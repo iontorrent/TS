@@ -38,13 +38,15 @@
 
 <script type="text/javascript">
   function numberWithCommas(x) {
+    if( !x ) return "NA";
     var parts = x.toString().split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
   }
   function numberToPercent(x) {
     if( isNaN(x) ) return x;
-    return (100 * x)+"%";
+    x *= 100;
+    return x.toFixed(2)+"%";
   }
 </script>
 

@@ -13,18 +13,23 @@ import base64
 import httplib2
 import tempfile
 import zipfile
-
+import mimetypes
+import re
+import subprocess
+import urllib2
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render_to_response, get_object_or_404
 from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
 from django.template import RequestContext
 from django.conf import settings
 from django.core import urlresolvers
+from django.core.files import File
 
 from iondb.rundb.ajax import render_to_json
 from iondb.rundb.forms import EditReferenceGenome
-from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor
-from iondb.rundb import tasks
+from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
+from iondb.rundb import tasks, publishers
+
 from iondb.rundb.tasks import build_tmap_index
 from iondb.rundb.configure.util import plupload_file_upload
 
@@ -197,6 +202,24 @@ def edit_genome(request, pk_or_name):
     bedFiles.sort(key=lambda x: x['path'].lower())
     processingBedFiles.sort(key=lambda x: x['path'].lower())
 
+    #Annotation Details Page
+    refAnnotFiles, processingRefAnnotFiles = [], []
+    try:
+        uploadsAnnot = ContentUpload.objects.filter(publisher__name="refAnnot")
+    except:
+        uploadsAnnot = None
+    if uploadsAnnot:
+        relevantAnnot = [u for u in uploadsAnnot if u.meta.get("reference", "") == rg.short_name]
+        for uploadAnnot in relevantAnnot:
+            annotInfo = {"path": os.path.basename(uploadAnnot.file_path), "pk": uploadAnnot.pk}
+            if uploadAnnot.status == "Successfully Completed":
+                refAnnotFiles.append(annotInfo)
+            else:
+                annotInfo["status"] = uploadAnnot.status
+                processingRefAnnotFiles.append(annotInfo)
+        refAnnotFiles.sort(key=lambda x: x['path'].lower())
+        processingRefAnnotFiles.sort(key=lambda x: x['path'].lower())
+
     if request.method == "POST":
         rfd = EditReferenceGenome(request.POST)
         if rfd.is_valid():
@@ -256,7 +279,8 @@ def edit_genome(request, pk_or_name):
                 "genome_fasta": genome_fasta, "genome_size": genome_size,
                 "index_version": rg.index_version, "fastaOrig": fastaOrig,
                 "bedFiles": bedFiles, "processingBedFiles": processingBedFiles,
-                "stale_index": stale_index
+                "stale_index": stale_index,
+                "refAnnotFiles": refAnnotFiles, "processingRefAnnotFiles": processingRefAnnotFiles,
                 }
         ctx = RequestContext(request, ctxd)
         return render_to_response("rundb/configure/edit_reference.html",
@@ -358,6 +382,10 @@ def search_for_genomes():
 def new_genome(request):
     """This is the page to create a new genome. 
     """
+    def is_fasta(filename):
+        ext = os.path.splitext(filename)[1]
+        return ext.lower() in ['.fasta', '.fas', '.fa', '.seq']
+
 
     if request.method == "POST":
         # parse the data sent in
@@ -396,8 +424,8 @@ def new_genome(request):
             if reported_file_size != uploaded_file_size:
                 why_delete = "The file you uploaded differs from the expected size. This is due to an error uploading."
 
-            if not (fasta.lower().endswith(".fasta") or fasta.lower().endswith(".zip")):
-                why_delete = "The file you uploaded does not have a .fasta or .zip extension.  It must be a plain text fasta file or a Zip compressed fasta."
+            if not (is_fasta(fasta) or fasta.lower().endswith(".zip")):
+                why_delete = "The file you uploaded does not have a FASTA or ZIP extension.  It must be a plain text a Zip compressed fasta file."
         is_zip = zipfile.is_zipfile(reference_path)
         if is_zip:
             zip_file = zipfile.ZipFile(reference_path, 'r')
@@ -408,7 +436,7 @@ def new_genome(request):
             zip_file.close()
         else:
             files = [fasta]
-        fasta_files = filter(lambda x: x.endswith('.fa') or x.endswith('.fasta'), files)
+        fasta_files = filter(lambda x: is_fasta(x), files)
 
         if len(fasta_files) != 1:
             why_delete = "Error: upload must contain exactly one fasta file"
@@ -511,6 +539,7 @@ def get_references():
             ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
             ref["notes"] = ref["meta"].get("notes", '')
             ref["installed"] = installed.get(ref['meta']['identity_hash'], None)
+            ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation","")))
         return references
     else:
         return None
@@ -524,25 +553,163 @@ def new_reference_download(url, reference_args):
     return start_reference_download(url, reference)
 
 
+def download_genome_annotation(annotation_lists, reference_args):
+    for item in annotation_lists:
+        remoteAnnotUrl = item.get("url", None)
+        remoteAnnotUpdateVersion = item.get("updateVersion", None)
+
+        if remoteAnnotUrl:
+            tasks.new_annotation_download.delay(remoteAnnotUrl, remoteAnnotUpdateVersion, **reference_args)
+
+
 @login_required
 def download_genome(request):
     if request.method == "POST":
-        url = request.POST.get("reference_url", None)
         reference_meta = request.POST.get("reference_meta", None)
-        logger.debug("downloading {0} with meta {1}".format(url, reference_meta))
-        if url is not None:
-            reference_args = json.loads(base64.b64decode(reference_meta))
-            new_reference_download(url, reference_args)
+        ref_annot_update = request.POST.get("ref_annot_update", None)
+        reference_args = json.loads(base64.b64decode(reference_meta))
+        annotation_meta = request.POST.get("missingAnnotation_meta", None)
+        if annotation_meta:
+            annotation_data =  json.loads(base64.b64decode(annotation_meta))
+            annotation_lists = annotation_data
+
+        # Download and register only the Ref Annotation file if Reference Genome is already Imported
+        # If not, download refAnnot file and Reference Genome asynchronously 
+        if annotation_data and ref_annot_update:
+            logger.debug("Downloading Annotation File {0} with meta {1}".format(annotation_data, reference_meta))
+            if annotation_lists:
+                download_genome_annotation(annotation_lists, reference_args)
+        else:
+            url = request.POST.get("reference_url", None)
+            logger.debug("Downloading {0} with meta {1}".format(url, reference_meta))
+            if url is not None:
+                if annotation_lists:
+                    download_genome_annotation(annotation_lists, reference_args)
+                new_reference_download(url, reference_args)
+
         return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
 
     references = get_references() or []
     downloads = FileMonitor.objects.filter(tags__contains="reference").order_by('-created')
+    downloads_annot = FileMonitor.objects.filter(tags__contains="reference_annotation").order_by('-created')
+
+    (references, downloads_annot) = get_annotation(references, downloads_annot)
+
     ctx = {
         'downloads': downloads,
+        'downloads_annot' : downloads_annot,
         'references': references
     }
     return render_to_response("rundb/configure/reference_download.html", ctx,
         context_instance=RequestContext(request))
+
+def validate_annotation_url(remoteAnnotUrl):
+    isValid = True
+    ctx = {}
+    try:
+        req = urllib2.urlopen(remoteAnnotUrl)
+        url = req.geturl()
+    except urllib2.HTTPError, err:
+        isValid = False
+        if err.code == 404:
+            logger.debug("HTTP Error: {0}. Please contact TS administrator  {1}".format(err,remoteAnnotUrl))
+            ctx['msg'] = "HTTP Error: {0}. Please contact TS administrator.".format(err.msg)
+        else:
+            logger.debug("Error in validate_annotation_url({0})".format(err))
+            ctx['msg'] = err
+    except urllib2.URLError, err:
+        logger.debug("Connection Error in validate_annotation_url: ({0})".format(err))
+        isValid = False
+        ctx['msg'] = "Connection Error. Please contact TS administrator.".format(err.reason)
+
+    ctx['isValid'] = isValid
+    return ctx
+
+
+def get_annotation(references, downloads_annot):
+    for ref in references:
+        annotation_meta = ref.get('annotation_encoded', None)
+        annotation_data =  json.loads(base64.b64decode(annotation_meta))
+        missingAnnotation = []
+
+        if not annotation_data:
+            ref["refAnnotNotAvailable"] = 'N/A'
+        else:
+            for item in annotation_data:
+                remoteAnnotUrl = item.get("url", None)
+                remoteAnnotUpdateVersion = item.get("updateVersion", None)
+                newAnnotFlag = True
+                if remoteAnnotUrl:
+                    for download in downloads_annot:
+                        isValid = True
+                        isValidNetwork = True
+                        if (download.url == remoteAnnotUrl):
+                            ctx = validate_annotation_url(remoteAnnotUrl)
+                            isValidNetwork = ctx['isValid']
+                        try:
+                            fm_pk = FileMonitor.objects.get(pk=download.id)
+                        except Exception as Err:
+                            logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                            logger.debug(Err)
+                        if isValidNetwork:
+                            tagsInfo = download.tags
+                            try:
+                                updateVersion = tagsInfo.split("reference_annotation_")[1]
+                            except:
+                                logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                                updateVersion = None
+                            download.updateVersion = updateVersion
+                            if (fm_pk.status == 'downloading'):
+                                newAnnotFlag = False
+                            # Check if there is any newer version of annotation file has been posted
+                            if ((fm_pk.url == remoteAnnotUrl)  and (float(updateVersion) >= float(remoteAnnotUpdateVersion))):
+                                newAnnotFlag = False
+                                if fm_pk.status == "Complete":
+                                    ref['isAnnotCompleted'] = "complete"
+                                else:
+                                    isValid = True
+                                    if 'Error' in str(download.status) or 'Error' in str(fm_pk.status):
+                                        logger.debug("Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                                        isValid = False
+                                        ctx['msg'] = fm_pk.status
+                                    if (fm_pk.status not in ["starting", "downloading", "download failed"]):
+                                        logger.debug("get_annotation() Error: Status is not in the expected state: {0}".format(fm_pk.status))
+                                        if ((not download.status) and (not fm_pk.status)):
+                                            # Query FileMonitor and Get the status if there was any lag in the network/celery task
+                                            fm_pk = FileMonitor.objects.get(pk=download.id)
+                                            status = str(fm_pk.status)
+                                            if (not fm_pk.status):
+                                                isValid = False
+                                                download.status = "Connection error. Please contact Torrent Suite Administrator"
+                                                ctx['msg'] = fm_pk.status
+                                            else:
+                                                status = status.replace("Complete", "complete")
+                                            ref['isAnnotCompleted'] = status
+                                        else:
+                                            ref['isAnnotCompleted'] = str(fm_pk.status)
+                                    else:
+                                        ref['isAnnotCompleted'] = str(fm_pk.status)
+                        if not isValidNetwork or not isValid:
+                            newAnnotFlag = False
+                            ref['noLink'] = "True"
+                            ref['noLinkMsg'] = ctx['msg']
+                            ref['errURL'] = download.url
+                            try:
+                                if fm_pk:
+                                    fm_pk.delete()
+                            except Exception as err:
+                                logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                            ref['isAnnotCompleted'] = str(fm_pk.status)
+
+                    if newAnnotFlag:
+                        missingAnnotation.append(item)
+                        ref['isNewAnnotPosted'] = remoteAnnotUrl
+                        ref['isAnnotCompleted'] = None
+
+        ref["missingAnnotation_meta"] = base64.b64encode(json.dumps(missingAnnotation))
+        ref["missingAnnotation_data"] =  json.loads(base64.b64decode(ref["missingAnnotation_meta"]))
+
+    return (references, downloads_annot)
 
 
 @login_required
@@ -559,7 +726,7 @@ def references_custom_download(request):
             "index_version": ""
         }
         new_reference_download(url, reference_args)
-    return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
+    return HttpResponseRedirect(urlresolvers.reverse("configure_references"))
 
 
 def start_reference_download(url, reference, callback=None):
@@ -577,3 +744,4 @@ def start_reference_download(url, reference, callback=None):
     except Exception as err:
         monitor.status = "System Error: " + str(err)
         monitor.save()
+

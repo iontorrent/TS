@@ -90,9 +90,6 @@ void TimeCompression::SetUpTime(int imgFrames, float t_comp_start, int start_det
   DeAllocate();
   Allocate(imgFrames);
   switch(choose_time){
-    case 1:
-       HalfSpeedSampling(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
-       break;
     case 2:
        // generate both ETF and standard compression but se the compression to ETF
        SetUpETFCompression(t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
@@ -270,58 +267,7 @@ void TimeCompression::ETFCompatible(int imgFrames, float t_comp_start, int start
   SetETFFrames(cur_pt);
 }
 
-// What if we were to take data at 7.5 frames per second and average?
-void TimeCompression::HalfSpeedSampling(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
-{
-  int i_start = (int) t_comp_start+start_detailed_time;
-  int i_done = (int)(t_comp_start+stop_detailed_time);
-  // go to i_start compressing aggressively
-  int cur_pt =0;
-  int cur_sum=i_start;
-  int i=0;
-  for (; (i<imgFrames) & (cur_sum>0); i++)
-  {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,left_avg);
-    cur_pt++;
-  }
-  // now do the middle time when we are at full detail
-  cur_sum = i_done-i_start;
-  for (; (i<imgFrames) & (cur_sum>0); i++)
-  {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,2);
-    cur_pt++;
-  }
-  // finally compress the tail very heavily indeed
-  int try_step = 2;
-  cur_sum = imgFrames-i_done;
- for (; (i<imgFrames) & (cur_sum>0); i++)
-  {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,try_step);
-    cur_pt++;
-    try_step += 4;
-    //try_step *=2;
-  }
- npts(cur_pt);
-}
 
-void TimeCompression::ExponentialFramesPerPoint(int imgFrames, float t_comp_start, int start_detailed_time, float geom_ratio)
-{
-  // super aggressive compression
-  int cur_pt =0;
-  int cur_sum=imgFrames;
-  int i_start = (int) t_comp_start+start_detailed_time;
-  if (i_start<1) i_start = 1;
-  frames_per_point[cur_pt] = i_start;
-  cur_sum -= frames_per_point[cur_pt];
-  cur_pt++;
-  float now_level = 1.0;
-  while (cur_sum>0){
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,(int) now_level);
-    cur_pt++;
-    now_level *= geom_ratio;
-  }
-  npts(cur_pt);
-}
 
 void TimeCompression::HyperTime(int imgFrames, float t_comp_start, int start_detailed_time)
 {

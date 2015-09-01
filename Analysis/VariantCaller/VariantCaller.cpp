@@ -70,20 +70,22 @@ int main(int argc, char* argv[])
   ref_reader.Initialize(parameters.fasta);
 
   TargetsManager targets_manager;
-  targets_manager.Initialize(ref_reader, parameters);
+  targets_manager.Initialize(ref_reader, parameters.targets, parameters.trim_ampliseq_primers);
 
   BAMWalkerEngine bam_walker;
   bam_walker.Initialize(ref_reader, targets_manager, parameters.bams, parameters.postprocessed_bam, parameters.prefixExclusion);
   bam_walker.GetProgramVersions(parameters.basecaller_version, parameters.tmap_version);
 
   SampleManager sample_manager;
-  sample_manager.Initialize(parameters, bam_walker.GetBamHeader());
+  sample_manager.Initialize(bam_walker.GetBamHeader(), parameters.sampleName, parameters.force_sample_name);
 
   InputStructures global_context;
   global_context.Initialize(parameters, ref_reader, bam_walker.GetBamHeader());
 
   OrderedVCFWriter vcf_writer;
   vcf_writer.Initialize(parameters.outputDir + "/" + parameters.outputFile, parameters, sample_manager);
+
+  OrderedBAMWriter bam_writer;
 
   HotspotReader hotspot_reader;
   hotspot_reader.Initialize(ref_reader, parameters.variantPriorsFile);
@@ -101,6 +103,7 @@ int main(int argc, char* argv[])
   vc.global_context = &global_context;
   vc.candidate_generator = &candidate_generator;
   vc.vcf_writer = &vcf_writer;
+  vc.bam_writer = &bam_writer;
   vc.metrics_manager = &metrics_manager;
   pthread_mutex_init(&vc.candidate_generation_mutex, NULL);
   pthread_mutex_init(&vc.read_loading_mutex, NULL);
@@ -129,6 +132,12 @@ int main(int argc, char* argv[])
   pthread_mutex_destroy(&vc.read_removal_mutex);
   pthread_cond_destroy(&vc.memory_contention_cond);
   pthread_cond_destroy(&vc.alignment_tail_cond);
+
+
+  Alignment* save_list = vc.bam_writer->process_new_etries(vc.bam_walker->alignments_first_);
+  vc.bam_walker->SaveAlignments(save_list);
+  save_list = vc.bam_writer->flush();
+  vc.bam_walker->SaveAlignments(save_list);
 
   vcf_writer.Close();
   bam_walker.Close();
@@ -162,7 +171,7 @@ void * VariantCallerWorker(void *input)
   MetricsAccumulator& metrics_accumulator = vc.metrics_manager->NewAccumulator();
   pthread_mutex_unlock(&vc.bam_walker_mutex);
 
-  while (more_positions) {
+  while (true /*more_positions*/) {
 
     // Opportunistic read removal
 
@@ -173,15 +182,16 @@ void * VariantCallerWorker(void *input)
         pthread_mutex_lock(&vc.bam_walker_mutex);
         vc.bam_walker->RequestReadRemovalTask(removal_list);
         pthread_mutex_unlock(&vc.bam_walker_mutex);
-	//In rare case, the Eligible check pass, but another thread got to remove reads, then when this thread get the lock, it find there
-	//is no reads to remove. The unexpected behavior of SaveAlignment() is that when NULL is passed in, it save all the reads and remove 
-	// ZM tags. To prevent that, we need to check for empty.
+        //In rare case, the Eligible check pass, but another thread got to remove reads, then when this thread get the lock, it find there
+        //is no reads to remove. The unexpected behavior of SaveAlignment() is that when NULL is passed in, it save all the reads and remove 
+        // ZM tags. To prevent that, we need to check for empty.
         if (removal_list) {
-	    vc.bam_walker->SaveAlignments(removal_list); 
-            pthread_mutex_lock(&vc.bam_walker_mutex);
-            vc.bam_walker->FinishReadRemovalTask(removal_list);
-            pthread_mutex_unlock(&vc.bam_walker_mutex);
-	}
+          Alignment* save_list = vc.bam_writer->process_new_etries(removal_list);
+          vc.bam_walker->SaveAlignments(save_list);
+          pthread_mutex_lock(&vc.bam_walker_mutex);
+          vc.bam_walker->FinishReadRemovalTask(save_list);
+          pthread_mutex_unlock(&vc.bam_walker_mutex);
+        }
         pthread_mutex_unlock(&vc.read_removal_mutex);
 
         pthread_cond_broadcast(&vc.memory_contention_cond);
@@ -234,7 +244,13 @@ void * VariantCallerWorker(void *input)
 
     if (not ready_for_next_position) {
 
+
       pthread_mutex_lock(&vc.read_loading_mutex);
+
+      if (not vc.bam_walker->HasMoreAlignments()) {
+        pthread_mutex_unlock(&vc.read_loading_mutex);
+        break;
+      }
 
       pthread_mutex_lock(&vc.bam_walker_mutex);
       for (int i = 0; i < kReadBatchSize; ++i) {
@@ -268,9 +284,6 @@ void * VariantCallerWorker(void *input)
         vc.bam_walker->FinishReadProcessingTask(new_read[i], success[i]);
       pthread_mutex_unlock(&vc.bam_walker_mutex);
 
-      if (not vc.bam_walker->HasMoreAlignments() and not vc.bam_walker->ReadProcessingTasksInProgress())
-        pthread_cond_broadcast(&vc.alignment_tail_cond);
-
       continue;
     }
 
@@ -278,12 +291,11 @@ void * VariantCallerWorker(void *input)
     // Dispatch outcome: Generate candidates at next position
     //
 
-    // Protect against the race condition where has_more_alignments = false, but not all alignments finished processing
-    if (not vc.bam_walker->HasMoreAlignments() and vc.bam_walker->ReadProcessingTasksInProgress()) {
-      pthread_mutex_unlock(&vc.candidate_generation_mutex);
-      pthread_cond_wait (&vc.alignment_tail_cond, &vc.bam_walker_mutex);
+
+    if (not vc.bam_walker->HasMoreAlignments() and not more_positions) {
       pthread_mutex_unlock(&vc.bam_walker_mutex);
-      continue;
+      pthread_mutex_unlock(&vc.candidate_generation_mutex);
+      break;
     }
 
     vc.bam_walker->BeginPositionProcessingTask(position_ticket);
@@ -347,9 +359,6 @@ void * VariantCallerWorker(void *input)
 
 
   }
-
-  if (pthread_mutex_trylock(&vc.read_removal_mutex) == 0)  vc.bam_walker->SaveAlignments(NULL);
-
   return NULL;
 }
 

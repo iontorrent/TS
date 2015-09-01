@@ -9,7 +9,7 @@ title    <- ifelse(is.na(args[3]),"Frequency Plot",args[3])
 minFPKM  <- as.numeric(ifelse(is.na(args[4]),0.03,args[4]))
 
 if( !file.exists(nFileIn) ) {
-  write(sprintf("ERROR: Could not locate input file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Could not locate input file %s",nFileIn),stderr())
   q(status=1)
 }
 
@@ -19,12 +19,12 @@ col_bkgd = "#E5E5E5"
 data <- read.table(nFileIn, header=TRUE, sep="\t", as.is=TRUE, comment.char="")
 ncols = ncol(data)
 if( ncols < 2 ) {
-  write(sprintf("ERROR: Expected at least 2 columns of data, including row ID field from barcode x isoform FPKM matrix file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Expected at least 2 columns of data, including row ID field from barcode x isoform FPKM matrix file %s",nFileIn),stderr())
   q(status=1)
 }
 nrows = nrow(data)
 if( nrows < 1 ) {
-  write(sprintf("ERROR: Expected at least 1 row of data plus header line barcode x isoform FPKM matrix file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Expected at least 1 row of data plus header line barcode x isoform FPKM matrix file %s",nFileIn),stderr())
   q(status=1)
 }
 
@@ -56,7 +56,7 @@ ymax <- 0
 for( i in 1:nplot) {
   h <- hist(data[[i]],breaks=nbrks,plot=F)
   b <- h$breaks[-length(h$breaks)]
-  ym <- max( h$counts[b>=minLog] )
+  ym <- suppressWarnings(max( h$counts[b>=minLog]) )
   if( ym > ymax ) { ymax = ym }
 }
 ymax <- (ymax+0.0001)*1.01

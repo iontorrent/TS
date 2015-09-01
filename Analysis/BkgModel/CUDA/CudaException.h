@@ -25,7 +25,7 @@ public:
   virtual const char* what() const throw()
   {
     Print();
-    return "CUDA EXCEPTION: an Exception occured" ;
+    return "CUDA EXCEPTION: an Exception occurred" ;
   }
 
     
@@ -59,7 +59,7 @@ public:
   virtual const char* what() const throw()
   {
     Print();
-    return "CUDA EXCEPTION: an Exception occured";
+    return "CUDA EXCEPTION: an Exception occurred";
   }
 
     

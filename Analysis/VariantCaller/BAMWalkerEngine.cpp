@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include <errno.h>
+#include <limits.h>
 #include <set>
 #include "ReferenceReader.h"
 
@@ -21,6 +22,7 @@ BAMWalkerEngine::BAMWalkerEngine()
   last_processed_chr_ = 0;
   last_processed_pos_ = 0;
   has_more_alignments_ = true;
+  has_more_positions_ = true;
   tmp_begin_ = NULL;
   tmp_end_ = NULL;
   processing_first_ = NULL;
@@ -228,7 +230,7 @@ void BAMWalkerEngine::SaveAlignments(Alignment* removal_list)
   if (not bam_writing_enabled_)
     return;
   
-  if (!removal_list) removal_list = alignments_first_;
+//  if (!removal_list) removal_list = alignments_first_;
     
   for (Alignment *current_read = removal_list; current_read; current_read = current_read->next) {
     if (not current_read->worth_saving)
@@ -276,14 +278,21 @@ bool BAMWalkerEngine::EligibleForGreedyRead()
 
 bool BAMWalkerEngine::ReadyForNextPosition()
 {
+  // Try Getting More Reads - if just starting
   if (not alignments_last_)
     return false;
 
+  // Try Getting More Reads - if target regions positions have been processed, but there are more reads
+  if (not has_more_positions_) // and has_more_alignments_)
+    return false;
+
+  // Try Generating a Variant - if processed reads are ahead of current position
   if (last_processed_chr_ > next_target_->chr or
       (last_processed_chr_ == next_target_->chr and last_processed_pos_ > next_position_))
     return true;
 
-  if (not has_more_alignments_)
+  // Try Generating a Variant (or quitting) - if all reads have been loaded and processed
+  if (not has_more_alignments_ and not processing_first_)
     return true;
 
   return false;
@@ -400,6 +409,9 @@ void BAMWalkerEngine::FinishReadProcessingTask(Alignment* new_read, bool success
       tmp_end_ = NULL;
     }
 
+    if (not has_more_positions_ and positions_in_progress_.empty())
+      first_useful_read_ = max(first_useful_read_,new_read->read_number);
+
   }
   if (new_read->processing_prev)
     new_read->processing_prev->processing_next = new_read->processing_next;
@@ -472,8 +484,10 @@ bool BAMWalkerEngine::AdvancePosition(int position_increment, int next_hotspot_c
   }
 
   if (next_position_ >= next_target_->end) {
-    if (next_target_ == &targets_manager_->merged.back()) // Can't go any further
+    if (next_target_ == &targets_manager_->merged.back()) {// Can't go any further
+      has_more_positions_ = false;
       return false;
+    }
     next_target_++;
     next_position_ = next_target_->begin;
   }
@@ -515,6 +529,8 @@ int BAMWalkerEngine::GetRecentUnmergedTarget()
 bool BAMWalkerEngine::MemoryContention()
 {
   if (positions_in_progress_.empty())
+    return false;
+  if (not alignments_first_)
     return false;
   if (read_counter_ - alignments_first_->read_number < 50000)
     return false;

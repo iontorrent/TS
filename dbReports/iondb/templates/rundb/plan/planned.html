@@ -115,9 +115,14 @@
 						AMPS_RNA : 'appl_ampliSeqRna',
 						AMPS_EXOME : 'appl_ampliSeqExome',
 						TARS_16S : 'appl_metagenomics'}; 
-	#
-						  
-	<span class="runTypeImageClass" rel="tooltip" title="#=TB.runTypeDescription(runType)#">
+	#				  
+		# if (data.applicationGroupDisplayedName  == "Pharmacogenomics") { #
+	                  <span class="runTypeImageClass" rel="tooltip" title="Pharmacogenomics">
+		          <img src="{% static "resources/img/appl_pgx.png"%}" width="24px" height="24px" />
+                          </span>
+                # } else { #
+           
+	    <span class="runTypeImageClass" rel="tooltip" title="#=TB.runTypeDescription(runType)#">
 		<!--does-not-work-on-some-TS img src="{% static "resources/img/#=applications[runType]#.png"%}" width="24px" height="24px" / -->
 		<!--TODO TS-8562 -->
 		# if (runType == "AMPS") { #
@@ -138,6 +143,7 @@
           <img src="{% static "resources/img/appl_metagenomics.png"%}" width="24px" height="24px" />  
         # } else if (runType == "AMPS_DNA_RNA") { #
           <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" width="24px" height="24px" />           
+        # } # 
         # } # 
 	</span>
 	
@@ -171,14 +177,16 @@
 		# if (data.planStatus == 'reserved') { #
 		<li><a href="\\#" rel="tooltip" title="planned Run is Reserved and cannot be transferred">Transfer</a></li>
 		# } else { #
-		<li class="dropdown-submenu pull-left">
-			<a href="\\#">Transfer</a>
-			<ul class="dropdown-menu" style="left:auto; right:100%;">
-				{% for ts in planshare %}
-				<li><a href="#= '{% url "plan_transfer" 999999 ts.name %}'.replace('999999',_id)#" class="transfer_plan">{{ts.name}}</a></li>
-				{% endfor %}
-			</ul>
-		</li>
+                <div class="btn-group dropup">
+                    <li class="dropdown-submenu pull-left">
+                        <a href="\\#">Transfer</a>
+                        <ul class="dropdown-menu dropup" style="left:auto; right:100%; max-height:165px; overflow-y:scroll;">
+                            {% for ts in planshare %}
+                            <li><a href="#= '{% url "plan_transfer" 999999 ts.name %}'.replace('999999',_id)#" class="transfer_plan">{{ts.name}}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                </div>
 		# } #
 		{% endif %}
 	</ul>

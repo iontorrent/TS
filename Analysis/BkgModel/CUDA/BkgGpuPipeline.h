@@ -10,9 +10,10 @@
 
 #include "LayoutTranslator.h"
 #include "DeviceParamDefines.h"
+#include "HostParamDefines.h"
 #include "SignalProcessingFitterQueue.h"
 #include "GpuPipelineDefines.h"
-
+#include "SampleHistory.h"
 
 class cudaComputeVersion{
   int major;
@@ -24,7 +25,7 @@ public:
     minor = Minor;
   };
 
-//actual comparison
+  //actual comparison
   bool operator== (const cudaComputeVersion &other) const {
     return (major == other.major && minor == other.minor);
   }
@@ -34,10 +35,10 @@ public:
     return false;
   }
 
-//combinations of ! and == and >
+  //combinations of ! and == and >
   bool operator!= (const cudaComputeVersion &other) const {
-      return !(*this == other);
-    }
+    return !(*this == other);
+  }
   bool operator<= (const cudaComputeVersion &other) const {
     return !(*this > other);
   }
@@ -52,15 +53,12 @@ public:
   int getMajor() const { return major;}
   int getMinor() const { return minor;}
 
-
 };
-
-
 
 //collection of all the device buffers, just to make things a little more organized
 class DeviceData
 {
-  MemoryResource _resource;
+  size_t accumBytes;
   vector<size_t> bufferSizes;
 
 public:
@@ -95,7 +93,7 @@ public:
   LayoutCubeWithRegions<int> EmptyTraceComplete; //(ImgP.getGridParam(),1,DeviceGlobal);
   //Sample for regional fitting
   LayoutCubeWithRegions<unsigned short> SampleStateMask; //200 per region
-  LayoutCubeWithRegions<short> SampleCompressedTraces; //200 per region
+  //LayoutCubeWithRegions<short> SampleCompressedTraces; //200 per region
   LayoutCubeWithRegions<float> SampleParamCube; //200 per region
   LayoutCubeWithRegions<SampleCoordPair> SampleCoord; //200 per region
   LayoutCubeWithRegions<int> SampleRowPtr; // maxRegH + 1 * per region
@@ -106,7 +104,7 @@ public:
   LayoutCubeWithRegions<float> ResultCube; //(ImgP,Result_NUM_PARAMS,DeviceGlobal);
 
   DeviceData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP):
-    _resource(),
+    accumBytes(0),
     bufferSizes(),
     T0(ImgP,1, DeviceGlobal, bufferSizes),
     RegionFrameCube(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), Rf_NUM_PARAMS, DeviceGlobal, bufferSizes),
@@ -134,7 +132,7 @@ public:
     EmptyTraceComplete(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
     //Sample for regional fitting
     SampleStateMask(ImgP.getGridParam(NUM_SAMPLES_RF),1, DeviceGlobal, bufferSizes),
-    SampleCompressedTraces(ImgP.getGridParam(NUM_SAMPLES_RF),ConstFrmP.getMaxCompFrames(), DeviceGlobal, bufferSizes), //200 per region
+   // SampleCompressedTraces(ImgP.getGridParam(NUM_SAMPLES_RF),ConstFrmP.getMaxCompFrames(), DeviceGlobal, bufferSizes), //200 per region
     SampleParamCube(ImgP.getGridParam(NUM_SAMPLES_RF), Bp_NUM_PARAMS, DeviceGlobal, bufferSizes), //200 per region
     SampleCoord(ImgP.getGridParam(NUM_SAMPLES_RF), 1, DeviceGlobal, bufferSizes),
     SampleRowPtr(ImgP.getGridParam(ImgP.getRegH()),1,DeviceGlobal, bufferSizes),
@@ -145,45 +143,156 @@ public:
     ResultCube(ImgP,Result_NUM_PARAMS,DeviceGlobal, bufferSizes)
   {
 
-    size_t accumBytes = 0;
+
     for (std::vector<size_t>::iterator it = bufferSizes.begin() ; it != bufferSizes.end(); ++it)
       accumBytes += *it;
 
     cout << "CUDA: Device Memory allocated: " << accumBytes / (1024.0* 1024.0) << " MB " << endl;
 
   }
-
+  size_t getSize(){return accumBytes;}
 
 };
 
 
+// contains device buffers where the size is not input but kernel launch configuration
+// dependent and therefore can only be allocate after the launch configuration was determined
 
 class SpecialDeviceData
 {
+  size_t accumBytes;
   vector<size_t> bufferSizes;
+
 public:
-  //Special Buffers for this kernel dependent on launch configuration
+
   LayoutCubeWithRegions<float>EmptyTraceSumRegionTBlock;
   LayoutCubeWithRegions<int>EmptyTraceCountRegionTBlock;
 
   SpecialDeviceData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP, size_t numTBlocksPerReg):
+    accumBytes(0),
     bufferSizes(),
     EmptyTraceSumRegionTBlock( ImgP.getGridParam(numTBlocksPerReg*ConstFrmP.getUncompFrames()), 1,DeviceGlobal, bufferSizes),
     EmptyTraceCountRegionTBlock( ImgP.getGridParam(numTBlocksPerReg),1,DeviceGlobal, bufferSizes)
   {
-    size_t accumBytes = 0;
     for (std::vector<size_t>::iterator it = bufferSizes.begin() ; it != bufferSizes.end(); ++it)
       accumBytes += *it;
 
     cout << "CUDA: Special Device Buffers Memory allocated: " << accumBytes / (1024.0* 1024.0) << " MB " << endl;
+  }
+  size_t getSize(){return accumBytes;}
+};
 
+
+/////////////////////////
+// Trace level XTalk buffer collection
+
+
+class HostTracelevelXTalkData{
+
+  size_t accumBytes;
+  vector<size_t> bufferSizes;
+
+public:
+
+  LayoutCubeWithRegions<bool> TestingGenericXTalkSampleMask;
+//temp buffers
+  LayoutCubeWithRegions<float> xTalkContribution;
+  LayoutCubeWithRegions<float> genericXTalkTracesRegion;
+  LayoutCubeWithRegions<int> numGenericXTalkTracesRegion;
+
+
+  HostTracelevelXTalkData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP):
+    accumBytes(0),
+    bufferSizes(),
+    TestingGenericXTalkSampleMask(ImgP,1,HostMem,bufferSizes),
+    xTalkContribution(ImgP,ConstFrmP.getMaxCompFrames(),HostMem,bufferSizes),
+    genericXTalkTracesRegion(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()),1,HostMem,bufferSizes),
+    numGenericXTalkTracesRegion(ImgP.getGridParam(),1,HostMem,bufferSizes)
+  {
+
+    TestingGenericXTalkSampleMask.memSet(0);
+
+    for (std::vector<size_t>::iterator it = bufferSizes.begin() ; it != bufferSizes.end(); ++it)
+    accumBytes += *it;
+
+    cout << "CUDA: Host Trace Level XTalk Buffers Memory allocated: " << accumBytes / (1024.0* 1024.0) << " MB " << endl;
+  }
+
+  size_t getSize(){return accumBytes;}
+
+  void createSampleMask(){
+    ImgRegParams ip = TestingGenericXTalkSampleMask.getParams();
+    for(size_t regId = 0; regId < ip.getNumRegions(); regId++){
+      BuildGenericSampleMask(
+          TestingGenericXTalkSampleMask.getPtr(), //global base pointer to mask Initialized with false
+          ip,
+          regId
+          );
+    }
   }
 
 };
 
 
+
+
+class DeviceTracelevelXTalkData{
+  size_t accumBytes;
+  vector<size_t> bufferSizes;
+public:
+  LayoutCubeWithRegions<float> BaseXTalkContribution;
+  LayoutCubeWithRegions<float> xTalkContribution;
+  LayoutCubeWithRegions<float> genericXTalkTracesRegion;
+  LayoutCubeWithRegions<int> numGenericXTalkTracesRegion;
+  LayoutCubeWithRegions<bool> TestingGenericXTalkSampleMask;
+  LayoutCubeWithRegions<float> * pDyncmaicPerBLockGenericXTalk;
+  DeviceTracelevelXTalkData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP):
+    accumBytes(0),
+    bufferSizes(),
+    BaseXTalkContribution(ImgP,ConstFrmP.getMaxCompFrames(),DeviceGlobal,bufferSizes),
+    xTalkContribution(ImgP,ConstFrmP.getMaxCompFrames(),DeviceGlobal,bufferSizes),
+    genericXTalkTracesRegion(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()),1,DeviceGlobal,bufferSizes),
+    numGenericXTalkTracesRegion(ImgP.getGridParam(),1,DeviceGlobal,bufferSizes),
+    TestingGenericXTalkSampleMask(ImgP,1,DeviceGlobal,bufferSizes)
+  {
+
+    pDyncmaicPerBLockGenericXTalk = NULL;
+
+    for (std::vector<size_t>::iterator it = bufferSizes.begin() ; it != bufferSizes.end(); ++it)
+      accumBytes += *it;
+
+    cout << "CUDA: Device Trace Level XTalk Buffers Memory allocated: " << accumBytes / (1024.0* 1024.0) << " MB " << endl;
+  }
+
+  ~DeviceTracelevelXTalkData()
+  {
+    if(pDyncmaicPerBLockGenericXTalk != NULL)
+      delete pDyncmaicPerBLockGenericXTalk;
+  }
+
+  size_t getSize() const {return accumBytes;}
+
+  void allocateRezeroDynamicBuffer(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP, const int threadBlocksPerRegion)
+  {
+    if(pDyncmaicPerBLockGenericXTalk == NULL){
+      pDyncmaicPerBLockGenericXTalk= new  LayoutCubeWithRegions<float>(ImgP.getGridParam(ConstFrmP.getMaxCompFrames() * threadBlocksPerRegion),1,DeviceGlobal,bufferSizes);
+      cout << "CUDA: Device Trace Level XTalk Buffers increased by Dynamic Element from " << accumBytes / (1024.0* 1024.0) << " MB ";
+      accumBytes += bufferSizes.back();
+      cout << "to " << accumBytes / (1024.0* 1024.0) << " MB " << endl;
+    }
+    pDyncmaicPerBLockGenericXTalk->memSet(0);
+  }
+
+};
+
+///////////////////////////////
+
+
+
+
 class HostData
 {
+  size_t accumBytes;
   vector<size_t> bufferSizes;
 public:
   //Host Buffer
@@ -205,6 +314,7 @@ public:
   //CubePerFlowDump<reg_params> RegionDump;
 
   HostData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP):
+    accumBytes(0),
     bufferSizes(),
     BfMask(NULL,ImgP,1,HostMem),
     RawTraces(NULL,ImgP,ConstFrmP.getRawFrames(), HostMem),
@@ -218,13 +328,13 @@ public:
     ConstRegP(ImgP.getGridParam(),1,HostMem, bufferSizes)//,
   // RegionDump(ImgP.getGridDimX(), ImgP.getGridDimY(),1,1,1,1)  // Regional Fit Read in From File
   {
-    size_t accumBytes = 0;
+
     for (std::vector<size_t>::iterator it = bufferSizes.begin() ; it != bufferSizes.end(); ++it)
       accumBytes += *it;
 
     cout << "CUDA: Host Buffers Memory allocated: " << accumBytes / (1024.0* 1024.0) << " MB " << endl;
   }
-
+  size_t getSize(){return accumBytes;}
 };
 
 class GPUResultsBuffer
@@ -252,7 +362,7 @@ class BkgGpuPipeline
   ConstantParamsGlobal ConstGP;
   ConstantFrameParams ConstFrmP;
   ConfigParams ConfP;
-  WellsLevelXTalkParams ConstXTP;
+
 
   PerFlowParamsGlobal GpFP;
 
@@ -260,28 +370,40 @@ class BkgGpuPipeline
   HostData * Host; // collection of Host buffers
   SpecialDeviceData * SpDev; // Launch Configuration specific Device buffers;
 
-  // collection of GPU results over several flows to be distributed as jobs to CPU queue by a separate thread
-  GPUResultsBuffer *resultsHostBuf; 
+  WellsLevelXTalkParamsHost * pConstXTP;
+  HostTracelevelXTalkData * HostTLXTalkData;
+  DeviceTracelevelXTalkData * DevTLXTalkData;
+  XTalkNeighbourStatsHost * pTLXTalkConstP;
 
+  SampleCollection * pSmplCol;
 
-  int flowBlockSize;
   int startFlowNum;
+  int devId;
   BkgModelWorkInfo * bkinfo;
 
 protected:
 
-  size_t checkAvailableDevMem();
 
+  size_t checkAvailableDevMem();
+  void setSpatialParams();
+  void InitPersistentData();
+  void InitXTalk();
+
+  dim3 matchThreadBlocksToRegionSize(int bx, int by);
 
 public:
 
-  BkgGpuPipeline(BkgModelWorkInfo* bkinfo, int fbSize, int startingFlow, int numFlowBuffers, int deviceId);  //ToDO: add stream and device info
+  BkgGpuPipeline(BkgModelWorkInfo* bkinfo, int startingFlow, int deviceId, SampleCollection * smpCol = NULL);  //ToDO: add stream and device info
   ~BkgGpuPipeline();
 
-  void PerFlowDataUpdate(BkgModelWorkInfo* bkinfo, int flowInBlock);
+
+  void InitPipeline();
+
+  void PerFlowDataUpdate(BkgModelWorkInfo* bkinfo);
   void PrepareInputsForSetupKernel();
-  void InitPersistentData();
-  void HandleResults();
+  void PrepareSampleCollection();
+
+  void HandleResults(RingBuffer<float> * ringbuffer);
   void HandleRegionalFittingResults();
   void PrepareForRegionalFitting();
   void PrepareForSingleFlowFit();
@@ -289,6 +411,7 @@ public:
   void ExecuteT0AvgNumLBeadKernel();
   void ExecuteGenerateBeadTrace();
   void ExecuteRegionalFitting();
+  void ExecuteTraceLevelXTalk();
   void ExecuteSingleFlowFit();
   void ExecuteCrudeEmphasisGeneration();
   void ExecuteFineEmphasisGeneration();
@@ -313,11 +436,16 @@ public:
   void CopyNewToOldRegParams();
 
 
+
+  void printBkgModelMaskEnum();
+  void printRegionStateMask();
+
+
   //void checkXTalkResults();
   //void checkPolyClonal();
 
 private:
-  void getDataForRawWells();
+  void getDataForRawWells(RingBuffer<float> * ringbuffer);
   void getDataForPostFitStepsOnHost();
 
 };

@@ -403,7 +403,7 @@ $(document).ready(function() {
                             type : "string",
                             editable : false                        
                         },
-                        libraryPrepKitName: {
+                        libraryPrepKitDisplayedName: {
                             type : "string"
                         },
                     }
@@ -419,7 +419,7 @@ $(document).ready(function() {
         	allowUnsort: true
         },
         scrollable : {
-            virtual : true
+            virtual : false 
         },         
         //pageable: {pageSizes:[5,10,20,50]},
         pageable: true,
@@ -451,7 +451,7 @@ $(document).ready(function() {
             title : "Lib Prep Type",
             template : kendo.template($('#LibPrepTypeColumnTemplate').html())
         }, {
-            field : "libraryPrepKitName",
+            field : "libraryPrepKitDisplayedName",
             title : "Lib Prep Kit"
         }, {
             field : "pcrPlateSerialNum",
@@ -616,7 +616,16 @@ function detailInit(e) {
                         },
                         pcrPlateRow: {
                             type : "string"
-                        }                        
+                        },
+                        biopsyDays : {
+                        	type : "number",
+                        },
+                        coupleId : {
+                        	type : "string",
+                        },
+                        embryoId : {
+                        	type : "string",
+                        },                        
 					}
 				}
 			},
@@ -778,7 +787,19 @@ function getColumns() {
          field: "cellularityPct",
          title: "Cellularity %",       
          sortable: true,
-         //template: kendo.template($('#sample_cellularityPct_kendo_template').html())         
+         //template: kendo.template($('#sample_cellularityPct_kendo_template').html()) 
+     } , {
+         field: "biopsyDays",
+         title: "Biopsy Days",       
+         sortable: true,
+     } , {
+         field: "coupleId",
+         title: "Couple ID",       
+         sortable: true,
+     } , {
+         field: "embryoId",
+         title: "Embryo ID",       
+         sortable: true,         
      }];
 
 //    var default_last_columnArray = [

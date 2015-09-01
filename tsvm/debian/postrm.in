@@ -13,6 +13,8 @@ case "$1" in
         rm -rf @ION_INSTALL_PREFIX@/.vagrant.d/
         rm -rf @ION_INSTALL_PREFIX@/.vagrant/
         rm -f @ION_INSTALL_PREFIX@/*.log
+        rm -f @ION_INSTALL_PREFIX@/.vagrant_key_rsa
+        rm -f @ION_INSTALL_PREFIX@/.vagrant_key_rsa.pub
         rmdir @ION_INSTALL_PREFIX@/VirtualBox\ VMs/ || true # only if empty
 
     ;;

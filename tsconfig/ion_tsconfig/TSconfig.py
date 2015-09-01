@@ -448,23 +448,36 @@ class TSconfig_ansible (object):
     def TSexec_update(self):
         self.logger.info("Starting update via ansible")
         self.update_progress('Installing')
+        # First step is to update software packages
         try:
-            cmd = ["/usr/sbin/TSconfig", "-s" ]
-            p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = p1.communicate()
-            self.logger.debug(stdout)
-            self.logger.debug(stderr)
-            success = p1.returncode == 0
+            cmd = ["/usr/sbin/TSconfig", "-s", "--force" ]
+            p1 = subprocess.call(cmd)
+            success = p1 == 0
         except:
             success = False
             self.logger.error(traceback.format_exc())
         
+        # Next step is to configure the server, if update was successful
         if success:
-            self.logger.info("Successfully TSconfigured !")
-            self.update_progress('Finished Installing')
+            self.logger.info("Software Updated !")
+    
+            try:
+                self.logger.debug("Starting configuration")
+                cmd = ["/usr/sbin/TSconfig", "--configure-server", "--force" ]
+                p1 = subprocess.call(cmd)
+                success = p1 == 0
+            except:
+                success = False
+                self.logger.error(traceback.format_exc())
+                
+            if success:
+                self.logger.info("TS Configured !")
+            else:
+                self.logger.error("Failed to Configure TS.")
+
         else:
-            self.logger.error("Failed to TSconfigure.")
-            self.update_progress('Update Failure')
+            self.logger.error("Failed to Update Software.")
+
         return success
 
 

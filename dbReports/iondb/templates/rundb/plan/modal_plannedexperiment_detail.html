@@ -242,6 +242,10 @@
 								<td>{{ plan.sampleTubeLabel }}</td>
 							</tr>
 							<tr>
+								<td><b>Chip ID:</b></td>
+								<td>{{ plan.experiment.chipBarcode }}</td>
+							</tr>
+							<tr>
 								<td><b>Sample Name:</b></td>
 								<td>{{ plan.get_sampleDisplayedName }}</td>
 							</tr>
@@ -273,6 +277,10 @@
 							<tr>
 								<td colspan=2><b>Sample Tube Label:</b></td>
 								<td colspan=3>{{ plan.sampleTubeLabel }}</td>
+							</tr>
+							<tr>
+								<td colspan=2><b>Chip ID:</b></td>
+								<td colspan=3>{{ plan.experiment.chipBarcode }}</td>
 							</tr>
 							<tr><td colspan=5></td></tr>
 							<tr>
@@ -312,13 +320,13 @@
 				</div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>Command Line Args (Advanced)
+						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>Analysis Parameters ({{eas.custom_args|yesno:"Custom,Default"}})
 					</h3>
 					<div class="collapse" id="args">
 						<table class="table table-striped table-condensed">
 							{% if not thumbnail %}
 							<tr>
-								<td><b>Beadfind Args:</b></td>
+								<td><b>BeadFind Args:</b></td>
 								<td>{{ eas.beadfindargs }}</td>
 							</tr>
 							<tr>
@@ -326,22 +334,29 @@
 								<td>{{ eas.analysisargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Pre Basecaller Args for calibration:</b></td>
+								<td><b>Pre-BaseCaller Args for calibration:</b></td>
 								<td>{{ eas.prebasecallerargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Basecaller Args:</b></td>
+							    <td><b>Calibration Args:</b></td>
+							    <td>{{ eas.calibrateargs }}</td>
+							</tr>
+							<tr>
+								<td><b>BaseCaller Args:</b></td>
 								<td>{{ eas.basecallerargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Alignment Args:</b></td>
 								<td>{{ eas.alignmentargs }}</td>
 							</tr>
+							<tr>
+								<td><b>IonStats Args:</b></td>
+								<td>{{ eas.ionstatsargs }}</td>
+							</tr>
 							{% endif %}
 							{% if thumbnail or show_thumbnail %}
-							<tr><td>&nbsp</td></tr>
 							<tr>
-								<td><b>Thumbnail Beadfind Args:</b></td>
+								<td><b>Thumbnail BeadFind Args:</b></td>
 								<td>{{ eas.thumbnailbeadfindargs }}</td>
 							</tr>
 							<tr>
@@ -349,16 +364,24 @@
 								<td>{{ eas.thumbnailanalysisargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail Pre Basecaller Args for calibration:</b></td>
+								<td><b>Thumbnail pre-BaseCaller Args for calibration:</b></td>
 								<td>{{ eas.prethumbnailbasecallerargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail Basecaller Args:</b></td>
+							    <td><b>Thumbnail Calibration Args:</b></td>
+							    <td>{{ eas.thumbnailcalibrateargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Thumbnail BaseCaller Args:</b></td>
 								<td>{{ eas.thumbnailbasecallerargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Thumbnail Alignment Args:</b></td>
 								<td>{{ eas.thumbnailalignmentargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Thumbnail IonStats Args:</b></td>
+								<td>{{ eas.thumbnailionstatsargs }}</td>
 							</tr>
 							{% endif %}
 						</table>

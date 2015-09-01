@@ -21,7 +21,7 @@ void BarcodeClassifier::PrintHelp()
   //printf ("  -b,--barcodes                    FILE/off   detect barcodes listed in provided file [off]\n");
   printf ("     --barcode-mode                INT        selects barcode classification algorithm [2] Range: {1,2,3}\n" );
   printf ("     --barcode-cutoff              FLOAT      minimum score to call a barcode [1.0] Range: [x>0]\n" );
-  printf ("     --barcode-separation          FLOAT      minimum difference between best and second best scores [2.5] Range: [x>0]\n" );
+  printf ("     --barcode-separation          FLOAT      minimum difference between best and second best scores [2.0] Range: [x>0]\n" );
   printf ("     --barcode-filter              FLOAT      barcode freq. threshold, if >0 writes output-dir/barcodeFilter.txt [0.0 = off] Range: [0<=x<1]\n" );
   printf ("     --barcode-filter-minreads     INT        barcode reads threshold, if >0 writes output-dir/barcodeFilter.txt [0 = off] Range: {x>=0}\n" );
   printf ("     --barcode-error-filter        FLOAT      filter barcodes based on average number of errors [1.0] Range: [0<=x<2]\n" );
@@ -90,6 +90,13 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   score_auto_config_              = opts.GetFirstBoolean('-', "barcode-auto-config", false);
   bool compute_dmin               = opts.GetFirstBoolean('-', "barcode-compute-dmin", false);
 
+  trim_barcodes_                  = opts.GetFirstBoolean('-', "trim-barcodes", true);
+  int calibration_training        = opts.GetFirstInt    ('-', "calibration-training", -1);
+  if (not trim_barcodes_ and calibration_training >= 0) {
+    cerr << "BarcodeClassifier WARNING: Ignoring option 'trim-barcode=off' during calibration training phase." << endl;
+    trim_barcodes_=true;
+  }
+
   // Check parameters that have absolute limits
   // CheckParameterLowerUpperBound(string identifier ,T &parameter, T lower_limit, int use_lower, T upper_limit, int use_upper, T default_val)
   CheckParameterLowerUpperBound("barcode-filter",          barcode_filter_,          0.0, 1, 1.0, 2, 0.01);
@@ -130,7 +137,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
     printf("   Barcode set name         : %s\n", barcode_id.c_str());
     printf("   Number of barcodes       : %d\n", num_barcodes_);
     printf("   Scoring mode             : %d\n", score_mode_);
-    printf("   Scoring threshold        : %1.1lf\n", score_cutoff_);
+    printf("   Cutoff threshold         : %1.1lf\n", score_cutoff_);
     printf("   Separation threshold     : %1.2lf\n", score_separation_);
     printf("   Barcode filter threshold : %1.6f (0.0 = disabled)\n", barcode_filter_);
     printf("   Barcode error filter     : %1.3f\n", barcode_error_filter_);
@@ -586,6 +593,9 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
 
   if(barcode_bam_tag_)
 	processed_read.bam.AddTag("XB","i", processed_read.barcode_n_errors);
+
+  if (not trim_barcodes_)
+    return;
 
   processed_read.filter.n_bases_prefix = 0;
   while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows-1)

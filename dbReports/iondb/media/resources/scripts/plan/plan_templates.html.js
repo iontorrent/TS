@@ -500,6 +500,13 @@ $(function () {
             'No Generic Sequencing templates yet'));  
     	grid = genericSeqs;
     }
+
+    if (selectedTab == 'pharmacogenomics') {
+      var pharmacogenomics = $("#pharmacogenomics").kendoGrid(commonKendoGrid("#pharmacogenomics",
+    	        basePlannedExperimentUrl + "&runType=AMPS&applicationGroup__name__iexact=PGx" + orderByOptions,
+    	        'No Pharmacogenomics templates yet'));
+      grid = pharmacogenomics;
+    }
     
     if (selectedTab == 'rna_seq') {
       var rnaSeqs = $("#rna_seq").kendoGrid(commonKendoGrid("#rna_seq",

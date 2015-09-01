@@ -1,0 +1,53 @@
+The following people have made contibutions to this project.
+Please keep this list in alphabetical order.
+
+Lillian Angel <langel@redhat.com>
+Aleksandar Antok <http://www.aleksandara.net>
+Alon Bar-Lev <alon.barlev@gmail.com>
+Gary Benson <gbenson@redhat.com>
+Tania Bento <tbento@redhat.com>
+Deepak Bhole <dbhole@redhat.com>
+Tom Callaway <tcallawa@redhat.com>
+Pablo del Campo <pablogdc@gmail.com>
+James Le Cuirot <chewi@gentoo.org>
+Tiago Sturmer Daitx <tdaitx@linux.vnet.ibm.com>
+Thomas Fitzsimmons <fitzsim@redhat.com>
+Matthew Flaschen <matthew.flaschen@gatech.edu>
+Michael Franz <mvfranz@gmail.com>
+Kyle Galloway <kgallowa@redhat.com>
+Dennis Gilmore <dgilmore@redhat.com>
+Andrew Haley <aph@redhat.com>
+C. K. Jester-Young <cky944@gmail.com>
+Andrew John Hughes <gnu_andrew@member.fsf.org, gnu.andrew@redhat.com>
+Tomas Hurka <tomas.hurka@sun.com>
+Ioana Ivan <iivan@redhat.com>
+Radim Kolar <hsn@sanatana.filez.com>
+Matthias Klose <doko@ubuntu.com>
+Francis Kung <fkung@redhat.com>
+Trustin Lee <http://t.motd.kr>
+DJ Lucas <dj@linuxfromscratch.org>
+Omair Majid <omajid@redhat.com>
+Casey Marshall <csm@gnu.org>
+Dan Munckton <lists@munckfish.net>
+Raif Naffah <admin@naffah-raif.name>
+Parag Nemade <pnemade@redhat.com>
+Xerxes Rånby <xerxes@zafena.se>
+Damien Raude-Morvan <drazzib@drazzib.com>
+Mark Reinhold <mr@sun.com>
+Bernhard Rosenkränzer <bero@arklinux.org>
+Marc Schoenefeld <mschoene@redhat.com>
+Keith Seitz <keiths@redhat.com>
+Ralph Sennhauser <sera@gentoo.org>
+Joshua Sumali <jsumali@redhat.com>
+Pavel Tisnovsky <ptisnovs@redhat.com>
+Christian Thalinger <twisti@complang.tuwien.ac.at>
+Dalibor Topic <robilad@kaffe.org>
+Arnaud Vandyck <avdyk@debian.org>
+Michal Vyskocil <mvyskocil@suse.cz>
+Mark Wielaard <mjw@klomp.org>
+Yi Zhan <yi.zhan@intel.com>
+
+This project also includes code from the following projects:
+
+GNU Classpath <http://www.gnu.org/software/classpath/>
+OpenJDK <http://openjdk.java.net/>

@@ -32,13 +32,14 @@ void PrepareHotspotsHelp()
   printf ("Usage:   tvcutils prepare_hotspots [options]\n");
   printf ("\n");
   printf ("General options:\n");
-  printf ("  -b,--input-bed                 FILE       input hotspots in BED format [either -b or -v required]\n");
-  printf ("  -v,--input-vcf                 FILE       input hotspots in VCF format [either -b or -v required]\n");
+  printf ("  -b,--input-bed                 FILE       input is a hotspots BED file (either -b or -v required)\n");
+  printf ("  -v,--input-vcf                 FILE       input is a hotspots VCF file (either -b or -v required)\n");
   printf ("  -d,--output-bed                FILE       output left-aligned hotspots in BED format [none]\n");
-  printf ("  -o,--output-vcf                FILE       output post-processed hotspots in VCF format [none]\n");
-  printf ("  -r,--reference                 FILE       reference fasta [required]\n");
+  printf ("  -o,--output-vcf                FILE       output is a hotspots VCF file. To be used as input to --hotspot-vcf argument of variant_caller_pipeline.py (recommended) [none]\n");
+  printf ("  -r,--reference                 FILE       FASTA file containing reference genome (required)\n");
   printf ("  -a,--left-alignment            on/off     perform left-alignment of indels [off]\n");
   printf ("  -s,--allow-block-substitutions on/off     do not filter out block substitution hotspots [on]\n");
+  printf ("  -u,--unmerged-bed              FILE       input a target bed file to filter out hotspots that contain a junction of 2 amplicons (optional)\n");
   printf ("\n");
 }
 
@@ -116,6 +117,70 @@ struct Reference {
   }
 };
 
+class junction_chr {
+   public:
+        junction_chr() {last = -1; start.clear(); end.clear();}
+    	void add(int b, int e) {
+	    if (last == -1) { beg = b; last = e; return;}
+	    if (b < beg) { // error
+		fprintf(stderr, "unmerged bed file not in order\n");
+		exit(1);
+	    } else {
+		if (b < last and e > last) {
+		    //fprintf(stderr, "%d %d\n", b-1, last+1);
+		    start.push_back(b-1);
+		    end.push_back(last+1);
+		}
+	    }
+	    beg = b; last = e;
+	}
+	bool contain(int b, int e) {
+	    // binary?
+	    if (start.size() == 0) return false;
+	    if (b > start.back()) return false;
+	    int l = 0, r = start.size()-1;
+	    if (start[0] < b) {
+	      while (l < r-1) {
+		int m = (l+r)/2;
+		int x = start[m];
+		if (x == b) { l = r = m; break;}
+		if (x < b) {
+		    l = m;
+		} else {
+		    r = m;
+		}
+	      }
+	   } else {
+	      r = 0;
+	   }
+	   if (e >= end[r]) return true;
+	   return false;
+	}
+   protected:
+    	vector<int> start;
+ 	vector<int> end;
+	int last, beg;
+};
+
+class junction {
+   public:
+	junction() {
+	    junc_.clear();
+	}
+	void init(int n) {for (int i = 0; i < n; i++) junc_.push_back(junction_chr());}
+   	bool contain(int id, int pos, unsigned int len) {
+	    if (id < 0) return false;
+	    if (id >= (int) junc_.size()) return false;
+	    return junc_[id].contain(pos, pos+len-1);
+	}
+	void add(int id, int beg, int end) {
+	    if (id  >= (int) junc_.size()) return;
+	    junc_[id].add(beg, end);
+	}
+   protected:
+	vector <junction_chr> junc_;
+};
+
 int PrepareHotspots(int argc, const char *argv[])
 {
   OptArgs opts;
@@ -125,6 +190,7 @@ int PrepareHotspots(int argc, const char *argv[])
   string output_bed_filename      = opts.GetFirstString ('d', "output-bed", "");
   string output_vcf_filename      = opts.GetFirstString ('o', "output-vcf", "");
   string reference_filename       = opts.GetFirstString ('r', "reference", "");
+  string unmerged_bed 		  = opts.GetFirstString ('u', "unmerged-bed", "");
   bool left_alignment             = opts.GetFirstBoolean('a', "left-alignment", false);
   bool filter_bypass              = opts.GetFirstBoolean('f', "filter-bypass", false);
   bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", true);
@@ -168,7 +234,34 @@ int PrepareHotspots(int argc, const char *argv[])
     ref_map[ref_entry.chr] = (int) ref_index.size() - 1;
   }
   fclose(fai);
+  junction junc;
+  if (!unmerged_bed.empty()) {
+    FILE *fp = fopen(unmerged_bed.c_str(), "r");
+    if (!fp) {
+	fprintf(stderr, "ERROR: Cannot open %s\n", unmerged_bed.c_str());
+	return 1;
+    }
+    char line2[65536];
 
+    junc.init(ref_index.size());
+    bool line_overflow = false;
+    while (fgets(line2, 65536, fp) != NULL) {
+      if (line2[0] and line2[strlen(line2)-1] != '\n' and strlen(line2) == 65535) {
+        line_overflow = true;
+	continue;
+      }
+      if (line_overflow) {
+        line_overflow = false;
+        continue;
+      }
+     if (strstr(line2, "track")) continue;
+      char chr[100];
+      int b, e;
+      sscanf(line2, "%s %d %d", chr,  &b, &e);
+      junc.add(ref_map[chr], b, e);
+    }
+    fclose(fp);
+  }
 
   // Load input BED or load input VCF, group by chromosome
 
@@ -272,6 +365,13 @@ int PrepareHotspots(int argc, const char *argv[])
         allele.ref += toupper(*pos);
       for (char *pos = current_alt+4; *pos; ++pos)
         allele.alt += toupper(*pos);
+      // here is the place to check the length of the hotspot cover the amplicon junction. ZZ
+      if (junc.contain(allele.chr_idx, allele.pos, (unsigned int) allele.ref.size())) {
+	line_status.push_back(LineStatus(line_number));
+        line_status.back().filter_message_prefix = "hotspot BED line contain the complete overlapping region of two amplicon, the variant cannot be detected by tvc";
+        continue;
+      }
+
       allele.filtered = false;
       line_status.push_back(LineStatus(line_number));
       allele.line_status = &line_status.back();

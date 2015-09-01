@@ -102,6 +102,9 @@ color: #0088cc;
            Generic Sequencing
          </a>
        </li> 
+       <li class="" id="pharmacogenomics_nav">
+	<a href="#pharmacogenomics"><img src="{% static "resources/img/appl_pgx.png"%}" border="0" width='20px;'> Pharmacogenomics</a>
+       </li> 
        <li class="" id="rna_seq_nav">
          <a href="#rna_seq">
            <img src="{% static "resources/img/appl_rnaSeq.png"%}" border="0" width='20px;'>
@@ -202,7 +205,7 @@ color: #0088cc;
             &nbsp;|   
             <a href="{% url "page_plan_new_template" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="ampliseq_dna" class="list_contents"></div>
@@ -225,7 +228,7 @@ color: #0088cc;
             &nbsp;|   
             <a href="{% url "page_plan_new_template" 5 %}" ref="#ampliSeqRNA" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 5 %}" ref="#ampliSeqRNA" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 5 %}" ref="#ampliSeqRNA" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="ampliseq_rna" class="list_contents"></div>
@@ -241,7 +244,7 @@ color: #0088cc;
             &nbsp;|           
             <a href="{% url "page_plan_new_template" 0 %}" ref="#genericSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 0 %}" ref="#genericSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 0 %}" ref="#genericSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="genericseq"></div>
@@ -256,13 +259,33 @@ color: #0088cc;
             &nbsp;|       
             <a href="{% url "page_plan_new_template" 8 %}" ref="#fusions" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 8 %}" ref="#fusions" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 8 %}" ref="#fusions" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="fusions"></div>
       </div>         
 
+      <div id="pharmacogenomics_tab" style="display: none;">
+        <h3 style="float:left;"><img src="{% static "resources/img/appl_pgx.png"%}" border="0" width='24px;'>&nbsp;Pharmacogenomics</h3>
+        <div class="clearfix">
 
+          <div class="pull-right">
+            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
+            <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
+                <ul class="dropdown-menu">
+                    <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
+                    <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
+                    <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>                    
+                </ul>
+            </div>
+            &nbsp;|
+            <a href="{% url "page_plan_new_template" 9 %}" ref="#pharmoacogenomics" rel="tooltip" title="Create new template for run planning">Add New Template</a>
+            &nbsp;|
+            <a href="{% url "page_plan_new_plan_from_code" 9 %}" ref="#pharmacogenomics" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+          </div>
+        </div>
+        <div id="pharmacogenomics"></div>
+      </div>
 
       <div id="rna_seq_tab" style="display: none;">
         <h3 style="float:left;"><img src="{% static "resources/img/appl_rnaSeq.png"%}" border="0" width='24px;'>&nbsp;RNA Seq</h3>
@@ -273,7 +296,7 @@ color: #0088cc;
             &nbsp;|           
             <a href="{% url "page_plan_new_template" 4 %}" ref="#rnaSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 4 %}" ref="#rnaSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 4 %}" ref="#rnaSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="rna_seq"></div>
@@ -289,7 +312,7 @@ color: #0088cc;
             &nbsp;|           
             <a href="{% url "page_plan_new_template" 2 %}" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 2 %}" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 2 %}" ref="#targetSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="targetseq"></div>
@@ -305,7 +328,7 @@ color: #0088cc;
             &nbsp;|           
             <a href="{% url "page_plan_new_template" 3 %}" ref="#wholeGenomes" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 3 %}" ref="#wholeGenomes" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 3 %}" ref="#wholeGenomes" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="whole_genome"></div>
@@ -321,7 +344,7 @@ color: #0088cc;
             &nbsp;|           
             <a href="{% url "page_plan_new_template" 7 %}" ref="#16sTargetSeq" rel="tooltip" title="Create new template for run planning">Add New Template</a>
             &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 7 %}" ref="#16sTargetSeq" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
+            <a href="{% url "page_plan_new_plan_from_code" 7 %}" ref="#16sTargetSeq" rel="tooltip" title="Create new plan">Plan New Run</a>
           </div>
         </div>
         <div id="16s_targetseq"></div>

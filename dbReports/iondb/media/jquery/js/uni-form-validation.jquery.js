@@ -402,8 +402,9 @@ jQuery.fn.uniform = function(settings) {
         /**
          * Is this a dupe of another value we know we can't use - Joshua G
          */
-        validateUniq : function(field, caption) {
-            isUniq = $.inArray(field.val(), uniq);
+        validateUniq : function(field, caption, uniq_values) {
+            if (typeof(uniq_values)==='undefined') uniq_values = uniq;
+            isUniq = $.inArray(field.val(), uniq_values);
 
             if(isUniq === -1) {
                 return true
@@ -506,14 +507,13 @@ jQuery.fn.uniform = function(settings) {
                            .toggleClass(settings.valid_class, valid)
                            .find(settings.msg_selector);
 
-            if (! valid && ! $p.data('info-text')) {
+            if (!valid && (typeof($p.data('info-text')) === "undefined") ){
                 $p.data('info-text', $p.html());
             }
-            else if (valid) {
-                text = $p.data('info-text');
-            }
 
-            if (text) {
+            if (valid) {
+                $p.html( $p.data('info-text') );
+            } else {
                 $p.html(text);
             }
         };

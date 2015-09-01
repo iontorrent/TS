@@ -23,6 +23,7 @@ using namespace std;
 struct BasecallerRead {
 
   void SetData(const vector<float> &measurements, int num_flows);
+  bool SetDataAndKeyPass(const vector<float> &measurements, int num_flows, const int *key_flows, int num_key_flows);
   bool SignalKeyPass(const vector<float> &measurements, int num_flows, const int *key_flows, int num_key_flows);
   bool SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows);
   bool SetDataAndKeyNormalizeNew(const float *measurements, int num_flows, const int *key_flows, int num_key_flows, const bool phased = false);

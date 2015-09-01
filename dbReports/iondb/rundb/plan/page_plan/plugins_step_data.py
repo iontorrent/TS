@@ -27,6 +27,7 @@ class PluginFieldNames():
     USER_INPUT = 'userInput'
     ACCOUNT_ID = 'accountId'
     ACCOUNT_NAME = 'accountName'
+    IRU_QC_OPTIONS = 'iru_qc_option'
 
 class PluginsStepData(AbstractStepData):
 

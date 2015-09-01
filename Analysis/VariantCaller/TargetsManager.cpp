@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <algorithm>
 #include "BAMWalkerEngine.h"
-#include "ExtendParameters.h"
+//#include "ExtendParameters.h"
 
 
 TargetsManager::TargetsManager()
@@ -47,7 +47,7 @@ bool CompareTargets(TargetsManager::UnmergedTarget *i, TargetsManager::UnmergedT
 
 
 
-void TargetsManager::Initialize(const ReferenceReader& ref_reader, const ExtendParameters& parameters)
+void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string& _targets, bool _trim_ampliseq_primers /*const ExtendParameters& parameters*/)
 {
 
   //
@@ -56,8 +56,8 @@ void TargetsManager::Initialize(const ReferenceReader& ref_reader, const ExtendP
 
   list<UnmergedTarget>  raw_targets;
 
-  if (not parameters.targets.empty()) {
-    LoadRawTargets(ref_reader, parameters.targets, raw_targets);
+  if (not _targets.empty()) {
+    LoadRawTargets(ref_reader, _targets, raw_targets);
 
   } else {
     for (int chr = 0; chr < ref_reader.chr_count(); ++chr) {
@@ -115,11 +115,11 @@ void TargetsManager::Initialize(const ReferenceReader& ref_reader, const ExtendP
     unmerged[idx].merged = merged.size();
   }
 
-  if (parameters.targets.empty()) {
+  if (_targets.empty()) {
     cout << "TargetsManager: No targets file specified, processing entire reference" << endl;
 
   } else  {
-    cout << "TargetsManager: Loaded targets file " << parameters.targets << endl;
+    cout << "TargetsManager: Loaded targets file " << _targets << endl;
 
     cout << "TargetsManager: " << num_unmerged << " target(s)";
     if (not already_merged)
@@ -128,7 +128,7 @@ void TargetsManager::Initialize(const ReferenceReader& ref_reader, const ExtendP
     if (not already_sorted)
       cout << "TargetsManager: Targets required sorting" << endl;
 
-    trim_ampliseq_primers = parameters.trim_ampliseq_primers;
+    trim_ampliseq_primers = _trim_ampliseq_primers;
     if (trim_ampliseq_primers)
       cout << "TargetsManager: Trimming of AmpliSeq primers is enabled" << endl;
   }

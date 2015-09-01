@@ -21,19 +21,27 @@ BASIC = false
 OUTBOUND_PORT = 'eth0'
 # set this to the IP address of your LAN's router (edited by tsvm-setup script)
 default_router = '8.8.8.8'
+# Set this to the ubuntu distribution version
+DIST = 'lucid'
 
 # Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
 VAGRANTFILE_API_VERSION = "2"
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-  config.vm.box = "lucid64_TS"
-  #config.vm.box_url = "http://files.vagrantup.com/lucid64.box
+  config.vm.box = DIST+"64_TS"
   BOX_URL = "ionupdates.com"
-  # Ion Torrent box
-  config.vm.box_url = "http://" + BOX_URL + "/boxes/lucid64_TS.box"
-  config.ssh.username = 'ionadmin'
-  config.ssh.private_key_path = './.private_key_rsa'
 
+  # Ion Torrent box
+  config.vm.box_url = "http://" + BOX_URL + "/boxes/"+DIST+"64_TS.box"
+  config.ssh.username = 'ionadmin'
+  config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'" # avoids 'stdin: is not a tty' error.
+  config.ssh.private_key_path = ["./.vagrant_key_rsa","./.private_key_rsa"]
+  config.vm.provision "shell", inline: <<-SCRIPT
+    printf "%s\n" "#{File.read("./.vagrant_key_rsa.pub")}" > /home/ionadmin/.ssh/authorized_keys
+    chown -R ionadmin:ionadmin /home/ionadmin/.ssh
+  SCRIPT
+  config.ssh.insert_key = false
+  
   config.vm.network :forwarded_port, guest: 80, host: 8082
   config.vm.network :public_network, :bridge => OUTBOUND_PORT
 
@@ -108,11 +116,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     #config.vm.provision :shell, :inline => 'echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99hashsumerrorfix.conf' # Work around broken proxy? Avoids 'Hash Sum error'
 
     # SETUP APT REPOSITORY LOCATION - DEPLOY
-    ION_APT = "deb http://updates.ite/updates/software/ lucid-beta/"
+    ION_APT = "deb http://updates.ite/updates/software/ "+DIST+"-beta/"
     config.vm.provision :shell, :inline => "echo \"" + ION_APT + "\" > /etc/apt/sources.list.d/ionupdates.list"
     # SETUP APT REPOSITORY LOCATION - DEVELOPMENT
-    #config.vm.provision :shell, :inline => 'echo "deb http://updates.ite/updates/software lucid-alpha/" > /etc/apt/sources.list.d/iontorrent.list'
-    #config.vm.provision :shell, :inline => 'echo "deb http://updates.ite/updates/software lucid-dev/" >> /etc/apt/sources.list.d/iontorrent.list'
+    #config.vm.provision :shell, :inline => 'echo "deb http://updates.ite/updates/software "+DIST+"-alpha/" > /etc/apt/sources.list.d/iontorrent.list'
+    #config.vm.provision :shell, :inline => 'echo "deb http://updates.ite/updates/software "+DIST+"-dev/" >> /etc/apt/sources.list.d/iontorrent.list'
 
     config.vm.provision :shell, :inline => 'apt-get -qq update'
 

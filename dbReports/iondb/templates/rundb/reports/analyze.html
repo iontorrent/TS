@@ -4,7 +4,7 @@
 {% load static from staticfiles %}
 {% block content %}
 <div class="content group" id="analyzeDiv">
-    <h1>Run Name : {{ expName }}</h1>
+    <h1>Run Name : {{ exp.pretty_print_no_space }}</h1>
     <div id="warning" class="alert alert-block hide"></div>
     {% if start_error %}
     <div id="start_error" class="alert alert-block alert-error">
@@ -12,7 +12,7 @@
     </div>
     {% endif %}
     <div id="report_analyze_form_container">
-    <form id="report_analyze_form" action="{% url "report_analyze" pk reportpk %}" method='POST' enctype="multipart/form-data" class="form-horizontal">
+    <form id="report_analyze_form" action="{% url "report_analyze" exp.pk reportpk %}" method='POST' enctype="multipart/form-data" class="form-horizontal">
         <div class="row-fluid">
             <div class="span2">
                 <ul id="analyzeTabs" class="nav nav-tabs nav-stacked" data-tabs="tabs">
@@ -27,9 +27,6 @@
                     </li>
                     <li>
                         <a data-toggle="tab" href="#plugins">Plugins</a>
-                    </li>
-                    <li>
-                        <a data-toggle="tab" href="#cmdline_args">Command Line Args (Advanced)</a>
                     </li>
                 </ul>
             </div>
@@ -80,6 +77,143 @@
                         </div>
                     </div>
                     {% endif %}
+
+                    <div class="control-group">
+                        <label class="control-label">Analysis Parameters</label>
+                        <div class="controls">
+                            {{ rpf.custom_args }}
+                            <label for="default_args" class="checkbox inline" rel="tooltip" title='Use ION default args'>
+                                <input type="radio" name="args_choice" value="default" {% if not rpf.custom_args.value %}checked{% endif %}>Default (Recommended)
+                            </label>
+                            <label for="custom_args" class="checkbox inline" rel="tooltip" title='Customized parameters'>
+                                <input type="radio" name="args_choice" value="custom" {% if rpf.custom_args.value %}checked{% endif %}>Custom
+                            </label>
+                            <a data-toggle="collapse" href="#cmdline_args" style="margin:10px 0 0 20px;"><i class="showargs icon-plus"></i></a>
+                        </div>
+                    </div>
+                    <div id="cmdline_args" class="collapse out">
+                    <div class="control-group">
+                        <div class="controls">
+                            <select id="analysisargs_select" class="input-xxlarge">
+                                <option value="">&lt;Current selection&gt;</option>
+                                {% if rpf.custom_args.value %}
+                                    <option value="_eas_args_dict" selected>&lt;Saved custom selection&gt;</option>
+                                {% endif %}
+                                {% for args in analysisargs %}
+                                    {% if args.best_match %}
+                                    <option value="{{args.name}}" class="best_match" {% if not rpf.custom_args.value %}selected{% endif %}>{{args.text}}</option>
+                                    {% else %}
+                                    <option value="{{args.name}}">{{args.text}}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="full">
+                        <div class="control-group">
+                            <label for="id_beadfindArgs" class="control-label">BeadFind</label>
+                            <div class="controls fromRaw">
+                                {{ rpf.beadfindArgs }}
+                                {{ rpf.beadfindArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_analysisArgs" class="control-label">Analysis</label>
+                            <div class="controls fromRaw">
+                                {{ rpf.analysisArgs }}
+                                {{ rpf.analysisArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_prebasecallerArgs" class="control-label">Pre-BaseCaller for calibration</label>
+                            <div class="controls recalib">
+                                {{ rpf.prebasecallerArgs }}
+                                {{ rpf.prebasecallerArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_calibrateArgs" class="control-label">Calibration</label>
+                            <div class="controls recalib">
+                                {{ rpf.calibrateArgs }}
+                                {{ rpf.calibrateArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_basecallerArgs" class="control-label">BaseCaller</label>
+                            <div class="controls">
+                                {{ rpf.basecallerArgs }}
+                                {{ rpf.basecallerArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_alignmentArgs" class="control-label">Alignment</label>
+                            <div class="controls">
+                                {{ rpf.alignmentArgs }}
+                                {{ rpf.alignmentArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_ionstatsArgs" class="control-label">Ionstats</label>
+                            <div class="controls">
+                                {{ rpf.ionstatsArgs }}
+                                {{ rpf.ionstatsArgs.errors }}
+                            </div>
+                        </div>
+                    </div>
+                    {% if has_thumbnail %}
+                    <div class="thumb">
+                        <div class="control-group">
+                            <label for="id_thumbnailBeadfindArgs" class="control-label">Thumbnail BeadFind</label>
+                            <div class="controls fromRaw">
+                                {{ rpf.thumbnailBeadfindArgs }}
+                                {{ rpf.thumbnailBeadfindArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_thumbnailAnalysisArgs" class="control-label">Thumbnail Analysis</label>
+                            <div class="controls fromRaw">
+                                {{ rpf.thumbnailAnalysisArgs }}
+                                {{ rpf.thumbnailAnalysisArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_prethumbnailBasecallerArgs" class="control-label">Thumbnail Pre-BaseCaller for calibration</label>
+                            <div class="controls recalib">
+                                {{ rpf.prethumbnailBasecallerArgs }}
+                                {{ rpf.prethumbnailBasecallerArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_thumbnailCalibrateArgs" class="control-label">Thumbnail Calibration</label>
+                            <div class="controls recalib">
+                                {{ rpf.thumbnailCalibrateArgs }}
+                                {{ rpf.thumbnailCalibrateArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_thumbnailBasecallerArgs" class="control-label">Thumbnail BaseCaller</label>
+                            <div class="controls">
+                                {{ rpf.thumbnailBasecallerArgs }}
+                                {{ rpf.thumbnailBasecallerArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_thumbnailAlignmentArgs" class="control-label">Thumbnail Alignment</label>
+                            <div class="controls">
+                                {{ rpf.thumbnailAlignmentArgs }}
+                                {{ rpf.thumbnailAlignmentArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_thumbnailIonstatsArgs" class="control-label">Thumbnail Ionstats</label>
+                            <div class="controls">
+                                {{ rpf.thumbnailIonstatsArgs }}
+                                {{ rpf.thumbnailIonstatsArgs.errors }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    </div>
                 </div>
                 <div class="tab-pane" id="options">
                     <div class="control-group">
@@ -166,18 +300,19 @@
 
                     <div class="control-group text-success">
                         Default reference info is used for barcodes with no sample name. Additional options for barcoded samples are available on the
-                        <a href="{% url "page_plan_edit_run" pk %}">Edit Run Plan</a> page.
+                        <a href="{% url "page_plan_edit_run" exp.pk %}">Edit Run Plan</a> page.
                     </div>
                     
                     {% if barcodesWithSamples %}
 
                     <div id='barcodedReference_container'>
                         <div id='unsupported' class="text-error" style="display: none;">
-                            Barcoded References selection is not supported. Please use <a href='{% url "page_plan_edit_run" pk %}'>Edit Run Plan</a> page to assign samples to new barcodes.
+                            Barcoded References selection is not supported. Please use <a href='{% url "page_plan_edit_run" exp.pk %}'>Edit Run Plan</a> page to assign samples to new barcodes.
                         </div>
                         <div id='barcodedReference_div'>
                             <div class="control-group">
-                                <input id="useDefaultReference" type="checkbox" style="margin-left: 25px;"><b> Use Default Reference & BED files for all barcodes</b>
+                                <input id="useDefaultReference" type="checkbox" style="margin-left: 25px;" {% if exp.plan.is_same_refInfo_as_defaults_per_sample %} checked {% endif %}
+                                    ><b> Use Default Reference & BED files for all barcodes</b>
                             </div>
 
                             <table class="table table-condensed">
@@ -244,112 +379,6 @@
                         <iframe id="plugin_iframe" src="" width="100%" height="300px" style="border:1px solid #0981d2;overflow: auto;padding:5px;"></iframe>
                     </div>
                 </div>
-                <div class="tab-pane" id="cmdline_args">
-                    <div class="span12 full">
-                        <div class="control-group">
-                            <label for="id_beadfindArgs" class="control-label">Beadfind args</label>
-                            <div class="controls fromRaw">
-                                {{ rpf.beadfindArgs }}
-                                {{ rpf.beadfindArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_analysisArgs" class="control-label">Analysis args</label>
-                            <div class="controls fromRaw">
-                                {{ rpf.analysisArgs }}
-                                {{ rpf.analysisArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_prebasecallerArgs" class="control-label">Pre Basecaller Args for calibration</label>
-                            <div class="controls recalib">
-                                {{ rpf.prebasecallerArgs }}
-                                {{ rpf.prebasecallerArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_recalibArgs" class="control-label">Recalibration Args</label>
-                            <div class="controls recalib">
-                                {{ rpf.recalibArgs }}
-                                {{ rpf.recalibArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_basecallerArgs" class="control-label">Basecaller Args</label>
-                            <div class="controls">
-                                {{ rpf.basecallerArgs }}
-                                {{ rpf.basecallerArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_alignmentArgs" class="control-label">Alignment Args</label>
-                            <div class="controls">
-                                {{ rpf.alignmentArgs }}
-                                {{ rpf.alignmentArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_ionstatsArgs" class="control-label">Ionstats Args</label>
-                            <div class="controls">
-                                {{ rpf.ionstatsArgs }}
-                                {{ rpf.ionstatsArgs.errors }}
-                            </div>
-                        </div>
-                    </div>
-                    {% if has_thumbnail %}
-                    <div class="span12 thumb">
-                        <div class="control-group">
-                            <label for="id_thumbnailBeadfindArgs" class="control-label">Thumbnail Beadfind args</label>
-                            <div class="controls fromRaw">
-                                {{ rpf.thumbnailBeadfindArgs }}
-                                {{ rpf.thumbnailBeadfindArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_thumbnailAnalysisArgs" class="control-label">Thumbnail Analysis args</label>
-                            <div class="controls fromRaw">
-                                {{ rpf.thumbnailAnalysisArgs }}
-                                {{ rpf.thumbnailAnalysisArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_prethumbnailBasecallerArgs" class="control-label">Thumbnail Pre Basecaller args for calibration</label>
-                            <div class="controls recalib">
-                                {{ rpf.prethumbnailBasecallerArgs }}
-                                {{ rpf.prethumbnailBasecallerArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_thumbnailRecalibArgs" class="control-label">Thumbnail Recalibration Args</label>
-                            <div class="controls recalib">
-                                {{ rpf.thumbnailRecalibArgs }}
-                                {{ rpf.thumbnailRecalibArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_thumbnailBasecallerArgs" class="control-label">Thumbnail Basecaller args</label>
-                            <div class="controls">
-                                {{ rpf.thumbnailBasecallerArgs }}
-                                {{ rpf.thumbnailBasecallerArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_thumbnailAlignmentArgs" class="control-label">Thumbnail Alignment args</label>
-                            <div class="controls">
-                                {{ rpf.thumbnailAlignmentArgs }}
-                                {{ rpf.thumbnailAlignmentArgs.errors }}
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="id_thumbnailIonstatsArgs" class="control-label">Thumbnail Ionstats args</label>
-                            <div class="controls">
-                                {{ rpf.thumbnailIonstatsArgs }}
-                                {{ rpf.thumbnailIonstatsArgs.errors }}
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
             </div>
         </div>
         {{ eas_form.pluginsUserInput }}
@@ -398,6 +427,13 @@
     var WARNINGS = {{warnings|safe}};
     var _save_barcoded_reference = false;
     var _barcode_set = $('#id_barcodeKitName').val();
+    var ANALYSISARGS = {};
+    {% for args in analysisargs %}
+        ANALYSISARGS["{{args.name}}"] = JSON.parse("{{ args.args_json|escapejs }}")
+    {% endfor %}
+    ANALYSISARGS["_eas_args_dict"] = JSON.parse("{{ eas_args_dict|escapejs }}");
+    
+    cmdline_args_display();
 </script>
 <script language="javascript" type="text/javascript" src="{% static "runliveness.min.js"%}"></script>
 {% endblock content %}

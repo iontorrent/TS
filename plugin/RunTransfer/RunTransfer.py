@@ -12,7 +12,7 @@ from ion.plugin import *
 
 class RunTransfer(IonPlugin):
     '''Main class definition for this plugin'''
-    version = '4.6.0.0'
+    version = '5.0.0.0'
     DEBUG = False
     author = "bernard.puc@thermofisher.com"
 

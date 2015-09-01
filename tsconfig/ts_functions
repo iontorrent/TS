@@ -12,9 +12,7 @@ function print_help()
     echo "Usage: TSconfig [options]"
     echo -e "\t--configure-server            Configure this server as a head node (WARNING: This will update the Torrent Suite)"
     echo -e "\t--reconfigure                 Re-run Configuration steps (Without updating the Torrent Suite)"
-    #echo -e "\t--configure-compute           Configure this server as a compute node"
     echo -e "\t--configure-instrument-support Add support for direct connected instruments"
-    #echo -e "\t--remove-instrument-support   Remove support for raw data (instruments)"
     echo -e "\t--change-hostname, -r         Change the server's hostname"
     echo -e "\t--update-torrent-suite, -s    Update Ion software packages"
     echo -e "\t--configure-timezone, -z      Set timezone."
@@ -25,9 +23,9 @@ function print_help()
     echo
     echo "Advanced options:"
     echo -e "\t--debug, -d                   Turns on verbose shell execution"
+    echo -e "\t--force, -f                   Override disk space warnings"
     echo -e "\t--eth-dev, -e <device>        Specify ethernet device, default is port assigned default route"
     echo -e "\t--apt-usb                     Use Ion Install USB drive for deb pkg repository"
-    #echo -e "\t--unconfigure-server          Unconfigures head-node or compute-node specific settings"
     echo -e "\t--skip-init                   Do not execute passwd reset, timezone setup during --configure* operations"
     echo -e "\t--skip-instrument-config      Disables FTP,DHCP,IPTABLES configuration during --configure* operations"
     echo -e "\t--configure-ftp               Configures FTP Service.  Only makes sense with these options: --configure-server --skip-pgm-config"
@@ -35,6 +33,31 @@ function print_help()
     echo -e "\t--security-update             Check for and install packages with security updates"
     echo -e "\t--update-cluster              Check for and install Ion Software updates on the cluster nodes"
     echo -e "\t--configure-apt-cache         Installs apt-cacher-ng and configures headnode"
+    echo
+}
+function print_help_1404()
+{
+    if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+        source /opt/ion/bin/ion-tsconfig.version.env
+        echo
+        echo "ion-tsconfig version: "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetGitHash`")"
+    fi
+    echo
+    echo "Usage: TSconfig [options]"
+    echo -e "\t--configure-server            Configure this server as a head node (Without updating the Torrent Suite)"
+    echo -e "\t--reconfigure                 Re-run Configuration steps (Without updating the Torrent Suite)"
+    echo -e "\t--update-torrent-suite, -s    Update installed software packages"
+    echo -e "\t--change-hostname, -r         Change the server's hostname"
+    echo -e "\t--configure-timezone, -z      Set timezone."
+    echo -e "\t--configure-postfix, -p       Configure postfix mailer"
+    echo -e "\t--purge-all-deb               Deletes all debian packages in apt cache directory"
+    echo -e "\t--help, -h                    Prints command line args"
+    echo -e "\t--version                     Prints version"
+    echo
+    echo "Advanced options:"
+    echo -e "\t--debug, -d                   Turns on verbose shell execution"
+    echo -e "\t--force, -f                   Override disk space warnings"
+    echo -e "\t--security-update             Check for and install packages with security updates"
     echo
 }
 #---    ---#
@@ -402,7 +425,7 @@ function scrub_torrentserver()
     for pkg in ${pkg_list[@]}; do
         user_msg "\t$pkg"
     done
-    
+
     echo -n "Do you REALLY want to delete these packages? (n|Y) "
     read usrmsg
     case $usrmsg in
@@ -412,7 +435,7 @@ function scrub_torrentserver()
         exit 1
         ;;
     esac
-    
+
     for pkg in ${pkg_list[@]}; do
         if dpkg -l $pkg|grep ^ii > /dev/null; then
             user_msg "\tRemoving $pkg"
@@ -421,7 +444,7 @@ function scrub_torrentserver()
             echo "$pkg not installed"
         fi
     done
-    
+
     # Remove any other dependent packages no longer required
     apt-get --assume-yes autoremove
 }
@@ -763,7 +786,7 @@ function get_input_hostname()
             ;;
         esac
     done
-    
+
     #---    set FQDN    ---#
     oldFQDN=$(/bin/hostname -f)
     if [ "${newDomainName}" == "" ]; then
@@ -835,7 +858,7 @@ function change_hostname()
     for hostfile in ${hostfiles[@]}; do
         sed -i "s/${oldFQDN}/${newHostName}/g" $hostfile
     done
-    
+
     # Reboot
     echo
     echo
@@ -1205,7 +1228,7 @@ function install_security_upgrades ()
     user_msg "=================================================================="
     #unattended-upgrade --dry-run --debug 1>&2
     unattended-upgrade --debug 1>&2
-    
+
     #Alternate method used by Update Server GUI
     #Tests show both methods update the same packages
     #grep lucid-security /etc/apt/sources.list > /etc/apt/secsrc.list
@@ -1331,7 +1354,7 @@ function preinst_ion_packages ()
     if dpkg -l python-librabbitmq|tail -1|grep -q ^ii; then
         dpkg --purge python-librabbitmq 1>&2
     fi
-    
+
     return 0
 }
 
@@ -1375,8 +1398,10 @@ function install_ion_packages()
         #Load proton specific packages if this is Proton Torrent Server
         inst_files=
         if is_proton_ts; then
-            read_packagelist_file torrentsuite pgm proton inst_files
-            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+            proton_files=
+            read_packagelist_file torrentsuite proton proton_files
+            read_packagelist_file torrentsuite pgm inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} ${proton_files[@]} )
         else
             #Default to PGM specific packages
             read_packagelist_file torrentsuite pgm inst_files
@@ -1579,13 +1604,12 @@ function logrotate_iondb ()
 	endscript
 }
 EOF
-
-        # Needs one file to rotate on, else all is lost - it will never execute prerotate script
-        mkdir -p /results/dbase_backup
-        touch /results/dbase_backup/iondb.sql
     else
         echo "/etc/logrotate.d/iondb file exists" 1>&2
     fi
+    # Needs one file to rotate on, else all is lost - it will never execute prerotate script
+    mkdir -p /results/dbase_backup
+    touch /results/dbase_backup/iondb.sql
 }
 
 function set_logfile_size_limit ()
@@ -2192,7 +2216,7 @@ function config_master_sge()
     fi
 
     # List of queues to create
-    sgequeues=( all.q tl.q thumbnail.q )
+    sgequeues=( all.q tl.q thumbnail.q thumbnail_worker.q )
 
     #setup all.q queue
     #setup tl.q queue
@@ -2236,6 +2260,7 @@ function config_master_sge()
     # Set the all.q load_thresholds       np_load_avg=95.0
     qconf -mattr queue load_thresholds np_load_avg=95.0 all.q 1>&2
     qconf -mattr queue load_thresholds np_load_avg=95.0 thumbnail.q 1>&2
+    qconf -mattr queue load_thresholds np_load_avg=95.0 thumbnail_worker.q 1>&2
     qconf -mattr queue load_thresholds np_load_avg=95.0 tl.q 1>&2
 
     # add execution host
@@ -2498,12 +2523,12 @@ function config_compute_sge()
     # ===================================================
     if grep ignore_fqdn /var/lib/gridengine/iontorrent/common/bootstrap | grep -q false; then
         sed -i 's/^ignore_fqdn.*/ignore_fqdn             true/' /var/lib/gridengine/iontorrent/common/bootstrap
-        
+
         # Need to whack gridengine daemon
         kill -9 $(pgrep sge_execd)
         service gridengine-exec restart
     fi
-    
+
     # ===================================================
     # add execution host
     if ! qconf -sel | grep -q $currentNodeName; then
@@ -2551,7 +2576,7 @@ function config_compute_sge()
 
     #add host to queues
     #TODO: when host is first added to queue, disable it.  All other times, do nothing.
-    sgequeues=( all.q plugin.q thumbnail.q )
+    sgequeues=( all.q plugin.q thumbnail.q thumbnail_worker.q )
     for qname in ${sgequeues[@]}; do
         if ! qconf -aattr queue hostlist $currentNodeName $qname 1>&2; then
             user_msg "WARNING: SGE config failed adding host to $qname"
@@ -3242,7 +3267,7 @@ function get_hw_conf()
     if echo $hardwarename|grep -q VirtualBox; then
         echo "tsvm"
     elif echo $hardwarename|grep -q Bochs; then
-        echo "raptorvm"
+        echo "s5vm"
     elif echo $hardwarename|grep -q "VMware Virtual Platform"; then
         echo "vmware"
     else

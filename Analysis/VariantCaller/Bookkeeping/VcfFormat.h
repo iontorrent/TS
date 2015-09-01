@@ -33,7 +33,7 @@ using namespace std;
 // forward declaration
 class ExtendParameters; 
 
-string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sample_list);
+string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sample_list, int primary_sample = 0);
 void clearInfoTags(vcf::Variant &var);
 void NullInfoFields(vcf::Variant &var, bool use_position_bias);
 void SetUpFormatString(vcf::Variant &var);

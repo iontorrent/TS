@@ -276,7 +276,7 @@ def finish_sys_template(sysTemplate, isCreated, chipType = "", flowCount = 500, 
 
 
 
-def add_or_update_sys_template(planDisplayedName, application, applicationGroup = "DNA", chipType = "", isPGM = True, isSystemDefault = False, isMuSeek = False, templateKitName = "", controlSeqKitName = None, samplePrepKitName = None, sampleGrouping = None, categories = ""):        
+def add_or_update_sys_template(planDisplayedName, application, applicationGroup = "DNA", chipType = "", isPGM = True, isSystemDefault = False, isMuSeek = False, templateKitName = "", controlSeqKitName = None, samplePrepKitName = None, sampleGrouping = None, categories = "", templatingSize=None, libraryReadLength=0):        
     sysTemplate = None
     isCreated = False
     isUpdated = False
@@ -308,16 +308,16 @@ def add_or_update_sys_template(planDisplayedName, application, applicationGroup 
             planDisplayedName = planDisplayedName, planName = planName, 
             defaults={"planStatus" : "planned", "runMode" : "single", "isReverseRun" : False, "planExecuted" : False,
             "runType" : application, "usePreBeadfind" : True, "usePostBeadfind" : True, "preAnalysis" : True, 
-            "chipBarcode" : "", "planPGM" : "",
+            "planPGM" : "",
             "templatingKitName" : templateKitName, "controlSequencekitname" : controlSeqKitName, "samplePrepKitName" : samplePrepKitName,
-            "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
+            "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories, "templatingSize":templatingSize, "libraryReadLength":libraryReadLength})
     else:
         sysTemplate, isCreated = models.PlannedExperiment.objects.get_or_create(isSystemDefault = isSystemDefault, isSystem = True, 
             isReusable = True, isPlanGroup = False,
             planDisplayedName = planDisplayedName, planName = planName, 
             defaults={"planStatus" : "planned","runMode" : "single", "isReverseRun" : False, "planExecuted" : False,
             "runType" : application, "usePreBeadfind" : True, "usePostBeadfind" : False, "preAnalysis" : True,
-            "chipBarcode" : "", "planPGM" : "",
+            "planPGM" : "",
             "templatingKitName" : templateKitName, "controlSequencekitname" : controlSeqKitName, "samplePrepKitName" : samplePrepKitName, 
             "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
 
@@ -325,6 +325,18 @@ def add_or_update_sys_template(planDisplayedName, application, applicationGroup 
             print "...Created System template.id=%d; name=%s; isSystemDefault=%s" %(sysTemplate.id, sysTemplate.planDisplayedName, str(isSystemDefault))
     else:
         hasChanges = False
+        if templatingSize:
+            if (sysTemplate.templatingSize != templatingSize):
+                print ">>> DIFF: orig sysTemplate.templatingSize=%s for system template.id=%d; name=%s" % (sysTemplate.templatingSize, sysTemplate.id, sysTemplate.planName) 
+            
+                sysTemplate.templatingSize = templatingSize
+                hasChanges = True
+        if libraryReadLength:
+            if (sysTemplate.libraryReadLength != libraryReadLength):
+                print ">>> DIFF: orig sysTemplate.libraryReadLength=%s for system template.id=%d; name=%s" % (sysTemplate.libraryReadLength, sysTemplate.id, sysTemplate.planName) 
+            
+                sysTemplate.libraryReadLength = libraryReadLength
+                hasChanges = True
         if (sysTemplate.planStatus != "planned"):
             print ">>> DIFF: orig sysTemplate.planStatus=%s for system template.id=%d; name=%s" % (sysTemplate.planStatus, sysTemplate.id, sysTemplate.planName) 
             
@@ -540,27 +552,28 @@ def add_or_update_all_system_templates():
         #18
         templateName = "Ion RNA - Whole Transcriptome"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "RNA", "RNA", "P1.1.17", False, False, False, DEFAULT_PROTON_TEMPLATE_KIT_NAME )
-        
-        #pre-select plugins
+
+        #pre-select plugins 
         plugins = {}
         pluginUserInput = {}
-                                    
-#        selectedPlugins = models.Plugin.objects.filter(name__in = ["ERCC_Analysis"], selected = True, active = True)
-#
-#        for selectedPlugin in selectedPlugins:
-#            pluginDict = {
-#                          "id" : selectedPlugin.id,
-#                          "name" : selectedPlugin.name,
-#                          "version" : selectedPlugin.version,
-#                          "userInput" : pluginUserInput,
-#                          "features": []
-#                          }
-#            
-#            plugins[selectedPlugin.name] = pluginDict
+                                            
+        selectedPlugins = models.Plugin.objects.filter(name__in = ["RNASeqAnalysis"], selected = True, active = True).order_by("-id")
+        if len(selectedPlugins) > 0:
+            selectedPlugin = selectedPlugins[0]   
+
+            pluginDict = {
+                          "id" : selectedPlugin.id,
+                          "name" : selectedPlugin.name,
+                          "version" : selectedPlugin.version,
+                          "userInput" : pluginUserInput,
+                          "features": []
+                          }
+            
+            plugins[selectedPlugin.name] = pluginDict
 
         plugins["PartekFlowUploader"] = thirdPartyPluginDict
                     
-        finish_sys_template(sysTemplate, isCreated, "P1.1.17", 500, DEFAULT_PROTON_SEQ_KIT_NAME, "Ion Total RNA Seq Kit v2", "RNA_Barcode_None", False, False, False, "", "", "", plugins, instrumentType)       
+        finish_sys_template(sysTemplate, isCreated, "P1.1.17", 500, DEFAULT_PROTON_SEQ_KIT_NAME, "Ion Total RNA Seq Kit v2", "IonXpressRNA", False, False, False, "", "", "", plugins, instrumentType)       
 
         #targetSeq     
         #19
@@ -583,17 +596,17 @@ def add_or_update_all_system_templates():
     
         #Oncomine
         #22
-        templateName = "OCP DNA"
+        templateName = "Oncomine Comprehensive DNA"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
         
         #23
-        templateName = "OCP Fusions"
+        templateName = "Oncomine Comprehensive Fusions"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "", {}, instrumentType)
+        finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "", {}, instrumentType)
                       
         #24
-        templateName = "OCP DNA and Fusions"        
+        templateName = "Oncomine Comprehensive DNA and Fusions"        
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")        
 
         #pre-select plugins 
@@ -620,17 +633,17 @@ def add_or_update_all_system_templates():
         #25
         templateName = "Ion AmpliSeq Colon and Lung Cancer Panel v2"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
         
         #26
         templateName = "Ion AmpliSeq RNA Lung Fusion Panel"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "", {}, instrumentType) 
                       
         #27
         templateName = "Ion AmpliSeq Colon Lung v2 with RNA Lung Fusion Panel"        
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Onconet")      
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
              
         
         #28
@@ -675,25 +688,23 @@ def add_or_update_all_system_templates():
         #29
         templateName = "Oncomine Focus DNA"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")
-        finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318select", 400, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
         
         #30
         templateName = "Oncomine Focus Fusions"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "", {}, instrumentType)
+        finish_sys_template(sysTemplate, isCreated, "318select", 400, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "", {}, instrumentType)
                       
         #31
         templateName = "Oncomine Focus DNA and Fusions"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "DNA_RNA", "Oncomine")
-        finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME,  OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318select", 400, OCP_FOCUS_SEQ_KIT_NAME,  OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
                       
         #32
         templateName = "Ion ReproSeq Aneuploidy"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "WGNM", "DNA", "318", True, False, False, "Ion PGM Template IA Tech Access Kit", None, None, "Self")                              
         finish_sys_template(sysTemplate, isCreated, "318", 250, "IonPGMHiQ",  "IonPicoPlex", "Ion SingleSeq Barcode set 1", True, False, False, "", "", "", {}, instrumentType, DEFAULT_P1_3_PRIME_ADAPTER_SEQUENCE) 
 
-
-        
     except:
         print format_exc()
         transaction.rollback()
@@ -707,7 +718,8 @@ def add_or_update_all_system_templates():
 def clean_up_obsolete_templates():
     try:
         #Oncomine
-        templateNames = ["Oncomine DNA", "Oncomine RNA", "Oncomine DNA-RNA", "Onconet DNA", "Onconet RNA", "Onconet DNA-RNA", "Ion AmpliSeq Colon and Lung Plus Cancer Panel", "Ion AmpliSeq Lung Fusion Cancer Panel", "Ion AmpliSeq Colon Lung Plus with Lung Fusion Cancer Panel" ]
+        templateNames = ["OCP DNA", "OCP Fusions", "OCP DNA and Fusions", "Oncomine DNA", "Oncomine RNA", "Oncomine DNA-RNA", "Onconet DNA", "Onconet RNA", "Onconet DNA-RNA", \
+                         "Ion AmpliSeq Colon and Lung Plus Cancer Panel", "Ion AmpliSeq Lung Fusion Cancer Panel", "Ion AmpliSeq Colon Lung Plus with Lung Fusion Cancer Panel", "Pharmacogenomics Research Panel" ]
         
         templates = models.PlannedExperiment.objects.filter(planDisplayedName__in = templateNames, isReusable = True, isSystem = True)
 
@@ -727,5 +739,3 @@ add_or_update_all_system_templates()
 
 #delete system templates here...           
 clean_up_obsolete_templates()
-
-        

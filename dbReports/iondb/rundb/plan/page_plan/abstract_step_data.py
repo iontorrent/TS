@@ -32,6 +32,9 @@ class AbstractStepData(object):
     def getCurrentSavedFieldDict(self):
         return self.savedFields
 
+    def getCurrentSavedObjectDict(self):
+        return self.savedObjects
+
     def getSectionSavedFieldDict(self, sectionName):
         """
         Sections are optional for a step.  Return the savedFields dictionary of the section if it exists.

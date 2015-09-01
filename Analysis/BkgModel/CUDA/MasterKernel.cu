@@ -18,6 +18,7 @@
 #include "UtilKernels.cu"
 #include "FittingHelpers.cu"
 #include "GenerateBeadTraceKernels.cu"
+#include "TraceLevelXTalk.cu"
 #include "SingleFlowFitKernels.cu"
 #include "RegionalFittingKernels.cu"
 #include "PostFitKernels.cu"

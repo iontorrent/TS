@@ -37,18 +37,6 @@ def create_user_profiles():
         (profile, created) = models.UserProfile.objects.get_or_create(user=user)
         if created:
             print "Added missing userprofile for: %s" % user.username
-
-def add_location():
-    '''Checks if a location exists and creates a default location
-    called `Home` if none exist. '''
-    loc = models.Location.objects.all()
-    if len(loc) > 0:
-        #print "Location exists: %s" % loc[0].name
-        pass
-    else:
-        loc = models.Location(name="Home",defaultlocation=True)
-        loc.save()
-        #print "Location Saved"
         
 def add_fileserver(_name,_path):
     fs = models.FileServer.objects.all()
@@ -1369,12 +1357,6 @@ if __name__=="__main__":
         sys.exit(1)
 
     try:
-        add_location()
-    except:
-        print 'Adding Location Failed'
-        print traceback.format_exc()
-        sys.exit(1)
-    try:
         add_fileserver("Home","/results/")
         if os.path.isdir ("/rawdata"):
             add_fileserver("Raw Data","/rawdata/")  # T620 support
@@ -1493,31 +1475,29 @@ if __name__=="__main__":
         print traceback.format_exc()
         sys.exit(1)
 
+    try:
+        add_or_update_singleSeq_dnabarcode_set()
+        ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+    except:
+        print 'Adding dnaBarcodeset: SingleSeq failed'
+        print traceback.format_exc()
+        sys.exit(1)
 
-#    try:
-#        add_or_update_singleSeq_dnabarcode_set()
-#        ensure_dnabarcodes_have_id_str()    # for existing barcode records        
-#    except:
-#        print 'Adding dnaBarcodeset: SingleSeq failed'
-#        print traceback.format_exc()
-#        sys.exit(1)
+    try:
+        add_or_update_ionCode_dnabarcode_set()
+        ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+    except:
+        print 'Adding dnaBarcodeset: IonCode failed'
+        print traceback.format_exc()
+        sys.exit(1)
 
-#     try:
-#         add_or_update_ionCode_dnabarcode_set()
-#         ensure_dnabarcodes_have_id_str()    # for existing barcode records        
-#     except:
-#         print 'Adding dnaBarcodeset: IonCode failed'
-#         print traceback.format_exc()
-#         sys.exit(1)
-
-#     try:
-#         add_or_update_ionCode1_32_dnabarcode_set()
-#         ensure_dnabarcodes_have_id_str()    # for existing barcode records        
-#     except:
-#         print 'Adding dnaBarcodeset: IonCode1-32 failed'
-#         print traceback.format_exc()
-#         sys.exit(1)
-
+    try:
+        add_or_update_ionCode1_32_dnabarcode_set()
+        ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+    except:
+        print 'Adding dnaBarcodeset: IonCode1-32 failed'
+        print traceback.format_exc()
+        sys.exit(1)
 
 #    try:
 #        add_ThreePrimeadapter('Forward', 'Ion P1B', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC', 'Default forward adapter', True)
@@ -1551,9 +1531,8 @@ if __name__=="__main__":
         sys.exit(1)
     
 
-    # This is necessary to be able to re-order analysisArgs entries in ts_dbData.json
-    for analysisArgs in models.AnalysisArgs.objects.all():
-        analysisArgs.delete()
+    # Allow re-ordering of analysisArgs entries in ts_dbData.json
+    models.AnalysisArgs.objects.filter(isSystem=True).delete()
 
     # This is necessary to be able to re-order chip entries in ts_dbData.json
     for chip in models.Chip.objects.all():

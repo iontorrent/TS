@@ -54,7 +54,7 @@ $(function() {
    <br/>
    <style type="text/css">
     th {text-align:center;width=100%}
-    td {text-align:right;width=100%}
+    td {text-align:left;width=100%}
     .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
    </style>
 
@@ -88,7 +88,9 @@ $(function() {
         {% endif %}
         
         <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
-            <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a></td>
+            <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
+            <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz">gVCF.GZ</a>
+            <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz.tbi">gVCF.GZ.TBI</a></td>
 
       {% elif barcode.status == "queued" %}
         <td style="text-align:left">{{barcode.name}}</td><td colspan="3" style="text-align:left">Queued</td>

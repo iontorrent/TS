@@ -117,9 +117,9 @@
                 {% ifequal kitTypeName "Avalanche" %}
                 {% else %}
                 <input type="radio" id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}"
-                    {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-                        checked="checked" data-templatekitname="{{step.getCurrentSavedFieldDict.templatekitname}}"
-                    {% endifequal %}
+                    {% if kitTypeName == step.getCurrentSavedFieldDict.templatekitType and step.getCurrentSavedFieldDict.templatekitname %}
+                                    checked="checked" data-templatekitname="{{step.getCurrentSavedFieldDict.templatekitname}}"
+                    {% endif %}
                 >{{kitTypeName}}
                 {% endifequal %}
             {% endfor %}
@@ -137,9 +137,7 @@
                 {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
                     {% for kit in kitDict.kit_values %}
                         <option value="{{kit.name}}" class="{{kitTypeName}}"
-                            {% if kitTypeName != step.getCurrentSavedFieldDict.templatekitType %}
-                                style="display: none;"
-                            {% elif kit.name == step.getCurrentSavedFieldDict.templatekitname %}
+                            {% if kit.name == step.getCurrentSavedFieldDict.templatekitname %}
                                 SELECTED
                             {% elif kit.name == kitDict.applDefault.name and not step.getCurrentSavedFieldDict.templatekitname %}
                                 SELECTED
@@ -235,6 +233,26 @@
         </p>
     </div>
 </div>
+
+<div class="read_length_info row-fluid hide" style="display: block;">
+    <div class="span6">
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Read Length:
+        <span class="option-group">
+            <small style="font-weight: normal; font-size: 100%;">
+                {% for readLength in step.getPrePopulatedFieldDict.readLengthChoices %}
+                    <label style="display: inline;">
+                        <input type="radio" id="readLength_{{readLength}}" name="readLength" value="{{readLength}}" {% if helper.isEditRun %} readonly {% endif %}
+                            {% if readLength|stringformat:"s"  == step.getCurrentSavedFieldDict.libraryReadLength|stringformat:"s"  or readLength|stringformat:"s"  == step.getCurrentSavedFieldDict.readLength|stringformat:"s"  %} checked="checked" {% endif  %}\>{{readLength}}
+                    </label>
+                {% endfor %}
+            </small>
+        </span>
+        </p>
+    </div>
+    <div class="span6">
+    </div>
+</div>
+
 <div class="row-fluid">
     <div class="span6">
         <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Flows:
@@ -302,12 +320,14 @@
 
         var template_kits_to_flows_map = {};
         var template_kits_to_readLengths_map = {};
+        var template_kits_to_altReadLengths_map = {};
         var template_kits_to_templatingSize_map = {};
         var template_kits_to_categories_map = {};
 
         {% for templateKitInfoObj in step.getPrePopulatedFieldDict.templateKits %}
             template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
             template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
+            template_kits_to_altReadLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
             template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
             template_kits_to_categories_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.categories}}";
         {%endfor%}
@@ -331,6 +351,28 @@
         {% endfor %}
         
 
+        function init_templatingSize_n_readLength_visibility() { 
+            var selectedTemplateKitName = $("#templateKit").find("option:selected").val();
+            if (selectedTemplateKitName) {
+                var categories = template_kits_to_categories_map[selectedTemplateKitName] || '';
+                
+                if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
+                    $('.templating_size_info').hide();
+                    $('.library_read_length_info').hide();
+                    $('.read_length_info').show();   
+                }
+                else if (categories.toLowerCase().indexOf("supportlibraryreadlength") >= 0) {
+                    $('.library_read_length_info').show();
+                    $('.read_length_info').hide();                   
+                }
+                else {
+                    $('.templating_size_info').hide();
+                    $('.library_read_length_info').hide();
+                    $('.read_length_info').hide();
+               }
+            }
+        }
+          
         function handleTemplateKitSelectionForTemplatingSize(selectedTemplateKitName) {
             $('input[name = "templatingSize"]').prop('checked', false);                    
             $('.templating_size_info').hide();
@@ -339,7 +381,10 @@
             
             if (selectedTemplateKitName) {
                 var categories = template_kits_to_categories_map[selectedTemplateKitName] || '';
-
+                if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
+                    $('.templating_size_info').hide();
+                    $('.library_read_length_info').hide();
+                }
                 if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {
                     var allowed_templatingSizes = template_kits_to_templatingSize_map[selectedTemplateKitName];
                     //console.log("at handleTemplateKitSelectionForTemplatingSize() categories=", categories, "; allowed_templatingSizes=", allowed_templatingSizes);
@@ -383,7 +428,6 @@
         
 
         function handleSeqKitSelectionForLibraryReadLength(selectedSeqKitName) {
-            
             var templateKit = $("select[name='templatekitname']").val()
             if (templateKit) {
                 var categories = template_kits_to_categories_map[templateKit] || '';
@@ -394,6 +438,38 @@
             }
         }
 
+        //for some templating kits, templating size cannot be used to drive UI behavior or db persistence.  Need to use read length instead
+        function handleTemplateKitSelectionForReadLength(selectedTemplateKitName) {
+            $('input[name = "readLength"]').prop('checked', false);     
+            $('.read_length_info').hide();
+            
+            var defaultReadLength = "";
+            
+            if (selectedTemplateKitName) {
+                var categories = template_kits_to_categories_map[selectedTemplateKitName] || '';
+                
+                if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
+                    var allowed_readLengths = template_kits_to_altReadLengths_map[selectedTemplateKitName];
+                    //console.log("at handleTemplateKitSelectionForReadLength() categories=", categories, "; allowed_readLengths=", allowed_readLengths);
+                    
+                    if (allowed_readLengths) {
+                        $('input[name = "readLength"]').parent().hide();
+
+                        jQuery.each(allowed_readLengths.split(";"), function(index, item) {
+                            $('input[name = "readLength"][value="' + item + '"]').parent().show();
+                            if (index == 0) {
+                                $('input[name = "readLength"][value="' + item + '"]').prop('checked', true);
+                                defaultReadLength = item;
+                            }
+                        });
+                        $('.read_length_info').show(); 
+                    }
+                }
+            }
+            updateSummaryPanel("#selectedLibraryReadLength", defaultReadLength);
+        }
+    
+    
         function setLibraryReadLengthByFlowCount() {
             var sequenceKit = $("select[name='sequencekitname']").val();
             
@@ -416,12 +492,15 @@
                 var categories_lower = categories.toLowerCase();
                 
                 if (categories_lower.indexOf("s5v1kit") >= 0 || categories_lower.indexOf("s5v1install") >= 0) {
-                    if (categories_lower in categories_to_seq_kits_map) {
-                        seqKitName = categories_to_seq_kits_map[categories_lower]
-                        $("#sequenceKit").val(seqKitName);
-                        handleSequencingKitSelection(seqKitName);             
-                    }
-                    
+                    //if sequencing kit's categories is same or is subset of templating kit's categories, we found our entry
+                    $.each(categories_to_seq_kits_map , function(key, value) {
+                        if (categories_lower.indexOf(key) >= 0) {
+                            //alert( key + ": " + value );
+                            seqKitName = value;
+                            $("#sequenceKit").val(seqKitName);
+                            handleSequencingKitSelection(seqKitName);
+                        }
+                    });
                 }
             }
         }
@@ -544,17 +623,24 @@
         }).change();
 
 
+        var templateKit_options = $("#templateKit option");
+
+        function filter_options(options, select, filter_class) {
+            select.find('option').not(':first').remove();
+            select.append( templateKit_options.filter( "."+filter_class ));
+        }
+
+        filter_options(templateKit_options, $("#templateKit"), $('input[name="templatekitType"]:checked').val());
+
         $('input[name="templatekitType"]').change(function () {
 
             $("#templateKit_comment").hide();
             $("#templateKit").show();
-                
+
             // show/hide templateKit select options based on type
             var templateType = $(this).val();
-            var $options = $("#templateKit option");
-            $options.not(':first').hide();
-            $options.filter("."+templateType).show();
-            
+            filter_options(templateKit_options, $("#templateKit"), templateType);
+
             // retrieve previously selected kit or default if any
             var templateKit = $(this).data('templatekitname');
             if (!templateKit){
@@ -581,6 +667,7 @@
             setFlowCountBySelectedKits();
         	handleTemplateKitSelectionForTemplatingSize(selectedVal)
         	handleTemplateKitSelectionForLibraryReadLength(selectedVal);
+        	handleTemplateKitSelectionForReadLength(selectedVal);
         	handleTemplateKitSelectionForAutoSeqKitSelection(selectedVal);
         	
             updateSummaryPanel("#selectedTemplatingKitName", templateKitNameToDesc[selectedVal]);
@@ -635,7 +722,15 @@
             var flowCount = templating_size_to_flows_map[this.value];
             updateFlows(flowCount);
         });
-        
+
+        $('input[type=radio][name=readLength]').change(function() {
+            // TS-11339,  TS-11340 set number of flows based on read length selection
+            var read_length_to_flows_map = {'200':'500', '400':'850'};
+            var flowCount = read_length_to_flows_map[this.value];
+            updateFlows(flowCount);
+            updateSummaryPanel("#selectedLibraryReadLength", this.value); 
+        });
+
         $("#controlsequence").change(function()  {
             updateSummaryPanel("#selectedControlSequence", $(this).val());
         });     
@@ -658,15 +753,9 @@
                 $(".extra_kit_forward_info").show();
             }
         });
-        
-        //hide libraryReadLength UI section by default if value is zero
-        if ($('input[name = "libraryReadLength"]').val() > 0) {
-            $(".library_read_length_info").show();
-        }
-        else {
-            $(".library_read_length_info").hide();
-        }
 
+        init_templatingSize_n_readLength_visibility();
+          
         //hide templatingSize UI section by default if value is blank
         if ($('input[name = "templatingSize"]:checked').val() == undefined) {
             $(".templating_size_info").hide();

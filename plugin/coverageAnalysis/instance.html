@@ -292,8 +292,11 @@
             if( barcodedata.targetRegionBedFile !== undefined ) {
                trg = barcodedata.targetRegionBedFile ? barcodedata.targetRegionBedFile : def_trg;
             }
-            planBcAssign[barcodename] = { 'nuc':nuc, 'ref':ref, 'trg':trg };
-            if( ++barcodedTargets == 1 ) def_barcode = barcodename;
+            // do not include barcodes for 'None' reference, since should be excluded from analysis
+            if( ref != "None" ) {
+              planBcAssign[barcodename] = { 'nuc':nuc, 'ref':ref, 'trg':trg };
+              if( ++barcodedTargets == 1 ) def_barcode = barcodename;
+            }
           });
         });
         // set up plan.html plan settings

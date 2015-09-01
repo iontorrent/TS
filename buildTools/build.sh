@@ -81,6 +81,9 @@ for MODULE in $MODULES; do
     fi
     echo "=================================================="
     echo
+    if [ $MODULE = "plugin" -o $MODULE = "rndplugins" ]; then
+        $BUILD_ROOT/buildTools/removeAboutFile.sh $BUILD_ROOT/$MODULE
+    fi
 done;
 
 if [ $ERR != 0 ]; then

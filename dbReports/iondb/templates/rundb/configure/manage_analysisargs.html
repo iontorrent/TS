@@ -1,0 +1,209 @@
+{% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
+{% block tab-configure-analysisargs %}
+    <li class="active"><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
+{% endblock tab-configure-analysisargs %}
+{% block content %}
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        *display: inline;
+        height: 30px;
+        float: left;
+        margin: 10px 0px 0px 10px;
+    }
+</style>
+
+<div class="content">
+    <div id="errors" class="alert alert-error" style="display:none;"></div>
+    <h1>Analysis Parameters</h1>
+    <div class="row-fluid">
+        <div class="search-field">
+            <input type="text" class="filter" id="search_name" placeholder="Search Name"/>
+        </div>
+        <div class="search-field">
+            <select id='search_chip' class="filter">
+                <option value="">All Chips</option>
+                {% for chip in chips %}
+                    <option value={{chip.name}}>{{chip.name}}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-field">
+            <button id="search_text_go" class="btn" type="button">Go</button>
+        </div>
+        <div class="input-append search-field">
+            <button id="clear_filters" class="btn" type="button">Clear Filters</button>
+        </div>
+    </div>
+    <div id="grid"></div>
+</div>
+
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
+
+<script type="text/javascript">
+
+function filter(e){
+    e.preventDefault();
+    e.stopPropagation();
+    var filters = [
+        {
+            field: "name",
+            operator: "__icontains",
+            value: $("#search_name").val()
+        }
+    ]
+    var search_chip = $("#search_chip").val();
+    if (search_chip){
+        filters.push({
+            field: "chipType",
+            operator: "",
+            value: search_chip
+        })
+    }
+    $("#grid").data("kendoGrid").dataSource.filter(filters);
+}
+
+$(document).ready(function(){
+    
+    var grid = $("#grid").kendoGrid({
+        dataSource: {
+            type: "json",
+            transport: {
+                read: "/rundb/api/v1/analysisargs/?active=true",
+                parameterMap: function(options) {
+                    return buildParameterMap(options)
+                }
+            },
+            schema: {
+                data: "objects",
+                total: "meta.total_count",
+                model: {
+                    fields: {
+                        lastModifiedDate: {type : "date"},
+                    }
+                },
+            },
+            serverPaging: true,
+            serverSorting: true,
+            serverFiltering: true,
+            sort: { field: "lastModifiedDate", dir: "desc" },
+            pageSize: 20
+        },
+        height: 446,
+        groupable: false,
+        scrollable : {
+            virtual : true
+        },
+        sortable: true,
+        selectable: false,
+        columns: [{
+                field: "lastModifiedDate",
+                title: "Last Modified",
+                format: "{0:yyyy/MM/dd h:mm:ss tt}",
+                width : "15%",
+            } , {
+                field: "name",
+                title: "Name",
+                template: '<a href="/configure/analysisargs/${id}/view" class="args_action">${name}</a>'
+            } , {
+                field: "description",
+                title: "Description",
+            } , {
+                field: "chipType",
+                title: "Chip Type",
+                width : "10%",
+            } , {
+                field: "created",
+                title: "Source",
+                width : "10%",
+                sortable : false,
+                template: kendo.template($("#IsSystemTemplate").html()) 
+            }, {        	
+                title : " ",
+                width : "60px",
+                sortable : false,
+                template : kendo.template($("#ActionColumnTemplate").html())
+            }
+        ],
+        dataBound: function(e) {
+            $("#grid .args_action").click(function(e){
+                e.preventDefault();
+                var url = $(this).attr('href');
+                $('body #modal_analysisargs_details').remove();
+                $.get(url, function(data) {
+                   $('body').append(data);
+                   $("#modal_analysisargs_details").modal("show");
+                });
+            });
+            
+            $("#grid .args_action_delete").click(function(e){
+                e.preventDefault();
+                var url = $(this).attr('href');
+                var name = $(this).data('name');
+                bootbox.confirm('<h3>Are you sure you want to delete these Analysis Parameters ('+ name +') ?</h3>', function(result){
+                    if(result){
+                        $('#errors').empty().hide();
+                        console.log('deleting', name, url);
+                        $.ajax({
+                            url: url,
+                            type: 'DELETE',
+                            success: function(data){ refreshKendoGrid('#grid') },
+                            error: function(data) { $('#errors').html(data.status+' '+data.statusText+' '+data.responseText).show(); }
+                        });
+                    }
+                });
+            });
+        }
+    });
+    
+    $('.filter').change(function (e) { filter(e); });
+    
+    $('#clear_filters').click(function(e){
+        $('.filter').val('');
+        filter(e);
+    });
+});
+</script>
+
+<script id="IsSystemTemplate" type="text/x-kendo-template">
+    # if (data.isSystem) { #
+        <span rel="tooltip" title="System Pre-loaded">
+        <img src="{% static "resources/img/ion_24x24.png" %}" width="24px" height="24px" />
+    # } else { #
+        <span rel="tooltip" title="User created">   
+        <i class="icon-user"></i>
+        # if (data.creator) { #
+        <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">User: #= data.creator.username #</li>
+        # } #
+    # } #
+    </span>
+</script>
+
+<script id="ActionColumnTemplate" type="text/x-kendo-template">
+<div class="btn-group">
+    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
+    <ul class="dropdown-menu pull-right">
+        <li>
+            <a href="/configure/analysisargs/#=data.id#/view" class="args_action">View</a>
+        </li>
+        <li>
+            <a href="/configure/analysisargs/#=data.id#/copy" class="args_action">Copy</a>
+        </li> 
+        # if (!data.isSystem) { #
+            <li class="divider"></li>
+            <li>
+                <a href="/configure/analysisargs/#=data.id#/edit" class="args_action">Edit</a>
+            </li>
+            <li>
+                <a href="/rundb/api/v1/analysisargs/#=data.id#/" data-name="#=data.name#" class="args_action_delete">Delete</a>
+            </li>
+        # } #
+    </ul>
+</div>  
+</script>
+{% endblock content %}

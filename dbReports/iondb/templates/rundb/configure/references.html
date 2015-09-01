@@ -2,15 +2,9 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% block tab-configure-references %}
+    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+{% endblock tab-configure-references %}
 {% block extra_head %}
   <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
   <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
@@ -92,8 +86,8 @@
         <div class="clearfix">
           <h1 style="float:left;">Reference Sequences</h1>
           <div class="pull-right">
-            <a href="{% url "references_genome_download" %}" class="btn">Import References</a>
-            <a href="{% url "references_genome_add" %}" class="btn btn-primary" id="add_genome">Upload Custom Reference</a>
+            <a href="{% url "references_genome_download" %}" class="btn btn-primary">Import Preloaded Ion References</a>
+            <a href="{% url "references_genome_add" %}" class="btn btn-primary" id="add_genome">Import Custom Reference</a>
           </div>
         </div>
         <div id="referenceSequences"></div>

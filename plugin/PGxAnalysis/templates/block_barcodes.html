@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_parent"/>
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css">
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet">
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet">
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css">
+
+<style type="text/css">
+p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
+.zebra {  background-color: #E1EFFA;}
+.table_hover{    color: #009;    background-color: #6DBCEE;}
+</style></head>
+<body style="background:white">
+
+	<table>
+	  <tr><td>Library type:</td>          <td>{{pgxOptions.library_type}}</td></tr>
+	  <tr><td>Reference genome:</td>             <td>{{pgxOptions.genome_name}}</td></tr>
+
+	  {% if options.has_targets %}
+	    <tr><td>Targeted regions:</td>    <td>{{pgxOptions.targets_name}}</td></tr>
+	  {% else %}
+	    <tr><td>Targeted regions:</td>    <td>None</td></tr>
+	  {% endif %}
+	  {% if options.has_hotspots %}
+	    <tr><td>Hotspot regions:</td>     <td>{pgxOptions.hotspots_name}}</td></tr>
+	  {% else %}
+	    <tr><td>Hotspot regions:</td>     <td>None</td></tr>
+	  {% endif %}
+	  <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
+  	  <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
+      <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
+                                              <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
+                                              <a class="btn" href="{{options.run_name}}.xls">XLS</a></td></tr>
+      {% if options.barcode_mode == "match" %}
+      <tr><td>Please note:</td>           <td>Variant calling was carried out only for barcodes with both reference genome and targeted regions matching those specified above</td></tr>
+      {% else %}
+      <tr><td>Please note:</td>           <td>Variant calling was carried out for all barcodes with reference genome as specified above</td></tr>
+      {% endif %}
+	</table>
+
+<div class="k-widget k-grid">
+  <table class="table-striped">
+    <thead class="k-grid-header">
+      <tr>
+        <th class="k-header"><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
+        <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
+        <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
+        {% if options.has_hotspots %}
+        <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
+        {% endif %}
+        <th class="k-header"><span class="help" title="Download links">Download Links</span></th>
+      </tr>
+    </thead>
+    {% for barcode in barcode_data %}
+      {% if barcode.status == "completed" %}
+       <tr>
+          <td style="text-align:left"><a href="{{barcode.name}}/variantCaller.html">
+            <span title="Click to view the detailed coverage report for barcode {{barcode.name}}">{{barcode.name}}</span></a>
+          </td>
+
+          <td>{{barcode.summary.sample_name}}</td>
+
+          <td>{{barcode.summary.variants_total.variants}}</td>
+
+          {% if options.has_hotspots %}
+            <td>{{barcode.summary.hotspots_total.variants}}</td>
+          {% endif %}
+
+          <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
+              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
+              <a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a></td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+  </table>
+</div>
+
+</body>
+</html>
+

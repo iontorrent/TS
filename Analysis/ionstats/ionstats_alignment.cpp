@@ -118,7 +118,7 @@ void GetAggregatorSize(map<string, ErrorData> &error_data, map<string, HpData> &
 bool is_unambiguous_base(char b);
 bool compatible_bases(char a, char b);
 unsigned char base_to_bitcode(char base);
-unsigned int assignDeletionsToFlows(vector<uint16_t> &del_flow, uint16_t flow_idx, char prev_read_base, char next_read_base, const string &flow_order, int advance, const string inserted_seq, uint16_t n_flow);
+unsigned int assignDeletionsToFlows(vector<uint16_t> &del_flow, uint32_t &flow_idx, char prev_read_base, char next_read_base, const string &flow_order, int advance, const string inserted_seq, uint16_t n_flow);
 void * processAlignments(void *in);
 
 enum align_t {ALIGN_MATCH, ALIGN_INS, ALIGN_DEL, ALIGN_SUB};
@@ -132,6 +132,7 @@ void hpAdvance(
   unsigned int              flow_idx,
   const string &            flow_order,
   const string &            read_bases,
+  const string &            ref_bases,
   unsigned int              max_flows,
   // Data for tracking position in bases/HPs
   int                       read_idx,         // index of where we are in read_bases
@@ -998,7 +999,7 @@ int parseAlignment(
       // Perfect match
       int advance = min((int)alignment.CigarData[cigar_idx].Length, MD_len[MD_idx]);
       if(evaluate_hp)
-        hpAdvance(ALIGN_MATCH,advance,evaluate_flow,flow_idx,flow_order,read_bases,max_flows,read_idx, read_hp_nuc, read_hp_len, read_hp_cum_len, ref_idx, ref_hp_nuc, ref_hp_len, ref_hp_cum_len, stored_read_match_count, read_hp_idx, ref_hp_idx, ref_hp_err, ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
+        hpAdvance(ALIGN_MATCH,advance,evaluate_flow,flow_idx,flow_order,read_bases,ref_bases,max_flows,read_idx, read_hp_nuc, read_hp_len, read_hp_cum_len, ref_idx, ref_hp_nuc, ref_hp_len, ref_hp_cum_len, stored_read_match_count, read_hp_idx, ref_hp_idx, ref_hp_err, ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
       if(evaluate_flow)
         flowAdvance(advance,flow_idx,flow_order,read_idx,read_bases,flow_space_incorporations);
       read_idx  += advance;
@@ -1009,7 +1010,7 @@ int parseAlignment(
       // Insertion (read has a base, reference doesn't)
       int advance = alignment.CigarData[cigar_idx].Length;
       if(evaluate_hp)
-        hpAdvance(ALIGN_INS,advance,evaluate_flow,flow_idx,flow_order,read_bases,max_flows,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
+        hpAdvance(ALIGN_INS,advance,evaluate_flow,flow_idx,flow_order,read_bases,ref_bases,max_flows,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
       for (int cnt = 0; cnt < advance; ++cnt) {
         if(evaluate_flow) {
           flowCatchup(flow_idx,flow_order,read_idx,read_bases);
@@ -1025,15 +1026,22 @@ int parseAlignment(
       // ?? Shouldn't we have a problem if below two lengths don't agree ??
       assert((int)alignment.CigarData[cigar_idx].Length == MD_len[MD_idx]);
       int advance = MD_len[MD_idx];
-      if(evaluate_hp)
-        hpAdvance(ALIGN_DEL,advance,evaluate_flow,flow_idx,flow_order,read_bases,max_flows,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
-      if(evaluate_flow) {
-        // Try to assign deleted bases to the flows in which they would have been sequenced
-        vector<uint16_t> del_flow;
+      if(evaluate_hp || evaluate_flow) {
         char next_read_base = (read_idx < (int) read_bases.length()) ? read_bases[read_idx] : 'N';
         char prev_read_base = (read_idx > 0) ? read_bases[read_idx-1] : 'N';
-        unsigned int impossible_deletions = assignDeletionsToFlows(del_flow,flow_idx,prev_read_base,next_read_base,flow_order,advance,MD_seq[MD_idx],max_flows);
-        flow_space_errors.AddDel(del_flow);
+        if(evaluate_flow) {
+          // Decrement flow_idx if the first base of the deletion is the same as the HP that was just completed
+          if(flow_idx > 0 && MD_seq[MD_idx][0] == prev_read_base)
+            --flow_idx;
+        }
+        if(evaluate_hp)
+          hpAdvance(ALIGN_DEL,advance,evaluate_flow,flow_idx,flow_order,read_bases,ref_bases,max_flows,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
+        if(evaluate_flow) {
+          // Try to assign deleted bases to the flows in which they would have been sequenced
+          vector<uint16_t> del_flow;
+          unsigned int impossible_deletions = assignDeletionsToFlows(del_flow,flow_idx,prev_read_base,next_read_base,flow_order,advance,MD_seq[MD_idx],max_flows);
+          flow_space_errors.AddDel(del_flow);
+        }
       }
       base_space_errors.AddDel(read_idx,advance);
       ref_idx += advance;
@@ -1043,20 +1051,21 @@ int parseAlignment(
       // Substitution
       int advance = min((int)alignment.CigarData[cigar_idx].Length, MD_len[MD_idx]);
       if(evaluate_hp)
-        hpAdvance(ALIGN_SUB,advance,evaluate_flow,flow_idx,flow_order,read_bases,max_flows,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
+        hpAdvance(ALIGN_SUB,advance,evaluate_flow,flow_idx,flow_order,read_bases,ref_bases,max_flows,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow, zeromer_insertion_flow, zeromer_insertion_len);
       for (int cnt = 0; cnt < advance; ++cnt) {
         // Check if the substitution is an error (as opposed to a matching ambiguity code)
         bool is_error = !compatible_bases(read_bases[read_idx],MD_seq[MD_idx][cnt]);
+        if(is_error)
+          base_space_errors.AddSub(read_idx);
         if(evaluate_flow) {
           flowCatchup(flow_idx,flow_order,read_idx,read_bases);
           if(is_error)
             flow_space_errors.AddSub(flow_idx);
-          flowAdvance(1,flow_idx,flow_order,read_idx,read_bases,flow_space_incorporations);
         }
-        if(is_error)
-          base_space_errors.AddSub(read_idx);
         read_idx++;
         ref_idx++;
+        if(evaluate_flow)
+          flowCatchup(flow_idx,flow_order,read_idx,read_bases);
       }
       alignment.CigarData[cigar_idx].Length -= advance;
       MD_len[MD_idx] -= advance;
@@ -1429,6 +1438,7 @@ void hpAdvance(
   unsigned int              flow_idx,
   const string &            flow_order,
   const string &            read_bases,
+  const string &            ref_bases,
   unsigned int              max_flows,
   // Data for tracking position in bases/HPs
   int                       read_idx,         // index of where we are in read_bases
@@ -1484,8 +1494,12 @@ void hpAdvance(
         // Store error rate & flow index for this reference HP
         ref_hp_err.push_back(stored_read_match_count - ref_hp_len[ref_hp_idx]);
 assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
-        if(evaluate_flow)
+        if(evaluate_flow) {
+          flowCatchup(flow_idx,flow_order,read_idx,read_bases);
+if(ref_hp_flow.size() > 0)
+assert(flow_idx >= ref_hp_flow.back());
           ref_hp_flow.push_back(flow_idx);
+        }
         // Advance
         ref_idx += ref_match_count;
         ref_hp_idx++;
@@ -1539,12 +1553,18 @@ assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
         ref_hp_err.push_back(stored_read_match_count - ref_hp_len[ref_hp_idx]);
         assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
         if(evaluate_flow) {
+          // Try scan forward to find a flow matching the deleted base, otherwise leave it assigned to the current flow
           char flowed_base = flow_order[flow_idx % flow_order.size()];
-          char inserted_base = ref_hp_nuc[ref_hp_idx];
+          char deleted_base = ref_hp_nuc[ref_hp_idx];
           char next_read_base = (read_idx < (int) read_bases.length()) ? read_bases[read_idx] : 'N';
-          while( inserted_base != flowed_base && next_read_base != flowed_base && flow_idx < max_flows-1)
+          unsigned int original_flow_idx = flow_idx;
+          while( flowed_base != deleted_base  && flowed_base != next_read_base && flow_idx < max_flows-1)
             flowed_base = flow_order[++flow_idx % flow_order.size()];
-          ref_hp_flow.push_back(flow_idx);
+assert(flow_idx >= ref_hp_flow.back());
+          if(flowed_base == deleted_base)
+            ref_hp_flow.push_back(flow_idx);
+          else
+            ref_hp_flow.push_back(original_flow_idx);
         }
         ref_idx += ref_count;
         ref_hp_idx++;
@@ -1565,8 +1585,34 @@ assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
         completed_ref_hp=true;
         ref_hp_err.push_back(stored_read_match_count - ref_hp_len[ref_hp_idx]);
         assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
-        if(evaluate_flow)
+        if(evaluate_flow) {
+          char substituted_base = ref_hp_nuc[ref_hp_idx];
+          char next_ref_base = (ref_idx+1 < (int) ref_bases.length() ) ? ref_bases[ref_idx+1] : 'N';
+          char last_ref_base = (ref_idx > 0) ? ref_bases[ref_idx-1] : 'N';
+          char next_read_base = (read_idx+1 < (int) read_bases.length() ) ? read_bases[read_idx+1] : 'N';
+
+          char best_prev_flowed_base = flow_order[flow_idx % flow_order.size()];
+          unsigned int best_prev_flow = flow_idx;
+          if(ref_hp_flow.size() > 0 && flow_idx > ref_hp_flow.back()) {
+            if(best_prev_flow > 0)
+              best_prev_flowed_base = flow_order[--best_prev_flow % flow_order.size()];
+            while( best_prev_flowed_base != substituted_base && best_prev_flowed_base != last_ref_base && best_prev_flow > ref_hp_flow.back() )
+              best_prev_flowed_base = flow_order[--best_prev_flow % flow_order.size()];
+          }
+          unsigned int best_next_flow = flow_idx;
+          char best_next_flowed_base = flow_order[best_next_flow % flow_order.size()];
+          while( best_next_flowed_base != substituted_base && best_next_flowed_base != next_ref_base && best_next_flowed_base != next_read_base && best_next_flow < max_flows-1 )
+            best_next_flowed_base = flow_order[++best_next_flow % flow_order.size()];
+
+          if(substituted_base == best_prev_flowed_base) {
+            flow_idx = best_prev_flow;
+          } else if(substituted_base == best_next_flowed_base) {
+            flow_idx = best_next_flow;
+          }
+if(ref_hp_flow.size() > 0)
+assert(flow_idx >= ref_hp_flow.back());
           ref_hp_flow.push_back(flow_idx);
+        }
         // Advance to next hp
         ref_hp_idx++;
       } else {
@@ -1922,8 +1968,17 @@ int IonstatsAlignmentReduceH5(const string& output_h5_filename, const vector<str
   unsigned int group_count=0;
   uint64_t total_bytes=0;
   for(unsigned int i=0; i < input_h5_filename.size(); ++i) {
+    if(H5Fis_hdf5(input_h5_filename[i].c_str()) <= 0) {
+      cerr << "IonstatsAlignmentReduceH5 WARNING: fail to open " << input_h5_filename[i] << endl;
+      continue;
+    }
     GetAggregatorSize(ed.error_data,hd.hp_data,rs.regional_summary,group_count,total_bytes);
     hid_t input_file_id  = H5Fopen(input_h5_filename[i].c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+	if(input_file_id < 0) {
+      cerr << "IonstatsAlignmentReduceH5 WARNING: fail to open " << input_h5_filename[i] << endl;
+      continue;
+	}
+
     hid_t group_id = H5Gopen2(input_file_id, "/", H5P_DEFAULT);
     //RecursivelyMergeErrorDataFromH5(input_file_id,group_id,ed.error_data,merge_proton_blocks);
     H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_INC, MergeErrorDataFromH5, &ed);
@@ -2230,10 +2285,7 @@ unsigned char base_to_bitcode(char base) {
   return(bitcode);
 }
 
-unsigned int assignDeletionsToFlows(vector<uint16_t> &del_flow, uint16_t flow_idx, char prev_read_base, char next_read_base, const string &flow_order, int advance, const string inserted_seq, uint16_t n_flow) {
-  // Decrement flow_idx if the first base of the deletion is the same as the HP that was just completed
-  if(flow_idx > 0 && inserted_seq[0] == prev_read_base)
-    --flow_idx;
+unsigned int assignDeletionsToFlows(vector<uint16_t> &del_flow, uint32_t &flow_idx, char prev_read_base, char next_read_base, const string &flow_order, int advance, const string inserted_seq, uint16_t n_flow) {
 
   // Advance through the deleted bases assigning to flows in order encountered
   char flowed_base = flow_order[flow_idx % flow_order.size()];
@@ -2289,6 +2341,9 @@ unsigned int assignDeletionsToFlows(vector<uint16_t> &del_flow, uint16_t flow_id
       }
     }
   }
+
+  if(flowed_base != next_read_base)
+    flow_idx++;
 
   // return the number of "impossible" deletions that could not be assigned to a flow
   return(impossible_deletions);

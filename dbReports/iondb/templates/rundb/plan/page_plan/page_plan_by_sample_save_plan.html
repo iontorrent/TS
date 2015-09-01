@@ -3,7 +3,8 @@
     {{ block.super }}
     {% load static %}
     <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>    
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_analysis_params_section.js"></script>
 {%endblock%}
 {% block page-plan-content %}
 <div id="step3" class="tab-pane active">
@@ -46,7 +47,10 @@
 
 
 {%if helper.isTemplateBySample%}
-    {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}    
+    {% include "rundb/plan/page_plan/page_plan_analysis_params_section.html" %}
+    {% if helper.getApplProduct.isReferenceSelectionSupported %}
+        {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}    
+    {% endif %}
 {%endif%}
 
 

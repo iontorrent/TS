@@ -16,6 +16,8 @@ WorkerInfoQueue::WorkerInfoQueue(int _depth)
   pthread_cond_init(&rdcond,NULL);
   pthread_cond_init(&wrcond,NULL);
   pthread_cond_init(&donecond,NULL);
+
+  std::cout << "Analysis pipeline: Worker Info Queue with depth: " << _depth << " created." << std::endl;
 }
 
 // put a new item on the queue.  this will block if the queue is full

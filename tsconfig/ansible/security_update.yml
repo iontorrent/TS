@@ -1,0 +1,15 @@
+---
+# file: security_update.yml
+
+- name: Install security updates
+  hosts: headnode:computes
+  gather_facts: False
+  tasks:
+    - name: update cache
+      apt: update_cache=yes
+    - name: install package unattended-upgrades
+      apt: name=unattended-upgrades state=present
+    - name: Running unattended-upgrades
+      shell: bash -c unattended-upgrades
+      register: foobar
+    - debug: var=foobar.stdout_lines

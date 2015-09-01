@@ -2,15 +2,9 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li class="active"><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% block tab-configure-configure %}
+    <li class="active"><a href="{% url "configure_configure" %}">Configure</a></li>
+{% endblock tab-configure-configure %}
 {% block content %}
     <div class="content clearfix">
         <form class="form-horizontal" id="contacts_form" enctype="application/x-www-form-urlencoded" action="{% url "configure_configure" %}" method="POST" >
@@ -125,6 +119,14 @@
             <br>
             <p>The <a href="/admin" target="_blank">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
         </div>
+    </div>
+    <div class="content">
+        <div class="clearfix">
+            <h1>Update Products</h1>
+            <br>
+            <p>The <a href="{% url "update_product" %}">Update Products Interface</a> provides direct access to update your Torrent Suite server with the latest Products</p>
+        </div>
+    </div>
     </div>
     </div>
 

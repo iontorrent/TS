@@ -1951,6 +1951,67 @@ tmap_map_util_merge_adjacent_cigar_operations(tmap_map_sam_t *s)
   }
 }
 
+//ZZ: finding #S#M#I or #S#M#D alignment for the two sequences allowing at most M mismatch.
+static int 
+tmap_map_util_one_gap(uint8_t *query, int32_t qlen, uint8_t *target, int32_t tlen, int32_t min_size, int max_q, int max_t, int max_MM, int max_indel,
+			int8_t strand, int *n_mismatch, int *indel_size, int *is_ins, int *softclip)
+{
+    int i, j, q, qq, t, tt, inc;
+    int qini, tini;
+    if (strand == 0) {
+	qini = qlen-1; tini = tlen-1;
+	inc = -1;
+    } else {
+	qini = tini = 0; inc = 1;
+    }
+    if (qlen < min_size || tlen < min_size) return 0;
+    if (qlen-min_size < max_q) max_q= qlen-min_size;
+    if (tlen-min_size < max_t) max_t = tlen-min_size;
+    if (qlen-tlen> max_indel) return 0;
+    if (tlen-max_t-qlen > max_indel) return 0;
+    //debug
+    /*
+    char code[] = "ACGT";
+    fprintf(stderr, "tlen=%d qlen=%d\n", tlen, qlen);
+    for (i = 0; i < tlen; i++) {
+	fprintf(stderr, "%c", code[target[i]]);
+    }
+    fprintf(stderr, "\n");
+    for (i = 0; i < qlen; i++) {
+	fprintf(stderr,"%c", code[query[i]]);
+    }
+    fprintf(stderr, "\n");
+    */	
+    for (i = 0, t = tini; i < max_t; i++, t+= inc) {
+	int last_M = -1;
+	int nM = 0;
+	for (j = i, q = 0, qq = qini, tt = t; j < tlen && q < qlen; j++, q++, qq += inc, tt+= inc) {
+	    if (query[qq] == target[tt]) continue;
+	    if (q < max_q) last_M = q;
+	    else {
+		nM++;
+		if (nM > max_MM) break;
+	    }
+	}
+	if (j == tlen || q == qlen) {
+	    // find one
+	    *softclip = last_M+1;
+	    *n_mismatch = nM;
+	    if (j == tlen) {
+		*indel_size = qlen-q;
+		*is_ins = 1;
+	    } else {
+		*indel_size = tlen-j;
+		*is_ins = 0;
+	    }
+	    if (*indel_size > max_indel) return 0;
+	    if (*indel_size == 0) return 0;
+	    return 1;
+	}
+    }
+    return 0;
+}
+
 static void 
 tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
                          uint8_t *target_prev, int32_t tlen, 
@@ -1958,7 +2019,7 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
                          tmap_sw_path_t *path,
                          tmap_refseq_t *refseq,
                          tmap_map_sam_t *s,
-                         tmap_map_opt_t *opt)
+                         tmap_map_opt_t *opt, int repair5p)
 {
   int32_t i, cigar_i;
   int32_t op, op_len, cur_len;
@@ -1986,14 +2047,17 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
   // check if we allow soft-clipping on the 5' end
   tmap_map_util_set_softclip(opt, seq, &softclip_start, &softclip_end);
   if (opt->end_repair > 2) {
-    if (1 == softclip_end) return;
+    if (repair5p == 0 && 1 == softclip_end) return; // allow softclip, then no need to repair.
+    if (repair5p == 1 && 1 == softclip_start) return;
+    if (repair5p) strand = (!strand);
     old_score = 0;
     found = 0; 
     int worst = 0;
     int ind = 0, nMM = 0, /*nc = 0,*/ nqb = 0, ntb = 0, nCC, target_red = 0;
     int tb, qb, inc;
     int i_c;
-    int i, nn_cigar, total_scl = 0;
+    int i, nn_cigar=0, total_scl = 0;
+    int max_gap = 0, num_gap = 0; // ZZ, for TS-10540
     if (0 != strand) { tb = qb = 0; inc = 1;}
     else {tb = tlen-1; qb = qlen-1; inc = -1;}
     for (i_c = 0; i_c < s->n_cigar; i_c++) {
@@ -2016,14 +2080,25 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
 	    } else break;
 	    old_score -= opt->pen_gapo+opt->pen_gape*op_len;
 	    found += op_len;
-	    if (old_score < worst) { worst = old_score; ind = 0; nMM = found; target_red =ntb; nn_cigar = i_c; total_scl = nqb;}
+	    if (old_score < worst) { worst = old_score; ind = 0; nMM = found; target_red =ntb; nn_cigar = i_c; total_scl = nqb;
+		num_gap++; if (op_len > max_gap) max_gap = op_len; // ZZ, for TS-10540
+	    }
 	}
+	if (old_score > 6*opt->score_match) break; // no need go further.
     }
     if (worst >= 0) return;
     nCC = target_red+total_scl+1;
+    if (num_gap < 3 && max_gap >= 3 /*opt->min_indel_end_repair*/) {
+	int del = max_gap/opt->min_indel_end_repair;
+	int adj = max_gap-1-del;
+	/* int adj = max_gap-1;*/
+	nMM -= adj; nCC-= adj;
+    }
     nCC /= 2;
-    int maxMM = 2;
-    if (nCC > 5) maxMM = (nCC-2)*opt->end_repair/100+2;
+    int maxMM = (nCC-2)*opt->end_repair/100+2;
+    //if (repair5p) maxMM = (nCC-2)*50/100+2; // temp, try symmetric
+    if (maxMM < 2) maxMM = 2; // no need? always at least 2
+    if (repair5p && total_scl <= 5) maxMM = nMM+1; // for 5', do not repair short stretch
     if (nCC < maxMM) maxMM = nCC;
     if (nMM >= maxMM) {
 	s->score -= worst;
@@ -2031,6 +2106,9 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
 	op_len = TMAP_SW_CIGAR_LENGTH(s->cigar[cigar_i]);
 	if (ind == op_len || ind == 0) { 
 	    if (nn_cigar == s->n_cigar-1) return; // all are removed, something not quite right. Give up
+	    if (nn_cigar == s->n_cigar-2) {
+		if (TMAP_SW_CIGAR_OP(s->cigar[cigar_i+inc]) == BAM_CSOFT_CLIP) return; // something wrong, will become XSYS??
+	    }
 	    TMAP_SW_CIGAR_STORE(s->cigar[cigar_i], BAM_CSOFT_CLIP, total_scl);
 	    s->n_cigar -= nn_cigar;
 	} else {
@@ -2057,6 +2135,73 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
 	}
 	if (0 != strand) s->pos += target_red;
 	s->target_len -= target_red; 
+	// do one large gap label:oneGapZZ
+	uint32_t ampl_start, ampl_end; 
+	if (refseq->bed_exist && total_scl > 5 && 
+		tmap_map_get_amplicon(refseq, s->seqid, s->pos, s->pos+s->target_len-1, &ampl_start, &ampl_end, strand)) {
+		//fprintf(stderr, "%d %d \n", ampl_start, ampl_end);
+	 	int need_do = 1;
+		int half_buffer = 6;
+		int buffer = half_buffer+3;
+		uint32_t start, end;
+		if (strand == 0) {
+ 		    start = s->pos + s->target_len + 1;
+		    end = ampl_end+half_buffer;
+		    if (end > refseq->annos[s->seqid].len) end = refseq->annos[s->seqid].len;
+		    query += qlen-total_scl;
+		} else {
+		    if (ampl_start <= half_buffer) start = 1;
+		    else start = ampl_start-half_buffer;
+		    end = s->pos;
+		}
+		tlen = end-start+1;
+		//fprintf(stderr, "%d %d \n", start, end);
+		if (tlen > 5) {
+		     if(target_mem < tlen) { // more memory?
+      			target_mem = tlen;
+      			tmap_roundup32(target_mem);
+      			target = tmap_realloc(target, sizeof(uint8_t)*target_mem, "target");
+  		     }
+		     if(NULL == tmap_refseq_subseq2(refseq, s->seqid+1, start, end, target, 1, NULL)) {
+              		tmap_bug();
+          	     }
+		} else need_do = 0;
+		int softclip, target_adj, n_mismatch, indel_size, is_ins;
+		if (need_do && tmap_map_util_one_gap(query, total_scl, target, tlen, 6, 2/*int max_q*/, buffer /*int max_t*/, 1 /*maxNM*/, 20, /*int max_indel*/
+                        strand, &n_mismatch, &indel_size, &is_ins, &softclip)) {
+		    //adjust cigar
+		    int match_size;
+		    int target_adj; // how many additional target bases aligned.
+		    if (is_ins) match_size = total_scl-softclip-indel_size;
+		    else match_size = total_scl-softclip;
+		    target_adj = match_size;
+		    if (!is_ins) target_adj += indel_size;
+		    int s_adj = (match_size-n_mismatch)*opt->score_match-n_mismatch*opt->pen_mm-opt->pen_gapo-opt->pen_gape;
+		    s->score += s_adj;
+		    int inc_cigar = 1;
+		    if (softclip> 0) inc_cigar++;
+		    s->cigar = tmap_realloc(s->cigar, sizeof(uint32_t)*(inc_cigar + s->n_cigar), "s->cigar");
+		    if (strand == 0) {
+		     	TMAP_SW_CIGAR_STORE(s->cigar[s->n_cigar-1], is_ins? BAM_CINS: BAM_CDEL , indel_size);
+			TMAP_SW_CIGAR_STORE(s->cigar[s->n_cigar], BAM_CMATCH, match_size);
+			s->n_cigar++;
+			if (softclip> 0) {
+			    TMAP_SW_CIGAR_STORE(s->cigar[s->n_cigar],  BAM_CSOFT_CLIP, softclip);
+			    s->n_cigar++;
+			}
+		    } else {
+			for (i = s->n_cigar-1; i >= 0; i--) s->cigar[i+inc_cigar] = s->cigar[i];
+			i = 0;
+			if (softclip> 0) TMAP_SW_CIGAR_STORE(s->cigar[i++],  BAM_CSOFT_CLIP, softclip);
+			TMAP_SW_CIGAR_STORE(s->cigar[i++], BAM_CMATCH, match_size);
+			TMAP_SW_CIGAR_STORE(s->cigar[i], is_ins? BAM_CINS: BAM_CDEL , indel_size);
+			s->pos -= target_adj;
+			s->n_cigar+= inc_cigar;
+		    }
+		    s->target_len += target_adj;
+		    free(target);
+		}	
+	}
     }
 
     /*
@@ -2112,6 +2257,7 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
     return;
   }
   // do not perform if so
+  if (repair5p) return;
   if(1 == softclip_start) return;
 
   // check the first cigar op
@@ -3423,7 +3569,8 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
 
       // end repair
       if(0 != opt->end_repair) {
-          tmap_map_util_end_repair(seq, query, qlen, target, tlen, strand, path, refseq, s, opt);
+          tmap_map_util_end_repair(seq, query, qlen, target, tlen, strand, path, refseq, s, opt, 0);
+	  tmap_map_util_end_repair(seq, query, qlen, target, tlen, strand, path, refseq, s, opt, 1); // do 5' end repair??
       }
       // TODO: ZZ: If the primer sequences are added, we remove the cigar that corresponds to the sequence, at the same time calculate the score
       //           of this part of alignment, this will be substracted from the alignment score there.

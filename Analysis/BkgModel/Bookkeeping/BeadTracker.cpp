@@ -806,11 +806,11 @@ int BeadTracker::SetSampled(std::vector<float>& penalty, int sampling_rate)
   int nsample1 = nsample;
   int residual_sampling_rate = 0;
   if (nsample<ntarget && itx<ix.end() ){
-    residual_sampling_rate = std::max(1.0, ((double)(ix.end() - itx))/(ntarget-nsample));
+    residual_sampling_rate = std::max(1.0, (double)(ix.end() - itx+ntarget-1)/(ntarget-nsample)); // (+ ntarget-1) guarantees a sampling rate that will never sample more than ntarget beads.
     nsample += SystematicSampling( residual_sampling_rate, itx, ix.end() );
   }
   if (false)
-    fprintf(stdout, "Sampling scheme: clonal penalty: sampled %d beads with target %d at sampling rate %d selected from %d live beads with systematic sampling of %d at rate %d in region %d\n", nsample1, ntarget, sampling_rate, numLBeads, nsample-nsample1, residual_sampling_rate, regionindex);
+    fprintf(stdout, "Sampling scheme: clonal penalty: sampled %d beads with target %d at sampling rate %d selected from %d live beads with systematic sampling of %d at rate %d in (overall samples: %d ) region %d\n", nsample1, ntarget, sampling_rate, numLBeads, nsample-nsample1, residual_sampling_rate, nsample, regionindex);
 
   isSampled = true;  
   return nsample;

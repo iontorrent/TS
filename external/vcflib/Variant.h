@@ -18,7 +18,6 @@
 #include "join.h"
 #include "tabixpp/tabix.hpp"
 #include "smithwaterman/SmithWatermanGotoh.h"
-#include "smithwaterman/disorder.h"
 #include "convert.h"
 #include "multichoose/multichoose.h"
 

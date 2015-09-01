@@ -1,15 +1,9 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% block tab-configure-references %}
+    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+{% endblock tab-configure-references %}
 {% block extra_head %}
 {% endblock extra_head %}
 {% block content %}

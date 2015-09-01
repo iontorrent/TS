@@ -511,11 +511,14 @@ RegionalizedData::RegionalizedData( const CommandLineOpts * inception_state ) :
   my_regions( inception_state )
 {
   NoData();
+  region_nSamples = inception_state->bkg_control.pest_control.bkgDebug_nSamples;
+  sampleIndex_assigned = false;
 }
 
 RegionalizedData::RegionalizedData()
 {
   NoData();
+  sampleIndex_assigned = false;
 }
 
 RegionalizedData::~RegionalizedData()
@@ -573,12 +576,228 @@ void RegionalizedData::SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgM
 
 bool RegionalizedData::isRegionCenter(int ibd)
 {
-    BeadParams *p= &my_beads.params_nn[ibd];
-    bool isCenter = (p->x == (region->w/2) && p->y==(region->h/2)) ? true: false;
+    //BeadParams *p= &my_beads.params_nn[ibd];
+    //bool isCenter = (p->x == (region->w/2) && p->y==(region->h/2)) ? true: false;
     //if (isCenter) cout << "outputCount=" << ++outputCount << " ibd=" << ibd << " x=" << p->x << " y=" << p->y << " isCenter=" << isCenter<< " w=" << region->w << " h=" << region->h<< endl << flush;
+    int nLiveBeads = GetNumLiveBeads();
+    bool isCenter = (ibd == (nLiveBeads/2)) ? true:false;
     return (isCenter);
 }
 
 
+bool RegionalizedData::isLinePoint(int ibd, int nSamples)
+{
+    int nLiveBeads = GetNumLiveBeads();
+    if (nSamples>0 && nLiveBeads>=nSamples) {
+        int dx = nLiveBeads / (nSamples+1);
+        if (dx<1)
+            dx = 1;
+        bool isSample = ((ibd+1)%dx==0) ? true:false;
+        return (isSample);
+    }
+    else
+        return (false);
+}
+
+
+bool RegionalizedData::isGridPoint(int ibd, int nSamples)
+{
+    int nLiveBeads = GetNumLiveBeads();
+    if (nSamples>0 && nLiveBeads>=nSamples) {
+        float bx = sqrt(nLiveBeads);
+        float sx = sqrt(nSamples);
+        int iy = ibd/bx;
+        int ix = ibd - iy*bx;
+        int dy = bx>=(sx+1) ? bx/(sx+1) : 1;
+        return ((++iy%dy==0 && ++ix%dy==0) ? true:false) ;
+    }
+    else
+        return (false);
+}
+
+
+int RegionalizedData::get_sampleIndex(int ibd) {
+    try {
+        return(regionSampleIndex[ibd]);
+    }
+    catch (...) {
+        return (-1);
+    }
+}
+
+
+int RegionalizedData::assign_sampleIndex(void)
+{
+    if (sampleIndex_assigned)
+        return (nAssigned);
+	if (betterUseEvenSamples()) 
+		nAssigned = assign_sampleIndex_even();
+	else 
+		nAssigned = assign_sampleIndex_even_random();
+		//nAssigned = assign_sampleIndex_random(); // slower than assign_sampleIndex_even_random(), and may fall into infinite loop?
+		//nAssigned = assign_sampleIndex_random_shuffle(); // slower than assign_sampleIndex_even_random(), and may not be reproducible
+   return (nAssigned);
+}
+
+
+int RegionalizedData::assign_sampleIndex_even(void)
+{
+	nAssigned = 0;
+	if (sampleIndex_assigned) { 
+		cout << "assign_sampleIndex_even...resetting regionSampleIndex" << endl << flush;
+		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+		regionSampleIndex = tmpSampleIndex;
+	}
+    int nLiveBeads = GetNumLiveBeads();
+    if (region_nSamples>nLiveBeads)
+        region_nSamples = nLiveBeads;
+	if (region_nSamples>0) {
+		float scale = float(nLiveBeads) / region_nSamples;
+		for (int n=0; n<region_nSamples; n++) {
+			int ibd = n*scale;
+			regionSampleIndex[ibd] = nAssigned++;
+		}
+	}
+   sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+   return (nAssigned);
+}
+
+
+int RegionalizedData::assign_sampleIndex_even_random(void)
+{
+	if (betterUseEvenSamples()) return (assign_sampleIndex_even()); // even() is good enough if region_nSamples>nBeads*fraction
+	
+	nAssigned = 0;
+	if (sampleIndex_assigned) { 
+		cout << "assign_sampleIndex_even_random...resetting regionSampleIndex" << endl << flush;
+		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+		regionSampleIndex = tmpSampleIndex;
+	}
+    int nLiveBeads = GetNumLiveBeads();
+    if (region_nSamples>nLiveBeads)
+        region_nSamples = nLiveBeads;
+	if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
+		float scale = float(nLiveBeads) / region_nSamples;
+		int range = int(scale);
+		if (range>1) srand(42); //seed so that it is reproducible, same as in in Separator.cpp
+		for (int n=0; n<region_nSamples; n++) {
+			int ibd = n*scale;
+			ibd += random_in_range(range); // 0 to range-1
+			regionSampleIndex[ibd] = nAssigned++;
+		}
+	}
+	sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+    return (nAssigned);
+}
+
+
+int RegionalizedData::assign_sampleIndex_random(void)
+{
+	// please make assign_sampleIndex_random more robust in finding unique numbers before removing the following line
+	if (betterUseEvenSamples()) return (assign_sampleIndex_even()); // avoid spending too much time in the while loop for unique random numbers
+	
+	nAssigned = 0;
+	if (sampleIndex_assigned) { 
+		cout << "assign_sampleIndex_random...resetting regionSampleIndex" << endl << flush;
+		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+		regionSampleIndex = tmpSampleIndex;
+	}
+    int nLiveBeads = GetNumLiveBeads();
+    if (region_nSamples>nLiveBeads)
+        region_nSamples = nLiveBeads;
+	if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
+		srand(42); //seed so that it is reproducible, same as in in Separator.cpp
+		while (nAssigned<region_nSamples) {
+			int ibd = random_in_range(nLiveBeads);
+			try {
+				if (regionSampleIndex[ibd]<=0) // always 0?? 
+					regionSampleIndex[ibd] = nAssigned++; // in case a negative (invalid) number is assigned, which shouldn't happen
+          //cout << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
+				}
+			catch (...) { // not assigned yet
+				regionSampleIndex[ibd] = nAssigned++;
+        //cout << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
+			}
+		}
+	}
+	sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+    return (nAssigned);
+}
+
+
+int RegionalizedData::assign_sampleIndex_random_shuffle(void) 
+{
+	nAssigned = 0;
+	if (sampleIndex_assigned) { 
+		cout << "assign_sampleIndex_random_shuffle...resetting regionSampleIndex" << endl << flush;
+		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+		regionSampleIndex = tmpSampleIndex;
+	}
+    int nLiveBeads = GetNumLiveBeads();
+    if (region_nSamples>nLiveBeads)
+        region_nSamples = nLiveBeads;
+	if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
+		srand(42); //try but not sure this makes it reproducible, due to the std::random_shuffle() used in my_random_shuffle
+		vector<int> beads;
+		my_random_shuffle(beads, nLiveBeads); // shuffle to make the samples unique
+		//cout << "beads.size()=" << beads.size() << " for nLiveBeads=" << nLiveBeads << endl << flush;
+		assert((int)beads.size()==nLiveBeads);
+		for (int n=0; n<region_nSamples; n++) {
+			try {
+				int ibd = beads[n];
+				assert(ibd<nLiveBeads);
+				regionSampleIndex[ibd] = nAssigned++;
+				//cout << "n=" << n << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
+			}
+			catch (...) {
+				cerr << "error at n=" << n << endl << flush;
+				throw 20;
+			}
+		}
+	}
+	sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+    return (nAssigned);
+}
+
+
+void RegionalizedData::my_random_shuffle(vector<int>&cards, unsigned int nCards)
+{
+	if (nCards>0)
+	{
+		if (cards.size() != nCards)
+		{
+			cards.resize(nCards);
+			for (unsigned int i=0; i<nCards; i++)
+				cards[i] = i;
+		}
+		std::random_shuffle ( cards.begin(), cards.end());
+	}
+}
+
+
+bool RegionalizedData::isRegionSample(int ibd)
+{
+   try {
+        if (regionSampleIndex[ibd]>=0)
+            return (true);
+        else
+            return (false);
+    }
+    catch (...) {
+        return (false);
+    }
+}
 
 

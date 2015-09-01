@@ -445,6 +445,42 @@ function customize_mountpoint()
 
 
 #==============================================================================
+# Copied from ts_functions
+#==============================================================================
+function outbound_net_port()
+{
+    port=$(/sbin/route | awk '/default/{print $8}')
+    if [[ ! -z $port ]]; then
+        echo $port
+    fi
+}
+
+#==============================================================================
+# Returns a subnet string valid for use in /etc/exports
+# Example: 10.25.3.0/24
+#==============================================================================
+function subnet_exportfs()
+{
+    outbound=$(outbound_net_port)
+    netmask=$(ifconfig $outbound | awk '/Mask:/ {print $4}')
+    netmask=( $(echo ${netmask:5} | tr . " ") )
+    cidr=0
+    for val in ${netmask[@]}; do
+        result=""
+        while [ $val -ne 0 ]; do
+            result=$(( $val % 2 ))$result
+            val=$(( $val / 2 ))
+        done
+        ones=$(grep -o "1" <<< $result | wc -l)
+        cidr=$((cidr + $ones ))
+    done
+    
+    bcast=$(ifconfig $outbound | awk '/Mask:/ {print $3}')
+    bcast=$(echo ${bcast:6}|sed 's/\.255/\.0/g')
+    echo ${bcast}/${cidr}
+}
+
+#==============================================================================
 # MAIN
 #==============================================================================
 #--------------------------------------
@@ -640,6 +676,40 @@ if is_perc_installed; then
                 echo "Device $dev_part is ready for use at $mnt_pt"
                 echo "=============================================================================="
             fi
+            
+            #==================================================================
+            # Export this volume via NFS
+            #==================================================================
+            echo "=============================================================================="
+            echo "Network File System Access"
+            echo "Currently exported volumes:"
+            exportfs
+            echo
+            if ! grep -q "$mnt_pt" /etc/exports; then
+                if proceed_query "Do you want to export $(basename ${mnt_pt}) via NFS?"; then
+                    #Add to /etc/exports file
+                    echo -e "${mnt_pt}\t$(subnet_exportfs)(rw,async,subtree_check)" >> /etc/exports
+                    exportfs -r
+                else
+                    echo "Not exporting"
+                fi
+            else
+                if proceed_query "Do you want to disable exporting $(basename ${mnt_pt})?"; then
+                    # Remove from /etc/exports file
+                    if sed -i "/$(basename ${mnt_pt})/d" /etc/exports; then
+                        echo "File /etc/exports has been modified"
+                        exportfs -r
+                    else
+                        echo "There was an error modifying /etc/exports"
+                    fi
+                fi
+            fi
+            echo
+            echo "Now exporting:"
+            exportfs
+            echo
+            echo "=============================================================================="
+            
         done
 
 
@@ -692,7 +762,8 @@ if is_perc_installed; then
             log "patch_3.6"
             log $(patch_3.6)
         elif [[ $INSTALLED_VERSION > '3.6' ]]; then
-            echo "Patch not required -- $INSTALLED_VERSION"
+            #echo "Patch not required -- $INSTALLED_VERSION"
+            :
         else
             echo "Unhandled version detected! -- $INSTALLED_VERSION"
         fi

@@ -79,15 +79,20 @@ END
 #=============================================================================
 function address_test()
 {
-        nodename=$1
+    nodename=$1
     echo -n $FUNCNAME:>&1
     ip=$(nslookup $nodename|grep ^Address|grep -v '#'|awk '{print $2}')
     if [[ -z $ip ]] ;then
-        echo failure>&1
-        echo "Cannot resolve hostname $nodename to an IP address">&2
-        return 1
+        ip=$(awk '/$nodename/{print $1}' /etc/hosts)
+        if [[ -z $ip ]]; then
+            echo failure>&1
+            echo "Cannot resolve hostname $nodename to an IP address">&2
+            return 1
+        else
+            echo success>&1
+            return 0
+        fi
     else
-        #echo $ip>&1
     	echo success>&1
         return 0
     fi
@@ -97,7 +102,7 @@ function address_test()
 #=============================================================================
 function network_test()
 {
-        nodename=$1
+    nodename=$1
     echo -n $FUNCNAME:>&1
 
     if ! ping -n -q -c 3 $nodename 2>/dev/null 1>&2; then
@@ -112,13 +117,15 @@ function network_test()
 }
 #=============================================================================
 # Access Test
+# This is first instance of connecting to a node so we disable password auth
+# and first-time add-to-known_hosts confirmation dialog
 #=============================================================================
 function access_test()
 {
-        nodename=$1
+    nodename=$1
     echo -n $FUNCNAME:>&1
 
-    if ssh -o PasswordAuthentication=no ${USER}@$nodename "hostname -f" >/dev/null; then
+    if ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no ${USER}@$nodename "hostname -f" >/dev/null; then
         echo success>&1
         return 0
     else

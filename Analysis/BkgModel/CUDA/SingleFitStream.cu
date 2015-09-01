@@ -56,11 +56,11 @@ int SimpleSingleFitStream::BlockSizeDefaultSetting()
 /////////////////////////////////////////////////
 //FIT STREAM CLASS
 SimpleSingleFitStream::SimpleSingleFitStream(streamResources * res, WorkerInfoQueueItem item ) : 
-  cudaSimpleStreamExecutionUnit(res, item),
-  _myJob( static_cast< BkgModelWorkInfo * >( item.private_data )->flow_key,
+      cudaSimpleStreamExecutionUnit(res, item),
+      _myJob( static_cast< BkgModelWorkInfo * >( item.private_data )->flow_key,
           static_cast< BkgModelWorkInfo * >( item.private_data )->inception_state->
-              bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow(
-                static_cast< BkgModelWorkInfo * >( item.private_data )->flow )->size() )
+          bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow(
+              static_cast< BkgModelWorkInfo * >( item.private_data )->flow )->size() )
 {
 
 
@@ -83,7 +83,7 @@ SimpleSingleFitStream::~SimpleSingleFitStream()
 
 void SimpleSingleFitStream::cleanUp()
 {
- if(_verbose) cout << getLogHeader()  << " clean up" <<  endl;
+  if(_verbose) cout << getLogHeader()  << " clean up" <<  endl;
 
 }
 
@@ -254,10 +254,10 @@ void SimpleSingleFitStream::serializeInputs()
 
     if(irP.isInRegion(regId, 321928)) tmpConstP->dumpRegion = true;
     else tmpConstP->dumRegion = false;
-    */
+     */
 
     memcpy(tmpConstP->std_frames_per_point, _myJob.GetETFFramesPerPoint(), _myJob.GetETFFramesPerPointSize());
-        // for recompressing traces
+    // for recompressing traces
     if (_myJob.performExpTailFitting() && _myJob.performRecompressionTailRawTrace()) {
       _hdStdTimeCompEmphVec.copyIn(_myJob.GetStdTimeCompEmphasis(), _myJob.GetStdTimeCompEmphasisSize());
       _hdStdTimeCompNucRise.copyIn(_myJob.GetStdTimeCompNucRise(), _myJob.GetStdTimeCompNucRiseSize());
@@ -268,9 +268,9 @@ void SimpleSingleFitStream::serializeInputs()
           _myJob.GetETFInterpolationMulSize());
       memcpy(tmpConstP->deltaFrames_std, _myJob.GetStdTimeCompDeltaFrame(), 
           _myJob.GetStdTimeCompDeltaFrameSize());
-            memcpy(tmpConstP->std_non_zero_emphasis_frames,
-              _myJob.GetNonZeroEmphasisFramesForStdCompression(),
-              _myJob.GetNonZeroEmphasisFramesVecSize());
+      memcpy(tmpConstP->std_non_zero_emphasis_frames,
+          _myJob.GetNonZeroEmphasisFramesForStdCompression(),
+          _myJob.GetNonZeroEmphasisFramesVecSize());
 
     }
 
@@ -292,64 +292,63 @@ void SimpleSingleFitStream::serializeInputs()
 
 
     if( (_myJob.getAbsoluteFlowNum()%_myJob.getFlowBlockSize()) == 0 ){
-      ImgRegParams irP;
-      irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
+      ImgRegParams irP(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
       if(_myJob.getAbsoluteFlowNum() >= 20){
 
-      //static RegParamDumper regDump(_myJob.getImgWidth(),_myJob.getImgHeight(),_myJob.getRegionWidth(), _myJob.getRegionHeight());
-      //regDump.DumpAtFlow(rC, rR,*tmpConstP,_myJob.getAbsoluteFlowNum());
+        //static RegParamDumper regDump(_myJob.getImgWidth(),_myJob.getImgHeight(),_myJob.getRegionWidth(), _myJob.getRegionHeight());
+        //regDump.DumpAtFlow(rC, rR,*tmpConstP,_myJob.getAbsoluteFlowNum());
 
 
 
 #if REGIONAL_DUMP
-      static CubePerFlowDump<reg_params> RegionDump(  irP.getGridDimX(), irP.getGridDimY(),1,1,1,1);
+        static CubePerFlowDump<reg_params> RegionDump(  irP.getGridDimX(), irP.getGridDimY(),1,1,1,1);
 
-      RegionDump.setFilePathPrefix("RegionParams");
-      RegionDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getRegionParams(),_myJob.getAbsoluteFlowNum(),1);
+        RegionDump.setFilePathPrefix("RegionParams");
+        RegionDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getRegionParams(),_myJob.getAbsoluteFlowNum(),1);
 
 #endif
 
 #if EMPTYTRACE_DUMP
-      static CubePerFlowDump<float> emptyTraceDump(  irP.getGridDimX()*_myJob.getUncompressedFrames(), irP.getGridDimY(),
-                                          _myJob.getUncompressedFrames(), 1,1, _myJob.getFlowBlockSize());
+        static CubePerFlowDump<float> emptyTraceDump(  irP.getGridDimX()*_myJob.getUncompressedFrames(), irP.getGridDimY(),
+            _myJob.getUncompressedFrames(), 1,1, _myJob.getFlowBlockSize());
 
-      //empty trace average;
-      emptyTraceDump.setFilePathPrefix("EmptyTraces");
-      emptyTraceDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getShiftedBackground(),_myJob.getAbsoluteFlowNum(),_myJob.getNumFrames());
+        //empty trace average;
+        emptyTraceDump.setFilePathPrefix("EmptyTraces");
+        emptyTraceDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getShiftedBackground(),_myJob.getAbsoluteFlowNum(),_myJob.getNumFrames());
 #endif
 
-   /*
+        /*
       static CubePerFlowDump<float> NucRiseDump(  irP.getGridDimX()*_myJob., irP.getGridDimY(),
                                                _myJob.getUncompressedFrames(), 1,1, _myJob.getFlowBlockSize());
 
            //empty trace average;
       NucRiseDump.setFilePathPrefix("NucRise");
       NucRiseDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getShiftedBackground(),_myJob.getAbsoluteFlowNum(),_myJob.getNumFrames());
-*/
+         */
 
 
-/*
+        /*
       static CubePerFlowDump<float> emphasisDump(  irP.getGridDimX()*_myJob.getMaxFrames()*MAX_POISSON_TABLE_COL, irP.getGridDimY(),
           _myJob.getMaxFrames()*MAX_POISSON_TABLE_COL, 1,1,1);
 
 
       emphasisDump.setFilePathPrefix("EmphasisDump");
       emphasisDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getEmphVec(), _myJob.getAbsoluteFlowNum(), _myJob.getEmphVecSize()/sizeof(float));
-*/
+         */
 
 
 #if FGBUFFER_DUMP
-      static CubePerFlowDump<short> FGDump(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getRegionWidth(),_myJob.getRegionHeight(),_myJob.getImageFrames(), _myJob.getFlowBlockSize());
-      FGDump.setFilePathPrefix("FgBufferDump");
-      size_t regId = irP.getRegId(rC,rR);
-      LayoutCubeWithRegions<short> fgBufferCube(irP.getRegW(regId),irP.getRegH(regId),irP.getRegW(regId),irP.getRegH(regId),_myJob.getNumFrames());
+        static CubePerFlowDump<short> FGDump(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getRegionWidth(),_myJob.getRegionHeight(),_myJob.getImageFrames(), _myJob.getFlowBlockSize());
+        FGDump.setFilePathPrefix("FgBufferDump");
+        size_t regId = irP.getRegId(rC,rR);
+        LayoutCubeWithRegions<short> fgBufferCube(irP.getRegW(regId),irP.getRegH(regId),irP.getRegW(regId),irP.getRegH(regId),_myJob.getNumFrames());
 
-      for(int f=0; f<_myJob.getFlowBlockSize(); f++){
-        TranslateFgBuffer_RegionToCube(fgBufferCube, _myJob.getNumBeads() , _myJob.getNumFrames(), _myJob.getFlowBlockSize(),_myJob.getFgBuffer()+_myJob.getNumFrames()*f,_myJob.getBeadParams(), 0);
-        FGDump.DumpOneFlowRegion(regId,fgBufferCube,0,_myJob.getAbsoluteFlowNum(),f,0,_myJob.getNumFrames());
-      }
+        for(int f=0; f<_myJob.getFlowBlockSize(); f++){
+          TranslateFgBuffer_RegionToCube(fgBufferCube, _myJob.getNumBeads() , _myJob.getNumFrames(), _myJob.getFlowBlockSize(),_myJob.getFgBuffer()+_myJob.getNumFrames()*f,_myJob.getBeadParams(), 0);
+          FGDump.DumpOneFlowRegion(regId,fgBufferCube,0,_myJob.getAbsoluteFlowNum(),f,0,_myJob.getNumFrames());
+        }
 #endif
-  
+
 
       }
     }
@@ -374,9 +373,9 @@ void SimpleSingleFitStream::serializeInputs()
 
 bool SimpleSingleFitStream::InitJob() {
 
-    _myJob.setData(static_cast<BkgModelWorkInfo *>(getJobData()));
+  _myJob.setData(static_cast<BkgModelWorkInfo *>(getJobData()));
 
-    return _myJob.ValidJob();
+  return _myJob.ValidJob();
 }
 
 
@@ -417,8 +416,8 @@ int SimpleSingleFitStream::handleResults()
         LayoutCubeWithRegions<float> ResultCube(irP.getRegW(regId),irP.getRegH(regId),irP.getRegW(regId),irP.getRegH(regId),Result_NUM_PARAMS);
 
         for(int f=0; f<_myJob.getFlowBlockSize(); f++){
-             TranslateResults_RegionToCube(ResultCube, _myJob.getNumBeads() , f, _myJob.getBeadParams(), 0);
-             ResultDump.DumpOneFlowRegion(regId,ResultCube,0,_myJob.getAbsoluteFlowNum(),f);
+          TranslateResults_RegionToCube(ResultCube, _myJob.getNumBeads() , f, _myJob.getBeadParams(), 0);
+          ResultDump.DumpOneFlowRegion(regId,ResultCube,0,_myJob.getAbsoluteFlowNum(),f);
         }
       }
 #endif
@@ -427,11 +426,11 @@ int SimpleSingleFitStream::handleResults()
       _myJob.putJobToCPU(_item);
     }
 
-  catch(cudaException &e)
-  {
-    cout << getLogHeader() << "Encountered Error during Result Handling!" << endl;
-    throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
-  }
+    catch(cudaException &e)
+    {
+      cout << getLogHeader() << "Encountered Error during Result Handling!" << endl;
+      throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
+    }
 
   }
 
@@ -445,16 +444,16 @@ void SimpleSingleFitStream::printStatus()
 
 
   cout << getLogHeader()  << " status: " << endl
-  << " +------------------------------" << endl
-  << " | block size: " << getBeadsPerBlock()  << endl
-  << " | l1 setting: " << getL1Setting() << endl
-  << " | state: " << _state << endl;
+      << " +------------------------------" << endl
+      << " | block size: " << getBeadsPerBlock()  << endl
+      << " | l1 setting: " << getL1Setting() << endl
+      << " | state: " << _state << endl;
   if(_resource->isSet())
     cout << " | streamResource acquired successfully"<< endl;
   else
     cout << " | streamResource not acquired"<< endl;
-    _myJob.printJobSummary();
-    cout << " +------------------------------" << endl;
+  _myJob.printJobSummary();
+  cout << " +------------------------------" << endl;
 }
 
 
@@ -489,7 +488,7 @@ void SimpleSingleFitStream::copyToDevice()
       StreamingKernels::copyXtalkConstParamAsync(_hConstXtalkP.getPtr(), getStreamId() ,_stream);CUDA_ERROR_CHECK();
       _dNeiIdxMap.copyAsync(_hNeiIdxMap, _stream, sizeof(int)*_myJob.getNumBeads()*_myJob.getNumXtalkNeighbours());
       _dSampleNeiIdxMap.copyAsync(_hSampleNeiIdxMap, _stream, sizeof(int)*(GENERIC_SIMPLE_XTALK_SAMPLE)*
-                                    _myJob.getNumXtalkNeighbours());
+          _myJob.getNumXtalkNeighbours());
     }
 
   }
@@ -509,8 +508,6 @@ void SimpleSingleFitStream::executeKernel()
 
   dim3 block(32,32);
   dim3 grid( (_F*_myJob.getFlowBlockSize()+ block.x-1)/block.x , (_padN+block.y-1)/block.y);
-
-
 
   StreamingKernels::transposeDataToFloat (grid, block, 0 ,_stream,_dFgBufferFloat.getPtr(), _hdFgBuffer.getPtr(), _F*_myJob.getFlowBlockSize(), _padN);
 
@@ -539,44 +536,107 @@ void SimpleSingleFitStream::executeKernel()
   grid.y = 1;
   grid.x = (_N+block.x-1)/block.x;
 
+  _dNeiContribution.memSet(0);
+  _dXtalkScratch.memSet(0);
+  _dXtalk.memSet(0);
 
   // cross talk correction is performed for 3-series chips only
   if (_myJob.performCrossTalkCorrection()) {
     for (int fnum=0; fnum<_myJob.getFlowBlockSize(); ++fnum) {
       StreamingKernels::NeighbourContributionToXtalk(
-        grid, 
-        block, 
-        0, 
-        _stream,
-        _dR.getPtr(), // N
-        _dCopies.getPtr(), // N
-        _dPhi.getPtr(), // N
-        (float*)_hdShiftedBkg.getPtr() + fnum*_F, // FLxF
-        (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
-        _hdBeadState.getPtr(),
-        _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
-        fnum,
-        _N, // 4
-        _F, // 4
-        //xtalk arguments
-        _dXtalkScratch.getPtr(),
-        _dNeiContribution.getPtr(),
-        getStreamId());
-  
-        StreamingKernels::XtalkAccumulation(
           grid, 
-	  block, 
-	  0, 
-	  _stream,
+          block,
+          0,
+          _stream,
+          _dR.getPtr(), // N
+          _dCopies.getPtr(), // N
+          _dPhi.getPtr(), // N
+          (float*)_hdShiftedBkg.getPtr() + fnum*_F, // FLxF
+          (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
           _hdBeadState.getPtr(),
-	  _N, // 4
-	  _F, // 4
-	  _dNeiIdxMap.getPtr(),
-	  _dNeiContribution.getPtr(),
-	  _dXtalk.getPtr(),
-	  getStreamId());
+          _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
+          fnum,
+          _N, // 4
+          _F, // 4
+          //xtalk arguments
+          _dXtalkScratch.getPtr(),
+          _dNeiContribution.getPtr(),
+          getStreamId());
 
-        StreamingKernels::CalculateGenericXtalkForSimpleModel(
+      /*
+         cudaDeviceSynchronize();
+
+          cout << "flow: " << fnum << " done" << endl;
+          int Ids[19] = {3905,3838,3907,3904,3979,3906,3981,3908,3978,4053,4055,3982,4052,4128,4054,4130,4056,4129};
+          //int Ids[19] = {3838,3839,3840,3905,3906,3907,3908,3909,3979,3980,3982,3983,4053,4054,4055,4056,4057,4130};
+         // int Ids[19] = {4442,4369,4295,4371,4368,4441,4370,-1,4372,4440,4511,-1,-1,4510,-1,4512,-1,-1,4578};
+//          int Ids[19] = {4441,4293,4294,4295,4367,4368,4369,4370,4371,4439,4440,4442,-1,4509,4510,4511,4512,-1,-1};
+          for(int i=0; i<19; i++)
+            if(Ids[i] >= 0 ) cout << Ids[i]<< "," <<(_myJob.getBeadParams())[Ids[i]].x << "," <<(_myJob.getBeadParams())[Ids[i]].y << endl;
+            else cout << "4442,-1,-1" << endl;
+*/
+
+/*
+
+        if(fnum==0){
+
+        printf("bead XTalk contribution:\n");
+        float * beadXTalkcontr = new float[_dNeiContribution.getNumElements()];
+        _dNeiContribution.copyOut(beadXTalkcontr);
+        int num_beads = ((_N+32-1)/32) * 32;
+        for(int n=0;n<_N  ;n++){
+          float * thisBead = beadXTalkcontr + n;
+          printf ("%d, %d, ", (_myJob.getBeadParams())[n].x, (_myJob.getBeadParams())[n].y );
+          float sumF = 0;
+          for(int f=0; f<_F; f++){
+            printf ("%f, ", thisBead[f*num_beads]);
+            //sumF += thisBead[f*num_beads];
+          }
+          printf("\n");
+        }
+        }
+*/
+
+      StreamingKernels::XtalkAccumulation(
+          grid,
+          block,
+          0,
+          _stream,
+          _hdBeadState.getPtr(),
+          _N, // 4
+          _F, // 4
+          _dNeiIdxMap.getPtr(),
+          _dNeiContribution.getPtr(),
+          _dXtalk.getPtr(),
+          getStreamId());
+
+
+      cudaDeviceSynchronize();
+/*
+      cudaDeviceSynchronize();
+      cout << "flow: " << fnum << " done" << endl;
+
+      if(fnum==19){
+
+      printf("bead XTalk:\n");
+      float * beadXTalk = new float[_dXtalk.getNumElements()];
+      _dXtalk.copyOut(beadXTalk);
+      int num_beads = ((_N+32-1)/32) * 32;
+      for(int n=0;n<_N  ;n++){
+        float * thisBead = beadXTalk + n;
+        printf ("%d, %d, ", (_myJob.getBeadParams())[n].x, (_myJob.getBeadParams())[n].y );
+        float sumF = 0;
+        for(int f=0; f<_F; f++){
+          //printf ("%f, ", thisBead[f*num_beads]);
+          sumF += thisBead[f*num_beads];
+        }
+        printf("%f\n", sumF);
+      }
+      }
+*/
+
+
+      StreamingKernels::CalculateGenericXtalkForSimpleModel(
           1, // dumb version to get things going..ultra fast already
           GENERIC_SIMPLE_XTALK_SAMPLE, 
           0, 
@@ -591,71 +651,89 @@ void SimpleSingleFitStream::executeKernel()
           _dGenericXtalk.getPtr(),
           _dNeiContribution.getPtr(), // use for generic xtalk
           getStreamId());
-        
 
-        StreamingKernels::ComputeXtalkAndZeromerCorrectedTrace(
+      /*
+      if(_myJob.getAbsoluteFlowNum() + fnum == 99){
+      float * genXtalk = new float[_dFgBufferFloat.getNumElements()];
+      _dNeiContribution.copyOut(genXtalk);
+      ImgRegParams irP;
+      irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
+      size_t rC = _myJob.getRegCol();
+      size_t rR = _myJob.getRegRow();
+      size_t regId = irP.getRegId(rC,rR);
+      printf("%lu, ", regId);
+      for(int f=0; f < _F; f++)
+      {
+        printf("%f, ", genXtalk[f]);
+      }
+      printf("\n");
+      }
+       */
+
+
+      StreamingKernels::ComputeXtalkAndZeromerCorrectedTrace(
           grid, 
-	  block, 
-	  0, 
-	  _stream,
-	  fnum,
-	  (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
-	  _N, // 4
-	  _F, // 4
-	  _dNeiContribution.getPtr(),
-	  _dXtalk.getPtr(),
-	  _dCopies.getPtr(), // N
-	  _dR.getPtr(), // N
-	  _dPhi.getPtr(), // N
-	  _dGain.getPtr(), // N
-	  (float*)_hdShiftedBkg.getPtr() + fnum*_F,
-	  _hdDarkMatter.getPtr(), // FLxF
-	  _dPCA_Vals.getPtr(),
-	  _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
-	  getStreamId());
-     }
+          block,
+          0,
+          _stream,
+          fnum,
+          (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
+          _N, // 4
+          _F, // 4
+          _dNeiContribution.getPtr(),
+          _dXtalk.getPtr(),
+          _dCopies.getPtr(), // N
+          _dR.getPtr(), // N
+          _dPhi.getPtr(), // N
+          _dGain.getPtr(), // N
+          (float*)_hdShiftedBkg.getPtr() + fnum*_F,
+          _hdDarkMatter.getPtr(), // FLxF
+          _dPCA_Vals.getPtr(),
+          _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
+          getStreamId());
+    }
   }
   else {
     StreamingKernels::PreSingleFitProcessing( grid, block, 0 , _stream,
-      // Here FL stands for flows
-      // inputs from data reorganization
-      _dCopies.getPtr(), // N
-      _dR.getPtr(), // N
-      _dPhi.getPtr(), // N
-      _dGain.getPtr(), // N
-      _dAmpl.getPtr(), // FLxN
-      _hdShiftedBkg.getPtr(), // FLxF
-      _hdDarkMatter.getPtr(), // FLxF
-      _dPCA_Vals.getPtr(),
-      _dFgBufferFloat.getPtr(), // FLxFxN
-      // other inputs 
-      _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
-      _N, // 4
-      _F, // 4
-      //_myJob.performAlternatingFit(),
-      false,
-      getStreamId(),
-      _myJob.getFlowBlockSize());
+        // Here FL stands for flows
+        // inputs from data reorganization
+        _dCopies.getPtr(), // N
+        _dR.getPtr(), // N
+        _dPhi.getPtr(), // N
+        _dGain.getPtr(), // N
+        _dAmpl.getPtr(), // FLxN
+        _hdShiftedBkg.getPtr(), // FLxF
+        _hdDarkMatter.getPtr(), // FLxF
+        _dPCA_Vals.getPtr(),
+        _dFgBufferFloat.getPtr(), // FLxFxN
+        // other inputs
+        _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
+        _N, // 4
+        _F, // 4
+        //_myJob.performAlternatingFit(),
+        false,
+        getStreamId(),
+        _myJob.getFlowBlockSize());
   }
 
   // perform projection search for amplitude estimation
   if ((_myJob.getAbsoluteFlowNum() > 19) && _myJob.InitializeAmplitude()) {
     StreamingKernels::ProjectionSearch(
-      grid,
-      block,
-      0,
-      _stream,
-      _hdBeadState.getPtr(),
-      _dFgBufferFloat.getPtr(),
-      _hdEmphVector.getPtr(),
-      _hdNucRise.getPtr(),
-      _dCopies.getPtr(),
-      _dfval.getPtr(),
-      _myJob.getAbsoluteFlowNum(),
-      _N,
-      _F,
-      getStreamId(),
-      _myJob.getFlowBlockSize());
+        grid,
+        block,
+        0,
+        _stream,
+        _hdBeadState.getPtr(),
+        _dFgBufferFloat.getPtr(),
+        _hdEmphVector.getPtr(),
+        _hdNucRise.getPtr(),
+        _dCopies.getPtr(),
+        _dfval.getPtr(),
+        _myJob.getAbsoluteFlowNum(),
+        _N,
+        _F,
+        getStreamId(),
+        _myJob.getFlowBlockSize());
   }
 
   //ampl update
@@ -664,67 +742,70 @@ void SimpleSingleFitStream::executeKernel()
   if (_myJob.performExpTailFitting()) {
 
     // only done in first 20 flows
-    if (_myJob.getAbsoluteFlowNum() == 0) {
+    // TODO: need to initialize taub adjustment to 1 if not fitting it
+    if (_myJob.getAbsoluteFlowNum() == 0 && _myJob.performTauAdjInExpTailFit()) {
       StreamingKernels::TaubAdjustForExponentialTailFitting(
-          grid, 
-          block, 
-          0, 
-          _stream,
-          _hdBeadState.getPtr(),
-          _dFgBufferFloat.getPtr(), // FLxFxN,
-          _dAmpl.getPtr(), // FLxN
-          _dR.getPtr(), // N
-          _dCopies.getPtr(), // N
-          _dPhi.getPtr(), // N
-          _davg_trc.getPtr(),
-          _dfval.getPtr(),
-          _dtmp_fval.getPtr(),
-          _derr.getPtr(),
-          _djac.getPtr(),
-          _N,
-          _F,
-          _dTau_Adj.getPtr(), // output it is a per bead parameter
-          getStreamId(),
-          _myJob.getFlowBlockSize());
-     }
+        grid, 
+	block, 
+	0, 
+	_stream,
+	_hdBeadState.getPtr(),
+	_dFgBufferFloat.getPtr(), // FLxFxN,
+	_dAmpl.getPtr(), // FLxN
+	_dR.getPtr(), // N
+	_dCopies.getPtr(), // N
+	_dPhi.getPtr(), // N
+	_davg_trc.getPtr(),
+	_dfval.getPtr(),
+	_dtmp_fval.getPtr(),
+	_derr.getPtr(),
+	_djac.getPtr(),
+	_N,
+	_F,
+	_dTau_Adj.getPtr(), // output it is a per bead parameter
+	getStreamId(),
+	_myJob.getFlowBlockSize());
+    }
 
-     StreamingKernels::ExponentialTailFitting(
-         grid, 
-         block, 
-         0, 
-         _stream,
-         _hdBeadState.getPtr(),
-         _dTau_Adj.getPtr(),
-         _dAmpl.getPtr(),
-         _dR.getPtr(),
-         _dCopies.getPtr(),
-         _dPhi.getPtr(), // N
-         _dFgBufferFloat.getPtr(),
-         _hdShiftedBkg.getPtr(),
-         _dtmp_fval.getPtr(),
-         _N,
-         _F,
-         _myJob.getAbsoluteFlowNum(),
-         getStreamId(),
-         _myJob.getFlowBlockSize());
+    if (_myJob.performBkgAdjInExpTailFit()) {
+      StreamingKernels::ExponentialTailFitting(
+        grid,
+        block,
+        0,
+        _stream,
+        _myJob.expTailFitBkgAdjLimit(),
+        _myJob.expTailFitBkgDcLowerLimit(),
+        _hdBeadState.getPtr(),
+        _dTau_Adj.getPtr(),
+        _dAmpl.getPtr(),
+        _dR.getPtr(),
+        _dCopies.getPtr(),
+        _dPhi.getPtr(), // N
+        _dFgBufferFloat.getPtr(),
+        _hdShiftedBkg.getPtr(),
+        _dtmp_fval.getPtr(),
+        _N,
+        _F,
+        _myJob.getAbsoluteFlowNum(),
+        getStreamId(),
+        _myJob.getFlowBlockSize());
+    }
 
     if (_myJob.performRecompressionTailRawTrace())
       StreamingKernels::RecompressRawTracesForSingleFlowFit(
-          grid, 
-          block, 
-          0, 
-          _stream,
-          _dFgBufferFloat.getPtr(), 
-          _dtmp_fval.getPtr(),
-          _myJob.GetETFStartFrame(),
-          _F, // exponential tail fit compressed frames
-          _myJob.GetNumStdCompressedFrames(),
-          _myJob.getFlowBlockSize(),
-          _N,
-          getStreamId());
-
-
- }
+        grid, 
+        block, 
+        0, 
+	_stream,
+	_dFgBufferFloat.getPtr(), 
+	_dtmp_fval.getPtr(),
+	_myJob.GetETFStartFrame(),
+	_F, // exponential tail fit compressed frames
+	_myJob.GetNumStdCompressedFrames(),
+	_myJob.getFlowBlockSize(),
+	_N,
+	getStreamId());
+  }
 
   // decide some data buffers based on whether tail need to be recompressed 
   // or not. Need to refactor
@@ -743,124 +824,124 @@ void SimpleSingleFitStream::executeKernel()
   if(_myJob.getAbsoluteFlowNum() < 20 )
   {
 #endif
-  //std::cout << "====================> Numframes: " << numFrames << std::endl;
-  // perform single flow fitting 
-  switch(_fittype){
-  case 1:
-    StreamingKernels::PerFlowLevMarFit(getL1Setting(), grid, block, sharedMem, _stream,
-      // inputs
-      _dFgBufferFloat.getPtr(),
-      dEmpVec,
-      dNucRise,
-      // bead params
-      _dCopies.getPtr(),
-      _hdBeadState.getPtr(),
-      // scratch space in global memory
-      _derr.getPtr(), //
-      _dfval.getPtr(), // NxF
-      _dtmp_fval.getPtr(), // NxF
-      _dMeanErr.getPtr(),
-      // other inputs
-      _myJob.getAmpLowLimit(),
-      _myJob.getkmultHighLimit(),
-      _myJob.getkmultLowLimit(),
-      _myJob.getkmultAdj(),
-      _myJob.fitkmultAlways(), 
-      _myJob.getAbsoluteFlowNum() , // real flow number 
-      _myJob.getNumBeads(), // 4
-      numFrames,
-      _myJob.useDynamicEmphasis(),
-      getStreamId(), // stream id for offset in const memory
-      _myJob.getFlowBlockSize()
-    );
-    break;
-  case 2:
-    StreamingKernels::PerFlowHybridFit(getL1Setting(), grid, block, sharedMem, _stream,
-      // inputs
-      _dFgBufferFloat.getPtr(),
-      dEmpVec,
-      dNucRise,
-      // bead params
-      _dCopies.getPtr(),
-      _hdBeadState.getPtr(),
-      // scratch space in global memory
-      _derr.getPtr(), //
-      _dfval.getPtr(), // NxF
-      _dtmp_fval.getPtr(), // NxF
-      _dMeanErr.getPtr(),
-      // other inputs
-      _myJob.getAmpLowLimit(),
-      _myJob.getkmultHighLimit(),
-      _myJob.getkmultLowLimit(),
-      _myJob.getkmultAdj(),
-      _myJob.fitkmultAlways(), 
-      _myJob.getAbsoluteFlowNum() , // real flow number 
-      _myJob.getNumBeads(), // 4
-      numFrames,
-      _myJob.useDynamicEmphasis(),
-      getStreamId(), // stream id for offset in const memory
-      3,              // switchToLevMar ???
-      _myJob.getFlowBlockSize()
-    );
-    break;
-  case 3:
-    StreamingKernels::PerFlowRelaxKmultGaussNewtonFit(getL1Setting(), grid, block, sharedMem, _stream,
-      // inputs
-      _dFgBufferFloat.getPtr(),
-      dEmpVec,
-      dNucRise,
-      // bead params
-      _dCopies.getPtr(),
-      _hdBeadState.getPtr(),
-      // scratch space in global memory
-      _derr.getPtr(), //
-      _dfval.getPtr(), // NxF
-      _dtmp_fval.getPtr(), // NxF
-      _djac.getPtr(), //NxF 
-      _dMeanErr.getPtr(),
-      // other inputs
-      _myJob.getAmpLowLimit(),
-      _myJob.getkmultHighLimit(),
-      _myJob.getkmultLowLimit(),
-      _myJob.getkmultAdj(),
-      _myJob.fitkmultAlways(),
-      _myJob.getAbsoluteFlowNum() , // real flow number 
-      _myJob.getNumBeads(), // 4
-      numFrames,
-      _myJob.useDynamicEmphasis(),
-      getStreamId(),  // stream id for offset in const memory
-      _myJob.getFlowBlockSize()
-    );
-    break;
-  case 0:
-  default: 
-    StreamingKernels::PerFlowGaussNewtonFit(getL1Setting(), grid, block, sharedMem, _stream,
-      // inputs
-      _dFgBufferFloat.getPtr(),
-      dEmpVec,
-      dNucRise,
-      // bead params
-      _dCopies.getPtr(),
-      _hdBeadState.getPtr(),
-      // scratch space in global memory
-      _derr.getPtr(), //
-      _dfval.getPtr(), // NxF
-      _dtmp_fval.getPtr(), // NxF
-      _dMeanErr.getPtr(),
-      // other inputs
-      _myJob.getAmpLowLimit(),
-      _myJob.getkmultHighLimit(),
-      _myJob.getkmultLowLimit(),
-      _myJob.getkmultAdj(),
-      _myJob.fitkmultAlways(),
-      _myJob.getAbsoluteFlowNum() , // real flow number 
-      _myJob.getNumBeads(), // 4
-      numFrames,
-      _myJob.useDynamicEmphasis(),
-      getStreamId(),  // stream id for offset in const memory
-      _myJob.getFlowBlockSize()
-    );
-  }
+    //std::cout << "====================> Numframes: " << numFrames << std::endl;
+    // perform single flow fitting
+    switch(_fittype){
+      case 1:
+        StreamingKernels::PerFlowLevMarFit(getL1Setting(), grid, block, sharedMem, _stream,
+            // inputs
+            _dFgBufferFloat.getPtr(),
+            dEmpVec,
+            dNucRise,
+            // bead params
+            _dCopies.getPtr(),
+            _hdBeadState.getPtr(),
+            // scratch space in global memory
+            _derr.getPtr(), //
+            _dfval.getPtr(), // NxF
+            _dtmp_fval.getPtr(), // NxF
+            _dMeanErr.getPtr(),
+            // other inputs
+            _myJob.getAmpLowLimit(),
+            _myJob.getkmultHighLimit(),
+            _myJob.getkmultLowLimit(),
+            _myJob.getkmultAdj(),
+            _myJob.fitkmultAlways(),
+            _myJob.getAbsoluteFlowNum() , // real flow number
+            _myJob.getNumBeads(), // 4
+            numFrames,
+            _myJob.useDynamicEmphasis(),
+            getStreamId(), // stream id for offset in const memory
+            _myJob.getFlowBlockSize()
+        );
+        break;
+      case 2:
+        StreamingKernels::PerFlowHybridFit(getL1Setting(), grid, block, sharedMem, _stream,
+            // inputs
+            _dFgBufferFloat.getPtr(),
+            dEmpVec,
+            dNucRise,
+            // bead params
+            _dCopies.getPtr(),
+            _hdBeadState.getPtr(),
+            // scratch space in global memory
+            _derr.getPtr(), //
+            _dfval.getPtr(), // NxF
+            _dtmp_fval.getPtr(), // NxF
+            _dMeanErr.getPtr(),
+            // other inputs
+            _myJob.getAmpLowLimit(),
+            _myJob.getkmultHighLimit(),
+            _myJob.getkmultLowLimit(),
+            _myJob.getkmultAdj(),
+            _myJob.fitkmultAlways(),
+            _myJob.getAbsoluteFlowNum() , // real flow number
+            _myJob.getNumBeads(), // 4
+            numFrames,
+            _myJob.useDynamicEmphasis(),
+            getStreamId(), // stream id for offset in const memory
+            3,              // switchToLevMar ???
+            _myJob.getFlowBlockSize()
+        );
+        break;
+      case 3:
+        StreamingKernels::PerFlowRelaxKmultGaussNewtonFit(getL1Setting(), grid, block, sharedMem, _stream,
+            // inputs
+            _dFgBufferFloat.getPtr(),
+            dEmpVec,
+            dNucRise,
+            // bead params
+            _dCopies.getPtr(),
+            _hdBeadState.getPtr(),
+            // scratch space in global memory
+            _derr.getPtr(), //
+            _dfval.getPtr(), // NxF
+            _dtmp_fval.getPtr(), // NxF
+            _djac.getPtr(), //NxF
+            _dMeanErr.getPtr(),
+            // other inputs
+            _myJob.getAmpLowLimit(),
+            _myJob.getkmultHighLimit(),
+            _myJob.getkmultLowLimit(),
+            _myJob.getkmultAdj(),
+            _myJob.fitkmultAlways(),
+            _myJob.getAbsoluteFlowNum() , // real flow number
+            _myJob.getNumBeads(), // 4
+            numFrames,
+            _myJob.useDynamicEmphasis(),
+            getStreamId(),  // stream id for offset in const memory
+            _myJob.getFlowBlockSize()
+        );
+        break;
+      case 0:
+      default:
+        StreamingKernels::PerFlowGaussNewtonFit(getL1Setting(), grid, block, sharedMem, _stream,
+            // inputs
+            _dFgBufferFloat.getPtr(),
+            dEmpVec,
+            dNucRise,
+            // bead params
+            _dCopies.getPtr(),
+            _hdBeadState.getPtr(),
+            // scratch space in global memory
+            _derr.getPtr(), //
+            _dfval.getPtr(), // NxF
+            _dtmp_fval.getPtr(), // NxF
+            _dMeanErr.getPtr(),
+            // other inputs
+            _myJob.getAmpLowLimit(),
+            _myJob.getkmultHighLimit(),
+            _myJob.getkmultLowLimit(),
+            _myJob.getkmultAdj(),
+            _myJob.fitkmultAlways(),
+            _myJob.getAbsoluteFlowNum() , // real flow number
+            _myJob.getNumBeads(), // 4
+            numFrames,
+            _myJob.useDynamicEmphasis(),
+            getStreamId(),  // stream id for offset in const memory
+            _myJob.getFlowBlockSize()
+        );
+    }
 #if PROJECTION_ONLY
   }
 #endif
@@ -977,11 +1058,11 @@ int SimpleSingleFitStream::getL1Setting()
 void SimpleSingleFitStream::requestResources( int flow_key, int flow_block_size, float deviceFraction)
 {
   size_t devAlloc = static_cast<size_t>( deviceFraction *
-                        max( getMaxDeviceMem( flow_key, flow_block_size, 0, 0 ),
-                             getMaxDeviceMem( 0,        flow_block_size, 0, 0 ) ) );
+      max( getMaxDeviceMem( flow_key, flow_block_size, 0, 0 ),
+          getMaxDeviceMem( 0,        flow_block_size, 0, 0 ) ) );
   size_t hostAlloc = max( getMaxHostMem(flow_key, flow_block_size),
-                          getMaxHostMem(0,        flow_block_size) );
-  cout << "CUDA SingleFitStream active and resources requested dev = "<< devAlloc/(1024.0*1024) << "MB ("<< (int)(deviceFraction*100)<<"%) host = " << hostAlloc/(1024.0*1024) << "MB" <<endl;
+      getMaxHostMem(0,        flow_block_size) );
+  cout << "CUDA: SingleFitStream active and resources requested dev = "<< devAlloc/(1024.0*1024) << "MB ("<< (int)(deviceFraction*100)<<"%) host = " << hostAlloc/(1024.0*1024) << "MB" <<endl;
   cudaResourcePool::requestDeviceMemory(devAlloc);
   cudaResourcePool::requestHostMemory(hostAlloc);
 
@@ -1087,19 +1168,19 @@ void SimpleSingleFitStream::setHybridIter(int hybridIter)
 void SimpleSingleFitStream::printSettings()
 {
 
-  cout << "CUDA SingleFitStream SETTINGS: blocksize = " << _bpb  << " l1setting = " ;
+  cout << "CUDA: SingleFitStream SETTINGS: blocksize = " << _bpb  << " l1setting = " ;
   switch(_l1type){
-  case 0:
-    cout << "cudaFuncCachePreferEqual" << endl;;
-    break;
-  case 1:
-    cout << "cudaFuncCachePreferShared" <<endl;
-    break;
-  case 2:
-    cout << "cudaFuncCachePreferL1" << endl;
-    break;
-  default:
-    cout << "GPU specific default" << endl;
+    case 0:
+      cout << "cudaFuncCachePreferEqual" << endl;;
+      break;
+    case 1:
+      cout << "cudaFuncCachePreferShared" <<endl;
+      break;
+    case 2:
+      cout << "cudaFuncCachePreferL1" << endl;
+      break;
+    default:
+      cout << "GPU specific default" << endl;
   }
 
 }

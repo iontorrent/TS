@@ -108,7 +108,7 @@ class CmdlineArgsField(forms.CharField):
         super(CmdlineArgsField, self).__init__(
             max_length=1024,
             required=False,
-            widget = forms.Textarea(attrs={'class':'span12','rows':4})
+            widget = forms.Textarea(attrs={'class':'span12 args','rows':4})
         )
     
     def clean(self, value):
@@ -125,7 +125,7 @@ class RunParamsForm(forms.Form):
     beadfindArgs = CmdlineArgsField()
     analysisArgs = CmdlineArgsField()
     prebasecallerArgs = CmdlineArgsField()
-    recalibArgs = CmdlineArgsField()
+    calibrateArgs = CmdlineArgsField()
     basecallerArgs = CmdlineArgsField()
     alignmentArgs = CmdlineArgsField()
     ionstatsArgs = CmdlineArgsField()
@@ -133,10 +133,12 @@ class RunParamsForm(forms.Form):
     thumbnailBeadfindArgs = CmdlineArgsField()
     thumbnailAnalysisArgs = CmdlineArgsField()
     prethumbnailBasecallerArgs = CmdlineArgsField()
-    thumbnailRecalibArgs = CmdlineArgsField()
+    thumbnailCalibrateArgs = CmdlineArgsField()
     thumbnailBasecallerArgs = CmdlineArgsField()
     thumbnailAlignmentArgs = CmdlineArgsField()
     thumbnailIonstatsArgs = CmdlineArgsField()
+
+    custom_args = forms.BooleanField(required=False, widget=forms.HiddenInput)
 
     blockArgs = forms.CharField(max_length=128, required=False, widget=forms.HiddenInput)
 

@@ -142,6 +142,7 @@ protected:
   double                    barcode_filter_weight_;      // Weighting factor for per-block-stringency of frequncy filter
   bool                      barcode_filter_named_;       // Exclude barcodes with an associated sample name from filtering
   bool                      barcode_ignore_flows_;       // Switch telling the classifier to exclude certain flows from classification
+  bool                      trim_barcodes_;              // Switch to trim or leave barcodes alone
   vector<int>               classifier_ignore_flows_;    // Specifying an interval of flows to exclude from classification
 
   int                       hamming_dmin_;

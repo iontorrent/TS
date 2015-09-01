@@ -22,21 +22,36 @@ import extend
 ###  global variables 
 pluginName = ""
 plugin_dir = ""
+#javaHome="java/jre/jre1.8.0_45"
+javaHome="java/jre/openjdk-7-jre-headless/usr/lib/jvm/java-7-openjdk-amd64/jre"
+#javaHome="java/jre/java-7-openjdk-amd64/jre"
+#javaHome="java/jre/openjdk-7-rpm/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.85.x86_64/jre"
+javaBinRelativePath=javaHome + "/bin" 
+javaBin=""
 
 
 class IonReporterUploader(IonPlugin):
-    version = '4.6.0.21'
+    version = '5.0.0.21'
     runtypes = [RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE]
-    runlevels = [RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST]
+    #runlevels = [RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST]
+    runlevels = [RunLevel.PRE, RunLevel.POST]
     features = [Feature.EXPORT]
     depends = ["variantCaller"]
 
     #JIRA [TS-7563]
     allow_autorun = False
 
-    global pluginName, plugin_dir, launchOption, commonScratchDir
+    global pluginName, plugin_dir, launchOption, commonScratchDir, javaBinRelativePath, javaBin
     pluginName = "IonReporterUploader"
     plugin_dir = os.getenv("RUNINFO__PLUGIN_DIR") or os.path.dirname(__file__)
+    javaBinPath=plugin_dir + "/" + javaBinRelativePath
+    javaBin=javaBinPath + "/" + "java"
+    currentPath = os.getenv("PATH")
+    newPath = javaBinPath +":" + currentPath
+    print "PATH is " + newPath
+    os.environ["PATH"] = newPath
+    os.environ["JAVA_HOME"] = javaHome
+    print "java is " + javaBin
     launchOption = "upload_and_launch"
     extend.setPluginName(pluginName)
     extend.setPluginDir(plugin_dir)
@@ -70,8 +85,8 @@ class IonReporterUploader(IonPlugin):
 
         if runtype == "composite" and runlevel == "pre":
             self.pre(data)
-        elif runtype == "composite" and runlevel == "block":
-            self.block(data)
+        #elif runtype == "composite" and runlevel == "block":
+            #self.block(data)
         elif runtype == "composite" and runlevel == "post":
             print "POST IS CALLED"
             self.post(data)
@@ -80,7 +95,10 @@ class IonReporterUploader(IonPlugin):
         elif runtype == "wholechip" and runlevel == "post":  #PGM
             self.default(data)
         else:
-            print "IonReporterUploader : ignoring the above combination of runtype and runlevel .. exit .."
+            print "IonReporterUploader : Ignoring the above combination of runtype and runlevel."
+            print "                      It is normal that this plugin ignores certain runtype / runlevel combinations, as they are not required."
+            print "                      Please look into the log.txt generated in  other runlevels via the status.html link. "
+            print "                      Exiting from this run level.. "
         return True
 
     #Run Mode: Pre - clear old JSON, set initial run timestamp, log version and start time
@@ -105,11 +123,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o pre ||true")
         elif launchOption == "upload_only":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o pre ||true")
         os.system("sleep 2")
         return True
@@ -125,11 +143,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o block ||true")
         elif launchOption == "upload_only":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o block ||true")
         os.system("sleep 2")
         self.write_log(
@@ -160,11 +178,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o default")
         elif launchOption == "upload_only":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o default")
         os.system("sleep 2")
         return True
@@ -179,11 +197,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o post  ||true")
         elif launchOption == "upload_only":
             os.system(
-                "java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o post  ||true")
         os.system("sleep 2")
         return True

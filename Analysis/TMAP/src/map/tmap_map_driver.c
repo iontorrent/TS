@@ -367,6 +367,7 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
                 op_end += bam_cigar_oplen (cigar [op_idx]);
 
             if (op_end >= trim_at) // reached point at or beyond trim position
+            // if (op_end > trim_at) // reached point at or beyond trim position
                 break;
 
 #if PARANOID_TESTS
@@ -382,7 +383,7 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
     }
     if (in_lclip) // new clip is covered by already present one; no need for changes
         return orig_cigar_sz;
-
+    
 #if PARANOID_TESTS
     if (op_end < trim_at) // this is abberant case, should not happen
     {
@@ -394,6 +395,23 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
     assert (op_end >= trim_at);
 #endif
 
+    if (op_end == trim_at)
+    {
+        // if trimmed at the edge of cigar operator, 
+        // iteratively remove any non-match operators starting from the head one, incrementing clip_extension by the consumed read length
+        // if reached beginning of cigar, return 0 (reject entire read)
+        while (op_idx + 1 < orig_cigar_sz && bam_cigar_op (cigar [op_idx + 1]) != BAM_CMATCH)
+        {
+            ++ op_idx;
+            if (bam_cigar_type (cigar [op_idx]) & 1) // consumes query
+            {
+                unsigned ol = bam_cigar_oplen (cigar [op_idx]);
+                trim_at += ol;
+                op_end  += ol;
+            }
+        }
+    }
+    
     // now we are guaranteed to be inside or at the right edge of the non-clipping cigar operator (at the index op_idx)
 
     // finish computing new cigar length
@@ -402,9 +420,14 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
     if (op_end > trim_at)  // need space for the right part of partially split operator
         ++new_cigar_sz;
     else // check if there are non-clipping operations left
+    {
         if ((op_idx + 1 == orig_cigar_sz) ||  // there are no operations left
             ((op1 = bam_cigar_op (cigar [op_idx + 1])) == BAM_CSOFT_CLIP || op1 == BAM_CHARD_CLIP || op1 == BAM_CPAD))
             return 0;
+        // fprintf (stderr, "op_idx = %d, orig_cigar_size = %d, op_end = %d, trim_at = %d\n", op_idx, orig_cigar_sz, op_end, trim_at);
+
+        // tmap_bug ();
+    }
 
     assert (orig_cigar_sz > op_idx); // just in case - check that we did not go beyond the cigar size
     new_cigar_sz += orig_cigar_sz - op_idx - 1; // add remining cigar operators count
@@ -833,7 +856,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 &(stat->num_realign_unclip_failures)))
                             {
                                 // check if changes were introduced
-                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof (*orig_cigar)))
+                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof(*orig_cigar)))
                                 {
                                     ++(stat->num_realign_changed);
                                     if (new_offset != ref_off)

@@ -19,7 +19,7 @@ struct BkgFitWorkerGpuInfo
   void* fallbackQueue;
 };
 
-
+/*
 struct ProcessorQueue
 {
 
@@ -77,6 +77,91 @@ private:
   bool gpuMultiFlowFitting;
   bool gpuSingleFlowFitting;
 };
+*/
+
+
+class ProcessorQueue
+{
+
+    //this queue is owned by this class
+    WorkerInfoQueue * workQueue;
+
+    //this is just a handle to the gpu queue so jobs can be handed to this queue if needed
+    WorkerInfoQueue * gpuQueue;
+
+    int numWorkers;
+    bool heterogeneousComputing; // use both gpu and cpu
+    bool gpuMultiFlowFitting;
+    bool gpuSingleFlowFitting;
+
+protected:
+
+    void CreateGpuThreadsForFitType(
+        std::vector<BkgFitWorkerGpuInfo> &gpuInfo,
+        WorkerInfoQueue* q,
+        WorkerInfoQueue* fallbackQ,
+        int numWorkers,
+        std::vector<int> &gpus );
+
+public:
+
+  ProcessorQueue() {
+
+    workQueue = NULL;
+    gpuQueue = NULL;
+    numWorkers = 6;
+    heterogeneousComputing = false;
+    gpuMultiFlowFitting = true;
+    gpuSingleFlowFitting = true;
+  }
+
+  ~ProcessorQueue(){
+    destroyWorkQueue();
+  }
+
+
+  void createWorkQueue(int numRegions);
+  void destroyWorkQueue();
+  void setGpuQueue(WorkerInfoQueue * GpuQ){gpuQueue = GpuQ;}
+
+  void setNumWorkers(int numBkgWorker){ numWorkers = numBkgWorker; }
+  int getNumWorkers(){ return numWorkers; }
+
+  void configureQueue(BkgModelControlOpts &bkg_control);
+
+  void turnOffHeterogeneousComputing() { heterogeneousComputing = false; }
+  void turnOnHeterogeneousComputing() { heterogeneousComputing = true; }
+
+  void turnOnGpuMultiFlowFitting() { gpuMultiFlowFitting = true; }
+  void turnOffGpuMultiFlowFitting() { gpuMultiFlowFitting = false; }
+  void turnOnGpuSingleFlowFitting() { gpuSingleFlowFitting = true; }
+  void turnOffGpuSingleFlowFitting() { gpuSingleFlowFitting = false; }
+
+  bool useHeterogenousCompute() { return heterogeneousComputing; }
+  bool performGpuMultiFlowFitting() { return gpuMultiFlowFitting; }
+  bool performGpuSingleFlowFitting() { return gpuSingleFlowFitting; }
+
+  void SpinUpWorkerThreads();
+
+  void UnSpinBkgModelThreads();
+
+  WorkerInfoQueue* GetQueue() { return workQueue; }
+  WorkerInfoQueue* GetGpuQueue() { return gpuQueue; }
+
+  void initItem (void * itemData);
+
+  void CreateItemAndAssignItemToQueue(void * itemData);
+
+  void AssignItemToQueue (WorkerInfoQueueItem &item);
+  void AssignMultiFLowFitItemToQueue(WorkerInfoQueueItem &item);
+  void AssignSingleFLowFitItemToQueue(WorkerInfoQueueItem &item);
+
+  void WaitForRegionsToFinishProcessing ();
+
+  WorkerInfoQueueItem TryGettingFittingJob(WorkerInfoQueue** curQ);
+
+};
+
 
 
 struct BkgModelWorkInfo
@@ -88,14 +173,14 @@ struct BkgModelWorkInfo
   SynchDat *sdat;
   Image *img;
   bool last;
-  ProcessorQueue* pq;
+  ProcessorQueue* QueueControl;
   int flow_key;
   PolyclonalFilterOpts polyclonal_filter_opts;
   master_fit_type_table *table;
   const CommandLineOpts *inception_state;
   const std::vector<float> *smooth_t0_est;
   void ** SampleCollection; // pointer to pointer so all bkinfo objects point to the same dynamically generated sample-collection
-  RingBuffer<float> *gpuAmpEstPerFlow;
+  //RingBuffer<float> *gpuAmpEstPerFlow;
 };
 
 
@@ -163,23 +248,24 @@ struct ImageInitBkgWorkInfo
 
 // Some information needed by the helper thread which coordinates the handshake 
 // between GPU and CPU for writing amplitudes estimates to rawwell buffers
-struct GPUFlowByFlowPipelineInfo
+/*struct GPUFlowByFlowPipelineInfo
 {
   RingBuffer<float> *ampEstimatesBuf;
   std::vector<SignalProcessingMasterFitter*> *fitters;
-  ProcessorQueue *pq;
   int startingFlow;
   int endingFlow;  
   SemQueue *packQueue;
   SemQueue *writeQueue;
   ChunkyWells *rawWells;
 };
+*/
 
 void* BkgFitWorkerCpu (void *arg);
 bool CheckBkgDbgRegion (const Region *r,const BkgModelControlOpts &bkg_control);
 
 
 // allocate compute resources for our analysis
+/*
 struct ComputationPlanner
 {
   int numBkgWorkers;
@@ -210,7 +296,7 @@ struct ComputationPlanner
     gpu_singleflow_fit = true;
   }
 };
-
+*/
 /* // Boost serialization support:
 template<class Archive>
 void serialize(Archive& ar, ComputationPlanner& p, const unsigned int version)
@@ -227,14 +313,14 @@ void serialize(Archive& ar, ComputationPlanner& p, const unsigned int version)
   & p.lastRegionToProcess;
 */
 
-void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts &bkg_control );
-void SetRegionProcessOrder (int numRegions, SignalProcessingMasterFitter** fitters, ComputationPlanner &analysis_compute_plan);
-void AllocateProcessorQueue (ProcessorQueue &my_queue,ComputationPlanner &analysis_compute_plan, int numRegions);
-void AssignQueueForItem (ProcessorQueue &analysis_queue,ComputationPlanner &analysis_compute_plan);
+//void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts &bkg_control );
+//void SetRegionProcessOrder (int numRegions, SignalProcessingMasterFitter** fitters, ComputationPlanner &analysis_compute_plan);
+//void AllocateProcessorQueue (ProcessorQueue &my_queue,ComputationPlanner &analysis_compute_plan, int numRegions);
+//void AssignQueueForItem (ProcessorQueue &analysis_queue,ComputationPlanner &analysis_compute_plan);
 
-void WaitForRegionsToFinishProcessing (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
+//void WaitForRegionsToFinishProcessing (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
 //void SpinDownCPUthreads (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
-bool UseGpuAcceleration(float useGpuFlag);
+//bool UseGpuAcceleration(float useGpuFlag);
 
 void DoInitialBlockOfFlowsAllBeadFit (WorkerInfoQueueItem &item);
 void DoSingleFlowFitAndPostProcessing(WorkerInfoQueueItem &item);

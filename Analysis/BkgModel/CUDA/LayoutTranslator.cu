@@ -18,7 +18,7 @@
 
 
 //Translate the FgBuffer into the Image cube
-void TranslateFgBuffer_RegionToCube(  LayoutCubeWithRegions<short> & ImageCube,
+void TranslatorsFlowByFlow::TranslateFgBuffer_RegionToCube(  LayoutCubeWithRegions<short> & ImageCube,
     size_t numLBeads,
     size_t numFrames,
     size_t flowsPerBLock,
@@ -46,7 +46,7 @@ void TranslateFgBuffer_RegionToCube(  LayoutCubeWithRegions<short> & ImageCube,
   }
 }
 
-void TranslateFgBuffer_CubeToRegion(  LayoutCubeWithRegions<short> & ImageCube,
+void TranslatorsFlowByFlow::TranslateFgBuffer_CubeToRegion(  LayoutCubeWithRegions<short> & ImageCube,
     size_t numLBeads,
     size_t numFrames,
     size_t flowsPerBLock,
@@ -76,7 +76,7 @@ void TranslateFgBuffer_CubeToRegion(  LayoutCubeWithRegions<short> & ImageCube,
 
 
 //Translate BeadParam struct into BeadParam Cube
-void TranslateBeadParams_RegionToCube(LayoutCubeWithRegions<float> & BeadParamCube, void* bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateBeadParams_RegionToCube(LayoutCubeWithRegions<float> & BeadParamCube, void* bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -100,7 +100,7 @@ void TranslateBeadParams_RegionToCube(LayoutCubeWithRegions<float> & BeadParamCu
   }
 }
 
-void TranslateBeadParams_CubeToRegion(LayoutCubeWithRegions<float> & BeadParamCube, size_t numLBeads, BeadParams * bP, size_t regId)
+void TranslatorsFlowByFlow::TranslateBeadParams_CubeToRegion(LayoutCubeWithRegions<float> & BeadParamCube, size_t numLBeads, BeadParams * bP, size_t regId)
 {
   BeadParamCube.setRWStrideZ();
 
@@ -121,7 +121,7 @@ void TranslateBeadParams_CubeToRegion(LayoutCubeWithRegions<float> & BeadParamCu
 
 
 //Translate Bead State into Bead State Cube
-void TranslatePolyClonal_RegionToCube(LayoutCubeWithRegions<float> & PolyClonalCube, void* bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslatePolyClonal_RegionToCube(LayoutCubeWithRegions<float> & PolyClonalCube, void* bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -144,7 +144,7 @@ void TranslatePolyClonal_RegionToCube(LayoutCubeWithRegions<float> & PolyClonalC
 
 
 //Translate Bead State flags into BeadState Mask
-void TranslateBeadStateMask_RegionToCube(  LayoutCubeWithRegions<unsigned short> & BkgModelMask, void* bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateBeadStateMask_RegionToCube(  LayoutCubeWithRegions<unsigned short> & BkgModelMask, void* bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -168,7 +168,7 @@ void TranslateBeadStateMask_RegionToCube(  LayoutCubeWithRegions<unsigned short>
 }
 
 
-void TranslateBeadStateMask_CubeToRegion(  LayoutCubeWithRegions<unsigned short> & BkgModelMask, void* bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateBeadStateMask_CubeToRegion(  LayoutCubeWithRegions<unsigned short> & BkgModelMask, void* bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -187,7 +187,7 @@ void TranslateBeadStateMask_CubeToRegion(  LayoutCubeWithRegions<unsigned short>
 
 
 //translate Results from beadParams to Result Cube
-void TranslateResults_RegionToCube(LayoutCubeWithRegions<float> & ResultCube, size_t numLBeads, size_t flowIdxInBlock, BeadParams * bP, size_t regId){
+void TranslatorsFlowByFlow::TranslateResults_RegionToCube(LayoutCubeWithRegions<float> & ResultCube, size_t numLBeads, size_t flowIdxInBlock, BeadParams * bP, size_t regId){
   ResultCube.setRWStrideZ();
   assert(ResultCube.getDimZ() >= Result_NUM_PARAMS);
 
@@ -199,7 +199,7 @@ void TranslateResults_RegionToCube(LayoutCubeWithRegions<float> & ResultCube, si
     bP++;
   }
 }
-void TranslateResults_CubeToRegion(LayoutCubeWithRegions<float> & ResultCube, void * bkinfo, size_t flowIdxInBlock, size_t regId)
+void TranslatorsFlowByFlow::TranslateResults_CubeToRegion(LayoutCubeWithRegions<float> & ResultCube, void * bkinfo, size_t flowIdxInBlock, size_t regId)
 {
 
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
@@ -221,12 +221,12 @@ void TranslateResults_CubeToRegion(LayoutCubeWithRegions<float> & ResultCube, vo
 
 
 
-void TranslateRegionParams_CubeToRegion(LayoutCubeWithRegions<reg_params> & RegionCube,  reg_params * rP, size_t regId)
+void TranslatorsFlowByFlow::TranslateRegionParams_CubeToRegion(LayoutCubeWithRegions<reg_params> & RegionCube,  reg_params * rP, size_t regId)
 {
   *rP = RegionCube.getAtReg(regId);
 }
 
-void TranslateRegionParams_RegionToCube( LayoutCubeWithRegions<reg_params> & RegionCube, void* bkinfo,
+void TranslatorsFlowByFlow::TranslateRegionParams_RegionToCube( LayoutCubeWithRegions<reg_params> & RegionCube, void* bkinfo,
     size_t regId)
 {
   WorkSet myJob((BkgModelWorkInfo*)bkinfo);
@@ -235,7 +235,7 @@ void TranslateRegionParams_RegionToCube( LayoutCubeWithRegions<reg_params> & Reg
 
 
 
-void TranslateRegionFrameCube_RegionToCube( LayoutCubeWithRegions<float> & RegionFrameCube, void * bkinfo,
+void TranslatorsFlowByFlow::TranslateRegionFrameCube_RegionToCube( LayoutCubeWithRegions<float> & RegionFrameCube, void * bkinfo,
      size_t regId)
 {
 
@@ -273,7 +273,7 @@ void TranslateRegionFrameCube_RegionToCube( LayoutCubeWithRegions<float> & Regio
   }
 }
 
-void TranslateRegionFramesPerPoint_RegionToCube( LayoutCubeWithRegions<int> & RegionFramesPerPoint, void * bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateRegionFramesPerPoint_RegionToCube( LayoutCubeWithRegions<int> & RegionFramesPerPoint, void * bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -289,7 +289,7 @@ void TranslateRegionFramesPerPoint_RegionToCube( LayoutCubeWithRegions<int> & Re
   RegionFramesPerPoint.writeByStride(FppStd,numFrames);
 }
 
-void TranslateEmphasis_RegionToCube(LayoutCubeWithRegions<float> & RegionEmphasis, void * bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateEmphasis_RegionToCube(LayoutCubeWithRegions<float> & RegionEmphasis, void * bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -306,7 +306,7 @@ void TranslateEmphasis_RegionToCube(LayoutCubeWithRegions<float> & RegionEmphasi
 
 }
 
-void TranslateNonZeroEmphasisFrames_RegionToCube(LayoutCubeWithRegions<int> & RegionNonZeroEmphFrames, void * bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateNonZeroEmphasisFrames_RegionToCube(LayoutCubeWithRegions<int> & RegionNonZeroEmphFrames, void * bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -329,7 +329,7 @@ void TranslateNonZeroEmphasisFrames_RegionToCube(LayoutCubeWithRegions<int> & Re
 }
 
 
-void TranslateNucRise_RegionToCube(LayoutCubeWithRegions<float> & NucRise, void *bkinfo, size_t flowIdx, size_t regId)
+void TranslatorsFlowByFlow::TranslateNucRise_RegionToCube(LayoutCubeWithRegions<float> & NucRise, void *bkinfo, size_t flowIdx, size_t regId)
 {
 
   //float * nucRise,  size_t numFrames, size_t regId)
@@ -353,7 +353,7 @@ void TranslateNucRise_RegionToCube(LayoutCubeWithRegions<float> & NucRise, void 
 }
 
 
-void TranslatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsRegion> & PerFlowParamReg, void * bkinfo, size_t flowIdx, size_t regId )
+void TranslatorsFlowByFlow::TranslatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsRegion> & PerFlowParamReg, void * bkinfo, size_t flowIdx, size_t regId )
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
 
@@ -390,7 +390,7 @@ void UpdatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsR
 
 
 
-void TranslateConstantRegionParams_RegionToCube(LayoutCubeWithRegions<ConstantParamsRegion> & ConstParamReg, void * bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslateConstantRegionParams_RegionToCube(LayoutCubeWithRegions<ConstantParamsRegion> & ConstParamReg, void * bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
 
@@ -417,7 +417,7 @@ void TranslateConstantRegionParams_RegionToCube(LayoutCubeWithRegions<ConstantPa
 
 }
 
-void TranslatePerNucRegionParams_RegionToCube(LayoutCubeWithRegions<PerNucParamsRegion> & PerNucCube, void * bkinfo, size_t regId)
+void TranslatorsFlowByFlow::TranslatePerNucRegionParams_RegionToCube(LayoutCubeWithRegions<PerNucParamsRegion> & PerNucCube, void * bkinfo, size_t regId)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   reg_params * rp = &(info->bkgObj->region_data->my_regions.rp);
@@ -443,7 +443,33 @@ void TranslatePerNucRegionParams_RegionToCube(LayoutCubeWithRegions<PerNucParams
 
 
 
-void PopulateSymbolConstantImgageParams(ImgRegParams iP, ConstantFrameParams & CfP, void * bkinfoArray)
+
+void TranslatorsFlowByFlow::TranslatePerFlowRegionParams_CubeToRegion(LayoutCubeWithRegions<PerFlowParamsRegion> &perFlowRegParams, void *bkgInfo, size_t regId)
+{
+  BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkgInfo;
+  WorkSet myJob(info);
+  reg_params *rp = myJob.getRegionParams();
+
+  PerFlowParamsRegion pfRegP = perFlowRegParams.getAtReg(regId);
+
+  *(rp->AccessTMidNuc()) = pfRegP.getTMidNuc();
+  *(rp->AccessRatioDrift()) = pfRegP.getRatioDrift();
+  *(rp->AccessCopyDrift()) = pfRegP.getCopyDrift();
+  *(rp->AccessTMidNucShiftPerFlow()) = pfRegP.getTMidNucShift();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+void ConstanSymbolCopier::PopulateSymbolConstantImgageParams(ImgRegParams iP, ConstantFrameParams & CfP, void * bkinfoArray)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfoArray;
 
@@ -459,6 +485,15 @@ void PopulateSymbolConstantImgageParams(ImgRegParams iP, ConstantFrameParams & C
 
   CfP.setRawFrames(rpt->frames);
   CfP.setUncompFrames(rpt->uncompFrames);
+  if(CfP.getUncompFrames() > MAX_UNCOMPRESSED_FRAMES_GPU){
+    cout <<"---------------------------------------------------------------------------"<<endl
+         <<"CUDA WARNING: The number of uncompressed frames of "<< CfP.getUncompFrames() <<" for this block " << endl
+         <<"              exceeds the GPU frame buffer limit for a maximum of " << MAX_UNCOMPRESSED_FRAMES_GPU << " frames." <<endl
+         <<"              No more than "<< MAX_UNCOMPRESSED_FRAMES_GPU <<" uncompressed frames will used!!" <<endl
+         <<"---------------------------------------------------------------------------"<<endl;
+    CfP.setUncompFrames(MAX_UNCOMPRESSED_FRAMES_GPU);
+  }
+
   CfP.setMaxCompFrames(maxFrames);
 
 
@@ -473,7 +508,7 @@ void PopulateSymbolConstantImgageParams(ImgRegParams iP, ConstantFrameParams & C
 
 }
 
-void PopulateSymbolConstantGlobal( ConstantParamsGlobal & CpG, void * bkinfo)
+void ConstanSymbolCopier::PopulateSymbolConstantGlobal( ConstantParamsGlobal & CpG, void * bkinfo)
 {
 
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
@@ -487,6 +522,9 @@ void PopulateSymbolConstantGlobal( ConstantParamsGlobal & CpG, void * bkinfo)
 
   CpG.setMaxTauB(rp->max_tauB);
   CpG.setMinTauB(rp->min_tauB);
+
+  CpG.setScaleLimit(myJob.expTailFitBkgAdjLimit());
+  CpG.setTailDClowerBound(myJob.expTailFitBkgDcLowerLimit());
 
   CpG.setMagicDivisorForTiming(rp->nuc_shape.magic_divisor_for_timing);
   CpG.setNucFlowSpan(rp->nuc_shape.nuc_flow_span);
@@ -505,21 +543,21 @@ void PopulateSymbolConstantGlobal( ConstantParamsGlobal & CpG, void * bkinfo)
 
 }
 
-void PopulateSymbolPerFlowGlobal(PerFlowParamsGlobal & pFpG, void * bkinfo, size_t flowIdx)
+void ConstanSymbolCopier::PopulateSymbolPerFlowGlobal(PerFlowParamsGlobal & pFpG, void * bkinfo)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
 
-  pFpG.setRealFnum(myJob.getAbsoluteFlowNum() + flowIdx);
-  pFpG.setFlowIdx(flowIdx); // ToDo remove when data only copied by flow
+  pFpG.setRealFnum(myJob.getAbsoluteFlowNum());
+  pFpG.setFlowIdx(0); // ToDo remove when data only copied by flow
   //pFpG.setNucId(myJob.getFlowIdxMap()[flowIdx]);
-  pFpG.setNucId(myJob.getNucIdForFlow(myJob.getAbsoluteFlowNum() + flowIdx));
+  pFpG.setNucId(myJob.getNucIdForFlow(myJob.getAbsoluteFlowNum()));
   pFpG.print();
   copySymbolsToDevice(pFpG);
-  //TODO: copy to symbol
+
 }
 
-void PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo)
+void ConstanSymbolCopier::PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo)
 {
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
   WorkSet myJob(info);
@@ -529,11 +567,13 @@ void PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo)
   if(myJob.fitkmultAlways()) confP.setFitKmult();
   if(rp->fit_taue) confP.setFitTauE();
   if(myJob.performExpTailFitting()) confP.setPerformExpTailFitting();
+  if(myJob.performBkgAdjInExpTailFit()) confP.setPerformBkgAdjInExpTailFit();
   if(rp->use_alternative_etbR_equation) confP.setUseAlternativeEtbRequation();
   if(myJob.useDarkMatterPCA()) confP.setUseDarkMatterPCA();
   if(myJob.useDynamicEmphasis()) confP.setUseDynamicEmphasis();
   if(myJob.performRecompressionTailRawTrace()) confP.setPerformRecompressTailRawTrace();
-  if(myJob.performWellsLevelXTalkCorrection()) confP.setPerformWellsLevelXTalk();
+  if(myJob.performCrossTalkCorrection()) confP.setPerformTraceLevelXTalk();
+  else if(myJob.performWellsLevelXTalkCorrection()) confP.setPerformWellsLevelXTalk();  //ToDo: Wells Level is default and will not be set if Trace level is already set
   if(myJob.performPolyClonalFilter()) confP.setPerformPolyClonalFilter();
 
   confP.print();
@@ -544,7 +584,7 @@ void PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo)
 
 
 
-/*void PopulateSymbolConstantRegParamBounds( ConstantRegParamBounds & CpB, void * bkinfo)
+/*void ConstanSymbolCopier::PopulateSymbolConstantRegParamBounds( ConstantRegParamBounds & CpB, void * bkinfo)
 {
 
   BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkinfo;
@@ -567,6 +607,28 @@ void PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo)
 
 
 
+void BuildGenericSampleMask(
+  bool * sampleMask, //global base pointer to mask Initialized with false
+  const ImgRegParams &imgP,
+  size_t regId)
+{
+
+   for (int sampIdx = 0; sampIdx < 100; sampIdx ++){
+     size_t large_num = sampIdx*104729;
+     size_t sampRow = large_num / imgP.getRegH(regId);
+     sampRow = sampRow % imgP.getRegH(regId);
+     size_t sampCol = large_num % imgP.getRegW(regId);
+//     cout << "sample id " << sampIdx << ": " << imgP.getWellIdx(regId,sampCol,sampRow) << endl;
+     sampleMask[ imgP.getWellIdx(regId,sampCol,sampRow) ] = true;
+//     cout << "sample id " << sampIdx << " mask update done" << endl;
+   }
+}
+
+
+
+
+
+
 void BuildMaskFromBeadParams_RegionToCube(   LayoutCubeWithRegions<unsigned short> & Mask,
     size_t numLBeads,
     BeadParams * bP,
@@ -583,22 +645,6 @@ void BuildMaskFromBeadParams_RegionToCube(   LayoutCubeWithRegions<unsigned shor
     bP++;
   }
 }
-
-
-void TranslatePerFlowRegionParams_CubeToRegion(LayoutCubeWithRegions<PerFlowParamsRegion> &perFlowRegParams, void *bkgInfo, size_t regId)
-{
-  BkgModelWorkInfo* info = (BkgModelWorkInfo*)bkgInfo;
-  WorkSet myJob(info);
-  reg_params *rp = myJob.getRegionParams();
-
-  PerFlowParamsRegion pfRegP = perFlowRegParams.getAtReg(regId);
-
-  *(rp->AccessTMidNuc()) = pfRegP.getTMidNuc();
-  *(rp->AccessRatioDrift()) = pfRegP.getRatioDrift();
-  *(rp->AccessCopyDrift()) = pfRegP.getCopyDrift();
-  *(rp->AccessTMidNucShiftPerFlow()) = pfRegP.getTMidNucShift();	
-}
-
 
 //////////////////////////////////////////////////////////////////////
 //CUBE PER FLOW DUMPER CLASS

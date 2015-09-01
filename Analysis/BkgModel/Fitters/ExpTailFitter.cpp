@@ -124,6 +124,9 @@ void ExpTailFitter::AdjustBackground(float *incorporation_traces,float *bkg_trac
 
 }
 
+/*
+// this routine inappropriately combines two separate fitting processes that happen to use the same data
+// do not call it if avoidable
 float ExpTailFitter::CorrectTraces(float *incorporation_traces,float *bkg_traces,BeadParams *p,reg_params *rp,FlowBufferInfo *my_flow,TimeCompression &time_c, int flow_block_size, int flow_block_start )
 {
   // only happens in first block of compute
@@ -133,7 +136,7 @@ float ExpTailFitter::CorrectTraces(float *incorporation_traces,float *bkg_traces
   AdjustBackground(incorporation_traces,bkg_traces,p,rp,my_flow, time_c, flow_block_size, flow_block_start);
 
   return(p->tau_adj);
-}
+}*/
 
 bool FindNonIncorporatingInterval(int &t_start, int &t_end, std::vector<float> &ftimes, float t_mid_nuc, float mer_guess, int npts){
   float fi_end = t_mid_nuc + MIN_INCORPORATION_TIME_PI + MIN_INCORPORATION_TIME_PER_MER_PI_VERSION_TWO* mer_guess;
@@ -215,9 +218,22 @@ float ExpTailFitter::generic_exp_tail_fit(float *inc_trc, float *bkg_trace, Time
    float mse_err;
    float integrated_delta = fit_exp_tail_to_data(smooth_inc_trace,t_start,t_end, ftimes, tau, &exp_amp, &mse_err, debug);
    float bkg_scale = IntegratedBackgroundScale(bkg_trace, t_start, t_end);
-//@TODO: note potential divide by zero error here
-   // @TODO: this is simply decomposing SI = signal*exp(-t/tau) + alpha*bkg  - why not return alpha?
-   return (integrated_delta/bkg_scale);
+//@TODO: note potential divide by zero error here - fixed?
+   // @TODO: this is simply decomposing SI = signal*exp(-t/tau) + alpha*bkg  - but we're ignoring the actual bkg shape and substituting an averaage dc value
+   float tmp_fraction = 0.0f;
+   if (bkg_scale>sanity_nuc_step_lower){
+     // bkg ph step well enough defined to take a fraction
+    tmp_fraction = integrated_delta/bkg_scale;
+   }
+   // but might have an insane fit anyway due to the vagaries of data
+   // clamp to sensible bounds
+   if (tmp_fraction>sanity_ratio_limit){
+      tmp_fraction = sanity_ratio_limit;
+   }
+   if (tmp_fraction<(-sanity_ratio_limit)){
+     tmp_fraction = -sanity_ratio_limit;
+   }
+   return (tmp_fraction);
 }
 
 float ExpTailFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> &ftimes, float tau, float *exp_amp, float *mse_err, bool debug)

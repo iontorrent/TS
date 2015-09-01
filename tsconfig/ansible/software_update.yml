@@ -22,7 +22,7 @@
       apt: update_cache=yes
         
     - name: apt-get autoclean
-      shell: bash -lc 'apt-get autoclean'
+      shell: bash -c 'apt-get autoclean'
 
     - name: Set package preseed values
       script: "files/grub-pc.preseed {{GRUB_BOOT_DEVICE}}"
@@ -31,25 +31,23 @@
     # Check for new entries in the common_syspkg_list and ionmaster_ionpkg_list.
     # This will only install packages not currently installed
     - name: Install common system packages
-      apt: name={{item}} state=latest force=yes update_cache=yes cache_valid_time=300
+      apt: name={{item}} state=latest force=yes
       with_items: common_syspkg_list
       when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
     - name: Install system packages for head node
-      apt: name={{ item }} state=latest force=yes update_cache=yes cache_valid_time=300
+      apt: name={{ item }} state=latest force=yes
       with_items: ionmaster_syspkg_list
       when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
     - name: Install Ion packages for head node
-      apt: name={{ item }} state=latest force=yes update_cache=yes cache_valid_time=300
+      apt: name={{ item }} state=latest force=yes
       with_items: ionmaster_ionpkg_list
       when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
   
     # This updates all packages available via apt repository settings.  System and Ion packages
-    - shell: bash -lc 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
+    - shell: bash -c 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
       register: foobar
        
-    - debug: msg="{{item}}"
-      with_items: foobar.stdout_lines
-      ignore_errors: yes
+    - debug: var=foobar.stdout_lines
       
     - name: configuration error fixing.
       include: fixes.yml
@@ -73,23 +71,45 @@
       register: tsconfig_version
       
     - name: Create/Update tsconf.log
-      template: src=roles/common/templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+      template: src=templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
 
 - hosts: iontorrent_computes
   tasks:
+    #-----------------------------------------------------------------------------
+    # On each compute node, we need to replicate the Ion Repository configured
+    # on the head node.
+    #-----------------------------------------------------------------------------
+    - name: Replicating head node's /etc/apt/source.list.d/
+      copy: src={{item}} dest=/etc/apt/sources.list.d/ mode=0644
+      with_fileglob:
+        - /etc/apt/sources.list.d/*
+
     - name: apt-get update
       apt: update_cache=yes
       
     - name: apt-get autoclean
-      shell: bash -lc 'apt-get autoclean'
+      shell: bash -c 'apt-get autoclean'
+
+    # Check for new entries in the common_syspkg_list and ionmaster_ionpkg_list.
+    # This will only install packages not currently installed
+    - name: Install common system packages
+      apt: name={{item}} state=latest force=yes
+      with_items: common_syspkg_list
+      when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+    - name: Install system packages for compute resource - apt
+      apt: name={{ item }} state=latest force=yes
+      with_items: ioncompute_syspkg_list
+      when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+    - name: Install Ion packages for compute resource - apt
+      apt: name={{ item }} state=latest force=yes
+      with_items: ioncompute_ionpkg_list
+      when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
       
-    - shell: bash -lc 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
+    # Install all available updates to installed packages
+    - shell: bash -c 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
       register: foobar
       
-    - debug: msg="{{item}}"
-      with_items: foobar.stdout_lines
-      ignore_errors: yes
+    - debug: var=foobar.stdout_lines
       
     - include: roles/iontorrent_computes/tasks/software_update.yml
-
 

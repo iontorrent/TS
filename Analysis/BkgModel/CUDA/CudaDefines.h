@@ -31,11 +31,15 @@
 #define MAX_ALLOWED_NUM_STREAMS 2
 
 #define MAX_XTALK_NEIGHBOURS 18
+#define MAX_WELL_XTALK_SPAN 2
 
 #define MAX_NUM_DEVICES 4
 
 // new poisson table layout
 #define POISS_FLOAT4
+
+
+
 
 
 #endif // CUDADEFINES_H

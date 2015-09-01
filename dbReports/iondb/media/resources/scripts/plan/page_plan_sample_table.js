@@ -25,6 +25,7 @@ updateSamplesTable = function () {
         if (USERINPUT.is_ir_connected) {
             var irWorkflow = $(this).find('select[name=irWorkflow]').val();
             row['ApplicationType'] = USERINPUT.workflow_to_application_type_map[irWorkflow];
+            row['irRelationshipType'] = USERINPUT.sample_group_to_workflow_map[irWorkflow]["relationshipType"];
         }
         
         table.push(row);
@@ -60,7 +61,7 @@ createRow = function (i) {
     
     if (isDualNucleotideType != "True") {
         //empty values for the new rows
-        $row.find("input").not("[name=irRelationshipType]").each(function () {
+        $row.find("input").each(function () {
             $(this).val('');
         });
 
@@ -87,6 +88,7 @@ createRow = function (i) {
         initForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, i, $row, $('#row' + previousRowIndex), true); 
     
     }
+
     return $row;
 }
 
@@ -185,13 +187,7 @@ function setIRValuesForDualNucleotideType(rowIndex, row, previousRow, isCreateRo
         value = previousRow.children().find('select[name=irWorkflow]').val();
         row.children().find('select[name=irWorkflow]').val(value);
 
-        value = previousRow.children().find(".irRelationshipType").val();
-
-        //console.log("page_plan_sample_table.setIRValuesForDualNucleotideType() - relationshipType.value=", value);
-        row.children().find(".irRelationshipType").val(value);
-
         value = previousRow.children().find('select[name=irRelationRole]').val();
-
         if (value) {
             //the 2nd row may not have the selected value in the drop down yet
             var isExist = false;
@@ -346,6 +342,9 @@ function updateIRWorkflowSelectionForDualNucleotideType(currentRow, nextRow, sel
             }
             nextRow.children().find('select[name=irRelationRole]').val(relationValue);
         }
+
+        var irSetID = currentRow.children().find('input[name=irSetID]').val();
+        nextRow.children().find('input[name=irSetID]').val(irSetID);
     }
 }
 
@@ -439,11 +438,6 @@ function initForBasicDualNucleotideType() {
 
             value = row0.children().find('select[name=irWorkflow]').val();
             row1.children().find('select[name=irWorkflow]').val(value);
-
-            value = row0.children().find(".irRelationshipType").val();
-
-            //console.log("page_plan_sample_table.initForBasicDualNucleotideType() - relationshipType.value=", value);
-            row1.children().find(".irRelationshipType").val(value);
 
             value = row0.children().find('select[name=irRelationRole]').val();
 
@@ -562,6 +556,11 @@ function updateSampleReferenceColumnsWithDefaults(defaultReference, defaultTarge
 
 
 function updateSamplesForReference(defaultReference, isToUpdateSamplesTableNow) {
+	var isReferenceSupported = $('input[id=isReferenceSupported]').val();
+	if (isReferenceSupported != "True") {
+		return;
+	}
+	
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
 
@@ -574,18 +573,15 @@ function updateSamplesForReference(defaultReference, isToUpdateSamplesTableNow) 
             //process DNA sample row
             var row = $("#row" + index);
             if (row && row.hasClass("dna")) {
-                row.children().find('select[name=reference]').val(defaultReference).prop('selected', true);
+                row.children().find('select[name=reference]').val(defaultReference).change();
             }
         });    
     }
     else {
         $("select[name=reference]").each(function(){
-            $(this).val(defaultReference).prop('selected', true);
+            $(this).val(defaultReference).change();
         });    
     }
-        
-    //trigger the change event manually
-    $("select[name=reference]").change();
         
 	if (isToUpdateSamplesTableNow == true) {
         updateSamplesTable();
@@ -594,6 +590,11 @@ function updateSamplesForReference(defaultReference, isToUpdateSamplesTableNow) 
    
 
 function updateMixedTypeRNASamplesForReference(planReference, isToUpdateSamplesTableNow) {
+	var isReferenceSupported = $('input[id=isReferenceSupported]').val();
+	if (isReferenceSupported != "True" ) {
+		return;
+	}
+	
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
 
     if (isDualNucleotideType == "True"){
@@ -604,12 +605,9 @@ function updateMixedTypeRNASamplesForReference(planReference, isToUpdateSamplesT
             //process RNA sample row  
             var row = $("#row" + index);
             if (row && row.hasClass("rna")) {
-                row.children().find('select[name=reference]').val(planReference).prop('selected', true);
+                row.children().find('select[name=reference]').val(planReference).change();
             }            
         });    
-        
-        //trigger the change event manually
-         $("select[name=reference]").change();
     }
 
 	if (isToUpdateSamplesTableNow == true) {
@@ -630,13 +628,13 @@ function updateSamplesForTargetRegion(defaultTargetBedFile, isToUpdateSamplesTab
             //process DNA sample row
             var row = $("#row" + index);
             if (row && row.hasClass("dna")) {
-                row.children().find('select[name=targetRegionBedFile]').val(defaultTargetBedFile).prop('selected', true);
+                row.children().find('select[name=targetRegionBedFile]').val(defaultTargetBedFile);
             }                        
         });           
     }
     else {
         $("select[name=targetRegionBedFile]").each(function(){
-            $(this).val(defaultTargetBedFile).prop('selected', true);
+            $(this).val(defaultTargetBedFile);
         });        
     }
     
@@ -657,7 +655,7 @@ function updateMixedTypeRNASamplesForTargetRegion(planTargetBedFile, isToUpdateS
             //process RNA sample row     
             var row = $("#row" + index);
             if (row && row.hasClass("rna")) {
-                row.children().find('select[name=targetRegionBedFile]').val(planTargetBedFile).prop('selected', true);
+                row.children().find('select[name=targetRegionBedFile]').val(planTargetBedFile);
             }                        
         });     
     }
@@ -680,13 +678,13 @@ function updateSamplesForHotSpot(defaultHotSpot, isToUpdateSamplesTableNow) {
             //process DNA sample row  
             var row = $("#row" + index);
             if (row && row.hasClass("dna")) {
-                row.children().find('select[name=hotSpotRegionBedFile]').val(defaultHotSpot).prop('selected', true);
+                row.children().find('select[name=hotSpotRegionBedFile]').val(defaultHotSpot);
             }                      
         });      
     }
     else {
         $("select[name=hotSpotRegionBedFile]").each(function(){
-            $(this).val(defaultHotSpot).prop('selected', true);
+            $(this).val(defaultHotSpot);
         });
     }
     
@@ -697,15 +695,17 @@ function updateSamplesForHotSpot(defaultHotSpot, isToUpdateSamplesTableNow) {
 
 
 
-showSampleReferenceColumns = function(isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported) {    
-    $(".hideable_referenceBySample_ref").each(function (index, value) {            
-        //console.log("going to SHOW hideable_referenceBySample_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
-        $(this).show();
-    });
+showSampleReferenceColumns = function(isReferenceSupported, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported) {
+    if (isReferenceSupported == "True" ) {
+        $(".hideable_referenceBySample_ref").each(function (index, value) {            
+            //console.log("going to SHOW hideable_referenceBySample_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
+            $(this).show();
+        });
+    }
     
     if (isTargetRegionBEDFileSupported == "True" && isTargetRegionBEDFileBySampleSupported == "True") {
         $(".hideable_referenceBySample_targetRegion").each(function (index, value) {            
-            //console.log("going to SHOW hideable_referenceBySample_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
+            //console.log("going to SHOW hideable_referenceBySample_targetRegionf...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
             $(this).show();
         });    
     }
@@ -719,17 +719,19 @@ showSampleReferenceColumns = function(isTargetRegionBEDFileSupported, isHotspotR
 }
 
 
-toggleSampleReferenceColumnEnablements = function(isToDisable, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported) {
-    $(".hideable_referenceBySample_ref").each(function (index, value) {            
-        //console.log("going to enable/disable hideable_referenceBySample_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
-        if (isToDisable) {
-           $(this).find('select').attr("disabled", true);
-        }
-        else {
-            $(this).find('select').removeAttr("disabled");
-        }
-    });
-    
+toggleSampleReferenceColumnEnablements = function(isToDisable, isReferenceSupported, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported) {
+	if (isReferenceSupported == "True") {
+		$(".hideable_referenceBySample_ref").each(function (index, value) {
+			//console.log("going to enable/disable hideable_referenceBySample_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
+			if (isToDisable) {
+				$(this).find('select').attr("disabled", true);
+			}
+			else {
+				$(this).find('select').removeAttr("disabled");
+			}
+		});
+	}
+	
     if (isTargetRegionBEDFileSupported == "True" && isTargetRegionBEDFileBySampleSupported == "True") {
         $(".hideable_referenceBySample_targetRegion").each(function (index, value) {            
             //console.log("going to enable/disable hideable_referenceBySample_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
@@ -765,6 +767,32 @@ toggleSampleReferenceColumnEnablements = function(isToDisable, isTargetRegionBED
 
 
 $(document).ready(function () {
+
+    function parse_chip_barcode(_chip_barcode){
+            var chipID = _chip_barcode;
+            if (_chip_barcode.substring(0,2) == "21")
+            {
+                 var sub_barcode = _chip_barcode.substring(2);
+                 var reverse_subbarcode = sub_barcode.split("").reverse().join("");
+                 var n1 = reverse_subbarcode.search("19");
+                 var n2 = reverse_subbarcode.search("142");
+                 if ((n1 != -1) && ((n2 == -1) || (n1 < n2)))
+                 {
+                     chipID = sub_barcode.substring(0,sub_barcode.length-n1-("91").length);
+                 }
+                 else if ((n2 != -1) && ((n1 == -1) || (n2 < n1)))
+                 {
+                     chipID = sub_barcode.substring(0,sub_barcode.length-n2-("241").length);
+                 }
+            }
+            return chipID;
+    }
+    $("#chipBarcodeLabel").on('change', function(){
+        $(this).val(parse_chip_barcode($(this).val()));
+    });
+    $('input[name="chipBarcode"]').on('change', function(){
+        $(this).val(parse_chip_barcode($(this).val()));
+    });
 
     $("#barcodeSampleTubeLabel").on('keyup', function () {
         $("#tubeerror").html('');
@@ -838,21 +866,65 @@ $(document).ready(function () {
         });
         updateSamplesTable();
     });
-    
+ 
+    $(".ircoupleId").on('keyup', function () {
+        var $td = $(this).parent();
+        var $h;
+        if ($td.find('h4').length > 0) {
+            $h = $td.find('h4');
+            $h.remove();
+        }
+        //call the Regex test function identified in validation.js file
+        if (!is_valid_chars($(this).val())) {
+            $h = $("<h4></h4>", {'style': 'color:red;'});
+            $h.text('Error, Couple ID should contain only numbers, letters, spaces, and the following: . - _');
+            $td.append($h);
+        }
+        //call the check max length function that's in validation.js
+        if (!is_valid_length($(this).val(), 127)) {
+            $h = $("<h4></h4>", {'style': 'color:red;'});
+            $h.text('Error, Couple ID length should be 127 characters maximum');
+            $td.append($h);
+        }
+    }); 
+
+    $(".irembryoId").on('keyup', function () {
+        var $td = $(this).parent();
+        var $h;
+        if ($td.find('h4').length > 0) {
+            $h = $td.find('h4');
+            $h.remove();
+        }
+        //call the Regex test function identified in validation.js file
+        if (!is_valid_chars($(this).val())) {
+            $h = $("<h4></h4>", {'style': 'color:red;'});
+            $h.text('Error, Embryo ID should contain only numbers, letters, spaces, and the following: . - _');
+            $td.append($h);
+        }
+        //call the check max length function that's in validation.js
+        if (!is_valid_length($(this).val(), 127)) {
+            $h = $("<h4></h4>", {'style': 'color:red;'});
+            $h.text('Error, Embryo ID length should be 127 characters maximum');
+            $td.append($h);
+        }
+    }); 
     
     /**
      *   Click event handler to show/hide the sample reference columns
      */
     $("[id^=showHideReferenceBySample]").click(function () {    
+    	var isReferenceSupported = $('input[id=isReferenceSupported]').val();
         var isTargetBEDFileSupported = $('input[id=isTargetBEDFileSupported]').val();
         var isHotSpotBEDFileSupported = $('input[id=isHotSpotBEDFileSupported]').val();
         var isTargetBEDFileBySampleSupported = $('input[id=isTargetBEDFileBySampleSupported]').val();
         var isHotSpotBEDFileBySampleSupported = $('input[id=isHotSpotBEDFileBySampleSupported]').val();
-        
-        $(".hideable_referenceBySample_ref").each(function (index, value) {            
-            $(this).toggle();
-        });
-        
+
+        if (isReferenceSupported == "True" ) {
+            $(".hideable_referenceBySample_ref").each(function (index, value) {
+                $(this).toggle();
+            });
+        }
+
         if (isTargetBEDFileSupported == "True" && isTargetBEDFileBySampleSupported == "True") {
             $(".hideable_referenceBySample_targetRegion").each(function (index, value) {            
                 $(this).toggle();
@@ -875,11 +947,16 @@ $(document).ready(function () {
         var selectedIRAccount = USERINPUT.account_name ? USERINPUT.account_name : "None";
 
         if (isDualNucleotideType == "True") {
-            $(".hideable_sampleAnnotation").toggle();
             $(".hideable_sampleAnnotation_nt").toggle();
         }
-        if (selectedIRAccount != "None" && USERINPUT.is_ir_connected) {
-            $(".hideable_sampleAnnotation").toggle();
+
+		var isOnco_Pgs = $("input[name=isOnco_Pgs]:checked").val()
+		if (isOnco_Pgs == 'Pgs') {
+            $(".hideable_sampleAnnotation_pgs").toggle();
+        }
+
+        if (isOnco_Pgs == 'Oncology') {
+            $(".hideable_sampleAnnotation_onco").toggle();
         }
     });
 
@@ -1049,6 +1126,7 @@ $(document).ready(function () {
             for (var i = nrows; i < this.value; i++) {
                 var row = createRow(i);
                 row.appendTo($table.find('tbody'));
+                row.find('select[name=irWorkflow]').change();
             }
         } else if (this.value < nrows) {
             $table.find("tbody tr:gt(" + (this.value - 1) + ")").remove();
@@ -1292,7 +1370,7 @@ $(document).ready(function () {
     });
 
 
-    $('input[name=irSetID]').live('keyup', function (e) {
+    $('input[name=irSetID]').live('change', function (e) {
 
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
         var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
@@ -1322,6 +1400,31 @@ $(document).ready(function () {
         updateSamplesTable();
     });
 
+
+
+    /**
+     Checkbox for isOnco and isPgs is clicked
+     */
+    $("input[name=isOnco_Pgs]").click(function () {
+        var isOnco_Pgs = $("input[name=isOnco_Pgs]:checked").val();
+
+        //var selectedIRAccount = USERINPUT.account_name ? USERINPUT.account_name : "None";
+        //if (selectedIRAccount != "None" && USERINPUT.is_ir_connected) {}
+
+        if (isOnco_Pgs == 'Oncology') {
+            $(".hideable_sampleAnnotation_onco").show();
+         }
+        else {
+            $(".hideable_sampleAnnotation_onco").hide();        	
+        }
+
+        if (isOnco_Pgs == 'Pgs') {
+            $(".hideable_sampleAnnotation_pgs").show();
+         }
+        else {
+            $(".hideable_sampleAnnotation_pgs").hide();
+        }
+    });
 
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
@@ -1365,7 +1468,10 @@ $(document).ready(function () {
 
         //Input Elements - Still Works!
         {selector: ".ircellularityPct", action: "copy"},
-        {selector: ".irSetID", action: "increment"}
+        {selector: ".irSetID", action: "increment"},
+        {selector: ".irbiopsyDays", action: "copy"},
+        {selector: ".ircoupleId", action: "copy"},
+        {selector: ".irembryoId", action: "copy"},
     ];
 
     //Only enable certain fields if not OCP planning.
@@ -1448,28 +1554,6 @@ $(document).ready(function () {
         var hiddenHotspotBedSelect = $(this).closest("tr").find(".hiddenHotspotBedSelect").first();
         //changing the mixedTypeRNA ref selection should not clear the DNA sample's BED file selection
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
-            //console.log("$$$ skipping targetBedSelect.children().remove() for dualNucleotideType");
-         	//console.log("### reference.change - targetBedSelect.children=", targetBedSelect.children());
-            //20141006-WIP-TODO - filter the targetBedSelect and hotspotBedSelect for the specific row!!
-/*            
-            targetBedSelect.remove();
-            targetBedSelect.append(hiddenTargetBedSelect.children().clone().map(function(){
-                if($(this).hasClass(reference) || $(this).attr("value") == ""){
-                    return this;
-                } else {
-                    return null;
-                }
-            }));
-            
-            hotspotBedSelect.remove();
-            hotspotBedSelect.append(hiddenHotspotBedSelect.children().clone().map(function(){
-                if($(this).hasClass(reference) || $(this).attr("value") == ""){
-                    return this;
-                } else {
-                    return null;
-                }
-            }));
-*/                        
         targetBedSelect.children().remove();
         targetBedSelect.append(hiddenTargetBedSelect.children().clone().map(function(){
             if($(this).hasClass(reference) || $(this).attr("value") == ""){
@@ -1518,5 +1602,72 @@ $(document).ready(function () {
         var hotSpotRegionBedFile = $(this).find("option:selected").data('hotSpotRegionBedFile');
         //console.log("page_plan_sample_table.js - hotSpotRegionBedFile BIND click...currentRow.index=", currentRow.index(), "; hotSpotRegionBedFile=", hotSpotRegionBedFile);
         updateSamplesTable();
-    });  
+    });
+
+    $('#saveTable').click(function(e){
+        e.preventDefault();
+        updateSamplesTable();
+        var form = $('<form id="saveTable_form" method="POST" action="' + $(this).attr("href") + '">');
+        $("#samplesTable").clone().appendTo(form);
+        $(document.body).append(form); // need for IE9
+        form.submit();
+        form.remove();
+    });
+    
+    $('#modal_load_samples_table .csv_load.btn').click(function(e){
+        // load selected csv file and update samples table
+        e.preventDefault();
+        $('#modal_error').empty().hide();
+
+        var filename = $('#modal_load_samples_table :file').val();
+        if (!filename){
+            $('#modal_error').empty().append('Please select a CSV file').show();
+            return false;
+        }
+
+        var url = $(this).attr("href");
+        var form = $('#step_form').attr('action', url);
+        form.append(
+            $('<input>', { name: 'irSelected', val: USERINPUT.is_ir_connected ? "1":"0" })
+        );
+        form.ajaxSubmit({
+            dataType : "json",
+            url: url,
+            async: false,
+            beforeSend: function() {
+                console.log('submitting', form)
+            },
+            success: function(data) {
+                console.log('success', data)
+                var table = data.samplesTable;
+                $('#numRows').val(table.length).change();
+                if ($('#isSameRefInfoPerSample').is(':checked') && !data.same_ref_and_bedfiles){
+                    $('#isSameRefInfoPerSample').prop('checked', false);
+                    handle_isSampleRefInfoPerBarcodeSample(false, false);
+                }
+                $('#chipsets tbody tr').each(function (i) {
+                    var $row = $(this);
+                    $.each(data.ordered_keys, function(){
+                        var name = this;
+                        var elem = $row.find("[name="+name+"]");
+                        if (name=="barcodeId") {
+                            $row.find('[name=barcode] option[data-id_str='+table[i][name]+']').prop('selected', true);
+                        } else {
+                            elem.val(table[i][name]);
+                        }
+                        // populate onchange select options
+                        if (name=="reference" || name=="irWorkflow") elem.change();
+                    })
+                });
+                updateSamplesTable();
+
+                $('#modal_load_samples_table').modal('hide');
+                $('.modal-backdrop').remove();
+            },
+            error: function(data){
+                $('#modal_error').empty().append(data.responseText).show();
+            }
+        });
+        return false;
+    });
 });

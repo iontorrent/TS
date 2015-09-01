@@ -1,3 +1,13 @@
+
+<style type="text/css">
+.control-group {
+  margin-bottom: 3px;
+  padding-top: 0px;
+  padding-bottom: 0px;
+}
+
+</style>
+
 <div class="add_sample_set_info row-fluid optional_section" style="display: none;">
 <!--div class="add_sample_set_info row-fluid" style="display: none; background-color: #E1EFFA;" -->                         
     <table class="plan-table">
@@ -27,7 +37,7 @@
         <tr>        
             <div class="control-group">
                 <label class="control-label" for="new_sampleSet_libraryPrepType">Library Prep Type</label>
-                <div class="controls">
+                <div class="span6">
                     <select id="new_sampleSet_libraryPrepType" name="new_sampleSet_libraryPrepType"style="height:28px;">
                         {% for libPrepType, displayed_libPrepType in libraryPrepType_choices.items %}
                             <option value="{{libPrepType}}" >{{displayed_libPrepType}}</option>
@@ -37,7 +47,7 @@
             </div>
             <div class="control-group">
                 <label class="control-label" for="new_sampleSet_libraryPrepKit">Library Prep Kit</label>
-                <div class="controls">
+                <div class="span6">
                     <select id="new_sampleSet_libraryPrepKit" name="new_sampleSet_libraryPrepKit"style="height:28px;">
                         <option value="" >.....</option>
                         {% for libraryPrepKit in libraryPrepKits %}
@@ -50,7 +60,7 @@
         <tr>
             <div class="control-group">
                 <label class="control-label" for="new_sampleSet_pcrPlateSerialNum">PCR Plate Serial Number</label>
-                <div class="controls">                      
+                <div class="span6">                      
                     <input type="text" maxlength="64" id="new_sampleSet_pcrPlateSerialNum" name="new_sampleSet_pcrPlateSerialNum" placeholder="Optional"/>
                 </div>
             </div>        

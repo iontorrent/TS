@@ -32,7 +32,7 @@ Run Report for {{report.resultsName|latexsafe}}
 \fancyhead[C]{\large\ReportTitle}                               % title of the report, centered
 \fancyfoot{}                                                    % clear all footer fields
 \fancyfoot[L]{\thepage}
-\fancyfoot[R]{\includegraphics[width=20mm]{/opt/ion/iondb/media/IonLogo.png}}
+\fancyfoot[R]{\includegraphics[width=20mm]{/opt/ion/iondb/media/resources/img/ion-by-thermo-logo-black.png}}
 \renewcommand{\headrulewidth}{1pt}								% the header rule
 \renewcommand{\footrulewidth}{0pt}
 }
@@ -49,6 +49,26 @@ Run Report for {{report.resultsName|latexsafe}}
  \section*{%
  Run Summary						
  }
+
+{% if report.resultsType == "CombinedAlignments" %}
+%%%%%%%%%%row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Alignments Merged From: }
+  \begin{tabular}{l}
+    {% for pk,name in parents %}
+    \bf {{name|latexsafe}} \\
+    {% endfor %}
+  \end{tabular}
+  {% if CA_warnings %}
+  \section*{Warning: }
+  \begin{tabular}{l}
+    {% for warning in CA_warnings %}
+    \bf {{warning|latexsafe}} \\
+    {% endfor %}
+  \end{tabular}
+  {% endif %}
+%%%%%%%%%%row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+{% else %}
 %%%%%%%%%%first column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
  \begin{minipage}[t]{55.25mm}
  \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%
@@ -143,7 +163,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \midrule
  Filtered: Polyclonal 			& {{ basecaller.polyclonal|intcomma }}	& {{ basecaller.p_polyclonal|latexsafe}}\\
  Filtered: Low Quality			& {{ basecaller.low_quality|intcomma }}		& {{ basecaller.p_low_quality|latexsafe }}\\
- Filtered: Primer Dimer			& {{ basecaller.primer_dimer|intcomma }}			& {{ basecaller.p_primer_dimer|latexsafe }}\\
+ Filtered: Adapter Dimer		& {{ basecaller.primer_dimer|intcomma }}			& {{ basecaller.p_primer_dimer|latexsafe }}\\
  \bf Final Library ISPs			& \bf {{ basecaller.total_reads|intcomma }}	& \bf {{ basecaller.p_total_reads|latexsafe }}\\
  \bottomrule
  \end{tabular}
@@ -156,6 +176,8 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%second column of row2 ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bigskip %add some vertical space
+{% endif %} %%% report.resultsType != "CombinedAlignments" %%%
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%part row3 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 {% if datasets.barcode_config %}
@@ -170,11 +192,11 @@ Run Report for {{report.resultsName|latexsafe}}
  \bottomrule
  \end{longtable}
 {% elif CA_barcodes %}
- \begin{longtable}{E{18mm}E{23mm}E{23mm}E{23mm}}
+ \begin{longtable}{E{28mm}E{23mm}E{23mm}E{23mm}}
  Barcode Name & Aligned Output & Reads & Mean Aligned Read Length\\
  \midrule
  {% for barcode in CA_barcodes %}
-{%ifequal barcode.ID 'nomatch' %}No barcode{%else%}{{barcode.ID|default:"No barcode"|latexsafe}}{%endifequal%} & {{barcode.Filtered_Mapped_Bases_in_Q7_Alignments|intcomma}} & {{barcode.Total_number_of_Reads|intcomma}} & {{barcode.Filtered_Q7_Mean_Alignment_Length|intcomma}} bp \\[2.5mm]
+{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.AQ7_num_bases|intcomma}} & {{barcode.full_num_reads|intcomma}} & {{barcode.AQ7_mean_read_length|intcomma}} bp \\[2.5mm]
  {% endfor %}
  \bottomrule
  \end{longtable}
@@ -213,6 +235,8 @@ Run Report for {{report.resultsName|latexsafe}}
  \includegraphics[width=65mm]{alignment_rate_plot.png} 		%UL %insert your figure-filename here{}
  }}
  \end{minipage}
+ 
+ {% if isToShowRawAccuracy %}
 %%%%%%%%%%first column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%second column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -228,6 +252,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \includegraphics[width=60mm]{base_error_plot.png} 		%UL %insert your figure-filename here{}
  }}
  \end{minipage}
+ {% endif %}
  
 %%%%%%%%%%second column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -250,6 +275,7 @@ Run Report for {{report.resultsName|latexsafe}}
  
 %%%%%%%%%%second row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{% if report.resultsType != "CombinedAlignments" %}
 \bigskip %add some vertical space
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%third% row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -262,7 +288,7 @@ Run Report for {{report.resultsName|latexsafe}}
  }}
  \end{minipage}
  {% endif %} 
-
+{% endif %}
 %%second page work ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%third page work starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -295,7 +321,7 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Analysis Details}
 
-	\begin{tabular}{l|l}
+	\begin{tabular}{E{38mm}|E{125mm}}
 	\bf Run Name & {{experiment.expName|latexsafe}} \\ 
 	\bf Run Date & {{experiment.date}} \\ 
 	\bf Run Flows & {{experiment.flows}} \\ 
@@ -312,6 +338,7 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf Flow Order & {{experiment.flowsInOrder}} \\ 
 	\bf Library Key & {{report.eas.libraryKey}} \\ 
 	\bf TF Key & {{report.eas.tfKey|default:"ATCG"}} \\ 
+	\bf Chip ID & {% spaceless %} {% if experiment %} {{experiment.chipBarcode}}{% endif %}{% endspaceless %} \\
 	\bf Chip Check & {% spaceless %} {% if experiment.log.calibratepassed %} Passed {% else %}Failed{% endif %}{% endspaceless %} \\
 	\bf Chip Type & {{experiment.chipType}} \\ 
 	\bf Chip Data & {{experiment.rawdatastyle}} \\ 
@@ -319,7 +346,25 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf Analysis Name & {{report.resultsName|latexsafe}} \\ 
 	\bf Analysis Date & {{report.timeStamp}} \\ 
 	\bf Analysis Flows & {{report.processedflows}} \\ 
-	\bf runID & {{report.runid}} \\ 
+	\bf runID & {{report.runid}} \\
+    {% if not report.isThumbnail %}
+        \bf BeadFind Args & {{ report.eas.beadfindargs }} \\
+        \bf Analysis Args & {{ report.eas.analysisargs }} \\
+        \bf Pre-BaseCaller Args for calibration & {{ report.eas.prebasecallerargs }} \\
+        \bf Calibration Args & {{ report.eas.calibrateargs }} \\
+        \bf BaseCaller Args & {{ report.eas.basecallerargs }} \\
+        \bf Alignment Args & {{ report.eas.alignmentargs }} \\
+        \bf IonStats Args & {{ report.eas.ionstatsargs }} \\
+    {% else %}
+        \bf BeadFind Args & {{ report.eas.thumbnailbeadfindargs }} \\
+        \bf Analysis Args & {{ report.eas.thumbnailanalysisargs }} \\
+        \bf Pre-BaseCaller Args for calibration & {{ report.eas.prethumbnailbasecallerargs }} \\
+        \bf Calibration Args: & {{ report.eas.thumbnailcalibrateargs }} \\
+        \bf BaseCaller Args & {{ report.eas.thumbnailbasecallerargs }} \\
+        \bf Alignment Args & {{ report.eas.thumbnailalignmentargs }} \\
+        \bf IonStats Args & {{ report.eas.thumbnailionstatsargs }} \\
+    {% endif %}
+    \bf Analysis Parameters & {{report.eas.custom_args|yesno:"custom,default"}} \\
 \end{tabular}%
 
 

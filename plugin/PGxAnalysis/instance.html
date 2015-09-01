@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css"/>
+
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
+    <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/site_media/js/chosen.jquery.min.js"></script>
+
+
+    <style type="text/css">
+        .dropdown {
+            width: 600px;
+        }
+
+        .help {
+            cursor: default;
+            border-bottom: 1px dotted #A9A9A9;
+            font-weight: bold;
+        }
+
+        .vcconfig {
+            font-weight: bold;
+            border-bottom: 1px dotted #A9A9A9;
+        }
+
+        .vcSpace {
+            margin-bottom: 10px;
+        }
+
+        h4 {
+            padding-top: 15px;
+            padding-bottom: 15px;
+        }
+
+        #showAdv {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        #tvclabel {
+            width: 300px;
+            text-align: left;
+        }
+
+        .row {
+            margin-bottom: 8px;
+        }
+
+        .container {
+            width: 840px;
+        }
+
+        .zebra {
+            padding: 5px;
+        }
+
+        .zebra:nth-child(odd) {
+            background: -moz-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%); /* FF3.6+ */
+            background: -webkit-gradient(linear, left top, left bottom, color-stop(0%, rgba(244, 245, 247, 0.75)), color-stop(50%, rgba(229, 230, 232, 0.75)), color-stop(100%, rgba(244, 245, 247, 0.75))); /* Chrome,Safari4+ */
+            background: -webkit-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%); /* Chrome10+,Safari5.1+ */
+            background: -o-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%); /* Opera 11.10+ */
+            background: -ms-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%); /* IE10+ */
+            background: linear-gradient(to bottom, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%); /* W3C */
+            filter: progid:DXImageTransform.Microsoft.gradient(startColorstr = '#bff4f5f7', endColorstr = '#bff4f5f7', GradientType = 0); /* IE6-9 */
+        }
+
+        textarea {
+          -webkit-box-sizing: border-box;
+          -moz-box-sizing: border-box;
+          box-sizing: border-box;
+          width: 605px;
+        }
+
+    </style>
+</head>
+
+<script>
+
+$(function () {
+
+    function generateMeta() {
+        var meta = {};
+        meta["reference"] = window.reference;
+        //meta["targetregions_id"] = $("#targetregions option:selected").text();
+        //meta["targetregions"] = $("#targetregions option:selected").val();
+        //meta["targetloci_id"] = $("#targetloci option:selected").text();
+        //meta["targetloci"] = $("#targetloci option:selected").val();
+
+        //var targets = $("#targetregions").val();
+        //var i = targets.lastIndexOf('/unmerged/detail/');
+
+        //if (i < 0) {
+        //    meta["targetregions_merge"] = "";
+        //}
+        //else {
+        //    meta["targetregions_merge"] = targets.substr(0, i) + '/merged/plain/' + targets.substr(i + 17);
+        //}
+
+        //var hotspots = $('#targetloci').val();
+        //i = hotspots.lastIndexOf('/unmerged/detail/');
+        //if (i < 0) {
+         //  meta["targetloci_merge"] = "";
+        //}
+        //else {
+         //  meta["targetloci_merge"] = hotspots.substr(0, i) + '/merged/plain/' + hotspots.substr(i + 17);
+        //}
+
+        return meta;
+    }
+
+    function inputToJson() {
+        //turns the input into the JSON the plugin needs
+	 var output = { "meta":{} };
+        $(".plugin_input").each(function (i) {
+            output[$(this).data("key")][$(this).data("subkey")] = $(this).val();
+        });
+        //add meta to the output json
+        output["meta"] = generateMeta();
+        return output;
+    }
+
+    function loadConfig(file) {
+        var request = $.ajax({
+            type:"GET",
+            url:file,
+            dataType:"json"
+        });
+
+        // request.done(function (data) {
+           // advancedTmpl(data);
+        // });
+
+        request.fail(function () {
+            console.log("failed")
+        });
+    }
+
+    window.pluginMedia = "/pluginMedia/" + TB_plugin["fields"]["name"] + "/";
+
+    // turn off async JavaScript so we can easily get/set var names
+    $.ajaxSetup({async:false});
+
+
+    var desc = $.ajax({
+        type:"GET",
+        url:window.pluginMedia + "configs/description.json",
+        dataType:"json"
+    });
+
+    desc.done(function (data) {
+        window.help = data;
+    });
+
+    $(".dropdown").chosen({disable_search_threshold:5});
+
+    var reportUrl = '/rundb/api/v1/results/' + TB_result + '/?format=json&noplugin=True';
+    var referenceID;
+    var experimentUrl;
+    var analysisUrl;
+
+
+    $.get(reportUrl, function (data) {
+        analysisUrl = data.reportLink;
+        experimentUrl = data.experiment;
+        referenceID = data.reference;
+        window.reference = data.reference;
+    });
+
+    $('#referenceid').html(referenceID);
+
+    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' + referenceID + '/unmerged/detail/&order_by=path';
+
+    $.get(refBedURL, function (data) {
+        $.each(data.objects, function (intIndex, result) {
+            var targfile = result.file;
+            var i = targfile.lastIndexOf('/unmerged/detail/');
+            if (i < 0) return true;
+            var selName = targfile.substr(i + 17);
+            if (selName.substr(0, 7) == 'example') return true;
+            var j = selName.lastIndexOf('.bed');
+            if (j > 0) {
+                selName = selName.substr(0, j);
+                if (result.meta.hotspot) {
+                    $("#targetloci").append("<option value='" + targfile + "'>" + selName + "</option>");
+                }
+                //else {
+                 //   $("#targetregions").append("<option value='" + targfile + "'>" + selName + "</option>");
+                //}
+            }
+        });
+        //chosen wants this to update the dropdowns
+        $(".dropdown").trigger("liszt:updated");
+    });
+
+    $('#postbutton').click(function () {
+
+        //TODO: add validation
+
+        // serialize user selections and run the plugin
+        obj = inputToJson();
+        pluginAPIJSON = { "plugin":[TB_plugin.fields.name], "pluginconfig":obj };
+        pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+        pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+
+        $.ajax({
+            type:'POST',
+            url:pluginURL,
+            async:false,
+            contentType:"application/json; charset=utf-8",
+            data:pluginAPIJSON, dataType:"json",
+            success:function (data) {
+                $("#json_result").html(
+                        '<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin ...</p></div>');
+                setTimeout("parent.$.fn.colorbox.close()", 2000);
+            }
+        });
+
+        console.log(obj);
+
+    });
+
+
+});
+
+</script>
+
+
+<body>
+
+<div class="container">
+    <h3>PGX Analysis Plugin</h3>
+
+    <div class="row">
+        <div class="span6">
+
+            <!--<div class="row">
+                <div class="span2">
+                        <span class="help"
+                              title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Notes below.">
+               Targeted Regions:
+                        </span>
+                </div>
+
+                <div class="span4">
+                    <select id="targetregions" name="targetregions" class="dropdown long">
+                        <option value="">None</option>
+                    </select>
+                </div>
+            </div>
+            !-->
+            <!--<div class="row">
+                <div class="span2">
+                        <span class="help"
+                              title="Select the target Hotspots matching your reference and enriched fragment library. See Description and Notes below.">
+               Targeted Hotspots:
+                        </span>
+                </div>
+
+                <div class="span4">
+                    <select id="targetloci" name="targetloci" class="dropdown long">
+                        <option value="">None</option>
+                    </select>
+                </div>
+            </div>
+	    !-->
+
+        </div>
+
+    </div>
+
+
+    <div class="row">
+        PGxAnalyis plugin is designed to be used with the Ion AmpliSeq Pharmacogenomics panel which is a hotspot panel that allows the interrogation of Pharmacogenomics variants in samples using the Torrent Suit variant caller for genotyping and Coverage Analysis PlugIn for CYP2D6 copy number detection.
+    </div>
+
+   
+
+    <div class="row">
+
+        <div class="span3 offset8">
+            <input id="postbutton" class="btn btn-primary" type="submit" value="Submit">
+        </div>
+
+    </div>
+
+
+    <div id="json_result"></div>
+
+
+</div>
+
+</body>
+</html>
+

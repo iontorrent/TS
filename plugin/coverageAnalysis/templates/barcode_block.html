@@ -45,6 +45,7 @@
 
 <script type="text/javascript">
   function numberWithCommas(x) {
+    if( !x ) return "NA";
     var parts = x.toString().split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
@@ -75,7 +76,7 @@ $(document).ready(function() {
         schema: { model: { fields: {
           barcode_name: {type:"string"},
           sample: {type:"string"},
-          mapped_reads: {type:"float"},
+          mapped_reads: {type:"number"},
 {% if trg_stats %}
           on_target: {type:"float"},
 {% endif %}
@@ -83,7 +84,7 @@ $(document).ready(function() {
           sample_target: {type:"float"},
 {% endif %}
 {% if bas_stats %}
-          mean_depth: {type:"float"},
+          mean_depth: {type:"number"},
           uniformity: {type:"float"}
 {% endif %}
         } } },

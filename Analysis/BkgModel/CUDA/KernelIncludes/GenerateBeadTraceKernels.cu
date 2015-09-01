@@ -986,9 +986,9 @@ void GenerateT0AvgAndNumLBeads_New(
 {
 
   //if(blockDim.x != warpsize) return; // block width needs to be warp size
-  extern __shared__ int smBase[]; //one element per thread;
+  extern __shared__ int smBaseGenerateT0AvgAndNumLBeads[]; //one element per thread;
 
-  int* sm_base = smBase;
+  int* sm_base = smBaseGenerateT0AvgAndNumLBeads;
   int* sm = sm_base + blockDim.x * threadIdx.y + threadIdx.x; //map sm to threads in threadblock
   int* sm_sample_base = sm_base + blockDim.x * blockDim.y;
   int* sm_sample = sm + blockDim.x * blockDim.y;
@@ -1221,8 +1221,8 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
 {
   extern __shared__ int smemGenBeadTraces[];  //4 Byte per thread
 
-
-
+  SampleCompressedTraces = ConstSmplCol.getWriteBuffer();
+  //if(blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x ==0 && threadIdx.y ==0) printf("Device SampleComressedTrace: %p\n",SampleCompressedTraces);
   //determine shared memory pointers for each thread and the the base pointer for each warp (or warp half)
   int * sm_base = smemGenBeadTraces;
   int * sm_warp_base = sm_base + threadIdx.y*blockDim.x;

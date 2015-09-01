@@ -16,24 +16,11 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 
 
 	<table>
-	  <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
-	  <tr><td>Reference genome:</td>             <td>{{options.genome_name}}</td></tr>
-
-	  {% if options.has_targets %}
-	    <tr><td>Targeted regions:</td>    <td>{{options.targets_name}}</td></tr>
-	  {% else %}
-	    <tr><td>Targeted regions:</td>    <td>None</td></tr>
-	  {% endif %}
-	  {% if options.has_hotspots %}
-	    <tr><td>Hotspot regions:</td>     <td>{{options.hotspots_name}}</td></tr>
-	  {% else %}
-	    <tr><td>Hotspot regions:</td>     <td>None</td></tr>
-	  {% endif %}
-	  <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
   	  <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
       <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
                                               <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
-                                              <a class="btn" href="{{options.run_name}}.xls">XLS</a></td></tr>
+                                              <a class="btn" href="{{options.run_name}}.xls">XLS</a>
+                                              <a class="btn" href="{{options.run_name}}.cov.xls">COV</a></td></tr>
       {% if options.barcode_mode == "match" %}
       <tr><td>Please note:</td>           <td>Variant calling was carried out only for barcodes with both reference genome and targeted regions matching those specified above</td></tr>
       {% else %}
@@ -71,6 +58,8 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 
           <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
               <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
+              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz">gVCF.GZ</a>
+              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz.tbi">gVCF.GZ.TBI</a>
               <a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a></td>
         </tr>
       {% endif %}

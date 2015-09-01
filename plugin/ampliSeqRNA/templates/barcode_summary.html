@@ -57,6 +57,7 @@
 
 <script type="text/javascript">
   function numberWithCommas(x) {
+    if( !x ) return "NA";
     var parts = x.toString().split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
@@ -90,7 +91,7 @@ $(document).ready(function() {
           ercc_target: {type:"float"},
 {% endif %}
         } } },
-        pageSize: 10
+        pageSize: 20
       },
       columns: [
         {field:"barcode_name"},
@@ -249,7 +250,7 @@ NOTE: Unexpectedly low values of Mapped Reads or Valid Reads (%) may be due to u
   <div class="pull-right">
     <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
     <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
-    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+    <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
     <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
   </div>
 </div> </div> </div> </div>

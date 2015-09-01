@@ -37,17 +37,17 @@ void make_filter(clonal_filter& filter, filter_counts& counts, Mask& mask, RawWe
     deque<float>  ppf;
     deque<float>  ssq;
     count_sample(counts, ppf, ssq, mask, wells, key_ionogram, opts);
-    make_filter(filter, counts, ppf, ssq, false, opts); // no verbosity
+    make_filter(filter, counts, ppf, ssq, opts);
 }
 
-void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq, bool verbose, const PolyclonalFilterOpts & opts)
+void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq, const PolyclonalFilterOpts & opts)
 {
     // Make a clonality filter from ppf and ssq for a sample of reads.
     // Record number of putative clonal and mixed reads in the sample.
     vec  mean[2];
     mat  sigma[2];
     vec  alpha;
-    bool converged = fit_normals(mean, sigma, alpha, ppf, ssq, verbose, opts);
+    bool converged = fit_normals(mean, sigma, alpha, ppf, ssq, opts);
 
     if(converged){
         bivariate_gaussian clonal(mean[0], sigma[0]);
@@ -158,7 +158,7 @@ static bool test_convergence(const vec mean[2], const mat sgma[2], const vec& al
     double mean_diff0  = max(max(new_mean[0] - mean[0]));
     double mean_diff1  = max(max(new_mean[1] - mean[1]));
     double sgma_diff0  = max(max(new_sgma[0]    - sgma[0]));
-    double sgma_diff1  = max(max(new_sgma[0]    - sgma[0]));
+    double sgma_diff1  = max(max(new_sgma[1]    - sgma[1]));
     double sgma_diff   = max(sgma_diff0, sgma_diff1);
     double alpha_diff  = max(max(new_alpha   - alpha));
     double max_diff    = max(max(mean_diff0, mean_diff1), max(sgma_diff, alpha_diff));
@@ -204,30 +204,40 @@ static void init(vec mean[2], mat sgma[2], vec& alpha)
     alpha.fill(0.5);
 }
 
-bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq, bool verbose, const PolyclonalFilterOpts & opts)
+bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq, const PolyclonalFilterOpts & opts)
 {
     bool converged = false;
-    //verbose = true;
     
     try {
         // Initial guesses for two normal distributions:
         init(mean, sgma, alpha);
-        if (verbose)
+        if (opts.verbose)
           print_dist(mean, sgma, alpha, converged, 0, opts.mixed_model_option);
 
         int  max_iters = opts.max_iterations;
         int iteration = 1;
         cout << "max_iters: " << max_iters << endl;
+        bool not_pos_def = false;
+        bool not_finite_params = false;
         for(; iteration<=max_iters and not converged; ++iteration){
-            if(not is_pos_def(sgma[0]) or not is_pos_def(sgma[1]))
-                break;
+
             vec  new_mean[2];
             mat  new_sgma[2];
             vec  new_alpha;
+
             calcMeanCovariance(new_sgma, new_mean, new_alpha, mean, sgma, alpha, ppf, ssq, opts.mixed_model_option);
-            // Test for convergence:
-            if(not new_mean[0].is_finite() or not new_mean[1].is_finite() or not new_sgma[0].is_finite() or not new_sgma[1].is_finite() or not new_alpha.is_finite())
+
+            if(not is_pos_def(sgma[0]) or not is_pos_def(sgma[1])) {
+                not_pos_def = true;
                 break;
+            }
+
+            // Test for convergence:
+            if(not new_mean[0].is_finite() or not new_mean[1].is_finite() or not new_sgma[0].is_finite() or not new_sgma[1].is_finite() or not new_alpha.is_finite()) {
+                not_finite_params = true;
+                break;
+            }
+
             converged = test_convergence(mean, sgma, alpha, new_mean, new_sgma, new_alpha);//ignore new_sigma2 comparison
 
             // Update parameters, forcing covariances to be the same for both distributions:
@@ -237,14 +247,27 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
             sgma[0] = new_sgma[0];
             sgma[1] = new_sgma[1];
 
-            if (verbose)
+            if (opts.verbose)
               print_dist(mean, sgma, alpha, converged, iteration, opts.mixed_model_option);
         }
 
         // Fallback position if failed to converge:
         if(not converged){
-            cout << "failed to converge to an acceptable filter: default filtering used" << endl;
-            init(mean, sgma, alpha);
+            // in case of singular covariance matrices on infinite means, don't use the mean and covariances at the last iteration
+            if (not_pos_def || not_finite_params) {
+              cout << "failed to converge to an acceptable filter with improper covariance and mean parameters for the clusters: default filtering used" << endl;
+              init(mean, sgma, alpha);
+            }
+            else {
+              cout << "failed to converge to an acceptable filter in " << max_iters << " iterations";
+              if (opts.use_last_iter_params) {
+                cout << ": using last iteration params for filtering" << endl;
+              }
+              else {
+                cout << ": default filtering used" << endl;
+                init(mean, sgma, alpha);
+              }
+            }
             converged = true;
         } else {
           cout << "converged to acceptable filter: using adapted filter at iteration " << (iteration-1) << endl;

@@ -294,7 +294,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 114857600
 PLUGIN_WAREHOUSE = [
     (
      'Torrent Browser Plugin Store',
-     'http://ioncommunity.lifetechnologies.com/community/products/torrent_browser_plugin_store',
+     'http://ioncommunity.thermofisher.com/community/products/software/torrent_browser_plugin_store',
      'http://torrentcircuit.iontorrent.com/warehouse/'
     )
 ]
@@ -325,6 +325,9 @@ SUPPORT_AUTH_URL   = "https://support.iontorrent.com/asdf_authenticate"
 SUPPORT_UPLOAD_URL = "https://support.iontorrent.com/asdf_upload"
 
 REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.json"
+
+PRODUCT_UPDATE_BASEURL = "http://ionupdates.com/"
+PRODUCT_UPDATE_PATH = "products/main.json"
 
 ABSOLUTE_URL_OVERRIDES = {
     'auth.user': lambda u: urlresolvers.reverse('configure_account'),

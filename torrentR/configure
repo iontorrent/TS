@@ -56,7 +56,7 @@ fi
 
 if [$RECALIBRATION_INC == ""]
 then
-  RECALIBRATION_INC=$TS_SOURCE_ROOT/Analysis/Recall
+  RECALIBRATION_INC=$TS_SOURCE_ROOT/Analysis/Calibration
 fi
 
 if [$ANALYSIS_IMAGE == ""]
@@ -120,7 +120,7 @@ fi
 
 if [$BAMTOOLS_ROOT == ""]
 then
-    BAMTOOLS_ROOT=$TS_BUILD_ROOT/bamtools-2.3.0.20150527+git6685b2f93f-install
+    BAMTOOLS_ROOT=$TS_BUILD_ROOT/bamtools-2.4.0.20150702+git15eadb925f-install
     BAMTOOLS_INC=$BAMTOOLS_ROOT/include/bamtools
     BAMTOOLS_LIB=$BAMTOOLS_ROOT/lib/bamtools
 fi

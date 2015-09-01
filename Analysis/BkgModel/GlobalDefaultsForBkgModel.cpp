@@ -43,7 +43,7 @@ LocalSigProcControl::LocalSigProcControl()
   regional_sampling_type = -1;
   no_RatioDrift_fit_first_20_flows = false;
   use_alternative_etbR_equation =false;
-  use_log_taub = false;
+
 
   fitting_taue = false;
   hydrogenModelType = 0;
@@ -97,7 +97,15 @@ void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 	bool do_clonal_filter_def = true;
 	bool enable_well_xtalk_correction_def = false;
 	bool per_flow_t_mid_nuc_tracking_def = false;
-	bool exp_tail_fit_def = false;
+
+  //ugly parameters because exp-tail fit jams multiple routines into one 'module'
+  bool exp_tail_fit_def = false; // gates the whole constellation, because of history
+  exp_tail_bkg_adj = true; // do background adjust per flow using the shifted background
+  exp_tail_tau_adj = true; // add a taub modifier based on the fit in the first 20 flows
+  exp_tail_bkg_limit = 0.2f; // 20% of background adjustment should be enough - typical values are <<5%
+  exp_tail_bkg_lower = 10.0f;  // guess what happens when the pH step becomes 0?  we divide by zero and blow up
+  // end ugly
+
 	bool pca_dark_matter_def = false;
 	bool regional_sampling_def = false;
 	float AmplLowerLimit_def = 0.001f;
@@ -119,16 +127,19 @@ void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 	do_clonal_filter = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", do_clonal_filter_def);
 	enable_well_xtalk_correction = RetrieveParameterBool(opts, json_params, '-', "bkg-use-proton-well-correction", enable_well_xtalk_correction_def);
 	per_flow_t_mid_nuc_tracking = RetrieveParameterBool(opts, json_params, '-', "bkg-per-flow-time-tracking", per_flow_t_mid_nuc_tracking_def);
+
+  //ugly family of parameters due to history
 	exp_tail_fit = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-fit", exp_tail_fit_def);
-	if(exp_tail_fit)
+  exp_tail_tau_adj = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-tau-adj", exp_tail_tau_adj);
+  exp_tail_bkg_adj = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-bkg-adj", exp_tail_bkg_adj);
+  exp_tail_bkg_limit = RetrieveParameterFloat(opts, json_params, '-', "bkg-exp-tail-limit", exp_tail_bkg_limit);
+  exp_tail_bkg_lower = RetrieveParameterFloat(opts, json_params, '-', "bkg-exp-tail-lower", exp_tail_bkg_lower);
+  if(exp_tail_fit)
 	{
 		choose_time = 2;
-		bool half_speed = RetrieveParameterBool(opts, json_params, '-', "time-half-speed", false);
-		if(half_speed)
-		{
-			choose_time = 1;
-		}
 	}
+  // too many things packed into 'exp-tail-fit'
+
 	pca_dark_matter = RetrieveParameterBool(opts, json_params, '-', "bkg-pca-dark-matter", pca_dark_matter_def);
 	regional_sampling = RetrieveParameterBool(opts, json_params, '-', "regional-sampling", regional_sampling_def);
 	regional_sampling_type = RetrieveParameterInt(opts, json_params, '-', "regional_sampling_type", 1);
@@ -141,7 +152,7 @@ void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 	// from OverrideDefaultsForBkgModel//changed
 	no_RatioDrift_fit_first_20_flows = RetrieveParameterBool(opts, json_params, '-', "limit-rdr-fit", false);
 	use_alternative_etbR_equation = RetrieveParameterBool(opts, json_params, '-', "use-alternative-etbr-equation", false);
-    use_log_taub = RetrieveParameterBool(opts, json_params, '-', "use-log-taub", false);
+
 
 	fitting_taue = RetrieveParameterBool(opts, json_params, '-', "fitting-taue", false);
 	hydrogenModelType = RetrieveParameterInt(opts, json_params, '-', "incorporation-type", 0);

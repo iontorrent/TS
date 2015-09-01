@@ -607,7 +607,7 @@ def createDetailReport(resultData,reportData):
   createReport( html_report, 'report_pdf.html', render_context )
   pdf_report = pluginParams['output_prefix']+'.summary.pdf'
   xcmd = Popen( [os.path.join(pluginParams['plugin_dir'],'bin','wkhtmltopdf-amd64'), '--load-error-handling', 'ignore',
-    '--page-height', '2000', html_report, os.path.join(output_dir,pdf_report)], shell=False, stdout=PIPE, stderr=PIPE )
+    '-R', '0', html_report, os.path.join(output_dir,pdf_report)], shell=False, stdout=PIPE, stderr=PIPE )
   xcmd.communicate()
   if xcmd.poll():
     printlog("Warning: Failed to PDF report summary file.")
@@ -670,6 +670,7 @@ def parseCmdArgs():
   parser.add_option('-d', '--scraper', help='Create a scraper folder of links to output files using name prefix (-P).', action="store_true", dest='scraper')
   parser.add_option('-k', '--keep_temp', help='Keep intermediate files. By default these are deleted after a successful run.', action="store_true", dest='keep_temp')
   parser.add_option('-l', '--log', help='Output extra progress Log information to STDERR during a run.', action="store_true", dest='logopt')
+  parser.add_option('-p', '--purge_results', help='Remove all folders and most files from output results folder.', action="store_true", dest='purge_results')
   parser.add_option('-s', '--skip_analysis', help='Skip re-generation of existing files but make new report.', action="store_true", dest='skip_analysis')
   parser.add_option('-x', '--stop_on_error', help='Stop processing barcodes after one fails. Otherwise continue to the next.', action="store_true", dest='stop_on_error')
 
@@ -686,6 +687,7 @@ def parseCmdArgs():
 
 def emptyResultsFolder():
   '''Purge everything in output folder except for specifically named files.'''
+  if not pluginParams['cmdOptions'].purge_results: return
   results_dir = pluginParams['results_dir']
   if results_dir == '/': return
   logopt = pluginParams['cmdOptions'].logopt
@@ -695,7 +697,7 @@ def emptyResultsFolder():
     # avoid specific files needed to launch run
     if not os.path.isdir(fname):
       start = os.path.basename(fname)[:10]
-      if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi":
+      if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi" or start == 'barcodes.j':
         continue
     if logopt:
       if os.path.islink(fname):
@@ -1147,9 +1149,11 @@ def checkBamBed(bamfile,bedfile):
   if not bedfile: return ""
   runcmd = Popen( [os.path.join(pluginParams['plugin_dir'],'scripts','checkBamBed.pl'), bamfile, bedfile], stdout=PIPE, shell=False )
   errMsg = runcmd.communicate()[0]
+  errMsg.strip()
+  # Hard error will kill run. Soft error (errMsg != "") will just kill for current barcode.
   if runcmd.poll():
-    raise Exception("Failed running checkBamBed.pl. Refer to Plugin Log.")
-  return errMsg.strip()
+    raise Exception("Detected issue with BAM/BED files: %s" % errMsg)
+  return errMsg
 
 def createScraperLinksFolder(outdir,rootname):
   '''Make links to all files matching <outdir>/<rootname>.* to <outdir>/scraper/link.*'''

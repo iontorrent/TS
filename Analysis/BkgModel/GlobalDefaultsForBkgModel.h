@@ -22,7 +22,6 @@ struct LocalSigProcControl{
   // why would this be global again?
   bool no_RatioDrift_fit_first_20_flows;
   bool use_alternative_etbR_equation;
-  bool use_log_taub;
 
   bool fitting_taue;
   int hydrogenModelType;
@@ -45,13 +44,20 @@ struct LocalSigProcControl{
   bool enable_well_xtalk_correction;
   int  single_flow_fit_max_retry;
   bool per_flow_t_mid_nuc_tracking;
-  bool exp_tail_fit;
   bool pca_dark_matter;
   bool regional_sampling;
   int regional_sampling_type;
   bool prefilter_beads;
   bool amp_guess_on_gpu;
   bool recompress_tail_raw_trace;
+
+  // exp-tail-fit is in fact two separate subroutines
+  bool exp_tail_fit; // for historical reasons, both were jammed together
+  bool exp_tail_tau_adj;
+  bool exp_tail_bkg_adj;
+  float exp_tail_bkg_limit; // prevent insane values in output
+  float exp_tail_bkg_lower; // negative pH steps lead to logic issues
+
 
   LocalSigProcControl();
   void PrintHelp();
@@ -69,7 +75,6 @@ private:
     ar
         & no_RatioDrift_fit_first_20_flows
         & use_alternative_etbR_equation
-        & use_log_taub
         & fitting_taue
         & hydrogenModelType
         & var_kmult_only
@@ -86,6 +91,10 @@ private:
         & single_flow_fit_max_retry
         & per_flow_t_mid_nuc_tracking
         & exp_tail_fit
+        & exp_tail_tau_adj
+        & exp_tail_bkg_adj
+        & exp_tail_bkg_limit
+        & exp_tail_bkg_lower
         & pca_dark_matter
         & prefilter_beads
         & regional_sampling
@@ -113,8 +122,7 @@ public:
 
   void FixRdrInFirst20Flows(bool fixed_RatioDrift) { signal_process_control.no_RatioDrift_fit_first_20_flows = fixed_RatioDrift; }
   void SetUse_alternative_etbR_equation(bool if_use_alternative_etbR_equation) { signal_process_control.use_alternative_etbR_equation = if_use_alternative_etbR_equation; }
-  void SetUse_log_taub(bool if_use_log_taub) { signal_process_control.use_log_taub = if_use_log_taub; }
-  void SetFittingTauE(bool fit_taue) { signal_process_control.fitting_taue = fit_taue; }
+   void SetFittingTauE(bool fit_taue) { signal_process_control.fitting_taue = fit_taue; }
   void SetHydrogenModel( int model ) { signal_process_control.hydrogenModelType = model; }
   bool GetVarKmultControl(){return(signal_process_control.var_kmult_only);};
   void SetVarKmultControl(bool _var_kmult_only){signal_process_control.var_kmult_only = _var_kmult_only;};

@@ -1,7 +1,13 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "ExtendParameters.h"
+#include <fstream>
 #include <iomanip>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <sys/stat.h>
+#include <errno.h>
 
 using namespace std;
 
@@ -178,8 +184,11 @@ ProgramControlSettings::ProgramControlSettings() {
   nVariantsPerThread = 1000;
   nThreads = 1;
   DEBUG = 0;
-
+#ifdef __SSE3__
   use_SSE_basecaller = true;
+#else
+  use_SSE_basecaller = false;
+#endif
   rich_json_diagnostic = false;
   minimal_diagnostic = false;
   json_plot_dir = "./json_diagnostic/";
@@ -485,7 +494,11 @@ void ProgramControlSettings::SetOpts(OptArgs &opts, Json::Value &tvc_params) {
   DEBUG                                 = opts.GetFirstInt   ('d', "debug", 0);
   nThreads                              = RetrieveParameterInt   (opts, tvc_params, 'n', "num-threads", 12);
   nVariantsPerThread                    = RetrieveParameterInt   (opts, tvc_params, 'N', "num-variants-per-thread", 250);
+#ifdef __SSE3__
   use_SSE_basecaller                    = RetrieveParameterBool  (opts, tvc_params, '-', "use-sse-basecaller", true);
+#else
+  use_SSE_basecaller                    = RetrieveParameterBool  (opts, tvc_params, '-', "use-sse-basecaller", false);
+#endif
   // decide diagnostic
   rich_json_diagnostic                  = RetrieveParameterBool  (opts, tvc_params, '-', "do-json-diagnostic", false);
   minimal_diagnostic                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-minimal-diagnostic", false);
@@ -508,6 +521,28 @@ bool ExtendParameters::ValidateAndCanonicalizePath(string &path)
   path = real_path;
   free(real_path);
   return true;
+}
+
+int mkpath(std::string s,mode_t mode)
+{
+    size_t pre=0,pos;
+    std::string dir;
+    int mdret = 0;
+
+    if(s[s.size()-1]!='/'){
+        // force trailing / so we can handle everything in loop
+        s+='/';
+    }
+
+    while((pos=s.find_first_of('/',pre))!=std::string::npos){
+        dir=s.substr(0,pos++);
+        pre=pos;
+        if(dir.size()==0) continue; // if leading / first time is 0 length
+        if((mdret=mkdir(dir.c_str(),mode)) && errno!=EEXIST){
+            return mdret;
+        }
+    }
+    return mdret;
 }
 
 void ExtendParameters::SetupFileIO(OptArgs &opts) {
@@ -545,6 +580,7 @@ void ExtendParameters::SetupFileIO(OptArgs &opts) {
     ValidateAndCanonicalizePath(bams[i_bam]);
 
   outputDir                             = opts.GetFirstString('O', "output-dir", ".");
+  mkpath(outputDir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   ValidateAndCanonicalizePath(outputDir);
 
   outputFile                            = opts.GetFirstString('o', "output-vcf", "");

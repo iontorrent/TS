@@ -5,9 +5,9 @@
 #   Script to be run on the compute node.
 #
 #=============================================================================
-# Load Test
+# SGE Test
 #=============================================================================
-function load_test()
+function sge_test()
 {
     # float number comparison
     function fcomp() {
@@ -15,13 +15,6 @@ function load_test()
     }
 
     echo -n $FUNCNAME:>&1
-    # monitor average load
-    busyness=$(qstat -f|grep $(hostname)|head -1|awk '{print $4}')
-    if ! fcomp $busyness 95.0; then
-        echo failure>&1
-        echo "Node is over compute threshold (95.0): $busyness">&2
-        return
-    fi
     # monitor error states in SGE (qstat -f output)
     for line in $(qstat -f|grep $(hostname)); do
         queue=$(echo $line|awk '{print $1}')
@@ -101,6 +94,6 @@ function version_test()
 set -u
 version_test
 daemon_test
-load_test
+sge_test
 
 exit 0

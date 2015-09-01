@@ -13,6 +13,7 @@ IONREPORTER.workflow_to_sample_group_map = {};
 IONREPORTER.ir_rel_type_pk_map = {};
 IONREPORTER.sample_group_to_workflow_map = {};
 IONREPORTER.default_sample_grouping = [];
+IONREPORTER.default_iruUploadMode = [];
 IONREPORTER.workflow_to_application_type_map = {};
 IONREPORTER.$none_input;
 
@@ -31,15 +32,17 @@ function create_none_ir_account() {
 
     IONREPORTER.$none_input.attr({'name' : 'irOptions', 'value' : '0'});
     IONREPORTER.$none_input.on('click', function(){
-
         $("#error").text("");
         $('input[name="irAccountId"]').val('0');
         $('input[name="irAccountName"]').val('None');
         $("#selectedIR").text('None');
         $("#selectedWorkflow").text('');
         $("#selectedGroup").text('');
+        $("#selectedUploadMode").text('');
+        IONREPORTER.existing_iruUploadMode = "";
         $("input[name=irVersion]").val('0');
         $("#workflows").hide();
+        $("#iruUploadMode").hide();
         var $div = $(".sampleGroupOptionsContent");
         $div.html('');
         $.each(IONREPORTER.default_sample_grouping, function(i){
@@ -47,9 +50,10 @@ function create_none_ir_account() {
             var $label = $("<label></label>", {'class' : 'radio', 'width' : '150px'});
 
             $label.text(sample_group);
-            var $input = $("<input/>", {'type' : 'radio', 'name' : 'sampleGrouping', 'value' : IONREPORTER.sample_group_to_pk_map[sample_group]});
-            if ("{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}" == IONREPORTER.sample_group_to_pk_map[sample_group]) {
+            var $input = $("<input/>", {'type':'radio', 'name':'sampleGrouping', 'value':IONREPORTER.sample_group_to_pk_map[sample_group], 'data-label':sample_group});
+            if (IONREPORTER.existing_sample_grouping == IONREPORTER.sample_group_to_pk_map[sample_group]) {
                 $input.attr('checked', true);
+                $("#selectedGroup").text($input.data('label'));
             }
             $input.on('click', function(){
                 $("#selectedGroup").text($input.parent().text().trim());
@@ -59,7 +63,7 @@ function create_none_ir_account() {
 
         });
 
-    });
+    }).click();
 
     $none_lbl.append(IONREPORTER.$none_input);
     $div.append($none_lbl);
@@ -149,7 +153,6 @@ function get_workflow_url() {
 */
 function get_workflow_and_sample_groupings(id, fullName) {
     var myURL = get_workflow_url();
-
     var all_workflows = [];
     $('input[name="irAccountId"]').val(id);
     $('input[name="irAccountName"]').val(fullName);
@@ -169,7 +172,6 @@ function get_workflow_and_sample_groupings(id, fullName) {
                     }
                 }
             }).then(function(data, textStatus, jqXHR) {
-
                 IONREPORTER.sample_group_to_workflow_map = {};
 
                 var workflows = data["userWorkflows"];
@@ -219,7 +221,8 @@ function get_workflow_and_sample_groupings(id, fullName) {
                     $("#error").text("Error connecting to IR Server");
                     $("#loading").hide();
                     $('#selectedWorkflow').text('');
-                    $("#sample_grouping").hide();
+                    //$("#sample_grouping").hide();
+                    $("#iruUploadMode").hide();
                     $("#workflows").hide();
                     $("input[name=applicationType]").val('');
                     return;
@@ -240,6 +243,39 @@ function get_workflow_and_sample_groupings(id, fullName) {
                 if (!found_workflow && IONREPORTER.existing_workflow.length > 0 && IONREPORTER.prev_account_id != "-1" ) {
                     $("#error").text("The previous workflow for this plan is no longer available.  Please select another workflow");
                 }
+                //Enable IRU QC/Upload Mode when IR is selected
+                //IRU Upload Mode is displayed as QC mode in UI
+                var iru_QC_JSONString = $('input[name="iru_QC_UploadModes"]').val();
+                iru_QC_JSONString = iru_QC_JSONString.replace(/\'/g, "\"");
+                iru_upload_modes = JSON.parse(iru_QC_JSONString);
+                var $div = $(".iruUploadModeContent");
+                $div.html('');
+                $.each(iru_upload_modes, function(key, value){
+	                iru_upload_mode = value;
+	                tooltip = "";
+	                if (key == 'None') {
+	                	tooltip = "Automatically upload run data from Torrent Suite to Ion Reporter";
+	                }
+	                else {
+	                	tooltip = "User must review the completed run, then launch the Ion Reporter Uploader plugin if desired";
+	                }
+	                var $label = $("<label></label>", {'class' : 'radio', 'width' : '150px', 'rel' : 'tooltip' , 'data-original-title' : tooltip});
+	                $div.append($label);
+	                $label.text(key);
+	                var $input = $("<input/>", {'type' : 'radio', 'name' : 'iru_UploadMode', 'value' : iru_upload_mode});
+	                $label.append($input);
+	                if ((IONREPORTER.existing_iruUploadMode == 'None' || IONREPORTER.existing_iruUploadMode == '') && fullName) {
+	                	if (iru_upload_mode == 'no_check') {
+	                    	$input.attr('checked', true);
+	                        $("#selectedUploadMode").text(key);
+	                        $input.click();
+	                    }
+	                }
+	                if (iru_upload_mode == IONREPORTER.existing_iruUploadMode) {
+	                	$input.attr('checked', true);
+	                    $input.click();
+	                }
+                });
 
                 //now we do the mapping between IR and TSS Sample Group Names
                 var sample_groups = [];
@@ -251,7 +287,7 @@ function get_workflow_and_sample_groupings(id, fullName) {
                         sample_groups.push(term);
                     }
                 });
-
+                
                 //now we loop through the samples groups and create radio buttons for each of them
                 $.each(sample_groups, function(i){
                     sample_group = sample_groups[i];
@@ -316,10 +352,9 @@ function get_ir_accounts() {
         timout: 6000, //in milliseconds
         success : function(data){
             //The API call is successful
-            if (data != "undefined") {
+            if (data && data.length>0) {
                 $("#error").text("");
                 var accounts = data;
-
                 //boolean to check if the IR account was previously selected, either in the template
                 //or part of a previous step in the plan run phase    
                 var matched_prev = false;
@@ -391,6 +426,12 @@ function get_ir_accounts() {
                         } else {
                             $("#new_workflow").show();
                         }
+                        if (version != '0') {
+                        	$("#iruUploadMode").show();
+                            
+                        } else {
+                        	$("#iruUploadMode").hide();
+                        }
                     });
                     $lbl.append($input);
 
@@ -445,6 +486,7 @@ function get_ir_accounts() {
             $('input[name="irAccountName"]').val('None');
             $("#selectedIR").text('None');
             $("#loading").hide();
+          	$("#iruUploadMode").hide();
         }
 
     });
@@ -504,10 +546,17 @@ $(document).ready(function () {
     //attach event to the workflow drop down list to show
     //the name of the workflow in the summary box 
     $('select[name=irworkflow]').click(function(){
-        var irworkflow = $(this).val() ? $(this).val() : 'Upload Only';
+    	var irworkflow = $(this).val() ? $(this).val() : 'Upload Only';
         $('#selectedWorkflow').text(irworkflow);
     });
 
+    //attach event to the iru QC/Upload Mode to show in the summary box
+    $("#iruUploadMode").on('change', 'input:radio[name^="iru_UploadMode"]', function (event) {
+        var iruUploadMode = $(this).val() ? $(this).val() : 'None';
+        var qc_mode = iruUploadMode == "no_check" ? 'None' : 'Manual';
+        $('#selectedUploadMode').text(qc_mode);
+    });
+    
     //refresh button which retrieves the workflows, etc for the selected account
     $("#ir_refresh").on('click', function(){
         get_workflow_and_sample_groupings($('input[name="irAccountId"]').val(), $('input[name="irAccountName"]').val());

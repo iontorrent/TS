@@ -3,15 +3,9 @@
 {% load pagetools %}
 {% load static from staticfiles %}
 {% load humanize %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% block tab-configure-references %}
+    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+{% endblock tab-configure-references %}
 {% block extra_head %}
     <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
@@ -371,6 +365,30 @@
                 </ul>
               </td>
             </tr>
+            <tr id="availableRefAnnotFiles" class="fileList">
+              <th>
+                <p>Available Reference Annotation Files</p>
+                <!--Place holder for Future Enhancement : Upload/Delete Annotation-->
+                <!--<button class="btn" id="bedUpload"
+                       type="button">Upload new files</button>-->
+              </th>
+              <td>
+              <ul id="availableRefAnnotFileList">
+                  {% for refAnnot in refAnnotFiles %}
+                    <li>
+                      {{ refAnnot.path }}
+                      <!--<input class="btn deleteBed" type="button"
+                             data-contentupload="{{refAnnot.pk}}"
+                             value="delete"/>-->
+                      <p>
+                        <a href="/rundb/uploadstatus/{{refAnnot.pk}}/">Details
+                        </a>
+                      </p>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </td>
+             </tr>
             </tbody>
           </table>
 
@@ -413,20 +431,28 @@
   function add_upload(data) {
     var name = data.file_path.split("/").pop();
     var li = $('<li>' + name + '</li>');
-    var button = $('<button class="btn btn-small deleteBed" data-contentupload="' + data.id + '">Delete</button>');
-    button.click(delete_bed);
-    button.hover(
-            function () {
-              $(this).parent("li").addClass("ui-state-error");
-            },
-            function () {
-              $(this).parent("li").removeClass("ui-state-error");
-            }
-    );
-    li.append(button);
+    
+    if (data.meta.publisher != "refAnnot") {
+    	var button = $('<button class="btn btn-small deleteBed" data-contentupload="' + data.id + '">Delete</button>');
+        button.click(delete_bed);
+	    button.hover(
+	            function () {
+	              $(this).parent("li").addClass("ui-state-error");
+	            },
+	            function () {
+	              $(this).parent("li").removeClass("ui-state-error");
+	            }
+	    );
+	    li.append(button);
+    }
     if (data.status == "Successfully Completed") {
-      li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a></p>');
-      $("#availableBedFileList").append(li);
+      if (data.meta.publisher == "refAnnot") {
+         li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a></p>');
+         $("#availableRefAnnotFileList").append(li);
+      } else {
+      	 li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a></p>');
+         $("#availableBedFileList").append(li);
+      }
     } else {
       li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a> - ' + data.status + ' </p>');
       $("#processingBedFileList").append(li);

@@ -3,9 +3,9 @@
         "name"          : "OCPv1i3 Panel - PGM - Somatic - Low Stringency",
         "tooltip"       : "Panel-specific parameters optimized for Oncomine Cancer Research AmpliSeq Panel",
         "configuration" : "ocp_somatic_lowstringency_pgm",
-        "ts_version"    : "4.6",
+        "ts_version"    : "5.0",
         "compatibility" : {
-          "chip"        : ["pgm"],
+          "chip"        : ["520","530","pgm"],
           "library"     : ["ampliseq"],
           "frequency"   : ["somatic"],
           "stringency"  : ["low"],
@@ -60,10 +60,10 @@
         "position_bias_pval":0.05,
         "position_bias_ref_fraction":0.05,
 
+        "sse_prob_threshold":1.0,
         "prediction_precision":1.0,
         "heavy_tailed":3,
-        "suppress_recalibration":0,
-        "sse_prob_threshold":1.0
+        "suppress_recalibration":0
     },
     "long_indel_assembler":{
         "kmer_len":19,
@@ -99,5 +99,4 @@
         "ploidy_increment":0.1,
         "max_fold_trans_prob_ratio_gap":10
     }
-
 }

@@ -8,11 +8,8 @@
 #include <cstring>
 #include <cassert>
 
-#include <x86intrin.h>
 #include "BaseCallerUtils.h"
 #include "DPTreephaser.h"
-
-using namespace std;
 
 #define SHUF_PS(reg, mode) _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(reg), mode))
 
@@ -23,6 +20,14 @@ using namespace std;
 
 #define NO_SSE_MESSAGE "TreephaserSSE compiled without SSE"
 #define NO_SSE3_MESSAGE "TreephaserSSE compiled without SSE3"
+
+#ifdef __SSE__
+#include <x86intrin.h>
+#else
+#pragma message NO_SSE_MESSAGE
+#endif
+
+using namespace std;
 
 namespace {
 

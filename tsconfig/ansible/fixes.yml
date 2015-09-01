@@ -1,7 +1,9 @@
 ---
 # file: fixes.yml
 #
-# Code that is configuration related.
+# This file contains changes to the configuration which need to be made
+# when Ion software is updated.  Rather than requiring full configuration
+# to be executed.
 
 # gridengine_master/tasks/main.yml
 # Raptor A hardware has 40GB RAM; needs modified plugin.q memory limits

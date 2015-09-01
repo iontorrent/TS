@@ -10,7 +10,8 @@ from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_default_or_first
     get_ir_set_id, is_operation_supported_by_obj
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_flows, \
     validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info, \
-    validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType
+    validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType, validate_chipBarcode, \
+    validate_reference
 
 from traceback import format_exc
 
@@ -172,7 +173,11 @@ def validate_csv_plan(csvPlanDict, request):
         return failed, planDict, rawPlanDict, isToSkipRow
 
     logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate sample_prep_kit..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))            
-    
+    if plan_csv_writer.COLUMN_CHIP_BARCODE in csvPlanDict:
+        errorMsg = _validate_chip_barcode(csvPlanDict.get(plan_csv_writer.COLUMN_CHIP_BARCODE), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((plan_csv_writer.COLUMN_CHIP_BARCODE, errorMsg))    
+
     errorMsg = _validate_sample_prep_kit(csvPlanDict.get(plan_csv_writer.COLUMN_SAMPLE_PREP_KIT), selectedTemplate, planObj)  
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_SAMPLE_PREP_KIT, errorMsg))
@@ -415,9 +420,9 @@ def _validate_lib_kit(input, selectedTemplate, planObj):
         
     if input:
         try:
-            selectedKits = KitInfo.objects.filter(kitType = "LibraryKit", isActive = True, description__iexact = input.strip())
+            selectedKits = KitInfo.objects.filter(kitType__in = ["LibraryKit","LibraryPrepKit"], isActive = True, description__iexact = input.strip())
             if not selectedKits:
-                selectedKit = KitInfo.objects.filter(kitType = "LibraryKit", isActive = True, name__iexact = input.strip())[0]
+                selectedKit = KitInfo.objects.filter(kitType__in = ["LibraryKit","LibraryPrepKit"], isActive = True, name__iexact = input.strip())[0]
             else:
                 selectedKit = selectedKits[0]
                 
@@ -452,7 +457,6 @@ def _validate_template_kit(input, selectedTemplate, planObj):
                 planObj.get_planObj().planStatus = "pending"
             else:
                 planObj.get_planObj().planStatus = "planned"
-             
         except:
             errorMsg = input + " not found."
     else:
@@ -602,6 +606,19 @@ def _validate_flows(input, selectedTemplate, planObj):
     
     return errorMsg
 
+def _validate_chip_barcode(input, selectedTemplate, planObj):
+    """
+    validate flow value with leading/trailing blanks in the input ignored
+    """
+    errorMsg = None
+    if input:
+        value = input.strip()
+        errors = validate_chipBarcode(value)
+        if errors:
+            errorMsg = ' '.join(errors)
+        else:
+            planObj.get_expObj().chipBarcode = value
+    return errorMsg
 
 def _validate_sample_tube_label(input, selectedTemplate, planObj):
     """
@@ -640,23 +657,16 @@ def _validate_qc_pct(input, selectedTemplate, planObj, displayedName):
     return errorMsg, qcValue
 
     
-def _validate_ref(input, selectedTemplate, planObj):
+def _validate_ref(value, selectedTemplate, planObj):
     """
     validate genome reference case-insensitively with leading/trailing blanks in the input ignored
     """    
     errorMsg = None
-    if input:
-        value = input.strip()
-        try:
-            selectedRef= ReferenceGenome.objects.filter(name = value)[0]
-            planObj.get_easObj().reference = selectedRef.short_name 
-        except:
-            try:
-                selectedRef= ReferenceGenome.objects.filter(short_name = value)[0]
-                planObj.get_easObj().reference = selectedRef.short_name 
-            except:
-                logger.exception(format_exc())      
-                errorMsg = input + " not found."
+    if value:
+        plan = planObj.get_planObj()
+        applicationGroupName = plan.applicationGroup.name if plan.applicationGroup else ""
+        errorMsg, ref_short_name = validate_reference(value, plan.runType, applicationGroupName)
+        planObj.get_easObj().reference = ref_short_name
     else:
         planObj.get_easObj().reference = ""
          
@@ -1378,7 +1388,7 @@ def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
                     if not foundSampleRefKeyword:
                         sampleReference = planObj.get_easObj().reference
                         
-                    errors, ref_short_name, rna_ref_short_name, sample_nucleotideType = validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sampleId, sampleNucleotideType, runType, sampleReference, sampleRnaReference)
+                    errors, ref_short_name, rna_ref_short_name, sample_nucleotideType = validate_barcoded_sample_info(sampleName, sampleId, sampleNucleotideType, sampleReference, sampleRnaReference, runType, applicationGroupName)
 
                     logger.debug("validate_barcode_sample_info applicationGroupName=%s; runType=%s; sampleReference=%s; ref_short_name=%s; rna_ref_short_name=%s; sampleTargetBed=%s; sampleHotSpotBed=%s; sample_nucleotideType=%s" %(applicationGroupName, runType, sampleReference, ref_short_name, rna_ref_short_name, sampleTargetBed, sampleHotSpotBed, sample_nucleotideType))
 

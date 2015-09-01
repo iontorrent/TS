@@ -151,25 +151,28 @@ void TraceControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 
 void BkgModelControlOpts::PrintHelp()
 {
-	printf ("     BkgModelControlOpts\n");
+    printf ("     BkgModelControlOpts\n");
     printf ("     --mixed-first-flow      INT               mixed first flow of polyclonal filter [12]\n");
     printf ("     --mixed-last-flow       INT               mixed last flow of polyclonal filter [72]\n");
     printf ("     --max-iterations        INT               max iterations of polyclonal filter [30]\n");
     printf ("     --mixed-model-option    INT               mixed model option of polyclonal filter [0]\n");
     printf ("     --mixed-stringency      DOUBLE            mixed stringency of polyclonal filter [0.5]\n");
-	printf ("     --nokey                 BOOL              nokey [false]\n");
-	printf ("     --xtalk-correction      BOOL              enable trace xtalk correction [false for Proton; true for P-zero and PGM]\n");
+    printf ("     --nokey                 BOOL              nokey [false]\n");
+    printf ("     --xtalk-correction      BOOL              enable trace xtalk correction [false for Proton; true for P-zero and PGM]\n");
     printf ("     --n-unfiltered-lib      INT               number of unfiltered library random samples [100000]\n");
     printf ("     --bkg-dont-emphasize-by-compression INT   emphasize by compression [1]\n");
-	printf ("     --clonal-filter-bkgmodel            BOOL  enable polyclonal filter [false for Proton; true for PGM]\n");
+    printf ("     --clonal-filter-bkgmodel            BOOL  enable polyclonal filter [false for Proton; true for PGM]\n");
+    printf ("     --clonal-filter-debug            BOOL  enable polyclonal filter debug output \n");
+    printf ("     --clonal-filter-use-last-iter-params           BOOL  use last EM iteration cluster parameters if no convergence \n");
+    printf ("     --filter-extreme-ppf-only           BOOL  Skip polyclonal filter training and filter for extreme ppf only \n");
     printf ("     --sigproc-regional-smoothing-alpha  FLOAT sigproc regional smoothing alpha [1.0]\n");
     printf ("     --sigproc-regional-smoothing-gamma  FLOAT sigproc regional smoothing gamma [1.0]\n");
     printf ("\n");
 
-	signal_chunks.PrintHelp();
-	trace_control.PrintHelp();
-	pest_control.PrintHelp();
-	gpuControl.PrintHelp();
+    signal_chunks.PrintHelp();
+    trace_control.PrintHelp();
+    pest_control.PrintHelp();
+    gpuControl.PrintHelp();
 }
 
 void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
@@ -189,6 +192,9 @@ void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	polyclonal_filter.mixed_last_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-last-flow", 72);
 	polyclonal_filter.max_iterations = RetrieveParameterInt(opts, json_params, '-', "max-iterations", 30);
 	polyclonal_filter.mixed_model_option = RetrieveParameterInt(opts, json_params, '-', "mixed-model-option", 0);
+	polyclonal_filter.verbose = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-debug", false);
+	polyclonal_filter.use_last_iter_params = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-use-last-iter-params", false);
+	polyclonal_filter.filter_extreme_ppf_only = RetrieveParameterBool(opts, json_params, '-', "filter-extreme-ppf-only", false);
 	double stringency = RetrieveParameterDouble(opts, json_params, '-', "mixed-stringency", 0.5);
 	if(stringency < 0)
 	{

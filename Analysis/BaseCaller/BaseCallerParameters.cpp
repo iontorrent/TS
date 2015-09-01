@@ -116,11 +116,7 @@ void BaseCallerParameters::PrintHelp()
     printf ("     --run-id                STRING     read name prefix [hashed input dir name]\n");
     printf ("  -n,--num-threads           INT        number of worker threads [2*numcores]\n");
     printf ("  -f,--flowlimit             INT        basecall only first n flows [all flows]\n");
-    printf ("  -r,--rows                  INT-INT    basecall only a range of rows [all rows]\n");
-    printf ("  -c,--cols                  INT-INT    basecall only a range of columns [all columns]\n");
-    printf ("     --region-size           INTxINT    wells processing chunk size [50x50]\n");
-    printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
-    printf ("     --keynormalizer         STRING     key normalization algorithm [keynorm-old]\n");
+    printf ("     --keynormalizer         STRING     key normalization algorithm [gain]\n");
     printf ("     --dephaser              STRING     dephasing algorithm [treephaser-sse]\n");
     printf ("     --window-size           INT        normalization window size (%d-%d) [%d]\n", DPTreephaser::kMinWindowSize_, DPTreephaser::kMaxWindowSize_, DPTreephaser::kWindowSizeDefault_);
     printf ("     --flow-signals-type     STRING     select content of FZ tag [none]\n");
@@ -130,17 +126,25 @@ void BaseCallerParameters::PrintHelp()
     printf ("                                          \"adaptive-normalized\" - Adaptive normalized and not dephased\n");
     printf ("                                          \"residual\" - Measurement-prediction residual\n");
     printf ("                                          \"scaled-residual\" - Scaled measurement-prediction residual\n");
-    printf ("     --block-row-offset      INT        Offset added to read coordinates [0]\n");
-    printf ("     --block-col-offset      INT        Offset added to read coordinates [0]\n");
     printf ("     --extra-trim-left       INT        Number of additional bases after key and barcode to remove from each read [0]\n");
-    printf ("     --calibration-training  INT        Generate training set of INT reads. No TFs, no unfiltered sets. -1=off [-1]\n");
-    printf ("     --calibration-file      FILE       Enable recalibration using tables from provided file [off]\n");
-    printf ("     --calibration-panel     FILE       Datasets json for calibration panel reads to be used for training [off]\n");
-    printf ("     --model-file            FILE       Enable recalibration using model from provided file [off]\n");
-    printf ("     --save-hpmodel          BOOL       Enable to save hpModel values to bam [off]\n");
+    printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
+    printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
+    printf ("\n");
+    printf ("Chip/Block division:\n");
+    printf ("  -r,--rows                  INT-INT    subset of rows to be processed [all rows]\n");
+    printf ("  -c,--cols                  INT-INT    subset of columns to be processed [all columns]\n");
+    printf ("     --region-size           INT,INT    region size (x,y) for processing [50x50]\n");
+    printf ("     --block-offset          INT,INT    region offset (x,y) added to read coordinates\n");
     printf ("     --downsample-fraction   FLOAT      Only save a fraction of generated reads. 1.0 saves all reads. [1.0]\n");
     printf ("     --downsample-size       INT        Only save up to 'downsample-size' reads. [0]\n");
-    printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
+    printf ("\n");
+    printf ("Calibration Options:\n");
+    printf ("     --calibration-training  INT        Generate training set of INT reads. No TFs, no unfiltered sets. -1=off [-1]\n");
+    printf ("     --calibration-panel     FILE       Datasets json for calibration panel reads to be used for training [off]\n");
+    printf ("     --calibration-json      FILE       Enable Calibration using models from provided json file [off]\n");
+    printf ("     --calibration-hp-thres  FILE       Threshold to switch between calibration models [4]\n");
+    printf ("     --model-file            FILE       Legacy text input file for LinearModelCalibration [off]\n");
+    printf ("     --calibration-file      FILE       Legacy text input file for HistogramCalibration [off]\n");
     printf ("\n");
 
     BaseCallerFilters::PrintHelp();
@@ -220,9 +224,9 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
 
     // Treephaser options
     context_vars.dephaser                    = opts.GetFirstString ('-', "dephaser", "treephaser-sse");
-    context_vars.keynormalizer               = opts.GetFirstString ('-', "keynormalizer", "keynorm-old");
+    context_vars.keynormalizer               = opts.GetFirstString ('-', "keynormalizer", "gain");
     context_vars.windowSize                  = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
-    context_vars.skip_droop                  = opts.GetFirstBoolean('-', "skipDroop", true);
+    context_vars.skip_droop                  = opts.GetFirstBoolean('-', "skip-droop", true);
     context_vars.skip_recal_during_norm      = opts.GetFirstBoolean('-', "skip-recal-during-normalization", false);
     context_vars.diagonal_state_prog         = opts.GetFirstBoolean('-', "diagonal-state-prog", false);
 

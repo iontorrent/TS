@@ -267,7 +267,7 @@ if __name__=="__main__":
 
 
         ########################################################
-        # Flow Space Recalibration and re-basecalling          #
+        # Flow Space Recalibration and pre-basecalling          #
         ########################################################
         #
         #          'no_recal' : 'No Calibration'
@@ -290,8 +290,6 @@ if __name__=="__main__":
                 else:
                     if not "--calibration-training=" in prebasecallerArgs:
                         prebasecallerArgs = prebasecallerArgs + " --calibration-training=100000"
-                    if not "--flow-signals-type" in prebasecallerArgs:
-                        prebasecallerArgs = prebasecallerArgs + " --flow-signals-type scaled-residual"
 
                 basecaller.basecalling(
                     env['SIGPROC_RESULTS'],
@@ -323,6 +321,8 @@ if __name__=="__main__":
                     traceback.print_exc()
                     raise
 
+                calibration_input_bams = ""
+                
                 for dataset in basecaller_recalibration_datasets["datasets"]:
 
                     if not dataset.get('read_count',0) > 0:
@@ -334,55 +334,52 @@ if __name__=="__main__":
                     if not referenceName:
                         continue
 
-                    readsFile = os.path.join(env['BASECALLER_RESULTS'],'recalibration',dataset['basecaller_bam'])
+                    basecaller_bam = os.path.join(env['BASECALLER_RESULTS'],'recalibration',dataset['basecaller_bam'])
 
-                    printtime("DEBUG: Work starting on %s" % readsFile)
-                    RECALIBRATION_RESULTS = os.path.join(env['BASECALLER_RESULTS'],"recalibration", dataset['file_prefix'])
-                    os.makedirs(RECALIBRATION_RESULTS)
-                    sample_map_path = os.path.join(RECALIBRATION_RESULTS, "samplelib.bam")
+                    # --- Alignment of individual calibration BAM files in recalibration directory                   
+                    printtime("DEBUG: Work starting on %s" % basecaller_bam)
+                    RECALIBRATION_RESULTS = os.path.join(env['BASECALLER_RESULTS'],"recalibration")
+                    calibration_bam_base = os.path.join(RECALIBRATION_RESULTS,dataset['file_prefix'])
                     blocks=[]
                     basecaller_meta_information=None
+                    
+                    if len(calibration_input_bams)>0:
+                        calibration_input_bams += ","
+                    calibration_input_bams += calibration_bam_base + ".bam"
 
                     alignment.align(
                         blocks,
+                        basecaller_bam,
                         env['alignmentArgs'],
                         env['ionstatsArgs'],
                         referenceName,
                         basecaller_meta_information,
                         env['libraryKey'],
                         graph_max_x,
-                        readsFile,
                         do_realign=False,
                         do_ionstats=False,
                         do_sorting=False,
                         do_mark_duplicates=False,
                         do_indexing=False,
-                        logfile=os.path.join(RECALIBRATION_RESULTS,"alignmentQC_out.txt"),
                         output_dir=RECALIBRATION_RESULTS,
-                        output_basename="samplelib")
+                        output_basename=dataset['file_prefix'])
 
-                    # Generate both hpTable and hpModel.
-                    flow_space_recal.calibrate(
-                        RECALIBRATION_RESULTS,
-                        sample_map_path,
-                        env['recalibArgs'],
-                        chipflow)
-
-                # merge step, calibrate collects the training data saved for each barcode,
-                # calculate and generate hpTable and hpModel files for the whole dataset
-                flow_space_recal.HPaggregation(
-                    os.path.join(env['BASECALLER_RESULTS'],"recalibration"),
-                    env['recalibArgs'])
-
-                hptable = os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpTable.txt")
-                printtime("hptable: %s" % hptable)
-
-                additional_basecallerArgs  = " --calibration-file " + hptable
+                # Do not call Calibration if we did not generate any aligned input BAMs but gracefully continue
                 additional_basecallerArgs += " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json")
-                additional_basecallerArgs += " --model-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpModel.txt")
                 if env['doBaseRecal'] == "panel_recal":
                     additional_basecallerArgs += " --calibration-panel /opt/ion/config/datasets_calibration.json"
-
+                    
+                if len(calibration_input_bams)>0:
+                    # Call Calibration module to process aligned training BAM files
+                    flow_space_recal.calibrate(
+                        env['BASECALLER_RESULTS'],
+                        calibration_input_bams,
+                        env['recalibArgs'],
+                        chipflow)
+                
+                    additional_basecallerArgs  += " --calibration-json " + os.path.join(env['BASECALLER_RESULTS'],"Calibration.json")
+                    
+                printtime("Finished Recalibration")
                 add_status("Recalibration", 0)
             except:
                 traceback.print_exc()
@@ -419,53 +416,6 @@ if __name__=="__main__":
             traceback.print_exc()
             add_status("Basecaller", 1)
             printtime ("ERROR: Basecaller failed")
-            sys.exit(1)
-
-
-
-    if args.do_alignment:
-
-        try:
-            c = open(os.path.join(env['BASECALLER_RESULTS'], "BaseCaller.json"),'r')
-            basecaller_meta_information = json.load(c)
-            c.close()
-        except:
-            traceback.print_exc()
-            raise
-
-        basecaller_datasets = blockprocessing.get_datasets_basecaller(env['BASECALLER_RESULTS'])
-
-        set_result_status('Alignment')
-
-        if isBlock:
-            do_indexing=False
-            do_ionstats=True
-        else:
-            do_indexing=True
-            do_ionstats=True
-
-        try:
-            blocks=[]
-            alignment.process_datasets(
-                blocks,
-                env['alignmentArgs'],
-                env['ionstatsArgs'],
-                env['BASECALLER_RESULTS'],
-                basecaller_meta_information if do_ionstats_spatial_accounting else None,
-                env['libraryKey'],
-                graph_max_x,
-                basecaller_datasets,
-                env['ALIGNMENT_RESULTS'],
-                env['realign'],
-                do_ionstats,
-                env['mark_duplicates'],
-                do_indexing,
-                env['barcodeInfo'])
-            add_status("Alignment", 0)
-        except:
-            traceback.print_exc()
-            add_status("Alignment", 1)
-            printtime ("ERROR: Alignment failed")
             sys.exit(1)
 
 

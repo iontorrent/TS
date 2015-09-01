@@ -44,8 +44,6 @@ void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_
     inception_state.sys_context.SetUpAnalysisLocation();
 
     LoadBeadFindState(inception_state, my_keys, my_image_spec);
-
-    inception_state.SetProtonDefault();
   }
   else if (inception_state.mod_control.reusePriorBeadfind && inception_state.bkg_control.signal_chunks.restart_from.empty())
   {
@@ -65,8 +63,6 @@ void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_
     ProgramState state ( stateFile );
     state.Save ( inception_state,my_keys,my_image_spec );
     state.WriteState();
-	
-    inception_state.SetProtonDefault();
 
     // region layout saved in inception_state.loc_context
     // region definitions in background model via my_prequel_setup
@@ -120,11 +116,17 @@ void LoadBeadFindState(CommandLineOpts &inception_state, SeqListClass &my_keys, 
     ProgramState state(stateFile);  
     state.LoadState(inception_state,my_keys,my_image_spec);  
     // load image state
-    CaptureImageState imgState( imageSpecFile );
-    imgState.LoadImageSpec(my_image_spec);
-    imgState.LoadXTCorrection();
-    if (inception_state.img_control.gain_correct_images)
-      imgState.LoadImageGainCorrection(my_image_spec.rows, my_image_spec.cols);
+    if (isFile (imageSpecFile.c_str())) {
+      CaptureImageState imgState( imageSpecFile );
+      imgState.LoadImageSpec(my_image_spec);
+      imgState.LoadXTCorrection();
+      if (inception_state.img_control.gain_correct_images)
+        imgState.LoadImageGainCorrection(my_image_spec.rows, my_image_spec.cols);
+    }
+    else {
+      fprintf (stderr, "Unable to find image spec file %s\n", imageSpecFile.c_str());
+      exit (EXIT_FAILURE);        
+    }
   }
   else
   {   

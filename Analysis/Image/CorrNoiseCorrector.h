@@ -27,13 +27,13 @@ class CorrNoiseCorrector
 public:
     char *AllocateStructs(int threadNum, int _rows, int _cols, int _frames);
     void FreeStructs(int threadNum, bool force=false, char *ptr=NULL);
-    void CorrectCorrNoise(RawImage *raw, int correctRows, int thumbnail, bool override=false,
+    double CorrectCorrNoise(RawImage *raw, int correctRows, int thumbnail, bool override=false,
     		bool verbose=false, int threadNum=-1, int avg=0);
     /**
      * @warning - if mask is NULL and data in image has been dc offset, CNC will think that all the
      * data is pinned low and zero everything out.
      */
-    void CorrectCorrNoise(short *image, int rows, int cols, int frames, int correctRows,
+    double CorrectCorrNoise(short *image, int rows, int cols, int frames, int correctRows,
     		int thumbnail, bool overrride=false, bool verbose=false, int threadNum=-1, int avg=0);
 
     CorrNoiseCorrector() {
@@ -70,24 +70,28 @@ public:
     }
 
 protected:
-   void CorrectRowNoise_internal(bool verbose, int correctRows);
+   double CorrectRowNoise_internal(bool verbose, int correctRows);
 
 private:
     void NNSubtractComparatorSigs(int row_span, int time_span, int correctRows);
     void SumRows();
     void SumCols();
     void SetMeanToZero();
-    void ApplyCorrection_rows();
+    double ApplyCorrection_rows();
     void ApplyCorrection_cols();
     void DebugSaveRowNoise(int correctRows);
     void DebugSaveComparatorSigs(int correctRows);
     void smoothRowAvgs(float weight);
+    void FixouterPixels();
+    void ReZeroPinnedPixels_cpFirstFrame();
 
     // list of allocated structures
     float *mCorr_sigs; // [cols*frames*4];
     int    mCorr_sigs_len; // [cols*frames*4];
     float *mCorr_noise; // [cols*frames*4];
     int    mCorr_noise_len; // [cols*frames*4];
+    short int *mCorr_mask;
+    int        mCorr_mask_len;
 //    short int *mCorrection; // [cols*frames*2]
 //    int        mCorrection_len; // [cols*frames*2]
 #define ALLIGN_LEN(a) (((a) & ~(32-1))?(((a)+32)& ~(32-1)):(a))

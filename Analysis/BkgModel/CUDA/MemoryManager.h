@@ -415,7 +415,8 @@ protected:
 
   void wrapp(T * ptr, size_t sizeBytes, MemoryType type){
       if(isAllocated()){
-        cout << "MemoryManager Warning: trying to wrap pointer "<< static_cast<void *>(ptr) << " in already initialized MemSegObject. Original buffer will be deleted and replaced by external pointer!" << endl;
+        cout << "MemoryManager Error: trying to wrap pointer "<< static_cast<void *>(ptr) << " in already initialized MemSegObject. Original buffer will be deleted and replaced by external pointer!" << endl;
+        //throw cudaAllocationError()
         _resource.destroy();
       }
       TMemSegment<T>::_type = type;

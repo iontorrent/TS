@@ -140,7 +140,6 @@ struct reg_params
   nuc_rise_params nuc_shape;
   bool fit_taue;
   bool use_alternative_etbR_equation;
-  bool use_log_taub;
 
   int hydrogenModelType;
 
@@ -191,7 +190,6 @@ private:
       & max_tauB
       & fit_taue
       & use_alternative_etbR_equation
-      & use_log_taub
       & hydrogenModelType
       & RatioDrift
       & NucModifyRatio
@@ -217,7 +215,7 @@ public:
   void SetStandardLow( float t_mid_nuc_start, int flow_block_size );
                            
   void SetStandardValue( float t_mid_nuc_start, float sigma_start, float *dntp_concentration_in_uM,
-                         bool _fit_taue, bool _use_alternative_etbR_equation, bool _use_log_taub,
+                         bool _fit_taue, bool _use_alternative_etbR_equation,
                          int _hydrogenModelType, int flow_block_size );
   void SetTshift(float _tshift);
   static void DumpRegionParamsTitle(FILE *my_fp, int flow_block_size);

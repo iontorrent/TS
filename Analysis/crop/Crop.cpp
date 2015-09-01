@@ -615,7 +615,7 @@ void DoCrop(OptionsCls &options)
     	  // subtract this file before continuing
     	  Image loader2;
 
-    	  loader2.LoadRaw ( options.cmpFile, 0, allocate, 2 );
+    	  loader2.LoadRaw ( options.cmpFile, 0, 1, 0, 2 );
 
           if(options.OverSample_skip || options.OverSample_combine)
         	  DoOverSample(options,loader2);

@@ -1,0 +1,224 @@
+
+<input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
+<input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
+
+<div class="row-fluid">
+    <div class="span12" style="margin-bottom: 15px;">
+        <b>Analysis Parameters:</b>
+        <label for="default_args" class="checkbox inline" rel="tooltip" title='Use ION default args'>
+            <input type="radio" name="analysisParamsCustom" value="False"
+                {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "False" %}checked{% endif %}>Default (Recommended)
+        </label>
+        <label for="custom_args" class="checkbox inline" rel="tooltip" title='Customized parameters'>
+            <input type="radio" name="analysisParamsCustom" value="True"
+                {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "True" %}checked{% endif %}>Custom
+        </label>
+        <a title="View/Change analysis parameters" class="btn btn-mini extra-analysis-params-inline" style="margin:10px 0 0 20px;">Details +</a>
+    </div>
+</div>
+
+<div id="analysis_params_section" class="extra_analysis_params_info">
+    <div class="row-fluid">
+        <div class="span10 offset2">
+            <select id="analysis_params_select" name="analysis_params" class="input-medium analysis_params" style="width: 440px;">                      
+                <option value="">&lt;Current selection&gt;</option>
+                 {% if  helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "True" %}
+                    <option SELECTED value="{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description}}">{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description}}</option>
+                {% endif %}
+                {% if  helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected %}
+                    <option value="{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.description}}">{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.description}}</option>
+                {% endif %}
+                {% for ap in helper.getStepDict.Analysis_params.getPrePopulatedFieldDict.analysisParamsEntries %}
+                    {% if ap.best_match %}
+                        <option value="{{ap.description}}" class="best_match"
+                            {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "False" %}SELECTED{% endif %}>
+                            {{ap.description}} ({{ap.name}})</option>
+                    {% else %}
+                         <option value="{{ap.description}}">{{ap.description}} ({{ap.name}})</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span6">
+            <table id="basic_analysis_params_table" class="table table-striped table-condensed">
+                <tbody>
+                <tr>
+                    <td>BeadFind:</td>
+                </tr>                
+                <tr>
+                    <td><textarea id="beadFindSelected" class="span12" style="height:80px;" value="" name="beadFindSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.beadFindSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                <tr>
+                    <td>Analysis:</td>
+                </tr>
+                <tr>
+                    <td ><textarea id="analysisArgsSelected" class="span12" style="height:80px;"  value="" name="analysisArgsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisArgsSelected | default_if_none:""}}</textarea></td>
+                <tr>
+                    <td>Pre-BaseCaller for calibration:</td>
+                </tr>                
+                 <tr>
+                    <td ><textarea id="preBaseCallerSelected" class="span12" style="height:80px;"  value="" name="preBaseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.preBaseCallerSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                 <tr>
+                    <td>Calibration:</td>
+                </tr>
+                <tr>
+                    <td ><textarea id="calibrateSelected" class="span12" style="height:80px;"  value="" name="calibrateSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.calibrateSelected | default_if_none:""}}</textarea></td>     
+                </tr>               
+                <tr>
+                    <td>BaseCaller:</td>
+                </tr>
+                <tr>
+                    <td ><textarea id="baseCallerSelected" class="span12" style="height:80px;"  value="" name="baseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.baseCallerSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                <tr>
+                    <td>Alignment:</td>
+                </tr>
+                <tr>
+                    <td ><textarea id="alignmentSelected" class="span12" style="height:80px;"  value="" name="alignmentSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.alignmentSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                <tr>
+                    <td>IonStats:</td>
+                </tr>
+                <tr>
+                    <td ><textarea id="ionStatsSelected" class="span12" style="height:80px;"  value="" name="ionStatsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.ionStatsSelected | default_if_none:""}}</textarea></td>     
+                </tr>                
+                </tbody>
+            </table> 
+        </div> 
+        <div class="span6">
+            <table id="thumbnail_analysis_params_table" class="table table-striped table-condensed">
+                <tbody>
+                <tr>
+                    <td>Thumbnail BeadFind:</td>
+                </tr>
+                <tr>
+                    <td><textarea id="thumbnailBeadFindSelected" class="span12" style="height:80px;"  value="" name="thumbnailBeadFindSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailBeadFindSelected | default_if_none:""}}</textarea></td>       
+                </tr>
+                <tr>
+                    <td>Thumbnail Analysis:</td>
+                </tr>
+                <tr>
+                    <td><textarea id="thumbnailAnalysisArgsSelected" class="span12" style="height:80px;"  value="" name="thumbnailAnalysisArgsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailAnalysisArgsSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                 <tr>
+                    <td>Thumbnail pre-BaseCaller for calibration:</td>
+                </tr>
+                <tr>
+                    <td><textarea id="thumbnailPreBaseCallerSelected" class="span12" style="height:80px;"  value="" name="thumbnailPreBaseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailPreBaseCallerSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                 <tr>
+                    <td>Thumbnail Calibration:</td>
+                </tr>
+                <tr>
+                    <td><textarea id="thumbnailCalibrateSelected"  class="span12" style="height:80px;"  value="" name="thumbnailCalibrateSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailCalibrateSelected | default_if_none:""}}</textarea></td>     
+                </tr>                      
+                <tr>
+                    <td>Thumbnail BaseCaller:</td>
+                </tr>
+                <tr>
+                    <td><textarea id="thumbnailBaseCallerSelected" class="span12" style="height:80px;"  value="" name="thumbnailBaseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailBaseCallerSelected | default_if_none:""}}</textarea></td>     
+                </tr>
+                <tr>
+                    <td>Thumbnail Alignment:</td>
+               </tr>
+               <tr>
+                    <td><textarea id="thumbnailAlignmentSelected" class="span12" style="height:80px;"  value="" name="thumbnailAlignmentSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailAlignmentSelected | default_if_none:""}}</textarea></td>
+                </tr>
+                <tr>
+                    <td>Thumbnail IonStats:</td>
+                </tr>
+                <tr>
+                    <td><textarea id="thumbnailIonStatsSelected" class="span12" style="height:80px;"  value="" name="thumbnailIonStatsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailIonStatsSelected | default_if_none:""}}</textarea></td>     
+                </tr>                
+               
+                </tbody>
+            </table> 
+        </div>
+    </div>
+</div>
+
+
+<script type="text/javascript">
+    var ANALYSIS_ENTRIES = {}
+
+    var ANALYSIS_ENTRIES_BEADFIND = {}
+    var ANALYSIS_ENTRIES_ANALYSIS = {}
+    var ANALYSIS_ENTRIES_PREBASECALLER = {}
+    var ANALYSIS_ENTRIES_CALIBRATE = {}    
+    var ANALYSIS_ENTRIES_BASECALLER = {}
+    var ANALYSIS_ENTRIES_ALIGNMENT = {}    
+    var ANALYSIS_ENTRIES_IONSTATS = {}
+
+    var ANALYSIS_ENTRIES_THUMBNAIL_BEADFIND = {}
+    var ANALYSIS_ENTRIES_THUMBNAIL_ANALYSIS = {}
+    var ANALYSIS_ENTRIES_THUMBNAIL_PREBASECALLER = {}
+    var ANALYSIS_ENTRIES_THUMBNAIL_CALIBRATE = {}    
+    var ANALYSIS_ENTRIES_THUMBNAIL_BASECALLER = {}
+    var ANALYSIS_ENTRIES_THUMBNAIL_ALIGNMENT = {}    
+    var ANALYSIS_ENTRIES_THUMBNAIL_IONSTATS = {}
+                    
+    var key = "{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description | safe}}";
+    ANALYSIS_ENTRIES[key] = "{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected | safe}}";   
+
+    ANALYSIS_ENTRIES_BEADFIND[key] = '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.beadfindargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_ANALYSIS[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.analysisargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_PREBASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.prebasecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_CALIBRATE[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.calibrateargs | default_if_none:""}}'; 
+    ANALYSIS_ENTRIES_BASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.basecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_ALIGNMENT[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.alignmentargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_IONSTATS[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.ionstatsargs | default_if_none:""}}';
+
+    ANALYSIS_ENTRIES_THUMBNAIL_BEADFIND[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.thumbnailbeadfindargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_ANALYSIS[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.thumbnailanalysisargs  | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_PREBASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.prethumbnailbasecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_CALIBRATE[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.thumbnailcalibrateargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_BASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.thumbnailbasecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_ALIGNMENT[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.thumbnailalignmentargs | default_if_none:""}}';   
+    ANALYSIS_ENTRIES_THUMBNAIL_IONSTATS[key] =   '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.thumbnailionstatsargs | default_if_none:""}}';    
+
+    key = "{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.description | safe}}";
+    ANALYSIS_ENTRIES[key] = "{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected | safe}}";   
+
+    ANALYSIS_ENTRIES_BEADFIND[key] = '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.beadfindargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_ANALYSIS[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.analysisargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_PREBASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.prebasecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_CALIBRATE[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.calibrateargs | default_if_none:""}}'; 
+    ANALYSIS_ENTRIES_BASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.basecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_ALIGNMENT[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.alignmentargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_IONSTATS[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.ionstatsargs | default_if_none:""}}';
+
+    ANALYSIS_ENTRIES_THUMBNAIL_BEADFIND[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailbeadfindargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_ANALYSIS[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailanalysisargs  | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_PREBASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.prethumbnailbasecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_CALIBRATE[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailcalibrateargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_BASECALLER[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailbasecallerargs | default_if_none:""}}';
+    ANALYSIS_ENTRIES_THUMBNAIL_ALIGNMENT[key] =  '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailalignmentargs | default_if_none:""}}';   
+    ANALYSIS_ENTRIES_THUMBNAIL_IONSTATS[key] =   '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailionstatsargs | default_if_none:""}}';    
+
+    {% for paramSet in helper.getStepDict.Analysis_params.getPrePopulatedFieldDict.analysisParamsEntries %}
+        key = '{{paramSet.description | safe}}';
+        ANALYSIS_ENTRIES[key] = '{{paramSet}}';
+
+        ANALYSIS_ENTRIES_BEADFIND[key] = '{{paramSet.beadfindargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_ANALYSIS[key] =  '{{paramSet.analysisargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_PREBASECALLER[key] =  '{{paramSet.prebasecallerargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_CALIBRATE[key] =  '{{paramSet.calibrateargs  | default_if_none:""}}'; 
+        ANALYSIS_ENTRIES_BASECALLER[key] =  '{{paramSet.basecallerargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_ALIGNMENT[key] =  '{{paramSet.alignmentargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_IONSTATS[key] =  '{{paramSet.ionstatsargs  | default_if_none:""}}';
+
+        ANALYSIS_ENTRIES_THUMBNAIL_BEADFIND[key] =  '{{paramSet.thumbnailbeadfindargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_THUMBNAIL_ANALYSIS[key] =  '{{paramSet.thumbnailanalysisargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_THUMBNAIL_PREBASECALLER[key] =  '{{paramSet.prethumbnailbasecallerargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_THUMBNAIL_CALIBRATE[key] =  '{{paramSet.thumbnailcalibrateargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_THUMBNAIL_BASECALLER[key] =  '{{paramSet.thumbnailbasecallerargs  | default_if_none:""}}';
+        ANALYSIS_ENTRIES_THUMBNAIL_ALIGNMENT[key] =  '{{paramSet.thumbnailalignmentargs  | default_if_none:""}}';   
+        ANALYSIS_ENTRIES_THUMBNAIL_IONSTATS[key] =   '{{paramSet.thumbnailionstatsargs  | default_if_none:""}}';    
+    {% endfor %}
+ 
+    console.log("AFTER EACH... ANALYSIS_ENTRIES=", ANALYSIS_ENTRIES);
+
+</script>

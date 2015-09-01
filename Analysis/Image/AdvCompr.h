@@ -104,6 +104,9 @@ public:
     void SetDoCNC(bool value) { do_cnc = value; }
     static void SetGain(int region, int w, int h, float conv, uint16_t *gainPtr);
     static void ClearGain(int region);
+    static int  ReadGain(int region, uint32_t cols, uint32_t rows, char *srcPath);
+    static void WriteGain(int region, int w, int h, char *destPath);
+    static void ReSetGain(int region, int w, int h, float *gainPtr);
 
 private:
         AdvCompr() {} // no default constructor
@@ -149,9 +152,11 @@ private:
 			int frameRate, int &tmp_npts, int &tmp_nUncompImgPts);
 	void TimeTransform_trace(int npts, int npts_newfr, int *timestamps_compr,
 			int *timestamps_newfr, float *vectors, float * nvectors, int nvect);
-    void xtalkCorrect(short int *raw, int nCols, int nRows, int nFrames, int chip_offset_y, float xtalk_fraction);
+    void xtalkCorrect(float xtalk_fraction);
     void SmoothMean();
     void ClearBeginningOfTrace();
+
+
 
 
 	int nPcaBasisVectors;       // number of pca basis vectors

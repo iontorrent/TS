@@ -120,9 +120,7 @@ class TimeCompression
 
   void SetUpTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg); // interface
   void SetUpOldTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
-  void ExponentialFramesPerPoint(int imgFrames, float t_comp_start, int start_detailed_time, float geom_ratio);
   void HyperTime(int imgFrames, float t_comp_start, int start_detailed_time);
-  void HalfSpeedSampling(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void SetupConvertVfcTimeSegments(int frames, int *timestamps, int baseFrameRate, int frameStep);
   void WriteLinearTransformation(int frameStep);
   void RecompressTrace (float *fgPtr, float *tmp_shifted)

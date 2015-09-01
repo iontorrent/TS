@@ -38,10 +38,15 @@ ERCC_Analysis
 RunTransfer
 FilterDuplicates
 FileExporter
+PGxAnalysis
+DataXfer
 )
 
 foreach(PLUGIN ${PLUGINS})
     if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN}")
+		execute_process(COMMAND bash ./makeAboutFile.sh ${PROJECT_SOURCE_DIR} ${PLUGIN}
+		WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/../buildTools/)
+
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN}/CMakeLists.txt")
             message(STATUS "Plugin ${PLUGIN} has custom build script.")
             add_subdirectory(${PLUGIN})
@@ -55,6 +60,7 @@ foreach(PLUGIN ${PLUGINS})
         endif()
     endif()
 endforeach(PLUGIN)
+
 
 
 install(FILES "${PROJECT_SOURCE_DIR}/plugin_functions" DESTINATION "plugins")

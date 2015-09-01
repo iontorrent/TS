@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="TC-chart" class="unselectable" style="border:2px solid #666;display:none">\
+<div id="TC-chart" class="unselectable" style="border:2px solid #666;page-break-inside:avoid;display:none">\
   <div id="TC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="TC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse View"></span>\
     <span id="TC-titletext" class="table-title" style="float:none">Target Coverage Chart</span>\

@@ -317,7 +317,7 @@ $(document).ready(function() {
             sortable : false,
         }, {
             field : "chipBarcode",
-            title : "Chip Barcode",
+            title : "Chip ID",
             sortable : false,
         }, {
             field : "date",

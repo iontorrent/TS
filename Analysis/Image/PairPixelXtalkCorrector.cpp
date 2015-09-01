@@ -20,8 +20,8 @@ void PairPixelXtalkCorrector::Correct(RawImage *raw, float xtalk_fraction)
     // doublet xtalk correction - electrical xtalk between two neighboring pixels in the same column is xtalk_fraction
     //
     // Model is:
-    // p1 = c1 + xtalk_fraction * c2
-    // p2 = c2 + xtalk_fraction * c1
+    // p1 = (1-xtalk_fraction)*c1 + xtalk_fraction * c2
+    // p2 = (1-xtalk_fraction)*c2 + xtalk_fraction * c1
     // where p1,p2 - observed values, and c1,c2 - actual values. We solve the system for c1,c2.
     /*-----------------------------------------------------------------------------------------------------------*/
     for( int f=0; f<nFrames; ++f ){

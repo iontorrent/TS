@@ -16,6 +16,26 @@ SERIALNUMFILE=/var/spool/ion/serial_number.alt
 TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
 source $TSCONFIG_SRC_DIR/ts_functions
 
+# this is a copy of echo_system_serial_number from tsconfig/ts_functions, which
+# is defined for TS Version 4.2 and up. Added it here so that this script can 
+# run on a 4.0 host as well.
+function get_system_serial_number()
+{
+    # use the dell service tag, if present
+    if ! dmidecode -s system-serial-number 2>/dev/null; then
+        # no dell service tag present.  perhaps we are in a vm.
+        if [ -f /var/spool/ion/serial_number.alt ]; then
+            # no dell service tag is present, but there is already a serial number set up.  use that.
+            cat /var/spool/ion/serial_number.alt | sed s/^serialnumber://
+        else
+            # no dell service tag present, and no serial number has been assigned; pick a random one.
+            sn=`uuidgen`
+            # since this case occurs only when in a vm, prefix the serial number with tsvm.
+            echo tsvm$sn
+        fi
+    fi
+}
+
 function start()
 {
   pid=`pidof RSMAgent_TS`
@@ -24,8 +44,8 @@ function start()
     echo -n "Starting service: RSMAgent_TS"
 
     # set the serial number.
-    # Must be run as root so dmidecode (in echo_system_serial_number()) can succeed.
-    sn=$(echo_system_serial_number)
+    # Must be run as root so dmidecode (in get_system_serial_number()) can succeed.
+    sn=$(get_system_serial_number)
     sn=$(echo $sn|sed 's/\///')    # remove any forward slashes
     echo $sn | sed "s/^serialnumber:.*/serialnumber:$sn/" > $SERIALNUMFILE
 

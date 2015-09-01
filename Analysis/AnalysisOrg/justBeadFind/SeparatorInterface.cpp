@@ -68,7 +68,8 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
                           inception_state.bfd_control.bfMinLiveLibSnr, inception_state.bfd_control.bfMinLiveTfSnr, 
                           inception_state.bfd_control.minLibPeakMax, inception_state.bfd_control.minTfPeakMax);
   opts.smoothTrace = inception_state.bfd_control.beadfindSmoothTrace;
-  if (inception_state.bfd_control.beadfindThumbnail == 1)
+  //Thumbnail regions for separator are 100x100. We use the same region size for Proton chips to match thumbnail performance.
+  if (inception_state.bfd_control.beadfindThumbnail == 1 || ChipIdDecoder::IsProtonChip() )
   {
     opts.t0MeshStep = 100; // inception_state.loc_context.regionXSize;
     opts.bfMeshStep = 100; // inception_state.loc_context.regionXSize;

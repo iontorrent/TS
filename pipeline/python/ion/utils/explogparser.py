@@ -59,10 +59,6 @@ def getparameter(parameterfile=None):
     
     env['exp_json'] = exp_json
 
-    env['platform'] = EXTERNAL_PARAMS.get('platform','Unspecified')
-    if not env['platform']:
-        env['platform'] = 'Unspecified'
-    
     env['instrumentName'] = EXTERNAL_PARAMS.get('instrumentName','unknownInstrument')
 
     #this will get the exp data from the database
@@ -70,6 +66,9 @@ def getparameter(parameterfile=None):
         exp_log_json = json.loads(exp_json['log'])
     else:
         exp_log_json = exp_json['log']
+
+    env['platform'] = EXTERNAL_PARAMS.get('platform') or 'Unspecified'
+    env['systemType'] = exp_log_json.get('systemtype') or env['platform']
 
     env['flows'] = EXTERNAL_PARAMS.get('flows')
     env['notes'] = exp_json['notes']
@@ -583,20 +582,18 @@ def explog_time(timeValue, folder):
     Note that Proton and PGM have different timestamp format in their explog.
     If all fails, use the folder-based time
     """
-
-    timestamp = ""
     try:
         timestamp = time.strptime(timeValue, PGM_START_TIME_FORMAT)
     except:
         try:
             timestamp = time.strptime(timeValue, PROTON_START_TIME_FORMAT)
         except:
-            return folder_mtime(folder)
+            timestamp = ""
 
     if timestamp:
         return time.strftime(DB_TIME_FORMAT, timestamp)
     else:
-        return folder_mtime(folder)
+        return folder_mtime(folder).strftime(DB_TIME_FORMAT)
 
 
 def folder_mtime(folder):

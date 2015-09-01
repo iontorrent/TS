@@ -1,15 +1,6 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-    <li><a href="{% url "configure_about" %}">About</a></li>
-    <li><a href="{% url "configure_references" %}">References</a></li>
-    <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
-    <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-    <li><a href="{% url "configure_configure" %}">Configure</a></li>
-    <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-    <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
 {% block content %}
 <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
@@ -141,7 +132,7 @@ $(document).ready(function(){
                             nfs_mount_test: {type:"string"},
                             version_test: {type:"string"},
                             daemon_test: {type:"string"},
-                            load_test: {type:"string"}
+                            sge_test: {type:"string"}
                         }
                     }
             },
@@ -199,13 +190,13 @@ $(document).ready(function(){
                 sortable: false,
                 template: "#=testTemplate(daemon_test!=null ? daemon_test : 'not tested')#"
             } , {
-                field: "load_test",
-                title: "Load Test",
+                field: "sge_test",
+                title: "SGE Test",
                 sortable: false,
-                template: "#=testTemplate(load_test!=null ? load_test : 'not tested')#"
+                template: "#=testTemplate(sge_test!=null ? sge_test : 'not tested')#"
             } , {
                 field: "error",
-                title: "Error",
+                title: " ",
                 sortable: false,
                 width: '30%'
             }

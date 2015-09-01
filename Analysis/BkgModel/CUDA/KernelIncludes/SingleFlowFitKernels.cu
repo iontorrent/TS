@@ -10,6 +10,8 @@
 
 //#define __CUDA_ARCH__ 350
 
+//#define USE_INTERPOLATED_EMPTY
+
 namespace { 
   enum ModelFuncEvaluationOutputMode { NoOutput, OneParam, TwoParams };
 }
@@ -54,6 +56,88 @@ float poiss_cdf_approx_float4_SingelFLowFit (float x, const float4* ptr, float o
 }
 */
 
+
+//empty t
+__device__
+void interpolateEmpty( float * interPolTrace, const float * emptyTracesRegion, const unsigned short * RegionMask, const size_t regId, const size_t ix, const size_t iy, int nframes)
+{
+
+  int nRegId;
+
+  int col= ImgRegP.getRegCol(regId);
+  int row= ImgRegP.getRegRow(regId);
+  float regX = ImgRegP.getRegCenterX(regId);
+  float regY = ImgRegP.getRegCenterY(regId);
+  //const int startC = (ix < regX )?(-1):(0);
+  //const int startR = (iy < regY )?(-1):(0);
+  // bilinear interpolation
+  //    |     |
+  // 0--|--1  |
+  // |  |  |  |
+  //----------|----
+  // |  | *|  |
+  // 2--|--3--| <- regId == 3, our well is the * so we have to interpolate between
+  //    |  |  |    the regions marked 0, 1, 2 and 3
+  // ---|-----|-----
+  // determine which quadrant we are in so we know which 4 regions we have to
+  // interpolate inbetween
+  //allays start with the region at the top left of the quadrant
+  //
+
+  float area = 0; // to normalize weights
+  float weights[9] = {0};
+  int RegIds[9];
+
+
+  //bool printMe = (ix%80 == 62 && iy%112 == 100);
+
+  for(int r = -1; r < 2; r++){
+    int nRow=row + r ;
+    for(int c = -1; c < 2; c++){
+      int nCol = col+c;
+      nRegId = regId + ImgRegP.getGridDimX() * r + c;
+      int ArrayIdx = (r+1)*3+(c+1);
+      bool valid = ( nRow >= 0 && nRow < ImgRegP.getGridDimY()) && ( nCol >= 0 && nCol < ImgRegP.getGridDimX());
+
+      if(valid)
+        valid = (valid && ( LDG_ACCESS(RegionMask,nRegId) == RegionMaskLive));
+
+      //regH/W are not necessarily correct for the weighting at boundary regions but should be negligible
+      float weightX = (valid)?(ImgRegP.getRegW(regId)-ImgRegP.getRegDistanceX(nRegId,ix)):(0.0f) ;
+      float weightY = (valid)?(ImgRegP.getRegH(regId)-ImgRegP.getRegDistanceY(nRegId,iy)):(0.0f);
+
+  //    if(printMe && valid) printf("centerof,%d,%f,%f,ix,%lu,iy,%lu,dist,%f,%f\n",nRegId,ImgRegP.getRegCenterX(nRegId),ImgRegP.getRegCenterY(nRegId),ix,iy,ImgRegP.getRegDistanceX(nRegId,ix),ImgRegP.getRegDistanceY(nRegId,iy));
+      float weight = (weightX > 0 && weightY > 0)?(weightX*weightY):(0);
+
+      valid = (valid && weight>0);
+      area+=(valid)?(weight):(0); // accumulate the calculated area to normalize by. so all out weights always add up to 1.0
+      weights[ArrayIdx] = (valid)?(weight):(0);
+      RegIds[ArrayIdx] = (valid)?(nRegId):(-1);
+      //if (printMe && valid) printf ("%lu,%d,%d,%d,%d,%f,%lu,%lu,%f\n", regId,c,r,ArrayIdx,RegIds[ArrayIdx],weights[ArrayIdx],ix,iy,area);
+    }
+  }
+
+
+  for(int i=0;i<9;i++)
+    weights[i] = (RegIds[i] > -1 && area>0 )?(weights[i]/area):(0);
+
+  for(int f=0; f<nframes; f++)
+    interPolTrace[f] = 0;
+
+
+
+  for(int i=0;i<9;i++){
+    const float * nEmptyTrace = emptyTracesRegion + RegIds[i] * ConstFrmP.getUncompFrames();
+    for(int f=0; f<nframes; f++){
+       if(weights[i] > 0 && RegIds[i] != -1){
+        float thisFrame = LDG_ACCESS(nEmptyTrace, f);
+
+        interPolTrace[f] += thisFrame * weights[i];
+      }
+    }
+  }
+
+}
 
 
 
@@ -876,7 +960,10 @@ void ZeromerCorrectionFromRawTrace(
     const int num_frames,
     const int frameStride,
     const int regionFrameStride,
-    float* correctedTrace
+    float* correctedTrace,
+    //TraceLevelXTalk
+    const float * XTalkContribution,
+    const float * genericXTalk
 )
 {
   float R = etbR - 1.0f;
@@ -885,33 +972,44 @@ void ZeromerCorrectionFromRawTrace(
   float dvn = 0.0f;
   float aval;
   float curSbgVal, deltaFrameVal;
+
   //  printf("fg after PreSingleFit\n"); //T*** REMOVE!!  DEBUG ONLY
   for (int i=0; i<num_frames; ++i) {
     deltaFrameVal = LDG_ACCESS(deltaFrames, i);
 #ifdef EMPTY_TRACES_REZERO_SHARED
     curSbgVal = bkgTrace[i];
 #else
+#ifdef USE_INTERPOLATED_EMPTY
+    curSbgVal = bkgTrace[i];
+#else
     curSbgVal = LDG_ACCESS(bkgTrace, i);
 #endif
+#endif
+    if(ConfigP.PerformTraceLevelXTalk()){
+      curSbgVal += (*XTalkContribution) - genericXTalk[i];
+      XTalkContribution += frameStride;
+    }
+
     aval = deltaFrameVal/(2.0f * tauB);
     dvn = (R*curSbgVal - dv_rs/tauB - dv*aval) / (1.0f + aval);
     dv_rs += (dv+dvn) * deltaFrameVal * 0.5f;
     dv = dvn;
+
     correctedTrace[i] = (float)(*rawTrace)
 #if FG_TRACES_REZERO
-                            - dcOffset
+        - dcOffset
 #endif
-                            - ((dv+curSbgVal)*gain
-                                + ApplyDarkMatterToFrame( beadParamCube,
-                                    regionFrameCube,
-                                    darkness,
-                                    i,
-                                    num_frames,
-                                    frameStride,
-                                    regionFrameStride
-                                )
+        - ((dv+curSbgVal)*gain
+            + ApplyDarkMatterToFrame( beadParamCube,
+                regionFrameCube,
+                darkness,
+                i,
+                num_frames,
+                frameStride,
+                regionFrameStride
+            )
+        );
 
-                            );
     rawTrace += frameStride;
     //    printf("%f ",correctedTrace[i] ); //T*** REMOVE!!  DEBUG ONLY
   }
@@ -983,7 +1081,11 @@ void ExponentialTailFitCorrection(
 #ifdef EMPTY_TRACES_REZERO_SHARED
         avg_bkg_amp_tail += bkgTrace[i];
 #else
+#ifdef USE_INTERPOLATED_EMPTY
+        avg_bkg_amp_tail += bkgTrace[i];
+#else
         avg_bkg_amp_tail += LDG_ACCESS(bkgTrace, i);
+#endif
 #endif
 
 
@@ -1009,15 +1111,24 @@ void ExponentialTailFitCorrection(
       }
 
       avg_bkg_amp_tail /= tailLen;
-      if (avg_bkg_amp_tail) 
-        C /= avg_bkg_amp_tail;
+
+      if (avg_bkg_amp_tail > ConstGlobalP.getTailDClowerBound()) {
+              C /= avg_bkg_amp_tail;
+              clampT(C, -ConstGlobalP.getScaleLimit(), ConstGlobalP.getScaleLimit());
+       }
+       else
+         C = 0;
 
       //      printf("fg after exptail: \n");//T*** REMOVE!!  DEBUG ONLY
       for (int i=0; i<num_frames; ++i) {
 #ifdef EMPTY_TRACES_REZERO_SHARED
         correctedTrace[i] -= C*bkgTrace[i];
 #else
+#ifdef USE_INTERPOLATED_EMPTY
+        correctedTrace[i] -= C*bkgTrace[i];
+#else
         correctedTrace[i] -= C*LDG_ACCESS(bkgTrace, i);
+#endif
 #endif
         //        printf("%f ", correctedTrace[i]); //T*** REMOVE!!  DEBUG ONLY
       }
@@ -1179,7 +1290,10 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
     const size_t num_frames, // 4
     const size_t frameStride, //stride from one CUBE plane to the next for the Per Well Cubes
     const size_t regionFrameStride,//, //stride in Region Frame Cube to get to next parameter
-    const size_t emphStride
+    const size_t emphStride,
+    //TraceLevelXTalk
+    const float * XTalkContribution,
+    const float * genericXTalk
     //bool print
     //int * maxIterWarp = NULL
     //   float * fgBufferFloat
@@ -1230,7 +1344,10 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
       num_frames,
       frameStride,
       regionFrameStride,
-      correctedTrace);
+      correctedTrace,
+      XTalkContribution,
+      genericXTalk
+      );
 
 
 
@@ -1270,7 +1387,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
 
 
   // exponential tail fit
-  if(true){ //ConfigP.PerformExpTailFitting()){
+  if(ConfigP.PerformExpTailFitting() && ConfigP.PerformBkgAdjInExpTailFit()){
 
     const float adjustTauB = tauB * (*(BeadParamCube + BpTauAdj*frameStride));
     const float* frameNumber = RegionFrameCube + RfFrameNumber*regionFrameStride;
@@ -1327,6 +1444,8 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
   float localMaxKmult= ConstGlobalP.getMaxKmult();
 
   const bool twoParamFit = ConfigP.FitKmult() || ( copies * Ampl > ConstGlobalP.getAdjKmult() );
+  if (twoParamFit)
+    kmult = ConstGlobalP.getMinKmult();
 
   float residual, newresidual;
   // These values before start are always zero since there is no nucrise yet. Don't need to
@@ -1383,7 +1502,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
     const float *emLeft, *emRight;
 
     // calculating weighted sum of square residuals for the convergence test
-    const float EmphSel = (relax_kmult_pass == 1) ? (Ampl + 2.0f) : Ampl;
+    const float EmphSel = Ampl;
     int nonZeroEmpFrames;
     float frac = BlockLevel_DecideOnEmphasisVectorsForInterpolation(
         nonZeroEmpFramesVec,
@@ -1409,7 +1528,16 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
     float newAmpl, newKmult;
     float delta0 = 0, delta1 = 0;
     int iter;
+    int done = 0;
     for (iter = 0; iter < ITER; ++iter) {
+
+      if ((delta0 * delta0) < 0.0000025f)
+        done++;
+      else
+        done = 0;
+       
+      if (done > 1)
+        break;
 
       // new Ampl and krate by adding delta to existing values
       newAmpl = Ampl + 0.001f;
@@ -1417,8 +1545,6 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
 
       // Evaluate model function for new Ampl keeping Krate constant
       float aa = 0, akr= 0, krkr = 0, rhs0 = 0, rhs1 = 0;
-
-
 
 #if __CUDA_ARCH__ >= 350
 
@@ -1614,12 +1740,10 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
           }
         }
       }
-      //       printf("DEBUG: %d delta %f\n", iter, delta0); //T*** REMOVE!!  DEBUG ONLY
-      if ((delta0*delta0) < 0.0000025f){
-        iter++;
-        break;
+      else {
+        delta0 = 0;
+        delta1 = 0;
       }
-
     } // end ITER loop
 
     //DEBUG (rawtrase const?)
@@ -1631,7 +1755,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
     if ((kmult - localMinKmult) < 0.01f) {
       if (sqrtf(residual) > 20.0f) {
         localMaxKmult = localMinKmult;
-        kmult = 0.3f;
+        //kmult = 0.3f;
         localMinKmult = 0.3f;
         relax_kmult_pass++;
         continue;
@@ -1670,6 +1794,8 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
   //  pState->corrupt = true;
 
 }
+
+/*
 
 
 // execute with one warp per row and 2D thread blocks of width warp length
@@ -1843,13 +1969,13 @@ void ExecuteThreadBlockPerRegion2DBlocks(
 
   //end all thread setup code, now excess threads can drop out
   ////////////////////////////////////////////////////////////
-  /*if(idx == 20){
-    printf("input trace \n");
-    for( size_t i = 0 ; i < *numFrames; i++){
-      printf("%d, ", RawTraces[i * ImgRegP.getPlaneStride()]);
-    }
-    printf("\n");
-}*/
+  //if(idx == 20){
+  //  printf("input trace \n");
+  //  for( size_t i = 0 ; i < *numFrames; i++){
+  //    printf("%d, ", RawTraces[i * ImgRegP.getPlaneStride()]);
+  //  }
+  //  printf("\n");
+  //}
   //filter blocks that are outside the region in y-direction (ToDO: when 2d blocks this has to be done per warp after the all threads tasks are completed)
   const size_t ry = iy%ImgRegP.getRegH();
   if( ! ImgRegP.isValidIdx(idx) || ry >= ImgRegP.getRegH(regId)) return;
@@ -1930,7 +2056,7 @@ void ExecuteThreadBlockPerRegion2DBlocks(
             BeadFrameStride,
             RegionFrameStride,
             emphStride
-            //print
+
         );
       }
     } //end work for active bead move to next beads
@@ -1949,7 +2075,7 @@ void ExecuteThreadBlockPerRegion2DBlocks(
 }
 
 
-
+*/
 
 // execute with one warp per row and 2D thread blocks of width warp length
 // each warp will slide across one row of the region
@@ -1999,7 +2125,10 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     const PerFlowParamsRegion * perFlowRegP,
     const PerNucParamsRegion * perNucRegP,
     const float * RegionFrameCube,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
-    const float * EmptyTraceRegion  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
+    const float * EmptyTraceRegion,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
+    //TraceLevelXTalk
+    const float * XTalkPerBead,
+    const float * genericXTalkRegion
     //DEBUG buffer
     //int * numLBeads//, //ToDo only for debuging
     // float * fgBufferFloat
@@ -2041,8 +2170,15 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
   //const size_t windowSize = blockDim.x;
 
   //if EmptyTraces from GenerateBeadTrace Kernel padding is uncompressed frames
-  const float * emptyTraceAvg = EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
+
   RegionFrameCube += regId*ConstFrmP.getMaxCompFrames();  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
+
+
+
+#ifndef USE_INTERPOLATED_EMPTY
+    const float * emptyTraceAvg = EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
+#endif
+
 
   ////////////////////////////////////////////////////////////
   // setup code that needs to be done by all threads
@@ -2082,6 +2218,9 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
   //point to correct nuc
   perNucRegP +=  ImgRegP.getNumRegions() * ConstFlowP.getNucId() + regId;
 
+  if(ConfigP.PerformTraceLevelXTalk()){
+    genericXTalkRegion += ConstFrmP.getMaxCompFrames() * regId;
+  }
 
   nonZeroEmphFrames += regId*MAX_POISSON_TABLE_COL;
   nucRise += regId *  ISIG_SUB_STEPS_SINGLE_FLOW * ConstFrmP.getMaxCompFrames() ;
@@ -2153,6 +2292,10 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
   BeadParamCube += idx;
   ResultCube += idx;
 
+  if(ConfigP.PerformTraceLevelXTalk())
+      XTalkPerBead += idx;
+
+
   //sliding window if thread block is too small to handle a whole row in a region
   int rx = 0;
 
@@ -2170,14 +2313,29 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
       rx++; //move to next bead in the row
     }
 
+    //ATTENTION: "rx" is not used in the dense packed kernel. from here on "myOffset" contains the x offset within the region for this thread!!
 
     if(myOffset < regionWidth){ //filter out threads that do not have a correct live bead to work on
 
+#ifdef USE_INTERPOLATED_EMPTY
+      float emptyTraceAvg[MAX_COMPRESSED_FRAMES_GPU] = {0};
+      interpolateEmpty( emptyTraceAvg, EmptyTraceRegion, RegionMask, regId, ix+myOffset, iy, numf);
+      //if( regId == 27 && myOffset%20 == 0 && ry%28 == 0 ){
+      //const float * rt = emptyTraceAvg;
+      //int i=0;
+      //printf("%lu,%lu,%lu,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",regId, myOffset, ry,rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++]);
+      //rt = EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
+      //i=0;
+      //if( myOffset == 0 && ry == 0) printf("reg %lu,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",regId,rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++],rt[i++]);
+      //}
+
+#endif
       //update local offsets (region regId does not change since warp only works on beads of one row in one region)
       unsigned short  * lbstateMask = bstateMask + myOffset;
       const short * lRawTraces = RawTraces + myOffset;
       const float * lBeadParamCube = BeadParamCube+ myOffset;
       float* lResultCube = ResultCube + myOffset;
+      const float * XTalkContribution = (ConfigP.PerformTraceLevelXTalk())?(XTalkPerBead + myOffset):(NULL);
 
 #if FG_TRACES_REZERO
         // Compute the per flow dc offset for the bead traces (maybe can be done later when we touch the raw traces the first time.
@@ -2210,7 +2368,12 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
             //strides
             BeadFrameStride,
             RegionFrameStride,
-            emphStride
+            emphStride,
+
+            //TraceLevelXTalk
+            XTalkContribution,
+            genericXTalkRegion
+
             //maxIterWarp
             //print
         );

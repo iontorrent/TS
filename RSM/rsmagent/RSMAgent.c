@@ -28,8 +28,7 @@
 #include "parson.h"
 
 #include "AlarmMgr.h"
-#include "list.h"
-#include "readhostlist.h"
+#include "sshTunnelMgmt.h"
 
 #define DEFAULT_OWNER "drm-data_source"
 
@@ -1508,45 +1507,6 @@ static AeBool OnFileUploadBegin(AeInt32 iDeviceId __attribute__((unused)),
 	return AeTrue;
 }
 
-pid_t findPidForName(char const * const name)
-{
-	pid_t pidout = -1;
-	DIR* dir = opendir("/proc");
-	if (!dir) {
-		printf("%s: opendir: %s\n", __FUNCTION__, strerror(errno));
-		return -1;
-	}
-
-	struct dirent *entry = NULL;
-	do {
-		entry = readdir(dir);
-		if (!entry)
-			break;
-		// We only want to search the directories with numbers (i.e., process IDs) for names.
-		char* endptr;
-		pid_t pid = strtol(entry->d_name, &endptr, 10);
-		// if endptr is not a null character, the directory name is not entirely numeric, so skip it.
-		if (*endptr != '\0')
-			continue;
-
-		char buf[512];
-		snprintf(buf, sizeof(buf), "/proc/%d/comm", pid);
-		FILE* fp = fopen(buf, "r");
-		if (fp) {
-			memset(buf, 0, 512);
-			int rc __attribute__((unused)) = fread(buf, sizeof(char), 37, fp);
-			if (strstr(buf, name)) {
-				entry = NULL; // exit the do-while loop
-				pidout = pid;
-			}
-			fclose(fp);
-		}
-	} while (entry);
-
-	closedir(dir);
-	return pidout;
-}
-
 static int rsshConnection(char const * const rsshCmd,
 						  char const * const remoteHost,
 						  const int remoteConnectionPort,
@@ -1554,16 +1514,15 @@ static int rsshConnection(char const * const rsshCmd,
 						  char const * const pass)
 {
 	int retval = 0; // init to failure case
-#define CMDLEN 1024
-	char cmd[CMDLEN];
-	int remoteTunnelPort = 0;
 
 	srand(time(NULL));
-	remoteTunnelPort = 15000 + (rand() % 1024);
+	int remoteTunnelPort = 15000 + (rand() % 1024);
 
 	if (verbose)
 		printf("%s: %s to %s:%d on port %d\n", __FUNCTION__,
 				rsshCmd, remoteHost, remoteConnectionPort, remoteTunnelPort);
+
+	ssh_tunnel_create(remoteHost, user, pass, remoteConnectionPort, remoteTunnelPort);
 
 	// Create a file to upload to the Axeda Enterprise server
 	FILE *fp = fopen(RSSH_CMD_FILE, "w");
@@ -1574,7 +1533,7 @@ static int rsshConnection(char const * const rsshCmd,
 
 	if (0 == strcmp(rsshCmd, "start")) {
 		// Create a file containing the port info the caller needs to connect
-		fprintf(fp, "ssh -l rsshUser %s\r\nthen run:\r\n"
+		fprintf(fp, "Log in to %s and run:\r\n"
 				"ssh -l ionadmin -p %d -o NoHostAuthenticationForLocalhost=yes -o StrictHostKeyChecking=no localhost\r\n",
 				remoteHost, remoteTunnelPort);
 	}
@@ -1583,41 +1542,6 @@ static int rsshConnection(char const * const rsshCmd,
 	}
 	fclose(fp);
 
-	snprintf(cmd, CMDLEN, "script -f -c \"%s/reverse_ssh.sh %s 22 %d %d %s %s %s\" " RSSH_RESULTS_FILE " &",
-			 BIN_DIR, rsshCmd, remoteConnectionPort, remoteTunnelPort, remoteHost, user, pass);
-
-	if (verbose > 0)
-		printf("System cmd executing: %s\n", cmd);
-	int rc = system(cmd);
-	if (rc == -1)
-		printf("%s: system: fork failed.\n", __FUNCTION__);
-	retval = 1;
-/*
-	if (0 == strcmp(rsshCmd, "start")) {
-		// Wait a little  bit, then check process table to see if reverse_ssh.sh is still running (success)
-		// or has exited (failure).  (We don't get a success or failure indication from the script.)
-		sleep(3);
-		pid_t rsshPid = findPidForName("reverse_ssh.sh");
-
-		if (rsshPid == -1) {
-			printf("*** SSH connection to %s port %d failed\n", remoteHost, remoteConnectionPort);
-			retval = 0; // fail
-
-			// Add information on the reason for the failure to the file we upload.
-			rc = system("cat " RSSH_RESULTS_FILE " >> " RSSH_CMD_FILE);
-			if (rc == -1)
-				printf("%s: system: fork failed.\n", __FUNCTION__);
-		}
-		else {
-			printf("*** SSH connection to %s port %d succeeded\n", remoteHost, remoteConnectionPort);
-			retval = 1; // success
-		}
-	}
-	else {
-		printf("*** SSH connection to %s port %d terminated\n", remoteHost, remoteConnectionPort);
-		retval = 1; // success
-	}
-*/
 	return retval;
 }
 
@@ -1625,7 +1549,6 @@ static int rsshConnection(char const * const rsshCmd,
 static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 		AeFileStat **ppFile, AeChar **ppData, AeInt32 *piSize, AePointer pUserData)
 {
-	char const * const listFile = "/opt/ion/RSM/rsshHosts.conf";
 	AeDemoUpload *pUpload;
 
 	*ppFile = NULL;
@@ -1644,47 +1567,39 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 	if (pUpload->iCurFileHandle == AeFileInvalidHandle)	{
 		/* inspect file name and perform special actions prior to file delivery */
 		int rsshfile = 0;
-		int rsshSuccess = 0;
-		if (strstr(pUpload->ppUploads[pUpload->iUploadIdx]->pName, "rssh") != 0) {
+		if (strstr(pUpload->ppUploads[pUpload->iUploadIdx]->pName, "rssh-start") != 0) {
 			// parse out the info from the 'command' file name
-			// expected file names are:
-			//    rssh-start-rsshUser-i0nrssh
-			//    rssh-stop-dontcare-dontcare
+			// expected file name is:
+			//    rssh-start-remoteHost-portOnRemoteHost-username-password
 			char *rsshCmd;
+			char *host;
+			char *pstr;
 			char *user;
 			char *pass;
 			char tokens[1024];
 			snprintf(tokens, sizeof(tokens), "%s", pUpload->ppUploads[pUpload->iUploadIdx]->pName);
 			strtok(tokens, "-"); /* we don't care about the /rssh- part */
 			rsshCmd = strtok(NULL, "-");
+			host = strtok(NULL, "-");
+			pstr = strtok(NULL, "-");
 			user = strtok(NULL, "-");
 			pass = strtok(NULL, "-");
 
-			// execute the rssh command
-			if (rsshCmd && pass && user) {
-				rsshfile = 1;
+			int port;
+			sscanf(pstr, "%d", &port);
 
-				// Re-read the list of rssh hosts for every rssh request.
-				list_t *hosts = list_create();
-				readHostList(listFile, hosts);
-				list_t *hptr = hosts;
-				while (hptr) {
-					host_t *h = (host_t *)(hptr->item);
-					if (h) {
-						rsshSuccess = rsshConnection(rsshCmd, h->name, h->port, user, pass);
-					}
-					if (rsshSuccess) {
-						break;	// use the first successful connection
-					}
-					hptr = hptr->next;
-				}
-				hptr = hosts;
-				while (hptr) {
-					freeHost(hptr->item);
-					hptr = hptr->next;
-				}
-				list_free(hosts);
+			// execute the rssh command
+			if (rsshCmd && host && pass && user) {
+				rsshfile = 1;
+				rsshConnection(rsshCmd, host, port, user, pass);
 			}
+
+			// Erase copy of file name.
+			memset(tokens, 0, 1024);
+		}
+		else if (strstr(pUpload->ppUploads[pUpload->iUploadIdx]->pName, "rssh-stop") != 0) {
+			rsshfile = 1;
+			ssh_tunnel_remove();
 		}
 
 		// open file
@@ -1734,6 +1649,14 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 
 		if (pUpload->ppUploads[pUpload->iUploadIdx]->bDelete)
 			AeFileDelete(pUpload->ppUploads[pUpload->iUploadIdx]->pName);
+
+		char *filename = pUpload->ppUploads[pUpload->iUploadIdx]->pName;
+		if (strstr(filename, "rssh-start") != 0) {
+			// Erase the upload filename "rssh-start-username-password" from memory.
+			memset(filename, 0, strlen(filename));
+			// Erase the copy we made of the upload filename.
+			memset(pUpload->curFileStat.pName, 0, strlen(pUpload->curFileStat.pName));
+		}
 
 		pUpload->iUploadIdx += 1;
 	}

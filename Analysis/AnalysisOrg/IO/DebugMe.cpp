@@ -21,6 +21,7 @@ DebugMe::DebugMe(){
   bkgModel_xyflow_fname_in_type = -1;
   bkgModel_xyflow_fname_in = "";
   bkgDebugParam = 0;
+  bkgDebug_nSamples = 9;
   // diagnostics
   debug_bead_only = 1;  // only debug bead
   region_vfrc_debug = 0; // off
@@ -180,6 +181,7 @@ void DebugMe::PrintHelp()
 {
 	printf ("     DebugMe\n");
     printf ("     --bkg-debug-param       INT               background modeling hdf5 debug param [1]\n");
+    printf ("     --bkg-debug-nsamples    INT               background modeling hdf5 debug nsamples per region [9]\n");
 	printf ("     --bkg-debug-region      INT VECTOR OF 2   background modeling hdf5 debug region [-1,-1]\n");
 	printf ("     --bkg-dbg-trace         INT VECTOR OF 2   background modeling	trace debug region []\n");
 	printf ("     --debug-bead-only       BOOL              debug bead only [true]\n");
@@ -194,6 +196,7 @@ void DebugMe::PrintHelp()
 void DebugMe::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
 	bkgModelHdf5Debug = RetrieveParameterInt(opts, json_params, '-', "bkg-debug-param", 1);
+    bkgDebug_nSamples = RetrieveParameterInt(opts, json_params, '-', "bkg-debug-nsamples", 9);
 	vector<int> vec1;
 	RetrieveParameterVectorInt(opts, json_params, '-', "bkg-debug-region", "-1,-1", vec1);
 	if(vec1.size() == 2)

@@ -1,0 +1,11 @@
+# empty directory by intent
+openjdk-7-jre-headless binary: package-contains-empty-directory usr/share/binfmts/
+
+# Strip libjvm.so with --strip-debug instead of --strip-unneeded. LP: #574997.
+openjdk-7-jre-headless binary: unstripped-binary-or-object
+
+# OpenJDK uses $ORIGIN to find shared libs in JAVA_HOME
+openjdk-7-jre-headless binary: binary-or-shlib-defines-rpath
+
+# Ignore the mouse cursors
+openjdk-7-jre-headless binary: image-file-in-usr-lib

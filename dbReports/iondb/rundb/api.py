@@ -929,7 +929,7 @@ class ResultsResource(BaseMetadataResource):
         return self.dispatch('pluginresult_set', request, **kwargs)
 
     def get_pluginresult_set(self, request, **kwargs):
-        # Helper to return full resource for pluginresults, 
+        # Helper to return full resource for pluginresults,
         # different from get_pluginresults, which returns custom report resource
         try:
             basic_bundle = self.build_bundle(request=request)
@@ -968,8 +968,8 @@ class ResultsResource(BaseMetadataResource):
     pluginresults = ToManyField('iondb.rundb.api.PluginResultResource', 'pluginresult_set', related_name='result', full=False)
     # Add back pluginState/pluginStore for compatibility
     # But using pluginresults should be preferred.
-    pluginState = DictField(readonly=True)
-    pluginStore = DictField(readonly=True)
+    pluginState = DictField(readonly=True, use_in="detail")
+    pluginStore = DictField(readonly=True, use_in="detail")
 
     projects = fields.ToManyField(ProjectResource, 'projects', full=False)
 
@@ -987,26 +987,29 @@ class ResultsResource(BaseMetadataResource):
 
         return base_object_list
 
-    # Only dehydrate State/Store if we are retrieving a full path
-    def dehydrate_pluginState(self, bundle):
-        return bundle.obj.getPluginState()
-    def dehydrate_pluginStore(self, bundle):
-        return bundle.obj.getPluginStore()
 
-    # NOTE: dehydrate bundle doesn't have request (which would allow us to suppress data above).
-    # So we remove the plugin data prior to sending. bundle has request in post 0.9.11 tastypie
+    # Only dehydrate State/Store if we are retrieving a full path
+    def dehydrate(self, bundle):
+        if toBoolean(bundle.request.GET.get('plugin')):
+            bundle.data['pluginState'] = self.dehydrate_pluginState(bundle)
+            bundle.data['pluginStore'] = self.dehydrate_pluginStore(bundle)
+        return bundle
+
+    def dehydrate_pluginState(self, bundle):
+        pluginState = {} if toBoolean(bundle.request.GET.get('noplugin')) else bundle.obj.getPluginState()
+        return pluginState
+
+    def dehydrate_pluginStore(self, bundle):
+        pluginStore = {} if toBoolean(bundle.request.GET.get('noplugin')) else bundle.obj.getPluginStore()
+        return pluginStore
+
     def alter_detail_data_to_serialize(self, request, bundle):
+        # remove the empty keys
         if request.POST.get('noplugin', False) or request.GET.get('noplugin', False):
             del bundle.data['pluginStore']
             del bundle.data['pluginState']
         return bundle
 
-    def alter_list_data_to_serialize(self, request, data):
-        if request.POST.get('noplugin', False) or request.GET.get('noplugin', False):
-            for bundle in data['objects']:
-                del bundle.data['pluginStore']
-                del bundle.data['pluginState']
-        return data
 
     class Meta:
         queryset = models.Results.objects.all()
@@ -1213,6 +1216,46 @@ class SampleResource(ModelResource):
         bundle.obj.save()
         return bundle
 
+class SampleSetValidation(Validation):
+    def is_valid(self, bundle, request=None):
+        if not bundle.data:
+            return {'__all__': 'Fatal Error, no bundle!'}
+        isValid = True
+
+        sampleSetName = bundle.data.get('displayedName','')
+        if not sampleSetName:
+            sampleSetName = bundle.obj.displayedName
+
+        queryDict = {
+                     'sampleSetName':sampleSetName,
+                     'sampleSetDescription' : bundle.data.get('description',''),
+                     'pcrPlateSerialNum' : bundle.data.get('pcrPlateSerialNum',''),
+                     'libraryPrepType' : bundle.data.get('libraryPrepType',''),
+                     'status' : bundle.data.get('status',''),
+                     'sampleBarcodeMapping' : bundle.data.get('sampleBarcodeMapping',''),
+                     'samplesetID' : bundle.obj.id
+                    }
+
+        isValid, errors = sample_validator.validate_sampleSet(queryDict)
+        if not isValid:
+            return errors
+
+        samplesetStatus = queryDict['status'].strip()
+        if samplesetStatus:
+            isValid, errors, input_data = sample_validator.validate_samplesetStatus(samplesetStatus)
+        if not isValid:
+            errordict = {'result': '1',
+                         'message': 'Fail',
+                         'detailMessage' : ''.join(errors),
+                         'inputData' : input_data
+                        }
+            return isValid,  errordict
+
+        if queryDict['sampleBarcodeMapping']:
+            isValid, errors = sample_validator.validate_sampleBarcodeMapping(queryDict)
+
+        if not isValid:
+            return errors
 
 class SampleSetResource(ModelResource):
     SampleGroupType_CV = fields.ToOneField('iondb.rundb.api.SampleGroupType_CVResource', 'SampleGroupType_CV', full=False, null=True, blank=True)
@@ -1224,6 +1267,8 @@ class SampleSetResource(ModelResource):
     libraryPrepInstrumentData = fields.ToOneField('iondb.rundb.api.SamplePrepDataResource', 'libraryPrepInstrumentData', full=True, null=True, blank=True)
 
     libraryPrepTypeDisplayedName = fields.CharField(readonly = True, attribute="libraryPrepTypeDisplayedName", null=True, blank=True)
+
+    libraryPrepKitDisplayedName = fields.CharField(readonly = True, attribute="libraryPrepKitDisplayedName", null=True, blank=True)
 
     def dehydrate(self, bundle):
         sampleSetItems = bundle.obj.samples
@@ -1238,6 +1283,17 @@ class SampleSetResource(ModelResource):
             for i, (internalValue, displayedValue) in enumerate(libPrepType_tuple):
                 if internalValue == bundle.data['libraryPrepType']:
                     bundle.data['libraryPrepTypeDisplayedName'] = displayedValue
+
+        #Create a customer-facing kitDisplayedName field so that the API will return both Internal and customer-facing KitName
+        bundle.data['libraryPrepKitDisplayedName'] = ""
+        if bundle.data['libraryPrepKitName']:
+            libPrepKitName = bundle.data.get('libraryPrepKitName',None)
+            if libPrepKitName:
+                try:
+                    kitInfo = models.KitInfo.objects.get(kitType = "LibraryPrepKit", name=libPrepKitName)
+                    bundle.data['libraryPrepKitDisplayedName'] = kitInfo.description
+                except Exception, Err:
+                    logger.debug("Error at SampleSetResources.dehydrate() : %s" %(Err))
 
         return bundle
 
@@ -1256,17 +1312,20 @@ class SampleSetResource(ModelResource):
                 try:
                     dna_obj = models.dnaBarcode.objects.get(name=barcodekit,id_str=barcode)
                 except:
-                    print "Invalid barcodes"
                     logger.debug("Invalid Barcodes SampleSetResources.obj_update() bundle.data=%s" %(bundle.data))
                     next
                 for samplesetitem_id in sampleset_items:
                     try:
-                        item_to_update = models.SampleSetItem.objects.get(sampleSet__id=bundle.obj.id,pcrPlateRow=row,pcrPlateColumn=col)
+                        item_to_update = models.SampleSetItem.objects.get(sampleSet__id=bundle.obj.id,pcrPlateRow=row.upper(),pcrPlateColumn=col)
                         if item_to_update:
                             item_to_update.dnabarcode = dna_obj
                             item_to_update.save()
                     except:
                         next
+            bundle.data['sampleset'] = {'result' : 0,
+                                        'message' : 'success',
+                                        'detailMessage' : "SampleSet Update is successful for '%s'" % bundle.obj.displayedName
+                                        }
             bundle.obj.save()
         return bundle
 
@@ -1302,20 +1361,20 @@ class SampleSetResource(ModelResource):
         always_return_data=True
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
-
+        validation = SampleSetValidation()
 
 class SamplePrepDataResource(ModelResource):
     sampleSet = fields.ToOneField('iondb.rundb.api.SampleSetResource', 'sampleSet', full=False, null=True, blank=True)
-    
+
     class Meta:
         queryset = models.SamplePrepData.objects.all()
-        
+
         resource_name = 'sampleprepdata'
-        
+
         #allow ordering and filtering by all fields
         field_list = models.SamplePrepData._meta.get_all_field_names()
         ordering = field_list
-        
+
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
@@ -1517,19 +1576,22 @@ class ExperimentAnalysisSettingsResource(ModelResource):
 class ReferenceGenomeResource(ModelResource):
     def apply_filters(self, request, applicable_filters):
         base_object_list = super(ReferenceGenomeResource, self).apply_filters(request, applicable_filters)
-        query = request.GET.get('special', None)
-        if query:
+        special = request.GET.get('special', None)
+        if special:
             qset = (
-                Q(status__exact="Rebuilding index") |
+                Q(status__contains="download") |
+                Q(status__in=['queued', 'preprocessing', 'indexing']) |
                 Q(index_version__exact=settings.TMAP_VERSION)
             )
             base_object_list = base_object_list.filter(qset)
+        else:
+            base_object_list = base_object_list.filter(index_version = settings.TMAP_VERSION)
 
         return base_object_list
 
     class Meta:
         limit = 0
-        queryset = models.ReferenceGenome.objects.filter(index_version = settings.TMAP_VERSION)
+        queryset = models.ReferenceGenome.objects.all()
 
         #allow ordering and filtering by all fields
         field_list = models.ReferenceGenome._meta.get_all_field_names()
@@ -1781,6 +1843,15 @@ class PluginResource(ModelResource):
         bucket["version"] = plugin.version
         #not sure if we want this or not, keep it for now
         bucket["config"] = plugin.config
+        #some environment variables are missing for user www-data. grab them here
+        with open('/etc/environment', 'r') as fh:
+            for line in fh:
+                try:
+                    key,arg = line.strip().split('=', 1)
+                    if key in ['no_proxy', 'http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY']:
+                        os.environ[key] = arg
+                except:
+                    pass
 
         module = imp.load_source(plugin.name, os.path.join(plugin.path,"extend.py"))
         #maybe make these classes instead with a set of methods to use
@@ -1797,16 +1868,8 @@ class PluginResource(ModelResource):
             return HttpBadRequest()
 
         # Assumes plugin_name is the same as last component of url. Questionable.
-        url  = data.get("url","")
         filename = data.get("file",False)
-
-        if url:
-            plugin_name = os.path.splitext(os.path.basename(url))[0]
-        elif filename:
-            plugin_name = os.path.splitext(os.path.basename(filename))[0]
-        else:
-            # Must specify either url or filename
-            return HttpBadRequest()
+        plugin_name = os.path.splitext(os.path.basename(filename))[0]
 
         # Create mock plugin object to pass details to downloadPlugin.
         # Do not save(), as we do not know if this is an install or upgrade yet.
@@ -1820,7 +1883,7 @@ class PluginResource(ModelResource):
                                )
 
         #now install the plugin
-        tasks.downloadPlugin.delay(url, plugin, filename)
+        tasks.downloadPlugin.delay(plugin, filename)
 
         # Task run async - return success
         return HttpAccepted()
@@ -2103,10 +2166,16 @@ class PlannedExperimentValidation(Validation):
         barcodedSampleWarnings = []
         barcodedWarnings = []
 
-        # validate required parameters
         isNewPlan=bundle.data.get('isNewPlan', False)
         isTemplate = bundle.data.get('isReusable', False)
-        
+        runType = bundle.data.get("runType", bundle.obj.runType)
+        if 'applicationGroupDisplayedName' in bundle.data:
+            applicationGroupName = bundle.data.get("applicationGroupDisplayedName","")
+        else:
+            applicationGroupName = bundle.obj.applicationGroup.description if bundle.obj.applicationGroup else ""
+
+        # validate required parameters
+
         value = bundle.data.get("planName",'')
         if value or isNewPlan:
             err = plan_validator.validate_plan_name(value)
@@ -2126,6 +2195,7 @@ class PlannedExperimentValidation(Validation):
                 errors["templatingKitName"] = err
 
         # validate optional parameters
+
         for key, value in bundle.data.items():
             err = []
             if key == "sample":
@@ -2149,7 +2219,11 @@ class PlannedExperimentValidation(Validation):
                             barcodedSampleWarnings += [{sample : keyErrMsg % e}]
                         continue
                     get_barcodedSamples = [x.encode('UTF8') for x in get_barcodedSamples]
-                    barcodeId = bundle.data.get("barcodeId","")
+                    if "barcodeId" in bundle.data:
+                        barcodeId = bundle.data.get("barcodeId","")
+                    else:
+                        barcodeId = bundle.obj.latestEAS.barcodeKitName if bundle.obj.latestEAS else ""
+
                     try:
                         barcodeSampleInfo = barcodedSamples[sample]['barcodeSampleInfo']
                     except KeyError, e:
@@ -2158,6 +2232,7 @@ class PlannedExperimentValidation(Validation):
                         else:
                             barcodedSampleWarnings += [{sample : keyErrMsg % e}]
                             barcodeSampleInfo = None
+
                     if barcodeSampleInfo:
                         for barcode in get_barcodedSamples:
                             if barcode:
@@ -2186,18 +2261,14 @@ class PlannedExperimentValidation(Validation):
                                     #validate targetRegionBedFile - Error if invalid / Warning if empty
                                     try:
                                         targetRegionBedFile = barcodedSamples[sample]['barcodeSampleInfo'][barcode]['targetRegionBedFile']
-                                        if targetRegionBedFile:
-                                            if reference:
-                                                runType = bundle.data.get("runType")
-                                                if not isTemplate:
-                                                    err_targetRegionBedFile = plan_validator.validate_targetRegionBedFile_for_runType(targetRegionBedFile,runType,reference)
-                                                    if err_targetRegionBedFile:
-                                                        err_targetRegionBedFile = "".join(err_targetRegionBedFile)
-                                                        eachBarcodeErr.append(err_targetRegionBedFile)
-                                            else:
+                                        if reference:
+                                            if not isTemplate:
+                                                err_targetRegionBedFile = plan_validator.validate_targetRegionBedFile_for_runType(targetRegionBedFile,runType,reference)
+                                                if err_targetRegionBedFile:
+                                                    err_targetRegionBedFile = "".join(err_targetRegionBedFile)
+                                                    eachBarcodeErr.append(err_targetRegionBedFile)
+                                        elif targetRegionBedFile:
                                                 eachBarcodeErr.append("Bed file exists but No Reference")
-                                        if not targetRegionBedFile and reference:
-                                            warnings.append("Barcoded Sample targetRegionBedFile is empty")
                                     except KeyError, e:
                                         if isNewPlan:
                                             eachBarcodeErr.append(keyErrMsg % e)
@@ -2205,7 +2276,7 @@ class PlannedExperimentValidation(Validation):
                                             warnings.append(keyErrMsg)
                                     except Exception, e:
                                         warnings.append(e)
-    
+
                                     #validate hotSpotRegionBedFile - Error if invalid / Warning if empty
                                     try:
                                         hotSpotRegionBedFile = barcodedSamples[sample]['barcodeSampleInfo'][barcode]['hotSpotRegionBedFile']
@@ -2217,8 +2288,6 @@ class PlannedExperimentValidation(Validation):
                                                     eachBarcodeErr.append(err_hotSpotRegionBedFile)
                                             else:
                                                 eachBarcodeErr.append("Hot spot exists but No Reference or Bed File")
-                                        if not hotSpotRegionBedFile and (targetRegionBedFile or reference):
-                                            warnings.append("Barcoded Sample hotSpotRegionBedFile value is empty")
                                     except KeyError, e:
                                         if isNewPlan:
                                             eachBarcodeErr.append(keyErrMsg % e)
@@ -2231,8 +2300,6 @@ class PlannedExperimentValidation(Validation):
                                     try:
                                         nucleotideType = barcodedSamples[sample]['barcodeSampleInfo'][barcode]['nucleotideType']
                                         if nucleotideType:
-                                            applicationGroupName = bundle.data.get("applicationGroupDisplayedName","")
-                                            runType = bundle.data.get("runType", "")
                                             err_nucleotideType, sample_nucleotideType = plan_validator.validate_sample_nucleotideType(nucleotideType, runType, applicationGroupName)
                                             if err_nucleotideType:
                                                 err_nucleotideType = "".join(err_nucleotideType)
@@ -2240,7 +2307,10 @@ class PlannedExperimentValidation(Validation):
                                             if not runType or not applicationGroupName:
                                                 warnings.append("runType or applicationGroup is empty for nucleotideType (%s)" % nucleotideType)
                                         else:
-                                            eachBarcodeErr.append("nucleotideType should not be empty")
+                                            if isNewPlan:
+                                                eachBarcodeErr.append("nucleotideType should not be empty")
+                                            else:
+                                                warnings.append("nucleotideType value is empty")
                                     except KeyError, e:
                                         if isNewPlan:
                                             eachBarcodeErr.append(keyErrMsg % e)
@@ -2257,21 +2327,23 @@ class PlannedExperimentValidation(Validation):
                         err.append({sample : barcodedSampleErrors})
                     if barcodedWarnings:
                         barcodedSampleWarnings += [{sample : barcodedWarnings}]
+            if key == "chipBarcode":
+                err = plan_validator.validate_chipBarcode(value)
             if key == "notes":
                 err = plan_validator.validate_notes(value)
             if key == "flows" and value!="0":
                 err = plan_validator.validate_flows(value)
             if key == "project" or key == "projects":
                 projectNames = value if isinstance(value, basestring) else ','.join(value)
-
                 project_errors, trimmed_projectNames = plan_validator.validate_projects(projectNames)
                 err.extend(project_errors)
             if key == "barcodeId":
                 err = plan_validator.validate_barcode_kit_name(value)
             if key == "sequencekitname":
                 err = plan_validator.validate_sequencing_kit_name(value)
+            if key == "runType":
+                err = plan_validator.validate_runType(value)
             if key == "applicationGroupDisplayedName":
-                runType = bundle.data.get("runType")
                 err = plan_validator.validate_application_group_for_runType(value, runType)
             if key == "sampleGroupingName":
                 err = plan_validator.validate_sample_grouping(value)
@@ -2280,17 +2352,15 @@ class PlannedExperimentValidation(Validation):
             if key == "templatingSize":
                 err = plan_validator.validate_templatingSize(value)
             if key == "bedfile":
-                runType = bundle.data.get("runType")
-                reference = bundle.data.get("library")
-
-                planStatus = bundle.data.get("planStatus")
-
-                applicationGroupDisplayedName = bundle.data.get("applicationGroupDisplayedName", "")
-                if planStatus != "run" and (not isTemplate):            
-                    err = plan_validator.validate_targetRegionBedFile_for_runType(value, runType, reference, "", applicationGroupDisplayedName)
+                if "library" in bundle.data:
+                    reference = bundle.data.get("library")
+                else:
+                    reference = bundle.obj.latestEAS.reference if bundle.obj.latestEAS else ""
+                if reference and not isTemplate:
+                    err = plan_validator.validate_targetRegionBedFile_for_runType(value, runType, reference, "", applicationGroupName)
             if key == "library":
                     err = plan_validator.validate_reference_short_name(value)
-                
+
             if err:
                 errors[key] = err
 
@@ -2369,6 +2439,12 @@ class PlannedExperimentDbResource(ModelResource):
         if filters is None:
             filters = {}
 
+        for key,val in filters.iteritems():
+            if 'chipBarcode' in key and 'experiment__chipBarcode' not in key:
+                # redirect filtering to experiment.chipBarcode field
+                filters[key.replace('chipBarcode', 'experiment__chipBarcode')] = val
+                del filters[key]
+
         filter_platform = filters.get("platform") or filters.get("instrument")
         if 'platform' in filters:
             del filters['platform']
@@ -2441,6 +2517,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     barcodeId = fields.CharField(blank=True, null=True, default='')
     bedfile = fields.CharField(blank=True, default='')
     chipType = fields.CharField(default='')
+    chipBarcode = fields.CharField(default='')
     flows = fields.IntegerField(default=0)
     forward3primeadapter = fields.CharField(blank=True, null=True, default='')
     library = fields.CharField(blank=True, null=True, default='')
@@ -2469,7 +2546,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
     libraryPrepType = fields.CharField(readonly = True, blank=True, null=True)
     libraryPrepTypeDisplayedName = fields.CharField(readonly = True, blank=True, null=True)
-    
+
     platform = fields.CharField(blank=True, null=True)
 
     chefInfo = fields.DictField(default={})
@@ -2482,24 +2559,24 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
     def dispatch_transfer(self, request, **kwargs):
         return self.dispatch('transfer', request, **kwargs)
-    
+
     def get_transfer(self, request, **kwargs):
         # runs on destination TS to update plan-related objects and return any errors
         plan = self.get_object_list(request).get(pk=kwargs["pk"])
         status = update_transferred_plan(plan, request)
-        
+
         return self.create_response(request, status)
-    
+
     def post_transfer(self, request, **kwargs):
         # runs on origin TS to initiate plan transfer
         destination = request.POST.get('destination')
         if not destination:
             return HttpBadRequest('Missing transfer destination')
-    
+
         plan = self.get_object_list(request).get(pk=kwargs["pk"])
         if plan is None:
             return HttpGone()
-        
+
         try:
             # transfer plan to destination
             bundle = self.build_bundle(obj=plan, request=request)
@@ -2519,13 +2596,23 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             experiment = bundle.obj.experiment
             bundle.data['autoAnalyze'] = experiment.autoAnalyze
             bundle.data['chipType'] = experiment.chipType
+            bundle.data['chipBarcode'] = experiment.chipBarcode
             bundle.data['flows'] = experiment.flows
             bundle.data['flowsInOrder'] = experiment.flowsInOrder
             bundle.data['notes'] = experiment.notes
             bundle.data['sequencekitname'] = experiment.sequencekitname
             bundle.data['platform'] = experiment.platform
 
-            latest_eas = bundle.obj.latestEAS
+            # retrieve EAS parameters from specified result or latest object
+            report_pk = bundle.request.GET.get('for_report')
+            if report_pk:
+                try:
+                    latest_eas = experiment.results_set.get(pk=report_pk).eas
+                except:
+                    raise ImmediateHttpResponse(HttpBadRequest('Invalid report pk specified: %s' % report_pk))
+            else:
+                latest_eas = bundle.obj.latestEAS
+
             if not latest_eas:
                 latest_eas = experiment.get_EAS()
 
@@ -2591,7 +2678,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         if sampleSet:
             bundle.data['sampleSetGroupType'] = sampleSet.SampleGroupType_CV.displayedName if sampleSet.SampleGroupType_CV else ""
             bundle.data['libraryPrepType'] = sampleSet.libraryPrepType
-            
+
             if sampleSet.libraryPrepType:
                 allowed_lib_prep_type = sampleSet.ALLOWED_LIBRARY_PREP_TYPES
                 for internalValue, displayedValue in allowed_lib_prep_type:
@@ -2669,6 +2756,8 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     def hydrate_barcodeId(self, bundle):
         if bundle.data.get('barcodeId') and bundle.data['barcodeId'].lower() == "none":
             bundle.data['barcodeId'] = ""
+        if 'barcodeId' in bundle.data:
+            bundle.data['barcodeKitName'] = bundle.data['barcodeId']
         return bundle
 
     def hydrate_bedfile(self, bundle):
@@ -2681,6 +2770,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 if bedfile_path:
                     bundle.data['bedfile'] = bedfile_path
 
+        if 'bedfile' in bundle.data:
             bundle.data['targetRegionBedFile'] = bundle.data['bedfile']
 
         return bundle
@@ -2690,14 +2780,23 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['chipType'] = ""
         return bundle
 
+    def hydrate_forward3primeadapter(self, bundle):
+        if 'forward3primeadapter' in bundle.data:
+            bundle.data['threePrimeAdapter'] = bundle.data['forward3primeadapter']
+        return bundle
+
     def hydrate_library(self,bundle):
         if bundle.data.get('library') and bundle.data['library'].lower() == "none":
             bundle.data['library'] = ""
+        if 'library' in bundle.data:
+            bundle.data['reference'] = bundle.data['library']
         return bundle
 
     def hydrate_librarykitname(self, bundle):
         if bundle.data.get('librarykitname') and bundle.data['librarykitname'].lower() == "none":
             bundle.data['librarykitname'] = ""
+        if 'librarykitname' in bundle.data:
+            bundle.data['libraryKitName'] = bundle.data['librarykitname']
         return bundle
 
     def hydrate_regionfile(self, bundle):
@@ -2710,6 +2809,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 if bedfile_path:
                     bundle.data['regionfile'] = bedfile_path
 
+        if 'regionfile' in bundle.data:
             bundle.data['hotSpotRegionBedFile'] = bundle.data['regionfile']
 
         return bundle
@@ -2760,7 +2860,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         return bundle
 
     def hydrate_metaData(self, bundle):
-        #logger.debug("api.PlannedExperimentResource.hydrate_metaData() metaData=%s" %(bundle.data.get('metaData', "")))        
+        #logger.debug("api.PlannedExperimentResource.hydrate_metaData() metaData=%s" %(bundle.data.get('metaData', "")))
         plan_metaData = bundle.data.get('metaData', "")
         valid = True
         if plan_metaData:
@@ -2793,20 +2893,6 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             if key in bundle.data:
                 bundle.data[key] = toBoolean(bundle.data[key], True)
 
-        #populate renamed fields
-        if 'barcodeId' in bundle.data:
-            bundle.data['barcodeKitName'] = bundle.data['barcodeId']
-        if 'bedfile' in bundle.data:
-            bundle.data['targetRegionBedFile'] = bundle.data['bedfile']
-        if 'forward3primeadapter' in bundle.data:
-            bundle.data['threePrimeAdapter'] = bundle.data['forward3primeadapter']
-        if 'library' in bundle.data:
-            bundle.data['reference'] = bundle.data['library']
-        if 'regionfile' in bundle.data:
-            bundle.data['hotSpotRegionBedFile'] = bundle.data['regionfile']
-        if 'librarykitname' in bundle.data:
-            bundle.data['libraryKitName'] = bundle.data['librarykitname']
-        
         applicationGroupDisplayedName = bundle.data.get('applicationGroupDisplayedName', "")
 
         if applicationGroupDisplayedName:
@@ -2871,7 +2957,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         # validate plan bundle
         self.is_valid(bundle)
-        
+
         # Save FKs just in case.
         self.save_related(bundle)
 
@@ -2892,11 +2978,11 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
 
     def obj_update( self, bundle, **kwargs ):
-        
+
         bundle = super(PlannedExperimentResource, self).obj_update(bundle, **kwargs)
-        
+
         logger.debug("PlannedExperimentResource.obj_update() bundle.data=%s" % bundle.data)
-        
+
         bundle.obj.save_plannedExperiment_association(False, **bundle.data)
         return bundle
 
@@ -3241,7 +3327,9 @@ class TorrentSuite(ModelResource):
         urls = [url(r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()),
                     self.wrap_view('dispatch_update'), name="api_dispatch_update"),
                 url(r"^(?P<resource_name>%s)/version%s$" % (self._meta.resource_name, trailing_slash()),
-                    self.wrap_view('dispatch_version'), name="api_dispatch_version")
+                    self.wrap_view('dispatch_version'), name="api_dispatch_version"),
+                url(r"^(?P<resource_name>%s)/sgejobs%s$" % (self._meta.resource_name, trailing_slash()),
+                    self.wrap_view('dispatch_sgejobs'), name="api_dispatch_sgejobs")
         ]
 
         return urls
@@ -3251,6 +3339,9 @@ class TorrentSuite(ModelResource):
 
     def dispatch_version(self, request, **kwargs):
         return self.dispatch('version', request, **kwargs)
+
+    def dispatch_sgejobs(self, request, **kwargs):
+        return self.dispatch('sgejobs', request, **kwargs)
 
     def get_update(self, request, **kwargs):
 
@@ -3277,12 +3368,31 @@ class TorrentSuite(ModelResource):
         ret = {'meta_version':version}
         return self.create_response(request, ret)
 
+    def get_sgejobs(self, request, **kwargs):
+        cmd = "qstat -u '*' | awk 'NR>2 {print $4, $5}'"
+        p = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+        stdout = p.stdout.readlines()
+        ret = {
+            "total_jobs" : len(stdout),
+            "analysis_jobs"   : 0,
+            "plugin_jobs"    : 0,
+            "pending_jobs"    : 0
+        }
+        for line in stdout:
+            user, state = line.split()
+            if user == "www-data": ret['analysis_jobs'] +=1
+            if user == "ionian": ret['plugin_jobs'] +=1
+            if state in ["qw", "hqw"]: ret['pending_jobs'] +=1
+
+        return self.create_response(request, ret)
+
     class Meta:
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
         update_allowed_methods = ['get', 'put']
         version_allowed_methods = ['get']
+        sgejobs_allowed_methods = ['get']
 
     def get_schema(self, request, **kwargs):
         schema = {
@@ -3388,7 +3498,7 @@ class ContentUploadResource(ModelResource):
         meta = bundle.data.get('meta')
         if meta:
             bundle.data['upload_date'] = meta.get('upload_date')
-        
+
         return bundle
 
     class Meta:
@@ -3632,7 +3742,7 @@ class ActiveIonChefLibraryPrepKitInfoResource(ModelResource):
         filtering = {'kitType' : ['LibraryPrepKit'] }
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
-        
+
 class LibraryKitInfoResource(ModelResource):
     parts = fields.ToManyField('iondb.rundb.api.KitPartResource', 'kitpart_set', full=True)
 
@@ -3851,6 +3961,11 @@ class CompositeQualityMetricsResource(ModelResource):
         authorization = DjangoAuthorization()
 
 class CompositeExperimentAnalysisSettingsResource(ModelResource):
+
+    def dehydrate(self, bundle):
+        bundle.data['references'] = 'Multiple references' if len(bundle.obj.barcoded_samples_reference_names) > 1 else bundle.obj.reference
+        return bundle
+
     class Meta:
         queryset = models.ExperimentAnalysisSettings.objects.all()
         fields = ['reference', 'barcodeKitName']
@@ -4018,7 +4133,7 @@ class ClusterInfoHistoryResource(ModelResource):
 
     def dehydrate(self, bundle):
         text = bundle.data['text'].split('<br>')
-        if len(text)>0:
+        if len(text)>1:
             bundle.data['state'] = text[0].split()[-1]
             bundle.data['error'] = text[1][7:] if text[1].startswith('Error:') else ''
             for line in text[2:]:
@@ -4027,6 +4142,8 @@ class ClusterInfoHistoryResource(ModelResource):
                     bundle.data[k.strip()] = v.strip()
                 except:
                     pass
+        else:
+            bundle.data['error'] = '[%s] %s' % (bundle.obj.username, ','.join(text))
         return bundle
 
     def apply_filters(self, request, applicable_filters):
@@ -4243,20 +4360,25 @@ class CompositeExperimentResource(ModelResource):
             bundle.data['sample'] = samples[0].name if samples else ""
             bundle.data['sampleDisplayedName'] = samples[0].displayedName if samples else ""
 
-        if bundle.data['results']:
+        eas = None
+        if bundle.obj.plan and bundle.obj.plan.latestEAS:
+            eas = bundle.obj.plan.latestEAS
+        elif bundle.data['results']:
             eas = bundle.data['results'][0].obj.eas
-            if eas:
-                bundle.data['barcodeId'] = eas.barcodeKitName
-                bundle.data['library'] = eas.reference
-                bundle.data['barcodedSamples'] = eas.barcodedSamples
-        else:
-            bundle.data['barcodedSamples'] = bundle.obj.plan.latestEAS.barcodedSamples if bundle.obj.plan.latestEAS else ''
 
+        if eas:
+            bundle.data['barcodeId'] = eas.barcodeKitName
+            bundle.data['library'] = eas.reference
+            bundle.data['barcodedSamples'] = eas.barcodedSamples
+            bundle.data['references'] = ', '.join(eas.barcoded_samples_reference_names) if eas.barcoded_samples_reference_names else eas.reference
+
+        '''
         try:
             dmfilestat = bundle.obj.results_set.all()[0].get_filestat(dmactions_types.SIG)
             bundle.data['archived'] = False if not dmfilestat.isdisposed() else dmfilestat.get_action_state_display()
         except:
             bundle.data['archived'] = False
+        '''
         bundle.data['keep'] = bundle.obj.storage_options == 'KI'
 
         if bundle.obj.plan:
@@ -4358,6 +4480,7 @@ class CompositeExperimentResource(ModelResource):
     class Meta:
         queryset = models.Experiment.objects.select_related(
             'plan',
+            'plan__latestEAS',
             'repResult'
         ).prefetch_related(
             'results_set',
@@ -4660,6 +4783,8 @@ class NetworkResource(ModelResource):
         return HttpResponse(json.dumps(schema), content_type="application/json")
 
 class AnalysisArgsResource(ModelResource):
+    creator = fields.ToOneField(UserResource, 'creator', null=True, full=True)
+    lastModifiedUser = fields.ToOneField(UserResource, 'lastModifiedUser', null=True, full=True)
 
     def prepend_urls(self):
         return [
@@ -4667,26 +4792,25 @@ class AnalysisArgsResource(ModelResource):
         ]
 
     def get_args(self, request, **kwargs):
-        # function for OIA to retrieve default args with or without Plan specified
+        # function to retrieve analysis args with or without Plan specified
         planGUID = request.GET.get('planGUID', None)
-        plan = None
-        if planGUID:
-            try:
-                plan = models.PlannedExperiment.objects.filter(planGUID=planGUID)[0]
-            except IndexError:
-                pass
-
-        if not plan:
-            # get system default template in the same way crawler would do it
-            chipType = request.GET.get('chipType', None)
+        chipType = request.GET.get('chipType', None)
+        args = {}
+        try:
+            plan = models.PlannedExperiment.objects.filter(planGUID=planGUID)[0]
+        except IndexError:
+            # get system default template
             plan = models.PlannedExperiment.get_latest_plan_or_template_by_chipType(chipType)
             if not plan:
                 plan = models.PlannedExperiment.get_latest_plan_or_template_by_chipType()
-
-        if plan:
-            args = plan.get_default_cmdline_args(**request.GET.dict())
+            if plan:
+                args = plan.get_default_cmdline_args(**request.GET.dict())
         else:
-            args = {}
+            eas = plan.latest_eas
+            if eas.custom_args:
+                args = eas.get_cmdline_args()
+            else:
+                args = plan.get_default_cmdline_args(**request.GET.dict())
 
         return self.create_response(request, args)
 

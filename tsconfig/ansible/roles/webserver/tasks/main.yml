@@ -5,7 +5,7 @@
   include: '../../../globals.yml'
 
 - name: Install packages for webserver
-  apt: name={{ item }} state=latest force=yes
+  apt: name={{ item }} state=present force=yes
   with_items:
     - apache2-mpm-prefork
     - apache2

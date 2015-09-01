@@ -15,10 +15,12 @@ from iondb.rundb.plan.page_plan.output_step_data import OutputStepData
 from iondb.rundb.plan.page_plan.ionreporter_step_data import IonreporterStepData
 from iondb.rundb.plan.page_plan.save_template_step_data import SaveTemplateStepData
 from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanStepData, SavePlanFieldNames
-from iondb.rundb.plan.page_plan.barcode_by_sample_step_data import BarcodeBySampleStepData
+from iondb.rundb.plan.page_plan.barcode_by_sample_step_data import BarcodeBySampleStepData, BarcodeBySampleFieldNames
 #from iondb.rundb.plan.page_plan.output_by_sample_step_data import OutputBySampleStepData
 from iondb.rundb.plan.page_plan.save_plan_by_sample_step_data import SavePlanBySampleStepData
 from iondb.rundb.plan.page_plan.save_template_by_sample_step_data import SaveTemplateBySampleStepData
+from iondb.rundb.plan.page_plan.analysis_params_step_data import AnalysisParamsStepData
+
 from iondb.rundb.plan.page_plan.step_names import StepNames
 
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
@@ -60,45 +62,54 @@ class StepHelper(object):
         if sh_type == StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE or sh_type == StepHelperType.EDIT_PLAN_BY_SAMPLE or sh_type == StepHelperType.COPY_PLAN_BY_SAMPLE:
             referenceStepData = ReferenceStepData(sh_type)
             barcodeBySampleStepData = BarcodeBySampleStepData(sh_type)
+            analysisParamsStepData = AnalysisParamsStepData(sh_type)
             
             steps_list = [IonreporterStepData(sh_type), ApplicationStepData(sh_type), KitsStepData(sh_type),
-                      referenceStepData, PluginsStepData(sh_type), barcodeBySampleStepData, 
+                      referenceStepData,  analysisParamsStepData, PluginsStepData(sh_type), barcodeBySampleStepData, 
                       OutputStepData(sh_type), SavePlanBySampleStepData(sh_type)]
             
             #some section can appear in multiple chevrons, key is the step name and value is the step_data object
             barcodeBySampleStepData.step_sections.update({StepNames.REFERENCE : referenceStepData})
+            barcodeBySampleStepData.step_sections.update({StepNames.ANALYSIS_PARAMS : analysisParamsStepData})
             
         elif sh_type == StepHelperType.CREATE_NEW_TEMPLATE_BY_SAMPLE:            
             referenceStepData = ReferenceStepData(sh_type)
-            saveTemplateBySampleData = SaveTemplateBySampleStepData(sh_type)
+            saveTemplateBySampleData = SaveTemplateBySampleStepData(sh_type)        
+            analysisParamsStepData = AnalysisParamsStepData(sh_type)
             
             steps_list = [IonreporterStepData(sh_type), ApplicationStepData(sh_type), KitsStepData(sh_type),
-                      referenceStepData, PluginsStepData(sh_type), 
+                      referenceStepData,  analysisParamsStepData, PluginsStepData(sh_type), 
                       OutputStepData(sh_type), saveTemplateBySampleData]     
             
             saveTemplateBySampleData.step_sections.update({StepNames.REFERENCE : referenceStepData})            
+            saveTemplateBySampleData.step_sections.update({StepNames.ANALYSIS_PARAMS : analysisParamsStepData})
 
         elif sh_type == StepHelperType.COPY_TEMPLATE or sh_type == StepHelperType.CREATE_NEW_TEMPLATE or sh_type == StepHelperType.EDIT_TEMPLATE:            
             referenceStepData = ReferenceStepData(sh_type)
             saveTemplateStepData = SaveTemplateStepData(sh_type)
+            analysisParamsStepData = AnalysisParamsStepData(sh_type)
             
             steps_list = [IonreporterStepData(sh_type), ApplicationStepData(sh_type), KitsStepData(sh_type),
-                      referenceStepData, PluginsStepData(sh_type), OutputStepData(sh_type),
+                      referenceStepData, analysisParamsStepData, PluginsStepData(sh_type), OutputStepData(sh_type),
                       saveTemplateStepData]  
               
             saveTemplateStepData.step_sections.update({StepNames.REFERENCE : referenceStepData})
+            saveTemplateStepData.step_sections.update({StepNames.ANALYSIS_PARAMS : analysisParamsStepData})
+            
         else:
 
             referenceStepData = ReferenceStepData(sh_type)
             #SaveTemplateStepData is needed for the last chevron during plan creation 
             saveTemplateStepData = SaveTemplateStepData(sh_type)
             savePlanStepData = SavePlanStepData(sh_type)
+            analysisParamsStepData = AnalysisParamsStepData(sh_type)
 
             steps_list = [IonreporterStepData(sh_type), ApplicationStepData(sh_type), KitsStepData(sh_type),
-                      referenceStepData, PluginsStepData(sh_type), OutputStepData(sh_type),
+                      referenceStepData, analysisParamsStepData, PluginsStepData(sh_type), OutputStepData(sh_type),
                       saveTemplateStepData, savePlanStepData]  
 
             savePlanStepData.step_sections.update({StepNames.REFERENCE : referenceStepData})            ###referenceStepData.sectionParentStep = savePlanStepData
+            savePlanStepData.step_sections.update({StepNames.ANALYSIS_PARAMS : analysisParamsStepData})
             
         for step in steps_list:
             self.steps[step.getStepName()] = step
@@ -259,7 +270,7 @@ class StepHelper(object):
         return self.getApplProduct().isControlSeqTypeBySampleSupported
     
     def isReferenceBySample(self):
-        return self.getApplProduct().isReferenceBySampleSupported
+        return self.getApplProduct().isReferenceBySampleSupported and self.getApplProduct().isReferenceSelectionSupported
     
     def isDualNucleotideTypeBySample(self):
         return self.getApplProduct().isDualNucleotideTypeBySampleSupported
@@ -278,6 +289,42 @@ class StepHelper(object):
     def getNucleotideTypeList(self):
         return ["", "DNA", "RNA"]
     
+    def getIruQcUploadModeList(self):
+        iruQcUploadModes = {"Manual":"manual_check", "None":"no_check"}
+        return iruQcUploadModes
+
+    def hasPgsData(self):
+        if self.isTemplate():
+            return False
+        if self.isPlanBySample():
+            step = self.steps.get(StepNames.BARCODE_BY_SAMPLE, None)
+            if step:
+                return step.prepopulatedFields[BarcodeBySampleFieldNames.HAS_PGS_DATA] 
+        else:
+            step = self.steps.get(StepNames.SAVE_PLAN, None)
+            if step:
+                return step.prepopulatedFields[SavePlanFieldNames.HAS_PGS_DATA] 
+        return False
+        
+
+    def hasOncoData(self):
+        if self.isTemplate():
+            return False
+
+        categories = self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.CATEGORIES]
+        if "Oncomine" in categories or "Onconet" in categories:
+            return True
+
+        if self.isPlanBySample():
+            step = self.steps.get(StepNames.BARCODE_BY_SAMPLE, None)
+            if step:
+                return step.prepopulatedFields[BarcodeBySampleFieldNames.HAS_ONCO_DATA] 
+        else:
+            step = self.steps.get(StepNames.SAVE_PLAN, None)
+            if step:
+                return step.prepopulatedFields[SavePlanFieldNames.HAS_ONCO_DATA] 
+        return False
+
 
     def getSelectedApplicationGroupName(self):
         #logger.debug("ENTER getSelectedApplicationGroupName...self.steps[StepNames.APPLICATION].savedFields=%s" %(self.steps[StepNames.APPLICATION].savedFields))

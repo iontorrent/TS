@@ -47,7 +47,7 @@ class Validateimage(Utility):
 
             self.imageArray=[]
             if "content" in self.section and self.section["content"]:
-                if isinstance(self.section["content"][1],types.DictType):
+                if isinstance(self.section["content"][0],types.DictType):
                     logging.debug("Image block - Dictionary Type")
                     for image in self.section["content"]:
                         if os.path.isfile(os.path.join(self.results_dir, image["source"])):
@@ -75,10 +75,10 @@ class Validateimage(Utility):
 
                             self.imageArray.append(imageJson)
                         else:
-                            logging.error("Image %s does not exist" % image["source"])
+                            logging.error("Image %s does not exist" % os.path.join(self.results_dir, image["source"]))
                     self.section["content"] = self.imageArray
 
-                elif isinstance(self.section["content"][1],types.UnicodeType):
+                elif isinstance(self.section["content"][0],types.UnicodeType):
                     logging.debug("Image block - List Type")
                     for images in self.section["content"]:
                         if os.path.isfile(os.path.join(self.results_dir, images)):
@@ -100,7 +100,7 @@ class Validateimage(Utility):
                         imageJson = {}
                         print image
                         imageJson["source"] = os.path.join(self.url_root,"plugin_out",os.path.basename(self.results_dir),os.path.basename(image))
-                        imageJson["caption"] =""
+                        imageJson["caption"] = os.path.basename(image)
                         self.imageArray.append(imageJson)
                     self.section["content"] = self.imageArray
                     logging.debug("Found images %s in results directory" % self.section["content"])

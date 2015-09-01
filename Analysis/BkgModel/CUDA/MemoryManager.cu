@@ -110,10 +110,12 @@ void MemSegment::copyOutSubSet(void * dst, size_t srcOffset, size_t size )
 {
   if(size == 0)
     size = _size - srcOffset; // if size == 0 copy from srcOffset to end of buffer
-  cudaMemcpy(dst,_basePointer + srcOffset ,checkSize(srcOffset+size),getCopyOutKind());
+
+  //cout << "cudaMemcpy( " << dst <<", " <<(void*)_basePointer << " + " <<  srcOffset << ", " <<  "checkSize(" << srcOffset << " + " <<  size  << " ),getCopyOutKind())" << endl;
+  cudaMemcpy(dst,(void*)(_basePointer + srcOffset) ,checkSize(srcOffset+size),getCopyOutKind());
+
   CUDA_ERROR_CHECK();
 }
-
 
 
 void MemSegment::copyAsync (const MemSegment& src, cudaStream_t sid, size_t size)

@@ -143,7 +143,7 @@
       </div>
       <div id="release_memo">
         <h3>Torrent Suite Release Notes</h3>
-        <p>Please check the Release Notes on the <a href="http://ioncommunity.lifetechnologies.com/welcome">Ion Community</a> for more details.</p>
+        <p>Please check the Release Notes on the <a href="http://ioncommunity.thermofisher.com/welcome">Ion Community</a> for more details.</p>
         <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
       </div>
     </div>  <!--END update_control-->
@@ -325,6 +325,9 @@
             $.post("/admin/update/version_lock/enable_lock");
           else
             $.post("/admin/update/version_lock/disable_lock");
+          setTimeout(function(){
+                window.location.reload(true);
+              }, 1000);
         }
       });
 

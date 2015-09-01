@@ -13,17 +13,8 @@ import re
 import getopt
 
 # Django related import
-from iondb.bin.djangoinit import *
+os.environ['DJANGO_SETTINGS_MODULE'] = "iondb.settings"
 from iondb.rundb import models
-
-# use default crawler functions
-import crawler
-
-
-class BatchAnalysisLog(crawler.CrawlLog):
-    BASE_LOG_NAME = "startanal.log"
-
-logger = BatchAnalysisLog(False)
 
 
 def get_default_analysis(exp):
@@ -43,11 +34,8 @@ def get_default_analysis(exp):
         return 'Analysis'
 
 
-def get_build_number(exp):
+def get_build_number(analysis_arg):
     """get Analysis build number"""
-
-    # analysis args does not always start with "Analysis"
-    analysis_arg = get_default_analysis(exp)
 
     p = os.popen("%s --version" % analysis_arg)
     for line in p:
@@ -69,12 +57,12 @@ def get_report_timestamp(timestring=None):
     return timestamp
 
 
-def generate_report_name(exp, timestring, ebr, gpu, note):
+def generate_report_name(exp, timestring, ebr, gpu, note, analysis_arg):
     """ report name: <exp name>_<build num>_<time stamp>_<ebr>_<gpu>_<note>"""
 
     report_name = '%s_%s_%s_%s_%s' % (
         exp.pretty_print_no_space(),
-        get_build_number(exp),
+        get_build_number(analysis_arg),
         get_report_timestamp(timestring),
         ebr, gpu)
 
@@ -106,12 +94,9 @@ def generate_post(run_name, timestamp, ebrOpt, gpu, note):
     elif int(gpu) == 1:
         gpuArgs = ' --gpuWorkLoad 1'
         gpuStr = 'GPU'
-    elif int(gpu) == 10:
-        gpuArgs = ' --wells-save-as-ushort true --gpuWorkLoad 0'
-        gpuStr = 'noGPU_newWells'
-    elif int(gpu) == 11:
-        gpuArgs = ' --wells-save-as-ushort true --gpuWorkLoad 1'
-        gpuStr = 'GPU_newWells'
+    elif int(gpu) == 2:
+        gpuArgs = ' --sigproc-compute-flow 20,20:1 --gpu-flow-by-flow true --gpuWorkLoad 1'
+        gpuStr = 'GPU_newPipeline'
     else:
         gpuArgs = ''
         gpuStr = ''
@@ -134,28 +119,46 @@ def generate_post(run_name, timestamp, ebrOpt, gpu, note):
         exp.plan.save()
 
     # reset the args to latest values
-    for key,value in args.items():
+    for key, value in args.items():
         setattr(eas, key, value)
 
     # set analysis args
     if doThumbnail == 'False':
+        beadfindargs = args['beadfindargs']
         analysisargs = args['analysisargs']
     else:
+        beadfindargs = args['thumbnailbeadfindargs']
         analysisargs = args['thumbnailanalysisargs']
 
+    # replace binary
+    """
+    beadfindargs = re.sub(
+        'justBeadFind',
+        '/results/justBeadFind.915d576',
+        beadfindargs)
+    analysisargs = re.sub(
+        'Analysis',
+        '/results/Analysis.915d576',
+        analysisargs)
+    """
+
+    # replace Analysis args
     m = re.search("--gpuWorkLoad.{2}", analysisargs)
     if m:
         newArgs = re.sub(m.group(0), gpuArgs, analysisargs)
     else:
         newArgs = analysisargs + gpuArgs
 
+    # save the analysis back
     if doThumbnail == "False":
+        eas.beadfindargs = beadfindargs
         eas.analysisargs = newArgs
     else:
+        eas.thumbnailbeadfindargs = beadfindargs
         eas.thumbnailanalysisargs = newArgs
     eas.save()
 
-    report_name = generate_report_name(exp, timestamp, ebrStr, gpuStr, note)
+    report_name = generate_report_name(exp, timestamp, ebrStr, gpuStr, note, newArgs)
 
     params = urllib.urlencode({'report_name': report_name,
                                'path': exp.expDir,

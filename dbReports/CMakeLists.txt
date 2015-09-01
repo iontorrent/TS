@@ -55,7 +55,6 @@ add_custom_target(compileall ALL
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/../buildTools/terms-of-use.txt" DESTINATION /var/www/licenses)
-install(FILES "${PROJECT_SOURCE_DIR}/iondb/media/TorrentServerSplash.jpg" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/media/favicon.ico" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/index.html" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/docsnotfound.html" DESTINATION /var/www)
@@ -71,7 +70,6 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "ionCrawler" EXCLUDE
     PATTERN "ionJobServer" EXCLUDE
     PATTERN "ionPlugin" EXCLUDE
-    PATTERN "media/TorrentServerSplash.jpg" EXCLUDE
     PATTERN "media/favicon.ico" EXCLUDE
     PATTERN "media/Makefile" EXCLUDE
     PATTERN "iondb/media/resources/kendo/examples/" EXCLUDE
@@ -82,6 +80,7 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "iondb/docsnotfound.html" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
     PATTERN "*.pyo" EXCLUDE
+    PATTERN "iondb/rundb/tests" EXCLUDE
 	PATTERN "iondb/backup" EXCLUDE
 )
 install(DIRECTORY DESTINATION /var/spool/ion DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
@@ -161,7 +160,6 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     texlive-latex-extra,
     latex-xcolor,
     pdftk,
-    zeroinstall-injector (>= 1.5),
     postgresql,
     php5,
     libapache2-mod-wsgi (>= 3.3),

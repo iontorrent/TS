@@ -136,7 +136,7 @@ function get_filter_rules()
     input_file=$1
     if [ -e $input_file ]; then
         TMPFILE=$(mktemp)
-        sed -n '/^*filter/,/COMMIT/p' $input_file
+        sed -n '/^*filter/,/COMMIT/p' $input_file > $TMPFILE
         echo $TMPFILE
     fi
 }

@@ -62,11 +62,14 @@ case "$1" in
     mkdir -p /var/log/ion
     chmod a+w /var/log/ion
     
-    # remove the previous entry
+    # remove the entries
     sed -i '/.*TSchkconfig.*/d' /etc/rc.local
+    sed -i '/qdel.*/d' /etc/rc.local
     sed -i '/clear/d' /etc/rc.local
-    # make sure clear is AFTER TSchkconfig
+    
     sed -i 's:^exit 0.*:/usr/sbin/TSchkconfig\n&:' /etc/rc.local
+    sed -i 's:^exit 0.*:qdel -u \"\*\" 2>\&1 > /tmp/qdel_out.startup\n&:' /etc/rc.local
+    # make sure clear is last before exit 0
     sed -i 's:^exit 0.*:clear\n&:' /etc/rc.local
     
     # Add hostname to ansible hosts definition file

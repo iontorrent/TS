@@ -1,0 +1,3 @@
+This plugin is used to Identify samples by gender and SNP markers, producing a 'unique' identification code ('sample ID') composed of the identified human sample gender and a number of specific (high frequency) allele calls for each barcode. This plugin assumes the run was made for an AmpliSeq library with additional sample tracking primers added. 
+
+Author: Guy Del Mistro

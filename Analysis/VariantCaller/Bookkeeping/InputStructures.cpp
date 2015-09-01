@@ -11,7 +11,11 @@
 InputStructures::InputStructures()
 {
   DEBUG = 0;
+#ifdef __SSE3__
   use_SSE_basecaller  = true;
+#else
+  use_SSE_basecaller  = false;
+#endif
   resolve_clipped_bases = false;
 }
 
@@ -35,20 +39,30 @@ void InputStructures::Initialize(ExtendParameters &parameters, const ReferenceRe
     cout << "Loaded." << endl;
   }
 
-  // Load homopolymer recalibration model from file if the option was specified
+  // Load homopolymer recalibration model from file if the command line option was specified
   // why is recal model using the command line directly? <-- Because the basecaller module is programmed that way.
   // initialize only if there's a model file
   if (parameters.recal_model_file_name.length()>0){
-    do_recal.recalModel.InitializeModel(parameters.recal_model_file_name, parameters.recalModelHPThres);
-    do_recal.use_recal_model_only = true;
-    do_recal.is_live = do_recal.recalModel.is_enabled();
+
+    // We only allow the use of a command line txt file calibration model if there is a single run id
+    if (num_flows_by_run_id.size() == 1) {
+
+      do_recal.recalModel.InitializeModelFromTxtFile(parameters.recal_model_file_name, parameters.recalModelHPThres, num_flows_by_run_id.begin()->second);
+      do_recal.use_recal_model_only = true;
+      do_recal.is_live = do_recal.recalModel.is_enabled();
+    }
+    else{
+      cerr << "TVC WARNING: Cannot initialize calibration model from text file for multiple run ids. " << endl;
+      do_recal.is_live = false;
+      do_recal.recalModel.disable();
+    }
   }
 
   // finally turn off recalibration if not wanted
   // even though we have a nice set of recalibration read-in.
   if (parameters.program_flow.suppress_recalibration) {
     printf("Recalibration model: suppressed\n");
-    do_recal.recalModel.suppressEnabled();
+    do_recal.recalModel.disable();
     do_recal.is_live = false;
   }
 }
@@ -243,14 +257,19 @@ void RecalibrationHandler::ReadRecalibrationFromComments(const SamHeader &samHea
     int y_coord = atoi(my_block_key.substr(y_loc+2, my_block_key.size()-y_loc+2).c_str());
 
     // Protection against not having a flow order for a specified recalibration run id
-    if (max_flows_by_run_id.find(runid) == max_flows_by_run_id.end()) {
+    std::map<string, int>::const_iterator n_flows = max_flows_by_run_id.find(runid);
+    if (n_flows == max_flows_by_run_id.end()) {
       cerr << "TVC ERROR: Recalibration information found for run id " << runid
     	   << " but there is no matching read group with this run id in the bam header." << endl;
       exit(EXIT_FAILURE);
     }
 
-    recalModel.InitializeFromJSON(recal_params, my_block_key, false, max_flows_by_run_id.at(runid));
-    bam_header_recalibration.insert(pair<string,RecalibrationModel>(my_block_key, recalModel));
+    //recalModel.InitializeFromJSON(recal_params, my_block_key, false, max_flows_by_run_id.at(runid));
+    // void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &my_block_key, bool spam_enabled, int over_flow_protect) {
+    // The calibration comment line contains  info about the hp threshold used during base calling, so set to zero here
+    // XXX FIXME: The number of flows in the TVC group can be larger than the one specified in the calibration block.
+    recalModel.InitializeModelFromJson(recal_params, n_flows->second);
+    bam_header_recalibration.insert(pair<string,LinearCalibrationModel>(my_block_key, recalModel));
     block_hash.insert(pair<string, pair<int,int > >(runid,pair<int,int>(x_coord,y_coord)));
     is_live = true; // found at least one recalibration entry
   }
@@ -272,7 +291,7 @@ void RecalibrationHandler::getAB(MultiAB &multi_ab, const string &found_key, int
         recalModel.getAB(multi_ab,x,y);
     else {
       // found_key in map to get iterator
-      map<string, RecalibrationModel>::const_iterator it;
+      map<string, LinearCalibrationModel>::const_iterator it;
       it = bam_header_recalibration.find(found_key);
       if (it!=bam_header_recalibration.end()){ 
         it->second.getAB(multi_ab, x, y);
@@ -290,6 +309,7 @@ void RecalibrationHandler::getAB(MultiAB &multi_ab, const string &found_key, int
 PersistingThreadObjects::PersistingThreadObjects(const InputStructures &global_context)
     : use_SSE_basecaller(global_context.use_SSE_basecaller), realigner(50, 1)
 {
+#ifdef __SSE3__
     if (use_SSE_basecaller) {
 	  for (unsigned int iFO=0; iFO < global_context.flow_order_vector.size(); iFO++){
         TreephaserSSE     treephaser_sse(global_context.flow_order_vector.at(iFO), DPTreephaser::kWindowSizeDefault_);
@@ -297,11 +317,14 @@ PersistingThreadObjects::PersistingThreadObjects(const InputStructures &global_c
       }
     }
     else {
+#endif
       for (unsigned int iFO=0; iFO < global_context.flow_order_vector.size(); iFO++){
         DPTreephaser      dpTreephaser(global_context.flow_order_vector.at(iFO));
         dpTreephaser_vector.push_back(dpTreephaser);
       }
+#ifdef __SSE3__
     }
+#endif
 };
 
 // ------------------------------------------------------------------------------------

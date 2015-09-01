@@ -246,8 +246,7 @@ size_t LayoutCubeWithRegions<T>::getRegH(size_t regId){size_t b = this->getDimY(
 
 template<typename T>
 ImgRegParams LayoutCubeWithRegions<T>::getParams() const {
-  ImgRegParams tmp;
-  tmp.init(this->getDimX(), this->getDimY(), _regWidth, _regHeight);
+  ImgRegParams tmp(this->getDimX(), this->getDimY(), _regWidth, _regHeight);
   return tmp;
 }
 
@@ -504,7 +503,7 @@ float LayoutCubeWithRegions<T>::getStdDevReg(size_t regId, size_t plane, float a
 // P has to provide << and == or a compare(P,P) function pointer
 //limit will limit the comparison to #limit base elements and
 //num  > 1 will compare num elements of type P starting from offsetBytes from a T element at regId,x,y,z
-//if a mask is provided it will only be appalled to the base coordinates designated by the stride of an entry.
+//if a mask is provided it will only be applied to the base coordinates designated by the stride of an entry.
 //the mask will not be evaluated for elements designated by offset or num entries from the base coordinate
 /*template <typename P>
   bool compare( LayoutCubeWithRegions<T> & that,

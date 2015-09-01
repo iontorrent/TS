@@ -9,7 +9,7 @@ from ion.plugin import *
 
 class RNASeqAnalysis(IonPlugin):
   '''Run the RNASeq pipeline.'''
-  version = "4.6.0.8"
+  version = '5.0.0.2'
   major_block = True
   allow_autorun = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]

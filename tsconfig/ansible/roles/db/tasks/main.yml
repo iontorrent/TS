@@ -5,7 +5,7 @@
   include: '../../../globals.yml'
   
 - name: Install postgresql package
-  apt: pkg=postgresql state=latest
+  apt: pkg=postgresql state=present
   
 - name: Need python-psycopg2
   apt: name=python-psycopg2 state=installed force=yes
@@ -70,7 +70,7 @@
 - name: Modify db filepath for S5 TSVM
   lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
                 regexp='^data_directory.*'
-                line='data_directory = \'/results/postgresql/{{ psql_version.stdout }}/main\''
+                line="data_directory = '/results/postgresql/{{ psql_version.stdout }}/main'"
   when: S5_virtual_guest|bool == True
   
 # TS-10551.  Stock max connections of 100 is too low.

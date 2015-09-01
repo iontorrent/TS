@@ -17,6 +17,9 @@ set(CPACK_SET_DESTDIR "ON")
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/BED" DESTINATION "publishers"
     USE_SOURCE_PERMISSIONS )
 
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/refAnnot" DESTINATION "publishers"
+    USE_SOURCE_PERMISSIONS )
+
 configure_file (
         "${PROJECT_SOURCE_DIR}/debian/preinst.in"
        "${PROJECT_BINARY_DIR}/debian/preinst" @ONLY

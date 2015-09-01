@@ -82,6 +82,7 @@ change_pipetype = function () {
     
     $("#id_blockArgs").val(type);
     show_warning();
+    cmdline_args_display();
 };
 
 show_warning = function(){
@@ -279,4 +280,45 @@ $("#plugin_config_save").click(function(){
 $("#plugin_config_cancel").click(function(){
     $("#plugin_config").hide();
     $("#plugin_iframe").attr("src", "");
+});
+
+// ***************************** AnalysisArgs ********************************
+cmdline_args_display = function(){
+    var default_args = $('[name=args_choice]:checked').val() == "default";
+    $('#cmdline_args').each(function(){
+        $(this).find('input, textarea').attr("readonly", default_args);
+        $(this).find('select').attr("disabled", default_args);
+    });
+}
+
+$("#analysisargs_select").change(function(){
+    var val = $(this).val();
+    if (val){
+        $('.args').each(function(){
+            var name = $(this).attr('name').toLowerCase();
+            $(this).val( ANALYSISARGS[val][name] );
+        });
+    }
+});
+
+$('[name=args_choice]').change(function(){
+    if (this.value == 'default'){
+        $('#id_custom_args').val('False');
+        $("#analysisargs_select .best_match").prop('selected',true).change();
+    }else{
+        $('#id_custom_args').val('True');
+        if ($('#cmdline_args').hasClass('out')){
+            $('#cmdline_args').removeClass('out').addClass('in');
+            $('.showargs').removeClass('icon-plus').addClass('icon-minus');
+        }
+    }
+    cmdline_args_display();
+});
+
+$('#cmdline_args textarea').on('change keypress paste', function(){
+    $("#analysisargs_select").val('');
+});
+
+$('.showargs').click(function(){
+    $(this).toggleClass('icon-plus icon-minus');
 });

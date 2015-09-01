@@ -36,7 +36,7 @@ STATIC_IP: False
 static_ip: 192.168.122.249
 static_nm: 255.255.255.0
 static_gw: 192.168.122.1
-#dns_nameserver: 192.168.122.1
+dns_nameserver: 192.168.122.1
 
 #----------------------------------------------------------------------------
 # Private subnet specification
@@ -71,6 +71,7 @@ queues:
   - { name: all.q, slots: 1}
   - { name: plugin.q, slots: 1}
   - { name: thumbnail.q, slots: 1}
+  - { name: thumbnail_worker.q, slots: 1}
   - { name: tl.q, slots: 10}
   
 #==============================================================================

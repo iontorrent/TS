@@ -6,13 +6,13 @@ except ImportError:
     from ordereddict import OrderedDict
 
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
-from iondb.rundb.models import dnaBarcode, SampleAnnotation_CV
+from iondb.rundb.models import dnaBarcode, SampleAnnotation_CV, RunType
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.rundb.plan.page_plan.kits_step_data import KitsFieldNames
 from iondb.rundb.plan.page_plan.reference_step_data import ReferenceFieldNames
-from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames
-from iondb.rundb.plan.plan_validator import validate_sample_tube_label, validate_barcode_sample_association, validate_targetRegionBedFile_for_runType
+from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames, update_ir_plugin_from_samples_table
+from iondb.rundb.plan.plan_validator import validate_sample_tube_label, validate_barcode_sample_association, validate_targetRegionBedFile_for_runType, validate_chipBarcode
 from iondb.rundb.plan.page_plan.ionreporter_step_data import IonReporterFieldNames
 
 
@@ -27,6 +27,8 @@ class BarcodeBySampleFieldNames():
     SAMPLESET_ITEMS = 'samplesetitems'
 
     ONCO_SAME_SAMPLE = "isOncoSameSample"
+    HAS_PGS_DATA = "hasPgsData"
+    HAS_ONCO_DATA = "hasOncoData"
 
 class BarcodeBySampleStepData(AbstractStepData):
 
@@ -38,6 +40,7 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.savedFields = OrderedDict()
         self.savedFields[SavePlanFieldNames.BARCODE_SET] = ''
         self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = ''
+        self.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = ''
 
         #for non-barcoded planBySampleSet
         self.savedFields[SavePlanFieldNames.TUBE_LABEL] = ''
@@ -48,7 +51,7 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
         self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "1"
 
-        self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
+        self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = []
         self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = OrderedDict()
         
         self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = list(dnaBarcode.objects.values_list('name',flat=True).distinct().order_by('name'))
@@ -73,7 +76,10 @@ class BarcodeBySampleStepData(AbstractStepData):
 
         self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = "" 
         self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = "" 
-         
+
+        self.prepopulatedFields[BarcodeBySampleFieldNames.HAS_ONCO_DATA] = False
+        self.prepopulatedFields[BarcodeBySampleFieldNames.HAS_PGS_DATA] = False
+                 
         self._dependsOn.append(StepNames.IONREPORTER)
         self._dependsOn.append(StepNames.APPLICATION)
         #self._dependsOn.append(StepNames.REFERENCE)
@@ -112,10 +118,12 @@ class BarcodeBySampleStepData(AbstractStepData):
                         row[SavePlanFieldNames.IR_GENDER] = sampleset_item[0].gender
                         row[SavePlanFieldNames.IR_RELATION_ROLE] = sampleset_item[0].relationshipRole
                         row[SavePlanFieldNames.IR_SET_ID] = sampleset_item[0].relationshipGroup
-                        #20140306-WIP-TO-BE-TESTED
                         row[SavePlanFieldNames.IR_CANCER_TYPE] = sampleset_item[0].cancerType
                         row[SavePlanFieldNames.IR_CELLULARITY_PCT] = sampleset_item[0].cellularityPct                        
-                        
+                        row[SavePlanFieldNames.IR_BIOPSY_DAYS] = sampleset_item[0].biopsyDays  
+                        row[SavePlanFieldNames.IR_COUPLE_ID] = sampleset_item[0].coupleId  
+                        row[SavePlanFieldNames.IR_EMBRYO_ID] = sampleset_item[0].embryoId  
+                                                                                                
                 self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
             
             self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
@@ -249,6 +257,12 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.validationErrors.pop(field_name, None)
         errors = None
 
+        if field_name == SavePlanFieldNames.CHIP_BARCODE_LABEL:
+            errors = validate_chipBarcode(new_field_value)
+
+        if errors:
+            self.validationErrors[field_name] = '\n'.join(errors)
+
         if field_name == SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL:
             errors = validate_sample_tube_label(new_field_value)
 
@@ -326,7 +340,13 @@ class BarcodeBySampleStepData(AbstractStepData):
         #logger.debug("ENTER barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() self.savedFields[SavePlanFieldNames.BARCODE_SET]=%s" %(self.savedFields[SavePlanFieldNames.BARCODE_SET]))
         
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
-        
+
+        self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = update_ir_plugin_from_samples_table(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
+
+        self.prepopulatedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL]
+
+        self.prepopulatedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = self.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL]
+
         if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
 
             #logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET self.savedFields=%s" %(self.savedFields))
@@ -340,7 +360,6 @@ class BarcodeBySampleStepData(AbstractStepData):
             logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET PLAN_REFERENCE=%s; TARGET_REGION=%s; HOTSPOT_REGION=%s;" %(planReference, planTargetRegionBedFile, planHotSpotRegionBedFile))
 
             self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = {}
-            self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
             for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
                 sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
                 if sample_name:
@@ -363,6 +382,12 @@ class BarcodeBySampleStepData(AbstractStepData):
                     
                     #logger.debug("barcode_by_sample_step_data SETTING reference step helper runType=%s; sample_nucleotideType=%s; sampleReference=%s" %(runType, sample_nucleotideType, sampleReference))
                     
+                    if not sample_nucleotideType:
+                        applicationGroupName = self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME]
+                        planNucleotideType = self._get_nucleotideType_barcodedSamples(appGroup=applicationGroupName, runType=runType)
+                        if planNucleotideType:
+                            sample_nucleotideType = planNucleotideType
+
                     if runType == "AMPS_DNA_RNA" and sample_nucleotideType == "DNA":
                         reference_step_helper = self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER]
                         if reference_step_helper:
@@ -401,29 +426,18 @@ class BarcodeBySampleStepData(AbstractStepData):
                                                         
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
                         }
-                    
-                    # update barcoded IR fields
-                    barcode_ir_userinput_dict = {
-                        KitsFieldNames.BARCODE_ID             : id_str,
-                        SavePlanFieldNames.SAMPLE             : sample_name,
-                        SavePlanFieldNames.SAMPLE_NAME        : sample_name.replace(' ', '_'),
-                        SavePlanFieldNames.SAMPLE_EXTERNAL_ID : row.get(SavePlanFieldNames.SAMPLE_EXTERNAL_ID,''),
-                        SavePlanFieldNames.SAMPLE_DESCRIPTION : row.get(SavePlanFieldNames.SAMPLE_DESCRIPTION,''),
-                        
-                        SavePlanFieldNames.WORKFLOW           : row.get(SavePlanFieldNames.IR_WORKFLOW,''),
-                        SavePlanFieldNames.GENDER             : row.get(SavePlanFieldNames.IR_GENDER,''),
-
-                        SavePlanFieldNames.NUCLEOTIDE_TYPE    : row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, ''),
-                        SavePlanFieldNames.CANCER_TYPE        : row.get(SavePlanFieldNames.IR_CANCER_TYPE, ""),
-                        SavePlanFieldNames.CELLULARITY_PCT    : row.get(SavePlanFieldNames.IR_CELLULARITY_PCT, ""),
-                        
-                        SavePlanFieldNames.RELATION_ROLE      : row.get(SavePlanFieldNames.IR_RELATION_ROLE,''),
-                        SavePlanFieldNames.RELATIONSHIP_TYPE  : row.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE,''),
-                        SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(SavePlanFieldNames.IR_APPLICATION_TYPE,''),
-                        SavePlanFieldNames.SET_ID             : row.get(SavePlanFieldNames.IR_SET_ID, '')
-                    }
-                   
-                    self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES].append(barcode_ir_userinput_dict)
 
         #logger.debug("EXIT barcode_by_sample_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])=%s; self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]));
-       
+
+    def _get_nucleotideType_barcodedSamples(self, appGroup=None, runType=None):
+        runTypeObjs = RunType.objects.filter(runType = runType)
+        if runTypeObjs:
+            runTypeObj = runTypeObjs[0]
+            if runType != "AMPS_DNA_RNA" and runTypeObj.nucleotideType:
+                return runTypeObj.nucleotideType.upper()
+            else:
+                value = appGroup
+                return value if value in ["DNA", "RNA"] else ""
+
+        return ""
+

@@ -9,23 +9,27 @@ import csv
 
 from django.core.exceptions import ValidationError
 from django.conf import settings
-
-
 #from django.core.serializers.json import DjangoJSONEncoder
 from django.utils.functional import cached_property
 from iondb.rundb.json_field import JSONEncoder
-
 from iondb.rundb.models import Results, dnaBarcode
 from iondb.rundb.plan import plan_validator
 
 logger = logging.getLogger(__name__)
+
+REFERENCE = 'reference'
+REFERENCE_FULL_PATH = 'referenceFullPath'
+TARGET_REGION_BED = 'targetRegionBedFile'
+HOT_SPOT_BED = 'hotSpotRegionBedFile'
+BAM = 'bam'
+BAM_FULL_PATH = 'bamFullPath'
+NON_BARCODED = 'nonbarcoded'
 
 class BarcodeSampleInfo(object):
     """
     Aggregate data from plan/eas barcodesample info
     and from pipeline datasets_basecaller
     Fallback gently for non-barcoded data.
-
     """
 
     def __init__(self, resultid, result=None):
@@ -33,7 +37,7 @@ class BarcodeSampleInfo(object):
         self.result = result or Results.objects.select_related('eas').get(pk=resultid)
         self.eas = self.result.eas
 
-    def data(self):
+    def data(self, start_json=None):
         # return all data found and not filtered by pipeline
         barcodedata = self.processDatasets()
 
@@ -49,14 +53,14 @@ class BarcodeSampleInfo(object):
                 logger.warn("Requested barcode name %s not found, using given sample %s with no bam data", barcode_name, sample)
                 # default values if user requested sample not found in run
                 d = {
-                    'bam': None,
+                    BAM: None,
                     'barcode_name': barcode_name,
                     'sample': sample,
                     'read_count': 0,
                 }
 
             # Pull in DB data about barcode. Return None when data not found.
-            if barcode_name != "nomatch":
+            if barcode_name != NON_BARCODED:
                 dnaBarcode = self.dnabarcodes.get(barcode_name)
                 if dnaBarcode:
                     for k in ['sequence', 'adapter', 'annotation', 'type']:
@@ -65,7 +69,7 @@ class BarcodeSampleInfo(object):
                     logger.error("Barcode given does not exist in TS database: %s", barcode_name)
 
             # These default to eas values
-            for k in ['reference', 'targetRegionBedFile', 'hotSpotRegionBedFile']:
+            for k in [REFERENCE, TARGET_REGION_BED, HOT_SPOT_BED]:
                 v = d.get(k)
                 if (v is None) or (not v):
                     d[k] = getattr(self.eas, k)
@@ -76,7 +80,6 @@ class BarcodeSampleInfo(object):
                     d[k] = None
 
             return d
-
 
         data = {}
         # Process User data in plan
@@ -92,7 +95,7 @@ class BarcodeSampleInfo(object):
                 plan_barcodeSampleInfo = info.get('barcodeSampleInfo', {}).get(bc)
                 if plan_barcodeSampleInfo:
                     # Barcode Specific reference data from plan
-                    for k in ['reference', 'targetRegionBedFile', 'hotSpotRegionBedFile']:
+                    for k in [REFERENCE, TARGET_REGION_BED, HOT_SPOT_BED]:
                         if k in plan_barcodeSampleInfo:
                             data[bc][k] = plan_barcodeSampleInfo[k]
 
@@ -107,9 +110,20 @@ class BarcodeSampleInfo(object):
             #logger.debug("Pipeline found extra barcode [%s]: %s", bc, data[bc])
 
         # Probably redundant. Should be in barcodedata.keys()
-        if 'nomatch' not in data:
+        if 'nomatch' not in data and NON_BARCODED not in data:
             data['nomatch'] = getPipelineValue('nomatch')
             logger.debug("Generated placeholder entry for nomatch: %s", data['nomatch'])
+
+        # add full path values for a series of entriess
+        reportFullPath = self.result.get_report_path()
+        for currentBarcode in data.values():
+            if BAM in currentBarcode:
+                currentBarcode[BAM_FULL_PATH] = os.path.join(reportFullPath, currentBarcode[BAM]) if currentBarcode[BAM] else ""
+            if start_json is not None and REFERENCE in currentBarcode and currentBarcode[REFERENCE]:
+                refName = currentBarcode[REFERENCE]
+                currentBarcode[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', start_json['runinfo']['tmap_version'],refName, "%s.fasta" % refName)
+            else:
+                currentBarcode[REFERENCE_FULL_PATH] = ''
 
         return data
 
@@ -125,40 +139,7 @@ class BarcodeSampleInfo(object):
     def barcodedSamples(self):
         barcodedSamples = self.eas.barcodedSamples
         if isinstance(barcodedSamples, basestring):
-            # barcodedSamples: {
-            #Sample 1: {
-            #    barcodeSampleInfo: {
-            #        IonXpress_078: {
-            #            controlSequenceType: "",
-            #            description: "",
-            #            externalId: "",
-            #            hotSpotRegionBedFile: "",
-            #            nucleotideType: "DNA",
-            #            reference: "hg19",
-            #            targetRegionBedFile: "/results/uploads/BED/46/hg19/unmerged/detail/AmpliSeqExome.20131001.designed.bed"
-            #        }
-            #    },
-            #    barcodes: [
-            #        "IonXpress_078"
-            #    ]
-            #},
-            #Sample 2: {
-            #    barcodeSampleInfo: {
-            #        IonXpress_089: {
-            #            controlSequenceType: "",
-            #            description: "",
-            #            externalId: "",
-            #            hotSpotRegionBedFile: "",
-            #            nucleotideType: "DNA",
-            #            reference: "hg19",
-            #            targetRegionBedFile: "/results/uploads/BED/46/hg19/unmerged/detail/AmpliSeqExome.20131001.designed.bed"
-            #        }
-            #    },
-            #    barcodes: [
-            #        "IonXpress_089"
-            #    ]
-            #}
-            #},
+
             try:
                 barcodedSamples = json.loads(barcodedSamples, encoding=settings.DEFAULT_CHARSET)
             except ValueError as j:
@@ -206,14 +187,43 @@ class BarcodeSampleInfo(object):
         return datasetsBaseCaller
 
     # Stock fields in datasets_basecaller.json version 1.0
-    _basecaller_fields = ['barcode_name', 'barcode_sequence', 'reference', 'sample', 'filtered', 'description']
+    _basecaller_fields = ['barcode_name', 'barcode_sequence', REFERENCE, 'sample', 'filtered', 'description']
     def processDatasets(self):
         """
         :return: json data with pipeline provided sample/barcode info
         returns basecaller_fields plus bam, read_count
 
         """
+
+        # for the moment we are attempting to detect an un-barcoded dataset by the curious absence of the barcode_config/barcode_id node
+        isUnbarcoded = False
+        barcode_config = self.datasetsBaseCaller.get("barcode_config")
+        if barcode_config:
+            barcode_id = barcode_config.get("barcode_id")
+            isUnbarcoded = barcode_id is None
+        else:
+            isUnbarcoded = True
+
         ret = {}
+        # we are going to handle unbarcoded data as a special case where as a single item is generated
+        if isUnbarcoded:
+            singleDataset   = self.datasetsBaseCaller.get('datasets')[0]
+            singleReadGroup = self.datasetsBaseCaller.get('read_groups').itervalues().next()
+            unbarcoded = {}
+            unbarcoded['bam'] = singleDataset['basecaller_bam']
+            unbarcoded['barcode_sequence'] = ''
+            unbarcoded[REFERENCE] = singleReadGroup[REFERENCE]
+            unbarcoded['sample'] = singleReadGroup['sample']
+            unbarcoded['filtered'] = singleReadGroup['filtered']
+            unbarcoded['description'] = singleReadGroup['description']
+            unbarcoded['barcode_name'] = NON_BARCODED
+            unbarcoded['filtered'] = False
+            unbarcoded['index'] = 0
+            unbarcoded['read_count'] = singleReadGroup['read_count']
+            ret[NON_BARCODED] = unbarcoded
+            return ret
+
+
         for item in self.datasetsBaseCaller.get('datasets', {}):
             rgs = []
             # Each file has multiple read groups. Though in practice just one.
@@ -231,17 +241,20 @@ class BarcodeSampleInfo(object):
                 x = { 'index': idx }
                 for k in self._basecaller_fields:
                     x[k] = rgdata.get(k)
+
                 # Inconsistency in non-barcoded output
-                if 'reference' not in x:
-                    x['reference'] = rgdata.get('library')
+                if REFERENCE not in x:
+                    x[REFERENCE] = rgdata.get('library')
+
                 rgs.append(x)
                 break
 
             bcd = {
-                'bam': "%s.bam" % item['file_prefix'],
+                BAM : "%s.bam" % item['file_prefix'],
                 'read_count': item['read_count']
                 #'read_groups': rgs,
             }
+
             # Primary read group only!
             if rgs:
                 bcd.update(rgs[0])

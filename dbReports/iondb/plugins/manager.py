@@ -15,7 +15,6 @@ import celery.exceptions
 import iondb.rundb.models
 
 from distutils.version import LooseVersion
-import zeroinstall.zerostore
 import iondb.rundb.tasks  ## circular import
 
 import iondb.plugins.tasks
@@ -38,7 +37,6 @@ class PluginManager(object):
     which handle discovery of manually installed plugins.
 
     TODO:
-    * Implement zeroinstall behaviors
     * Allow multiple version entries
         - Legacy - one plugin entry per name, installing different version replaces
           **Name is unique identifier**
@@ -346,7 +344,7 @@ class PluginManager(object):
 
         elif p.path != full_path:
             # 3. path was set and exists
-            # FIXME - for now, replace old plugin with new. 
+            # FIXME - for now, replace old plugin with new.
             # TODO - With multi-version install, ignore duplicate of same version
             logger.info("Found relocated Plugin %s v%s at '%s' (was '%s')", pname, version, full_path, p.path)
             self.uninstall(p)
@@ -490,7 +488,6 @@ class PluginManager(object):
 
         # Ensure plugin path is in a known plugin directory.
         known_plugin_paths = [ self.pluginroot, settings.PLUGIN_PATH, ]
-        known_plugin_paths.extend(x.dir for x in zeroinstall.zerostore.Stores().stores)
 
         for known_path in known_plugin_paths:
             known_path = os.path.normpath(known_path)
@@ -555,17 +552,6 @@ class PluginManager(object):
             logger.error("Attempted to delete plugin folder in unknown plugin store: '%s'", plugin_path)
             return False
 
-        ## For zeroinstall, removing just the plugin path will leave behind the parent folder. Remove that too.
-        parent_path = os.path.normpath(os.path.dirname(plugin_path))
-        # Safety checks - MUST avoid deleting parent folder unless it really is zeroinstall
-        if plugin.url \
-           and (parent_path not in [ settings.PLUGIN_PATH, self.pluginroot]) \
-           and os.path.basename(parent_path).startswith("sha256=") \
-           and os.path.exists(os.path.join(parent_path, '.manifest')):
-            # Looks like zeroinstall - delete one folder up as well
-            logger.debug("ZeroInstall Plugin: Removing store folder - ", parent_path)
-            plugin_path = parent_path
-
         # Green Light - All tests pass, OK to remove
         logger.warn("Purging files '%s' for plugin uninstall '%s v%s'", plugin_path, plugin.name, plugin.version)
 
@@ -582,4 +568,3 @@ class PluginManager(object):
         return True
 
 pluginmanager = PluginManager()
-

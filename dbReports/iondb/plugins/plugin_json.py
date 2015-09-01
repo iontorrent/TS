@@ -60,6 +60,7 @@ def get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net
         "barcodeId": ion_params.get('barcodeId',''),
         "username": username,
         "platform": ion_params.get('platform',''),
+        "systemType": ion_params.get('systemType','')
     }
     
     try:
@@ -200,8 +201,11 @@ def get_datamanagement(pk, result=None):
     # provide status of files: True means files are available
     from iondb.rundb.data import dmactions_types as dmtypes
     retval = {}
-    for dmtype in dmtypes.FILESET_TYPES:
-        retval[dmtype] = not(result.get_filestat(dmtype).isdisposed())
+    try:
+        for dmtype in dmtypes.FILESET_TYPES:
+            retval[dmtype] = not(result.get_filestat(dmtype).isdisposed())
+    except:
+        retval = {}
     return retval
 
 

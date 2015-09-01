@@ -100,7 +100,7 @@ PhaseEstimator::PhaseEstimator()
   init_dr_ = 0.0;
 
   normalization_string_    = "gain";
-  key_norm_new_            = false;
+  key_norm_method_         = "default";
   num_fullchip_iterations_ = 3;
   num_region_iterations_   = 1;
   maxfrac_negative_flows_  = 0.2;
@@ -125,7 +125,7 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset 
   min_reads_per_region_   = opts.GetFirstInt    ('-', "phasing-min-reads", 1000);
   phase_file_name_        = opts.GetFirstString ('-', "phase-estimation-file", "");
   normalization_string_   = opts.GetFirstString ('-', "phase-normalization", "adaptive");
-  key_norm_new_           = (key_norm_method == "keynorm-new");
+  key_norm_method_        = key_norm_method;
 
   // Static member variables
   norm_during_param_eval_ = opts.GetFirstBoolean('-', "phase-norm-during-eval", false);
@@ -190,8 +190,10 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset 
     norm_method_ = 2;
   else if (normalization_string_ == "variable")
     norm_method_ = 3;
+  else if (normalization_string_ == "off")
+    norm_method_ = 4;
   else
-    norm_method_ = 0;
+    norm_method_ = 0; // "gain" and anythign else is default
 
   printf("Phase estimator settings:\n");
   printf("  phase file name        : %s\n", phase_file_name_.c_str());
@@ -705,13 +707,17 @@ size_t PhaseEstimator::LoadRegion(int region)
       region_reads_[region].push_back(BasecallerRead());
 
       bool keypass = true;
-      if (key_norm_new_) {
-    	  keypass = region_reads_[region].back().SetDataAndKeyNormalizeNew(&well_buffer[0],
+      if (key_norm_method_ == "adaptive") {
+          keypass = region_reads_[region].back().SetDataAndKeyNormalizeNew(&well_buffer[0],
               flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1, false);
+      } else if (key_norm_method_ == "off") {
+          keypass = region_reads_[region].back().SetDataAndKeyPass(well_buffer,
+              flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1);
       } else {
-    	  keypass = region_reads_[region].back().SetDataAndKeyNormalize(&well_buffer[0],
+          keypass = region_reads_[region].back().SetDataAndKeyNormalize(&well_buffer[0],
               flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1);
       }
+
 
       //  *** Compute some metrics - overload read.penalty_residual to store them
       if (keypass) {
@@ -776,6 +782,8 @@ void PhaseEstimator::NormalizeBasecallerRead(DPTreephaser& treephaser, Basecalle
               treephaser.WindowedNormalize(read, (end_flow / windowSize_), windowSize_);
             else
               treephaser.Normalize(read, start_flow, end_flow);
+            break;
+        case 4: // "off" do not do anything
             break;
         default:
             cerr << "PhaseEstimator: Unknown normalization method " << norm_method_ << endl;

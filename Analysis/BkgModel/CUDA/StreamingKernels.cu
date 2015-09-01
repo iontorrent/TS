@@ -3076,6 +3076,9 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
     ComputeSP_dev(SP, &CP[sId], copies, realFnum+flow_ndx, sId); //CP_SINGLEFLOWFIT
  
     const bool twoParamFit = fitKmult || ( copies * Ampl > adjKmult );
+  
+    if (twoParamFit)
+      krate = minKmult;
  
     float residual, newresidual;
     // These values before start are always zero since there is no nucrise yet. Don't need to
@@ -3085,7 +3088,6 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
     int relax_kmult_pass = 0;
     while (relax_kmult_pass < 2)
     {
-
       // first step
       // Evaluate model function using input Ampl and Krate and get starting residual
 #if __CUDA_ARCH__ >= 350
@@ -3102,7 +3104,8 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
       const float *emLeft, *emRight;
 
       // calculating weighted sum of square residuals for the convergence test
-      const float EmphSel = (relax_kmult_pass == 1) ? (Ampl + 2.0f) : Ampl;
+      //const float EmphSel = (relax_kmult_pass == 1) ? (Ampl + 2.0f) : Ampl;
+      const float EmphSel = Ampl;
       int nonZeroEmpFrames;
       float frac = DecideOnEmphasisVectorsForInterpolation(nonZeroEmpFramesVec, &emLeft,&emRight,EmphSel,emphasis, num_frames, nonZeroEmpFrames);
       residual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
@@ -3113,7 +3116,16 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
 
       float delta0 = 0, delta1 = 0;
       int iter;
+      int done = 0;
       for (iter = 0; iter < ITER; ++iter) {
+
+        if ((delta0*delta0) < 0.0000025f)
+          done++;
+        else 
+          done = 0;
+        
+        if (done > 1)
+          break;
 
         // new Ampl and krate by adding delta to existing values
         newAmpl = Ampl + 0.001f;
@@ -3204,18 +3216,18 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
                 }
               }
             }
+            else {
+              delta0 = 0;
+              delta1 = 0;
+            }
 
-        if ((delta0*delta0) < 0.0000025f){
-          iter++;
-          break;
-        }
       } // end ITER loop
 
       // probably slower incorporation
       if (fabs(krate - localMinKmult) < 0.01f) {
         if (sqrtf(residual) > 20.0f) {
           localMaxKmult = localMinKmult;
-          krate = 0.3f;
+          //krate = 0.3f;
           localMinKmult = 0.3f;
           relax_kmult_pass++;
           continue;
@@ -3721,6 +3733,8 @@ __global__ void ComputeXtalkAndZeromerCorrectedTrace_k(// Here FL stands for flo
 
 __global__
 void ExponentialTailFitting_k(
+  float bkg_scale_limit,
+  float bkg_tail_dc_lower_bound,
   bead_state* pState,
   float* tauAdjust, // obtained from TaubAdjustForExponentialTailFitting()
   float* Ampl,
@@ -3827,8 +3841,13 @@ void ExponentialTailFitting_k(
         }
 
         avg_bkg_amp_tail /= tailFrames;
-        if (avg_bkg_amp_tail) 
+
+        if (avg_bkg_amp_tail > bkg_tail_dc_lower_bound) {
           C /= avg_bkg_amp_tail;
+          clamp_streaming(C, -bkg_scale_limit, bkg_scale_limit); 
+        }
+        else
+          C = 0;
 
         // correct fg_buffers in place
         for (int i=0; i<num_frames; ++i) {
@@ -5499,6 +5518,8 @@ void StreamingKernels::ExponentialTailFitting(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  float bkg_scale_limit,
+  float bkg_tail_dc_lower_bound,
   bead_state* pState,
   float* tauAdjust,
   float* Ampl,
@@ -5520,6 +5541,8 @@ void StreamingKernels::ExponentialTailFitting(
       block, 
       smem, 
       stream >>> (
+      bkg_scale_limit,
+      bkg_tail_dc_lower_bound,
       pState,
       tauAdjust,
       Ampl,

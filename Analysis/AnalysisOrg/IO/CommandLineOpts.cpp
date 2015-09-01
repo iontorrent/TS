@@ -58,9 +58,6 @@ void CommandLineOpts::SetUpProcessing()
 
   loc_context.FindDimensionsByType ( (char*)(sys_context.explog_path.c_str()) );
   img_control.SetWashFlow ( (char*)(sys_context.explog_path.c_str()) );
-
-  // now that we know chip type, can set if needed
-  SetProtonDefault();
 }
 
 void CommandLineOpts::SetSysContextLocations ()
@@ -92,34 +89,6 @@ void CommandLineOpts::SetGlobalChipID ( string explog_path )
   char *chipType = GetChipId ( (char*)(explog_path.c_str()) );
   ChipIdDecoder::SetGlobalChipId ( chipType ); // @TODO: bad coding style, function side effect setting global variable
   if (chipType) free (chipType);
-}
-
-void CommandLineOpts::SetProtonDefault()
-{  // based on chip Id, set a few things.  I really wanted to do this in the constructors for the individual
-  // option objects, but alas the chip Id is unknown until AFTER the command line is parsed
-
-  //@TODO: global variable abuse here
-
-  // PZERO
-  if ( ChipIdDecoder::IsPzero() )
-  {
-	  img_control.ImageControlForProton(false);
-  }
-
-  // PONE
-  if ( ChipIdDecoder::IsPone() )
-  {
-	  img_control.ImageControlForProton(true);
-    if (bfd_control.useSignalReferenceSet == 0) {
-      bfd_control.useSignalReference = 4;
-    }
-  }
-
-  //PTWO TYPE CHIPS
-  if (ChipIdDecoder::IsPtwo() )
-  {
-	  img_control.ImageControlForProton(true);
-  }
 }
 
 void CommandLineOpts::PrintHelp()
@@ -211,7 +180,22 @@ void CommandLineOpts::PostProcessArgs(OptArgs &opts)
 		}
 		if(!opts.HasOption('-', "col-flicker-correct-aggressive"))
 		{
-			img_control.aggressive_cnc = true;
+            if ( ChipIdDecoder::IsPzero() )
+            {
+                img_control.ImageControlForProton(false);
+            }
+
+            // PONE
+            if ( ChipIdDecoder::IsPone() )
+            {
+                img_control.ImageControlForProton(true);
+            }
+
+            //PTWO TYPE CHIPS
+            if (ChipIdDecoder::IsPtwo() )
+            {
+                img_control.ImageControlForProton(true);
+            }
 		}
 		if(!opts.HasOption('-', "img-gain-correct"))
 		{
@@ -228,6 +212,9 @@ ValidateOpts::ValidateOpts()
 	m_opts["bkg-dont-emphasize-by-compression"] = VT_INT;
 	m_opts["nokey"] = VT_BOOL;
 	m_opts["clonal-filter-bkgmodel"] = VT_BOOL;
+	m_opts["clonal-filter-debug"] = VT_BOOL;
+	m_opts["clonal-filter-use-last-iter-params"] = VT_BOOL;
+        m_opts["filter-extreme-ppf-only"] = VT_BOOL;
 	m_opts["mixed-first-flow"] = VT_INT;
 	m_opts["mixed-last-flow"] = VT_INT;
 	m_opts["max-iterations"] = VT_INT;
@@ -279,6 +266,7 @@ ValidateOpts::ValidateOpts()
 
 	// DebugMe
 	m_opts["bkg-debug-param"] = VT_INT;
+    m_opts["bkg-debug-nsamples"] = VT_INT;
 	m_opts["bkg-debug-region"] = VT_VECTOR_INT;
 	m_opts["bkg-debug-trace-sse"] = VT_STRING;
 	m_opts["bkg-debug-trace-rcflow"] = VT_STRING;
@@ -407,8 +395,13 @@ ValidateOpts::ValidateOpts()
 	m_opts["clonal-filter-bkgmodel"] = VT_BOOL;
 	m_opts["bkg-use-proton-well-correction"] = VT_BOOL;
 	m_opts["bkg-per-flow-time-tracking"] = VT_BOOL;
+
 	m_opts["bkg-exp-tail-fit"] = VT_BOOL;
-	m_opts["time-half-speed"] = VT_BOOL;
+  m_opts["bkg-exp-tail-bkg-adj"] = VT_BOOL;
+  m_opts["bkg-exp-tail-tau-adj"] = VT_BOOL;
+  m_opts["bkg-exp-tail-bkg-limit"] = VT_FLOAT;
+  m_opts["bkg-exp-tail-bkg-lower"] = VT_FLOAT;
+
 	m_opts["bkg-pca-dark-matter"] = VT_BOOL;
 	m_opts["regional-sampling"] = VT_BOOL;
 	m_opts["regional_sampling_type"] = VT_INT;
@@ -420,8 +413,8 @@ ValidateOpts::ValidateOpts()
 	m_opts["limit-rdr-fit"] = VT_BOOL;
 	m_opts["use-alternative-etbr-equation"] = VT_BOOL;
 	m_opts["use-alternative-etbR-equation"] = VT_BOOL;
-    m_opts["use-log-taub"] = VT_BOOL;
-	m_opts["psp4-dev"] = VT_FLOAT;
+
+
 	m_opts["fitting-taue"] = VT_BOOL;
 	m_opts["incorporation-type"] = VT_INT;
 	m_opts["bkg-single-alternate"] = VT_BOOL;

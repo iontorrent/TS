@@ -13,22 +13,50 @@
 //Util device functions
 //WARP LEVEL NO SYNC FUNCTIONS, USE WITH CAUTION
 template<typename T>//blockDim.x == warpsize !!
-__device__ inline void WarpSumNoSync(T * smP);
+__device__ inline void WarpSumNoSync(T * sm);
 
 template<typename T>//blockDim.x == warpsize !!
-__device__ inline void WarpSumNoSync(T * smP, int n);
+__device__ inline void WarpSumNoSync(T * sm, int n);
 
-template<typename T>//blockDim.x == warpsize !!
-__device__ inline T RunningSumToCurrentThread(T * sm);
+template<typename T>
+__device__ inline T WarpRunningSumToCurrentThread(T * smWarp);
 
-template<typename T>  //blockDim.x == warpsize !!
-__device__  inline T ReduceSharedMemory(T* base, T*local);
+template<typename T>  //blockDim.x == warpsize !! sm buffer must be at least smBase[numframes]
+__device__ inline void WarpTraceAccum(T* outTrace, T*smWarp, T*localTrace, const int nframes);
 
+template<typename T>
+__device__ inline void WarpTraceAccumSingleFrame(T* smWarpTrace, const int frame, T*smWarp, const T localFrameValue, const bool validTrace = true);
+
+template<typename T>
+__device__ inline void WarpTraceAccumSingleFrame(T* smWarpTrace, const int frame, T*smWarp, const T * localTrace, const bool validTrace = true);
+
+template<typename T>
+__device__ inline int WarpTraceAccumCount(T* smWarpTrace, const int nframes, T*smWarp, const T*localTrace, const bool validTrace = true);
 
 // Block level reduction 
 // blockDim.x should be power of 2 and less than equal to 512
 template<typename T>
 __device__ inline void ReduceAndAvgAtBlockLevel(T *sm, T N, bool avg);
+
+
+template<typename T>  //blockDim.x == warpsize !!
+__device__  inline T ReduceSharedMemory(T* base, T*local);
+
+template<typename T>
+__device__ inline int BlockTraceAccumfromWarps(T* outTrace, const T*smTracesBase, const int nframes, const int maxCompFrames);
+
+template<typename T>
+__device__ inline int BlockTraceAccumfromWarpsInplace(T*smTracesBase, const int nframes, const int maxCompFrames);
+
+template<typename T>
+__device__ inline void BlockTraceAccumfromWarpsInplaceToGlobal( T*gTrace, const size_t outFrameStride, T*smTracesBase, const int nframes, const int maxCompFrames, const bool atomicGlobalAccum=false);
+
+template<typename T>
+__device__ inline T BlockAccumPerThreadValuesAcrossWarpsSharedMem(T*smBase);
+
+template<typename T>
+__device__ inline void BlockAccumValuePerWarpToGlobal( T*gValue, T*smBase, const bool atomicGlobalAccum=false);
+
 
 template<typename T>
 __device__ inline void SimplestReductionAndAverage(T *sm, int N, bool avg); 

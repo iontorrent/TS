@@ -1,15 +1,9 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-    <li><a href="{% url "configure_about" %}">About</a></li>
-    <li><a href="{% url "configure_references" %}">References</a></li>
+{% block tab-configure-services %}
     <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
-    <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-    <li><a href="{% url "configure_configure" %}">Configure</a></li>
-    <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-    <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% endblock tab-configure-services %}
 {% block content %}
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
@@ -60,13 +54,15 @@ $(document).ready(function () {
 
     $('#refresh_cluster_info').click(function(e){
         e.preventDefault();
-        var $div = $(this).next('div');
-        $div.removeClass('hidden');
+        $('#cluster_msg').html('<h4>Refreshing cluster info, please wait</h4>');
+        $('#cluster_loading').removeClass('hidden');
         $.get($(this).attr('href'), function(data){
-            $div.html('<h4>Success!</h4>');
+            $('#cluster_msg').html('<h4>Success!</h4>');
             setTimeout(function(){ window.location.reload(true); }, 1000);
         }).fail(function(data){
-            $div.html('<h4>Failed, '+data.statusText+'</h4>');
+            $('#cluster_msg').html('<h4>Failed, '+data.statusText+'</h4>');
+        }).always(function(){
+            $('#cluster_loading').addClass('hidden');
         });
     });
     
@@ -94,6 +90,20 @@ $(document).ready(function () {
         }
     });
     $('#analysis').click();
+
+    $("[name=nodectrl]").click(function(e){
+        $("#cluster_msg").empty();
+        $('#cluster_loading').removeClass('hidden');
+        e.stopPropagation();
+        $.post($(this).attr('href'), function(data){
+            $("#cluster_msg").html('<h4>Success! ' +data+'</h4>');
+        }).fail(function(data){
+            console.log(data)
+            $("#cluster_msg").html('<h4>Failed, '+data.responseText+'</h4>');
+        }).always(function(){
+            $('#cluster_loading').addClass('hidden');
+        });
+    });
 });
 </script>
 
@@ -292,10 +302,11 @@ $(document).ready(function () {
     <div class="content clearfix">
         <h1>Cluster Info
             <a title="Refresh Cluster Info" id="refresh_cluster_info" href="{% url 'cluster_info_refresh' %}"><i class="icon-refresh"></i></a>
-            <div class="hidden" style="display:inline-block;">
-                <h4>Refreshing cluster info, please wait <img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
+            <div id="cluster_msg" style="display:inline-block;"></div>
+            <div id="cluster_loading" class="hidden" style="display:inline-block;">
+                <h4><img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
             </div>
-            <a href= {% url "cluster_info_history" %} id="cluster_info_history">View History</a>
+            <a href= {% url "cluster_info_history" %} id="cluster_info_history" class="pull-right">View History</a>
         </h1>
         <table class="table table-condensed table-hover">
             {% for node in crunchers %}
@@ -314,11 +325,28 @@ $(document).ready(function () {
                     {% elif node.state == 'U'%}
                         <td colspan="2"><span class="label label-default">Unknown</span></td>
                     {% endif %}
-                    <td><a href= {% url "cluster_info_log" node.pk %} class="cluster_info_log" class="btn">View Log</a></td>
+
+                    {% if node.info.queues %}
+                        {% with q=node.info.queues %}
+                        <td>queues: <span title="used/total">{{q.used}} / {{q.total}}</span></td>
+                        <td>load: {{q.load}}</td>
+                        <td>
+                            <span class="option-group pull-right">
+                                <input type="radio" name="nodectrl" href="{% url 'cluster_ctrl' node.name 'enable' %}" value='enable'
+                                    {% ifnotequal q.disabled q.total %} checked="checked" {% endifnotequal %}>Enable
+                                <input type="radio" name="nodectrl" href="{% url 'cluster_ctrl' node.name 'disable' %}" value='disable'
+                                    {% ifequal q.disabled q.total %} checked="checked" {% endifequal %}>Disable
+                            </span>
+                        </td>
+                        {% endwith %}
+                    {% else %}
+                        <td></td><td></td><td></td>
+                    {% endif %}
+                    <td><span class="pull-right"><a href= {% url "cluster_info_log" node.pk %} class="cluster_info_log" class="btn">View Log</a></span></td>
                 </tr>
                 <tr class="hide">
                     <td></td>
-                    <td colspan=4>
+                    <td colspan="5">
                         <table class="table table-condensed">
                             {% for test,status in node.info.connect_tests %}
                                 <tr {%if status == 'failure' %}class="text-error"{%endif%}>

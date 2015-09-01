@@ -1,16 +1,17 @@
 {
     "meta":{
         "name"          : "AmpliSeq Exome Panel - Proton - Germ Line - Low Stringency",
-        "tooltip"       : "Panel-specific parameters optimized for AmpliSeq Exome Panel and HiQ",
+        "tooltip"       : "Parameters optimized for AmpliSeq Exome Panel and HiQ",
         "configuration" : "ampliseqexome_germline_low_stringency_p1",
-        "ts_version"    : "4.6",
+        "ts_version"    : "5.0",
         "compatibility" : {
-          "chip"        : ["proton_p1"],
+          "chip"        : ["540","proton_p1"],
           "library"     : ["ampliseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"],
           "panel"       : true
-        }
+        },
+        "tmapargs"      : "tmap mapall ... --context -J 25 --end-repair 15 --do-repeat-clip stage1 map4"
     },
     "torrent_variant_caller":{
 
@@ -51,7 +52,6 @@
 
         "downsample_to_coverage":400,
         "outlier_probability":0.01,
-
         "do_snp_realignment":0,
         "do_mnp_realignment":0,
         "realignment_threshold":0,

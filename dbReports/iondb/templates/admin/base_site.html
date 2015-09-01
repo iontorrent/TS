@@ -105,6 +105,12 @@
 <script>
   $(function(){
     inbox = new MessageBox({models: {{global_messages|safe}} });
+
+    $('#changelist-filter > h2').html('- Filter').click(function(){
+	var text = $(this).text();
+	$(this).text(text == "- Filter" ? "+ Filter" : "- Filter" );
+	$(this).nextAll().toggle();
+      });
   });
 </script>
 {% endblock %}

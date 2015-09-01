@@ -31,7 +31,7 @@ string get_time_iso_string(time_t time)
 }
 
 
-string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sample_list)
+string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sample_list, int primary_sample)
 {
   stringstream headerss;
   headerss
@@ -132,8 +132,11 @@ string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sa
     << "##FORMAT=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency based on Flow Evaluator observation counts\">" << endl
 
   << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
+  // Ensure primary sample is always in the first column (IR req)
+  headerss << "\t" << sample_list[primary_sample];
   for (size_t i = 0; i < sample_list.size(); i++)
-    headerss << "\t" << sample_list[i];
+    if (i != (size_t)primary_sample)
+      headerss << "\t" << sample_list[i];
 
 
 

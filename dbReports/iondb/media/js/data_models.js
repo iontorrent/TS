@@ -335,7 +335,7 @@ $(function(){
 
     TastyModel = Backbone.Model.extend({
         url: function () {
-            return this.baseUrl + "/" + this.id + "/"
+            return this.baseUrl + this.id + "/"
         },
 
         patch: function (attributes) {

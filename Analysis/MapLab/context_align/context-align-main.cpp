@@ -13,7 +13,18 @@
 #include <ctime>
 #include <csignal>
 
+#define GCC_VERSION (__GNUC__ * 10000  + __GNUC_MINOR__ * 100  + __GNUC_PATCHLEVEL__)
+
+#if GCC_VERSION > 40600
+#pragma GCC diagnostic push
+#endif
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+
 #include <SamFile.h>
+
+#if GVV_VERSION > 40600
+#pragma GCC diagnostic pop
+#endif
 
 #include <myassert.h>
 #include <cmdline_s.h>
@@ -706,4 +717,5 @@ int main (int argc, char* argv [])
         wait_key (rv, false);
     return rv;
 }
+
 

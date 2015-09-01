@@ -117,6 +117,7 @@ public:
    int bkgModelHdf5Debug_region_r;
    int bkgModelHdf5Debug_region_c;
    int bkgDebugParam;
+   int bkgDebug_nSamples;
 
    // only the row and col fields are used to specify location of debug regions
     std::vector<Region> BkgTraceDebugRegions;

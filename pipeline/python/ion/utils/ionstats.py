@@ -11,7 +11,7 @@ from ion.utils.blockprocessing import printtime
 
 ''' Invoke ionstats basecaller to generate alignment-independent metrics for unmapped BAM files'''
 
-def generate_ionstats_basecaller(unmapped_bam_filenames, ionstats_basecaller_filename, library_key, histogram_length):
+def generate_ionstats_basecaller_cmd(unmapped_bam_filenames, ionstats_basecaller_filename, library_key, histogram_length):
 
     try:
         com = "ionstats basecaller"
@@ -21,6 +21,16 @@ def generate_ionstats_basecaller(unmapped_bam_filenames, ionstats_basecaller_fil
         com += " -o %s" % (ionstats_basecaller_filename)
         com += " -k %s" % (library_key)
         com += " -h %d" % (int(histogram_length))
+    except:
+        traceback.print_exc()
+        raise
+    return com
+
+
+def generate_ionstats_basecaller(unmapped_bam_filenames, ionstats_basecaller_filename, library_key, histogram_length):
+
+    com = generate_ionstats_basecaller_cmd(unmapped_bam_filenames, ionstats_basecaller_filename, library_key, histogram_length)
+    try:
         printtime("DEBUG: Calling '%s'" % com)
         subprocess.call(com,shell=True)
     except:

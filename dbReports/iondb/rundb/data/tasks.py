@@ -8,10 +8,12 @@ from iondb.celery import app
 import sys
 import traceback
 import logging
+import os
+from datetime import timedelta, datetime
 
 from django.core import urlresolvers
 from django import shortcuts
-from iondb.rundb.models import Message, Results, EventLog, DMFileStat
+from iondb.rundb.models import Message, Results, EventLog, DMFileStat, FileServer
 from iondb.rundb.data import dmactions
 from iondb.rundb.data import dm_utils
 from iondb.rundb.data import dmfilestat_utils
@@ -181,3 +183,39 @@ def save_serialized_json(resultpk):
     except:
         raise
 
+
+def logs_cleanup_settings():
+    chef_logs = {
+        'folder': 'chef_logs',
+        'extensions': '.tar.gz',
+        'expire_days': 45
+    }
+    ot_logs = {
+        'folder': 'ot_logs',
+        'extensions': '.tar.gz',
+        'expire_days': 45
+    }
+    chips = {
+        'folder': 'Chips',
+        'extensions': ('.tar.bz2', '.txt'),
+        'expire_days': 30
+    }
+    return [chef_logs, ot_logs, chips]
+    
+
+@periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
+def logs_cleanup():
+    settings = logs_cleanup_settings()
+    for server in FileServer.objects.all():
+        for item in settings:
+            threshold = datetime.now() - timedelta(days=item['expire_days'])        
+            directory = os.path.join(server.filesPrefix, item['folder'])
+            if os.path.exists(directory):
+                files = [os.path.join(directory,f) for f in os.listdir(directory) if f.endswith(item['extensions'])]
+                for filepath in files:
+                    try:
+                        if datetime.fromtimestamp(os.path.getmtime(filepath)) < threshold:
+                            logger.debug('Deleting %s.' % filepath, extra = logid)
+                            os.remove(filepath)
+                    except:
+                        logger.error(traceback.format_exc(), extra = logid)

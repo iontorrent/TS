@@ -34,8 +34,7 @@ if [[ ! -e ~/.ssh/id_rsa ]]; then
     read -p "Do you want to generate one now? (Y|n) " answer
     if [[ "${answer,,}" == "y" ]] || [[ "${answer,,}" == "" ]]; then
         echo
-        echo "Hit the enter key at all prompts and do not specify a passphrase:"
-        ssh-keygen
+        ssh-keygen -t rsa -N ""
         echo
     else
         echo "exiting"
@@ -64,8 +63,6 @@ for node in `get_sge_nodes`; do
             # Adds passwordless commands capability
             scp $TSCONFIG_SRC_DIR/tools/prep_node_sudo.sh $USER@$node:/tmp
             ssh -t $USER@$node "/tmp/prep_node_sudo.sh && rm /tmp/prep_node_sudo.sh"
-            # Adds apt cache proxy location
-            ssh -t $USER@$node "echo 'Acquire::http::Proxy \"http://$HEADNODE:3142\";'|sudo tee /etc/apt/apt.conf.d/01proxy"
         ;;
         *)
         continue

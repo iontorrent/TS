@@ -216,6 +216,7 @@ $(document).ready(function () {
             });
 
             launchObj["launchoption"] = "upload_only";
+            launchObj["iru_qc_option"] = "no_check";
 
             //check to see if previous instance of plugin exists and still running
             var alreadyGoing = false;

@@ -87,7 +87,6 @@ public:
 	CommandLineOpts() {}
     ~CommandLineOpts() {}
 
-	void SetProtonDefault();
 	void SetUpProcessing(); 
 	void SetSysContextLocations();
     void SetFlowContext(string explog_path);

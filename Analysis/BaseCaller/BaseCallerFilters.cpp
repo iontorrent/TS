@@ -512,6 +512,7 @@ void BaseCallerFilters::PrintHelp()
   printf ("\n");
   printf ("Read trimming options:\n");
   printf ("     --trim-min-read-len      INT        reads trimmed shorter than this are omitted from output [min-read-length]\n");
+  printf ("     --trim-barcodes          BOOL       trim barcodes and barcode adapters [on]\n");
   printf (" Adapter trimming (turn off by supplying cutoff 0):\n");
   printf ("     --trim-adapter-mode      INT        0=use simplified metric, 1=use standard metric [1]\n");
   printf ("     --trim-adapter           STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");

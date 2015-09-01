@@ -6,7 +6,7 @@
 
 CC			= gcc
 LD			= gcc
-SOURCES		= RSMAgent.c AlarmMgr.c list.c readhostlist.c
+SOURCES		= RSMAgent.c AlarmMgr.c sshTunnelMgmt.c
 # code from external sources:
 EXTSOURCES	= parson.c
 OBJECTS		= $(patsubst %.c,obj/%.o,$(SOURCES))
@@ -17,7 +17,7 @@ INCLUDES	= -I$(AEDIR)/Include -I$(AEDIR)/Sysdeps/Unix
 DEPLIBS		= $(AEDIR)/libAgentEmbedded.a \
 			  $(AEDIR)/Libsrc/expat/xmlparse/libexpat.a \
 			  $(AEDIR)/Libsrc/zlib/libz.a
-LIBS		= -lssl -lcrypto -lpthread
+LIBS		= -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -ldl -pthread
 EXECUTABLE	= RSMAgent_TS
 
 # automatically generate dependency rules

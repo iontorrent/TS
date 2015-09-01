@@ -338,15 +338,19 @@ void HpData::Add(vector<char> &ref_hp_nuc, vector<uint16_t> &ref_hp_len, vector<
   unsigned int last_flow  = ref_hp_flow.back();
   unsigned int ref_hp_idx=0;
   if(ignore_terminal_hp) {
-    first_flow++;
-    last_flow--;
+    if(ref_hp_flow.size() > 2) {
+      first_flow = ref_hp_flow[1];
+      last_flow  = ref_hp_flow[ref_hp_flow.size()-2];
+    } else {
+      return;
+    }
     ref_hp_idx++;
   }
 
   unsigned int zeromer_insertion_idx=0;
   unsigned int n_zeromer_insertions = zeromer_insertion_flow.size();
   unsigned int n_ref_hp = ref_hp_flow.size();
-  for(unsigned int flow=first_flow; flow <= last_flow && ref_hp_idx < n_ref_hp; ++flow) {
+  for(unsigned int flow=first_flow; flow <= last_flow && ref_hp_idx < n_ref_hp;) {
 
     // Determine read & reference lengths - most commonly it will be zero for both
     char this_nuc = flow_order[flow % flow_order.size()];
@@ -369,6 +373,8 @@ void HpData::Add(vector<char> &ref_hp_nuc, vector<uint16_t> &ref_hp_len, vector<
     map< char, vector< vector<uint64_t> > >::iterator hp_it = HpCountFind(this_nuc);
     if(hp_it != hp_count_.end())
       hp_it->second[this_ref_len][this_read_len] += 1;
+    if( (ref_hp_idx == n_ref_hp-1) || (ref_hp_flow[ref_hp_idx] != flow) )
+      flow++;
   }
 }
 

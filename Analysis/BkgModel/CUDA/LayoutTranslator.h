@@ -139,83 +139,84 @@ public:
 //none of the functions check if the passed cube's dimensions fit the data, it will only assert
 //during translation if elements would be placed outside a region
 
-void TranslateFgBuffer_RegionToCube(  LayoutCubeWithRegions<short> & ImageCube,
-    size_t numLBeads,
-    size_t numFrames,
-    size_t flowsPerBLock,
-    FG_BUFFER_TYPE *fgPtr, // has to point to first bead of flow to translate
-    BeadParams * bP,
-    size_t regId);
-void TranslateFgBuffer_CubeToRegion(  LayoutCubeWithRegions<short> & ImageCube,
-    size_t numLBeads,
-    size_t numFrames,
-    size_t flowsPerBLock,
-    FG_BUFFER_TYPE *fgPtr, // has to point to first bead of flow to translate
-    BeadParams * bP,
-    size_t regId);
+namespace TranslatorsFlowByFlow {
 
+  void TranslateFgBuffer_RegionToCube(  LayoutCubeWithRegions<short> & ImageCube,
+      size_t numLBeads,
+      size_t numFrames,
+      size_t flowsPerBLock,
+      FG_BUFFER_TYPE *fgPtr, // has to point to first bead of flow to translate
+      BeadParams * bP,
+      size_t regId);
+  void TranslateFgBuffer_CubeToRegion(  LayoutCubeWithRegions<short> & ImageCube,
+      size_t numLBeads,
+      size_t numFrames,
+      size_t flowsPerBLock,
+      FG_BUFFER_TYPE *fgPtr, // has to point to first bead of flow to translate
+      BeadParams * bP,
+      size_t regId);
 
+  void TranslateBeadParams_RegionToCube( LayoutCubeWithRegions<float> & BeadParamCube,void * bkinfo, size_t regId);
+  void TranslateBeadParams_CubeToRegion( LayoutCubeWithRegions<float> & BeadParamCube,
+      size_t numLBeads,
+      BeadParams * bP,
+      size_t regId);
 
-void TranslateBeadParams_RegionToCube( LayoutCubeWithRegions<float> & BeadParamCube,void * bkinfo, size_t regId);
-void TranslateBeadParams_CubeToRegion( LayoutCubeWithRegions<float> & BeadParamCube,
-    size_t numLBeads,
-    BeadParams * bP,
-    size_t regId);
+  void TranslatePolyClonal_RegionToCube( LayoutCubeWithRegions<float> & BeadParamCube,void * bkinfo, size_t regId);
 
+  void TranslateBeadStateMask_RegionToCube(  LayoutCubeWithRegions<unsigned short> & BkgModelMask,void * bkinfo, size_t regId);
+  void TranslateBeadStateMask_CubeToRegion(  LayoutCubeWithRegions<unsigned short> & BkgModelMask,void * bkinfo, size_t regId);
 
+  void TranslateResults_RegionToCube( LayoutCubeWithRegions<float> & BeadParamCube,
+      size_t numLBeads,
+      size_t flowIdxInBlock,
+      BeadParams * bP,
+      size_t regId);
+  void  TranslateResults_CubeToRegion(LayoutCubeWithRegions<float> & ResultCube, void * bkinfo, size_t flowIdxInBlock, size_t regId);
 
-void TranslatePolyClonal_RegionToCube( LayoutCubeWithRegions<float> & BeadParamCube,void * bkinfo, size_t regId);
+  void TranslateRegionParams_CubeToRegion( LayoutCubeWithRegions<reg_params> & RegionCube,
+      reg_params * rP,  size_t regId = 0);
 
+  void TranslateRegionParams_RegionToCube( LayoutCubeWithRegions<reg_params> & RegionCube, void* bkinfo,
+      size_t regId);
 
-void TranslateBeadStateMask_RegionToCube(  LayoutCubeWithRegions<unsigned short> & BkgModelMask,void * bkinfo, size_t regId);
-void TranslateBeadStateMask_CubeToRegion(  LayoutCubeWithRegions<unsigned short> & BkgModelMask,void * bkinfo, size_t regId);
+  void TranslateRegionFrameCube_RegionToCube( LayoutCubeWithRegions<float> & RegionFrameCube, void * bkinfo, size_t regId);
+  void TranslateRegionFramesPerPoint_RegionToCube( LayoutCubeWithRegions<int> & RegionFramesPerPoint, void * bkinfo, size_t regId);
 
-void TranslateResults_RegionToCube( LayoutCubeWithRegions<float> & BeadParamCube,
-    size_t numLBeads,
-    size_t flowIdxInBlock,
-    BeadParams * bP,
-    size_t regId);
-void  TranslateResults_CubeToRegion(LayoutCubeWithRegions<float> & ResultCube, void * bkinfo, size_t flowIdxInBlock, size_t regId);
+  void TranslateEmphasis_RegionToCube(LayoutCubeWithRegions<float> & RegionEmphasis, void * bkinfo, size_t regId);
+  void TranslateNonZeroEmphasisFrames_RegionToCube(LayoutCubeWithRegions<int> & RegionNonZeroEmphFrames, void * bkinfo, size_t regId);
+  void TranslateNucRise_RegionToCube(LayoutCubeWithRegions<float> & NucRise, void *bkinfo, size_t flowIdx,  size_t regId);
 
+  void TranslatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsRegion> & PerFlowParamReg, void * bkinfo, size_t flowIdx, size_t regId );
+  void TranslatePerFlowRegionParams_CubeToRegion(LayoutCubeWithRegions<PerFlowParamsRegion> &PerFlowParamReg, void *bkinfo, size_t regId);
+  void UpdatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsRegion> & PerFlowParamReg, reg_params * rP, size_t flowIdx, size_t regId );
 
+  void TranslateConstantRegionParams_RegionToCube(LayoutCubeWithRegions<ConstantParamsRegion> & ConstParamReg, void * bkinfo, size_t regId);
+  void TranslatePerNucRegionParams_RegionToCube(LayoutCubeWithRegions<PerNucParamsRegion> & PerNucCube, void * bkinfo, size_t regId);
 
-void TranslateRegionParams_CubeToRegion( LayoutCubeWithRegions<reg_params> & RegionCube,
-    reg_params * rP,  size_t regId = 0);
-
-
-void TranslateRegionParams_RegionToCube( LayoutCubeWithRegions<ConstParams> & RegionCube, void* bkinfo,
-    size_t regId);
-
-
-void TranslateRegionFrameCube_RegionToCube( LayoutCubeWithRegions<float> & RegionFrameCube, void * bkinfo, size_t regId);
-void TranslateRegionFramesPerPoint_RegionToCube( LayoutCubeWithRegions<int> & RegionFramesPerPoint, void * bkinfo, size_t regId);
-
-
-void TranslateEmphasis_RegionToCube(LayoutCubeWithRegions<float> & RegionEmphasis, void * bkinfo, size_t regId);
-void TranslateNonZeroEmphasisFrames_RegionToCube(LayoutCubeWithRegions<int> & RegionNonZeroEmphFrames, void * bkinfo, size_t regId);
-void TranslateNucRise_RegionToCube(LayoutCubeWithRegions<float> & NucRise, void *bkinfo, size_t flowIdx,  size_t regId);
-
-
-
-void TranslatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsRegion> & PerFlowParamReg, void * bkinfo, size_t flowIdx, size_t regId );
-void TranslatePerFlowRegionParams_CubeToRegion(LayoutCubeWithRegions<PerFlowParamsRegion> &PerFlowParamReg, void *bkinfo, size_t regId);
-void UpdatePerFlowRegionParams_RegionToCube(LayoutCubeWithRegions<PerFlowParamsRegion> & PerFlowParamReg, reg_params * rP, size_t flowIdx, size_t regId );
-
-
-
-void TranslateConstantRegionParams_RegionToCube(LayoutCubeWithRegions<ConstantParamsRegion> & ConstParamReg, void * bkinfo, size_t regId);
-void TranslatePerNucRegionParams_RegionToCube(LayoutCubeWithRegions<PerNucParamsRegion> & PerNucCube, void * bkinfo, size_t regId);
-
+}
 
 //Populate and Copy Constant Memory Symbols
 
-void PopulateSymbolConstantImgageParams( ImgRegParams iP, ConstantFrameParams & CfP, void * bkinfoArray);
-void PopulateSymbolConstantGlobal( ConstantParamsGlobal & CpG, void * bkinfo);
-void PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo);
-void PopulateSymbolPerFlowGlobal(PerFlowParamsGlobal & pFpG, void * bkinfo, size_t flowIdx);
-//void PopulateSymbolConstantRegParamBounds(ConstantRegParamBounds & CpB, void * bkinfo);
+namespace ConstanSymbolCopier {
+  void PopulateSymbolConstantImgageParams( ImgRegParams iP, ConstantFrameParams & CfP, void * bkinfoArray);
+  void PopulateSymbolConstantGlobal( ConstantParamsGlobal & CpG, void * bkinfo);
+  void PopulateSymbolConfigParams(ConfigParams & confP, void * bkinfo);
+  void PopulateSymbolPerFlowGlobal(PerFlowParamsGlobal & pFpG, void * bkinfo);
+  //void PopulateSymbolConstantRegParamBounds(ConstantRegParamBounds & CpB, void * bkinfo);
+}
 
 
+
+
+
+
+
+
+void BuildGenericSampleMask(
+    bool * sampleMask, //global base pointer to mask Initialized with false
+    const ImgRegParams &imgP,
+    size_t regId);
 
 
 void BuildMaskFromBeadParams_RegionToCube(   LayoutCubeWithRegions<unsigned short> & Mask,

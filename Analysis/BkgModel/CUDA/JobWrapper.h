@@ -254,6 +254,12 @@ public:
 
   void ** getSampleCollectionPtr();
 
+  // exp tail fit related
+  bool performTauAdjInExpTailFit() const;
+  bool performBkgAdjInExpTailFit() const;
+  float expTailFitBkgAdjLimit() const; 
+  float expTailFitBkgDcLowerLimit() const; 
+ 
 };
 
 

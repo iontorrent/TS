@@ -283,7 +283,7 @@ void usage ( int cropx, int cropy, int kernx, int kerny )
   fprintf ( stdout, "   -o\tOutput directory.\n" );
   fprintf ( stdout, "   -f\tConverts only the one file named as an argument\n" );
   fprintf ( stdout, "   -F\tFlowLimit\n" );
-  fprintf ( stdout, "   -H\tPrints this message and exits.\n" );
+  fprintf ( stdout, "   -h\tPrints this message and exits.\n" );
   fprintf ( stdout, "   -v\tPrints version information and exits.\n" );
   fprintf ( stdout, "   -c\tOutput a variable rate frame compressed data set.  Default to whole chip\n" );
   fprintf ( stdout, "   -n\tOutput a non-variable rate frame compressed data set.\n" );
@@ -385,7 +385,7 @@ int main ( int argc, char *argv[] )
       exit ( 0 );
       break;
 
-    case 'H':
+    case 'h':
       usage ( cropx, cropy, kernx, kerny );
       break;
 

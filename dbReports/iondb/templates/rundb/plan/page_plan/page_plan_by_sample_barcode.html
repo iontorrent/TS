@@ -12,6 +12,7 @@
 <script type="text/javascript" src="/site_media/resources/scripts/plan/by_sample.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_sample_table.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_analysis_params_section.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_get_user_input.js"></script>
 <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
 <style>
@@ -46,6 +47,7 @@
          </div>
     </div>
 
+    {% include "rundb/plan/page_plan/page_plan_analysis_params_section.html" %}
     {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
     {% include "rundb/plan/page_plan/page_plan_sample_table.html" %}
 </div>
@@ -72,7 +74,10 @@
             "description":      "{{item.sample.description}}",
             "irGender":         "{{item.gender}}",
             "ircancerType":     "{{item.cancerType}}",
-            "ircellularityPct": "{{item.cellularityPct}}",                        
+            "ircellularityPct":   "{{item.cellularityPct}}",
+            "irbiopsyDays":     "{{item.biopsyDays}}",
+            "ircoupleID":         "{{item.coupleId}}",
+            "irembryoID":       "{{item.embryoId}}",
             "irRelationRole":   "{{item.relationshipRole}}",
             "irSetID"    :      "{{item.relationshipGroup}}"
         }
@@ -80,7 +85,7 @@
 
     var USERINPUT = USERINPUT || {};
 
-    USERINPUT.is_by_template = $("#planName").length != 0;
+    USERINPUT.validate = USERINPUT.is_by_sample = true;
 
     USERINPUT.ir_sample_to_tss_sample = {};
     USERINPUT.preset_ir_fields = [];
@@ -90,7 +95,6 @@
     USERINPUT.account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}";
     
     USERINPUT.is_ir_connected = false;
-    USERINPUT.by_template_url = '{% url "page_plan_save" %}';
 
     USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
     USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
@@ -115,11 +119,14 @@
         
         _array.push("{{sampleValues.ircancerType|default_if_none:""}}");
         _array.push("{{sampleValues.ircellularityPct|default_if_none:""}}");
-      
+        _array.push("{{sampleValues.irbiopsyDays|default_if_none:""}}");
+        _array.push("{{sampleValues.ircoupleID|default_if_none:""}}");
+        _array.push("{{sampleValues.irembryoID|default_if_none:""}}");
+              
         _array.push("{{sampleValues.irWorkflow|default_if_none:""}}");
         _array.push("{{sampleValues.irRelationshipType|default_if_none:""}}");
         _array.push("{{sampleValues.irRelationRole|default_if_none:""}}");
-        _array.push("{{sampleValues.irSetID|default_if_none:""}}");
+        _array.push("{{sampleValues.irSetID|default:"1"}}");
         USERINPUT.preset_ir_fields.push(_array);
     {%endfor%}
     

@@ -12,13 +12,14 @@
 #include <vector>
 #include <stdio.h>
 #include <iostream>
+#include <sstream>
 #include <stdlib.h>
 #include "OptArgs.h"
 
 
 namespace ion {
 
-// ------------------------------------------------------------------
+// =====================================================================
 class FlowOrder {
 public:
   FlowOrder() : cycle_nucs_("TACG"), num_flows_(0) {}
@@ -26,20 +27,26 @@ public:
     BuildFullArrays();
   }
 
+  // ------------------------------------------------------------------
   void SetFlowOrder(const std::string& cycle_nucs, int num_flows) {
     cycle_nucs_ = cycle_nucs;
     num_flows_ = num_flows;
     BuildFullArrays();
   }
+
+  // ------------------------------------------------------------------
   void SetFlowOrder(const std::string& cycle_nucs) {
     cycle_nucs_ = cycle_nucs;
     BuildFullArrays();
   }
+
+  // ------------------------------------------------------------------
   void SetNumFlows(int num_flows) {
     num_flows_ = num_flows;
     BuildFullArrays();
   }
 
+  // ------------------------------------------------------------------
   char operator[](int flow) const { return full_nucs_.at(flow); }
 
   const std::string& str() const { return cycle_nucs_; }
@@ -52,15 +59,7 @@ public:
   int num_flows() const { return num_flows_; }
   const char *full_nucs() const { return full_nucs_.c_str(); }
 
-//  void BasesToFlows (const string& basespace, vector<int> &flowspace) const
-//  void BasesToFlows (const string& basespace, vector<int> &flowspace, int num_flows) const;
-
-  // Potential use case: In BaseCaller, BaseCallerLite:
-  //void FlowsToBases, automatically resizes bases, returns number of bases
-  //void FlowsToFlowIndex, also generates flow_index...
-  //
-
-
+  // ------------------------------------------------------------------
   int BasesToFlows (const std::string& seq, int *ionogram, int ionogram_space) const
   {
     int flows = 0;
@@ -76,6 +75,7 @@ public:
     return flows;
   }
 
+  // ------------------------------------------------------------------
   int FlowsToBases(const std::vector<char>& ionogram, std::string &bases) const
   {
     int num_bases = 0;
@@ -89,6 +89,7 @@ public:
     return num_bases;
   }
 
+  // ------------------------------------------------------------------
   static int NucToInt (char nuc) {
       if (nuc=='a' or nuc=='A') return 0;
       if (nuc=='c' or nuc=='C') return 1;
@@ -96,6 +97,8 @@ public:
       if (nuc=='t' or nuc=='T') return 3;
       return -1;
   }
+
+  // ------------------------------------------------------------------
   static char IntToNuc (int idx) {
       if (idx == 0) return 'A';
       if (idx == 1) return 'C';
@@ -104,6 +107,14 @@ public:
       return 'N';
   }
 
+  // -----------------------------------------------------------------
+  static std::string IntToNucStr (int idx){
+    char nuc = IntToNuc(idx);
+    std::string nuc_str(&nuc,1);
+    return nuc_str;
+  }
+
+  // ------------------------------------------------------------------
 private:
   void BuildFullArrays() {
     if (cycle_nucs_.empty())
@@ -128,34 +139,49 @@ private:
 class ChipSubset {
 public:
   ChipSubset() {
-    chip_size_x_ = 0;       chip_size_y_ = 0;
-    region_size_x_ = 50;    region_size_y_ = 50;
-    num_regions_x_ = 0;     num_regions_y_ = 0;
-    num_regions_ = 0;
-    block_col_offset_ = 0;  block_row_offset_ = 0;
-    subset_begin_x_ = 0;    subset_begin_y_ = 0;
-    subset_end_x_ = 0;      subset_end_y_ = 0;
-    next_region_ = 0;
-    next_begin_x_ = 0;      next_begin_y_ = 0;
-    num_wells_  = 0;
+    chip_size_x_    = 0;  chip_size_y_    = 0;
+    region_size_x_  = 0;  region_size_y_  = 0;
+    num_regions_x_  = 0;  num_regions_y_  = 0;
+    num_regions_    = 0;
+    block_offset_x_ = 0;  block_offset_y_ = 0;
+    subset_begin_x_ = 0;  subset_begin_y_ = 0;
+    subset_end_x_   = 0;  subset_end_y_   = 0;
+    next_region_    = 0;
+    next_begin_x_   = 0;  next_begin_y_   = 0;
+    num_wells_      = 0;
   }
 
   // ------------------------------------------------------------------
+  // Chip subset initialization for BaseCaller
 
-  bool InitializeChipSubsetFromOptArgs(OptArgs &opts, const unsigned int chipSize_x, const unsigned int chipSize_y){
+  bool InitializeChipSubsetFromOptArgs(OptArgs &opts, const unsigned int chipSize_x, const unsigned int chipSize_y,
+                                                  const unsigned int regionSize_x, const unsigned int regionSize_y){
 
-    subset_begin_x_ = 0;
-    subset_begin_y_ = 0;
+    subset_begin_x_ = subset_begin_y_ = 0;
     subset_end_x_   = chip_size_x_ = chipSize_x;
     subset_end_y_   = chip_size_y_ = chipSize_y;
 
-    block_row_offset_            = opts.GetFirstInt    ('-', "block-row-offset", 0);
-    block_col_offset_            = opts.GetFirstInt    ('-', "block-col-offset", 0);
+    // Coordinate offset is addressable in row,col and x,y format, with x,y taking precedence
+    // In BaseCaller we do not use the offset for anything other than output info.
+    // Counters within block assume a zero offset index.
+    block_offset_x_ = opts.GetFirstInt    ('-', "block-col-offset", 0);
+    block_offset_y_ = opts.GetFirstInt    ('-', "block-row-offset", 0);
+    std::stringstream default_opt_val;
+    default_opt_val << block_offset_x_ << ',' << block_offset_y_;
+    std::vector<int> arg_block_offset  = opts.GetFirstIntVector ('-', "block-offset", default_opt_val.str(), ',');
+    if (arg_block_offset.size() != 2) {
+      std::cerr << "BaseCaller Option Error: argument 'block-offset' needs to be 2 comma separated values <Int>,<Int>" << std::endl;
+      exit (EXIT_FAILURE);
+    }
+    block_offset_x_ = arg_block_offset.at(0);
+    block_offset_y_ = arg_block_offset.at(1);
 
-    //! @todo Get default chip size from wells reader
-    std::vector<int> arg_region_size  = opts.GetFirstIntVector ('-', "region-size", "50x50", 'x');
+    // Make default options from variables in function header
+    default_opt_val.str("");
+    default_opt_val << regionSize_x << ',' << regionSize_y;
+    std::vector<int> arg_region_size  = opts.GetFirstIntVector ('-', "region-size", default_opt_val.str(), ',');
     if (arg_region_size.size() != 2) {
-      std::cerr << "BaseCaller Option Error: region-size needs to be of the format <Int>x<Int>" << std::endl;
+      std::cerr << "BaseCaller Option Error: argument 'region-size' needs to be 2 comma separated values <Int>,<Int>" << std::endl;
       exit (EXIT_FAILURE);
     }
     region_size_x_ = arg_region_size.at(0);
@@ -165,6 +191,7 @@ public:
     num_regions_ = num_regions_x_ * num_regions_y_;
 
     // Dash as string separator protects against someone trying to input negative numbers
+    // Subset specified by rows,cols is zero indexed without offset
     std::vector<int> arg_subset_rows  = opts.GetFirstIntVector ('r', "rows", "", '-');
     if (arg_subset_rows.size() == 2) {
       subset_begin_y_ = arg_subset_rows.at(0);
@@ -193,9 +220,10 @@ public:
 
     num_wells_ = (subset_end_x_-subset_begin_x_) * (subset_end_y_-subset_begin_y_);
 
-    std::cout << "Processing chip region x: " << subset_begin_x_ << "-" << subset_end_x_
+    std::cout << "BaseCaller chip region x: " << subset_begin_x_ << "-" << subset_end_x_
     	      << " y: " << subset_begin_y_ << "-" << subset_end_y_
-    	      << " with a total of " << num_wells_ << " wells." << std::endl;
+    	      << " with a total of " << num_wells_ << " wells and regions of size "
+    	      << region_size_x_ << "x" << region_size_y_ << std::endl;
     return true;
   };
 
@@ -207,8 +235,10 @@ public:
   int GetBeginY()       const { return subset_begin_y_; };
   int GetEndX()         const { return subset_end_x_; };
   int GetEndY()         const { return subset_end_y_; };
-  int GetRowOffset()    const { return block_row_offset_; };
-  int GetColOffset()    const { return block_col_offset_; };
+  int GetRowOffset()    const { return block_offset_y_; };
+  int GetColOffset()    const { return block_offset_x_; };
+  int GetOffsetX()      const { return block_offset_x_; };
+  int GetOffsetY()      const { return block_offset_y_; };
   int GetRegionSizeX()  const { return region_size_x_; };
   int GetRegionSizeY()  const { return region_size_y_; };
   int GetNumRegionsX()  const { return num_regions_x_; };
@@ -240,33 +270,135 @@ public:
   };
 
   // ------------------------------------------------------------------
+  // Chip subset initialization for Calibration Module
+
+  bool InitializeCalibrationRegionsFromOpts(OptArgs &opts) {
+
+    // Read in block coordinate offset
+
+    block_offset_x_ = opts.GetFirstInt    ('-', "block-col-offset", 0);
+    block_offset_y_ = opts.GetFirstInt    ('-', "block-row-offset", 0);
+    std::stringstream default_opt_val;
+    default_opt_val << block_offset_x_ << ',' << block_offset_y_;
+    std::vector<int> arg_block_offset  = opts.GetFirstIntVector ('-', "block-offset", default_opt_val.str(), ',');
+    if (arg_block_offset.size() != 2) {
+      std::cerr << "BaseCaller Option Error: argument block-offset needs to be 2 comma separated values <Int>,<Int>" << std::endl;
+      exit (EXIT_FAILURE);
+    }
+
+    // Read in chip/block size (default to 318 for testing)
+
+    chip_size_y_ = opts.GetFirstInt    ('-', "block-row-size", 3792);
+    chip_size_x_ = opts.GetFirstInt    ('-', "block-col-size", 3392);
+    default_opt_val.str("");
+    default_opt_val << chip_size_x_ << ',' << chip_size_y_;
+    std::vector<int> arg_chip_size  = opts.GetFirstIntVector ('-', "block-size", default_opt_val.str(), ',');
+    if (arg_chip_size.size() != 2) {
+      std::cerr << "Calibration Option Error: argument  block-size needs to be 2 comma separated values <Int>,<Int>" << std::endl;
+      exit (EXIT_FAILURE);
+    }
+
+    // Chip subdivision by regions
+
+    std::vector<int> arg_num_regions  = opts.GetFirstIntVector ('-', "num-calibration-regions", "2,2", ',');
+    if (arg_num_regions.size() != 2) {
+      std::cerr << "Calibration Option Error:argument num-regions needs to be 2 comma separated values <Int>,<Int>" << std::endl;
+      exit (EXIT_FAILURE);
+    }
+
+    bool success = InitializeCalibrationRegions(arg_block_offset.at(0), arg_block_offset.at(1),
+                                         arg_chip_size.at(0), arg_chip_size.at(1),
+                                         arg_num_regions.at(0), arg_num_regions.at(1));
+
+    std::cout << "Calibration chip region x: " << subset_begin_x_ << "-" << subset_end_x_
+              << " y: " << subset_begin_y_ << "-" << subset_end_y_ << " divided into "
+              << num_regions_x_ << "x" << num_regions_y_ << "=" << num_regions_ << " regions." << std::endl;
+    return (success);
+  }
+
+  // ------------------------------------------------------------------
+
+ bool InitializeCalibrationRegions(const int block_offset_x, const int block_offset_y,
+                                   const int chip_size_x,    const int chip_size_y,
+                                   const int num_regions_x,  const int num_regions_y)
+  {
+    subset_begin_x_ = block_offset_x_ = block_offset_x;
+    subset_begin_y_ = block_offset_y_ = block_offset_y;
+
+    chip_size_x_ = chip_size_x;
+    chip_size_y_ = chip_size_y;
+    subset_end_x_ = subset_begin_x_ + chip_size_x_;
+    subset_end_y_ = subset_begin_y_ + chip_size_y_;
+
+    num_regions_x_ = num_regions_x;
+    num_regions_y_ = num_regions_y;
+    region_size_x_  = (chip_size_x_ + num_regions_x_ -1) / num_regions_x_;
+    region_size_y_  = (chip_size_y_ + num_regions_y_ -1) / num_regions_y_;
+
+    num_regions_ = num_regions_x_ * num_regions_y_;
+    num_wells_   = (subset_end_x_-subset_begin_x_) * (subset_end_y_-subset_begin_y_);
+
+    return true;
+  }
+
+  // ------------------------------------------------------------------
+
+  int CoordinatesToRegionIdx(int x, int y) const
+  {
+    if (x < subset_begin_x_ or x >= subset_end_x_)
+      return(-1);
+    if (y < subset_begin_y_ or y >= subset_end_y_)
+      return(-1);
+
+    // In line with BaseCaller region numbering, opposite to old recalibration code
+    return (((x - subset_begin_x_) / region_size_x_) + ((y - subset_begin_y_) / region_size_y_)*num_regions_x_);
+  };
+
+  // ------------------------------------------------------------------
+
+  void GetRegionStart(int region_idx, int& start_x, int& start_y) const
+  {
+    if (num_regions_x_ == 0) {
+      std::cerr << "ERROR in ChipSubset::GetRegionStart : num_regions_x_ is zero!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (region_idx > -1 and region_idx < num_regions_) {
+	  start_x = (region_idx % num_regions_x_) * region_size_x_ + subset_begin_x_;
+      start_y = (region_idx / num_regions_x_) * region_size_y_ + subset_begin_y_;
+    }
+    else {
+      start_x = start_y = -1;
+    }
+  }
+
+  // ------------------------------------------------------------------
 private:
     // Generic sizes
-    int      chip_size_y_;            //!< Chip height in wells
-    int      chip_size_x_;            //!< Chip width in wells
-    int      region_size_y_;          //!< Wells hdf5 dataset chunk height
-    int      region_size_x_;          //!< Wells hdf5 dataset chunk width
+    int      chip_size_y_;            //!< Chip/block height in wells file (rows)
+    int      chip_size_x_;            //!< Chip/block width in wells file (columns)
+    int      region_size_y_;          //!< Processing region (H5 chunk size in wells file)
+    int      region_size_x_;          //!< Processing region (H5 chunk size in wells file)
 
-    int      num_regions_x_;
-    int      num_regions_y_;
-    int      num_regions_;
+    int      num_regions_x_;          //!< Number of regions along X
+    int      num_regions_y_;          //!< Number of regions along Y
+    int      num_regions_;            //!< Total number of regions
 
     // Block offset for Proton Chips
-    int      block_row_offset_;       //!< Offset added to read names
-    int      block_col_offset_;       //!< Offset added to read names
+    int      block_offset_x_;         //!< X coordinate offset of block
+    int      block_offset_y_;         //!< Y coordinate offset of block
 
     // Chip subset coordinates selected
     int      subset_begin_x_;         //!< Starting X of chip subset selected
     int      subset_begin_y_;         //!< Starting Y of chip subset selected
     int      subset_end_x_;           //!< Ending X of chip subset selected
-    int      subset_end_y_;           //!< Ending X of chip subset selected
+    int      subset_end_y_;           //!< Ending Y of chip subset selected
 
     // Threading block management
     int      next_region_;            //!< Number of next region that needs processing by a worker
     int      next_begin_x_;           //!< Starting X coordinate of next region
     int      next_begin_y_;           //!< Starting Y coordinate of next region
 
-    int num_wells_;                   //!< NUmber of weelas in the chip subblock selected
+    int      num_wells_;              //!< Total number of wells in the selected chip sub-block
 };
 
 }

@@ -14,7 +14,7 @@
 
 <table>
   <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
-  <tr><td>Reference genome:</td>             <td>{{options.genome_name}}</td></tr>
+  <tr><td>Reference genome:</td>             <td>{{options.reference_genome_name}}</td></tr>
   {% if options.has_targets %}
     <tr><td>Targeted regions:</td>    <td>{{options.targets_name}}</td></tr>
   {% else %}
@@ -50,6 +50,8 @@
             {% endif %}
             <td><a class="btn" href="{{variants_vcf_gz_link}}">VCF.GZ</a>
             <a class="btn" href="{{variants_tbi_link}}">VCF.GZ.TBI</a>
+            <a class="btn" href="{{genome_vcf_gz_link}}">gVCF.GZ</a>
+            <a class="btn" href="{{genome_tbi_link}}">gVCF.GZ.TBI</a>
             <a class="btn" href="{{alleles_xls_link}}">XLS</a></td>
           </tr>
         </tbody>

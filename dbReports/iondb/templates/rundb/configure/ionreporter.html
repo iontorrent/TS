@@ -4,16 +4,9 @@
 {% block extra_head_js %}
     <script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
 {% endblock extra_head_js %}
-{% block sub-nav %}
-	<li><a href="{% url "configure_about" %}">About</a></li>
-	<li><a href="{% url "configure_references" %}">References</a></li>
-	<li><a href="{% url "configure_services" %}">Services</a></li>
-	<li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-	<li><a href="{% url "configure_configure" %}">Configure</a></li>
+{% block tab-configure-ionreporter %}
     <li class="active"><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-	<li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
-
+{% endblock tab-configure-ionreporter %}
 {% block content %}
 
 <style>

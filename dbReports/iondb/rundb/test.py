@@ -31,6 +31,8 @@ class SeleniumTestCase(LiveServerTestCase):
 
     @classmethod
     def setUpClass(cls):
+        if settings.GUIDISPLAY == False:
+            settings.DISPLAY.start()  
         LOGGER.setLevel(logging.WARNING)
         
         # Instantiating the WebDriver will load your browser
@@ -72,8 +74,24 @@ class SeleniumTestCase(LiveServerTestCase):
 #        json = simplejson.loads(response.read())
 #        return json['objects'][0]
 
-        
+    def get_latest_all_nth_planned_experiment(self,n): 
+        try:
+            self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/?format=json&order_by=-id'+"&limit="+str(n)
 
+            host = settings.TEST_SERVER_URL
+            url = host + self.latest_pe_api_url
+            request = urllib2.Request(url)
+
+            base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
+            request.add_header("Authorization", "Basic %s" %(base64String))
+            
+            response = urllib2.urlopen(request)
+            json = simplejson.loads(response.read())
+            return json['objects']
+        except Exception, e:
+            #TO-DO: do something with the exception
+            raise e
+        
     def get_latest_planned_experiment(self):
         try:
             self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/?format=json&order_by=-id'
@@ -94,6 +112,8 @@ class SeleniumTestCase(LiveServerTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if settings.GUIDISPLAY == False:
+            settings.DISPLAY.stop()
         cls.wd.quit()
 
     def open(self, url):

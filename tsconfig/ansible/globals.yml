@@ -12,7 +12,6 @@
 - debug: var={{S5_virtual_guest}}
 
 # Load the platform-specific variables, if the file exists
-
 - name: 
   stat: path='group_vars/{{ansible_product_name}}'
   register: p
@@ -21,4 +20,3 @@
 # ...or if its an S5, load the S5 variables
 - include_vars: 'group_vars/S5'
   when: S5_virtual_guest
-

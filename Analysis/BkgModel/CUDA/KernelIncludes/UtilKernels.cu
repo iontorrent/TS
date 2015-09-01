@@ -13,19 +13,54 @@
 /////////////////////////////////////////////////////////////
 //WARP LEVEL NO SYNC FUNCTIONS, USE WITH CAUTION
 
+
+
+
+
+/*********************************8
+ *
+ * shared memory pointer naming conventions:
+ *
+ * [v][type]sm[OffsetDescriptor][Usage]
+ *
+ * v:               if pointer name starts with a v it is declared a volatile to guarantee warp safe execution
+ *
+ * type:            (optional, only used for temporary type casts) can be i=int, f=float, d=double,...
+ *
+ * OffsetDesriptor: if none given: e.g. sm, ism, the pointer points to a unique address/offset used only by the current thread
+ *                  Base: points to the first element of the per thread/per Warp memory. all warps in block point to the same address.
+ *                  Warp: (sometimes shortened to W) pointer points to the first element of a buffer of warp size used only by the the threads in the current warp
+ *
+ * Usage:            suffix do indicate special use or different sm layout with num elements != num threads
+ *
+ *
+ * Examples:
+ *            ism:          pointer to thread specific address casted to int*
+ *            vsmWarpTrace  address pointing to the first element of a trace-buffer specific to the current warp which his declared volatile
+ *            smWarp    pointer to the first element of a buffer of warp size used only by the the threads in the current warp
+ *
+ *            volatile int * vism = (int*)&smWarp[threadIdx.x];
+ *                          assigns the int* casted address for the current thread to a volatile declared pointer
+ *
+ *
+ *
+*/
+
+
 // Accumulates sm values of blockDim.x and stores them in sm value of thread 0;
 // does not distribute results in sm, hence
 // all values in sm for threads with Idx.x > 0 are garbage afterwards
-// only works if blockDim.x <= warpsize since no sync
+// only works if blockDim.x has a value of 2^n <= warpsize (32) since no sync is used.
 
+// smP[0] will contain correct value
 template<typename T>
 __device__ inline
-void WarpSumNoSync(T * smP)
+void WarpSumNoSync(T * sm)
 {
-  volatile T * sm = smP;
+  volatile T * vsm = sm;
   int offset = blockDim.x >> 1;
   while(offset >= 1){
-    if(threadIdx.x < offset) *sm += *(sm + offset);
+    if(threadIdx.x < offset) *vsm += *(vsm + offset);
     offset = offset >> 1;
   }
 }
@@ -33,51 +68,231 @@ void WarpSumNoSync(T * smP)
 //sums only up for groups of n where n has to be a warpsize/(2^k)
 template<typename T>
 __device__ inline
-void WarpSumNoSync(T * smP, int n)
+void WarpSumNoSync(T * sm, int n)
 {
-  volatile T * sm = smP;
+  volatile T * vsm = sm;
   int tid = threadIdx.x % n;
   int offset = n >> 1;
   while(offset >= 1){
-    if(tid < offset) *sm += *(sm + offset);
+    if(tid < offset) *vsm += *(vsm + offset);
     offset = offset >> 1;
   }
-  *sm = *(sm-tid); //distribute to all threads sm address
+  *vsm = *(vsm-tid); //distribute to all threads sm address
 }
 
 
 //sums up shared memory from sm[0] to sm[threadIdx.x]
 template<typename T>
 __device__ inline
-T RunningSumToCurrentThread(T * smP)
+T WarpRunningSumToCurrentThread(T * smWarp)
 {
-  volatile T * sm = smP;
+  volatile T * vsmWarp = smWarp;
   T s = 0;
   for(int i = 0 ; i<blockDim.x; i++)
-    s += (i<=threadIdx.x)?(sm[i]):0;
+    s += (i<=threadIdx.x)?(vsmWarp[i]):0;
   return s;
 }
 
+
+//accumulates one trace with nframes per thread into the output Trace by accumulaton
+//the input races frame by frame in shared memory. all operations are warp based and rely on
+//blockDim.x == warp size
+// output trace buffer has to be initialized with 0 since accumulated value gets added to current value.
+//
+template<typename T>  //blockDim.x == warpsize !! sm buffer must be at least smBase[numframes]
+__device__ inline
+void WarpTraceAccum(T* outTrace, T*smWarp, T*localTrace, const int nframes)
+{
+  volatile float * vsmW = smWarp;
+  volatile float * vOut = outTrace;
+  for(int f=0; f<nframes; f++){
+    vsmW[threadIdx.x] = localTrace[f]; // each thread of the warp writes one frame
+    WarpSumNoSync(&smWarp[threadIdx.x]);
+    if(threadIdx.x == 0)
+      vOut[f] += vsmW[0];
+  }
+}
+
+
+
+//accumulates one frame of trace held
+//validTrace is option and defaults to true, if some traces are not part of the accumulation for those threads/traces validTrace has to be set to false
+template<typename T>  //blockDim.x == warpsize !! sm buffer must be at least smBase[numframes]
+__device__ inline
+void WarpTraceAccumSingleFrame(T* smWarpTrace, const int frame, T*smWarp, const T localFrameValue, const bool validTrace)
+{
+  //volatile float * vsmW = smWarp;
+  volatile float * vsm = smWarp + threadIdx.x;
+  volatile float * vOut = smWarpTrace;
+  *vsm = (validTrace)?(localFrameValue):(0.0f);
+  WarpSumNoSync(vsm);
+  if(threadIdx.x == 0)
+      vOut[frame] += *vsm;
+
+}
+//overloaded from above, where input trace instead of just the frame value is passed
+//validTrace is option and defaults to true, if some traces are not part of the accumulation for those threads/traces validTrace has to be set to false
+template<typename T>
+__device__ inline
+void WarpTraceAccumSingleFrame(T* smWarpTrace, const int frame, T*smWarp, const T * localTrace, const bool validTrace)
+{
+  WarpTraceAccumSingleFrame( smWarpTrace, frame, smWarp, localTrace[frame], validTrace);
+}
+
+
+
+//same as above but each thread also passes a valid trace flag which tells if there is a trace to accumulate
+//the function will also accumulate the number of valid traces and return the value
+//blockDim.x == warpsize !! sm buffer must be at least smBase[numframes]
+//validTrace is option and defaults to true, if some traces are not part of the accumulation for those threads/traces validTrace has to be set to false
+template<typename T>
+__device__ inline
+int WarpTraceAccumCount(T* smWarpTrace, const int nframes, T*smWarp, const T*localTrace, const bool validTrace)
+{
+  volatile int * vismW = (int*)smWarp;
+  volatile float * vsmW = smWarp;
+  volatile int*vism = vismW+threadIdx.x; /// !!!!!
+  *vism = (validTrace)?(1):(0);
+  WarpSumNoSync(vism);
+  int numTraces = vismW[0];
+  if(numTraces > 0){
+    volatile float * vOut = smWarpTrace;
+    for(int f=0; f<nframes; f++){
+      vsmW[threadIdx.x] = (validTrace)?(localTrace[f]):(0); // each thread of the warp writes one frame
+      WarpSumNoSync(&(smWarp[threadIdx.x]));
+      if(threadIdx.x == 0)
+        vOut[f] += vsmW[0];
+    }
+  }
+  return numTraces;
+}
+
+
+// END WARP LEVEL FUNCTIONS
+////////////////////////////////////////
+//BLOCK LEVEL REDUCTION
 
 //reduces shared memory and returns sum,
 //no sync at the end make sure to sync before using smem after function call
 template<typename T>
 __device__ inline
-T ReduceSharedMemory(T* base, T*local)
+T ReduceSharedMemory(T* smBase, T*sm)
 {
-  WarpSumNoSync(local);
+  WarpSumNoSync(sm);
   //Synchronize to allow to sum up partial sums from all warps within block
   __syncthreads();
 
   T sum = 0;
   //calculate num live beads for whole region in all threads
   for(size_t i=0; i<blockDim.y; i++){
-    sum += base[i*blockDim.x]; //all threads get correct sum from SM base pointer
+    sum += smBase[i*blockDim.x]; //all threads get correct sum from SM base pointer
   }
   return sum;
 }
 
-// END WARP LEVEL FUNCTIONS
+
+
+//accumulates num Warps traces with nframes which are stored consecutively in shared memory into one final trace
+//parameters: outTrace: points to the first frame of a buffer of length nframes or larger
+//            smTracesBase: points to the first frame of a buffer containing numWarps traces of length nframes.
+//            nframes: number of frames.
+template<typename T>
+__device__ inline
+void BlockTraceAccumfromWarps(T* outTrace, const T*smBaseTraces, const int nframes, const int maxCompFrames)
+{
+  int accumFrame = threadIdx.x + blockDim.x * threadIdx.y;
+  int blockSize = blockDim.x * blockDim.y;
+
+  __syncthreads();
+
+  while (accumFrame < nframes){
+    T accum = 0.0f;
+
+    for(int i=0; i<blockDim.y; i++)
+      accum += smBaseTraces[accumFrame+maxCompFrames*i];
+
+    outTrace[accumFrame] = accum;
+    accumFrame += blockSize;
+
+  }
+}
+
+//same as above but result will be written to the first warps trace in shared memory.
+template<typename T>
+__device__ inline
+void BlockTraceAccumfromWarpsInplace(T*smBaseTraces, const int nframes, const int maxCompFrames)
+{
+  int offset = threadIdx.x + blockDim.x * threadIdx.y;
+  int blockSize = blockDim.x * blockDim.y;
+
+  __syncthreads();
+
+  while (offset < nframes){
+
+    for(int i=1; i<blockDim.y; i++)
+      smBaseTraces[offset] += smBaseTraces[offset+maxCompFrames*i];
+
+    offset += blockSize;
+  }
+}
+
+//as above but then stores the result to a global address
+// atomicGlobalAccum: true does an atomic accumulation in global memory, if false value gets saved to global memory and current value get's overwritten.
+
+template<typename T>
+__device__ inline
+void BlockTraceAccumfromWarpsInplaceToGlobal( T*gTrace,const size_t outFrameStride, T*smBaseTraces, const int nframes, const int maxCompFrames, const bool atomicGlobalAccum)
+{
+  int accumFrame = threadIdx.x + blockDim.x * threadIdx.y;
+  int blockSize = blockDim.x * blockDim.y;
+  gTrace += accumFrame * outFrameStride;
+  volatile T * vsmBaseTrace = smBaseTraces;
+  __syncthreads();
+  while (accumFrame < nframes){
+
+    for(int i=1; i<blockDim.y; i++)
+      vsmBaseTrace[accumFrame] += vsmBaseTrace[accumFrame+maxCompFrames*i];
+
+    if(atomicGlobalAccum)
+      atomicAdd(gTrace,vsmBaseTrace[accumFrame]);
+    else
+      *gTrace = vsmBaseTrace[accumFrame];
+
+    accumFrame += blockSize;
+    gTrace += blockSize * outFrameStride;
+
+  }
+}
+
+
+template<typename T>
+__device__ inline
+T BlockAccumPerThreadValuesAcrossWarpsSharedMem(T*smBase)
+{
+  __syncthreads();
+
+  T sum = 0;
+  for(int i=0; i<blockDim.y;i++)
+      sum += smBase[threadIdx.x + i*blockDim.x];
+  return sum;
+
+}
+
+//per warp value at each sm_warp_base: smBase[0],[warpsize],[2*warpsize].... will be accumulated in smBase[0] and then stored to global
+// atomicGlobalAccum: true does an atomic accumulation in global memory, if false value gets saved to global memory and current value get's overwritten.
+template<typename T>
+__device__ inline
+void BlockAccumValuePerWarpToGlobal( T*gValue, T*smBase, const bool atomicGlobalAccum)
+{
+  T sum = BlockAccumPerThreadValuesAcrossWarpsSharedMem(smBase);
+  if (threadIdx.x==0 && threadIdx.y ==0){
+    if(atomicGlobalAccum)
+      atomicAdd(gValue,sum);
+    else
+      *gValue=sum;
+  }
+}
+
 /////////////////////////////////////////////////////////
 
 
@@ -180,8 +395,8 @@ float ComputeDcOffsetForUncompressedTrace ( const T *bPtr, const int uncompresse
   for ( int pt = above_t_start; pt <= below_t_end; pt++ )
   {
 
-      dc_zero += ( float ) ( bPtr[pt] );
-      cnt += 1.0f;
+    dc_zero += ( float ) ( bPtr[pt] );
+    cnt += 1.0f;
 
   }
 
@@ -387,7 +602,7 @@ void SimplestReductionAndAverage(T *sm, int N, bool avg) {
   if (threadIdx.x == 0) {
     for (int i=0; i<N; ++i)
       sum += sm[i];
-  
+
     if (avg)
       sm[0] = sum / (T)N;
     else

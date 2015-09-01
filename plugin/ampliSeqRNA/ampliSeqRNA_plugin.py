@@ -575,6 +575,7 @@ def parseCmdArgs():
   parser.add_option('-d', '--scraper', help='Create a scraper folder of links to output files using name prefix (-P).', action="store_true", dest='scraper')
   parser.add_option('-k', '--keep_temp', help='Keep intermediate files. By default these are deleted after a successful run.', action="store_true", dest='keep_temp')
   parser.add_option('-l', '--log', help='Output extra progress Log information to STDERR during a run.', action="store_true", dest='logopt')
+  parser.add_option('-p', '--purge_results', help='Remove all folders and most files from output results folder.', action="store_true", dest='purge_results')
   parser.add_option('-s', '--skip_analysis', help='Skip re-generation of existing files but make new report.', action="store_true", dest='skip_analysis')
   parser.add_option('-x', '--stop_on_error', help='Stop processing barcodes after one fails. Otherwise continue to the next.', action="store_true", dest='stop_on_error')
 
@@ -591,7 +592,7 @@ def parseCmdArgs():
 
 def emptyResultsFolder():
   '''Purge everything in output folder except for specifically named files.'''
-  # Dangerous - replace with something safer if it becomes obvious (e.g. putting output in subfolder?)
+  if not pluginParams['cmdOptions'].purge_results: return
   results_dir = pluginParams['results_dir']
   if results_dir == '/': return
   logopt = pluginParams['cmdOptions'].logopt
@@ -603,7 +604,7 @@ def emptyResultsFolder():
       # these are the exceptions - partial names and in the to level results
       if root == results_dir:
         start = os.path.basename(name)[:10]
-        if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi":
+        if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi" or start == 'barcodes.j':
           continue
       fname = os.path.realpath(os.path.join(root,name))
       if fname.startswith(cwd): continue

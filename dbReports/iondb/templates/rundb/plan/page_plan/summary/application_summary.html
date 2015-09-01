@@ -22,3 +22,17 @@
     {% endif %}
     </td>
 </tr>
+
+<!-- #TS-11365 - Below comment will be reverted in release 5.2 -->
+<!--<tr>
+    <td width="160"><b>Data Quality Check Before Upload to Ion Reporter:</b></td>
+    <td id="selectedUploadMode">
+            {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName %}
+                {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode == 'no_check' %}
+                    None
+                {% elif helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode == 'manual_check' %}
+                    Manual
+                {% endif %}
+            {% endif %}
+    </td>
+</tr>-->

@@ -1,16 +1,16 @@
 {
     "meta":{
         "name"          : "Generic - PGM - Germ Line - Low Stringency",
-        "tooltip"       : "Optimized using Ampliseq for 48K amplicons for generic low stringency",
+        "tooltip"       : "Parameters optimized using Ampliseq for 48K NA12878 for generic low stringency",
         "configuration" : "germline_low_stringency",
-        "ts_version": "4.6",
+        "ts_version"    : "5.0",
         "compatibility" : {
-          "chip"        : ["pgm"],
+          "chip"        : ["520","530","pgm"],
           "library"     : ["wholegenome","ampliseq","targetseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]
-          
-        }
+        },
+        "tmapargs"      : "tmap mapall ... --context -J 25 --end-repair 15 --do-repeat-clip stage1 map4"
     },
     "torrent_variant_caller":{
 
@@ -18,21 +18,21 @@
         "hp_max_length":8,
         "filter_unusual_predictions":0.3,
         "filter_insertion_predictions": 0.3,
-        "filter_deletion_predictions": 0.3, 
+        "filter_deletion_predictions": 0.3,
         "indel_as_hpindel": 0,
 
         "snp_min_cov_each_strand":0,
         "snp_min_variant_score":10.0,
         "snp_min_allele_freq":0.10,
         "snp_min_coverage":5,
-        "snp_strand_bias":0.98, 
+        "snp_strand_bias":0.98,
         "snp_strand_bias_pval":0.01,
 
         "mnp_min_cov_each_strand":0,
         "mnp_min_variant_score":10.0,
         "mnp_min_allele_freq":0.10,
         "mnp_min_coverage":5,
-        "mnp_strand_bias":0.98, 
+        "mnp_strand_bias":0.98,
         "mnp_strand_bias_pval":0.01,
 
         "indel_min_cov_each_strand":4,
@@ -41,19 +41,19 @@
         "indel_min_coverage":10,
         "indel_strand_bias":0.95,
         "indel_strand_bias_pval":1.0,
-        
+
         "hotspot_min_cov_each_strand":0,
         "hotspot_min_variant_score":10.0,
         "hotspot_min_allele_freq":0.10,
         "hotspot_min_coverage":5,
         "hotspot_strand_bias":0.98,
         "hotspot_strand_bias_pval":0.01,
-        
+
         "downsample_to_coverage":4000,
         "outlier_probability":0.01,
-        "do_snp_realignment":1,
-        "do_mnp_realignment":1,
-        "realignment_threshold":1,
+        "do_snp_realignment":0,
+        "do_mnp_realignment":0,
+        "realignment_threshold":0,
 
         "use_position_bias":1,
         "position_bias":0.75,

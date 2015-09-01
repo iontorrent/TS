@@ -168,8 +168,6 @@ class SignalProcessingMasterFitter
     void GetRegParams (struct reg_params &pOut)
     {
       //ION_ASSERT(sizeof(pOut) == sizeof(reg_params), "sizeof(pOut) != sizeof(reg_params)");
-      if (&pOut != NULL)
-      {
         // avoid the variable sizeof(reg_params) problem, if there's one here, due to the align(16) statement in the struc
         if (sizeof (pOut) == sizeof (reg_params))
           memcpy (&pOut,& (region_data->my_regions.rp),sizeof (struct reg_params));
@@ -178,7 +176,6 @@ class SignalProcessingMasterFitter
           std::cout << "Warning in SignalProcessingMasterFitter::GetRegParams(): sizeof(pOut)=" << sizeof (pOut) << " != sizeof(reg_params)=" << sizeof (reg_params) << std::endl;
           pOut = region_data->my_regions.rp;
         }
-      }
     }
 
     const Region *GetRegion (void)
@@ -276,6 +273,9 @@ class SignalProcessingMasterFitter
       return trace_xtalk_execute;
     }
     GlobalWriter &GetGlobalStage() { return global_state; }
+
+    const WellXtalk & getWellXTalk() const {return well_xtalk_corrector.my_xtalk; }
+    const TraceCrossTalkSpecification & getTraceXTalkSpecs() const {return trace_xtalk_spec; }
 
 	void setWashoutThreshold(float threshold) { washout_threshold = threshold; }
 	float getWashoutThreshold() { return washout_threshold; }

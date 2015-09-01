@@ -29,7 +29,10 @@ $(document).ready(function () {
 
         $row.find('select[name=ircancerType]').val(ITEM['ircancerType']);
         $row.find('input[name=ircellularityPct]').val(ITEM['ircellularityPct']);
-
+        $row.find('input[name=irbiopsyDays]').val(ITEM['irbiopsyDays']);
+        $row.find('input[name=ircoupleID]').val(ITEM['ircoupleId']);
+        $row.find('input[name=irembryoID]').val(ITEM['irembryoId']);
+        
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
         var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
 
@@ -53,6 +56,13 @@ $(document).ready(function () {
                 
                 value = $row.find('input[name=ircellularityPct]').val();                
                 row1.children().find('input[name=ircellularityPct]').val(value);
+
+                value = $row.find('input[name=irbiopsyDays]').val();
+                row1.children().find('input[name=irbiopsyDays]').val(value);
+                value = $row.find('input[name=ircoupleID]').val();
+                row1.children().find('input[name=ircoupleID]').val(value);
+                value = $row.find('input[name=irembryoID]').val();  
+                row1.children().find('input[name=irembryoID]').val(value);
                 
                 //if user changes sample selection, duplicate the barcode selection as well to avoid incorrect carryover of barcode selection
                 // for the previous sample

@@ -436,6 +436,10 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     nucleotideType = queryDict.get("nucleotideType", "")
     pcrPlateRow = queryDict.get("pcrPlateRow", "").strip()
     
+    biopsyDays = queryDict.get("biopsyDays", "0")
+    coupleId = queryDict.get("coupleId", "")
+    embryoId = queryDict.get("embryoId", "")
+    
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
     if errorMessage:
@@ -464,6 +468,10 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     
     sampleSetItem_dict['cancerType'] = cancerType
     sampleSetItem_dict['cellularityPct'] = cellularityPct
+
+    sampleSetItem_dict["biopsyDays"] = biopsyDays if biopsyDays else "0"
+    sampleSetItem_dict["coupleId"] = coupleId
+    sampleSetItem_dict["embryoId"] = embryoId
     
     #logger.debug("views_helper._create_pending_sampleSetItem_dict=%s" %(sampleSetItem_dict))
     
@@ -500,6 +508,10 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
 
     barcodeKit = queryDict.get("barcodeKit", "")
     barcode = queryDict.get("barcode", "")
+
+    biopsyDays = queryDict.get("biopsyDays", "0")
+    coupleId = queryDict.get("coupleId", "")
+    embryoId = queryDict.get("embryoId", "")
     
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
@@ -529,6 +541,10 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['barcodeKit'] = barcodeKit
     sampleSetItem_dict['barcode'] = barcode    
     sampleSetItem_dict['attribute_dict'] = sampleAttributes_dict
+
+    sampleSetItem_dict["biopsyDays"] = biopsyDays if biopsyDays else "0"
+    sampleSetItem_dict["coupleId"] = coupleId
+    sampleSetItem_dict["embryoId"] = embryoId
     
     #logger.debug("views_helper._create_pending_sampleSetItem_dict=%s" %(sampleSetItem_dict))
     
@@ -703,7 +719,7 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" %(attributeValue.id))                                                                        
               
 def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, \
-                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow):
+                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId):
     currentDateTime = timezone.now()  ##datetime.datetime.now()      
     
     if selectedBarcode:
@@ -723,7 +739,8 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
             for sampleSetItem in sampleSetItems:
                 if sampleSetItem.gender == sampleGender and sampleSetItem.relationshipRole == sampleRelationshipRole and sampleSetItem.relationshipGroup == relationshipGroup and \
                     sampleSetItem.cancerType == sampleCancerType and sampleSetItem.cellularityPct == sampleCellularityPct and sampleSetItem.dnabarcode == dnabarcode and \
-                    sampleSetItem.nucleotideType == sampleNucleotideType and sampleSetItem.pcrPlateRow == pcrPlateRow:
+                    sampleSetItem.nucleotideType == sampleNucleotideType and sampleSetItem.pcrPlateRow == pcrPlateRow and sampleSetItem.biopsyDays == sampleBiopsyDays and \
+                    sampleSetItem.coupleId == sampleCoupleId and sampleSetItem.embryoId == sampleEmbryoId:
                     logger.debug("views_helper - _create_or_update_pending_sampleSetItem NO UPDATE NEEDED for sampleSetItem.id=%d" %(sampleSetItem.id))
                     need_update = False
                 
@@ -739,6 +756,9 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                         'nucleotideType' : sampleNucleotideType,
                                         'pcrPlateRow' : pcrPlateRow,
                                         'pcrPlateColumn' : pcrPlateColumn,
+                                        'biopsyDays' : sampleBiopsyDays,
+                                        'coupleId' : sampleCoupleId,
+                                        'embryoId' : sampleEmbryoId,
                                         'lastModifiedUser' : user,                     
                                         'lastModifiedDate' : currentDateTime   
                                         }
@@ -753,8 +773,10 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                      'relationshipRole' : sampleRelationshipRole, 
                                      'relationshipGroup' : relationshipGroup,
                                      'cancerType' : sampleCancerType,
-                                     'cellularityPct' : sampleCellularityPct,                                        
-                                     # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE                                                                      
+                                     'cellularityPct' : sampleCellularityPct,
+                                     'biopsyDays' : sampleBiopsyDays,
+                                     'coupleId' : sampleCoupleId,
+                                     'embryoId' : sampleEmbryoId,                                                                      
                                      'creator' : user,
                                      'creationDate' : currentDateTime,
                                      'lastModifiedUser' : user,
@@ -802,10 +824,15 @@ def _create_or_update_sampleSetItem(request, user, sample):
     selectedNucleotideType = queryDict.get("nucleotideType", "").strip()
     pcrPlateRow = queryDict.get("pcrPlateRow", "").strip()
     pcrPlateColumn = "1" if pcrPlateRow else ""
-            
+
+    sampleBiopsyDays = queryDict.get("biopsyDays", "0")
+    sampleCoupleId = queryDict.get("coupleId", "")
+    sampleEmbryoId = queryDict.get("embryoId", "")
+                
     if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and \
         (sampleSetItem.dnabarcode == selectedDnaBarcode) and sampleSetItem.cancerType == cancerType and (sampleSetItem.cellularityPct == cellularityPct) and \
-        (sampleSetItem.nucleotideType == selectedNucleotideType and sampleSetItem.pcrPlateRow == pcrPlateRow):
+        (sampleSetItem.nucleotideType == selectedNucleotideType) and sampleSetItem.pcrPlateRow == pcrPlateRow and sampleSetItem.biopsyDays == sampleBiopsyDays and \
+        sampleSetItem.coupleId == sampleCoupleId and sampleSetItem.embryoId == sampleEmbryoId:                   
         logger.debug("views_helper - _create_or_update_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
     else:
         isValid, errorMessage = sample_validator.validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType, pcrPlateRow)
@@ -820,6 +847,9 @@ def _create_or_update_sampleSetItem(request, user, sample):
                                     'nucleotideType' : selectedNucleotideType,
                                     'pcrPlateRow' : pcrPlateRow,
                                     'pcrPlateColumn' : pcrPlateColumn,
+                                    'biopsyDays' : sampleBiopsyDays if sampleBiopsyDays else "0",
+                                    'coupleId' : sampleCoupleId,
+                                    'embryoId' : sampleEmbryoId,
                                     'lastModifiedUser' : user,
                                     'lastModifiedDate' : currentDateTime
                                     }
@@ -860,8 +890,23 @@ def _get_pcrPlateRow_valid_values(request):
     
     return row_values
 
+def _get_pcrPlateCol_valid_values(request):
+    col_choices_tuple = SampleSetItem.get_ampliseq_plate_v1_column_choices()
+    col_values = []
+    for i, (internalValue, displayedValue) in enumerate(col_choices_tuple):
+        col_values.append(displayedValue)
+
+    return col_values
+
 def _get_libraryPrepType_choices(request):
     choices_tuple = SampleSet.ALLOWED_LIBRARY_PREP_TYPES
+    choices = OrderedDict()
+    for i, (internalValue, displayedValue) in enumerate(choices_tuple):
+        choices[internalValue] = displayedValue
+    return choices
+
+def _get_sampleset_choices(request):
+    choices_tuple = SampleSet.ALLOWED_SAMPLESET_STATUS
     choices = OrderedDict()
     for i, (internalValue, displayedValue) in enumerate(choices_tuple):
         choices[internalValue] = displayedValue

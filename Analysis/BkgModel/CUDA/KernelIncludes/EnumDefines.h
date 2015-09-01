@@ -15,7 +15,7 @@ enum BkgModelMaskType {
   BkgMaskNone                = 0,
   BkgMaskBadRead               = ( 1<<0 ), // set in BFMask instead
   BkgMaskPolyClonal            = ( 1<<1 ),
-  BkgMaskCorrupt               = ( 1<<2 ),   //update BFMaks washout ibnstead
+  BkgMaskCorrupt               = ( 1<<2 ),   //update BFMaks washout instead
   BkgMaskRandomSample          = ( 1<<3 ),
   BkgMaskHighQaulity           = ( 1<<4 ),
   BkgMaskRegionalSampled       = ( 1<<5 ),
@@ -23,25 +23,24 @@ enum BkgModelMaskType {
   BkgMaskAll                   = 0xffff
 };
 
-
-
 //ToDo: determine validity of thresholds!
-#define THRESHOLD_T0_AVERAGE 2
+#define THRESHOLD_T0_AVERAGE 2.0f
 #define THRESHOLD_NUM_EMPTIES 5
 #define THRESHOLD_NUM_REGION_SAMPLE 5
 
 // BkgModelMask
 enum RegionStateMask {
   RegionMaskLive                            = 0,
-  RegionMaskNoT0Average                    = ( 1<<0 ),
-  RegionMaskT0AverageBelowThreshold         = ( 1<<1 ),
-  RegionMaskNoLiveBeads                     = ( 1<<2 ),
-  RegionMaskNoEmpties                       = ( 1<<4 ),
-  RegionMaskNumEmptiesBelowThreshold        = ( 1<<5 ),
-  RegionMaskNoRegionSamples                 = ( 1<<6 ),
-  RegionMaskNumRegionSamplesBelowThreshold  = ( 1<<7 ),
+  RegionMaskNoLiveBeads                     = ( 1<<0 ),
+  RegionMaskNoT0Average                     = ( 1<<1 ),
+  RegionMaskT0AverageBelowThreshold         = ( 1<<2 ),
+  RegionMaskNoEmpties                       = ( 1<<3 ),
+  RegionMaskNumEmptiesBelowThreshold        = ( 1<<4 ),
+  RegionMaskNoRegionSamples                 = ( 1<<5 ),
+  RegionMaskNumRegionSamplesBelowThreshold  = ( 1<<6 ),
   RegionMaskAll                             = 0xffff
 };
+
 
 
 //////////////////////////////////////////////////

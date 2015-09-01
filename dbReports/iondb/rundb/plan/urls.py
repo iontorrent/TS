@@ -42,6 +42,9 @@ urlpatterns = patterns(
     url(r'^page_plan_save_plan/$', 'views.page_plan_save_plan', name="page_plan_save_plan"),
     url(r'^page_plan_save/$', 'views.page_plan_save', name="page_plan_save"),
     url(r'^page_plan_save/(?P<exp_id>\d+)/$', 'views.page_plan_save', name="page_plan_save_and_reanalyze"),
+    url(r'^page_plan_samples_table/save/$', 'views.page_plan_save_samples_table', name="page_plan_save_samples_table"),
+    url(r'^page_plan_samples_table/load/$', 'views.page_plan_load_samples_table', name="page_plan_load_samples_table"),
+
     url(r'^template/(?P<pks>[\d,]+)/delete/$', 'views.delete_plan_template', name='delete_plan_template'),
 
     url(r'^reviewplan/(?P<pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),

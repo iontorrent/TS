@@ -42,8 +42,7 @@ def basecaller_cmd(basecallerArgs,
     cmd += " --tfkey=%s" % (tfKey)
     cmd += " --run-id=%s" % (runID)
     cmd += " --output-dir=%s" % (BASECALLER_RESULTS)
-    cmd += " --block-col-offset %d" % (block_col_offset)
-    cmd += " --block-row-offset %d" % (block_row_offset)
+    cmd += " --block-offset %d,%d" % (block_col_offset, block_row_offset)
     cmd += " --datasets=%s" % (datasets_pipeline_path)
     cmd += " --trim-adapter %s" % (adapter)
 

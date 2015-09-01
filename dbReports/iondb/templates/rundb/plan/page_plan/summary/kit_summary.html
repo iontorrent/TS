@@ -25,7 +25,7 @@
 </tr>
 <tr>
     <td><b>Library Read Length:</b></td>
-    <td id="selectedLibraryReadLength">{% if helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength > 0 %}{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength}}{%else%}--{%endif%}</td>
+    <td id="selectedLibraryReadLength">{% if helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength|stringformat:"s" != "0" and helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength > 0 %}{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength}}{%else%}--{%endif%}</td>
 </tr>                                                                        
 <tr>
     <td><b>Flows:</b></td>

@@ -345,7 +345,7 @@ def emptyResultsFolder():
       # these are the exceptions - partial names and in the to level results
       if root == results_dir:
         start = os.path.basename(name)[:10]
-        if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi":
+        if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi" or start == 'barcodes.j':
           continue
       fname = os.path.join(root,name)
       if logopt and root == results_dir:

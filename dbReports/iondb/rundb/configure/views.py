@@ -15,6 +15,7 @@ from django.utils import timezone
 import celery.exceptions
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.http import require_POST
 from django.shortcuts import render_to_response, get_object_or_404, get_list_or_404
 from django.template import RequestContext, Context
@@ -30,7 +31,7 @@ from iondb.rundb import tasks, publishers
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
-from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, GlobalConfig, \
+from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, GlobalConfig, Chip, AnalysisArgs, \
     EmailAddress, Publisher, Results, Template, UserProfile, \
     FileMonitor, ContentType, Cruncher
 from iondb.rundb.data import rawDataStorageReport
@@ -44,6 +45,7 @@ from django.core import urlresolvers
 from iondb.utils.raid import get_raid_status, load_raid_status_json
 from iondb.servelocation import serve_wsgi_location
 from ion.plugin.remote import call_pluginStatus
+from iondb.utils.utils import convert
 logger = logging.getLogger(__name__)
 
 from json import encoder
@@ -493,7 +495,7 @@ def current_plugin_jobs():
         try:
             job_status = call_pluginStatus(list(jobids))
             for i, pr in enumerate(list(running)):
-                if job_status[i] != 'DRMAA BUG':
+                if job_status[i] not in ['DRMAA BUG', 'job finished normally']:
                     jobs.append({
                         'name': pr.plugin.name,
                         'resultsName': pr.result.resultsName,
@@ -630,6 +632,8 @@ def _add_barcode(request):
                     value = value.strip()  # strip the strings
                     if key in nucs:  # uppercase if a nuc
                         value = value.upper()
+                    if key=="type":
+                        value = value.lower()
                     setattr(newBarcode, key, value)
             if not newBarcode.id_str:  # make a id_str if one is not provided
                 newBarcode.id_str = str(name) + "_" + str(index)
@@ -1223,14 +1227,40 @@ def configure_ampliseq(request, pipeline=None):
             ctx['ordered_solutions'] = []
             ctx['fixed_solutions'] = filter(lambda x: x['status'] == "ORDERABLE" and
                 match(x), fixed)
+            #creates fixed_solution: a list of dictionaries with 2 keys - id (design id from the Ready-to-Use ampliseq panel and configuration_choices (the instrument/chip types supported by the corresponding panel).
+            tmpList= []
+            for design in ctx['fixed_solutions']:
+                designID = design['id']
+                configurationChoices = design['configuration_choices'] 
+                tmpDict = {'id':designID,'configuration_choices':configurationChoices}
+                tmpList.append(tmpDict)
+                
+            tmpList = convert(tmpList)
+            ctx['fixed_solution'] = json.dumps(tmpList)
+
+            #creates ordered_solution: a list of dictionaries with 2 keys - id (solution id from the custom ampliseq panel and configuration_choices (the instrument/chip types supported by the corresponding panel).
+            #creates unordered_solution: a list of dictionaries with 2 keys - id (solution id from the custom ampliseq panel and configuration_choices (the instrument/chip types supported by the corresponding panel).
+            #solution_id: unique identifier of custom panels designed by ampliseq.com
+
             ctx['unordered_solutions'] = []
+            unordered_tmpList = []
+            ordered_tmpList = []
             for design in designs:
                 for solution in design['DesignSolutions']:
+                    solution_id = solution['id']
+                    configurationChoices = solution['configuration_choices']
                     if match(solution):
                         if solution.get('ordered', False):
                             ctx['ordered_solutions'].append((design, solution))
+                            ordered_tmpList.append({'configuration_choices':configurationChoices,'id':solution_id})
                         else:
                             ctx['unordered_solutions'].append((design, solution))
+                            unordered_tmpList.append({'configuration_choices':configurationChoices,'id':solution_id})
+            unordered_tmpList = convert(unordered_tmpList)
+            ordered_tmpList = convert(ordered_tmpList)
+            ctx['unordered_solution'] = json.dumps(unordered_tmpList)
+            ctx['ordered_solution'] = json.dumps(ordered_tmpList)
+             
             ctx['designs_pretty'] = json.dumps(designs, indent=4, sort_keys=True)
             ctx['fixed_designs_pretty'] = json.dumps(fixed, indent=4, sort_keys=True)
     ctx['form'] = form
@@ -1338,6 +1368,19 @@ def cluster_info_refresh(request):
     return HttpResponse()
 
 
+@login_required
+@staff_member_required
+def cluster_ctrl(request, name, action):
+    error = tasks.cluster_ctrl_task.delay(action, name, request.user.username).get(timeout=20)
+    if error:
+        return HttpResponseServerError(error)
+
+    # refresh queues database info
+    tasks.cluster_queue_info()
+
+    return HttpResponse("%s is %sd" % (name, action.capitalize()))
+
+
 def cluster_info_log(request, pk):
     nodes = Cruncher.objects.all()
     ct_obj = ContentType.objects.get_for_model(Cruncher)
@@ -1351,3 +1394,49 @@ def cluster_info_history(request):
     nodes = Cruncher.objects.all().values_list('name', flat=True)
     ctx = RequestContext(request, {'nodes':nodes})
     return render_to_response("rundb/configure/clusterinfo_history.html", context_instance=ctx)
+
+@login_required
+def configure_analysisargs(request):
+    chips = Chip.objects.filter(isActive=True)
+    ctx = RequestContext(request, {'chips': chips})
+    return render_to_response("rundb/configure/manage_analysisargs.html", context_instance=ctx)
+
+@login_required
+def configure_analysisargs_action(request, pk, action):
+    if pk:
+        obj = get_object_or_404(AnalysisArgs, pk=pk)
+    else:
+        obj = AnalysisArgs(name = 'new_parameters')
+
+    if request.method == 'GET':
+        chips = Chip.objects.filter(isActive=True)
+        args_for_uniq_validation = AnalysisArgs.objects.all()
+        display_name = "%s (%s)" % (obj.description, obj.name) if obj else ''
+        if action == "copy":
+            obj.name = obj.description = ''
+        elif action == "edit":
+            args_for_uniq_validation = args_for_uniq_validation.exclude(pk=obj.pk)
+        
+        ctxd = {
+            'obj': obj,
+            'chips': chips,
+            'args_action':action,
+            'display_name': display_name,
+            'args_for_uniq_validation': args_for_uniq_validation
+            #'uniq_names': json.dumps(args_for_uniq_validation.values_list('name', flat=True)),
+            #'uniq_descriptions': json.dumps(args_for_uniq_validation.values_list('description', flat=True))
+        }
+        return render_to_response("rundb/configure/modal_analysisargs_details.html", context_instance=RequestContext(request, ctxd))
+
+    elif request.method == 'POST':
+        params = request.POST.dict()
+        params['isSystem'] = params['chip_default'] = False
+        params['lastModifiedUser'] = request.user
+        if action == 'copy':
+            params['creator'] = request.user
+            obj.pk = None
+
+        for key, val in params.items():
+            setattr(obj, key, val)
+        obj.save()
+        return HttpResponseRedirect(urlresolvers.reverse("configure_analysisargs"))

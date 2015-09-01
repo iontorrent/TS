@@ -25,7 +25,7 @@
 #include "OptArgs.h"
 #include "IonVersion.h"
 #include "json/json.h"
-
+#include "ReferenceReader.h"
 
 using namespace std;
 
@@ -39,16 +39,16 @@ void ValidateBedHelp()
   printf ("Usage:   tvcutils validate_bed [options]\n");
   printf ("\n");
   printf ("Input selection options (must provide one):\n");
-  printf ("     --target-regions-bed        FILE       input is a target regions BED file\n");
-  printf ("     --hotspots-bed              FILE       input is a hotspots BED file\n");
+  printf ("     --target-regions-bed        FILE       input is a target regions BED file (required)\n");
+  printf ("     --hotspots-bed              FILE       input is a hotspots BED file (required)\n");
   //TODO: printf ("     --hotspots-vcf              FILE       input is a hotspots VCF file\n");
   printf ("\n");
   printf ("General options:\n");
-  printf ("     --reference                 FILE       reference fasta [required]\n");
+  printf ("     --reference                 FILE       FASTA file containing reference genome (required)\n");
   printf ("     --validation-log            FILE       log file for user-readable warning/error messages [stdout]\n");
   printf ("     --meta-json                 FILE       save validation and file statistics to json file [none]\n");
-  printf ("     --unmerged-detail-bed       FILE       output a valid bedDetail unmerged BED [none]\n");
-  printf ("     --unmerged-plain-bed        FILE       output a valid plain unmerged BED [none]\n");
+  printf ("     --unmerged-detail-bed       FILE       output a valid unmerged BED. To be used as input to --primer-trim-bed argument of variant_caller_pipeline.py (recommended) [none]\n");
+  printf ("     --unmerged-plain-bed        FILE       output a valid merged BED. To be used as input to --region-bed argument of variant_caller_pipeline.py (recommended) [none]\n");
   printf ("     --merged-detail-bed         FILE       output an (almost) valid bedDetail merged BED [none]\n");
   printf ("     --merged-plain-bed          FILE       output a valid plain merged BED [none]\n");
   printf ("     --effective-bed             FILE       output a valid effective BED [none]\n");
@@ -74,7 +74,7 @@ void ValidateBedHelp()
  *  - With VCF, propagate select INFO fields that may have useful annotations
  *  - Convert chromosome names: 1 -> chr1. Friendly to cosmic, dbsnp
  */
-
+/*
 
 
 class ReferenceReader {
@@ -171,7 +171,7 @@ private:
 
 };
 
-
+*/
 
 
 
@@ -1293,8 +1293,7 @@ int ValidateBed(int argc, const char *argv[])
 
   ReferenceReader reference_reader;
   if (not reference.empty()) {
-    if (not reference_reader.Initialize(reference, reference+".fai"))
-      return 1;
+    reference_reader.Initialize(reference);
   }
 
 

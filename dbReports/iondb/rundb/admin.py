@@ -535,6 +535,9 @@ class ExperimentAdmin(admin.ModelAdmin):
     actions = ['redo_from_scratch']
     raw_id_fields = ('plan','repResult',)
 
+    def has_add_permission(self, request):
+        return False
+
     # custom admin action to delete all results and reanalyze with Plan data intact
     def redo_from_scratch(self, request, queryset):
         selected = request.POST.getlist(admin.ACTION_CHECKBOX_NAME)
@@ -680,6 +683,8 @@ class RunTypeAdmin(admin.ModelAdmin):
 
 class ReferenceGenomeAdmin(admin.ModelAdmin):
     list_display = ('short_name','name')
+    # delete action doesn't remove ref files, disable it
+    actions = None
 
 
 class ThreePrimeadapterAdmin(admin.ModelAdmin):
@@ -711,6 +716,9 @@ class PlannedExperimentAdmin(admin.ModelAdmin):
     raw_id_fields = ('latestEAS','parentPlan',)
 
     inlines = [PlannedExperimentQCInline,]
+
+    def has_add_permission(self, request):
+        return False
 
 class PlannedExperimentQCAdmin(admin.ModelAdmin):
     ##pass
@@ -756,7 +764,7 @@ class EventLogAdmin(admin.ModelAdmin):
     search_fields = ['text']
 
 class AnalysisArgsAdmin(admin.ModelAdmin):
-    list_display = ('name','chipType','chip_default', 'sequenceKitName', 'templateKitName', 'libraryKitName', 'samplePrepKitName')
+    list_display = ('name','description', 'chipType', 'chip_default', 'sequenceKitName', 'templateKitName', 'libraryKitName', 'samplePrepKitName', "applType", "applGroup", 'active', 'isSystem', )
     ordering = ( "chipType", "-chip_default", "name")
     formfield_overrides = {
         models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}

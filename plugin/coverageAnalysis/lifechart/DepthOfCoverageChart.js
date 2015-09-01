@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="DOC-chart" class="unselectable" style="border:2px solid #666;display:none">\
+<div id="DOC-chart" class="unselectable" style="border:2px solid #666;page-break-inside:avoid;display:none">\
   <div id="DOC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="DOC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse view"></span>\
     <span class="table-title">Depth of Coverage Chart</span>\

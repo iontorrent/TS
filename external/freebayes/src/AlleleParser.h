@@ -33,6 +33,7 @@ public:
       ref_length = observation.ref_length;
       initialized = true;
     }
+    if (sample_index < 0) return;
     coverage++;
     if ((int)samples.size() != num_samples)
       samples.resize(num_samples);
@@ -185,6 +186,11 @@ private:
 
   void PileUpAlleles(int allowed_allele_types, int haplotype_length, bool scan_haplotype,
       list<PositionInProgress>::iterator& position_ticket, int hotspot_window);
+  void PileUpAlleles(int pos, int haplotype_length, list<PositionInProgress>::iterator& position_ticket);
+  void PileUpHotspotOnly( vector<HotspotAllele> hotspot, list<PositionInProgress>::iterator& position_ticket) {
+	if (hotspot.size() == 0) return;
+	PileUpAlleles(hotspot[0].pos, hotspot[0].ref_length, position_ticket);
+  }
   void InferAlleleTypeAndLength(AlleleDetails& allele);
   long ComputeRepeatBoundary(const string& seq, int chr, long position, int max_size, long &hp_repeat_len);
 

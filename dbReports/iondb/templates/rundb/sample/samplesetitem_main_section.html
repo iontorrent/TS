@@ -1,0 +1,154 @@
+<div class="row-fluid">
+	<input type="hidden" id="intent" name="intent" value="{{intent}}">
+	<input type="hidden" id="id" name="id" value="{{sampleSetItem.id}}">
+	<input type='hidden' pending_id="pending_id" name="pending_id" value="{{pending_sampleSetItem.pending_id}}">
+	<div class="span5">
+	<div class="control-group">
+		<label class="control-label" for="sampleName">Sample Name (required)</label>
+		<div class="controls">
+			{% if intent == "edit" %}
+				{% ifequal sampleSetItem.sample.status "created" %}
+					<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" value="{{sampleSetItem.sample.displayedName}}" />                                                   
+				{% else %}
+					<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" value="{{sampleSetItem.sample.displayedName}}" readonly />      
+				{% endifequal %}
+			{% elif intent == "edit_pending" %}
+				<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" value="{{pending_sampleSetItem.displayedName}}" />                                                  
+			{% else %}
+				<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" />
+			{% endif %}
+
+			<div class="help-block">
+				{% if intent == "edit" and sampleSetItem.sample.status != "created" %}                          
+					FYI: Sample name in the sample set cannot be changed since this sample set has been planned.
+				{% endif %}
+			</div>                      
+		</div>
+	</div>
+	
+	<div class="control-group">
+		<label class="control-label" for="sampleExternalId">Sample External ID</label>
+		<div class="controls">
+			{% if intent == "edit" %}
+				{% ifequal sampleSetItem.sample.status "created" %}
+					<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" value="{{sampleSetItem.sample.externalId}}" />                                                  
+				{% else %}
+					<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" value="{{sampleSetItem.sample.externalId}}" readonly />     
+				{% endifequal %}
+			{% elif intent == "edit_pending" %} 
+				<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" value="{{pending_sampleSetItem.externalId}}" />                                                                         
+			{% else %}                      
+				<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" />
+			{% endif %}
+
+		</div>
+	</div>  
+								
+	<div class="control-group">
+		<label class="control-label" for="pcrPlateRow">PCR Plate Position</label>
+		<div class="controls">
+			<select id="pcrPlateRow" name="pcrPlateRow"style="height:28px;">
+				<option value="" >.....</option>                 
+				{% if intent == "edit" %}
+					{% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
+						{% ifequal sampleSetItem.pcrPlateRow pcrPlateRow %}
+							<option SELECTED value="{{sampleSetItem.pcrPlateRow}}">{{displayed_pcrPlateRow}}</option>
+						{% else %}
+							<option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
+						{% endifequal %}
+					{% endfor %}                             
+				{% elif intent == "edit_pending" %}  
+					{% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
+						{% ifequal pending_sampleSetItem.pcrPlateRow pcrPlateRow %}
+							<option SELECTED value="{{pending_sampleSetItem.pcrPlateRow}}">{{displayed_pcrPlateRow}}</option>
+						{% else %}
+							<option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
+						{% endifequal %}
+					{% endfor %}                                                        
+				{% else %}           
+					{% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
+						<option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
+					{% endfor %}                                              
+				{% endif %}
+				</select>
+
+			<div class="help-block">
+			</div>
+			
+		</div>
+	</div>
+	
+	<div class="control-group">
+		<label class="control-label" for="barcodeKit">Barcode Kit</label>
+		<div class="controls">
+			<select id="barcodeKit" name="barcodeKit"style="height:28px;">
+			<option value="" >.....</option>
+			{% if intent == "edit" %}
+				{% for kit in barcodeKits %}
+					{% ifequal selectedBarcodeKitName kit.name %}
+						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+					{% else %}
+						<option value="{{kit.name}}" >{{kit.name}}</option>
+					{% endifequal %}
+				{% endfor %}        
+			{% elif intent == "edit_pending" %}
+				{% for kit in barcodeKits %}
+					{% ifequal pending_sampleSetItem.barcodeKit kit.name %}
+						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+					{% else %}
+						<option value="{{kit.name}}" >{{kit.name}}</option>
+					{% endifequal %}
+				{% endfor %}        }
+			{% else %}                  
+				{% for kit in barcodeKits %}
+				<option value="{{kit.name}}" >{{kit.name}}</option>}
+				{% endfor %}
+			{% endif %}
+			</select>
+
+			<div class="help-block">
+			</div>
+		</div>
+	</div>
+
+	<div id="barcodesDiv" class="control-group">
+		<label class="control-label" for="barcode">Barcode</label>
+		<div class="controls">
+			<select id="barcode" name="barcode"style="height:28px;">
+			<option value="" >.....</option>
+			{% if intent == "edit" %}
+				{% for barcode in barcodeInfo %}
+					{% ifequal selectedBarcodeKitName barcode.name %}                           
+						{% ifequal sampleSetItem.dnabarcode.id_str barcode.id_str %}
+							<option SELECTED value="{{sampleSetItem.dnabarcode.id_str}}">{{sampleSetItem.dnabarcode.id_str}}</option>
+						{% else %}
+							<option value="{{barcode.id_str}}" >{{barcode.id_str}}</option>
+						{% endifequal %}
+					{% endifequal %}
+				{% endfor %}
+			{% elif intent == "edit_pending" %}
+				{% for barcode in barcodeInfo %}
+					{% ifequal pending_sampleSetItem.barcodeKit barcode.name %}                         
+						{% ifequal pending_sampleSetItem.barcode barcode.id_str %}
+							<option SELECTED value="{{pending_sampleSetItem.barcode}}">{{pending_sampleSetItem.barcode}}</option>
+						{% else %}
+							<option value="{{barcode.id_str}}" >{{barcode.id_str}}</option>
+						{% endifequal %}
+					{% endifequal %}
+				{% endfor %}
+			{% endif %}
+			</select>
+
+			<div class="help-block">
+			</div>
+		</div>
+	</div>
+</div>         
+
+<div id="myBarcodes" class="control-group" style="display: none;" >
+	<select id="myBarcode">
+	{% for barcode in barcodeInfo %}
+		<option value="{{barcode.name}}|{{barcode.id_str}}" >{{barcode.id_str}}</option>
+	{% endfor %}
+	</select>
+</div>       

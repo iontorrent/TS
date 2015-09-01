@@ -7,29 +7,21 @@ register = template.Library()
 @register.filter(name='ion_readable')
 def ion_readable(value):
     try:
-        charlist = []
-        charlist.append("")
-        charlist.append(" K")
-        charlist.append(" M")
-        charlist.append(" G")
-        charlist.append(" T")
-
+        charlist = ["", " K", " M", " G", " T"]
         charindex = 0
         val = float(value)
-        while (val >= 1000):
+        while (round(val) >= 1000):
             val = val / 1000
             charindex = charindex + 1
 
         converted_text = ""
         if (charindex > 0):
-            val2 = math.floor(val*10)
-            val2 = val2 / 10
-            text = "%.1f" % val2
-            if text[-1:] == '0':
-                text = text.split('.')[0]
-            textIntPart = text.split('.')[0]
-            if len(textIntPart) > 2:
-                text = textIntPart
+            for n in [0, 1, 2]:
+                text = str(round(val, n))
+                if text.split('.')[1] == "0":
+                    text = text.split('.')[0]
+                if len(text.replace('.','')) > 2:
+                    break
             converted_text = str(text) + charlist[charindex]
         else:
             converted_text = str(value)

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_parent"/>
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css">
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet">
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet">
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css">
+
+<style type="text/css">
+p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
+.zebra {  background-color: #E1EFFA;}
+.table_hover{    color: #009;    background-color: #6DBCEE;}
+
+.tableContainer
+{
+ margin: -10px 0px -10px 0px;
+ border-spacing: 7px;
+ empty-cells:show;
+ width:60%;
+ text-align:left;
+ } 
+
+ .tableContainer tr td{
+  white-space:nowrap;
+  text-align:left;
+ }
+
+</style>
+
+{% if autorefresh %}
+<META HTTP-EQUIV="refresh" CONTENT="15">
+{% endif %}
+
+<style type="text/css">
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+</style>
+
+</head>
+<body>
+
+<br>
+<br>
+<title>Pharmacogenomics Analysis Report</title>
+
+<body>
+
+<h1><center>Pharmacogenomics Analysis Report</center></h1>
+<!-- <h3><center>{{run_name}}<center></h3> -->
+
+<div class="container-fluid">
+
+<!-- Capture django variable in to javascript -->
+<script>
+  var barcodes_json = {{barcode_results|safe}};
+</script>
+
+<h3> Overview </h3>
+<div class="k-widget k-grid" >
+<table class="table-striped">
+          <tr><td>Library type&nbsp;</td><td>:</td>          <td> {{library_type}} </td></tr>
+          <tr><td>Reference genome&nbsp;</td><td>:</td>             <td>{{genome_name}} </td></tr>
+          <tr><td>Targeted regions&nbsp;</td><td>:</td>    <td>{{targets_name}}</td></tr>
+          <tr><td>Hotspot regions&nbsp;</td><td>:</td>     <td>{{hotspots_name}}</td></tr>
+          <tr><td>VariantCaller results&nbsp;</td><td>:</td>     <td><a href="../{{variantCallerName}}/variantCaller.html"target="_blank">{{variantCallerName}}</td></tr>
+          <tr><td>CoverageAnalysis results&nbsp;</td><td>:</td>     <td><a href="../{{coverageAnalysisName}}/coverageAnalysis.html" target="_blank">{{coverageAnalysisName}}</td></tr>
+          <tr><td>Download all results&nbsp;</td><td>:</td> <td><a class="btn" href="{{run_name}}.vcf.zip">VCF.ZIP</a>
+                                              <a class="btn" href="GenotypeExport/Genotyper-data-export.txt"target="_blank">GENOTYPES_ALLELE_TYPER_FORMAT</a>
+	  
+                                             <a class="btn" href="cnvExports.zip">CNVS_ALLELE_TYPER_FORMAT</a></td></tr>
+</table>
+</div>
+<br>
+<br>
+
+<h3> CYP2D6 CNV QC Analysis </h3>
+  <div width="50%" >
+  <table class="table-striped" style="border: 1px solid gray;font-size: 12px;">
+          <tr style="height:40px;"><td>&nbsp;Total Number of Valid Samples &nbsp;&nbsp;&nbsp;&nbsp;</td><td>&nbsp;:&nbsp;&nbsp;</td>          <td>&nbsp;&nbsp;&nbsp;{{totalSamples}}&nbsp;&nbsp;&nbsp;</td></tr>
+          <tr style="height:40px;"><td>&nbsp;Number of Samples that passed QC for CNV Calling&nbsp;&nbsp; &nbsp;&nbsp;</td><td>&nbsp;:&nbsp;&nbsp;</td>             <td>&nbsp;&nbsp;&nbsp;{{numPass}}&nbsp;&nbsp;&nbsp;</td></tr>
+          <tr style="height:40px;"><td>&nbsp;Number of Samples that did not pass QC metric 'Average coverage &#62;= 100'&nbsp;&nbsp; &nbsp;&nbsp;</td><td>&nbsp;:&nbsp;&nbsp;</td>             <td>&nbsp;&nbsp;&nbsp;{{numAvgCov}}&nbsp;&nbsp;&nbsp;</td></tr>
+          <tr style="height:40px;"><td>&nbsp;Number of Samples that did not pass QC metric 'Uniformity Rate &#62;= 80%'&nbsp;&nbsp; &nbsp;&nbsp;</td><td>&nbsp;:&nbsp;&nbsp;</td>             <td>&nbsp;&nbsp;&nbsp;{{numUniformity}}&nbsp;&nbsp;&nbsp;</td></tr>
+  </table>
+  </div>
+<br>
+<br>
+
+<h3> Variant Summary </h3>
+<div class="k-widget k-grid">
+  <table class="table-striped">
+    <thead class="k-grid-header">
+      <tr>
+      <th class="k-header"> <span class="help" title="Barcode name and link to detailed report.">Barcode Name</span></th>
+      <th class="k-header"> <span class="help" title="Sample name.">Sample Name</span></th>
+      <th class="k-header"> <span class="help" title="Novel Variants Detected"> Novel Variants Detected</span></th>
+      <th class="k-header"> <span class="help"  title="Hotspot Variants Detected">Hotspot Variants Detected</span></th>
+      <th class="k-header"> <span class="help"  title="Copy Number ploidy of CYP2D6 Gene.">CYP2D6 Gene CNV</span></th>
+      <th class="k-header"> <span class="help" title="Copy Number ploidy of CYP2D6 exon 9.">CYP2D6 Exon 9 CNV</span></th>
+      <th class="k-header"> <span class="help" title="Confidence of the CYP2D6 Copy Number calls.">CYP2D6 Gene CNV Confidence</span></th>
+      <th class="k-header"> <span class="help" title="Confidence of CYP2D6 Exon 9 Copy Number calls.">CYP2D6 Exon 9 CNV Confidence</span></th>
+    </tr>
+    </thead>
+    {% for barcode in barcodeData %}
+       <tr>
+          <td style="text-align:left"><a href="../{{variantCallerName}}/{{barcode.name}}/variantCaller.html"target="_blank">
+            <span title="Click to view the detailed variantCaller report for barcode {{barcode.name}}">{{barcode.name}}</span></a>
+          </td>
+
+          <td>{{barcode.sample}}</td>
+
+          <td>{{barcode.novel_variants_total}}</td>
+
+          <td>{{barcode.hotspots_variants_total}}</td>
+          
+	  <td>{{barcode.gene_cnv}}</td>
+          
+	  <td>{{barcode.exon9_cnv}}</td>
+        
+	  <td>{{barcode.gene_cnv_confidence}}</td>
+	  
+	  <td>{{barcode.exon9_cnv_confidence}}</td>
+
+        </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="spacer clear"></div>
+
+{% if autorefresh %}
+<br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+<a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
+<div style="text-align:center">Click here to refresh</div></a>
+{% endif %}
+
+</div>
+
+<br/>
+
+<div class="clear"></div>
+
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+  <div class="pull-right">
+    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+    <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
+    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+  </div>
+</div> </div> </div> </div>
+<br/>
+
+</body> 
+</html>

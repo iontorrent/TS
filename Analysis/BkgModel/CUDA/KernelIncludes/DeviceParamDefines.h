@@ -8,8 +8,10 @@
 #ifndef REGIONPARAMSGPU_H_
 #define REGIONPARAMSGPU_H_
 
+#include "CudaDefines.h"
 #include "BkgMagicDefines.h"
 #include "EnumDefines.h"
+
 
 //LDG LOADER
 #if __CUDA_ARCH__ >= 350
@@ -30,7 +32,6 @@
 
 
 
-
 struct SampleCoordPair{
   unsigned short x;
   unsigned short y;
@@ -44,29 +45,35 @@ struct SampleCoordPair{
 
 
 //XTALK DEFINES
-#define XTALK_SPAN_X  2
-#define XTALK_SPAN_Y  2
-#define XTALK_WIDTH   ( 2 * XTALK_SPAN_X +1 )
-#define XTALK_HEIGHT  ( 2 * XTALK_SPAN_Y +1 )
-#define XTALK_MAP ( XTALK_WIDTH * XTALK_HEIGHT )
+//#define XTALK_SPAN_X  2
+//#define XTALK_SPAN_Y  2
+//#define XTALK_WIDTH   ( 2 * XTALK_SPAN_X +1 )
+//#define XTALK_HEIGHT  ( 2 * XTALK_SPAN_Y +1 )
+//#define XTALK_MAP ( XTALK_WIDTH * XTALK_HEIGHT )
+
+#define XTALK_DIM(a) (2*(a)+1)
+#define XTALK_MAP(sx,sy) (XTALK_DIM(sx)*XTALK_DIM(sy))
+
 
 
 ////////////////////////////////////////////////////////////
 //CONSTANT MEMORY OBJECTS
 
+template<int MaxSpanX, int MaxSpanY>
+class WellsLevelXTalkParamsConst{
 
-class WellsLevelXTalkParams{
+protected:
 
-  float evenPhaseMap[ XTALK_MAP ];
-  float oddPhaseMap[ XTALK_MAP ];
-
-
+  int spanX;
+  int spanY;
+  float evenPhaseMap[ XTALK_MAP(MaxSpanX,MaxSpanY)];
+  float oddPhaseMap[ XTALK_MAP(MaxSpanX,MaxSpanY) ];
 
 public:
 
   __host__ __device__
   int Hash(int lx, int ly) const{
-    return(ly*XTALK_WIDTH+lx);
+    return(ly*XTALK_DIM(spanX)+lx);
   }
 
   __host__ __device__
@@ -96,60 +103,143 @@ public:
     return (phase)?(even(lx,ly)):(odd(lx,ly));
   }
   __host__ __device__
-  int getPhase(int col)
+  int getPhase(int col) const
   {
     return (col & 1);
   }
 
+  __host__ __device__
+  int getSpanX() const {return spanX;}
+  __host__ __device__
+  int getSpanY() const {return spanY;}
+  __host__ __device__
+  int getMapWidth() const {return 2*spanX+1;}
+  __host__ __device__
+  int getMapHeight() const {return 2*spanY+1;}
+  __host__ __device__
+  int getMapSize() const {return getMapWidth()*getMapHeight();}
 
 
-  //non const host only functions
-  __host__
-  void XtalkSymbolInit(){
+  __host__ __device__
+  int getMaxSpanX() const {return MaxSpanX;}
+  __host__ __device__
+  int getMaxSpanY(){return MaxSpanY;}
 
-    //from WellXtalk.h
-    float phasemapdefault[]  = {
-        0.000,0.000,0.010,0.000,0.000,
-        0.015,0.031,0.131,0.026,0.015,
-        0.026,0.127,0.000,0.111,0.025,
-        0.015,0.117,0.133,0.110,0.013,
-        0.000,0.021,0.010,0.020,0.000,
-    };
-
-    memcpy(evenPhaseMap,phasemapdefault,sizeof(float[XTALK_MAP]));
-    OddFromEvenHexCol();
-    NormalizeCoeffs(evenPhaseMap);
-    NormalizeCoeffs(oddPhaseMap);
+  __host__ __device__
+  void print(){
+    printf("WellsLevelXTalkParamsConst\n spanX: %d spanY: %d\n", spanX, spanY);
+    printf(" Map size: %d\n  n,  odd, even\n", getMapSize());
+    for(int n=0; n<getMapSize(); n++) printf("%3d,%5f,%5f\n",n,oddPhaseMap[n],evenPhaseMap[n]);
   }
 
-  __host__
-  void OddFromEvenHexCol(){
-    for (int ly=0; ly<XTALK_HEIGHT; ly++){
-      for (int lx=0; lx<XTALK_WIDTH; lx++){
-        int tx = lx;
-        int ty = ly;
-        int col_phase = lx &1;
-        if (col_phase)
-          ty = ly+1;
-        if (ty<XTALK_HEIGHT){
-          oddPhaseMap[Hash(lx,ly)] = evenPhaseMap[Hash(tx,ty)];
-        } else {
-          oddPhaseMap[Hash(lx,ly)] = 0.0f;
-        }
-      }
-    }
-  }
-  __host__
-  void NormalizeCoeffs(float *c_map){
-    float coeff_sum = 0.0f;
-    for (int i=0; i<XTALK_MAP; i++)
-      coeff_sum += c_map[i];
-    for (int i=0; i<XTALK_MAP; i++){
-      c_map[i] /= coeff_sum;
-    }
-  }
 
 };
+
+
+
+
+//this class is meant only for use as constant symbol on the device side.
+//derived host side class with constructor and setter in: TraceLevelXTalk.h
+template<size_t numNeighbours>
+class XTalkNeighbourStatsConst
+{
+
+protected:
+
+  int cx[numNeighbours];
+  int cy[numNeighbours];
+  float multiplier[numNeighbours];
+  //float tauTop[numNeighbours]; // not used for simple XTalk
+  //float tauFluid[numNeighbours]; // not used for simple XTalk
+
+  int initialPhase;
+  size_t numN;
+  bool hexPacked;
+  bool threeSeries;
+
+
+
+
+  __host__ __device__
+  void NeighborByGridPhase(int &ncx, int &ncy, const int x, const int y, const int nei, const int phase) const
+  {
+    if (phase==0)
+    {
+      ncx = x+cx[nei];
+      ncy = y+cy[nei];
+    } else
+    {
+      ncy = y+cy[nei];
+      if (cy[nei]!=0)
+        ncx = x+cx[nei]-phase; // up/down levels are offset alternately on rows
+      else
+        ncx = x+cx[nei];
+    }
+  }
+
+  // bb operates the other direction
+  __host__ __device__
+  void NeighborByGridPhaseBB(int &ncx, int &ncy, const int x, const int y, const int nei, const int phase) const
+  {
+    ncx = x+cx[nei]; // neighbor columns are always correct
+    ncy = y+cy[nei]; // map is correct
+    if ((phase!=0) & (((cx[nei]+16) %2)!=0)) //neighbors may be more than one away!!!!
+      ncy -= phase; // up/down levels are offset alternately on cols
+  }
+
+
+  //for block coordinated x and y are coordinates in block and region_x/y are both 0
+  //for region coordinates x and y are coordinates withing region and region_x/y have to be the region dimensions.
+  __host__ __device__
+  void NeighborByChipType(int &ncx, int &ncy, const int x, const int y, const int nei_idx, const int region_x = 0, const int region_y = 0) const
+  {
+    // the logic has now become complex, so encapsulate it
+    // phase for hex-packed
+    if (!hexPacked)
+      NeighborByGridPhase (ncx,ncy,x,y,nei_idx, 0);
+    else
+    {
+      if (threeSeries)
+        NeighborByGridPhase (ncx,ncy,x,y,nei_idx,(y+region_y+1)%2); // maybe????
+      else
+        NeighborByGridPhaseBB(ncx,ncy,x,y,nei_idx,(x+region_x+1+initialPhase) % 2); // maybe????
+    }
+  }
+
+
+
+public:
+
+
+  __host__ __device__
+  size_t getNumMaxNeighbours() const { return numNeighbours; }
+  __host__ __device__
+  size_t getNumNeighbours() const { return numN; }
+
+
+  //float getTauTop(int nid) const { return tauTop[nid]; } // not used for simple XTalk
+  //float getTauFluid(int nid) const { return tauFluid[nid]; } // not used for simple XTalk
+  __host__ __device__
+  float getMultiplier( int nid) const { return multiplier[nid];}
+
+  //x and y are bead coordinates in block
+  __host__ __device__
+  void getBlockCoord(int& nx, int& ny, const int nid, const int x,const int y) const { NeighborByChipType(nx,ny,x,y,nid); }
+  //rx and ry are bead coordinates in region and region_x/y are region dimensions
+  __host__ __device__
+  void getRegionCoord(int& nx, int& ny, const int nid, const int rx,const int ry,const int region_x, const int region_y) const { NeighborByChipType(nx,ny,rx,ry,nid,region_x,region_y); }
+
+  __host__ __device__
+  void print(){
+    printf("XTalkNeighbourStatsConst\n initial Phase: %d\n hex packed: %s\n three series: %s\n", initialPhase, hexPacked?("true"):("false"),threeSeries?("true"):("false"));
+    printf(" num Neighbours: %lu\n  n, nx, ny, mult\n", numN);
+    for(size_t n=0; n<numN; n++) printf("%3lu,%3d,%3d, %f\n",n,cx[n],cy[n],multiplier[n]);
+  }
+
+
+
+};
+
 
 class ConfigParams {
 
@@ -161,9 +251,11 @@ class ConfigParams {
     ConfMaskUseDynamicEmphasis = (1 << 3),
     ConfMaskUseAlternativeEtbRequation = (1 << 4),
     ConfMaskPerformExpTailFitting = (1 << 5),
-    ConfMaskPerformRecompressTailRawTrace = (1 << 6),
-    ConfMaskPerformWellsLevelXTalk = ( 1 << 7),
-    ConfMaskPerformPolyClonalFilter = ( 1 << 8)
+    ConfMaskPerformBkgAdjInExpTailFit = ( 1 << 6),
+    ConfMaskPerformRecompressTailRawTrace = (1 << 7),
+    ConfMaskPerformWellsLevelXTalk = ( 1 << 8),
+    ConfMaskPerformTraceLevelXTalk = ( 1 << 9),
+    ConfMaskPerformPolyClonalFilter = ( 1 << 10)
   };
 
   unsigned short maskvalue;
@@ -191,11 +283,17 @@ public:
   __host__ void setPerformExpTailFitting() {
     maskvalue = maskvalue | ConfMaskPerformExpTailFitting;
   }
+  __host__ void setPerformBkgAdjInExpTailFit() {
+      maskvalue = maskvalue | ConfMaskPerformBkgAdjInExpTailFit;
+  }
   __host__ void setPerformRecompressTailRawTrace() {
     maskvalue = maskvalue | ConfMaskPerformRecompressTailRawTrace;
   }
   __host__ void setPerformWellsLevelXTalk() {
     maskvalue = maskvalue | ConfMaskPerformWellsLevelXTalk;
+  }
+  __host__ void setPerformTraceLevelXTalk() {
+    maskvalue = maskvalue | ConfMaskPerformTraceLevelXTalk;
   }
   __host__ void setPerformPolyClonalFilter() {
     maskvalue = maskvalue | ConfMaskPerformPolyClonalFilter;
@@ -219,7 +317,6 @@ public:
   bool UseDynamicEmphasis() const {
     return maskvalue & ConfMaskUseDynamicEmphasis;
   }
-
   __host__ __device__ inline
   bool UseAlternativeEtbRequation() const {
     return maskvalue & ConfMaskUseAlternativeEtbRequation;
@@ -227,6 +324,10 @@ public:
   __host__ __device__ inline
   bool PerformExpTailFitting() const {
     return maskvalue & ConfMaskPerformExpTailFitting;
+  }
+  __host__ __device__ inline
+    bool PerformBkgAdjInExpTailFit() const {
+    return maskvalue & ConfMaskPerformBkgAdjInExpTailFit;
   }
   __host__ __device__ inline
   bool PerformRecompressTailRawTrace() const {
@@ -237,22 +338,28 @@ public:
     return maskvalue & ConfMaskPerformWellsLevelXTalk;
   }
   __host__ __device__ inline
+  bool PerformTraceLevelXTalk() const {
+    return maskvalue & ConfMaskPerformTraceLevelXTalk;
+  }
+  __host__ __device__ inline
   bool PerformPolyClonalFilter() const {
     return maskvalue & ConfMaskPerformPolyClonalFilter;
   }
 
   __host__ __device__ inline
   void print(){
-    printf("ConfigParams FitTauE %s\nFitKmult %s\nUseDarkMatterPCA %s\nUseDynamicEmphasis %s\nUseAlternativeEtbRequation %s\nPerformExpTailFitting %s\nPerformRecompressTailRawTrace %s\nPerformWellsLevelXTalk %s\nPerfromPolyClonalFilter %s\n",
+    printf("ConfigParams\n FitTauE %s\n FitKmult %s\n UseDarkMatterPCA %s\n UseDynamicEmphasis %s\n UseAlternativeEtbRequation %s\n PerformExpTailFitting %s\n PerformBkgAdjInExpTailFit %s\n PerformRecompressTailRawTrace %s\n PerformWellsLevelXTalk %s\n PerformTraceLevelXTalk %s\n PerfromPolyClonalFilter %s\n",
         (FitTauE())?("true"):("false"),
             (FitKmult())?("true"):("false"),
                 (UseDarkMatterPCA())?("true"):("false"),
                     (UseDynamicEmphasis())?("true"):("false"),
                         (UseAlternativeEtbRequation())?("true"):("false"),
                             (PerformExpTailFitting())?("true"):("false"),
-                                (PerformRecompressTailRawTrace())?("true"):("false"),
-                                    (PerformWellsLevelXTalk())?("true"):("false"),
-                                        (PerformPolyClonalFilter())?("true"):("false"));
+                                (PerformBkgAdjInExpTailFit())?("true"):("false"),
+                                    (PerformRecompressTailRawTrace())?("true"):("false"),
+                                        (PerformWellsLevelXTalk())?("true"):("false"),
+                                            (PerformTraceLevelXTalk())?("true"):("false"),
+                                                (PerformPolyClonalFilter())?("true"):("false"));
   }
 };
 
@@ -268,6 +375,8 @@ class ConstantParamsGlobal {
   float adjKmult;
   float min_tauB;
   float max_tauB; // range of possible values
+  float scaleLimit;
+  float tailDClowerBound;
   float empWidth;
   float empAmpl;
   float empParams[NUMEMPHASISPARAMETERS];
@@ -303,6 +412,14 @@ public:
   __host__
   void setMinTauB(float minTauB) {
     min_tauB = minTauB;
+  }
+  __host__
+  void setScaleLimit(float scale_limit) {
+    this->scaleLimit = scale_limit;
+  }
+  __host__
+  void setTailDClowerBound(float tail_dc_lower_bound) {
+    tailDClowerBound = tail_dc_lower_bound;
   }
   __host__
   void setMinAmpl(float minAmpl) {
@@ -363,6 +480,14 @@ public:
     return min_tauB;
   }
   __host__ __device__ inline
+   float getScaleLimit() {
+     return this->scaleLimit;
+   }
+   __host__ __device__ inline
+   float getTailDClowerBound() {
+     return tailDClowerBound;
+   }
+  __host__ __device__ inline
   float getMinAmpl() const {
     return minAmpl;
   }
@@ -410,9 +535,9 @@ public:
 
   __host__ __device__ inline
   void print() const {
-    printf("ConstantParamsGlobal valve_open %f magic_divisor_for_timing %f nuc_flow_span %f clonalFilterFirstFlow %d clonalFilterLastFlow %d\n",
+    printf("ConstantParamsGlobal\n valve_open %f magic_divisor_for_timing %f nuc_flow_span %f clonalFilterFirstFlow %d clonalFilterLastFlow %d\n",
         valve_open,  magic_divisor_for_timing, nuc_flow_span, clonalFilterFirstFLow, clonalFilterLastFLow);
-    printf("ConstantParamsGlobal minAmpl %f minKmult %f maxKmult %f adjKmult %f min_tauB %f max_tauB %f \n",
+    printf(" minAmpl %f minKmult %f maxKmult %f adjKmult %f min_tauB %f max_tauB %f \n",
         minAmpl, minKmult, maxKmult, adjKmult, min_tauB, max_tauB);
   }
 
@@ -460,14 +585,14 @@ public:
   }
 
   __host__ __device__ inline
-    int getImageAllocFrames() const {
-      return max(maxCompFrames,rawFrames);
-    }
+  int getImageAllocFrames() const {
+    return max(maxCompFrames,rawFrames);
+  }
 
 
   __host__ __device__ inline
   void print(){
-    printf("ConstantFrameParams GPU raw Image frames: %d, uncomp frames: %d, maxBkgFrames: %d \n", rawFrames, uncompFrames, maxCompFrames);
+    printf("ConstantFrameParams\n GPU raw Image frames: %d, uncomp frames: %d, maxBkgFrames: %d \n", rawFrames, uncompFrames, maxCompFrames);
   }
 
 };
@@ -582,7 +707,7 @@ public:
 
   __host__ __device__ inline
   void print() const {
-    printf("PerFlowParamsGlobal flowIdx %d realFnum %d NucId %d\n", flowIdx, realFnum, NucId );
+    printf("PerFlowParamsGlobal\n flowIdx %d realFnum %d NucId %d\n", flowIdx, realFnum, NucId );
   }
 
 };
@@ -971,6 +1096,10 @@ public:
   }
 
 };
+
+
+
+
 
 
 /////////////////////

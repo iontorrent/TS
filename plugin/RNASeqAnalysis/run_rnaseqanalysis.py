@@ -25,9 +25,11 @@ def fileName(filepath):
 def runcmd( cmd, log, fatal=True ):
   retval = os.system(cmd)
   if retval != 0:
+    sys.stderr.write( "ERROR: Failed running command (status = %d):\n" % retval )
     sys.stderr.write( "$ "+cmd+"\n" )
-    sys.stderr.write( "ERROR: Failed running command (status = %d). See '%s'.\n" % (retval,os.path.basename(log)) )
-    if fatal: sys.exit(1)
+    if fatal:
+      sys.stderr.write( "Check Plugin Log and '%s' for details.\n" % os.path.basename(log) )
+      sys.exit(1)
 
 
 if __name__ == '__main__':

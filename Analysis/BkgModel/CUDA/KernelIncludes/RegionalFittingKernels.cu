@@ -964,7 +964,8 @@ void PerformMultiFlowRegionalFitting(
   if (beadId >= NumSamples[regId])
     return;
   //strides
-  const size_t BeadFrameStride = ( ImgRegP.getGridParam( NUM_SAMPLES_RF )).getPlaneStride();
+  //const size_t BeadFrameStride = ( ImgRegP.getGridParam( NUM_SAMPLES_RF )).getPlaneStride();
+  const size_t BeadFrameStride = ( ImgRegParams::getGridParam( ImgRegP, NUM_SAMPLES_RF )).getPlaneStride();
   const size_t RegionFrameStride = ConstFrmP.getMaxCompFrames() * ImgRegP.getNumRegions();
 
   //if EmptyTraces from GenerateBeadTrace Kernel padding is uncompressed frames
@@ -983,6 +984,24 @@ void PerformMultiFlowRegionalFitting(
   emphasisVec += regId * MAX_POISSON_TABLE_COL * ConstFrmP.getMaxCompFrames();
 
   const size_t numf = numFramesRegion[regId];
+
+  /////////////////////////////////////
+  //Observed Sample traces now come from a Sample collection:
+  //
+  // for only one sample set we can use:
+    observedTrace = ConstSmplCol.getLatestTraces();
+
+  // if we have a sample history this needs to be replaced by the following:
+  // n sample buffers starting with the oldest: idx = 0 to the latest: idx= numSampleFlows-1
+  // they can be accessed by:
+  //
+  // for(int sampleIdx = 0; sampleIdx < ConstSmplCol.getNumFlows(); sampleIdx++){
+  //   observedTrace = ConstSmplCol.getTraces(sampleIdx);
+  //   ... // work to be done with this sample set
+  // }
+  //
+  //////////////////////////////////
+
 
   // bead specific pointers
   beadStateCube += NUM_SAMPLES_RF*regId + threadIdx.x;

@@ -54,8 +54,9 @@ ERROR_MSG_SAMPLE_IMPORT_VALIDATION = "Error: Sample set validation failed. "
 
 
 def clear_samplesetitem_session(request):
-    request.session['input_samples'].pop('pending_sampleSetItem_list', None)
-    request.session.pop('input_samples', None)
+    if request.session.get("input_samples", None):
+        request.session['input_samples'].pop('pending_sampleSetItem_list', None)
+        request.session.pop('input_samples', None)
     return HttpResponse("Manually Entered Sample session has been cleared")
 
 
@@ -176,6 +177,9 @@ def download_samplefile_format(request):
 
     hdr = [ import_sample_processor.COLUMN_SAMPLE_NAME
             , import_sample_processor.COLUMN_SAMPLE_EXT_ID
+            , import_sample_processor.COLUMN_PCR_PLATE_POSITION         
+            , import_sample_processor.COLUMN_BARCODE_KIT
+            , import_sample_processor.COLUMN_BARCODE            
             , import_sample_processor.COLUMN_GENDER
             , import_sample_processor.COLUMN_GROUP_TYPE
             , import_sample_processor.COLUMN_GROUP
@@ -183,11 +187,11 @@ def download_samplefile_format(request):
             , import_sample_processor.COLUMN_NUCLEOTIDE_TYPE
             , import_sample_processor.COLUMN_CANCER_TYPE
             , import_sample_processor.COLUMN_CELLULARITY_PCT 
-            , import_sample_processor.COLUMN_PCR_PLATE_POSITION         
-            , import_sample_processor.COLUMNS_BARCODE_KIT
-            , import_sample_processor.COLUMN_BARCODE
+            , import_sample_processor.COLUMN_BIOPSY_DAYS
+            , import_sample_processor.COLUMN_COUPLE_ID
+            , import_sample_processor.COLUMN_EMBRYO_ID
             ]
-    
+
     customAttributes = SampleAttribute.objects.all().exclude(isActive = False).order_by("displayedName")
     for customAttribute in customAttributes:
         hdr.append(customAttribute)
@@ -454,6 +458,12 @@ def save_samplesetitem(request):
         
         logger.debug("views.save_samplesetitem() B4 validate_barcoding queryDict=%s" %(queryDict))
 
+        isValid, errorMessage = sample_validator.validate_sample_pgx_attributes_for_sampleSet(queryDict)
+        
+        if errorMessage:
+            transaction.rollback()
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
+
         try:
             isValid, errorMessage = sample_validator.validate_barcoding(request, queryDict)
         except:
@@ -649,6 +659,12 @@ def save_input_samples_for_sampleset(request):
                 sampleNucleotideType = pending_sampleSetItem.get("nucleotideType", "")
                 pcrPlateRow = pending_sampleSetItem.get("pcrPlateRow", "")
 
+                sampleBiopsyDays = pending_sampleSetItem.get("biopsyDays", "0")
+                if not sampleBiopsyDays:
+                    sampleBiopsyDays = "0"
+                sampleCoupleId = pending_sampleSetItem.get("coupleId", "")
+                sampleEmbryoId = pending_sampleSetItem.get("embryoId", "")
+                
                 new_sample = views_helper._create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc, selectedBarcodeKit, selectedBarcode)
                             
                 isValid, errorMessage = views_helper._create_or_update_sampleAttributes_for_sampleSetItem_with_dict(request, user, new_sample, sampleAttribute_dict)
@@ -658,7 +674,7 @@ def save_input_samples_for_sampleset(request):
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
 
                 views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, \
-                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow)
+                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId)
                    
             clear_samplesetitem_session(request)
                        

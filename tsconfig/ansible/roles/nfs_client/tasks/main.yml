@@ -46,11 +46,15 @@
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
 
-- name: Execute mount command
-  shell: bash -lc 'if ! mount|grep "{{ item.name }}:{{ item.directory }}"; then mount {{ item.mountpoint }}; fi'
+#-----------------------------------------------------------------------------
+# mount action also writes an fstab entry.  We don't want that so we direct
+# the action to write to /dev/null.  We want to maintain fstab ourselves.
+#-----------------------------------------------------------------------------
+- name: External mounts
+  mount: name={{item.mountpoint}} src={{item.name}}:{{item.directory}} fstype=nfs state=mounted fstab=/dev/null
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
-  
+  ignore_errors: yes    # TODO: Having trouble with some already-mounted volumes detected to be unmounted.
 
 #-----------------------------------------------------------------------------
 # Remove what we have done - for development only

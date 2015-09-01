@@ -20,6 +20,7 @@ function print_help()
     echo -e "\t--deviceid device_name        Specify device to partition"
     echo -e "\t--debug, -d                   Enable debug print (set -x)"
     echo -e "\t--nodelete                    Disable deleting existing contents of partitions after copying"
+    echo -e "\t--nomount                     Create/partition only.  No data copy, mounting, etc."
     echo -e "\t--test                        No changes are made to the system, commands are printed"
     echo -e "\t--help, -h                    Prints command line args"
     echo -e "\t--version                     Prints version"
@@ -164,14 +165,16 @@ function cleanup_partition()
     else
         echo "Device ${devid} will be wiped of LVM"
         vgname=$(pvdisplay ${devid} | awk '/VG Name/{print $3}')
-        for item in $(lvdisplay $vgname | awk '/LV Path/{print $3}'); do
-            echo $item
-            if [ "swap" == "$()" ]; then swapoff $item || true; fi
-            if ! lvremove -f $item; then
-                exit
-            fi
-        done
-        vgremove $vgname
+        if [ ! -z $vgname ]; then
+            for item in $(lvdisplay $vgname | awk '/LV Path/{print $3}'); do
+                echo $item
+                if [ "swap" == "$()" ]; then swapoff $item || true; fi
+                if ! lvremove -f $item; then
+                    exit
+                fi
+            done
+            vgremove $vgname
+        fi
         pvremove ${devid}
     fi
 }
@@ -197,6 +200,7 @@ rawdata_mtpt="/rawdata"
 home_mtpt="/home"
 partid=1
 DELETE_DATA=true
+NOMOUNT=False
 DEBUG=false
 
 #---                                    ---#
@@ -261,6 +265,10 @@ while [ $# != 0 ]; do
         ;;
         '--nodelete')
             DELETE_DATA=false
+        ;;
+        '--nomount')
+            DELETE_DATA=false
+            NOMOUNT=True
         ;;
         '--help'|'-h'|\?)
             print_help
@@ -483,11 +491,15 @@ else
     echo "ALL EXISTING DATA WILL BE LOST!"
     echo "Four Logical Volumes will be created:"
     echo "/results, /home, /tmp, swap"
-    echo "The current contents of /results and /home will be copied to the new volumes"
+    if [ $NOMOUNT == False ]; then
+        echo "The current contents of /results and /home will be copied to the new volumes"
+    fi
     echo
     echo "WARNING!  Any data on partition ${deviceid} will be deleted"
     echo "Continue only if you are sure you want to reformat ${deviceid}"
-    echo "and migrate current /results and /home to the new partitions."
+    if [ $NOMOUNT == False ]; then
+        echo "and migrate current /results and /home to the new partitions."
+    fi
     read -p"Type yes to continue: " usrin
     if [ "${usrin,,}" != "yes" ]; then
         exit
@@ -544,34 +556,40 @@ else
     exec_cmd "$cmd"
     
     #---------------------------------------------------
-    # Permissions on /tmp and /results
+    # Following commands only should run when executed from
+    # within the TS environment.
     #---------------------------------------------------
-    cmd="chmod 1777 /tmp"
-    exec_cmd "$cmd"
-    cmd="chmod 0777 /results"
-    exec_cmd "$cmd"
-    cmd="hack_tmp_permissions"
-    exec_cmd "$cmd"
-    
-    #---------------------------------------------------
-    #Copy existing /results, /home to new partitions
-    #---------------------------------------------------
-    cmd="copy_and_mount /dev/data/results $results_mtpt"
-    exec_cmd "$cmd"
-    cmd="copy_and_mount /dev/data/home $home_mtpt"
-    exec_cmd "$cmd"
-    
-    #---------------------------------------------------
-    # Edit /etc/fstab
-    #---------------------------------------------------
-    cmd="add_to_fstab /dev/data/home /home"
-    exec_cmd "$cmd"
-    cmd="add_to_fstab /dev/data/tmp /tmp"
-    exec_cmd "$cmd"
-    cmd="add_to_fstab /dev/data/results /results"
-    exec_cmd "$cmd"
-    cmd="edit_swap_fstab /dev/data/swap"
-    exec_cmd "$cmd"
+    if [ $NOMOUNT = False ]; then
+        #---------------------------------------------------
+        # Permissions on /tmp and /results
+        #---------------------------------------------------
+        cmd="chmod 1777 /tmp"
+        exec_cmd "$cmd"
+        cmd="chmod 0777 /results"
+        exec_cmd "$cmd"
+        cmd="hack_tmp_permissions"
+        exec_cmd "$cmd"
+        
+        #---------------------------------------------------
+        #Copy existing /results, /home to new partitions
+        #---------------------------------------------------
+        cmd="copy_and_mount /dev/data/results $results_mtpt"
+        exec_cmd "$cmd"
+        cmd="copy_and_mount /dev/data/home $home_mtpt"
+        exec_cmd "$cmd"
+        
+        #---------------------------------------------------
+        # Edit /etc/fstab
+        #---------------------------------------------------
+        cmd="add_to_fstab /dev/data/home /home"
+        exec_cmd "$cmd"
+        cmd="add_to_fstab /dev/data/tmp /tmp"
+        exec_cmd "$cmd"
+        cmd="add_to_fstab /dev/data/results /results"
+        exec_cmd "$cmd"
+        cmd="edit_swap_fstab /dev/data/swap"
+        exec_cmd "$cmd"
+    fi
     
     #---------------------------------------------------
     # We are finished.  Exit banner

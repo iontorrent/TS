@@ -52,7 +52,8 @@
   }
    .repsnap {
      width:774px;
-     height:280px
+     height:280px;
+     page-break-inside:avoid;
    }
    .page-break {
      display: block;
@@ -295,7 +296,6 @@
 <div id='TargetCoverageChart' amplicons={{trg_type}} datafile='{{output_dir}}/{{finecov_tsv}}' hidelegend initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
 {% if not rna_stats %}
-<div class="page-break"></div>
 {% endif %}
 {% if bas_stats %}
 <div id='ReferenceCoverageChart' {% if wgn_stats %}genome{% endif %} showoptions outlieroffscale bbcfile='{{output_dir}}/{{aux_bbc}}' cbcfile='{{output_dir}}/{{aux_cbc}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
@@ -323,7 +323,7 @@
 <div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
   <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
   <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
-  <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+  <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
   <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
 </div> </div> </div> </div>
 <br/>

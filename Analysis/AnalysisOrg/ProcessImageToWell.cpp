@@ -21,6 +21,7 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <fenv.h>
 
 #define DUMP_NEW_PIPELINE_REG_FITTING 0
 
@@ -29,7 +30,9 @@ using namespace std;
 
 // Need to be aware whether 1.wells writing in background or not
 // Need to sync after writing a flow 
-static void setUpFlowByFlowHandshakeWorker(
+
+/*
+ static void setUpFlowByFlowHandshakeWorker(
   const CommandLineOpts &inception_state,
   const ImageSpecClass &my_image_spec,
   BkgFitterTracker &fitterTracker,
@@ -43,13 +46,13 @@ static void setUpFlowByFlowHandshakeWorker(
   // set up information for the thread here
   info.ampEstimatesBuf = fitterTracker.getRingBuffer();
   info.fitters = &(fitterTracker.signal_proc_fitters);
-  info.pq = &(fitterTracker.analysis_queue);
   info.startingFlow = inception_state.bkg_control.gpuControl.switchToFlowByFlowAt;
   info.endingFlow = (int)inception_state.flow_context.endingFlow;
   info.packQueue = packQueue;
   info.writeQueue = writeQueue;
   info.rawWells = rawWells;
 }
+ */
 
 static bool CheckForMinimumNumberOfFlows(const CommandLineOpts &inception_state) {
 
@@ -144,8 +147,7 @@ static void DoThreadedSignalProcessing(
     // Build everything
     json_params["chipType"] = chipType;
     json_params["results_folder"] = inception_state.sys_context.GetResultsFolder();
-    GlobalFitter.global_defaults.SetOpts(opts, json_params);
-	
+    GlobalFitter.global_defaults.SetOpts(opts, json_params);	
 	// >does not open wells file<
     fprintf(stdout, "Opening wells file %s ... ", wellsFile.c_str());
     RawWells preWells ( inception_state.sys_context.wellsFilePath, inception_state.sys_context.wellsFileName, convert, lower, upper );
@@ -163,12 +165,16 @@ static void DoThreadedSignalProcessing(
   // One way (fresh creation) or the other (serialization), we need to allocate scratch space,
   // now that the GlobalFitter has been built.
   GlobalFitter.AllocateSlicedChipScratchSpace( flow_block_sequence.MaxFlowsInAnyFlowBlock() );
+
   
-  // plan (this happens whether we're from-disk or not):
-  GlobalFitter.PlanComputation ( inception_state.bkg_control);
+     // plan (this happens whether we're from-disk or not):
+  //GlobalFitter.PlanComputation ( inception_state.bkg_control);
+  GlobalFitter.SetUpCpuPipelines(inception_state.bkg_control);
+  GlobalFitter.SetUpGpuPipelines(inception_state.bkg_control);
+  GlobalFitter.SpinnUpCpuThreads();
 
   // tweaking global defaults for bkg model if GPU is used
-  if (GlobalFitter.IsGpuAccelerationUsed()) {
+  if (GlobalFitter.useGpuAcceleration()) {
       GlobalFitter.global_defaults.signal_process_control.amp_guess_on_gpu = 
           (inception_state.bkg_control.gpuControl.gpuSingleFlowFit & 
           inception_state.bkg_control.gpuControl.gpuAmpGuess);
@@ -221,9 +227,9 @@ static void DoThreadedSignalProcessing(
   GlobalFitter.InitBeads_xyflow(inception_state);
 
   // Get the GPU ready, if we're using it.
-  GlobalFitter.DetermineAndSetGPUAllocationAndKernelParams( inception_state.bkg_control, KEY_LEN,
-                                              flow_block_sequence.MaxFlowsInAnyFlowBlock() );
-  GlobalFitter.SpinUpGPUThreads();
+  GlobalFitter.DetermineAndSetGPUAllocationAndKernelParams( inception_state.bkg_control, KEY_LEN, flow_block_sequence.MaxFlowsInAnyFlowBlock() );
+  GlobalFitter.SpinnUpGpuThreads();
+  //GlobalFitter.SpinUpGPUThreads(); //now is done within pipelinesetup
 
   float washoutThreshold = RetrieveParameterFloat(opts, json_params, '-', "bkg-washout-threshold", WASHOUT_THRESHOLD);
   GlobalFitter.setWashoutThreshold(washoutThreshold);
@@ -242,7 +248,12 @@ static void DoThreadedSignalProcessing(
   SemQueue packQueue;
   SemQueue writeQueue;
 
-  int saveQueueSize = RetrieveParameterInt(opts, json_params, '-', "wells-save-queue-size", 0);
+  int saveQueueSize;
+  if (inception_state.bkg_control.gpuControl.gpuFlowByFlowExecution)
+    saveQueueSize = 2;
+  else
+    saveQueueSize = RetrieveParameterInt(opts, json_params, '-', "wells-save-queue-size", 0);
+
   writeFlowDataFuncArg writerArg;
   if(saveQueueSize > 0) {
     unsigned int queueSize = (unsigned int)saveQueueSize;
@@ -260,7 +271,7 @@ static void DoThreadedSignalProcessing(
     writerArg.filePath = rawWells.GetHdf5FilePath();
     writerArg.numCols = my_image_spec.cols;
     writerArg.stepSize = stepSize;
-	writerArg.saveAsUShort = convert;
+    writerArg.saveAsUShort = convert;
     writerArg.packQueuePtr = &packQueue;
     writerArg.writeQueuePtr = &writeQueue;
 
@@ -278,9 +289,9 @@ static void DoThreadedSignalProcessing(
 
   // process all flows...
   // using actual flow values
-  GPUFlowByFlowPipelineInfo flowByFlowInfo; 
-  pthread_t flowByFlowHandshakeThread;
-  bool handshakeCreated = false;
+  //GPUFlowByFlowPipelineInfo flowByFlowInfo;
+  //pthread_t flowByFlowHandshakeThread;
+  //bool handshakeCreated = false;
   Timer flow_block_timer;
   Timer signal_proc_timer;
   for ( int flow = inception_state.flow_context.startingFlow; 
@@ -326,26 +337,34 @@ static void DoThreadedSignalProcessing(
        if(flow == inception_state.bkg_control.gpuControl.switchToFlowByFlowAt ){
           cout << "SignalProcessing: flow 20 reached, switching from old block of 20 flows to NEW flow by flow GPU pipeline!" <<endl;
           cout << "CUDA: cleaning up GPU pipeline and queuing system used for first 20 flows!" <<endl;
-          GlobalFitter.UnSpinGPUThreads();
+          GlobalFitter.UnSpinGpuThreads();
           cout << "CUDA: initiating flow by flow pipeline" << endl;
 
           if (inception_state.bkg_control.gpuControl.postFitHandshakeWorker) {
             cout << "Destroying legacy CPU bkgmodel workers after first 20 flows" << endl;
-            GlobalFitter.UnSpinCPUBkgModelThreads();
+            GlobalFitter.UnSpinCpuThreads();
    
             // start separate GPU-CPU handshake thread if performing flow by flow GPU pipeline
-            setUpFlowByFlowHandshakeWorker(
-                inception_state,
-		my_image_spec,
-		GlobalFitter,
-		&packQueue,
-		&writeQueue,
-		&rawWells,
-		flowByFlowInfo);
+            //setUpFlowByFlowHandshakeWorker(
+            //    inception_state,
+		// my_image_spec,
+		// GlobalFitter,
+		//&packQueue,
+		//&writeQueue,
+		//&rawWells,
+		//flowByFlowInfo);
 
             // initiate thread here
-            pthread_create(&flowByFlowHandshakeThread, NULL, flowByFlowHandshakeWorker, &flowByFlowInfo);
-            handshakeCreated = true;
+      //      pthread_create(&flowByFlowHandshakeThread, NULL, flowByFlowHandshakeWorker, &flowByFlowInfo);
+      //      handshakeCreated = true;
+            cout << "Creating new CPU Handshake thread and worker threads for file writing." << endl;
+            GlobalFitter.GpuQueueControl.setUpAndStartFlowByFlowHandshakeWorker(  inception_state,
+                                                                                  my_image_spec,
+                                                                                  &GlobalFitter.signal_proc_fitters,
+                                                                                  &packQueue,
+                                                                                  &writeQueue,
+                                                                                  &rawWells );
+
           }
        }
 
@@ -387,7 +406,7 @@ static void DoThreadedSignalProcessing(
 
 
 
-    if (!inception_state.bkg_control.gpuControl.postFitHandshakeWorker) {
+    if (!GlobalFitter.GpuQueueControl.handshakeCreated()) {
 
       // Find the flow that's the last runnable flow in the "mixed_last_flow" block.
       int applyFlow = flow_block_sequence.BlockAtFlow(
@@ -409,12 +428,28 @@ static void DoThreadedSignalProcessing(
       }
 
 
+       //Here I should collect the sample for all the regions and n flows for regional fitting in the new pipeline
+      //TODO: ad comandline parameter to turn sampel collection on or off and change number of history flows (currently hard coded to 20
+      if(inception_state.bkg_control.gpuControl.gpuFlowByFlowExecution){
+        if(flow == (inception_state.bkg_control.gpuControl.switchToFlowByFlowAt -1) ){
+          GlobalFitter.CollectSampleWellsForGPUBlockLevelSignalProcessing(
+                    flow,
+                    flow_block->size(),
+                    my_img_set,
+                    last_flow,
+                    max( KEY_LEN - flow_block->begin(), 0 ),
+                    LevMarSparseMatrices,
+                    &inception_state,
+                    &(my_prequel_setup.smooth_t0_est));
+        }
+      }
+
+
 
       // hdf5 dump of bead and regional parameters in bkgmodel
       if (inception_state.bkg_control.pest_control.bkg_debug_files)
         GlobalFitter.all_params_hdf.IncrementalWrite ( flow, last_flow, flow_block,
                                                      flow_block_sequence.FlowBlockIndex( flow ) );
-
 
       // Needed for 318 chips. Decide how many DATs to read ahead for every flow block
       // also report timing for block of 20 flows from reading dat to writing 1.wells for this block 
@@ -467,11 +502,13 @@ static void DoThreadedSignalProcessing(
 
   // Need a commandline option to decide if we want post fit steps in separate background 
   // thread or not when running new flow by flow pipeline
-  // Will not work right now if ran only for first 20 flows
 
   if (inception_state.bkg_control.gpuControl.postFitHandshakeWorker) {
-      if ( handshakeCreated)
-        pthread_join(flowByFlowHandshakeThread, NULL);
+    //if ( handshakeCreated) {
+    if(GlobalFitter.GpuQueueControl.handshakeCreated()){
+      GlobalFitter.GpuQueueControl.joinFlowByFlowHandshakeWorker();
+      //  pthread_join(flowByFlowHandshakeThread, NULL);
+    }
   }
 
 
@@ -507,7 +544,8 @@ static void DoThreadedSignalProcessing(
   rawWells.Close();
   rawWells.GetWriteTimer().PrintMilliSeconds(std::cout, "Timer: Wells total writing time:");
 
-  GlobalFitter.UnSpinGPUThreads ();
+  GlobalFitter.UnSpinGpuThreads();
+  GlobalFitter.UnSpinCpuThreads();
 
   if ( inception_state.bkg_control.signal_chunks.updateMaskAfterBkgModel )
     from_beadfind_mask.pinnedInFlow->UpdateMaskWithPinned ( from_beadfind_mask.my_mask ); //update maskPtr
@@ -832,6 +870,8 @@ void IsolatedSignalProcessing (
   ClearStaleWellsFile();
   inception_state.sys_context.MakeNewTmpWellsFile ( inception_state.sys_context.GetResultsFolder() );
 
+  // feenableexcept(FE_DIVBYZERO | FE_INVALID); // | FE_OVERFLOW);
+
   // we might use some other model here
   if ( true )
   {
@@ -924,7 +964,7 @@ void RealImagesToWells (
     if ( inception_state.bkg_control.signal_chunks.restart_check ){
       string git_hash = IonVersion::GetGitHash();
       ION_ASSERT( (saved_git_hash.compare(git_hash) == 0),
-		  "This GIT hash " + git_hash + " of Analysis does not match the GIT hash " + saved_git_hash + " where " + filePath + " was saved; disable this check by using --no-restart-check");
+		  "This GIT hash " + git_hash + " of Analysis does not match the GIT hash " + saved_git_hash + " where " + filePath + " was saved; disable this check by using --restart-check false");
     }
 
     // set file locations

@@ -13,7 +13,7 @@
 #define PACKAGE "tmap"
 
 /* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "http://ioncommunity.lifetechnologies.com"
+#define PACKAGE_BUGREPORT "http://ioncommunity.thermofisher.com"
 
 /* Define to the full name of this package. */
 #define PACKAGE_NAME "tmap"

@@ -101,6 +101,7 @@ def num_get_list(my_dict, my_key, default):
 def main():
     
     parser = OptionParser()
+    parser.add_option('-z', '--suppress-no-calls',      help='Suppress no calls [on/off]', dest='suppress_no_calls') 
     parser.add_option('-i', '--input-vcf',      help='Input vcf file to be sorted', dest='input') 
     parser.add_option('-r', '--region-bed',     help='Region bed file (optional)', dest='region') 
     parser.add_option('-B', '--barcode',        help='Barcode name (optional)', dest='barcode')
@@ -393,8 +394,9 @@ def main():
                 continue
             idx = alt.index(omapalt)
 
-            if oid == '.' and genotype1_int != (idx+1) and genotype2_int != (idx+1):
-                continue
+            if (options.suppress_no_calls == "on"):
+                if oid == '.' and genotype1_int != (idx+1) and genotype2_int != (idx+1):
+                    continue
 
             allele = {}
             allele['chrom']             = chr

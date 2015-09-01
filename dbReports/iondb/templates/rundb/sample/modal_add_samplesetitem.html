@@ -3,15 +3,30 @@
 
 <style type="text/css">
     .nav ~ .tab-content {
+        border-top: 0px;
         margin-top: -20px;
         padding-top: 20px;
         padding-left: 0px;
         padding-right: 0px;
+        padding-bottom: 0px;
         z-index: -1;
     }
+
+    .form-horizontal .control-label {
+      float: left;
+      width: 120px;
+      padding-top: 5px;
+      text-align: right;
+    }  
+    .form-horizontal .controls {
+      *display: inline-block;
+      *padding-left: 20px;
+      margin-left: 130px;
+      *margin-left: 0;
+    }      
 </style>
 
-<div id="modal_add_samplesetitem_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
+<div id="modal_add_samplesetitem_popup" class="modal modal-900 fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
         <h3 id="modal_addLabel">
@@ -20,7 +35,7 @@
         	{% endif %}
         </h3>
     </div>
-    <div class="modal-body" style="max-height: 480px;">
+    <div class="modal-body" style="max-height: 400px;">
         <div class="workflow-step " style="display: block;">
             <div id="error-messages" class="format-errors alert alert-error hide" style="margin-left: 4%;"></div>
             
@@ -29,417 +44,32 @@
 			<div class="alert alert-success modal-success-messages hide"></div -->
 
 			<form class="form-horizontal" id="save_samplesetitem" name="save_samplesetitem" method="POST" action="">
-            	<input type="hidden" id="intent" name="intent" value="{{intent}}">
-            	<input type="hidden" id="id" name="id" value="{{sampleSetItem.id}}">
-            	<input type='hidden' pending_id="pending_id" name="pending_id" value="{{pending_sampleSetItem.pending_id}}">
-
-				<div class="control-group">
-					<label class="control-label" for="sampleName">Sample Name (required)</label>
-					<div class="controls">
-						{% if intent == "edit" %}
-							{% ifequal sampleSetItem.sample.status "created" %}
-								<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" value="{{sampleSetItem.sample.displayedName}}" />						    						
-							{% else %}
-								<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" value="{{sampleSetItem.sample.displayedName}}" readonly />		
-							{% endifequal %}
-						{% elif intent == "edit_pending" %}
-							<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" value="{{pending_sampleSetItem.displayedName}}" />						    						
-						{% else %}
-							<input type="text" maxlength="127" id="sampleName" name="sampleName" placeholder="Required" />
-						{% endif %}
-
-						<div class="help-block">
-        					{% if intent == "edit" and sampleSetItem.sample.status != "created" %}      					
-        						FYI: Sample name in the sample set cannot be changed since this sample set has been planned.
-        					{% endif %}
-						</div>						
-					</div>
-				</div>
-	           	
-				<div class="control-group">
-					<label class="control-label" for="sampleExternalId">Sample External ID</label>
-					<div class="controls">
-						{% if intent == "edit" %}
-							{% ifequal sampleSetItem.sample.status "created" %}
-								<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" value="{{sampleSetItem.sample.externalId}}" />						    						
-							{% else %}
-								<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" value="{{sampleSetItem.sample.externalId}}" readonly />		
-							{% endifequal %}
-						{% elif intent == "edit_pending" %}	
-							<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" value="{{pending_sampleSetItem.externalId}}" />						    												
-						{% else %}						
-							<input type="text" maxlength="127" id="sampleExternalId" name="sampleExternalId" placeholder="Optional" />
-						{% endif %}
-
-					</div>
-				</div>	
-                                            
-                <div class="control-group">
-                    <label class="control-label" for="pcrPlateRow">PCR Plate Position</label>
-                    <div class="controls">
-                        <select id="pcrPlateRow" name="pcrPlateRow"style="height:28px;">
-                            <option value="" >.....</option>                 
-                            {% if intent == "edit" %}
-                                {% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
-                                    {% ifequal sampleSetItem.pcrPlateRow pcrPlateRow %}
-                                        <option SELECTED value="{{sampleSetItem.pcrPlateRow}}">{{displayed_pcrPlateRow}}</option>
-                                    {% else %}
-                                        <option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
-                                    {% endifequal %}
-                                {% endfor %}                             
-                            {% elif intent == "edit_pending" %}  
-                                {% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
-                                    {% ifequal pending_sampleSetItem.pcrPlateRow pcrPlateRow %}
-                                        <option SELECTED value="{{pending_sampleSetItem.pcrPlateRow}}">{{displayed_pcrPlateRow}}</option>
-                                    {% else %}
-                                        <option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
-                                    {% endifequal %}
-                                {% endfor %}                                                        
-                            {% else %}           
-                                {% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
-                                    <option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
-                                {% endfor %}                                              
-                            {% endif %}
-                            </select>
-    
-                        <div class="help-block">
-                        </div>
-                        
-                    </div>
-                </div>
-                
-				<div class="control-group">
-					<label class="control-label" for="barcodeKit">Barcode Kit</label>
-					<div class="controls">
-                    	<select id="barcodeKit" name="barcodeKit"style="height:28px;">
-            			<option value="" >.....</option>
-                    	{% if intent == "edit" %}
-            				{% for kit in barcodeKits %}
-            					{% ifequal selectedBarcodeKitName kit.name %}
-            						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
-            					{% else %}
-            						<option value="{{kit.name}}" >{{kit.name}}</option>
-            					{% endifequal %}
-            				{% endfor %}		
-            			{% elif intent == "edit_pending" %}
-            				{% for kit in barcodeKits %}
-            					{% ifequal pending_sampleSetItem.barcodeKit kit.name %}
-            						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
-            					{% else %}
-            						<option value="{{kit.name}}" >{{kit.name}}</option>
-            					{% endifequal %}
-            				{% endfor %}		}
-                        {% else %}                	
-                    		{% for kit in barcodeKits %}
-    						<option value="{{kit.name}}" >{{kit.name}}</option>}
-                    		{% endfor %}
-                        {% endif %}
-                    	</select>
-
-						<div class="help-block">
-						</div>
-					</div>
-				</div>
-
-				<div id="barcodesDiv" class="control-group">
-					<label class="control-label" for="barcode">Barcode</label>
-					<div class="controls">
-                    	<select id="barcode" name="barcode"style="height:28px;">
-            			<option value="" >.....</option>
-                    	{% if intent == "edit" %}
-            				{% for barcode in barcodeInfo %}
-    							{% ifequal selectedBarcodeKitName barcode.name %}            				
-            						{% ifequal sampleSetItem.dnabarcode.id_str barcode.id_str %}
-            							<option SELECTED value="{{sampleSetItem.dnabarcode.id_str}}">{{sampleSetItem.dnabarcode.id_str}}</option>
-            						{% else %}
-            							<option value="{{barcode.id_str}}" >{{barcode.id_str}}</option>
-            						{% endifequal %}
-            					{% endifequal %}
-            				{% endfor %}
-    					{% elif intent == "edit_pending" %}
-    						{% for barcode in barcodeInfo %}
-    							{% ifequal pending_sampleSetItem.barcodeKit barcode.name %}    						
-    								{% ifequal pending_sampleSetItem.barcode barcode.id_str %}
-    									<option SELECTED value="{{pending_sampleSetItem.barcode}}">{{pending_sampleSetItem.barcode}}</option>
-    								{% else %}
-    									<option value="{{barcode.id_str}}" >{{barcode.id_str}}</option>
-    								{% endifequal %}
-    							{% endifequal %}
-    						{% endfor %}
-                        {% endif %}
-                    	</select>
-
-						<div class="help-block">
-						</div>
-					</div>
-				</div>
-
-
+			     {% include "rundb/sample/samplesetitem_main_section.html" %}
+			
+                <div class="span6">
                 <ul class="nav nav-tabs">
-                <li class="active"><a href="#annotations" data-toggle="tab">Annotations</a></li>
+                <li class="active"><a href="#annotations" data-toggle="tab">Basic Annotations</a></li>
+                <li><a href="#extraAnnotations" data-toggle="tab">Extra Annotations</a></li>                
                 <li><a href="#userDefinedAttributes" data-toggle="tab">User-defined Attributes</a></li>                  
                 </ul>
                 
                 <!-- Tab panes -->
                 <div class="tab-content">
                   <div class="tab-pane fade in active" id="annotations">
-                    <div class="control-group">
-                        <label class="control-label" for="sampleDescription">Description</label>
-                        <div class="controls">
-                            {% if intent == "edit" %}
-                                <textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="Optional" value="{{sampleSetItem.sample.description}}">{{sampleSetItem.sample.description}}</textarea>
-                            {% elif intent == "edit_pending" %}
-                                <textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="Optional" value="{{pending_sampleSetItem.description}}">{{pending_sampleSetItem.description}}</textarea>                        
-                            {% else %}
-                                <textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="Optional"></textarea>
-                            {% endif %}
-
-                            <div class="help-block">
-                            </div>                      
-                        </div>
-                    </div>
-                    
-                    <div class="control-group">
-                        <label class="control-label" for="nucleotideType">DNA/RNA</label>
-                        <div class="controls">
-                            <select id="nucleotideType" name="nucleotideType"style="height:28px;">
-                            <option value="" >.....</option>                 
-                            {% if intent == "edit" %}
-                                {% for nucType, displayedNucType in nucleotideType_choices.items %}
-                                    {% ifequal sampleSetItem.nucleotideType nucType %}
-                                        <option SELECTED value="{{sampleSetItem.nucleotideType}}">{{displayedNucType}}</option>
-                                    {% else %}
-                                        <option value="{{nucType}}" >{{displayedNucType}}</option>
-                                    {% endifequal %}
-                                {% endfor %}                             
-                            {% elif intent == "edit_pending" %}  
-                                {% for nucType, displayedNucType in nucleotideType_choices.items %}
-                                    {% ifequal pending_sampleSetItem.nucleotideType nucType %}
-                                        <option SELECTED value="{{pending_sampleSetItem.nucleotideType}}">{{displayedNucType}}</option>
-                                    {% else %}
-                                        <option value="{{nucType}}" >{{displayedNucType}}</option>
-                                    {% endifequal %}
-                                {% endfor %}                                                        
-                            {% else %}           
-                                {% for nucType, displayedNucType in nucleotideType_choices.items %}
-                                    <option value="{{nucType}}" >{{displayedNucType}}</option>
-                                {% endfor %}                                              
-                            {% endif %}
-                            </select>
-    
-                            <div class="help-block">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="control-group">
-                        <label class="control-label" for="gender">Gender</label>
-                        <div class="controls">
-                            <select id="gender" name="gender"style="height:28px;">
-                            <option value="" >.....</option>
-                            {% if intent == "edit" %}
-                                {% for gender in gender_CV_list %}
-                                    {% ifequal sampleSetItem.gender gender.value %}
-                                        <option SELECTED value="{{sampleSetItem.gender}}">{{sampleSetItem.gender}}</option>
-                                    {% else %}
-                                        {% if gender.isActive %}
-                                            <option value="{{gender.value}}" >{{gender.value}}</option>
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endfor %}
-                            {% elif intent == "edit_pending" %}  
-                                {% for gender in gender_CV_list %}
-                                    {% ifequal pending_sampleSetItem.gender gender.value %}
-                                        <option SELECTED value="{{pending_sampleSetItem.gender}}">{{pending_sampleSetItem.gender}}</option>
-                                    {% else %}
-                                        {% if gender.isActive %}
-                                            <option value="{{gender.value}}" >{{gender.value}}</option>
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endfor %}                        
-                            {% else %}                  
-                                {% for gender in gender_CV_list %}
-                                    {% if gender.isActive %}
-                                        <option value="{{gender.value}}" >{{gender.value}}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            </select>
-    
-                            <div class="help-block">
-                            </div>
-                        </div>
-                    </div>
-                                                
-                    <div class="control-group">
-                        <label class="control-label" for="relationshipRole">Type</label>
-                        <div class="controls">
-                            <select id="relationshipRole" name="relationshipRole"style="height:28px;">
-                            <option value="" >.....</option>
-                            {% if intent == "edit" %}
-                                {% for role in sample_role_CV_list %}
-                                    {% ifequal sampleSetItem.relationshipRole role.value %}
-                                        <option SELECTED value="{{sampleSetItem.relationshipRole}}">{{sampleSetItem.relationshipRole}}</option>
-                                    {% else %}
-                                        {% if role.isActive %}
-                                            <option value="{{role.value}}" >{{role.value}}</option>
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endfor %}
-                            {% elif intent == "edit_pending" %}
-                                {% for role in sample_role_CV_list %}
-                                    {% ifequal pending_sampleSetItem.relationshipRole role.value %}
-                                        <option SELECTED value="{{pending_sampleSetItem.relationshipRole}}">{{pending_sampleSetItem.relationshipRole}}</option>
-                                    {% else %}
-                                        {% if role.isActive %}
-                                            <option value="{{role.value}}" >{{role.value}}</option>
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endfor %}                        
-                            {% else %}                      
-                                {% for role in sample_role_CV_list %}
-                                    {% if role.isActive %}
-                                        <option value="{{role.value}}" >{{role.value}}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            </select>
-    
-                            <div class="help-block">
-                            </div>
-                        </div>
-                    </div>
-                
-                    <div class="control-group">
-                        <label class="control-label" for="relationshipGroup">Relationship Group</label>
-                        <div class="controls">
-                            {% if intent == "edit" %}
-                                <input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="whole number" value="{{sampleSetItem.relationshipGroup}}" />
-                            {% elif intent == "edit_pending" %}
-                                <input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="whole number" value="{{pending_sampleSetItem.relationshipGroup}}" />                        
-                            {% else %}
-                                <input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="whole number"/>
-                            {% endif %}
-    
-                            <div class="help-block">                        
-                                FYI: A unique number (e.g., 1) to designate multiples samples within the sample set as a group (e.g., a trio group).
-                            </div>                                  
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label" for="cancerType">Cancer Type</label>
-                        <div class="controls">
-                            <select id="cancerType" name="cancerType"style="height:28px;">
-                            <option value="" >.....</option>
-                            {% if intent == "edit" %}
-                                {% for cancer in cancerType_CV_list %}
-                                    {% ifequal sampleSetItem.cancerType cancer.value %}
-                                        <option SELECTED value="{{sampleSetItem.cancerType}}">{{sampleSetItem.cancerType}}</option>
-                                    {% else %}
-                                        {% if cancer.isActive %}
-                                            <option value="{{cancer.value}}" >{{cancer.value}}</option>
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endfor %}
-                            {% elif intent == "edit_pending" %}  
-                                {% for cancer in cancerType_CV_list %}
-                                    {% ifequal pending_sampleSetItem.cancerType cancer.value %}
-                                        <option SELECTED value="{{pending_sampleSetItem.cancerType}}">{{pending_sampleSetItem.cancerType}}</option>
-                                    {% else %}
-                                        {% if cancer.isActive %}
-                                            <option value="{{cancer.value}}" >{{cancer.value}}</option>
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endfor %}                        
-                            {% else %}                  
-                                {% for cancer in cancerType_CV_list %}
-                                    {% if cancer.isActive %}
-                                        <option value="{{cancer.value}}" >{{cancer.value}}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            </select>
-    
-                            <div class="help-block">
-                            </div>
-                        </div>
-                    </div>
-                
-                    <div class="control-group">
-                        <label class="control-label" for="cellularityPct">Cellularity %</label>
-                        <div class="controls">
-                            {% if intent == "edit" %}
-                                {% if sampleSetItem.cellularityPct %}
-                                    <input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number" value="{{sampleSetItem.cellularityPct}}" />
-                                {% else %}
-                                    <input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number" value="" />                            
-                                {% endif %}
-                            {% elif intent == "edit_pending" %}
-                                <input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number" value="{{pending_sampleSetItem.cellularityPct}}" />                        
-                            {% else %}
-                                <input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number"/>
-                            {% endif %}
-    
-                            <div class="help-block">                        
-                                FYI: A whole number between 0 to 100.
-                            </div>                                  
-                        </div>
-                    </div>
-
+                     {% include "rundb/sample/samplesetitem_annotation_section.html" %}
                 </div>                
-
                   
-                  <div class="tab-pane fade" id="userDefinedAttributes">
-                    {% for sampleAttribute in sampleAttribute_list %}               
-                        <div class="control-group">
-                            <label class="control-label" for="sampleAttribute|{{sampleAttribute.id}}">{{sampleAttribute.displayedName}}</label>
-                            <div class="controls">
-                            <input maxlength="1024" id="sampleAttribute|{{sampleAttribute.id}}" name="sampleAttribute|{{sampleAttribute.id}}" 
-                            {% if sampleAttribute.isMandatory %}
-                                {% if sampleAttribute.dataType.dataType == "Integer" %}
-                                    class="mandatory integer" placeholder="Required (whole number)" 
-                                {% else %}
-                                    placeholder="Required (text)" 
-                                {% endif %}
-                            {% else %}
-                                {% if sampleAttribute.dataType.dataType == "Integer" %}
-                                    class="integer" placeholder="Optional (whole number)" 
-                                {% else %}
-                                    placeholder="Optional (text)" 
-                                {% endif %}                             
-                            {% endif %}                         
-                            {% if intent == "edit" %}
-                                {% for attributeValue in sampleAttributeValue_list %}
-                                    {% if attributeValue.sampleAttribute.displayedName == sampleAttribute.displayedName  %}
-                                        value = "{{attributeValue.value}}" 
-                                    {% endif %}
-                                {% endfor %}
-                            {% elif intent == "edit_pending" %}
-                                var attributeName = sampleAttribute.displayedName
-                                 {% for pendingKey,pendingValue in pending_sampleSetItem.attribute_dict.items %}
-                                    {% if pendingKey == sampleAttribute.displayedName %}
-                                        value = "{{pendingValue}}"
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            />
-                            </div>
-                        </div>
-                    {% endfor %}                      
-                  </div>
-
+                <div class="tab-pane fade" id="extraAnnotations">
+                     {% include "rundb/sample/samplesetitem_annotation2_section.html" %}                                
                 </div>
-                
-                
-				<div id="myBarcodes" class="control-group" style="display: none;" >
-            		<select id="myBarcode">
-					{% for barcode in barcodeInfo %}
-						<option value="{{barcode.name}}|{{barcode.id_str}}" >{{barcode.id_str}}</option>
-					{% endfor %}
-					</select>
-				</div
-						
+
+                 <div class="tab-pane fade" id="userDefinedAttributes">
+                    {% include "rundb/sample/samplesetitem_customattributes_section.html" %}           
+                 </div>
+                </div>
+                </div>
+            </div>
+ 
 		</form>
 		</div>
 		</div>
@@ -483,10 +113,8 @@
 
         	filterBarcodeList(selectedBarcodeKit);
         });
-
         
-      $('.done_add_sampleSetItem_btn').click(function(e){
-    	  
+      $('.done_add_sampleSetItem_btn').click(function(e){    	  
     	  console.log(">>>> at modal_add_samplesetitem - done_add_sampleSetItem_btn");
     	  
           e.preventDefault();
@@ -541,7 +169,7 @@
               console.log("error:", data);
           })
          .always(function(data) { /*console.log("complete:", data);*/ });
-
+           
            return false;
       });
       

@@ -470,10 +470,9 @@ if __name__ == '__main__':
     except:
         traceback.print_exc()
   
-    # copy php script
+    # copy files for report
     os.umask(0002)
-    TMPL_DIR = '/usr/share/ion/web/db/writers'
-  
+    TMPL_DIR = '/usr/share/ion/web'
     templates = [
       # DIRECTORY, SOURCE_FILE, DEST_FILE or None for same as SOURCE
         (TMPL_DIR, "report_layout.json", None),

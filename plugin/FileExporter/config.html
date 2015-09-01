@@ -1,30 +1,100 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-	<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-	
+	<link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
+	<link rel="stylesheet" media="all" href="pluginMedia/jquery-ui-1.11.4.custom/jquery-ui.min.css"></script>
+	<link rel="stylesheet" media="all" href="pluginMedia/bootstrap-3.3.5-dist/css/bootstrap.min.css"/>
+
+	<script type="text/javascript" src="pluginMedia/jquery-1.11.3.js"></script>
+	<script type="text/javascript" src="pluginMedia/bootstrap-3.3.5-dist/js/bootstrap.min.js"></script>
+
+	<script src="pluginMedia/jquery-ui-1.11.4.custom/jquery-ui.min.js"></script>
+
 	<style type="text/css">
-	#formwrap {
-		line-height: 2em;
-		background: #eef;
-		margin: 10px;
-		padding: 10px;
-	}
+		.helpRight, .helpLeft {
+			cursor: default;
+			border-bottom: 1px dotted #A9A9A9;
+			font-weight: bold;
+			text-align: center;
+			display: inline-block;
+		}
 
-	body {
-		font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
-		font-size: 14px;
-	}
+		.dropzone{
+			float: left; 
+			width:86px; 
+			height:44px;
+			border:1px dashed #aaaaaa;
+		}
+		.dragelement{
+			width: 60px;
+			height:40px;
+			padding-top: 1px;
+			padding-bottom: 1px;
+			font-size: 12px
+
+		}
+		.dropelement{
+			margin-top: 1px;
+			margin-bottom: 5px;
+			margin-right: 5px;
+			margin-left: 5px;
+		}
+		.intable{
+			padding:5px;
+			margin-top: 5px;
+			margin-bottom: 5px;
+			margin-right: 30px;
+			margin-left: 30px;
+
+		}
+		#postbutton{
+
+
+		}
+		input{
+			vertical-align: middle;
+		}
+
+		.dropdown {
+			width: 400px;
+		}
+		.container {
+			width: 700px;
+		}
+		.zebra:nth-child(odd) {
+			background: -moz-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+			background: -webkit-gradient(linear, left top, left bottom, color-stop(0%, rgba(244, 245, 247, 0.75)), color-stop(50%, rgba(229, 230, 232, 0.75)), color-stop(100%, rgba(244, 245, 247, 0.75)));
+			background: -webkit-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+			background: -o-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+			background: -ms-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+			background: linear-gradient(to bottom, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+			filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#bff4f5f7', endColorstr='#bff4f5f7', GradientType=0);
+
+		}
+		.header{
+			background: -moz-linear-gradient(top,  #eeeeee 0%, #cccccc 100%); /* FF3.6+ */
+			background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#eeeeee), color-stop(100%,#cccccc)); /* Chrome,Safari4+ */
+			background: -webkit-linear-gradient(top,  #eeeeee 0%,#cccccc 100%); /* Chrome10+,Safari5.1+ */
+			background: -o-linear-gradient(top,  #eeeeee 0%,#cccccc 100%); /* Opera 11.10+ */
+			background: -ms-linear-gradient(top,  #eeeeee 0%,#cccccc 100%); /* IE10+ */
+			background: linear-gradient(to bottom,  #eeeeee 0%,#cccccc 100%); /* W3C */
+			filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#eeeeee', endColorstr='#cccccc',GradientType=0 ); /* IE6-9 */
+
+		}
+		h6{
+			color: red;
+		}
+		body {
+			font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+			font-size: 14px;
+		}
 	</style>
-
-	<script type='text/javascript'>
-		var extraCount = 1;
-		// barcode check.
-		var selectCode = 'Field %NUMNUM: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample Name</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
-		var selectCodeDefault = 'Field 1: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME" selected="selected">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample Name</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
-		pluginGET = "";
-		
-		$(document).ready(function(){
-			$.ajax({
+</head>
+<script type='text/javascript'>
+	// set up an empty array where the options will  be held
+	var selectCode =["","","","","","",""]
+	$(document).ready(function(){
+		$.ajax({
 			url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
 			dataType:"json",
 			type: "GET",
@@ -32,356 +102,440 @@
 			success:function(data){
 				//get the plugin data
 				pluginGET = data;
-				
+
 				//delete the resource_uri
 				delete pluginGET.resource_uri;
-				
+
 				$.each(pluginGET.config, function(key,val){
 					//set the value of the html object
-					if (key == "sffCreate")
-					{
-						if (val == "on")
-						{
+					if (key == "sffCreate"){
+						if (val == "on"){
 							document.getElementById("sffCreate").checked = true;
+							document.getElementById("zipSFF").disabled = false;
 						}
 					}
-					if(key == "fastqCreate")
-					{
-						if (val == "on")
-						{
+					if(key == "fastqCreate"){
+						if (val == "on"){
 							document.getElementById("fastqCreate").checked = true;
+							document.getElementById("zipFASTQ").disabled = false;
 						}
 					}
-					if (key == "vcCreate")
-					{
-						if (val == "on")
-						{
-							document.getElementById("vcCreate").checked = true;
+					if (key == "vcfCreate"){
+						if (val == "on"){
+							document.getElementById("vcfCreate").checked = true;
+							document.getElementById("zipVCF").disabled = false;
 						}
 					}
-					if(key == "zipBAM")
-                                        {
-                                                if (val == "on")
-                                                {
-                                                        document.getElementById("zipBAM").checked = true;
-                                                }
-                                        }
-                                        if(key == "zipSFF")
-                                        {
-                                                if (val == "on")
-                                                {
-                                                        document.getElementById("zipSFF").checked = true;
-                                                }
-                                        }
-                                        if(key == "zipFASTQ")
-                                        {
-                                                if (val == "on")
-                                                {
-                                                        document.getElementById("zipFASTQ").checked = true;
-                                                }
-                                        }
-                                        if(key == "zipVCF")
-                                        {
-                                                if (val == "on")
-                                                {
-                                                        document.getElementById("zipVCF").checked = true;
-                                                }
-                                        }
-                                        if(key == "zipXLS")
-                                        {
-                                                if (val == "on")
-                                                {
-                                                        document.getElementById("zipXLS").checked = true;
-                                                }
-                                        }
-					if(key == "compressedType")
-					{
-						if (val == "zip")
-						{
+					if (key == "xlsCreate"){
+						if (val == "on"){
+							document.getElementById("xlsCreate").checked = true;
+							document.getElementById("zipXLS").disabled = false;
+						}
+					}
+					if(key == "bamCreate"){
+						if (val == "on"){
+							document.getElementById("bamCreate").checked = true;
+							document.getElementById("zipBAM").disabled = false;
+						}
+					}
+					if(key == "zipSFF"){
+						if (val == "on"){
+							document.getElementById("zipSFF").checked = true;
+						}
+					}
+					if(key == "zipFASTQ"){
+						if (val == "on"){
+							document.getElementById("zipFASTQ").checked = true;
+						}
+					}
+					if(key == "zipVCF"){
+						if (val == "on"){
+							document.getElementById("zipVCF").checked = true;
+						}
+					}
+					if(key == "zipXLS"){
+						if (val == "on"){
+							document.getElementById("zipXLS").checked = true;
+						}
+					}
+					if(key == "zipBAM"){
+						if (val == "on"){
+							document.getElementById("zipBAM").checked = true;
+						}
+					}
+					if(key == "compressedType"){
+						if (val == "zip"){
 							document.getElementsByName("compressedType")[0].checked = true;
-						}
-
-                                                if (val == "tar")
-						{
+						} else if (val == "tar"){
 							document.getElementsByName("compressedType")[1].checked = true;
 						}
 					}
-					if(key == "delimiter_select")
-					{
+					if(key == "delimiter_select"){
 						document.getElementById("delimiter_select").value = val;
 					}
-					if (key == "select_dialog")
-					{
+					if (key == "select_dialog"){
 						totalCode = "";
-						extraCount = 0
-						if (typeof(val) == "string")
-							val = new Array(val);
-						for (var valList in val)
-						{
-							extraCount = extraCount + 1;
-							addCode = selectCode.replace("%NUMNUM", parseInt(valList)+1);
-							addCode = addCode.replace('value="' + val[valList] + '"', 'value="' + val[valList] + '" selected="selected"')
-							totalCode += addCode;
-						}
-						$("#addloc").html(totalCode);
-						report("");
-					}
-				});
+						if (val != null)
+							selectCode = val
+						for(each in selectCode){
 
+							if (selectCode[each] != ''){
+								eachID= parseInt(each) + 1;
+								$("#" + selectCode[each]).appendTo($("#" + eachID));
+
+							}
+						}
+					}
+
+				});
 				// make sure that appropriate options are disabled/enabled as necessary
 				// this also fixes issues when serializing later where disabled options don't auto-serialize
-				updateSFF();
-				updateFASTQ();
-				updateVCF();
+				updateTable();
+				updatePreview("");
+
+			}
+
+		});
+
+
+		//adding drag and drop
+		$('.help').tooltip({"placement": "left"});
+		$('.dragelement').draggable({ revert: "invalid" });
+		$('.dropzone').droppable({
+			accept: function(draggable) {
+				return $(this).find("*").length == 0;
+			},
+			drop: function( event, ui ) {
+				event.target.style.border = "";
+				ui.draggable.detach().css({top: 0,left: 0}).appendTo(event.target);
+
+
+				console.log(selectCode);
+				updatePreview("");
+			},
+			over: function( event, ui ) {
+				event.target.style.border = "1px dotted red";
+			},
+			out: function( event, ui ) {
+				event.target.style.border = "";
 			}
 		});
-		});
-		
-       //turn the html objects into json objects
-       $.fn.serializeObject = function(){
-        var o = {};
-        var a = this.serializeArray();
+	});
 
-        $.each(a, function() {
-         if (o[this.name] != null) {
-          if (!o[this.name].push) {
-           o[this.name] = [o[this.name]];
-          }
+	//turn the html objects into json objects
+	$.fn.serializeObject = function(){
+		var seriObj = {};
+		var seriArray = this.serializeArray();
 
-          o[this.name].push(this.value || '');
-         } else {
-           o[this.name] = this.value || '';
-         }
-        });
-
-       return o;
-      };
-
-		function updateSFF() {
-			if (document.getElementById("sffCreate").checked == true) {
-				document.getElementById("zipSFF").disabled = false;
-			} else {
-				document.getElementById("zipSFF").disabled = true;
-				document.getElementById("zipSFF").checked = false;
-			}
-		}
-
-		function updateFASTQ() {
-			if (document.getElementById("fastqCreate").checked == true) {
-				document.getElementById("zipFASTQ").disabled = false;
-			} else {
-				document.getElementById("zipFASTQ").disabled = true;
-				document.getElementById("zipFASTQ").checked = false;
-			}
-		}
-
-		function updateVCF() {
-			if (document.getElementById("vcCreate").checked == true) {
-				document.getElementById("zipBAM").disabled = false;
-				document.getElementById("zipVCF").disabled = false;
-				document.getElementById("zipXLS").disabled = false;
-			} else {
-				document.getElementById("zipBAM").disabled = true;
-				document.getElementById("zipVCF").disabled = true;
-				document.getElementById("zipXLS").disabled = true;
-				document.getElementById("zipBAM").checked = false;
-				document.getElementById("zipVCF").checked = false;
-				document.getElementById("zipXLS").checked = false;
-			}
-		}
-
-		// Note: I don't know if I'll end up using the option arg; keep it for now just in case.
-		function report(optGiven) {
-			// Avoid printing a delimiter too early.
-			var delimPrint = 0;
-			selectOptions = $('#bamform').serializeObject();
-			// I don't know why, but it just returns nothing if it isn't json and stringified first.
-			selectJSON = { "field" : selectOptions };
-			selectJSON = JSON.stringify(selectJSON["field"]["select_dialog"]);
-			selectJSON = selectJSON.replace("[","");
-			selectJSON = selectJSON.replace("]","");
-			selectJSON = selectJSON.split(",");
-			previewOut = "";
-			for (var val in selectJSON)
-			{
-				// Too many if statements but hey, it's just displaying a preview and it works.
-				processedVal = selectJSON[val].split('"').join('');
-				if (processedVal != '')
-				{
-					if (val != 0)
-					{
-						if (delimPrint == 1)
-						{
-							previewOut += document.getElementById("delimiter_select").value;
-						}
-						else
-						{
-							delimPrint = 1;
-						}
-					}
-					else
-					{
-						delimPrint = 1;
-					}
-					previewOut += processedVal;
+		$.each(seriArray, function() {
+			if (seriObj[this.name] != null) {
+				if (!seriObj[this.name].push) {
+					seriObj[this.name] = [seriObj[this.name]];
 				}
-			}
-			previewOut += ".bam";
-			$("#previewplace").html(previewOut);
-		}
-		
-		$(function() {
-		$('#add_select').click(function() {
-			extraCount = extraCount + 1;
-			var totalCode = '';
-			// Get stringified JSON list of selected values.
-			selOpts = $('#bamform').serializeObject();
-			selJSON = { "field" : selOpts }
-			selJSON = JSON.stringify(selJSON["field"]["select_dialog"]);
-			selJSON = selJSON.replace("[","");
-			selJSON = selJSON.replace("]","");
-			selJSON = selJSON.split(",");
-			// Define a new array that can be accessed with int indices.
-			var structArr = new Array();
-			var ind = 0;
-			for (var val in selJSON)
-			{
-				structArr[ind] = selJSON[val];
-				ind = ind + 1;
-			}
-			for (var i=0;i<extraCount;i++)
-			{
-				addCode = selectCode.replace("%NUMNUM", i+1);
-				// It won't have an entry for every element, namely the newly-added one. Handle that.
-				if (structArr[i] != undefined)
-				{
-					// Select the previously selected option. Man, that was a bit messy.
-					selStr = structArr[i];
-					addCode = addCode.replace(selStr, selStr + ' selected="selected"');
-				}
-				totalCode += addCode;
-			}
-			$("#addloc").html(totalCode);
-			report("");
-		});
-		})
-		
-		$(function() {
-		$('#rem_select').click(function() {
-			// don't let users remove all fields
-			if (extraCount <= 1)
-				return;
 
-			extraCount = extraCount - 1;
-			var totalCode = '';
-			// Get stringified JSON list of selected values.
-			selOpts = $('#bamform').serializeObject();
-			selJSON = { "field" : selOpts }
-			selJSON = JSON.stringify(selJSON["field"]["select_dialog"]);
-			selJSON = selJSON.replace("[","");
-			selJSON = selJSON.replace("]","");
-			selJSON = selJSON.split(",");
-			// Define a new array that can be accessed with int indices.
-			var structArr = new Array();
-			var ind = 0;
-			for (var val in selJSON)
-			{
-				structArr[ind] = selJSON[val];
-				ind = ind + 1;
+				seriObj[this.name].push(this.value || '');
+			} 
+			else {
+				seriObj[this.name] = this.value || '';
 			}
-			for (var i=0;i<extraCount;i++)
-			{
-				addCode = selectCode.replace("%NUMNUM", i+1);
-				if (structArr[i] != undefined)
-				{
-					// Select the previously selected option. Man, that was a bit messy.
-					selStr = structArr[i];
-					addCode = addCode.replace(selStr, selStr + ' selected="selected"');
-				}
-				totalCode += addCode;
-			}
-			$("#addloc").html(totalCode);
-			report("");
 		});
-		})
 
-		$(function() {
-		$('#def_select').click(function() {
-			extraCount = 1;
-			$("#addloc").html(selectCodeDefault);
-			report("");
-		});
-		})
+		return seriObj;
+	};
+	//update the interface as they click the buttons. 
+    //allow the to compress a file only if they clicked to generate it
+    function updateTable() {
+    	readyToSubmit = false;
+    	if (document.getElementById("bamCreate").checked == true) {
+    		document.getElementById("zipBAM").disabled = false;
+    		readyToSubmit = true;
+    	} 
+    	else {
+    		document.getElementById("zipBAM").disabled = true;
+    		document.getElementById("zipBAM").checked = false;
+    	}
+    	if (document.getElementById("vcfCreate").checked == true) {
+    		document.getElementById("zipVCF").disabled = false;
+    		readyToSubmit = true;
+    	} 
+    	else {
+    		document.getElementById("zipVCF").disabled = true;
+    		document.getElementById("zipVCF").checked = false;
+    	}
+    	if (document.getElementById("xlsCreate").checked == true) {
+    		document.getElementById("zipXLS").disabled = false;
+    		readyToSubmit = true;
+    	} 
+    	else {
+    		document.getElementById("zipXLS").disabled = true;
+    		document.getElementById("zipXLS").checked = false;
+    	}
+    	if (document.getElementById("sffCreate").checked == true) {
+    		document.getElementById("zipSFF").disabled = false;
+    		readyToSubmit = true;
+    	} 
+    	else {
+    		document.getElementById("zipSFF").disabled = true;
+    		document.getElementById("zipSFF").checked = false;
+    	}
+    	if (document.getElementById("fastqCreate").checked == true) {
+    		document.getElementById("zipFASTQ").disabled = false;
+    		readyToSubmit = true;
+    	} 
+    	else {
+    		document.getElementById("zipFASTQ").disabled = true;
+    		document.getElementById("zipFASTQ").checked = false;
+    	}
+    	
+    	if (readyToSubmit){
+    		//$("#postbutton").show();
+    		$("#postbutton").prop('disabled', false);
+    	}
+    	else{
+    		//$("#postbutton").hide();
+    		$("#postbutton").prop('disabled', true);
+    	}
+    }
 
-		$(function() {
-		$('#postbutton').click(function() {
-			obj = $('#bamform').serializeObject();
-			pluginGET.config = obj;
-			pluginAPIJSON = JSON.stringify(pluginGET);
-			pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json"
-			
-			$.ajax({
-				type: 'PUT',
-				url: pluginURL,
-				contentType: "application/json; charset=utf-8",
-				success: function() { parent.$.fn.colorbox.close(); },
-				data: pluginAPIJSON,
-				dataType: "json"
-			});
-		});
-		})
-	</script>
+    // Note: I don't know if I'll end up using the option arg; keep it for now just in case.
+    function updatePreview() {
+    	var i, j, count =0;
+    	for(i = 0, j =1; i<7; i++, j++){
+    		if( $('#' + j).children().length > 0 ){
+    			selectCode[i] = $('#' + j).children().attr('id');
+    			count++;
+    		}
+    		else{
+    			selectCode[i] = '';
+    		}
 
-</head>
+    	}
+
+    	if(count > 3)
+    		document.getElementById("warn").style.color= "red";
+    	else
+    		document.getElementById("warn").style.color= "white";
+
+    	previewOut= '';
+    	for (var sel in selectCode){
+    		if(selectCode[sel] != ''){
+    			previewOut += selectCode[sel];
+    			previewOut += document.getElementById("delimiter_select").value;
+    		}
+    	}
+
+    	if(previewOut != ''){
+    		previewOut = previewOut.substring(0, previewOut.length - 1);
+    		previewOut += ".bam";
+    	}
+    	else{
+    		previewOut = "No options selected"
+    	}
+    	$("#previewplace").html(previewOut);
+    }
+
+    $(function() {
+    	$('#postbutton').click(function() {
+    		obj = $('#bamform').serializeObject();
+    		obj['select_dialog'] = selectCode
+    		pluginGET.config = obj;
+    		pluginAPIJSON = JSON.stringify(pluginGET);
+    		pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json"
+
+    		$.ajax({
+    			type: 'PUT',
+    			url: pluginURL,
+    			contentType: "application/json; charset=utf-8",
+    			success: function() { parent.$.fn.colorbox.close(); },
+    			data: pluginAPIJSON,
+    			dataType: "json"
+    		});
+    	});
+    })
+</script>
 <body>
-	<div id="formwrap" align="left">
-		<form id="bamform" name="bamform" align="left">
-			<h1>Output File Options</h1>
-			Create SFF?  <input type="checkbox" id="sffCreate" name="sffCreate" onchange="updateSFF()"/>
-			&nbsp;&nbsp;&nbsp;Move SFF to compressed file?  <input type="checkbox" id="zipSFF" name="zipSFF" disabled="disabled"/><br>
-			Create FASTQ? <input type="checkbox" id="fastqCreate" name="fastqCreate" onchange="updateFASTQ()"/>
-			&nbsp;&nbsp;&nbsp;Move FASTQ to compressed file?  <input type="checkbox" id="zipFASTQ" name="zipFASTQ" disabled="disabled"/><br>
-			Include TVC files (if available)? <input type="checkbox" id="vcCreate" name="vcCreate" onchange="updateVCF()"/>
-			&nbsp;&nbsp;&nbsp;Move TVC files to compressed file:&nbsp;&nbsp;
-				BAM/BAI: <input type="checkbox" id="zipBAM" name="zipBAM" disabled="disabled"/>&nbsp;&nbsp;&nbsp;
-				VCF: <input type="checkbox" id="zipVCF" name="zipVCF" disabled="disabled"/>&nbsp;&nbsp;&nbsp;
-				XLS: <input type="checkbox" id="zipXLS" name="zipXLS" disabled="disabled"/>&nbsp;&nbsp;&nbsp;<br>
-			<br><div>Compressed file type: &nbsp;&nbsp;&nbsp;<input type="radio" name="compressedType" value="zip"> zip <input type="radio" name="compressedType" value="tar"> tar.bz2</div>
-			<h1>Customize file names</h1>
-			<p>Delimiter selection:
-				<select name="delimiter_select" id="delimiter_select" onchange="report(this.value)">
-					<option value=".">.</option>
-					<option value="-">-</option>
-					<option value="_">_</option>
-				</select>
-			</p>
-			<span id="addloc">
-			Field 1: 
-				<select name="select_dialog" id="select_dialog" onchange="report(this.value)">
-					<option value="">Select option</option>
-					<option value="TSP_RUN_NAME">Run Name</option>
-					<option value="TSP_ANALYSIS_NAME">Report Name</option>
-					<option value="TSP_ANALYSIS_DATE">Report Date</option>
-					<option value="TSP_CHIPTYPE">Chip Type</option>
-					<option value="TSP_PGM_NAME">Sequencer Name</option>
-					<option value="TSP_SAMPLE">Sample Name</option>
-					<option value="OPT_BARCODE">Barcode Info. (if applicable)</option>
-				</select>
-			</span>
-		</form>
-		</p>
-		<input id="add_select" type="submit" value="Add another field...">
-		<input id="rem_select" type="submit" value="Remove last field...">
-		<input id="def_select" type="submit" value="Reset to default naming">
-		<br>
-		<h1>Example name string</h1>
-		<span id="previewplace"></span>
-		<br>
-		<br>
-		<input id="postbutton" type="submit" value="Save Configuration">
-		<br>
-		<div id="infoDiv" align="left">Note: if a barcoded run is not provided with at least one 'Barcode Info.' field, it will be prepended to the beginning of the file name.</div>
-		<br>
+	<form id="bamform" name="bamform" align="left" class="container">
+		<div class="row-fluid" style="margin-bottom:0px">
+			<div class="span8">
+				<h2>File Exporter</h2>
+			</div>
+			<div style="margin-top:14px;display:none"></div>
+		</div>
+		<h4>File Options:</h4>
+		<table class="table table-bordered" >
+			<thead>
+				<tr class ="header">
+					<th><div style="text-align: center;">File Types:</div></th>
+					<th><div style="text-align: center;">Include:</div></th>
+					<th><div style="text-align: center;">Archive:</div></th>
+				</tr>
+			</thead>
+
+			<tbody>
+				<tr class="zebra">
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<span class="helpLeft" title="Binary Sequence Alignment/Map (BAM), is a compressed, binary form of the SAM format. BAM files can be indexed, using the BAM Index file, for quick access to sequence alignment data.">BAM</span>
+					</div></td>
+
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox" id="bamCreate"name="bamCreate" onchange="updateTable()"/></td> 
+					</div>
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox"id="zipBAM" name="zipBAM" disabled="disabled"/></td>
+					</div>
+				</tr>
+
+
+				<tr class="zebra">
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<span class="helpLeft" title="VCF is a text file that contains meta-information lines, a header line, and then data lines each containing information about a position in the genome. The format also has the ability to contain genotype information on samples for each position. This file is generated by Variant Caller">Variant Call Format (VCF)</span>
+					</div></td>
+
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox" id="vcfCreate"name="vcfCreate" onchange="updateTable()"/></td>
+					</div>
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox"id="zipVCF" name="zipVCF" disabled="disabled"/>
+					</div>
+				</tr>
+
+				<tr class="zebra">
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<span class="helpLeft" title="The XLS is a excel file that contains meta-information lines, a header line, and then data lines each containing information about a position in the genome. The format also has the ability to contain genotype information on samples for each position. This file is generated by Variant Caller">Variant Caller Excel File (XLS)</span>
+					</div></td>
+
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox" id="xlsCreate"name="xlsCreate" onchange="updateTable()"/></td>
+					</div>
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox"id="zipXLS" name="zipXLS" disabled="disabled"/>
+					</div>
+				</tr>
+
+				<tr class="zebra">
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<span class="helpLeft" title="Standard Flowgram Format (SFF) is a formatted file that contains flow space data.This is where the bases called in a run are stored. This file also contains the nucleotide calls and associated quality values and signal values in flow space and a mapping between sequence and flow spaces. The data are organized on a per flow basis, and contain information about nucleotide flows that both did and did not result in base incorporation. ">Standard Flowgram Format (SFF)</span>
+					</div></td>
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox" id="sffCreate" name="sffCreate" onchange="updateTable()"/></td>
+					</div>
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<input type="checkbox" id="zipSFF" name="zipSFF" disabled="disabled"/></td>
+					</div>
+				</tr>
+
+				<tr class="zebra">
+					<td><div class="row-fluid" style="text-align: center;"> 
+						<span class="helpLeft" title='FASTQ-formatted file containing data organized in a per-base basis, including quality scores. The reads contained in the file are unaligned reads. It file contains a sequence header followed by a line of sequence then by a quality header and another line of quality metrics. The sequence header line always starts with a “@” directly followed by a unique identifier and the quality header always starts with a "+"'>FASTQ</span>
+					</div></td>
+				</div></td>
+				<td><div class="row-fluid" style="text-align: center;"> 
+					<input type="checkbox" id="fastqCreate" name="fastqCreate" onchange="updateTable()"/></td>
+				</div>
+				<td><div class="row-fluid" style="text-align: center;"> 
+					<input type="checkbox" id="zipFASTQ" name="zipFASTQ" disabled="disabled"/></td>
+				</div>
+			</tr>
+
+		</tbody>
+	</table>
+	<div class="row-fluid">
+		<div class="span3"><span class="helpRight" title="If you choose to have the file compressed, it can either be put into a zip file or a tar.bz2 file. Ignore this if you do not want it to be archived at all.">Archive File Type:</span></div>
+		<div class="span8">
+			<div style="float:left;margin-right:30px">
+				<label>
+					<input type="radio" name="compressedType" style="vertical-align:baseline" value="zip" checked>
+					zip
+				</label>
+			</div>
+			<div style="float:left;margin-right:30px">
+				<label>
+					<input type="radio" name="compressedType" style="vertical-align:baseline" value="tar">
+					tar.bz2
+				</label>
+			</div>
+		</div>
 	</div>
+	<br><br>
+	<h4>Name Options:</h4>
+
+
+	<table class="table table-bordered"  style="text-align: center;">
+		<thead>
+			<tr class="header">
+				<th><div style="text-align: center;">Selections:</div></th>
+				<th></th><th></th><th></th>
+			</tr>
+		</thead>
+
+		<tbody name="select_dialog" class="zebra">
+			<tr>
+				<td ><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="run_name" value="runname" class="btn btn-primary active dragelement buttonsize">Run Name</span>
+				</div></td>
+				<td class="zebra"><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="report_name" value="reportname" class="btn btn-primary active dragelement buttonsize">Report Name</span>
+				</div></td>
+				<td><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="run_date" value="reportdate" class="btn btn-primary active dragelement buttonsize">Report Date</span>
+				</div></td>
+				<td><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="chiptype" value="chiptype" class="btn btn-primary active dragelement buttonsize">Chip Type</span>
+				</div></td>
+			</tr>
+			<tr class="zebra" style="text-align: center;" >
+				<td><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="instrument" value="sequencername" class="btn btn-primary active dragelement buttonsize">Sequencer Name</span>
+				</div></td>
+				<td><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="sample" value="samplename" class="btn btn-primary active dragelement buttonsize">Sample Name</span>
+				</div></td>
+				<td><div class="dropzone intable row-fluid" style="text-align: center;">
+					<span type="button" id="barcodename" value="barcodeName" class="btn btn-primary active dragelement buttonsize">Barcode Name</span>
+				</div></td>
+				<td></td>
+			</tr>
+		</tbody>
+	</table>
+	<div>
+		<div class="dropzone dropelement" id= "1"></div>
+		<div class="dropzone dropelement" id= "2" ></div>
+		<div class="dropzone dropelement" id= "3" ></div>
+		<div class="dropzone dropelement" id= "4" ></div>
+		<div class="dropzone dropelement" id= "5" ></div>
+		<div class="dropzone dropelement" id= "6" ></div>
+		<div class="dropzone dropelement" id= "7" ></div>
+		<br><br>
+	</div>
+	<br><br>
+	<span>
+		<div class="row-fluid">	
+			<div class="span3">
+				<span class="helpRight"
+				title="This will be how the naming options will be seperated. Once you choose more than one naming option, you will be able to see,in the preview area, what the delimiter will look like.">
+				Delimiters:
+			</span>
+		</div>
+		<div class="span8">
+			<select id="delimiter_select" name="delimiter_select" class="dropdown long"  onchange="updatePreview()">
+				<option value=".">.</option>
+				<option value="-">-</option>
+				<option value="_">_</option>
+			</select>
+			<div class="span1"></div>
+		</div>
+	</div>
+</span>
+<h4>Example Name:</h4>
+<span id="previewplace"></span>
+<br><br>
+<h6 id="warn">Warning: The name you have choosen may be too long. You may encounter problems when downloading.</h6>
+<br><br>
+</form>
+<div class="container">
+	<input id="postbutton" type="submit" name="submit help" value="Save Configuration" >
+	<br><br><br>
+</div>
+
 </body>
 </html>

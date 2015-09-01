@@ -1,0 +1,58 @@
+<html>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
+
+<script type="text/javascript" src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+
+<title>OncoFusion Report (Incomplete)</title>
+
+{% if autorefresh %}
+<META HTTP-EQUIV="refresh" CONTENT="15">
+{% endif %}
+
+</head>
+
+<body>
+<div class="topbar"><div class="logoholder">
+  <a href="http://www.iontorrent.com/"><img src="/site_media/images/raw_name_small.png"
+     alt="IonTorrent Systems, Inc." style="border:none;"/></a>
+</div></div>
+
+<h1><center>OncoFusion Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% endif %}
+<h3><center>{{run_name}}<center></h3>
+
+<div class="container-fluid">
+
+{% if Error and Error != "" %}
+  <h2 style="text-align:center;color:red">*** Analysis failed to complete ***</h2>
+  <h3 style="text-align:center">{{Error}}</h3>
+{% elif autorefresh %}
+  <h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+  <a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
+  <div style="text-align:center">Click here to refresh</div></a>
+{% endif %}
+
+</div>
+
+<br/>
+<div class="footer">
+  <a href=http://www.iontorrent.com/support>Request Support</a>&nbsp;|&nbsp;<a href=/ion-docs/Home.html>Help/Documentation</a>&nbsp;|&nbsp;
+  <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+  <br/>Copyright&nbsp;&copy; 2011<a href="http://www.iontorrent.com/">Life Technologies, Inc.</a>
+</div>
+<br/><br/>
+
+</body>
+</html>
+

@@ -226,7 +226,7 @@ def clear_inprocess():
 
 def clear_process(process_id):
     '''Same as clear_inprocess() for a single result'''
-    dm_objs = DMFileStat.objects.filter(result__resultsName = process_id, action_state__in=['AG','DG','EG'])
+    dm_objs = DMFileStat.objects.filter(result__resultsName = process_id, action_state__in=['AG','DG','EG','IG'])
     reset_state(dm_objs)
     return
 
@@ -237,6 +237,7 @@ def reset_state(dm_objs):
         dm_objs.filter(action_state__in=['AG']).update(action_state="SA")
         dm_objs.filter(action_state__in=['DG']).update(action_state="SD")
         dm_objs.filter(action_state__in=['EG']).update(action_state="SE")
+        dm_objs.filter(action_state__in=['IG']).update(action_state="E")    #Indicates user needs to re-start Import
         print "Cleared %d objects" % dms
         for dm in dm_objs:
             msg = "%s for %s.<br>User Comment: started by dm_ctrl" % (DMFileStat.objects.get(pk=dm.pk).get_action_state_display(), dm.dmfileset.type)

@@ -30,7 +30,7 @@ int BkgFitterTracker::findRegion(int row, int col)
 
 void BkgFitterTracker::SetRegionProcessOrder (const CommandLineOpts &inception_state)
 {
-  analysis_compute_plan.region_order.resize (numFitters);
+  region_order.resize (numFitters);
   int numBeads;
   int zeroRegions = 0;
   for (int i=0; i<numFitters; ++i)
@@ -39,18 +39,19 @@ void BkgFitterTracker::SetRegionProcessOrder (const CommandLineOpts &inception_s
     if (numBeads == 0)
       zeroRegions++;
 
-    analysis_compute_plan.region_order[i] = beadRegion (i, numBeads);
+    region_order[i] = beadRegion (i, numBeads);
   }
-  std::sort (analysis_compute_plan.region_order.begin(), analysis_compute_plan.region_order.end(), sortregionProcessOrderVector);
+  std::sort (region_order.begin(), region_order.end(), sortregionProcessOrderVector);
   int nonZeroRegions = numFitters - zeroRegions;
   printf("Number of live bead regions (nonZeroRegions): %d\n",nonZeroRegions);
 
-  if (analysis_compute_plan.gpu_work_load != 0)
-  {
-    int gpuRegions = int (analysis_compute_plan.gpu_work_load * float (nonZeroRegions));
-    if (gpuRegions > 0)
-      analysis_compute_plan.lastRegionToProcess = gpuRegions;
-  }
+  //no longer allows for heterogeneous execution only all CPU or all GPU
+  //if (analysis_compute_plan.gpu_work_load != 0)
+  //{
+  //  int gpuRegions = int (analysis_compute_plan.gpu_work_load * float (nonZeroRegions));
+  //  if (gpuRegions > 0)
+  //    analysis_compute_plan.lastRegionToProcess = gpuRegions;
+  //}
   // bestRegion is used for beads_bestRegion output to hdf5 file
   if (nonZeroRegions>0)
   {
@@ -63,10 +64,10 @@ void BkgFitterTracker::SetRegionProcessOrder (const CommandLineOpts &inception_s
       if (reg>=0)
           bestRegion = beadRegion(reg,sliced_chip[reg]->GetNumLiveBeads());
       else
-          bestRegion = analysis_compute_plan.region_order[0];
+          bestRegion = region_order[0];
       }
       else
-          bestRegion = analysis_compute_plan.region_order[0];
+          bestRegion = region_order[0];
       bestRegion_region = sliced_chip[bestRegion.first]->get_region();
       sliced_chip[bestRegion.first]->isBestRegion = true;
 	  //cout << "SetRegionProcessOrder... bestRegion_region.row=" << bestRegion_region->row << " bestRegion_region.col=" << bestRegion_region->col << endl << flush;
@@ -85,7 +86,7 @@ void BkgFitterTracker::SetRegionProcessOrder (const CommandLineOpts &inception_s
 
 
 
-
+/*
 void BkgFitterTracker::UnSpinGPUThreads ()
 {
   if (analysis_queue.GetGpuQueue())
@@ -119,6 +120,8 @@ void BkgFitterTracker::UnSpinCPUBkgModelThreads ()
 
   }
 }
+*/
+
 
 /*
 void BkgFitterTracker::UnSpinMultiFlowFitGpuThreads ()
@@ -151,7 +154,7 @@ BkgFitterTracker::BkgFitterTracker (int numRegions) :
   bkinfo = NULL;
   all_emptytrace_track = NULL;
   bestRegion_region = NULL;
-  ampEstBufferForGPU = NULL;
+  //ampEstBufferForGPU = NULL;
 }
 
 void BkgFitterTracker::AllocateSlicedChipScratchSpace( int global_flow_max )
@@ -201,19 +204,71 @@ BkgFitterTracker::~BkgFitterTracker()
   DeleteFitters();
   numFitters = 0;
 
-  if (ampEstBufferForGPU)
-    delete ampEstBufferForGPU;
+//  if (ampEstBufferForGPU)
+//    delete ampEstBufferForGPU;
 }
-
-void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control /*, int flow_max,
-                                        master_fit_type_table *table*/)
+/*
+void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control) //, int flow_max, master_fit_type_table *table)
 {
   // how are we dividing the computation amongst resources available as directed by command line constraints
 
-  PlanMyComputation (analysis_compute_plan,bkg_control/*, flow_max, table*/);
+  PlanMyComputation (analysis_compute_plan,bkg_control); //, flow_max, table);
 
   AllocateProcessorQueue (analysis_queue,analysis_compute_plan,numFitters);
 }
+*/
+
+void BkgFitterTracker::SetUpCpuPipelines (BkgModelControlOpts &bkg_control )
+{
+
+  //create Gpu side Queuing system
+  cout << "Analysis Pipeline: configuring GPU queue and GPU if available" << endl;
+  GpuQueueControl.configureGpu(bkg_control);
+  GpuQueueControl.createQueue(numFitters);
+}
+void BkgFitterTracker::SetUpGpuPipelines (BkgModelControlOpts &bkg_control )
+  {
+  //create Cpu side Queuing system
+  cout << "Analysis Pipeline: configuring CPU queue and CPU pipeline" << endl;
+  CpuQueueControl.configureQueue(bkg_control);
+  CpuQueueControl.createWorkQueue(numFitters);
+  CpuQueueControl.setGpuQueue(GpuQueueControl.getQueue());
+
+}
+
+void BkgFitterTracker::SpinnUpGpuThreads()
+{
+  //if gpu spinup fails gpu object will be in error state the gpu quueue will be NULL
+  GpuQueueControl.SpinUpThreads(CpuQueueControl.GetQueue());
+  if (useGpuAcceleration())
+      fprintf (stdout, "Number of GPU threads for background model: %d\n", GpuQueueControl.getNumWorkers());
+    else
+      fprintf (stdout, "No GPU threads created. proceeding with CPU only execution\n");
+    fprintf (stdout, "Number of CPU threads for background model: %d\n", CpuQueueControl.getNumWorkers());
+}
+
+void BkgFitterTracker::SpinnUpCpuThreads()
+{
+  //start worker threads threads
+    //provide Cpu Queue to gpu threads as fall back in error state
+    CpuQueueControl.SpinUpWorkerThreads();
+}
+
+
+void BkgFitterTracker::UnSpinGpuThreads ()
+{
+  GpuQueueControl.UnSpinThreads();
+}
+
+
+void BkgFitterTracker::UnSpinCpuThreads ()
+{
+  CpuQueueControl.UnSpinBkgModelThreads();
+}
+
+
+
+
 
 void BkgFitterTracker::SetUpTraceTracking(const SlicedPrequel &my_prequel_setup, const CommandLineOpts &inception_state, const ImageSpecClass &my_image_spec, const ComplexMask &from_beadfind_mask, int flow_max)
 {
@@ -251,8 +306,9 @@ void BkgFitterTracker::InitBeads_BestRegion(const CommandLineOpts &inception_sta
     if (inception_state.bkg_control.pest_control.bkg_debug_files)
     {
         int nBeads_live = bestRegion.second;
-        int nRegions = analysis_compute_plan.region_order.size();
-        all_params_hdf.Init2(inception_state.bkg_control.pest_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region,nRegions);
+        int nRegions = region_order.size();
+        int nSamples = inception_state.bkg_control.pest_control.bkgDebug_nSamples;
+        all_params_hdf.Init2(inception_state.bkg_control.pest_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region,nRegions,nSamples);
     }
 }
 
@@ -405,13 +461,15 @@ void BkgFitterTracker::ThreadedInitialization (
 
 
     // now put me on the queue
-    analysis_queue.item.finished = false;
-    analysis_queue.item.private_data = (void *) &linfo[r];
-    analysis_queue.GetCpuQueue()->PutItem (analysis_queue.item);
+    CpuQueueControl.CreateItemAndAssignItemToQueue((void *) &linfo[r]);
+    //analysis_queue.item.finished = false;
+    //analysis_queue.item.private_data = (void *) &linfo[r];
+    //analysis_queue.GetCpuQueue()->PutItem (analysis_queue.item);
 
   }
   // wait for all of the images to be loaded and initially processed
-  analysis_queue.GetCpuQueue()->WaitTillDone();
+  CpuQueueControl.GetQueue()->WaitTillDone();
+  // analysis_queue.GetCpuQueue()->WaitTillDone();
 
   delete[] linfo;
 
@@ -436,7 +494,7 @@ void BkgFitterTracker::ExecuteFitForFlow (
 
   int maxFrames = 0;
   for (int r = 0; r < numFitters; r++)
-    maxFrames = std::max(signal_proc_fitters[analysis_compute_plan.region_order[r].first]->get_time_c_npts(),maxFrames);
+    maxFrames = std::max(signal_proc_fitters[region_order[r].first]->get_time_c_npts(),maxFrames);
   GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
 
   int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
@@ -444,7 +502,7 @@ void BkgFitterTracker::ExecuteFitForFlow (
   {
     // these get free'd by the thread that processes them
     bkinfo[r].type = MULTI_FLOW_REGIONAL_FIT;
-    bkinfo[r].bkgObj = signal_proc_fitters[analysis_compute_plan.region_order[r].first];
+    bkinfo[r].bkgObj = signal_proc_fitters[region_order[r].first];
     bkinfo[r].flow = flow;
     bkinfo[r].sdat = NULL;
     bkinfo[r].img = NULL;
@@ -461,19 +519,22 @@ void BkgFitterTracker::ExecuteFitForFlow (
       bkinfo[r].img = & (my_img_set.img[flow_buffer_for_flow]);
     }
     bkinfo[r].last = last;
-    bkinfo[r].pq = &analysis_queue;
-    analysis_queue.item.finished = false;
-    analysis_queue.item.private_data = (void *) &bkinfo[r];
-    AssignQueueForItem (analysis_queue,analysis_compute_plan);
+    bkinfo[r].QueueControl = &CpuQueueControl;
+    //bkinfo[r].pq = &analysis_queue;
+    //analysis_queue.item.finished = false;
+    //analysis_queue.item.private_data = (void *) &bkinfo[r];
+    //AssignQueueForItem (analysis_queue,analysis_compute_plan);
+    CpuQueueControl.CreateItemAndAssignItemToQueue((void *) &bkinfo[r]);
   }
 
-  WaitForRegionsToFinishProcessing (analysis_queue,analysis_compute_plan);
+  CpuQueueControl.WaitForRegionsToFinishProcessing();
+  //WaitForRegionsToFinishProcessing (analysis_queue,analysis_compute_plan);
 }
 
-void BkgFitterTracker::SpinUpGPUThreads()
-{
-  analysis_queue.SpinUpGPUThreads( analysis_compute_plan );
-}
+//void BkgFitterTracker::SpinUpGPUThreads()
+//{
+//  analysis_queue.SpinUpGPUThreads( analysis_compute_plan );
+//}
 
 
 void BkgFitterTracker::DumpBkgModelBeadParams (char *results_folder,  int flow, bool debug_bead_only, int flow_max) const
@@ -654,7 +715,7 @@ void BkgFitterTracker::DetermineAndSetGPUAllocationAndKernelParams(
   GpuMultiFlowFitControl::SetChemicalXtalkCorrectionForPGM(bkg_control.enable_trace_xtalk_correction);
 
   cout << "CUDA: worst case per region beads: "<< maxBeads << " frames: " << maxFrames << endl;
-  configureKernelExecution(bkg_control.gpuControl, global_max_flow_key, global_max_flow_max);
+  GpuQueueControl.configureKernelExecution(bkg_control.gpuControl, global_max_flow_key, global_max_flow_max);
 
 }
 
@@ -673,7 +734,7 @@ void BkgFitterTracker::ExecuteGPUBlockLevelSignalProcessing(
 
   int maxFrames = 0;
   for (int r = 0; r < numFitters; r++)
-    maxFrames = std::max(signal_proc_fitters[analysis_compute_plan.region_order[r].first]->get_time_c_npts(),maxFrames);
+    maxFrames = std::max(signal_proc_fitters[region_order[r].first]->get_time_c_npts(),maxFrames);
   GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
 
   int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
@@ -683,14 +744,14 @@ void BkgFitterTracker::ExecuteGPUBlockLevelSignalProcessing(
 
     // these get free'd by the thread that processes them
     bkinfo[r].type = MULTI_FLOW_REGIONAL_FIT;
-    bkinfo[r].bkgObj = signal_proc_fitters[analysis_compute_plan.region_order[r].first];
+    bkinfo[r].bkgObj = signal_proc_fitters[region_order[r].first];
     bkinfo[r].flow = flow;
     bkinfo[r].flow_key = flow_key;
     bkinfo[r].table = table;
     bkinfo[r].doingSdat = my_img_set.doingSdat;
     bkinfo[r].inception_state = inception_state;
     bkinfo[r].smooth_t0_est = smooth_t0_est;
-    bkinfo[r].gpuAmpEstPerFlow = ampEstBufferForGPU;
+    //bkinfo[r].gpuAmpEstPerFlow =   ampEstBufferForGPU;
     if (bkinfo[r].doingSdat)
     {
       bkinfo[r].sdat = & (my_img_set.sdat[flow_buffer_for_flow]);
@@ -700,15 +761,17 @@ void BkgFitterTracker::ExecuteGPUBlockLevelSignalProcessing(
       bkinfo[r].img = & (my_img_set.img[flow_buffer_for_flow]);
     }
     bkinfo[r].last = last;
-    bkinfo[r].pq = &analysis_queue;
-    analysis_queue.item.finished = false;
-    analysis_queue.item.private_data = (void *) &bkinfo[r];
+    bkinfo[r].QueueControl = &CpuQueueControl;
+    //bkinfo[r].pq = &analysis_queue;
+    //analysis_queue.item.finished = false;
+    //analysis_queue.item.private_data = (void *) &bkinfo[r];
   }
 
-  int deviceId = analysis_compute_plan.valid_devices[0];
-   
 
-  if (!ProcessProtonBlockImageOnGPU(bkinfo, flow_block_size,deviceId)) {
+  //int deviceId = analysis_compute_plan.valid_devices[0];
+
+  //if (!ProcessProtonBlockImageOnGPU(bkinfo, flow_block_size,deviceId)) {
+   if(!GpuQueueControl.fullBlockSignalProcessing(bkinfo)){
     std::cout << "=======================================" << std::endl;
     std::cout << "GPU block processing  failed at flow " << flow << std::endl;       
     std::cout << "Exiting..." << std::endl;
@@ -717,6 +780,62 @@ void BkgFitterTracker::ExecuteGPUBlockLevelSignalProcessing(
   }  
 }
 
+
+void BkgFitterTracker::CollectSampleWellsForGPUBlockLevelSignalProcessing(
+    int flow,
+    int flow_block_size,
+    ImageTracker &my_img_set,
+    bool last,
+    int flow_key,
+    master_fit_type_table *table,
+    const CommandLineOpts *inception_state,
+    const std::vector<float> *smooth_t0_est)
+{
+
+  int maxFrames = 0;
+  for (int r = 0; r < numFitters; r++)
+    maxFrames = std::max(signal_proc_fitters[region_order[r].first]->get_time_c_npts(),maxFrames);
+  GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
+
+  int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
+  for (int r = 0; r < numFitters; r++)
+  {
+
+
+    // these get free'd by the thread that processes them
+    bkinfo[r].type = MULTI_FLOW_REGIONAL_FIT;
+    bkinfo[r].bkgObj = signal_proc_fitters[region_order[r].first];
+    bkinfo[r].flow = flow;
+    bkinfo[r].flow_key = flow_key;
+    bkinfo[r].table = table;
+    bkinfo[r].doingSdat = my_img_set.doingSdat;
+    bkinfo[r].inception_state = inception_state;
+    bkinfo[r].smooth_t0_est = smooth_t0_est;
+    //bkinfo[r].gpuAmpEstPerFlow =   ampEstBufferForGPU;
+    if (bkinfo[r].doingSdat)
+    {
+      bkinfo[r].sdat = & (my_img_set.sdat[flow_buffer_for_flow]);
+    }
+    else
+    {
+      bkinfo[r].img = & (my_img_set.img[flow_buffer_for_flow]);
+    }
+    bkinfo[r].last = last;
+    bkinfo[r].QueueControl = &CpuQueueControl;
+    //bkinfo[r].pq = &analysis_queue;
+    //analysis_queue.item.finished = false;
+    //analysis_queue.item.private_data = (void *) &bkinfo[r];
+  }
+
+
+  //int deviceId = analysis_compute_plan.valid_devices[0];
+
+  //if (!ProcessProtonBlockImageOnGPU(bkinfo, flow_block_size,deviceId)) {
+   GpuQueueControl.collectSampleHistroyForRegionalFitting(bkinfo,flow_block_size,20);
+}
+
+
+/*
 void BkgFitterTracker::CreateRingBuffer(
   int numBuffers,
   int bufSize)
@@ -724,3 +843,4 @@ void BkgFitterTracker::CreateRingBuffer(
   if (!ampEstBufferForGPU)
     ampEstBufferForGPU = new RingBuffer<float>(numBuffers, bufSize);
 }
+*/

@@ -1,0 +1,230 @@
+{% load static from staticfiles %}
+<style type="text/css">
+    .textInput {
+        word-wrap: break-word;
+    }
+</style>
+
+<div id="modal_analysisargs_details" title="" class="modal modal-1000 hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>{{args_action|lower|capfirst}} Analysis Parameters: {{display_name}}</h3>
+        {% if not obj.isSystem %}
+            <h4>Created on <b>{{obj.creationDate}}</b> by <b>{{obj.creator.username}}</b>. Last modified on <b>{{obj.lastModifiedDate}}</b> by <b>{{obj.lastModifiedUser.username}}</b>.</h4>
+        {% endif %}
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+        {% if args_action != "view" %}
+            <form class="form-horizontal" id="modal_analysisargs_details_form" method="POST" action="{% url "configure_analysisargs_action" obj.pk args_action %}">
+        {% endif %}
+        <div class="row-fluid">
+            <div class="span6">
+                <table class="table table-striped table-condensed">
+                    <tr><td>Name:</td></tr>
+                    <tr><td>
+                        <div class="control-group" style="margin-bottom: 0px;">
+                            <textarea name="name" id="name" class="span12 textInput required validateAlphaNumNoSpace" rows="1" maxlength="256">{{obj.name}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Description:</td></tr>
+                    <tr><td>
+                        <div class="control-group" style="margin-bottom: 0px;">
+                            <textarea name="description" id="description" class="span12 textInput required" rows="1" maxlength="256">{{obj.description}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                </table>
+            </div>
+            <div class="span6">
+                <table class="table table-striped table-condensed">
+                    <tr><td>Chip Type:</td></tr>
+                    <tr><td><div class="control-group" style="margin-bottom: 0px;">
+                        <select name='chipType' class="required">
+                            <option value=""></option>
+                            {% for chip in chips %}
+                                <option value={{chip.name}} {% if chip.name == obj.chipType %}selected{% endif %}>{{chip.name}}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="help-block"></p>
+                    </div></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row-fluid">
+            <div class="span6">
+                <table class="table table-striped table-condensed">
+                    <tr><td>Beadfind args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="beadfindargs" class="span12 textInput required" rows="3">{{obj.beadfindargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Analysis args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="analysisargs" class="span12 textInput required" rows="3">{{obj.analysisargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Pre-BaseCaller Args for calibration:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="prebasecallerargs" class="span12 textInput" rows="3">{{obj.prebasecallerargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Calibration Args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="calibrateargs" class="span12 textInput" rows="3">{{obj.calibrateargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>BaseCaller args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="basecallerargs" class="span12 textInput required" rows="3">{{obj.basecallerargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Alignment args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="alignmentargs" class="span12 textInput" rows="3">{{obj.alignmentargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>IonStats args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="ionstatsargs" class="span12 textInput" rows="3">{{obj.ionstatsargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                </table>
+            </div>
+            <div class="span6">
+                <table class="table table-striped table-condensed">
+                    <tr><td>Thumbnail BeadFind args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="thumbnailbeadfindargs" class="span12 textInput" rows="3">{{obj.thumbnailbeadfindargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Thumbnail Analysis args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="thumbnailanalysisargs" class="span12 textInput" rows="3">{{obj.thumbnailanalysisargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Thumbnail pre-BaseCaller Args for calibration:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="prethumbnailbasecallerargs" class="span12 textInput" rows="3">{{obj.prethumbnailbasecallerargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Thumbnail Calibration Args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="thumbnailcalibrateargs" class="span12 textInput" rows="3">{{obj.thumbnailcalibrateargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Thumbnail BaseCaller args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="thumbnailbasecallerargs" class="span12 textInput" rows="3">{{obj.thumbnailbasecallerargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Thumbnail Alignment args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="thumbnailalignmentargs" class="span12 textInput" rows="3">{{obj.thumbnailalignmentargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                    <tr><td>Thumbnail IonStats args:</td></tr>
+                    <tr><td>
+                        <div>
+                            <textarea name="thumbnailionstatsargs" class="span12 textInput" rows="3">{{obj.thumbnailionstatsargs}}</textarea>
+                            <p class="help-block"></p>
+                        </div>
+                    </td></tr>
+                </table>
+            </div>
+        </div>
+        {% if args_action != "view" %}
+        </form>
+        {% endif %}
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Close</a>
+        <a class="btn btn-primary" href="#">Save</a>
+    </div>
+
+<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>
+<script type="text/javascript">
+$('#modal_analysisargs_details').on('hidden', function () {
+    $('body #modal_analysisargs_details').remove();
+   });
+
+var form = $('#modal_analysisargs_details_form').uniform({
+    holder_class : 'control-group'
+    , msg_selector: 'p.help-block'
+    , error_class : 'alert alert-error'
+});
+
+$('#modal_analysisargs_details .btn-primary').click(function(e) {
+    e.preventDefault();
+    $('#modal_analysisargs_details #modal-error-messages').hide().empty();
+
+    // validation
+    $.when( $('#modal_analysisargs_details_form .textInput').blur() ).then( $('#name, #description').trigger('validate_uniq') );
+    
+    if ($("#modal_analysisargs_details_form *").hasClass("error")) {
+        $("#modal_analysisargs_details_form .error").eq(0).focus();
+        $("#modal_analysisargs_details_form .error").effect("highlight", {"color" : "#F20C18"}, 2000);
+        return false;
+    }
+
+    $('#modal_analysisargs_details_form').submit();
+});
+
+$('#name, #description').on('validate_uniq blur', function(){
+    // validate uniq keys
+    if (this.id == 'name'){
+        var label = 'Name';
+        var uniq = uniq_names;
+    } else {
+        var label = 'Description';
+        var uniq = uniq_descriptions;
+    }
+    var error = form.validators.validateUniq($(this), label, uniq);
+    if(typeof(error) == 'string') $(this).trigger('error', error);
+});
+
+var uniq_names = [];
+var uniq_descriptions = [];
+
+$(function() {
+    var action = "{{args_action}}";
+    if (action == 'view') {
+        $('#modal_analysisargs_details .btn-primary').hide();
+    }
+
+    {% for arg in args_for_uniq_validation %}
+        uniq_names.push("{{arg.name}}")
+        uniq_descriptions.push("{{arg.description}}")
+    {% endfor %}
+});
+</script>
+</div>
+

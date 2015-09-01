@@ -151,7 +151,7 @@ string cudaSimpleStreamExecutionUnit::getLogHeader()
 {
   ostringstream headerinfo;
 
-  headerinfo << "CUDA " << _resource->getDevId() << " SEU " << getSeuNum() << " " << getName() << " SR " << getStreamId()<< ":";
+  headerinfo << "CUDA " << _resource->getDevId() << ": SEU " << getSeuNum() << ": " << getName() << " SR " << getStreamId()<< ":";
 
   return headerinfo.str();
 }
@@ -179,7 +179,7 @@ cudaSimpleStreamExecutionUnit * cudaSimpleStreamExecutionUnit::makeExecutionUnit
   cudaSimpleStreamExecutionUnit * tmpSeu = NULL;
 
   ostringstream headerinfo;
-  headerinfo << "CUDA " << resources->getDevId() << " SEU Factory SR "<< resources->getStreamId() << ":";
+  headerinfo << "CUDA " << resources->getDevId() << ": SEU Factory SR "<< resources->getStreamId() << ":";
 
   int *type = (int*)item.private_data;
 
@@ -597,7 +597,7 @@ void cudaSimpleStreamManager::setNumMaxStreams(int numMaxStreams)
   if(numMaxStreams <= MAX_ALLOWED_NUM_STREAMS ){
     _maxNumStreams = numMaxStreams;
   }else{
-    cout << "CUDA tried to set number of streams to " << numMaxStreams << ", correcting to allowed maximum of " << MAX_ALLOWED_NUM_STREAMS <<  " streams " << endl;
+    cout << "CUDA: tried to set number of streams to " << numMaxStreams << ", correcting to allowed maximum of " << MAX_ALLOWED_NUM_STREAMS <<  " streams " << endl;
     _maxNumStreams = MAX_ALLOWED_NUM_STREAMS;
   }
 }
@@ -618,7 +618,7 @@ string cudaSimpleStreamManager::getLogHeader()
 {
   ostringstream headerinfo;
 
-  headerinfo << "CUDA " << _devId << " StreamManager:";
+  headerinfo << "CUDA " << _devId << ": StreamManager:";
 
   return headerinfo.str();
 }

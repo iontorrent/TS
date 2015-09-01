@@ -160,13 +160,16 @@ backwards_compatible()
 }
 
 #---                                                                        ---#
-#---    Creates shell variables from keyword and assigns value as value        ---#
+#---    Creates shell variables from keyword and assigns value as value     ---#
+#---    NOTE: the following are not converted to env variables
+#---    barcodeSamples, sampleinfo
+#---    The plugin should parse the startplugin.json file to get that information
 #---                                                                        ---#
 makeVarsFromJson()
 {
     local IFS=$'\n'
     for line in $(jsonpipe < $1);do
-        if echo $line|egrep -q '(\{}|\[])'; then
+        if echo $line|egrep -q '(\{}|\[]|barcodedSamples|sampleinfo)'; then
             :
         else
             line=${line#/}

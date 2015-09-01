@@ -393,6 +393,8 @@ void ExponentialTailFitting(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  float bkg_scale_limit,
+  float bkg_tail_dc_lower_bound,
   bead_state* pState,
   float* tauAdjust,
   float* Ampl,

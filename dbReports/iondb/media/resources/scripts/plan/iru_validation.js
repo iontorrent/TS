@@ -96,36 +96,28 @@ function validate_user_input_from_iru($form, accountId, accountName, userInputIn
 	}
 	call_validation_api($form, $div, data, accountId);
 }
+
 function get_user_input_info_from_ui(accountId, accountName, userInput) {
-        var userInputInfo = {"userInputInfo" : [], "accountId" : accountId, "accountName" : accountName, "isVariantCallerSelected":userInput.is_variantCaller_enabled, "isVariantCallerConfigured": userInput.is_variantCaller_configured};
-	var $sampleNames = $(".irSampleName");
-
-	for (i = 0; i < $sampleNames.length; i++) {
-		var self = $($sampleNames[i]);
-
-		if (self.val().length > 0) {
-			var $tr = self.parent().parent();
-			
-//			$tr.each(function(index) {
-//				var currentCell = this;
-//				console.log("...currentCell=", currentCell);
-//			});
-					
-			var dict = {};
-			dict["sample"] = self.val();
-			dict["row"] = (i+1).toString();
-			dict["Workflow"] = $tr.find(".irWorkflow").val();
-			dict["Gender"] = $tr.find(".irGender").val();			
-			dict["nucleotideType"] = $tr.find(".nucleotideType").val();
-			dict["Relation"] = $tr.find(".irRelationshipType").val();
-			dict["RelationRole"] = $tr.find(".irRelationRole").val();
-			dict["cancerType"] = $tr.find(".ircancerType").val();
-			dict["cellularityPct"] =$tr.find(".ircellularityPct").val();
-			dict["setid"] = $tr.find(".irSetID").val();
-			userInputInfo["userInputInfo"].push(dict);
-		}
+	var userInputInfo = {"userInputInfo" : [], "accountId" : accountId, "accountName" : accountName, "isVariantCallerSelected":userInput.is_variantCaller_enabled, "isVariantCallerConfigured": userInput.is_variantCaller_configured};
+	var samplesTable = JSON.parse($('#samplesTable').val());
+	for (i = 0; i < samplesTable.length; i++) {
+		var row = samplesTable[i]
+		var dict = {};
+		dict["sample"] = row["sampleName"];
+		dict["row"] = (i+1).toString();
+		dict["Workflow"] = row["irWorkflow"];
+		dict["Gender"] = row["irGender"];
+		dict["nucleotideType"] = row["nucleotideType"];
+		dict["Relation"] = row["irRelationshipType"];
+		dict["RelationRole"] = row["irRelationRole"];
+		dict["cancerType"] = row["ircancerType"];
+		dict["cellularityPct"] = row["ircellularityPct"];
+		dict["biopsyDays"] = row["irbiopsyDays"];
+		dict["coupleID"] = row["ircoupleID"];
+		dict["embryoID"] = row["irembryoID"];		
+		dict["setid"] = row["irSetID"];
+		userInputInfo["userInputInfo"].push(dict);
 	}
-
 	return userInputInfo;
 }
 
@@ -140,10 +132,10 @@ $(document).ready(function(){
         if ($("input[name=irDown]").val() == "1")
             return true;
 
-        if (USERINPUT.is_by_template) {
-        	if ($(this).attr('action') != USERINPUT.by_template_url) {return true;}
+        if (!USERINPUT.validate) {
+            return true;
         } else {
-        	if ($(this).attr('action') == USERINPUT.by_sample_url) {return true;}
+            USERINPUT.validate = USERINPUT.is_by_sample;
         }
         
         $.blockUI();
@@ -168,7 +160,7 @@ $(document).ready(function(){
         	if (badRelation){$div.text("Relation on row " + counter + " cannot be blank");$.unblockUI();return false;}
         	else {$div.text("");}
 
-        	validate_user_input_from_iru($(this), USERINPUT.account_id, USERINPUT.account_name, get_user_input_info_from_ui(USERINPUT.account_id, USERINPUT.account_name,USERINPUT));
+        	validate_user_input_from_iru($(this), USERINPUT.account_id, USERINPUT.account_name, get_user_input_info_from_ui(USERINPUT.account_id, USERINPUT.account_name, USERINPUT));
         	return false;
    		} else {
    			return true;

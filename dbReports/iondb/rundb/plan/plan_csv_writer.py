@@ -49,7 +49,7 @@ COLUMN_IR_V1_X_WORKFLOW = "IR_v1_x_workflow"
 
 TOKEN_DELIMITER = ";"
 
-
+COLUMN_CHIP_BARCODE = "Chip ID"
 
 def _get_kit_description(kitTypes, kitName):
     desc = ""
@@ -74,7 +74,7 @@ def _get_lib_kit_description(template):
     desc = ""
     if template:
         kitName = template.get_librarykitname()
-        desc = _get_kit_description(["LibraryKit"], kitName)
+        desc = _get_kit_description(["LibraryKit", "LibraryPrepKit"], kitName)
     return desc
 
 
@@ -352,6 +352,7 @@ def get_template_data_for_batch_planning(templateId):
                , COLUMN_EXPORT
                , COLUMN_NOTES
                , COLUMN_LIMS_DATA
+               , COLUMN_CHIP_BARCODE
                ]
     
         body = [ getPlanDisplayedName(template)

@@ -1,7 +1,7 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 from iondb.rundb.models import PlannedExperiment, PlannedExperimentQC,\
-    RunType, dnaBarcode, Plugin, ApplProduct, SampleSet, ThreePrimeadapter, Chip, KitInfo
+    RunType, dnaBarcode, Plugin, ApplProduct, SampleSet, ThreePrimeadapter, Chip, KitInfo, AnalysisArgs, ApplicationGroup
 
 from iondb.rundb.plan.page_plan.step_helper import StepHelper
 
@@ -21,6 +21,7 @@ from iondb.rundb.plan.page_plan.save_plan_step_data import ApplicationFieldNames
 from iondb.rundb.plan.page_plan.save_template_step_data import SaveTemplateStepDataFieldNames
 from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames
 from iondb.rundb.plan.page_plan.ionreporter_step_data import IonReporterFieldNames
+from iondb.rundb.plan.page_plan.analysis_params_step_data import AnalysisParamsFieldNames
 
 import logging
 
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class StepHelperDbLoader():
     
-    def getStepHelperForRunType(self, run_type_id, step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE):
+    def getStepHelperForRunType(self, run_type_id, step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE, applicationGroupName=None):
         '''
             Creates a step helper for the specified runtype, this can be a plan or a template step helper.
         '''
@@ -41,19 +42,31 @@ class StepHelperDbLoader():
         runType = RunType.objects.get(pk=run_type_id)
         step_helper.parentName = runType.description
         
-        self._updateApplicationStepData(runType, step_helper, application_step_data)
+        applicationGroupID=None
+        if applicationGroupName:
+            applicationGroupObj = ApplicationGroup.objects.get(name=applicationGroupName)
+            applicationGroupID = applicationGroupObj.pk
+        self._updateApplicationStepData(runType, step_helper, application_step_data, applicationGroupID)
         
         kits_step_data = step_helper.steps[StepNames.KITS]
-        self._updateKitsStepData(runType, step_helper, kits_step_data)
+        self._updateKitsStepData(runType, step_helper, kits_step_data, applicationGroupID)
         
         return step_helper
 
 
-    def _updateApplicationStepData(self, runTypeObj, step_helper, application_step_data):
+    def _updateApplicationStepData(self, runTypeObj, step_helper, application_step_data, applicationGroupID=None):
         application_step_data.savedFields[ApplicationFieldNames.RUN_TYPE] = runTypeObj.pk
-        application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = runTypeObj.applicationGroups.all()[0:1][0].pk
-        application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = runTypeObj.applicationGroups.all()[0:1][0].name
         
+ 	if applicationGroupID:
+	    applicationGroupObj = ApplicationGroup.objects.get(pk=applicationGroupID)
+	    step_helper.parentName = applicationGroupObj.description
+	    application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = applicationGroupID
+	    application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = applicationGroupObj.name
+	    application_step_data.savedObjects["applProduct"] = ApplProduct.objects.get(isActive=True, isVisible=True,
+	    applType__runType = runTypeObj.runType, applicationGroup__id=applicationGroupID)
+	else:
+	    application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = runTypeObj.applicationGroups.all()[0:1][0].pk
+	    application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = runTypeObj.applicationGroups.all()[0:1][0].name
         ##application_step_data.savedObjects["runType"] = runTypeObj
         ##application_step_data.savedObjects["applProduct"] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
         ##                                                               applType__runType = runTypeObj.runType)
@@ -63,10 +76,13 @@ class StepHelperDbLoader():
         step_helper.update_dependent_steps(application_step_data)
 
 
-    def _updateKitsStepData(self, runTypeObj, step_helper, kits_step_data):
+    def _updateKitsStepData(self, runTypeObj, step_helper, kits_step_data, applicationGroupID=None):
         kits_step_data.prepopulatedFields[KitsFieldNames.IS_CHIP_TYPE_REQUIRED] = step_helper.isPlan()
-        
-   
+        if applicationGroupID:
+            applProduct = ApplProduct.objects.get(isActive=True, isVisible=True, applType__runType = runTypeObj.runType, applicationGroup__id=applicationGroupID)
+            if applProduct:
+                kits_step_data.updateFieldsFromDefaults(applProduct)
+
     def getStepHelperForTemplateRunType(self, run_type_id, step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE, template_id = -1):
         '''
             Creates a template step helper for the specified runty.
@@ -84,24 +100,36 @@ class StepHelperDbLoader():
                 
         kits_step_data = step_helper.steps[StepNames.KITS]
         self._updateKitsStepData(runType, step_helper, kits_step_data)
-                
         return step_helper
     
-    def getStepHelperForNewTemplateBySample(self, run_type_id, step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE_BY_SAMPLE):
+    def getStepHelperForNewTemplateBySample(self, run_type_id, sampleset_id, step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE_BY_SAMPLE):
         '''
-            
+            Start Plan by Sample creation with "Add new Template"
         '''
-        #logger.debug("ENTER step_helper_db_loader.getStepHelperForNewTemplateBySample()")
-                
         step_helper = StepHelper(sh_type=step_helper_type)
         ionReporter_step_data = step_helper.steps[StepNames.IONREPORTER]
         application_step_data = step_helper.steps[StepNames.APPLICATION]
-        
+        kits_step_data = step_helper.steps[StepNames.KITS]
+
+        sampleset = SampleSet.objects.get(pk=sampleset_id)
         runType = RunType.objects.get(pk=run_type_id)
         step_helper.parentName = runType.description
-        
+
+        ionReporter_step_data.savedFields['sampleset_id'] = sampleset_id
         self._updateApplicationStepData(runType, step_helper, application_step_data)
-        
+
+        barcodeSet = None
+        for item in sampleset.samples.all().order_by("sample__displayedName"):
+            if item.dnabarcode:
+                barcodeSet = item.dnabarcode.name
+                break
+        kits_step_data.savedFields[KitsFieldNames.BARCODE_ID] = barcodeSet
+
+        if sampleset.libraryPrepInstrument == 'chef':
+            kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = KitsFieldNames.ION_CHEF
+
+        if sampleset.libraryPrepKitName and sampleset.libraryPrepKitName != '0':
+            kits_step_data.savedFields[KitsFieldNames.LIBRARY_KIT_NAME] = sampleset.libraryPrepKitName
         return step_helper
     
     def updateTemplateSpecificStepHelper(self, step_helper, planned_experiment):
@@ -197,7 +225,7 @@ class StepHelperDbLoader():
 
         #logger.debug("step_helper_db_loader.updatePlanSpecificStepHelper isOncoSameSample=%s" %(isOncoSameSample))
 
-        
+
         # add IonReporter parameters
         irInfo = self._getIRinfo(planned_experiment)
         if irInfo:
@@ -206,6 +234,21 @@ class StepHelperDbLoader():
             save_plan_step_data.prepopulatedFields[SavePlanFieldNames.SETID_SUFFIX] = irInfo.get(SavePlanFieldNames.SETID_SUFFIX)
 
             logger.debug("step_helper_db_loader.updatePlanSpecificStepHelper() irInfo=%s" %(irInfo))  
+
+            userInputInfo = irInfo.get("userInputInfo", [])
+            iru_hasOncoData = False
+            iru_hasPgsData = False
+            if userInputInfo:
+                for info in userInputInfo:
+                    if info.get("cancerType", "") or info.get("cellularityPct", ""):
+                        iru_hasOncoData = True
+                    if info.get("biopsyDays", "") or info.get("coupleID", "") or info.get("embryoID", ""):
+                        iru_hasPgsData = True
+            if planned_experiment.categories:
+                if "Oncomine" in planned_experiment.categories or "Onconet" in planned_experiment.categories:
+                    iru_hasOncoData = True
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.HAS_ONCO_DATA] = iru_hasOncoData
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.HAS_PGS_DATA] = iru_hasPgsData
        
         samplesTable = self._getSamplesTable_from_plan(planned_experiment, step_helper, irInfo)
         if samplesTable:
@@ -228,7 +271,7 @@ class StepHelperDbLoader():
         if step_helper.isBarcoded():
             #do not copy sampleTubeLabel since a sample tube is meant for 1 run only
             save_plan_step_data.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = "" if step_helper.isCopy() else planned_experiment.sampleTubeLabel
-        
+            save_plan_step_data.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = "" if step_helper.isCopy() else planned_experiment.get_chipBarcode()
         save_plan_step_data.updateSavedObjectsFromSavedFields()
 
     def updateUniversalStepHelper(self, step_helper, planned_experiment):
@@ -243,6 +286,8 @@ class StepHelperDbLoader():
         kits_step_data = step_helper.steps[StepNames.KITS]
         reference_step_data = step_helper.steps[StepNames.REFERENCE]
         plugins_step_data = step_helper.steps[StepNames.PLUGINS]
+        analysisParams_step_data = step_helper.steps[StepNames.ANALYSIS_PARAMS]
+                
         # if not step_helper.isPlanBySample():
         #     ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
         appl_product = None
@@ -258,6 +303,8 @@ class StepHelperDbLoader():
         self._updateUniversalStep_kitData(step_helper, planned_experiment, appl_product, application_step_data, kits_step_data)
 
         self._updateUniversalStep_referenceData(step_helper, planned_experiment, appl_product, reference_step_data)
+
+        self._updateUniversalStep_analysisParamsData(step_helper, planned_experiment, appl_product, application_step_data, kits_step_data, analysisParams_step_data)
         
         if step_helper.isEdit() or step_helper.isEditRun():
             self._updateUniversalStep_applicationData_for_edit(step_helper, planned_experiment, application_step_data)
@@ -299,7 +346,6 @@ class StepHelperDbLoader():
     def _updateUniversalStep_ionReporterData(self, step_helper, planned_experiment, ionreporter_step_data):        
         ionreporter_step_data.savedFields[IonReporterFieldNames.SAMPLE_GROUPING] = planned_experiment.sampleGrouping.pk if planned_experiment.sampleGrouping else None
         ionreporter_step_data.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = planned_experiment.sampleGrouping if planned_experiment.sampleGrouping else None
-
         ionreporter_step_data.prepopulatedFields[IonReporterFieldNames.CATEGORIES] =  planned_experiment.categories
         
     
@@ -347,6 +393,12 @@ class StepHelperDbLoader():
             self._updateStep_with_applicationData(step, application_step_data)
             step.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
 
+        step = step_helper.steps.get(StepNames.ANALYSIS_PARAMS, "")
+        if step:
+            step.prepopulatedFields[AnalysisParamsFieldNames.RUN_TYPE] = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
+            step.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP] = application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP]
+            step.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME] = application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
+            
         step = step_helper.steps.get(StepNames.BARCODE_BY_SAMPLE, "")
         if step:
             self._updateStep_with_applicationData(step, application_step_data)
@@ -377,7 +429,7 @@ class StepHelperDbLoader():
         kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = "OneTouch"
         if planned_experiment.is_ionChef():
             kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = "IonChef"
-        
+
         kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_NAME] = planned_experiment.templatingKitName
         kits_step_data.savedFields[KitsFieldNames.CONTROL_SEQUENCE] = planned_experiment.controlSequencekitname
         kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT] = planned_experiment.samplePrepKitName
@@ -389,6 +441,7 @@ class StepHelperDbLoader():
 
         kits_step_data.savedFields[KitsFieldNames.FLOWS] = planned_experiment.get_flows()
         kits_step_data.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH] = planned_experiment.libraryReadLength
+        kits_step_data.savedFields[KitsFieldNames.READ_LENGTH] = planned_experiment.libraryReadLength
         kits_step_data.savedFields[KitsFieldNames.TEMPLATING_SIZE] = planned_experiment.templatingSize
                 
         kits_step_data.savedFields[KitsFieldNames.FORWARD_3_PRIME_ADAPTER] = planned_experiment.get_forward3primeadapter()
@@ -566,6 +619,98 @@ class StepHelperDbLoader():
         reference_step_data.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] = planned_experiment.planStatus
 
 
+    def _updateUniversalStep_analysisParamsData(self, step_helper, planned_experiment, appl_product,  application_step_data, kits_step_data, analysisParams_step_data):       
+        self. _updateUniversalStep_analysisParamsData_basic(step_helper, planned_experiment, appl_product,  application_step_data, kits_step_data, analysisParams_step_data)
+         
+        #current chip selection
+        chipType = planned_experiment.get_chipType()  
+        if Chip.objects.filter(name=chipType).count() == 0:
+            chipType = chipType[:3]
+            
+        #there is no analysisArgs db definition for 318v2
+        analysisParams_step_data.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE]  = '318' if chipType == '318v2' else chipType
+        
+        logger.debug("step_helper_db_loader._updateUniversalStep_analysisParamsData() chipType=%s;" %(chipType))
+
+        applicationGroupName = planned_experiment.applicationGroup.name if planned_experiment.applicationGroup else ""
+        
+        best_match_entry = AnalysisArgs.best_match(chipType, planned_experiment.get_sequencekitname(), 
+                                                          planned_experiment.templatingKitName, planned_experiment.get_librarykitname(), planned_experiment.samplePrepKitName, None, planned_experiment.runType, applicationGroupName)
+
+        #system templates may not have any analysis args pre-selected
+        doesPlanHaveCustomAnalysisArgs  = self._doesPlanHaveCustomAnalysisArgs(planned_experiment)
+        
+        if doesPlanHaveCustomAnalysisArgs or not best_match_entry:
+            current_selected_analysisArgs = planned_experiment.latest_eas.get_cmdline_args()
+        else:
+            current_selected_analysisArgs = best_match_entry.get_args()
+        
+        current_selected_analysisArgs.update({
+            'description' : AnalysisParamsFieldNames.AP_ENTRY_SELECTED_VALUE,
+            'name' : '',
+            'custom_args': doesPlanHaveCustomAnalysisArgs
+        })
+        
+        self. _updateUniversalStep_analysisParamsData_currentSelection(analysisParams_step_data, current_selected_analysisArgs)
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_CUSTOM] = "True" if doesPlanHaveCustomAnalysisArgs else "False"
+ 
+
+    def _doesPlanHaveCustomAnalysisArgs(self, planned_experiment):
+        latest_eas = planned_experiment.latest_eas
+        if latest_eas and latest_eas.custom_args and latest_eas.have_args():
+            return True
+        else:
+            return False
+    
+
+    def _updateUniversalStep_analysisParamsData_currentSelection(self, analysisParams_step_data, current_selected_analysisArgs):
+
+        analysisParams_step_data.savedObjects[AnalysisParamsFieldNames.AP_ENTRY_SELECTED] = current_selected_analysisArgs
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_BEADFIND_SELECTED] = current_selected_analysisArgs['beadfindargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_ANALYSISARGS_SELECTED] = current_selected_analysisArgs['analysisargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_PREBASECALLER_SELECTED] = current_selected_analysisArgs['prebasecallerargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_CALIBRATE_SELECTED] = current_selected_analysisArgs['calibrateargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_BASECALLER_SELECTED] = current_selected_analysisArgs['basecallerargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_ALIGNMENT_SELECTED] = current_selected_analysisArgs['alignmentargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_IONSTATS_SELECTED] = current_selected_analysisArgs['ionstatsargs']
+        
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BEADFIND_SELECTED] = current_selected_analysisArgs['thumbnailbeadfindargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ANALYSISARGS_SELECTED] = current_selected_analysisArgs['thumbnailanalysisargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_PREBASECALLER_SELECTED] = current_selected_analysisArgs['prethumbnailbasecallerargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_CALIBRATE_SELECTED] = current_selected_analysisArgs['thumbnailcalibrateargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BASECALLER_SELECTED] = current_selected_analysisArgs['thumbnailbasecallerargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ALIGNMENT_SELECTED] = current_selected_analysisArgs['thumbnailalignmentargs']
+        analysisParams_step_data.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_IONSTATS_SELECTED] = current_selected_analysisArgs['thumbnailionstatsargs']
+
+
+    def _updateUniversalStep_analysisParamsData_basic(self, step_helper, planned_experiment, appl_product,  application_step_data, kits_step_data, analysisParams_step_data):
+        #current chip selection
+        chipType = planned_experiment.get_chipType() 
+        #current runType
+        runType = planned_experiment.runType
+        #current application group
+        applicationGroup = planned_experiment.applicationGroup
+        applicationGroupName = applicationGroup.name if applicationGroup else ""
+
+        #return a list of entries
+        possible_match_entries = AnalysisArgs.possible_matches(chipType, planned_experiment.get_sequencekitname(), 
+                planned_experiment.templatingKitName, planned_experiment.get_librarykitname(), planned_experiment.samplePrepKitName, None, runType, applicationGroupName)
+        best_match_entry = planned_experiment.get_default_cmdline_args_obj()
+        
+        for ap in possible_match_entries:
+            if ap.name == best_match_entry.name:
+                ap.name = AnalysisParamsFieldNames.AP_ENTRY_BEST_MATCH_PLAN_VALUE
+                ap.best_match = True
+
+        logger.debug("step_helper_db_loader._updateUniversalStep_analysisParamsData_basic() ANALYSIS_PARAMS possible_match_entries=%s" %(possible_match_entries))
+     
+        analysisParams_step_data.prepopulatedFields[AnalysisParamsFieldNames.AP_ENTRIES] = possible_match_entries
+        analysisParams_step_data.prepopulatedFields[AnalysisParamsFieldNames.AP_DISPLAYED_NAMES] = [ap.description for ap in possible_match_entries]        
+    
+        logger.debug("step_helper_db_loader._updateUniversalStep_analysisParamsData_basic() chipType=%s; runType=%s; applicationGroupName=%s" %(chipType, runType, applicationGroupName))
+
+
+
     def _getIsSameRefInfoPerSample(self, step_helper, planned_experiment):           
         stepHelper_type = step_helper.sh_type
         
@@ -596,14 +741,16 @@ class StepHelperDbLoader():
             else:
                 pluginIds.append(plugin.id)
                 plugins_step_data.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id] = json.dumps(plugin_dict.get(PluginFieldNames.USER_INPUT,''), cls=JSONEncoder, separators=(',', ':'))
-            
+
             if 'accountId' in plugin_dict:
                 ionreporter_step_data.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] = plugin_dict.get('accountId')
                 ionreporter_step_data.savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME] = plugin_dict.get('accountName')
                 ionreporter_step_data.savedFields[IonReporterFieldNames.IR_VERSION] = plugin_dict.get('version')
+                ionreporter_step_data.savedFields[IonReporterFieldNames.IRU_UPLOAD_MODE] = plugin_dict[PluginFieldNames.USER_INPUT].get('iru_qc_option','no_check')
             elif PluginFieldNames.USER_INPUT in plugin_dict and 'accountId' in plugin_dict[PluginFieldNames.USER_INPUT]:
                 ionreporter_step_data.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] = plugin_dict[PluginFieldNames.USER_INPUT].get('accountId')
                 ionreporter_step_data.savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME] = plugin_dict[PluginFieldNames.USER_INPUT].get('accountName')
+                ionreporter_step_data.savedFields[IonReporterFieldNames.IRU_UPLOAD_MODE] = plugin_dict[PluginFieldNames.USER_INPUT].get('iru_qc_option')
                 
                 if 'userconfigs' in plugin.config:
                     if 'ionadmin' in plugin.config.get('userconfigs'):
@@ -637,7 +784,10 @@ class StepHelperDbLoader():
                     Workflow = None,
                     setid = None,
                     cancerType = None,
-                    cellularityPct = None
+                    cellularityPct = None,
+                    biopsyDays = None,
+                    coupleID = None,
+                    embryoID = None
                 )
 
             sample_name = user_input_info[0].keys()[index]
@@ -661,7 +811,10 @@ class StepHelperDbLoader():
                 Workflow = None,
                 setid = None,
                 cancerType = None,
-                cellularityPct = None                
+                cellularityPct = None,
+                biopsyDays = None,
+                coupleID = None,
+                embryoID = None
             )
         else:
             return user_input_info[index]
@@ -686,7 +839,7 @@ class StepHelperDbLoader():
 
         barcoding_step.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = planned_experiment.runType
         save_plan_step.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = planned_experiment.runType
-                
+
         isOncoSameSample = False
 
         if (planned_experiment.runType == "AMPS_DNA_RNA"):
@@ -715,6 +868,26 @@ class StepHelperDbLoader():
         
         barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = sorted_sampleSetItems
 
+        barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
+        save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
+
+        barcoding_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = planned_experiment.get_chipBarcode()
+        save_plan_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = planned_experiment.get_chipBarcode()
+
+        save_plan_step.savedFields[SavePlanFieldNames.NOTE] = planned_experiment.get_notes()
+
+        LIMS_meta = planned_experiment.get_LIMS_meta()
+        #logger.debug("step_helper_db_loader.updatePlanBySampleSpecificStepHelper() type(LIMS_meta)=%s; LIMS_meta=%s" %(type(LIMS_meta), LIMS_meta))
+
+        if (type(LIMS_meta) is list):
+            #convert list to string
+            save_plan_step.savedFields[SavePlanFieldNames.LIMS_META] = ''.join(LIMS_meta)
+        else:
+            save_plan_step.savedFields[SavePlanFieldNames.LIMS_META] = LIMS_meta
+        #logger.debug("step_helper_db_loader.updatePlanBySampleSpecificStepHelper() LIMS_META=%s" %(save_plan_step.savedFields[SavePlanFieldNames.LIMS_META]))
+
+        save_plan_step.savedFields[SavePlanFieldNames.META] = planned_experiment.metaData
+
         # Pick barcode set to use:
         #   1. Edit/Copy - get from plan
         #   2. Create - get from sampleSetItems or, if none, the barcode set selected in the plan template
@@ -736,6 +909,33 @@ class StepHelperDbLoader():
         if irInfo:
             barcoding_step.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = irInfo['selectedIr']
             barcoding_step.prepopulatedFields[SavePlanFieldNames.SETID_SUFFIX] = irInfo.get('setid_suffix')
+
+            userInputInfo = irInfo.get("userInputInfo", [])
+            iru_hasOncoData = False
+            iru_hasPgsData = False
+            if userInputInfo:
+                for info in userInputInfo:
+                    if info.get("cancerType", "") or info.get("cellularityPct", ""):
+                        iru_hasOncoData = True
+                    if info.get("biopsyDays", "") or info.get("coupleID", "") or info.get("embryoID", ""):
+                        iru_hasPgsData = True
+                if "Oncomine" in planned_experiment.categories or "Onconet" in planned_experiment.categories:
+                    iru_hasOncoData = True
+            barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.HAS_ONCO_DATA] = iru_hasOncoData
+            barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.HAS_PGS_DATA] = iru_hasPgsData
+
+        #TODO if irInfo is missing or this is a new plan creation, do that following (template could have IR pre-selected already!!!)
+        if barcoding_step.sh_type == StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE or not irInfo:
+            sampleSetItem_hasPgsData = False
+            sampleSetItem_hasOncoData = False
+            for item in sorted_sampleSetItems:
+                if item.cancerType or item.cellularityPct:
+                    sampleSetItem_hasOncoData = True
+                if item.biopsyDays or item.coupleId or item.embryoId:
+                    sampleSetItem_hasPgsData = True
+    
+            barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.HAS_ONCO_DATA] = sampleSetItem_hasOncoData
+            barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.HAS_PGS_DATA] = sampleSetItem_hasPgsData
 
         # Populate samples table
         if existing_plan:
@@ -768,7 +968,13 @@ class StepHelperDbLoader():
                     "irRelationRole"    : item.relationshipRole,
                     "irSetID"           : item.relationshipGroup,
                     "ircancerType"      : item.cancerType,
-                    "ircellularityPct"  : item.cellularityPct
+                    "ircellularityPct"  : item.cellularityPct,
+                    "biopsyDays"   : "",
+                    "coupleID"     : "",
+                    "embryoID"     : "",
+                    "irbiopsyDays"   : item.biopsyDays,
+                    "ircoupleID"     : item.coupleId,
+                    "irembryoID"     : item.embryoId,                                     
                 }
                 
                 #logger.debug("step_helper_db_loader.updatePlanBySampleSpecificStepHelper() sampleDict=%s" %(sampleDict))
@@ -817,7 +1023,7 @@ class StepHelperDbLoader():
         logger.debug("step_helper_db_loader._updatePlanBySampleSpecificStepHelper_barcodeKit() planned_experiment.id=%d; barcodeSet=%s" %(planned_experiment.id, barcodeSet))
 
         barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET] = step_helper.steps[StepNames.KITS].savedFields[KitsFieldNames.BARCODE_ID] = barcodeSet
-        
+
         #crucial step
         ##20141005-no-longer-needed  barcoding_step.updateSavedFieldsForSamples()
 
@@ -857,9 +1063,9 @@ class StepHelperDbLoader():
         
         samplesTable = []
             
-        planNucleotideType = self._get_nucleotideType_byRunTypeOrApplGroup(planned_experiment)
+        planNucleotideType = planned_experiment.get_default_nucleotideType()
         runType = planned_experiment.runType
-        
+
         logger.debug("step_helper_db_loader._getSamplesTable_from_plan() planNucleotideType=%s; runType=%s" %(planNucleotideType, runType))
 
         order_counter = 1
@@ -940,6 +1146,7 @@ class StepHelperDbLoader():
                                     order_counter_rna += 1
                                 else:
                                     orderKey = format(order_counter, "05d")
+
                             sampleDict = {
                                 "barcodeId"            : barcode,
                                 "sampleName"           : sample,
@@ -956,11 +1163,10 @@ class StepHelperDbLoader():
                             order_counter += 1
                             
                             samplesTable.append(sampleDict)
-                            logger.debug("step_helper_db_loader._getSamplesTable_from_plan() barcodeSampleInfo plan.pk=%d; planName=%s; sampleName=%s; sampleDict=%s" %(planned_experiment.id, planned_experiment.planDisplayedName, sample, sampleDict))               
-
+                            logger.debug("step_helper_db_loader._getSamplesTable_from_plan() barcodeSampleInfo plan.pk=%d; planName=%s; sampleName=%s; sampleDict=%s" %(planned_experiment.id, planned_experiment.planDisplayedName, sample, sampleDict))
                     else:
                         #logger.debug("step_helper_db_loader._getSamplesTable_from_plan() NO barcodeSampleInfo plan.pk=%d; planName=%s; reference=%s " %(planned_experiment.id, planned_experiment.planDisplayedName, planned_experiment.get_library()))   
-                        
+
                         for barcode in value.get('barcodes',[]):
                             sampleDict = {"barcodeId"            : barcode, 
                                           "sampleName"           : sample, 
@@ -1000,12 +1206,17 @@ class StepHelperDbLoader():
             sampleTubeLabel = "" if step_helper.isCopy() else planned_experiment.sampleTubeLabel
             if sampleTubeLabel is None:
                 sampleTubeLabel = ""
+            #when we load a non-barcoded run for editing/copying we know it will only have a single chip barcode.
+            chipBarcode = "" if step_helper.isCopy() else planned_experiment.get_chipBarcode()
+            if chipBarcode is None:
+                chipBarcode = ""
                 
             sampleDict = {
                 'sampleName':  planned_experiment.get_sampleDisplayedName(),
                 'sampleExternalId' : planned_experiment.get_sample_external_id(),
                 'sampleDescription': planned_experiment.get_sample_description(),
                 'tubeLabel':   sampleTubeLabel,
+                'chipBarcode': chipBarcode,
                 "nucleotideType"       : planNucleotideType, 
                 "orderKey" : format(order_counter, "05d")                 
             }
@@ -1028,23 +1239,6 @@ class StepHelperDbLoader():
         
         return samplesTable
         
-
-    def _get_nucleotideType_byRunTypeOrApplGroup(self, plan):
-        #logger.debug("ENTER step_helper_db_loader._get_nucleotideType_byRunTypeOrApplGroup()")
-         
-        if plan and plan.runType:
-            runTypeObjs = RunType.objects.filter(runType = plan.runType)
-            if runTypeObjs:
-                runTypeObj = runTypeObjs[0]
-                if (runTypeObj.nucleotideType):
-                    return runTypeObj.nucleotideType.upper()
-                else:
-                    if plan.applicationGroup:
-                        value = plan.applicationGroup.name
-                        return value if value in ["DNA", "RNA"] else ""
-                       
-        return ""
-    
 
     def getStepHelperForTemplatePlannedExperiment(self, pe_id, step_helper_type=StepHelperType.EDIT_TEMPLATE, sampleset_id=None):
         '''
@@ -1105,7 +1299,7 @@ class StepHelperDbLoader():
         planDisplayedName = getPlanDisplayedName(planned_experiment)
 
         step_helper.parentName = planDisplayedName
-        
+
         if planned_experiment.isReusable:
             raise ValueError("You must pass in a plan id, not a template id.")
 
@@ -1116,5 +1310,5 @@ class StepHelperDbLoader():
             self.updatePlanSpecificStepHelper(step_helper, planned_experiment)
         else:
             raise ValueError("Can not create templates from plans.")
-        
+
         return step_helper

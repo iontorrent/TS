@@ -17,3 +17,4 @@ class StepNames():
     OUTUT_BY_SAMPLE = 'Output_by_sample'
     SAVE_PLAN_BY_SAMPLE = 'Save_plan_by_sample'
     SAVE_TEMPLATE_BY_SAMPLE = 'Save_template_by_sample'
+    ANALYSIS_PARAMS = "Analysis_params" 

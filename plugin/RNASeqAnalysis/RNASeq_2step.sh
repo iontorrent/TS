@@ -152,6 +152,7 @@ if [ ! -d $STAR_INDEX ]; then
   echo "(`date`) Running STAR --runMode genomeGenerate for reference '$REF_NAME' ..." >&2
   $RUNDIR/bin/STAR --runThreadN 12 --runMode genomeGenerate --genomeDir $TMPDIR --genomeFastaFiles $REFERENCE --sjdbGTFfile $GENE_GTF --sjdbOverhang 75
   mv $TMPDIR $STAR_INDEX
+  chmod 777 $STAR_INDEX
   echo "" >&2
 fi
 
@@ -162,6 +163,7 @@ if [ ! -d $BOWTIE2_INDEX ]; then
   echo "(`date`) Running bowtie2-build for reference '$REF_NAME' ..." >&2
   $RUNDIR/bin/bowtie2-build $REFERENCE $TMPDIR/bowtie2 >& $TMPDIR/bowtie2-build.log
   mv $TMPDIR $BOWTIE2_INDEX
+  chmod 777 $BOWTIE2_INDEX
   echo "" >&2
 fi
 
@@ -173,6 +175,7 @@ if [ -f $XREFERENCE ]; then
   echo "(`date`) Running bowtie2-build for reference '$XREF_NAME' ..." >&2
   $RUNDIR/bin/bowtie2-build $XREFERENCE $TMPDIR/bowtie2 >& $TMPDIR/bowtie2-build.xrRNA.log
   mv $TMPDIR $XREF_INDEX
+  chmod 777 $XREF_INDEX
   echo "" >&2
  fi
 fi

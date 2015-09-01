@@ -1,0 +1,9 @@
+This plugin transfers signal processing output files to another Torrent Server and launches a re-analysis of the dataset on that server. The files that are transferred are Basecaller Input Files.
+
+    1.wells
+    analysis.bfmask.bin
+    analysis.bfmask.stat
+    average_nuke_trace*.txt
+    Bead_density_*.png 
+
+Proton datasets will transfer block-level files when the thumbnail option is unchecked. When thumbnail option is checked, only the thumbnail files will be transferred. 

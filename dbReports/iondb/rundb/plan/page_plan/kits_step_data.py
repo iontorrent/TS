@@ -64,9 +64,11 @@ class KitsFieldNames():
     IS_CHIP_TYPE_REQUIRED = "is_chipType_required"
     BARCODE_KIT_NAME = "barcodeId"
     LIBRARY_READ_LENGTH = "libraryReadLength"
+    READ_LENGTH = "readLength"
     TEMPLATING_SIZE_CHOICES = "templatingSizeChoices"
     TEMPLATING_SIZE = "templatingSize"
-    
+    READ_LENGTH_CHOICES = "readLengthChoices"
+        
 class KitsStepData(AbstractStepData):
 
 
@@ -84,7 +86,7 @@ class KitsStepData(AbstractStepData):
         self.prepopulatedFields[KitsFieldNames.SAMPLE_PREP_KITS] = KitInfo.objects.filter(kitType='SamplePrepKit', isActive=True).order_by('description')
         
         self.savedFields[KitsFieldNames.LIBRARY_KIT_NAME] = None
-        self.prepopulatedFields[KitsFieldNames.LIB_KITS] = KitInfo.objects.filter(kitType='LibraryKit', isActive=True).order_by("description")
+        self.prepopulatedFields[KitsFieldNames.LIB_KITS] = KitInfo.objects.filter(kitType__in = ["LibraryKit","LibraryPrepKit"], isActive=True).order_by("description")
         
         self.savedFields[KitsFieldNames.LIBRARY_KEY] = None
         self.prepopulatedFields[KitsFieldNames.FORWARD_LIB_KEYS] = LibraryKey.objects.filter(direction='Forward', runMode='single').order_by('-isDefault', 'name')
@@ -155,11 +157,15 @@ class KitsStepData(AbstractStepData):
         
         self.savedFields[KitsFieldNames.FLOWS] = 0
         self.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH] = 0
+        self.savedFields[KitsFieldNames.READ_LENGTH] = 0
 
         self.prepopulatedFields[KitsFieldNames.IS_BARCODE_KIT_SELECTION_REQUIRED] = False
 
         self.prepopulatedFields[KitsFieldNames.TEMPLATING_SIZE_CHOICES] = ["200", "400"]
         self.savedFields[KitsFieldNames.TEMPLATING_SIZE] = ""
+
+        #For raptor templating kits, templating size cannot be used to drive UI behavior or db persistence.  Use read length instead.
+        self.prepopulatedFields[KitsFieldNames.READ_LENGTH_CHOICES] = ["200", "400"]
     
         self.sh_type = sh_type
 
@@ -241,6 +247,8 @@ class KitsStepData(AbstractStepData):
             
             if not applProduct.defaultChipType:
                 self.savedFields[KitsFieldNames.CHIP_TYPE] = None    
+            else:
+                self.savedFields[KitsFieldNames.CHIP_TYPE] = applProduct.defaultChipType
             
             if applProduct.defaultSamplePrepKit:
                 self.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT] = applProduct.defaultSamplePrepKit.name
@@ -256,6 +264,11 @@ class KitsStepData(AbstractStepData):
                                 
             if applProduct.defaultTemplateKit:
                 self.savedFields[KitsFieldNames.TEMPLATE_KIT_NAME] = applProduct.defaultTemplateKit.name
+                if applProduct.defaultTemplateKit.kitType in ['TemplatingKit']:
+                        self.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = KitsFieldNames.ONE_TOUCH
+                elif applProduct.defaultTemplateKit.kitType == 'IonChefPrepKit':
+                        self.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = KitsFieldNames.ION_CHEF
+                
    
             if applProduct.defaultSequencingKit:
                 self.savedFields[KitsFieldNames.SEQUENCE_KIT_NAME] = applProduct.defaultSequencingKit.name
@@ -315,6 +328,15 @@ class KitsStepData(AbstractStepData):
             else:
                 self.validationErrors.pop(field_name, None)
 
+        if field_name == KitsFieldNames.READ_LENGTH:
+            if new_field_value:
+                errors = validate_libraryReadLength(new_field_value)
+                if errors:
+                    self.validationErrors[field_name] = ' '.join(errors)
+                else:
+                    self.validationErrors.pop(field_name, None)
+                    self.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH] = new_field_value 
+
         if field_name == KitsFieldNames.TEMPLATING_SIZE:
             errors = validate_templatingSize(new_field_value)
             if errors:
@@ -336,7 +358,7 @@ class KitsStepData(AbstractStepData):
         
         if field_name == KitsFieldNames.LIBRARY_KIT_NAME:
             if new_field_value:
-                libKit_objs = KitInfo.objects.filter(kitType='LibraryKit', name = new_field_value).order_by("-isActive")
+                libKit_objs = KitInfo.objects.filter(kitType__in = ["LibraryKit","LibraryPrepKit"], name = new_field_value).order_by("-isActive")
                 if libKit_objs and len(libKit_objs) > 0:
                     libKit_obj = libKit_objs[0]
                     if libKit_obj.categories and ("bcrequired" in libKit_obj.categories.lower()):

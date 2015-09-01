@@ -3,11 +3,28 @@
 
 {% block configure_menu %}active{% endblock %}
 {% block sub-nav %}
-<li><a href="{% url "configure_about" %}">About</a></li>
-<li><a href="{% url "configure_references" %}">References</a></li>
-<li><a href="{% url "configure_services" %}">Services</a></li>
-<li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-<li><a href="{% url "configure_configure" %}">Configure</a></li>
-<li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-<li><a href="{% url "configure_account" %}">Accounts</a></li>
+    {% block tab-configure-about %}
+        <li><a href="{% url "configure_about" %}">About</a></li>
+    {% endblock tab-configure-about %}
+    {% block tab-configure-analysisargs %}
+        <li><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
+    {% endblock tab-configure-analysisargs %}
+    {% block tab-configure-references %}
+        <li><a href="{% url "configure_references" %}">References</a></li>
+    {% endblock tab-configure-references %}
+    {% block tab-configure-services %}
+        <li><a href="{% url "configure_services" %}">Services</a></li>
+    {% endblock tab-configure-services %}
+    {% block tab-configure-plugins %}
+        <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    {% endblock tab-configure-plugins %}
+    {% block tab-configure-configure %}
+        <li><a href="{% url "configure_configure" %}">Configure</a></li>
+    {% endblock tab-configure-configure %}
+    {% block tab-configure-ionreporter %}
+        <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+    {% endblock tab-configure-ionreporter %}
+    {% block tab-configure-accounts %}
+        <li><a href="{% url "configure_account" %}">Accounts</a></li>
+    {% endblock tab-configure-accounts %}
 {% endblock sub-nav %}

@@ -7,7 +7,11 @@
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
-        <form class="form-horizontal" id="modal_references_new_genome_form" method="POST">
+        <ul class="nav nav-tabs">
+            <li class="active"><a href="#" id="nav_file" data-toggle="tab">Upload File</a></li>
+            <li><a href="#" id="nav_url" data-toggle="tab">Install via URL</a></li>
+        </ul>
+        <form class="form-horizontal" id="modal_references_new_genome_form" method="POST" action="{% url "references_custom_download" %}">
             <fieldset>
                 <div id="upload-fasta" class="control-group">
                     <label for="pickfile" class="control-label">Upload a FASTA file (required)</label>
@@ -29,6 +33,15 @@
                         <div id="upload-progress" class="progress progress-striped active hide">
                             <div class="bar" style="width: 0%"></div>
                         </div>
+                    </div>
+                </div>
+                <div id="url-install" class="control-group hide">
+                    <label for="reference_url" class="control-label">Reference URL <i>(required)</i></label>
+                    <div class="controls">
+                        <input name="reference_url" id="reference_url" placeholder="e.g. http://updates.iontorrent.com/reference_downloads/mm10.zip" type="text" class="input-xxlarge textInput required"/>
+                        <p class="help-block">
+                            URL to the reference, a zip or gzip file on a remote server.
+                        </p>
                     </div>
                 </div>
                 <div class="control-group">
@@ -75,7 +88,7 @@
   </div>    
   <div class="modal-footer">    
       <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-      <a id="uploadfile" class="btn btn-primary" href="#">Upload Reference</a>
+      <a id="uploadfile" class="btn btn-primary" href="#">Import Reference</a>
   </div>
 <script type="text/javascript">
 $(function(){
@@ -136,7 +149,7 @@ $(function(){
         container : 'upload-fasta',
         runtimes : 'silverlight,flash,html5,gears,browserplus',
         filters : [
-            {title : "FASTA files", extensions : "fasta"},
+            {title : "FASTA files", extensions : "fasta,fas,fa,seq"},
             {title : "FASTA Compressed Zip files", extensions : "zip"}
         ],
         browse_button: 'pickfile',
@@ -153,6 +166,14 @@ $(function(){
     $('#uploadfile').click(function (e) {
         //don't allow them to upload a big file if they are using Flash, it will fail.
         e.preventDefault();
+        
+        if ($('#url-install').is(':visible') ){
+            console.log('Starting install via URL', $('reference_url').val());
+            $('#modal_references_new_genome_form').submit();
+            return false;
+        } else {
+            console.log('Starting install via file upload');
+        }
 
         console.log('flashFail', flashFail);
         if (flashFail) {
@@ -232,12 +253,21 @@ $(function(){
         } else {
             //ERROR : Must select a file
             $('#upload-fasta').addClass('invalid alert alert-error');
-            $("#file_info").addClass('alert-error').html("You must select FASTA file to upload (with the .fasta extension only).").show();
+            $("#file_info").addClass('alert-error').html("You must select FASTA or ZIP file to upload").show();
         }
         
-        return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).exists()
-        && uploader.files.length == 1;
+        return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).not('#url-install,#reference_url').exists();
     }
+
+    $('#nav_file').click(function(){
+        $('#upload-fasta').show();
+        $('#url-install').hide();
+    });
+
+    $('#nav_url').click(function(){
+        $('#upload-fasta').hide();
+        $('#url-install').show();
+    });
 });
 </script>
 </div>

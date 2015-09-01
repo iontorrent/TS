@@ -100,15 +100,16 @@ background: #dbdbdb;
 </script>
 
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
-<div class="btn-group">
+<div class="btn-group" id="sampleSet_actions">
 	# var _id = id;# 
 	# var _status = status; #
+	# var _sampleCount = sampleCount; #
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
 			<a href="#= '{% url "edit_sampleset" 999999 %}'.replace('999999',_id)#" class="edit_sampleset" data-toggle="modal">Edit Set</a>
 		</li>
-		# if (_status !== "libPrep_pending" && _status !== "voided") { #
+		# if (_status !== "libPrep_pending" && _status !== "voided" && _sampleCount != 0) { #
             <li>
                 <a data-id="#=_id#" data-name="#=name#" href="#= '{% url "sampleset_plan_run" 999999 %}'.replace('999999',_id)#" class="plan-run" data-toggle="modal">Plan Run</a>
             </li>
@@ -306,7 +307,7 @@ function CustomSampleAttributeTemplate_old(index) {
                         <label for="searchText" class=" hide">Search</label>                                   
                         <input id="search_text" type="text" placeholder="Search name or label" style="width: 200px;" />
             
-                        <div class="btn-group" style="width: 150px;" >
+                        <div class="btn-group" style="width: 150px;" id="sampleSet_search_options">
                             <label for="searchSubject" id="search_subject" class=" hide">sampleSetName</label> 
                             
                             <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by name or code" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>

@@ -57,7 +57,7 @@ public:
     }
     suppress_no_calls_ = parameters.my_controls.suppress_no_calls;
 
-    string vcf_header = getVCFHeader(&parameters, sample_manager.sample_names_);
+    string vcf_header = getVCFHeader(&parameters, sample_manager.sample_names_, sample_manager.primary_sample_);
     output_vcf_stream_ << vcf_header << endl;
     filtered_vcf_stream_ << vcf_header << endl;
     variant_initializer_.parseHeader(vcf_header);

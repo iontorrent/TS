@@ -40,11 +40,15 @@ for( i in 1:nplot) {
     write(sprintf("ERROR: Could not locate input file %s\n",nFileIn),stderr())
     q(status=1)
   }
-  rcov <- read.table(nFileIn, skip=10, header=TRUE, sep="\t", as.is=TRUE, comment.char="#")
-  ndata <- length(rcov$normalized_position)
+  rcov <- try( read.table(nFileIn, skip=10, header=TRUE, sep="\t", as.is=T, comment.char="#"), T )
+  ndata <- if( class(rcov) == "try-error") 0 else length(rcov$normalized_position)
   if( ndata < 2 ) {
-    write(sprintf("ERROR: No gene reads found in '%s'\n",nFileIn),stderr())
-    q(status=1)
+    if( nplot == 1 ) {
+      write(sprintf("ERROR: No transcript coverage data in '%s'\n",nFileIn),stderr())
+      q(status=1)
+    }
+    write(sprintf("WARNING: No transcript coverage data in '%s'",nFileIn),stderr())
+    next
   }
   ym <- max(rcov$All_Reads.normalized_coverage)
   if( ym > ymax ) { ymax = ym }
@@ -53,11 +57,13 @@ for( i in 1:nplot) {
 ymax <- (ymax+0.0001)*1.01
 
 # loop again for making the plots
+usedcols <- c()
 for( i in 1:nplot) {
   nFileIn <- args[i+1]
-  rcov <- read.table(nFileIn, skip=10, header=TRUE, sep="\t", as.is=TRUE, comment.char="#")
+  rcov <- try( read.table(nFileIn, skip=10, header=TRUE, sep="\t", as.is=T, comment.char="#"), T )
+  ndata <- if( class(rcov) == "try-error") 0 else length(rcov$normalized_position)
+  if( ndata < 2 ) next
   a <- rcov$normalized_position
-  ndata <- length(a)
   b <- rcov$All_Reads.normalized_coverage
   if( i == 1 ) {
     png(nFileOut,width=700,height=hgt)
@@ -71,9 +77,10 @@ for( i in 1:nplot) {
     box()
   }
   lines( a, b, type="l", col=colors[i], lwd=2 )
+  usedcols <- c(usedcols,colors[i])
 }
 if( nplot > 1 ) {
-  legend( legend=lnames, xpd=T, x="topright",cex=0.6,inset=c(-0.38,lgd),fill=colors,bty="n",x.intersp=0.5 )
+  legend( legend=lnames, xpd=T, x="topright",cex=0.6,inset=c(-0.38,lgd),fill=usedcols,bty="n",x.intersp=0.5 )
 }
 q()
 

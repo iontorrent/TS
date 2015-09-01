@@ -7,7 +7,8 @@
 my $DESCR = "Checks a given BED file only contains contigs that are present in given BAM file.
 If they appear to be consistent then the script also checks to see if the BAM has any reads.
 If no BED file is supplied, only the BAM file is checked.
-Produces an error message to STDOUT if an issue if found or '' otherwise.";
+Produces an error message to STDOUT if an issue if found or '' otherwise.
+An error status is only issued for serious errors, e.g. missing files.";
 my $USAGE = "Usage:\n\t$CMD [options] <bam file> <bed file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information";
@@ -40,12 +41,18 @@ my $bedfile = $nargs > 1 ? shift(@ARGV) : "";
 
 #--------- End command arg parsing ---------
 
-die "Cannot find BAM file '$bamfile'" unless( -e $bamfile );
+unless( -e $bamfile ) {
+  print "Cannot find BAM file '$bamfile'\n";
+  exit 1;
+}
 
 my %bamchrs;
 my $nreads = 0;
 
-open( BAMREAD, "samtools idxstats '$bamfile' |" ) || die "Failed to open $bamfile - may not be BAM formatted.\n";
+unless( open( BAMREAD, "samtools idxstats '$bamfile' |" ) ) {
+  print "Failed to open $bamfile - may not be BAM formatted.\n";
+  exit 1;
+}
 while(<BAMREAD>) {
   next if(/^[*]/);
   my ($chr,$siz,$rds) = split('\t',$_);
@@ -58,8 +65,13 @@ close(BAMREAD);
 
 if( $bedfile ) {
   my $ntrack = 0;
-  die "Cannot find BED file '$bedfile'" unless( -e $bedfile );
-  open( BEDREAD, $bedfile ) || die "Failed to open $bedfile.\n";
+  unless( -e $bedfile ) {
+    print "Cannot find BED file '$bedfile'\n";
+    exit 1;
+  }
+  unless( open( BEDREAD, $bedfile ) ) {
+    print "Failed to open $bedfile.\n";
+  }
   while(<BEDREAD>) {
     if( /^track/ ) {
       if( ++$ntrack > 1 ) {

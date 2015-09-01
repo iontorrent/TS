@@ -384,7 +384,7 @@ public:
                             );
         // int score = aligner_.get_last_score ();
         // backtrace (reverse fill the results array)
-        int bno =  aligner.backtrace (
+        unsigned bno =  aligner.backtrace (
                              batches,  // BATCH *b_ptr
                              max_batch_no, // int max_cnt
                              false,               // bool reverse (default false)

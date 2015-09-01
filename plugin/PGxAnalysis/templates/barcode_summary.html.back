@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_parent"/>
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css">
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet">
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet">
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css">
+
+<style type="text/css">
+p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
+.zebra {  background-color: #E1EFFA;}
+.table_hover{    color: #009;    background-color: #6DBCEE;}
+</style>
+
+{% if autorefresh %}
+<META HTTP-EQUIV="refresh" CONTENT="15">
+{% endif %}
+
+<style type="text/css">
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+</style>
+
+</head>
+<body>
+
+<title>PGX Analysis Report</title>
+
+<body>
+<div class="topbar"><div class="logoholder">
+  <a href="http://www.iontorrent.com/"><img src="/site_media/images/raw_name_small.png"
+     alt="IonTorrent Systems, Inc." style="border:none;"/></a>
+</div></div>
+
+<h1><center>PGX Analysis Report</center></h1>
+<!-- <h3><center>{{run_name}}<center></h3> -->
+
+<div class="container-fluid">
+
+<!-- Capture django variable in to javascript -->
+<script>
+  var barcodes_json = {{barcode_results|safe}};
+</script>
+
+<h3> Overview </h3>
+<div class="k-widget k-grid" >
+<table class="table-striped">
+          <tr class="d0"><td>Library type&nbsp;</td><td>:</td>          <td> {{library_type}} </td></tr>
+          <tr class="d1"><td>Reference genome&nbsp;</td><td>:</td>             <td>{{genome_name}} </td></tr>
+          <tr class="d0"><td>Targeted regions&nbsp;</td><td>:</td>    <td>{{targets_name}}</td></tr>
+          <tr class="d1"><td>Hotspot regions&nbsp;</td><td>:</td>     <td>{{hotspots_name}}</td></tr>
+      <tr class="d0"><td>Download all barcodes&nbsp;</td><td>:</td> <td><a class="btn" href="{{run_name}}.vcf.zip">VCF.ZIP</a>
+                                              <a class="btn" href="GenotypeExport/Genotyper-data-export.txt">GENOTYPES_OA_FORMAT</a>
+                                             <a class="btn" href="cnvExports.zip">CNV_OA_FORMAT</a></td></tr>
+</table>
+</div>
+<br>
+<br>
+
+<h3> CYP2D6 CNV QC Analysis </h3>
+ <div class="k-widget k-grid">
+  <table class="table-striped">
+          <tr ><td>Total Number of Samples&nbsp;</td><td>:</td>          <td>{{totalSamples}}</td></tr>
+          <tr><td>Number of Samples passed QC for CNV Calling&nbsp;</td><td>:</td>             <td>{{numPass}}</td></tr>
+          <tr><td>Number of Samples did not pass QC metric 'On Target Rate 20%'&nbsp;</td><td>:</td>             <td>{{numTargetRate}}</td></tr>
+          <tr ><td>Number of Samples did not pass QC metric 'Average coverage 100'&nbsp;</td><td>:</td>             <td>{{numAvgCov}}</td></tr>
+          <tr><td>Number of Samples did not pass QC metric 'Uniformity Rate 80%'&nbsp;</td><td>:</td>             <td>{{numUniformity}}</td></tr>
+  </table>
+ </div>
+<p> <a href="../{{coverageAnalysisName}}/coverageAnalysis.html"> click here to view the coverage Analysis report </a> </p> 
+<br>
+<br>
+
+<div class="k-widget k-grid">
+  <table class="table-striped">
+    <thead class="k-grid-header">
+      <tr>
+      <th class="k-header"> <span class="help" title="Barcode name and link to detailed report.">Barcode Name</span></th>
+      <th class="k-header"> <span class="help" title="Sample name.">Sample Name</span></th>
+      <th class="k-header"> <span class="help" title="Number of Variants"> Number of Variants</span></th>
+      <th class="k-header"> <span class="help"  title="Number of Hotspot Variants">Number of Hotspot Variants </span></th>
+      <th class="k-header"> <span class="help"  title="Copy Number ploidy of CYP2D6 Gene.">CYP2D6 Gene CNV</span></th>
+      <th class="k-header"> <span class="help" title="Copy Number ploidy of CYP2D6 exon 9.">CYP2D6 Exon 9 CNV</span></th>
+      <th class="k-header"> <span class="help" title="Confidence of the CYP2D6 Copy Number calls.">CYP2D6 Gene CNV Confidence</span></th>
+      <th class="k-header"> <span class="help" title="Confidence of CYP2D6 Exon 9 Copy Number calls.">CYP2D6 Exon 9 CNV Confidence</span></th>
+    </tr>
+    </thead>
+    {% for barcode in barcodeData %}
+       <tr>
+          <td style="text-align:left"><a href="../{{variantCallerName}}/{{barcode.name}}/variantCaller.html">
+            <span title="Click to view the detailed variantCaller report for barcode {{barcode.name}}">{{barcode.name}}</span></a>
+          </td>
+
+          <td>{{barcode.sample_name}}</td>
+
+          <td>{{barcode.variants_total}}</td>
+
+          <td>{{barcode.hotspots_total}}</td>
+          
+	  <td>{{barcode.gene_cnv}}</td>
+          
+	  <td>{{barcode.exon9_cnv}}</td>
+        
+	  <td>{{barcode.gene_cnv_confidence}}</td>
+	  
+	  <td>{{barcode.exon9_cnv_confidence}}</td>
+
+        </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="spacer clear"></div>
+
+{% if autorefresh %}
+<br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+<a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
+<div style="text-align:center">Click here to refresh</div></a>
+{% endif %}
+
+</div>
+
+<br/>
+<div class="clear"></div>
+<div class="footer">
+  <a href=http://www.iontorrent.com/support>Request Support</a>&nbsp;|&nbsp;<a href=/ion-docs/Home.html>Help/Documentation</a>&nbsp;|&nbsp;
+  <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+  <br/>Copyright&nbsp;&copy; 2014<a href="http://www.iontorrent.com/">Life Technologies, Inc.</a>
+</div>
+<br/><br/>
+
+</body> 
+</html>

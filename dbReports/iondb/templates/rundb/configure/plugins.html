@@ -17,15 +17,9 @@
 
 <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
 {% endblock extra_head_js %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% block tab-configure-plugins %}
+    <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
+{% endblock tab-configure-plugins %}
 {% block content %}
     <div class="content clearfix">
         <div class="clearfix">

@@ -1,7 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include <Rcpp.h>
-#include "RecalibrationModel.h"
+#include "LinearCalibrationModel.h"
 #include "DPTreephaser.h"
 
 
@@ -27,9 +27,34 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle,
     int model_threshold    = Rcpp::as<int>(RmodelThreshold);
     Rcpp::IntegerVector      x_values(Rxval);
     Rcpp::IntegerVector      y_values(Ryval);
-    RecalibrationModel       recalModel;
+    LinearCalibrationModel   calibModel;
+
+    // Variably load a json or legacy text file for calibration
     if (model_file.length() > 0) {
-      recalModel.InitializeModel(model_file, model_threshold);
+
+      // See if we can load a json file
+      calibModel.SetHPthreshold(model_threshold);
+      ifstream calibration_file(model_file.c_str(), ifstream::in);
+
+      if (calibration_file.good()) {
+        Json::Value temp_calibraiton_file;
+        Json::Reader json_reader;
+        bool success = json_reader.parse(calibration_file, temp_calibraiton_file, false);
+
+        if (success and temp_calibraiton_file.isMember("LinearModel")){
+          calibModel.InitializeModelFromJson(temp_calibraiton_file["LinearModel"]);
+        }
+      }
+      calibration_file.close();
+
+      // If the loading from json was not successful, we assume we have a legacy text file
+      if (not calibModel.is_enabled())
+        calibModel.InitializeModelFromTxtFile(model_file, model_threshold);
+
+      // And if that also didn't work we print a warning
+      if (not calibModel.is_enabled())
+        cout << "ERROR initializing calibration model from file " << model_file << endl;
+
     }
 
 
@@ -79,13 +104,13 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle,
         if (per_read_phasing)
           dpTreephaser.SetModelParameters((double)cf_vec(iRead), (double)ie_vec(iRead), (double)dr_vec(iRead));
         // And load recalibration model
-        if (recalModel.is_enabled()) {
+        if (calibModel.is_enabled()) {
           int my_x = (int)x_values(iRead);
           int my_y = (int)y_values(iRead);
           const vector<vector<vector<float> > > * aPtr = 0;
           const vector<vector<vector<float> > > * bPtr = 0;
-          aPtr = recalModel.getAs(my_x, my_y);
-          bPtr = recalModel.getBs(my_x, my_y);
+          aPtr = calibModel.getAs(my_x, my_y);
+          bPtr = calibModel.getBs(my_x, my_y);
           if (aPtr == 0 or bPtr == 0) {
             cout << "Error finding a recalibration model for x: " << x_values(iRead) << " y: " << y_values(iRead);
             cout << endl;
@@ -172,9 +197,9 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     int model_threshold    = Rcpp::as<int>(RmodelThreshold);
     Rcpp::IntegerVector      x_values(Rxval);
     Rcpp::IntegerVector      y_values(Ryval);
-    RecalibrationModel       recalModel;
+    LinearCalibrationModel   calibModel;
     if (model_file.length() > 0) {
-      recalModel.InitializeModel(model_file, model_threshold);
+      calibModel.InitializeModelFromTxtFile(model_file, model_threshold);
     }
 
     ion::FlowOrder flow_order(flowCycle, flowCycle.length());
@@ -211,13 +236,13 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
         dpTreephaser.SetModelParameters((double)cf_vec(0,iRead), (double)ie_vec(0,iRead), (double)dr_vec(0,iRead));
 
       // If you bothered specifying a recalibration model you probably want its effect on the predictions...
-      if (recalModel.is_enabled()) {
+      if (calibModel.is_enabled()) {
         int my_x = (int)x_values(iRead);
         int my_y = (int)y_values(iRead);
         const vector<vector<vector<float> > > * aPtr = 0;
         const vector<vector<vector<float> > > * bPtr = 0;
-        aPtr = recalModel.getAs(my_x, my_y);
-        bPtr = recalModel.getBs(my_x, my_y);
+        aPtr = calibModel.getAs(my_x, my_y);
+        bPtr = calibModel.getBs(my_x, my_y);
         if (aPtr == 0 or bPtr == 0) {
           cout << "Error finding a recalibration model for x: " << x_values(iRead) << " y: " << y_values(iRead);
           cout << endl;

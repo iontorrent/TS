@@ -691,6 +691,7 @@ float GenerateBlankEmphasis_Dev(
 // emphasis constants from gopt
 __global__
 void GenerateEmphasis(
+  const unsigned short * RegionMask,
   const int numEv,
   const float amult,
   const PerFlowParamsRegion *perFlowRegP,
@@ -704,6 +705,9 @@ void GenerateEmphasis(
   __shared__ float empScale[MAX_POISSON_TABLE_COL];
 
   int regId = blockIdx.x;
+
+  if( LDG_ACCESS(RegionMask,regId) != RegionMaskLive) return;
+
   int num_frames = numFramesRegion[regId];
 
   const float *frameNumber = RegionFrameCube +  RfFrameNumber*ConstFrmP.getMaxCompFrames()*ImgRegP.getNumRegions() + 

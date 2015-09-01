@@ -139,7 +139,10 @@
   <div class="modal-footer">    
     <div class="row-fluid">
       <a id="back_to_history" class="btn pull-left" href="/rundb/published/">Back</a>
-      <button class="btn btn-danger pull-right" id="delete">Delete</button>
+      <!-- TS-11394 #Need to be Implemented in next phase -->
+      {% if contentupload.publisher.name != "refAnnot" %}
+      	   <button class="btn btn-danger pull-right" id="delete">Delete</button>
+      {% endif %}
     </div>
     <div id="ask_delete" style="display: none; margin-top:12px;">
       <div class="row-fluid">

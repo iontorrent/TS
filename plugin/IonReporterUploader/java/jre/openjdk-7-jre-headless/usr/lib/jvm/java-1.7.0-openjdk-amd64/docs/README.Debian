@@ -1,0 +1,78 @@
+openjdk-7 for Debian/Ubuntu
+---------------------------
+
+The OpenJDK build is configured --with-additional-vms to build with
+different virtual machines.  The original implementation of the hotspot
+VM is only available on the amd64, i386, lpia and sparc architectures.
+Other VM's are CACAO, providing a just in time compiler on several
+architectures (although the VM implementation is incomplete), and Zero,
+providing a byte code interpreter for every architecture.  On some
+architectures Zero is built with JIT support using shark (still considered
+experimental).
+
+To use a different VM other than the default, use
+
+	java -cacao|-zero|-shark
+
+or for the java tools, use
+
+	<tool name> -J-cacao|-J-zero|-J-shark.
+
+The zero build on the ix86 architectures is built with shark (just in time
+compiler); to use the zero build without shark support, use the `-Xint'
+option to operate in interpreted-only mode.
+
+On some architectures (currently armel and powerpc, when built against
+llvm-2.6) which use ther zero vm as the default, the openjdk-7-jre-zero
+package contains the shark vm.
+
+To change the default permanently, edit /etc/java-7-openjdk/jvm.cfg.
+
+The CACAO VM can be found in the icedtea-7-jre-cacao package, the Zero/Shark
+VM can be found in the openjdk-7-jre-zero package (on the architectures
+where the Hotspot VM is available).
+
+Please look for further documentation in the directory
+/usr/share/doc/openjdk-7-jre/ .
+
+The package openjdk-7-jre-headless ships a cgi script
+/usr/lib/jvm/java-7-openjdk/bin/java-rmi.cgi that you must integrate
+into your webserver setup manually if you need it. It is not activated
+automatically.
+
+
+Note for non-reparenting window manager users
+---------------------------------------------
+
+If you are using a non-reparenting window manager, such as ratpoison, awesome
+or dwm, some Java graphical applications using the AWT toolkit will only
+display empty grey windows, as described in but #508650.
+
+There are two solutions to work around this issue:
+1. mask your window manager as one of the non-reparenting ones supported by AWT,
+   using the wmname <http://tools.suckless.org/wmname> tool from the dwm-tools
+   package:
+   $ wmname LG3D
+2. set the environment variable _JAVA_AWT_WM_NONREPARENTING:
+   $ export _JAVA_AWT_WM_NONREPARENTING=true
+
+You can automate these tasks by writing them to your ~/.xsessionrc:
+$ cat >> ~/.xsessionrc <<EOF
+export _JAVA_AWT_WM_NONREPARENTING=true
+EOF
+
+
+IcedTea NPPlugin
+----------------
+
+IcedTea provides a java plugin for at least mozilla based browsers.  It is
+not yet 100% with the closed source plugin, but much improved to the former
+GCJPlugin.  If you experience problems with the plugin, start your browser
+from the command line with the environment variable ICEDTEAPLUGIN_DEBUG set,
+and attach this output to a bug report.  You usually should not expect a
+quick fix, if the applet code is closed source, or only accessible after
+creating accounts for external web services using these applets.
+
+
+ -- Matthias Klose <doko@ubuntu.com>  Sun, 03 May 2009 13:58:10 +0200
+ -- Torsten Werner <twerner@debian.org>  Wed, 02 Apr 2008 11:46:53 +0200

@@ -13,7 +13,8 @@
     <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_get_user_input.js"></script>
     <script type="text/javascript" src="/site_media/resources/scripts/plan/by_template.js"></script>   
     <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_sample_table.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>     
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_analysis_params_section.js"></script> 
     <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
     <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
 
@@ -80,6 +81,11 @@
                     <h4 style="color: red;">Error, tube label length should be 512 characters maximum. </h4>
                     <h4 style="color: red;">Please Fix: {% for tube_label in step.validationErrors.bad_tube_label %}{{tube_label}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
+                {% elif key == "bad_chip_barcode" %}
+                <div class="span12">
+                    <h4 style="color: red;">Error, chip barcode can only contain letters and numbers. </h4>
+                    <h4 style="color: red;">Please Fix: {% for chip_barcode in step.validationErrors.bad_chip_barcode %}{{chip_barcode}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                </div>
                 {% elif key == "badIrSetId" %}
                 <div class="span12">
                     <h4 style="color: red;">Error, IR set id must be numeric.</h4>
@@ -94,7 +100,10 @@
     </div>
 </div>
 
-{% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
+{% include "rundb/plan/page_plan/page_plan_analysis_params_section.html" %}
+{% if helper.getApplProduct.isReferenceSelectionSupported %}
+    {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
+{% endif %}
 {% include "rundb/plan/page_plan/page_plan_sample_table.html" %}
 
 
@@ -131,10 +140,10 @@
     
     <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">&larr; Previous</a>
     {% if helper.isEditRun %}
-        <a class="btn btn-primary btn-100 pull-right" href="#" style="margin-left:10px;" onclick="$('#step_form').attr('action', '{% url "page_plan_save_and_reanalyze" exp_id=helper.experiment_id %}');$('#step_form').submit();return false;">
+        <a class="btn btn-primary btn-100 pull-right" href="#" style="margin-left:10px;" onclick="USERINPUT.validate=true; $('#step_form').attr('action', '{% url "page_plan_save_and_reanalyze" exp_id=helper.experiment_id %}');$('#step_form').submit();return false;">
             Update Run & Reanalyze</a>
     {% endif %}
-    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save" %}');$('#step_form').submit();return false;">
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="USERINPUT.validate=true; $('#step_form').attr('action', '{% url "page_plan_save" %}');$('#step_form').submit();return false;">
         {% if helper.isCopy %}
             Copy Plan
         {% elif helper.isEdit %}
@@ -157,7 +166,7 @@
 
     var USERINPUT = USERINPUT || {};
 
-    USERINPUT.is_by_template = $("#planName").length != 0;
+    USERINPUT.validate = USERINPUT.is_by_sample = false;
 
     USERINPUT.ir_sample_to_tss_sample = {};
     USERINPUT.preset_ir_fields = [];
@@ -167,9 +176,9 @@
     USERINPUT.account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}";
     USERINPUT.is_ir_connected = false;
         
-    USERINPUT.by_template_url = '{% url "page_plan_save" %}';
     USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
     USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
+    USERINPUT.iruUploadMode ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode}}";
 
     {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
         var ir_term = "{{sample_annotation.iRValue}}";
@@ -194,11 +203,14 @@
         
         _array.push("{{sampleValues.ircancerType|default_if_none:""}}");
         _array.push("{{sampleValues.ircellularityPct|default_if_none:""}}");
+        _array.push("{{sampleValues.irbiopsyDays|default_if_none:""}}");
+        _array.push("{{sampleValues.ircoupleID|default_if_none:""}}");
+        _array.push("{{sampleValues.irembryoID|default_if_none:""}}");
             
         _array.push("{{sampleValues.irWorkflow|default_if_none:""}}");
         _array.push("{{sampleValues.irRelationshipType|default_if_none:""}}");
         _array.push("{{sampleValues.irRelationRole|default_if_none:""}}");
-        _array.push("{{sampleValues.irSetID|default_if_none:""}}");
+        _array.push("{{sampleValues.irSetID|default:"1"}}");
         USERINPUT.preset_ir_fields.push(_array);
     {%endfor%}
     

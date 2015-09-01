@@ -101,23 +101,19 @@ class LevMarFitterV2
     {
       double r = 0.0;
       double e;
+      double sqWtScale = 0;
 
-      if (err_vec)
-        for (int i=0;i < numVals;i++)
-        {
-          //e = (*err_vec)(i) = residualWeight[i] * (refVals[i] - testVals[i]);
-          err_vec[i] = e = residualWeight[i] * (refVals[i] - testVals[i]);
-          r += e*e;
-        }
-      else
-        for (int i=0;i < numVals;i++)
-        {
-          e = residualWeight[i] * (refVals[i] - testVals[i]);
-          r += e*e;
-        }
+      for (int i=0;i < numVals;i++)
+      {
+        e = residualWeight[i] * (refVals[i] - testVals[i]);
+	r += e*e;
+	sqWtScale += residualWeight[i]*residualWeight[i];
 
-      // r = sqrt(r/wtScale)
-      r = (r/wtScale); // sqrt() is called at the end after optimization
+	if (err_vec)
+          err_vec[i] = e;
+      }
+
+      r = (r/sqWtScale); // sqrt() is called at the end after optimization
       return r;
     }
 

@@ -65,6 +65,24 @@
             margin-top: 20px;
             color: #fff;
         }
+        .workflow-btn {
+            background: transparent;
+            position:absolute;
+            width:66px;
+            height:79px;
+            overflow: hidden;
+        }
+        .workflow-btn:hover {
+            background: transparent;
+            bottom: 0;
+        }
+        #workflow_report:hover {
+            background-image: url('{% static "img/link-report-hover.png" %}');
+        }
+        #workflow_design:hover {
+            background-image: url('{% static "img/link-design-hover.png" %}');
+        }
+
     </style>
 </head>
 <body>
@@ -94,7 +112,11 @@
             <div class="row">
                 <div class="span12">
                     <img id="logo" class="pull-left" src="{% static "img/iontorrent_logo.png"%}" alt="Ion Torrent: Sequencing for all"/>
-                    <img id="workflowBar" class="pull-right" src="{% static "img/workflow-header-bar-thing.png" %}" alt="Informatics workflow"/>
+                    <div id="workflow" class="pull-right" style="position: relative; display: inline-block;">
+                        <img id="workflowBar" class="pull-right" src="{% static "img/workflow-header-bar-thing.png" %}" alt="Informatics workflow"/>
+                        <a id="workflow_design" href="https://www.ampliseq.com/" class="btn workflow-btn" style="left: 92px;"></a>
+                        <a id="workflow_report" href="https://ionreporter.lifetechnologies.com/" class="btn workflow-btn" style="right: 0px;"></a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -119,8 +141,8 @@
         <div id="footer" class="container">
             <div class="row">
                 <div class="span12">
-                    <p>FOR RESEARCH USE ONLY. NOT INTENDED FOR ANY ANIMAL OR HUMAN THERAPEUTIC OR DIAGNOSTIC USE.</p>
-                    <p class="copyright">&copy; Copyright 2014 Thermo Fisher Scientific Inc. All Rights Reserved.</p>
+                    <p>For Research Use Only. Not for use in diagnostic procedures.</p>
+                    <p class="copyright">&copy; 2015 Thermo Fisher Scientific Inc. All Rights Reserved.</p>
                 </div>
             </div>
         </div>

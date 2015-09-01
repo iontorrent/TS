@@ -42,11 +42,13 @@
 #include "PerBaseQual.h"
 #include "BaseCallerFilters.h"
 #include "BaseCallerMetricSaver.h"
-#include "BaseCallerRecalibration.h"
-#include "RecalibrationModel.h"
+//#include "LinearCalibrationModel.h"
 
 using namespace std;
 
+// Forward declaration of classes
+class HistogramCalibration;
+class LinearCalibrationModel;
 
 //! @brief    Verify path exists and if it does, canonicalize it
 //! @ingroup  BaseCaller
@@ -154,8 +156,8 @@ struct BaseCallerContext {
     BaseCallerMetricSaver     *metric_saver;          //!< Saves requested metrics to an hdf5
     BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
     BarcodeClassifier         *calibration_barcodes;  //!< Barcode detection for calibration set
-    BaseCallerRecalibration   recalibration;          //!< Base call and signal adjustment algorithm
-    RecalibrationModel        recalModel;             //!< Model estimation of simulated predictions and observed measurements
+    HistogramCalibration      *histogram_calibration; //!< Posterior base call and signal adjustment algorithm
+    LinearCalibrationModel    *linear_cal_model;      //!< Model estimation of simulated predictions and observed measurements
     PolyclonalFilterOpts      polyclonal_filter;      //!< User options for polyclonal filtering
 
     // Threaded processing

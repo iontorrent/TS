@@ -1,15 +1,6 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-    <li><a href="{% url "configure_about" %}">About</a></li>
-    <li><a href="{% url "configure_references" %}">References</a></li>
-    <li><a href="{% url "configure_services" %}">Services</a></li>
-    <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-    <li><a href="{% url "configure_configure" %}">Configure</a></li>
-    <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-    <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
 {% block content %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <style type="text/css">

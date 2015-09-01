@@ -84,7 +84,6 @@ void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_sta
   rp.SetStandardValue (t_mid_nuc_start,sigma_start, global_defaults.region_param_start.dntp_uM,
                        global_defaults.signal_process_control.fitting_taue,
                        global_defaults.signal_process_control.use_alternative_etbR_equation,
-                       global_defaults.signal_process_control.use_log_taub,
                        global_defaults.signal_process_control.hydrogenModelType, flow_block_size);
   rp.SetTshift(global_defaults.region_param_start.tshift_default);
   reg_params_setKrate (&rp,global_defaults.region_param_start.krate_default);

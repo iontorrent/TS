@@ -10,7 +10,7 @@ from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNam
 from iondb.rundb.plan.page_plan.reference_step_data import ReferenceFieldNames
 from iondb.rundb.plan.page_plan.ionreporter_step_data import IonReporterFieldNames
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_sample_tube_label, \
-    validate_barcode_sample_association, validate_QC, validate_targetRegionBedFile_for_runType
+    validate_barcode_sample_association, validate_QC, validate_targetRegionBedFile_for_runType, validate_chipBarcode
 
 from iondb.utils.utils import convert
 
@@ -37,6 +37,9 @@ class SavePlanFieldNames():
     GENDER = 'Gender'
     CANCER_TYPE = "cancerType"
     CELLULARITY_PCT = "cellularityPct" 
+    BIOPSY_DAYS = "biopsyDays"
+    COUPLE_ID = "coupleID"
+    EMBRYO_ID = "embryoID"    
     NUCLEOTIDE_TYPE = "NucleotideType"
     RELATIONSHIP_TYPE = 'Relation'
     RELATION_ROLE = 'RelationRole'
@@ -52,16 +55,22 @@ class SavePlanFieldNames():
     BARCODE_SETS_SUBSET = "barcodeSets_subset"
     BARCODE_SETS_BARCODES = 'barcodeSets_barcodes'
     SAMPLE_TO_BARCODE = 'sampleToBarcode'
-    BARCODED_IR_PLUGIN_ENTRIES = 'barcodedIrPluginEntries'
     SAMPLE_EXTERNAL_ID = 'sampleExternalId'
     SAMPLE_NAME = 'sampleName'
     SAMPLE_DESCRIPTION = 'sampleDescription'
     TUBE_LABEL = 'tubeLabel'
-    IR_GENDER = 'irGender'
+    CHIP_BARCODE_LABEL = 'chipBarcodeLabel'
+    CHIP_BARCODE = 'chipBarcode'
 
+
+    IR_PLUGIN_ENTRIES = 'irPluginEntries'    
+    IR_GENDER = 'irGender'
     IR_CANCER_TYPE = "ircancerType"
     IR_CELLULARITY_PCT = "ircellularityPct"
-    
+    IR_BIOPSY_DAYS = "irbiopsyDays"
+    IR_COUPLE_ID = "ircoupleID"
+    IR_EMBRYO_ID = "irembryoID"
+
     IR_WORKFLOW = 'irWorkflow'
     IR_DOWN = 'irDown'
     IR_RELATION_ROLE = 'irRelationRole'
@@ -73,6 +82,7 @@ class SavePlanFieldNames():
     BAD_SAMPLE_EXTERNAL_ID = 'bad_sample_external_id'
     BAD_SAMPLE_DESCRIPTION = 'bad_sample_description'
     BAD_TUBE_LABEL = 'bad_tube_label'
+    BAD_CHIP_BARCODE = 'bad_chip_barcode'
     BARCODE_SAMPLE_NAME = 'barcodeSampleName'
     BARCODE_SAMPLE_DESCRIPTION = 'barcodeSampleDescription'
     BARCODE_SAMPLE_EXTERNAL_ID = 'barcodeSampleExternalId'
@@ -115,9 +125,47 @@ class SavePlanFieldNames():
     LIMS_META = 'LIMS_meta'
     META = 'meta'
     APPLICATION_GROUP_NAME = "applicationGroupName"
-
+    HAS_PGS_DATA = "hasPgsData"
+    HAS_ONCO_DATA = "hasOncoData"
+    
 class MonitoringFieldNames():
     QC_TYPES = 'qcTypes'
+
+
+def update_ir_plugin_from_samples_table(samplesTable):
+    # save IR fields for non-barcoded and barcoded plans
+    userInputInfo = []
+    for row in samplesTable:
+        sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
+        if sample_name:
+            ir_userinput_dict = {
+                SavePlanFieldNames.SAMPLE             : sample_name,
+                SavePlanFieldNames.SAMPLE_NAME        : sample_name.replace(' ', '_'),
+                SavePlanFieldNames.SAMPLE_EXTERNAL_ID : row.get(SavePlanFieldNames.SAMPLE_EXTERNAL_ID,''),
+                SavePlanFieldNames.SAMPLE_DESCRIPTION : row.get(SavePlanFieldNames.SAMPLE_DESCRIPTION,''),
+
+                SavePlanFieldNames.WORKFLOW           : row.get(SavePlanFieldNames.IR_WORKFLOW,''),
+                SavePlanFieldNames.RELATION_ROLE      : row.get(SavePlanFieldNames.IR_RELATION_ROLE,''),
+                SavePlanFieldNames.RELATIONSHIP_TYPE  : row.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE,''),
+                SavePlanFieldNames.SET_ID             : row.get(SavePlanFieldNames.IR_SET_ID, ''),
+
+                SavePlanFieldNames.GENDER             : row.get(SavePlanFieldNames.IR_GENDER,''),
+                SavePlanFieldNames.NUCLEOTIDE_TYPE    : row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, ''),
+                SavePlanFieldNames.CANCER_TYPE        : row.get(SavePlanFieldNames.IR_CANCER_TYPE, ""),
+                SavePlanFieldNames.CELLULARITY_PCT    : row.get(SavePlanFieldNames.IR_CELLULARITY_PCT, ""),
+                SavePlanFieldNames.BIOPSY_DAYS :  row.get(SavePlanFieldNames.IR_BIOPSY_DAYS, ""),
+                SavePlanFieldNames.COUPLE_ID : row.get(SavePlanFieldNames.IR_COUPLE_ID,  ""),
+                SavePlanFieldNames.EMBRYO_ID : row.get(SavePlanFieldNames.IR_EMBRYO_ID, ""),            
+                SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(SavePlanFieldNames.IR_APPLICATION_TYPE,''),
+            }
+
+            barcode_id = row.get('barcodeId')
+            if barcode_id:
+                ir_userinput_dict[KitsFieldNames.BARCODE_ID] = barcode_id
+
+            userInputInfo.append(ir_userinput_dict)
+
+    return userInputInfo
 
 
 class SavePlanStepData(AbstractStepData):
@@ -144,6 +192,7 @@ class SavePlanStepData(AbstractStepData):
         self.prepopulatedFields[SavePlanFieldNames.IR_CONFIG_JSON] = None
         self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
         self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = None
+        self.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = None
         self.savedObjects[SavePlanFieldNames.BARCODE_TO_SAMPLE] = OrderedDict()
         
         self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = list(dnaBarcode.objects.values_list('name',flat=True).distinct().order_by('name'))
@@ -153,7 +202,7 @@ class SavePlanStepData(AbstractStepData):
         self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
         
         self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = OrderedDict()
-        self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
+        self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = []
         self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "1"
 
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = [{"row":"1"}]
@@ -175,6 +224,9 @@ class SavePlanStepData(AbstractStepData):
         self.savedFields[SavePlanFieldNames.META] = {}
 
         self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = "" 
+
+        self.prepopulatedFields[SavePlanFieldNames.HAS_ONCO_DATA] = False
+        self.prepopulatedFields[SavePlanFieldNames.HAS_PGS_DATA] = False
         
         self._dependsOn.append(StepNames.IONREPORTER)
         self._dependsOn.append(StepNames.APPLICATION)
@@ -210,6 +262,10 @@ class SavePlanStepData(AbstractStepData):
                 self.validationErrors[field_name] = '\n'.join(errors)
         elif field_name == SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL:
             errors = validate_sample_tube_label(new_field_value)
+            if errors:
+                self.validationErrors[field_name] = '\n'.join(errors)
+        elif field_name == SavePlanFieldNames.CHIP_BARCODE_LABEL:
+            errors = validate_chipBarcode(new_field_value)
             if errors:
                 self.validationErrors[field_name] = '\n'.join(errors)
 
@@ -249,9 +305,8 @@ class SavePlanStepData(AbstractStepData):
 
                     errors = []
                     #if the plan has been sequenced, do not enforce the target bed file to be selected
-                    if planStatus != "run":  
-                        if self.sh_type not in StepHelperType.TEMPLATE_TYPES:
-                            errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
+                    if planStatus != "run" and (self.sh_type not in StepHelperType.TEMPLATE_TYPES):  
+                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
 
                     if errors:
                         samples_errors.append('\n'.join(errors))
@@ -266,6 +321,7 @@ class SavePlanStepData(AbstractStepData):
         self.validationErrors[SavePlanFieldNames.BAD_SAMPLE_EXTERNAL_ID] = []
         self.validationErrors[SavePlanFieldNames.BAD_SAMPLE_DESCRIPTION] = []
         self.validationErrors[SavePlanFieldNames.BAD_TUBE_LABEL] = []
+        self.validationErrors[SavePlanFieldNames.BAD_CHIP_BARCODE] = []
         self.validationErrors[SavePlanFieldNames.BAD_IR_SET_ID] = []
 
         self.validationErrors.pop(SavePlanFieldNames.NO_BARCODE,None)
@@ -304,7 +360,9 @@ class SavePlanStepData(AbstractStepData):
                 tube_label = row.get('tubeLabel','')
                 if validate_sample_tube_label(tube_label):
                     self.validationErrors[SavePlanFieldNames.BAD_TUBE_LABEL].append(tube_label)
-
+                chip_barcode = row.get('chipBarcode','')
+                if validate_chipBarcode(chip_barcode):
+                    self.validationErrors[SavePlanFieldNames.BAD_CHIP_BARCODE].append(chip_barcode)  
                 if barcodeSet:
                     selectedBarcodes.append(row.get('barcodeId'))
                 
@@ -319,6 +377,8 @@ class SavePlanStepData(AbstractStepData):
         
         if not self.validationErrors[SavePlanFieldNames.BAD_TUBE_LABEL]:
             self.validationErrors.pop(SavePlanFieldNames.BAD_TUBE_LABEL, None)
+        if not self.validationErrors[SavePlanFieldNames.BAD_CHIP_BARCODE]:
+            self.validationErrors.pop(SavePlanFieldNames.BAD_CHIP_BARCODE, None)
         
         if not self.validationErrors[SavePlanFieldNames.BAD_SAMPLE_EXTERNAL_ID]:
             self.validationErrors.pop(SavePlanFieldNames.BAD_SAMPLE_EXTERNAL_ID, None)
@@ -370,8 +430,7 @@ class SavePlanStepData(AbstractStepData):
 
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
 
-        #logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() ORIGINAL type(self.savedFields[samplesTable])=%s; self.savedFields[samplesTable]=%s" %(type(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE]), self.savedFields[SavePlanFieldNames.SAMPLES_TABLE]))     
-        #logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() AFTER JSON.LOADS... type(self.savedObjects[samplesTableList])=%s; self.savedObjects[samplesTableList]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]))       
+        self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = update_ir_plugin_from_samples_table(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
         if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
             planned_dnabarcodes = list(dnaBarcode.objects.filter(name=self.savedFields[SavePlanFieldNames.BARCODE_SET]).order_by('index'))
@@ -384,7 +443,6 @@ class SavePlanStepData(AbstractStepData):
             logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET PLAN_REFERENCE=%s; TARGET_REGION=%s; HOTSPOT_REGION=%s;" %(planReference, planTargetRegionBedFile, planHotSptRegionBedFile))
 
             self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = {}
-            self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
             for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
 
                 logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET LOOP row=%s" %(row)) 
@@ -458,31 +516,6 @@ class SavePlanStepData(AbstractStepData):
                     #logger.debug("save_plan_step_data.updateSavedObjectsFromSaveFields() sampleName=%s; id_str=%s; savedObjects=%s" %(sample_name, id_str, self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str]))
                     #logger.debug("save_plan_step_date.updateSavedObjectsFromSaveFields() savedObjects=%s" %(self.savedObjects));
                     ##logger.debug("save_plan_step_date.updateSavedObjectsFromSaveFields() savedFields=%s" %(self.savedFields));
-                                                                         
-                    # update barcoded IR fields
-                    barcode_ir_userinput_dict = {
-                        KitsFieldNames.BARCODE_ID             : id_str,
-                        SavePlanFieldNames.SAMPLE             : sample_name,
-                        SavePlanFieldNames.SAMPLE_NAME        : sample_name.replace(' ', '_'),
-                        SavePlanFieldNames.SAMPLE_EXTERNAL_ID : row.get(SavePlanFieldNames.SAMPLE_EXTERNAL_ID,''),
-                        SavePlanFieldNames.SAMPLE_DESCRIPTION : row.get(SavePlanFieldNames.SAMPLE_DESCRIPTION,''),
-                        
-                        SavePlanFieldNames.WORKFLOW           : row.get(SavePlanFieldNames.IR_WORKFLOW,''),
-                        SavePlanFieldNames.GENDER             : row.get(SavePlanFieldNames.IR_GENDER,''),
-                        SavePlanFieldNames.NUCLEOTIDE_TYPE    : row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, ''),
-                                                                            
-                        SavePlanFieldNames.CANCER_TYPE        : row.get(SavePlanFieldNames.IR_CANCER_TYPE, ""),
-                        SavePlanFieldNames.CELLULARITY_PCT    : row.get(SavePlanFieldNames.IR_CELLULARITY_PCT, ""),
-
-                        SavePlanFieldNames.RELATION_ROLE      : row.get(SavePlanFieldNames.IR_RELATION_ROLE,''),
-                        SavePlanFieldNames.RELATIONSHIP_TYPE  : row.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE,''),
-                        SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(SavePlanFieldNames.IR_APPLICATION_TYPE,''),
-                        SavePlanFieldNames.SET_ID             : row.get(SavePlanFieldNames.IR_SET_ID, '')
-                    }
-
-                    #logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() barcode_ir_userinput_dict=%s" %(barcode_ir_userinput_dict))
-                            
-                    self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES].append(barcode_ir_userinput_dict)
 
         #logger.debug("EXIT save_plan_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])=%s; self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]));
        

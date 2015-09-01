@@ -2,16 +2,6 @@
 {% load url from future %}
 {% load static from staticfiles %}
 {% block current_tab %}about{% endblock %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li class="active"><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
-
 {% block content %}
 <div class="content">
     {% if request.session.ampliseq_username %}
@@ -61,10 +51,21 @@
                         <span id="file_progress"></span>
                     </div>
                     <button class="btn" id="pickfiles">Select File</button>
-                    <p>Select which instrument this panel is intended for</p>
+                    <p>
+                    <div>Select which instrument/chip this panel is intended for:</div>
                     <div>
-                        <label class="radio inline"><input type="radio" name="instrument_choice" value="pgm" checked /> PGM</label>
-                        <label class="radio inline"><input type="radio" name="instrument_choice" value="proton" /> Proton</label>
+                            <table><tr>
+                            <td style="padding-right:20px;"><span class=label>PGM: </span></td><td>
+                            <label class="radio inline"><input id="pgm_choice" type="radio" name="instrument_choice" value="pgm" checked /><div>  314 / 316 / 318</div></label></td>
+                            </tr><tr>
+                            <td style="padding-right:20px;"><span class=label>Proton: </span></td><td>
+                            <label class="radio inline"><input type="radio" name="instrument_choice" value="p1" /><div> PI</div></label>
+                            </tr><tr>
+                            <td style="padding-right:20px;"><span class=label>S5/S5XL: </span></td><td><div>
+                            <label class="radio inline"><input type="radio" name="instrument_choice" value="520" /> 520</label>
+                            <label class="radio inline"><input type="radio" name="instrument_choice" value="530" /> 530</label>
+                            <label class="radio inline"><input type="radio" name="instrument_choice" value="540" /> 540</label>
+                            </div></td></tr></table>
                     </div>
                 </div>
             </div>
@@ -142,6 +143,22 @@
         <form action="{% url "configure_ampliseq_download" %}" method="post">
         <div class="row-fluid">
             <div class="span12">
+                    <h3>Instrument/Chip </h3>
+                    <div>
+                            <table><tr>
+                            <td style="padding-right:50px;"><span class=label>PGM: </span></td><td>
+
+                            <label class="radio inline"><input id="pgm_choice" type="radio" name="_instrument_choice" value="pgm" checked /><div>  314 / 316 / 318</div></label></td>
+                            </tr><tr>
+                            <td style="padding-right:50px;"><span class=label>Proton: </span></td><td>
+                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="p1" /><div> PI</div></label>
+                            </tr><tr>
+                            <td style="paddingi-right:50px;"><span class=label>S5/S5XL: </span></td><td><div>
+                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="520" /> 520</label>
+                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="530" /> 530</label>
+                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="540" /> 540</label></div>
+                            </td></tr></table>
+                    </div>
                 {% if ordered_solutions %}
                     <h3>Your solutions:</h3>
                     <table class="table">
@@ -162,10 +179,8 @@
                                             <small>(design id {{design.id}} solution id {{solution.id}})</small>
                                         </label>
                                     </td>
-                                    <td>
-                                        {% for choice in solution.configuration_choices %}
-                                            <label class="radio inline"><input type="radio" name="{{solution.id}}_instrument_choice" value="{{choice}}" {% if forloop.first %} checked {% endif %}  /> {{choice}}</label>
-                                        {% endfor %}
+                                    <td><div id="{{solution.id}}_info_td" style="display:none;"><img src="{% static "resources/img/warning_triangle.png"%}" width="24" height="24"/></div>
+                                        <input id="{{solution.id}}_instrument_choice" type="hidden" name="{{solution.id}}_instrument_choice" value="pgm"/> 
                                     </td>
                                     <td>
                                         <a href="{{ ampliseq_url }}/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
@@ -184,6 +199,7 @@
         <div class="row-fluid">
             <div class="span12">
                 {% if fixed_solutions %}
+                    
                     <h3>Ready-to-Use Panels</h3>
                                         <table class="table">
                         <thead>
@@ -202,10 +218,8 @@
                                             {{design.name}}
                                         </label>
                                     </td>
-                                    <td>
-                                        {% for choice in design.configuration_choices %}
-                                            <label class="radio inline"><input type="radio" name="{{design.id}}_instrument_choice" value="{{choice}}" {% if forloop.first %} checked {% endif %} /> {{choice}}</label>
-                                        {% endfor %}
+                                    <td><div id="{{design.id}}_info_td" style="display:none;"><img src="{% static "resources/img/warning_triangle.png"%}" width="24" height="24"/></div>
+                                        <input id="{{design.id}}_instrument_choice" type="hidden" name="{{design.id}}_instrument_choice" value="pgm"/> 
                                     </td>
                                     <td>
                                         {% if design.type == "COMMUNITY_PANEL" %}
@@ -251,10 +265,8 @@
                                             <small>(design id {{design.id}} solution id {{solution.id}})</small>
                                         </label>
                                     </td>
-                                    <td>
-                                        {% for choice in solution.configuration_choices %}
-                                            <label class="radio inline"><input type="radio" name="{{solution.id}}_instrument_choice" value="{{choice}}" {% if forloop.first %} checked {% endif %} /> {{choice}}</label>
-                                        {% endfor %}
+                                    <td><div id="{{solution.id}}_info_td" style="display:none;"><img src="{% static "resources/img/warning_triangle.png"%}" width="24" height="24"/></div>
+                                        <input id="{{solution.id}}_instrument_choice" type="hidden" name="{{solution.id}}_instrument_choice" value="pgm"/> 
                                     </td>
                                     <td>
                                         <a href="{{ ampliseq_url }}/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
@@ -289,6 +301,71 @@ $(function (){
         $("#not_ordered").slideToggle();
         return false;
     });
+});
+$(document).ready(function() {
+    function replaceAll(find, replace, target) {
+        return target.replace(new RegExp(find,'g'), replace);
+    }
+    function chipTypeFilter(target, selected) {
+        var fixed_solution_str = replaceAll("&quot;",'"', target);
+        var fixed_solution = JSON.parse(fixed_solution_str);
+        var fixed_len = fixed_solution.length;
+        for (i = 0; i < fixed_len; i++) {
+            var design_id = fixed_solution[i].id;
+            var config_list = fixed_solution[i].configuration_choices;
+            var found_in_config_list = false;
+            for (j = 0; j < config_list.length; j++) {
+                var choice = config_list[j];
+                if (selected == choice){
+                    found_in_config_list = true;
+                }
+            }
+            var td_id = "#".concat(design_id, "_info_td");
+            if (found_in_config_list == false){
+                if (selected == "pgm"){
+                    selected_code = "PGM";
+                }
+                else if (selected == "proton"){
+                    selected_code = "Proton";
+                }
+                else {
+                    selected_code = selected;
+                }
+                var info = selected_code.concat("-specific parameters not available");
+                var img_info = $(td_id).html();
+                var n = img_info.search(">");
+                img_info = img_info.substring(0, n+1);
+                var message = img_info.concat(" ", info);
+                $(td_id).html(message);   
+                $(td_id).show();
+            }
+            else {
+                $(td_id).hide();
+            }
+            var input_element = "#".concat(design_id,"_instrument_choice");
+            $(input_element).val(selected);
+        }
+
+    }
+    function chipTypeFilterWrapper(selected){
+        var fixed = "{{fixed_solution}}";
+        chipTypeFilter(fixed, selected);
+        var unordered = "{{unordered_solution}}";
+        chipTypeFilter(unordered, selected);
+        var ordered = "{{ordered_solution}}";
+        chipTypeFilter(ordered, selected);
+
+    }
+    $("input[name=_instrument_choice]").on('click', function(){
+        var selected = $(this).val();
+        if (selected == "p1"){
+            selected = "proton";
+        }
+        chipTypeFilterWrapper(selected);
+    });
+    if ($("#logout_button").is(':visible')) {
+        $("#pgm_choice").click();
+    }
 });
 </script>
 {% endblock content %}

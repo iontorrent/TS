@@ -41,7 +41,7 @@ protected:
     return ( (1.0f-start_frac) * approach_one_rate + start_frac);
   }
 
-  __device__ inline void setCscaleRefFroFlow(const int flow) {
+  __device__ inline void setCscaleRefForFlow(const int flow) {
     cscale_ref = modulateEffectByFlow( XTALK_CONST_FRAC_REF, flow, XTALK_MAGIC_FLOW);
   }
   __device__ inline void setCscaleForFlow(const  int flow ) {
@@ -57,7 +57,7 @@ public:
   __device__
   MagicXTalkForFLow(const int flow, const float regionMeanSignal){
     setCscaleForFlow(flow);
-    setCscaleRefFroFlow(flow);
+    setCscaleRefForFlow(flow);
     setMagicHplusRef(regionMeanSignal);
   }
 
@@ -103,10 +103,10 @@ float UnweaveMap(
   float sum = 0.0f;
   int phase = ConstXTalkP.getPhase(rx);
   int ly = 0;
-  for (int r=(-XTALK_SPAN_Y); r<=(XTALK_SPAN_Y); r++, ly++)
+  for (int r=(-ConstXTalkP.getSpanY()); r<=(ConstXTalkP.getSpanY()); r++, ly++)
   {
     int lx=0;
-    for (int c=(-XTALK_SPAN_X); c<=(XTALK_SPAN_X); c++, lx++)
+    for (int c=(-ConstXTalkP.getSpanX()); c<=(ConstXTalkP.getSpanX()); c++, lx++)
     {
       int tx = c + rx;
       int ty = r + ry;
@@ -128,16 +128,15 @@ float UnweaveMap(
   return sum;
 }
 
-__device__ inline
-float EmptyCorrector(float default_signal)
-{
-  float sum = 0.0f;
-  for (int mx=0; mx< XTALK_MAP; mx++){
-    sum += default_signal*ConstXTalkP.odd(mx);
-  }
-  return sum;
-}
-
+//__device__ inline
+//float EmptyCorrector(float default_signal)
+//{
+//  float sum = 0.0f;
+//  for (int mx=0; mx< XTALK_MAP; mx++){
+//    sum += default_signal*ConstXTalkP.odd(mx);
+//  }
+//  return sum;
+//}
 
 __device__ inline
 void DoXTalk(
@@ -366,7 +365,7 @@ void PostProcessingCorrections_k(
   const float * R = BeadParamCube + BpR*planeStride + idx;
   const float * AmpCpy = ResultCube + planeStride * ResultAmplCopyMapXTalk + idx;
 
-  //when no longer using Xtlak on host one of thse buffers can be removed
+  //when no longer using Xtlak on host one of these buffers can be removed
   const float * AmplIn = ResultCube + planeStride * ResultAmpl + idx;
   float * AmplOut = ResultCube + planeStride * ResultAmpl + idx;
 
@@ -423,11 +422,11 @@ void loadSharedMemoryAll( float * AmplBase,
   size_t globalx = ImgRegP.getXFromIdx(regBaseIdx);
   szie_t globaly = ImgRegP.getYFromIdx(regBaseIdx);
   size_t tIdx = threadIdx.y * blockDim.x + threadIdx.x;
-  int rx = tIdx - XTALK_SPAN_X;
-  int ry = startRy - XTALK_SPAN_Y;
+  int rx = tIdx - ConstXTalkP.getSpanX();
+  int ry = startRy - ConstXTalkP.getSpanY();
 
-  int windowDimX = blokcDim.x + 2 * XTALK_SPAN_X;
-  int windowDimY = blokcDim.y + 2 * XTALK_SPAN_Y;
+  int windowDimX = blokcDim.x + 2 * ConstXTalkP.getSpanX();
+  int windowDimY = blokcDim.y + 2 * ConstXTalkP.getSpanY();
 
   for (int r= ry; r<= ry+windowSimY; r++)
     {

@@ -15,6 +15,10 @@ from django.http import HttpResponseRedirect, HttpResponse
 
 from iondb.rundb.login.forms import UserRegistrationForm, AuthenticationRememberMeForm
 from iondb.rundb.models import Message
+
+from iondb.rundb.plan.views import reset_page_plan_session
+from iondb.rundb.sample.views import clear_samplesetitem_session
+
 from django.conf import settings
 from django.template.response import TemplateResponse
 
@@ -23,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 # No login_required
 def logout_view(request):
+    reset_page_plan_session(request)  
+    clear_samplesetitem_session(request)
     return logout_then_login(request)
 
 
@@ -39,6 +45,11 @@ def remember_me_login(request, template_name='registration/login.html',
 
     if request.method == "POST":
         redirect_to = request.POST.get(redirect_field_name, '')
+
+        #plan template is NOT re-entrantable
+        if ("page_plan" in redirect_to):
+            redirect_to = ""
+        
         form = authentication_form(data=request.POST)
         if form.is_valid():
             netloc = urlparse.urlparse(redirect_to)[1]

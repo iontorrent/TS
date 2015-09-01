@@ -13,6 +13,9 @@ class PolyclonalFilterOpts {
     int max_iterations;
     int mixed_model_option;
     double mixed_stringency;
+    bool verbose;
+    bool use_last_iter_params;
+    bool filter_extreme_ppf_only;
 };
 
 #endif // POLYCLONAL_FILTER_H

@@ -37,7 +37,7 @@
           }
         });
       });
-      orderSelectorList(selectorID);
+      orderSelectorList(selectorID, "As Planned");
     }
 
     function orderSelectorList(selectorID,firstItem) {
@@ -58,6 +58,7 @@
 
     function setOptionDefaults(libType) {
       $("#libtypesel").val(libType);
+
       var showchecks = 'NYYY';
       if( libType == "AMPS_RNA" ) {
         showchecks = 'YNNN';
@@ -65,7 +66,10 @@
         showchecks = 'YNYN';
       } else if( libType == "TARS_16S" || libType == "RNA" ) {
         showchecks = 'NNNN';
+      } else if( libType == "") {
+        showchecks = 'YYYY';
       }
+
       $("#sampid").toggle(showchecks[0]=='Y');
       $("#tpadding").toggle(showchecks[1]=='Y');
       $("#uniquereads").toggle(showchecks[2]=='Y');
@@ -78,16 +82,17 @@
     });
 
     // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
-    $('#sampleid').attr('checked',false);
-    $('#barcodebeds').attr('checked',false);
-    $('#uniquemaps').attr('checked',false);
-    $('.bcbed-shy').hide();
+//But this erases planned plugin settings:
+//    $('#sampleid').attr('checked',false);
+//    $('#barcodebeds').attr('checked',false);
+//    $('#uniquemaps').attr('checked',false);
+//    $('.bcbed-shy').hide();
     
     // populate Library Type selector
     populateLibType("libtypesel");
 
     // populate Plan default selections
-    var pluginLibType = "GENS";
+    var pluginLibType = "";
     setOptionDefaults(pluginLibType);
 
   });
@@ -113,7 +118,7 @@
      <td><span class="help"
        title="Specifiy the number of bases for option target padding. See Description and Notes below.">
        Target Padding:</span></td>
-     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td> </tr>
+     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></td> </tr>
     <tr id="uniquereads">
      <td><span class="help"
        title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">

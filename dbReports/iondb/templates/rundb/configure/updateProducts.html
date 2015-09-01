@@ -1,0 +1,73 @@
+{% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load pagetools %}
+{% load static from staticfiles %}
+{% block extra_head %}
+
+{% endblock extra_head %}
+
+{% block content %}
+	<div class="content">
+        <div class="row">
+            <div class="span12">
+                <h1>Update Products:</h1>
+                {% if not isValidNetwork %}
+                	<p><h3><font color="red">{{ errorMsg }}</font></h3></p>
+                {% elif productContents == 'N/A' %}
+            		<p><h3><a>{{ errorMsg }}</a></h3></p>
+                {% else %}
+                    {% if isAccessDenied %}
+                    	<p>&emsp;&emsp;<font color="red">{{ msg }}</font></p>
+                    {% endif %}
+                    <table class="table table-hover table-striped">
+                    {% for kitchip in productContents %}
+                    	{% with isDisabled=False %}
+                    	{% if TSVersion < kitchip.version_max %}
+                           <tr>
+                                <td>
+                                	<form action="{% url "update_product" %}" method="post" class="pull-right">
+                                        <input type="hidden" name="kitchip_url" value="{{ kitchip.url }}" />
+                                        <input type="hidden" name="version_req" value="{{ kitchip.version_req }}" />
+                                        <input type="hidden" name="update_version" value="{{ kitchip.update_version }}" />
+                                        {% if kitchip.disable %}
+                                            <a class="pull-right" href="#">Complete</a>
+                                        {% else %}
+                                        	<input type="submit" name="offCycleUpdate" class="btn btn-small" value="Update" {{ isAccessDenied }} />
+                                        {% endif %}
+                                    </form>
+                                    <p><strong>{{ kitchip.name }}</strong> - <i>{{ kitchip.update_version }}</i></p>
+                                    <p>&emsp;&emsp;<i>{{ kitchip.product_desc }}</i></p>
+                                    {% if kitchip.url == invalidProductUrl %}
+                                    	{% if errCode == 'E005'%}
+                                    		<p>&emsp;&emsp;<font color="red">{{ msg }}</font></p>
+                                    	{% endif %}
+									{% endif %}
+                                    {% if kitchip.url == versionMismatch_url %}
+                                    	{% if errCode %}
+                                    	    <p>&emsp;&emsp;<font color="red">{{ msg }}</font></p>
+                                    	    {% if errCode == 'E001'%}
+                                    	    	<p>&emsp;&emsp;TS version required: {{ kitchip.version_req }}</p>
+                                    	    {% endif %}
+                                    	{% else %}
+                                    		<p>&emsp;&emsp;TS version required: {{ kitchip.version_req }}</p>
+                                    	{% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endwith %}
+                    {% endfor %}
+                    </table>
+                {% endif %}
+            </div>
+            <div class="span12">
+            	<p>Note: This interface is used to update new products in Torrent Suite Software. For further information, see the "Configure Off-cycle Product Update" in the Torrent Suite Administration Guide, Management Actions section of the Torrent Suite User Documentation on <a href="https://ioncommunity.lifetechnologies.com/docs/DOC-9672">Ion Community</a></p> 
+                <br/><br/>
+                {% if not downloads and isValid%}
+                	<p>No Products are currently updated. Please Click on "Update" button to update the specific Product.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock content %}	
+

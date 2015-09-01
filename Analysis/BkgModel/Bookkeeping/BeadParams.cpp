@@ -299,7 +299,7 @@ void BeadParams::DumpBeadProfile (FILE* my_fp, int offset_col, int offset_row, i
 bool BeadParams::FitBeadLogic()
 {
   // this may be an elaborate function of the state
-  return ((my_state->random_samp or my_state->clonal_read) and 
+  return ((my_state->clonal_read) and 
           (not my_state->corrupt) and 
           (not my_state->pinned));
 }

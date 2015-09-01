@@ -44,8 +44,8 @@
 #include "PerBaseQual.h"
 #include "BaseCallerFilters.h"
 #include "BaseCallerMetricSaver.h"
-#include "BaseCallerRecalibration.h"
-#include "RecalibrationModel.h"
+#include "HistogramCalibration.h"
+#include "LinearCalibrationModel.h"
 
 #include "BaseCallerParameters.h"
 
@@ -241,6 +241,8 @@ int main (int argc, const char *argv[])
         fprintf (stderr, "Failed to retrieve metadata from %s\n", bc_params.GetFiles().filename_wells.c_str());
         exit (EXIT_FAILURE);
     }
+    unsigned int chunk_rows, chunk_cols, chunk_flows;
+    wells.GetH5ChunkSize(chunk_rows, chunk_cols, chunk_flows);
     Mask mask (1, 1);
     if (mask.SetMask (bc_params.GetFiles().filename_mask.c_str()))
         exit (EXIT_FAILURE);
@@ -253,7 +255,7 @@ int main (int argc, const char *argv[])
     BaseCallerContext bc;
     bc.mask = &mask;
     bc.SetKeyAndFlowOrder(opts, wells.FlowOrder(), wells.NumFlows());
-    bc.chip_subset.InitializeChipSubsetFromOptArgs(opts, mask.W(), mask.H());
+    bc.chip_subset.InitializeChipSubsetFromOptArgs(opts, mask.W(), mask.H(), chunk_cols, chunk_rows);
 
     // Sampling options may reset command line arguments & change context
     bc_params.InitializeSamplingFromOptArgs(opts, bc.chip_subset.NumWells());
@@ -290,10 +292,14 @@ int main (int argc, const char *argv[])
     bc.metric_saver = &metric_saver;
 
     // Calibration modules
-    bc.recalibration.Initialize(opts, bc.flow_order);
-    bc.recalModel.Initialize(opts, bam_comments, bc.run_id, bc.chip_subset);
+    HistogramCalibration hist_calibration(opts, bc.flow_order);
+    bc.histogram_calibration = &hist_calibration;
+
+    LinearCalibrationModel linear_calibration_model(opts, bam_comments, bc.run_id, bc.chip_subset, &bc.flow_order);
+    bc.linear_cal_model = &linear_calibration_model;
+
     // initialize the per base quality score generator - dependent on calibration
-    bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, bc.recalibration.is_enabled());
+    bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, hist_calibration.is_enabled());
 
     // Phase estimator
     bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer);
@@ -642,9 +648,13 @@ void * BasecallerWorker(void *input)
 
                 BasecallerRead read;
                 bool key_pass = true;
-                if (bc.keynormalizer == "keynorm-new") {
+                if (bc.keynormalizer == "adaptive") {
                   key_pass = read.SetDataAndKeyNormalizeNew(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1, false);
-                } else { // if (bc.keynormalizer == "keynorm-old") {
+                }
+                else if (bc.keynormalizer == "off") {
+                  key_pass = read.SetDataAndKeyPass(wells_measurements, wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
+                }
+                else { // if (bc.keynormalizer == "default") {
                   key_pass = read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
                 }
 
@@ -666,9 +676,9 @@ void * BasecallerWorker(void *input)
                 // Equal recalibration opportunity for everybody! (except TFs!)
                 const vector<vector<vector<float> > > * aPtr = 0;
                 const vector<vector<vector<float> > > * bPtr = 0;
-                if (bc.recalModel.is_enabled() && read_class == 0) { //do not recalibrate TF read bc.chip_subset.GetChipSizeX()
-                  aPtr = bc.recalModel.getAs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
-                  bPtr = bc.recalModel.getBs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
+                if (bc.linear_cal_model->is_enabled() && read_class == 0) { //do not recalibrate TF read bc.chip_subset.GetChipSizeX()
+                  aPtr = bc.linear_cal_model->getAs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
+                  bPtr = bc.linear_cal_model->getBs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
                 }
 
                 // Execute the iterative solving-normalization routine - switch by specified algorithm
@@ -677,8 +687,16 @@ void * BasecallerWorker(void *input)
                   treephaser_sse.SetModelParameters(cf, ie); // sse version has no hookup for droop.
                   treephaser_sse.NormalizeAndSolve(read);
                   treephaser.SetModelParameters(cf, ie); // Adapter trimming uses the cpp treephaser
-
-                } else { // Setup cpp treephaser
+                }
+                // By popular demand: Solving bases without any normalization
+                else if (bc.dephaser == "treephaser-solve") {
+                  treephaser_sse.SetAsBs(aPtr, bPtr);
+                  treephaser_sse.SetModelParameters(cf, ie);
+                  treephaser_sse.SolveRead(read, 0, bc.flow_order.num_flows());
+                  treephaser.SetModelParameters(cf, ie);
+                }
+                // All other options are for the c++ version of the BaseCaller
+                else { // Setup cpp treephaser
                   if (bc.skip_droop)
                     treephaser.SetModelParameters(cf, ie);
                   else
@@ -702,10 +720,12 @@ void * BasecallerWorker(void *input)
                 }
 
                 // If recalibration is enabled, generate adjusted sequence and normalized_measurements, and recompute QV metrics
-                bool calibrate_read = (bc.recalibration.is_enabled() && read_class == 0); //do not recalibrate TF read
+                bool calibrate_read = (bc.histogram_calibration->is_enabled() && read_class == 0); //do not recalibrate TF read
                 if (calibrate_read) {
                 	// Change base sequence for low hps
-                    bc.recalibration.CalibrateRead(x+bc.chip_subset.GetColOffset(),y+bc.chip_subset.GetRowOffset(),read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
+                    //bc.recalibration.CalibrateRead(x+bc.chip_subset.GetColOffset(),y+bc.chip_subset.GetRowOffset(),read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
+                    bc.histogram_calibration->CalibrateRead(bc.flow_order, x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset(), read);
+
                     if (bc.dephaser == "treephaser-sse")
                       treephaser_sse.ComputeQVmetrics(read);
                     else

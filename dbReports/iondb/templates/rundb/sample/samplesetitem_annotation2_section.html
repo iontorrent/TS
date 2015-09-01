@@ -1,0 +1,110 @@
+<div class="control-group">
+	<label class="control-label" for="cancerType">Cancer Type</label>
+	<div class="controls">
+		<select id="cancerType" name="cancerType"style="height:28px;">
+		<option value="" >.....</option>
+		{% if intent == "edit" %}
+			{% for cancer in cancerType_CV_list %}
+				{% ifequal sampleSetItem.cancerType cancer.value %}
+					<option SELECTED value="{{sampleSetItem.cancerType}}">{{sampleSetItem.cancerType}}</option>
+				{% else %}
+					{% if cancer.isActive %}
+						<option value="{{cancer.value}}" >{{cancer.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% elif intent == "edit_pending" %}  
+			{% for cancer in cancerType_CV_list %}
+				{% ifequal pending_sampleSetItem.cancerType cancer.value %}
+					<option SELECTED value="{{pending_sampleSetItem.cancerType}}">{{pending_sampleSetItem.cancerType}}</option>
+				{% else %}
+					{% if cancer.isActive %}
+						<option value="{{cancer.value}}" >{{cancer.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}                        
+		{% else %}                  
+			{% for cancer in cancerType_CV_list %}
+				{% if cancer.isActive %}
+					<option value="{{cancer.value}}" >{{cancer.value}}</option>
+				{% endif %}
+			{% endfor %}
+		{% endif %}
+		</select>
+
+		<div class="help-block">
+		</div>
+	</div>
+</div>
+
+<div class="control-group">
+	<label class="control-label" for="cellularityPct">Cellularity %</label>
+	<div class="controls">
+		{% if intent == "edit" %}
+			{% if sampleSetItem.cellularityPct %}
+				<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)" value="{{sampleSetItem.cellularityPct}}" />
+			{% else %}
+				<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)" value="" />                            
+			{% endif %}
+		{% elif intent == "edit_pending" %}
+			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)" value="{{pending_sampleSetItem.cellularityPct}}" />                        
+		{% else %}
+			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)"/>
+		{% endif %}
+
+		<div class="help-block">                        
+			FYI: A whole number between 0 to 100.
+		</div>                                  
+	</div>
+</div>
+
+<div class="control-group">
+	<label class="control-label" for="biopsyDays">Biopsy Days</label>
+	<div class="controls">
+		{% if intent == "edit" %}
+			{% if sampleSetItem.biopsyDays %}
+				<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)" value="{{sampleSetItem.biopsyDays}}" />
+			{% else %}
+				<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)" value="" />                            
+			{% endif %}
+		{% elif intent == "edit_pending" %}
+			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)" value="{{pending_sampleSetItem.biopsyDays}}" />                        
+		{% else %}
+			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)"/>
+		{% endif %}
+
+		<div class="help-block"> 
+			FYI: A whole number.                            
+		</div>                                  
+	</div>
+</div>
+
+<div class="control-group">
+	<label class="control-label" for="coupleId">Couple ID</label>
+	<div class="controls">
+		{% if intent == "edit" %}
+			<input maxlength="127" id="coupleId" name="coupleId" placeholder="Optional" value="{{sampleSetItem.coupleId}}" />
+		{% elif intent == "edit_pending" %}
+			<input maxlength="127" id="coupleId" name="coupleId" placeholder="Optional" value="{{pending_sampleSetItem.coupleId}}" />                        
+		{% else %}
+			<input maxlength="127" id="coupleId" name="coupleId" placeholder="Optional"></input>
+		{% endif %}
+		<div class="help-block"> 
+		</div>                                  
+	</div>
+</div>
+
+<div class="control-group">
+	<label class="control-label" for="embryoId">Embryo ID</label>
+	<div class="controls">
+		 {% if intent == "edit" %}
+			<input maxlength="127" id="embryoId" name="embryoId" placeholder="Optional" value="{{sampleSetItem.embryoId}}" />
+		{% elif intent == "edit_pending" %}
+			<input maxlength="127" id="embryoId" name="embryoId" placeholder="Optional" value="{{pending_sampleSetItem.embryoId}}" />                        
+		{% else %}
+			<input maxlength="127" id="embryoId" name="embryoId" placeholder="Optional"></input>
+		{% endif %}
+		<div class="help-block"> 
+		</div>                                  
+	</div>
+</div>

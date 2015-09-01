@@ -150,6 +150,14 @@ bool BasecallerRead::SignalKeyPass(const vector<float> & measurements, int num_f
 
 //-------------------------------------------------------------------------
 
+bool BasecallerRead::SetDataAndKeyPass(const vector<float> &measurements, int num_flows, const int *key_flows, int num_key_flows)
+{
+  SetData(measurements, num_flows);
+  return SignalKeyPass(raw_measurements, num_flows, key_flows, num_key_flows);
+}
+
+//-------------------------------------------------------------------------
+
 bool BasecallerRead::SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows)
 {
   raw_measurements.resize(num_flows);
@@ -829,14 +837,27 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_
 void DPTreephaser::Simulate(BasecallerRead& data, int max_flows,bool state_inphase)
 {
   InitializeState(&path_[0]);
+  int   recent_flow = 0;
+  float recent_state_inphase = 1.0;
 
   for (vector<char>::iterator nuc = data.sequence.begin(); nuc != data.sequence.end()
        and path_[0].flow < max_flows; ++nuc) {
     AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
     path_[0].sequence.push_back(*nuc); // Needed to simulate diagonal states correctly
-    if (state_inphase and path_[0].flow < max_flows)
-      data.state_inphase.at(path_[0].flow) = path_[0].state.at(path_[0].flow);
 
+    if (state_inphase and path_[0].flow < max_flows) {
+      for (int iFlow=recent_flow+1; iFlow<path_[0].flow; iFlow++)
+        data.state_inphase.at(iFlow) = recent_state_inphase;
+
+      data.state_inphase.at(path_[0].flow) = path_[0].state.at(path_[0].flow);
+      recent_flow = path_[0].flow;
+      recent_state_inphase = path_[0].state.at(path_[0].flow);
+    }
+  }
+
+  if (state_inphase){
+    for (int iFlow=recent_flow+1; iFlow<max_flows; iFlow++)
+      data.state_inphase.at(iFlow) = recent_state_inphase;
   }
 
   data.prediction.swap(path_[0].prediction);

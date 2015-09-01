@@ -2,6 +2,10 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 '''Utility functions to ascertain cluster node health'''
 import subprocess
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 USER = "ionadmin"
 
@@ -83,3 +87,56 @@ def config_nodetest(node, head_versions):
             status_dict['error'] += 'Unable to get status from: ' + line + '\n'
     
     return status_dict
+
+def queue_info():
+    info = {}
+    try:
+        command = ["qstat", "-f"]
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+
+        for line in stdout.splitlines():
+            l = line.split()
+            if len(l) > 1 and '.q' in l[0]:
+                name = os.path.splitext(l[0].split('@')[1])[0]
+                if name not in info:
+                    info[name] = {
+                        'used': 0,
+                        'total': 0,
+                        'disabled': 0,
+                        'error': 0,
+                        'load': l[3]
+                    }
+
+                resv, used, total = l[2].split('/')
+                info[name]['used'] += int(used)
+                info[name]['total'] += int(total)
+
+                state = l[5] if len(l)>5 else ''
+                if state == 'E':
+                    info[name]['error'] += int(total)
+                if state == 'd':
+                    info[name]['disabled'] += int(total)
+
+    except Exception as err:
+        logger.error(err)
+
+    return info
+
+def sge_ctrl(action, node):
+    ''' Run command and return error '''
+    if action == "enable":
+        command = "qmod -e *@%s" % node
+    elif action == "disable":
+        command = "qmod -d *@%s" % node
+
+    error = ''
+    try:
+        proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            error = "%s %s" % (stdout, stderr)
+    except Exception as e:
+        error = str(e)
+
+    return error

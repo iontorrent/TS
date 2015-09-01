@@ -29,7 +29,7 @@ ionmaster_ionpkg_list:
     - ion-publishers
     - ion-plugins
     - ion-rsmts
-#    - ion-usbmount
+    - ion-usbmount
     - ion-pgmupdates
     - ion-chefupdates
     - ion-onetouchupdater

@@ -66,14 +66,16 @@
             <input type="hidden" name="irVersion" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irVersion}}"/>
             <input type="hidden" name="irAccountName" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}"/>
             <input type="hidden" name="planCategories" value="{{helper.getStepDict.Ionreporter.getPrePopulatedFieldDict.categories}}"/>
-            
+            <input type="hidden" name="iru_QC_UploadModes" value="{{helper.getIruQcUploadModeList}}"/>
+
             <div id="irAccountDoesNotExistError" style="color:red;font-weight:bold; display: none;">
                 The IR account {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.
             </div>
         </div>
         <div id="error" style="color:red;font-weight:bold"></div>
         <div class="span12" id="workflows" style="display:none;">
-            <label>
+            <label rel="tooltip" data-original-title="For Ion Reporter v5.0 or above, either all workflows, or only workflows that have been tagged for IRU in IR, will be available in TS.">
+            	<i class="icon-info-sign"></i>
                 Existing Workflow
             </label>
             <div style="overflow:auto;">
@@ -99,12 +101,24 @@
                 </div>
         </div>
     </div>
+    <!-- #TS-11365 - Below comment will be reverted in release 5.2 -->
+    <!--<div class="span6">
+    <div class="span6" id="iruUploadMode">
+    			<label><h4>Data Quality Check Before<br/> Upload to Ion Reporter</h4></label>
+                <div class="control-group offset1">
+                    <div class="iruUploadModeContent">
+                    </div>
+                </div>
+    </div>
+    </div>-->
 </div>
+
+
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
     <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">Next &rarr;</a>
-    
+
 {% endblock prevnext-buttons %}
 
 {% block summary-table %}
@@ -138,7 +152,7 @@
     IONREPORTER.prev_account_id = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}";
     IONREPORTER.existing_workflow = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}";
     IONREPORTER.existing_sample_grouping ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}";
-
+    IONREPORTER.existing_iruUploadMode ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode}}";
     //loop through all the sample groupings and create a map 
     //between the sample group TSS name and the sample group (relationship type) IR name
     {%for sample_group in step.prepopulatedFields.sampleGroupings %}

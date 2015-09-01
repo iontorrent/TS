@@ -333,8 +333,7 @@ void SimpleSingleFitStream::serializeInputs()
       //static RegParamDumper regDump(_myJob.getImgWidth(),_myJob.getImgHeight(),_myJob.getRegionWidth(), _myJob.getRegionHeight());
       //regDump.DumpAtFlow(rC, rR,*tmpConstP,_myJob.getAbsoluteFlowNum());
 
-      ImgRegParams irP;
-      irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
+      ImgRegParams irP(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
 
       static CubePerFlowDump<ConstParams> RegionDump(  irP.getGridDimX(), irP.getGridDimY(),1,1,1,1);
 
@@ -441,8 +440,7 @@ int SimpleSingleFitStream::handleResults()
 
       if( _myJob.getAbsoluteFlowNum() >= 20){
 
-        ImgRegParams irP;
-        irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
+        ImgRegParams irP(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
         size_t rC = _myJob.getRegCol();
         size_t rR = _myJob.getRegRow();
         size_t regId = irP.getRegId(rC,rR);

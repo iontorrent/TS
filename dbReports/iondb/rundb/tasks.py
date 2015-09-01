@@ -50,6 +50,7 @@ import urlparse
 from ion.utils.timeout import timeout
 from iondb.utils import raid as raid_utils
 from iondb.utils import files as file_utils
+from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest, queue_info, sge_ctrl
 
 logger = get_task_logger(__name__)
 
@@ -219,7 +220,7 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
                 os.chown(targetpath, uid, gid)
             except (OSError, IOError) as e:
                 # Non fatal if time and owner fail.
-                logger.warn("Failed to set time/owner attributes on '%s': %s", targetpath , e)
+                logger.warn("Failed to set owner attributes on '%s': %s", targetpath , e)
 
             extracted_files.append(targetpath)
 
@@ -369,89 +370,6 @@ def downloadGenome(url, genomeID):
     """download a genome, and update the genome model"""
     downloadChunks(url)
 
-from . import zeroinstallHelper
-
-# Helper for downloadPlugin task
-def downloadPluginZeroInstall(url, plugin, logger=None):
-    """ To be called for zeroinstall xml feed urls.
-        Returns plugin prototype, not full plugin model object.
-    """
-    try:
-        downloaded  = zeroinstallHelper.downloadZeroFeed(url)
-        feedName = zeroinstallHelper.getFeedName(url)
-    except:
-        logger.exception("Failed to fetch zeroinstall feed")
-        plugin.status["installStatus"] = "failed"
-        plugin.status["result"] = str(sys.exc_info()[1][0])
-        return False
-
-    # The url field stores the zeroinstall feed url
-    plugin.url = url
-    plugin.name = feedName.replace(" ","")
-
-    if not downloaded:
-        logger.error("Failed to download url: '%s'", url)
-        plugin.status["installStatus"] = "failed"
-        plugin.status["result"] = "processed"
-        return False
-
-    plugin.status["installStatus"] = "installed"
-
-    # Find plugin in subdirectory of extracted and installed path
-    for d in os.listdir(downloaded):
-        # Skip MACOSX attribute zip artifact
-        if d == '__MACOSX':
-            continue
-        nestedpath = os.path.join(downloaded, d)
-        if not os.path.isdir(nestedpath):
-            continue
-        # only take subdirectory with launch.sh script
-        if os.path.exists(os.path.join(nestedpath, 'launch.sh')):
-            plugin.path = os.path.normpath(nestedpath)
-            break
-        if os.path.exists(os.path.join(nestedpath, plugin.name + '.py')):
-            plugin.path = os.path.normpath(nestedpath)
-            break
-    else:
-        # Plugin expanded without top level folder
-        plugin.path = downloaded
-        # assert launch.sh exists?
-
-    # Extraction can leave files owned by root, change back to ionadmin
-    fix_plugin_owner(plugin.path)
-
-    plugin.status["result"] = "0install"
-    # Other fields we can get from zeroinstall feed?
-
-    logger.debug(plugin)
-    # Version is parsed during install - from launch.sh, ignoring feed value
-    return plugin
-
-# Helper for downloadPlugin task
-def downloadPluginArchive(url, plugin, logger=None):
-    ret = downloadChunks(url)
-    if not ret:
-        plugin.status["installStatus"] = "failed"
-        plugin.status["result"] = "failed to download '%s'" % url
-        return False
-    downloaded, url = ret
-
-    pdata = unzipPlugin(downloaded, logger=logger)
-
-    plugin.name = pdata['plugin'] or os.path.splitext(os.path.basename(url))[0]
-    plugin.path = pdata['path'] or os.path.join(settings.PLUGIN_PATH, plugin.name )
-
-    #clean up archive file and temp dir (archive should be only file in dir)
-    os.unlink(downloaded)
-    os.rmdir(os.path.dirname(downloaded))
-
-    if unzipStatus:
-        plugin.status["result"] = "unzipped"
-    else:
-        plugin.status["result"] = "failed to unzip"
-
-    return True
-
 def fix_plugin_owner(target_path):
     # Fix ownership - zeroinstall can leave files owned by root
     try:
@@ -485,53 +403,30 @@ def fix_plugin_owner(target_path):
     return
 
 @app.task
-def downloadPlugin(url, plugin=None, zipFile=None):
+def downloadPlugin(plugin, zipFile):
     """download a plugin, extract and install it"""
+    
     if not plugin:
         from iondb.rundb import models
         plugin = models.Plugin.objects.create(name='Unknown', version='Unknown', status={})
     plugin.status["installStatus"] = "downloading"
 
-    #normalise the URL
-    url = urlparse.urlsplit(url).geturl()
+    # Extract zipfile
+    scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch")
+    zipFullPath = os.path.join(scratch_path, zipFile)
+    plugin.status["installStatus"] = "extracting zip"
 
-    if not zipFile:
-        if url.endswith(".xml"):
-            status = downloadPluginZeroInstall(url, plugin, logger=logger)
-            logger.error("xml") # logfile
-        else:
-            status = downloadPluginArchive(url, plugin, logger=logger)
-            logger.error("zip") # logfile
+    try:
+        ret = unzipPlugin(zipFullPath)
+    except:
+        logger.exception("Failed to unzip Plugin: '%s'", zipFullPath)
+    finally:
+        #remove the zip file
+        os.unlink(zipFullPath)
 
-        if not status:
-            # FIXME - Errors!
-            installStatus = plugin.status.get('installStatus', 'Unknown')
-            result = plugin.status.get('result', 'unknown')
-            msg = "Plugin install '%s', Result: '%s'" % (installStatus, result)
-
-            logger.error(msg) # logfile
-            from iondb.rundb import models
-            models.Message.error(msg) # UI message
-            return False
-
-    else:
-        # Extract zipfile
-        scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch")
-        zip_file = os.path.join(scratch_path, zipFile)
-        plugin.status["installStatus"] = "extracting zip"
-
-        try:
-            ret = unzipPlugin(zip_file)
-        except:
-            logger.exception("Failed to unzip Plugin: '%s'", zip_file)
-        finally:
-            #remove the zip file
-            os.unlink(zip_file)
-
-        plugin.name = ret['plugin']
-        plugin.path = ret['path']
-        plugin.status["installStatus"] = "installing from zip"
-
+    plugin.name = ret['plugin']
+    plugin.path = ret['path']
+    plugin.status["installStatus"] = "installing from zip"
 
     # Now that it has been downloaded,
     # convert pre-plugin into real db plugin object
@@ -544,11 +439,9 @@ def downloadPlugin(url, plugin=None, zipFile=None):
 
     # Copy over download status messages and url
     new_plugin.status = plugin.status
-    if plugin.url:
-        new_plugin.url = plugin.url
     new_plugin.save()
 
-    logger.info("Successfully downloaded and installed plugin %s v%s from '%s'", new_plugin.name, new_plugin.version, url)
+    logger.info("Successfully downloaded and installed plugin %s v%s", new_plugin.name, new_plugin.version)
 
     return new_plugin
 
@@ -833,7 +726,7 @@ def build_tmap_index(reference_id):
         logger.error('TMAP index rebuild "%s" failed:\n%s' %
                      (" ".join(cmd), stderr))
         reference.status = 'error'
-        reference.verbose_error = json.dumps((stdout, stderr, ret))
+        reference.verbose_error = stderr[:3000]
         reference.save()
         reference.enabled = False
         reference.disable_genome()
@@ -1606,7 +1499,7 @@ def lock_ion_apt_sources(enable=False):
         return 'trusty'  # failsafe default which may work
 
     os_codename = get_distrib_name()
-    
+
     if enable:
         find_string = "updates\/software.*%s\/" % (os_codename)
         replace_string = "updates\/software\/archive\/%s %s\/" % (ts_version, os_codename)
@@ -1638,32 +1531,36 @@ def post_run_nodetests(result):
     '''Handler for return value of set of tasks running test_node_and_update_db
     result is an array of strings
     '''
-    from iondb.rundb.models import Message
-    logger.info(result)
+    from iondb.rundb.models import Message, Cruncher
 
-    if 'error' in  result:
-        cluster_status = 'error'
-    elif 'warning' in result:
-        cluster_status = 'warning'
+    bad_nodes = Cruncher.objects.exclude(state='G')
+    message = Message.objects.filter(tags="cluster_alert")
+    if len(bad_nodes) > 0:
+        if not message:
+            msg = 'WARNING: Cluster node failure.'
+            golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
+            Message.warn(msg+"   %s" % golink,tags="cluster_alert")
+
+        # disable nodes that fail nfs_mount_test or version_test
+        disable_on_tests = ['nfs_mount_test','version_test']
+        for node in bad_nodes:
+            queues = node.info.get('queues')
+            node_disabled = queues['disabled'] == queues['total'] if queues else False
+            if not node_disabled and 'config_tests' in node.info:
+                failed_tests = sum(test[1]=='failure' for test in node.info['config_tests'] if test[0] in disable_on_tests)
+                if failed_tests > 0:
+                    logger.info('Node %s failed tests and will be disabled' % node.name)
+                    cluster_ctrl_task("disable", node.name, "system")
     else:
-        cluster_status = 'good'
+        message.delete()
 
-    if cluster_status:
-        message = Message.objects.filter(tags="cluster_alert")
-        if 'error' in cluster_status or 'warning' in cluster_status:
-            if not message:
-                msg = 'WARNING: Cluster node failure.'
-                golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
-                Message.warn(msg+"   %s" % golink,tags="cluster_alert")
-        else:
-            message.delete()
+    # refresh queue info
+    cluster_queue_info()
 
 
 @task(queue = 'w1', soft_time_limit = 60)
 def test_node_and_update_db(node, head_versions):
     '''run tests'''
-    from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest
-
     logger.info("Testing node: %s" % node.name)
     node_status = connect_nodetest(node.name)
     if node_status['status'] == 'good':
@@ -1681,7 +1578,7 @@ def test_node_and_update_db(node, head_versions):
     node.info = node_status
     node.save()
 
-    return node_status['status']
+    return (node.name, node_status['status'])
 
 
 @periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result = True)
@@ -1700,6 +1597,47 @@ def check_cluster_status():
         tasks = group(test_node_and_update_db.s(node, head_versions) for node in nodes)
         c = chord(tasks)(post_run_nodetests.s())
         return c
+
+
+def cluster_queue_info():
+    ''' run qstat and update database objects '''
+    from iondb.rundb.models import Cruncher
+
+    info = queue_info()
+    for node in Cruncher.objects.all():
+        node.info["queues"] = info.get(node.name)
+        node.save()
+
+
+@app.task(queue = 'w1')
+def cluster_ctrl_task(action, name, username):
+    ''' send SGE commands, run as task to get root permissions '''
+    from iondb.rundb.models import Cruncher, EventLog
+
+    nodes = Cruncher.objects.filter(name=name) if name!="all" else Cruncher.objects.all()
+    if not nodes:
+        return "Node %s not found" % node
+
+    errors = []
+    info = queue_info()
+    for node in nodes:
+        # check if already in desired state
+        queues = info.get(node.name)
+
+        if action == "enable" and queues['disabled'] == 0:
+            error = 'SGE queues for %s are already enabled' % node.name
+        elif action == "disable" and queues['disabled'] == queues['total']:
+            error = 'SGE queues for %s are already disabled' % node.name
+        else:
+            error = sge_ctrl(action, node.name)
+
+        if not error:
+            msg = "%s SGE queues" % action.capitalize()
+            EventLog.objects.add_entry(node, msg, username)
+        else:
+            errors.append(error)
+
+    return errors
 
 
 def add_eventlog(node, new_status):
@@ -1753,21 +1691,131 @@ def generate_TF_files(tfkey, tf_dir='/results/referenceLibrary/TestFragment'):
     if len(tfs) > 0:
         if not os.path.exists(dest):
             os.mkdir(dest)
-        
+
         # write fasta file
         fasta_path = os.path.join(dest, fasta_filename)
         with open(fasta_path, 'w') as f:
             for tf in tfs:
                 f.write('>%s\n' % tf.name)
                 f.write('%s\n' % tf.sequence.strip())
-        
+
         # make faidx index file
-        subprocess.check_call("samtools faidx %s" % fasta_path, shell=True)
+        subprocess.check_call("/usr/local/bin/samtools faidx %s" % fasta_path, shell=True)
         # make tmap index files
-        subprocess.check_call("tmap index -f %s" % fasta_path, shell=True)
+        subprocess.check_call("/usr/local/bin/tmap index -f %s" % fasta_path, shell=True)
     else:
         # remove key folder if this key no longer has any TFs
         try:
             shutil.rmtree(dest)
         except OSError:
             logger.error("Failed to delete folder %s" % dest)
+
+def check_gunzip(gunZipFile, logger=None):
+    #import mimetypes
+    isTaskSuccess = False
+    if not logger:
+        logger = logging.getLogger(__name__)
+    #Extract if annotation file is in gzip format
+    try:
+        result = subprocess.check_call("gunzip %s" % gunZipFile, shell=True)
+        if not result: #extract failed If non-zero exit status
+            isTaskSuccess = True
+            fileToRegister = re.sub('.gz$','', gunZipFile)
+            return isTaskSuccess, fileToRegister
+    except Exception, err:
+        logger.error("Failed to extract .gz file %s" % err)
+
+    return isTaskSuccess, gunZipFile
+
+@app.task
+def new_annotation_download(annot_url, updateVersion, **reference_args):
+    ref_short_Name = reference_args['short_name']
+    from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
+    from django.core.files import File
+    from iondb.rundb import publishers
+    fileToRegister = None
+    isTaskSuccess = False
+    try:
+        reference = ReferenceGenome.objects.get(short_name=ref_short_Name)
+    except Exception, err:
+        logger.debug("Reference does not exists for  Annotation File {0} with version {1}".format(annot_url, updateVersion))
+        return err
+    try:
+        (isTaskSuccess, fileToRegister, downloadstatus) = start_annotation_download(annot_url, reference, updateVersion=updateVersion)
+        print (isTaskSuccess, fileToRegister, downloadstatus)
+    except Exception as Err:
+        logger.debug("System Error {0}".format(Err))
+
+    if isTaskSuccess and downloadstatus == "Complete":
+        #convert the raw file into Django File object so that publisher framework can accept it
+        fileObject = open(fileToRegister)
+        upload = File(fileObject)
+        file_name = os.path.basename(upload.name)
+        upload.name = file_name
+        #Go ahead and register the annotation file via publisher framework
+        pub_name = "refAnnot"
+        meta = {"publisher" : pub_name, "reference": ref_short_Name, "annotation_url" : annot_url, "upload_type" : "Annotation" }
+        try:
+            pub = Publisher.objects.get(name=pub_name)
+            contentUpload, async_upload = publishers.edit_upload(pub, upload, json.dumps(meta))
+            return contentUpload
+        except:
+            logger.debug("Publisher does not exists {0}".format(pub_name))
+
+    return isTaskSuccess
+
+def start_annotation_download(annot_url, reference, callback=None, updateVersion=None, monitor=None):
+    from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
+    import mimetypes
+    tagsInfo = "reference_annotation_{0}".format(float(updateVersion))
+    monitor = FileMonitor(url=annot_url, tags=tagsInfo)
+    monitor.status = "downloading"
+    monitor.save()
+    fileToRegister = None
+    downloaded_fileTempPath = None
+    #logger.error("File Not Found (404) URL Info: %s" % (annot_url))
+    try:
+        urllib2.urlopen(annot_url)
+    except Exception as err:
+        monitor.status = "System Error" + str(err)
+        monitor.save()
+        logger.error("File Not Found (404) URL Info: %s %s" % (annot_url, str(err)))
+        return (False, fileToRegister, monitor.status)
+    try:
+        download_args = (annot_url, monitor.id, settings.TEMP_PATH)
+        async_result = download_something.apply_async(download_args,refID=reference.id)
+        logger.error(async_result)
+
+        isTaskSuccess = False
+        if async_result.status == 'PENDING':
+            try:
+                async_result.get()
+            except Exception, err:
+                monitor.status = "Download Error"
+                monitor.save()
+                logger.error("Error in Download File '{0}': {1}".format(annot_url, err))
+        if async_result.status == 'SUCCESS':
+            monitor = FileMonitor.objects.get(tags=tagsInfo,url=annot_url)
+            isTaskSuccess = async_result.successful()
+            result = async_result.result
+            downloaded_fileTempPath = result[0]
+        else:
+            monitor.status = "Downloading"
+            monitor.save()
+
+        if isTaskSuccess:
+            fileToRegister = downloaded_fileTempPath
+
+            gztype = mimetypes.guess_type(fileToRegister)
+            if gztype[1] == 'gzip':
+                (isExtractSuccess, fileToRegister) = check_gunzip(fileToRegister)
+                if not isExtractSuccess:
+                    monitor.status = ".gz Annotation file extraction Failed"
+                    monitor.save()
+
+        return (isTaskSuccess, fileToRegister, monitor.status)
+
+    except Exception as err:
+        logger.debug("System Error: Caused Unknown Exception {0}".format(err))
+        monitor.status = "System Error. Please contact TS administrator"
+        monitor.save()

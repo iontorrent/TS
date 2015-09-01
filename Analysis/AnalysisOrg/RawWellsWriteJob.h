@@ -9,7 +9,7 @@
 class RawWellsWriteJob : public PJob
 {
   public:
-    RawWellsWriteJob(SignalProcessingMasterFitter *fitter):PJob(), _fitter(fitter) 
+    RawWellsWriteJob(SignalProcessingMasterFitter *fitter):PJob(),_curFlow(0),_ampBuffer(NULL),_fitter(fitter)
     {}
 
     ~RawWellsWriteJob(){}
@@ -31,7 +31,7 @@ void RawWellsWriteJob::Run()
   // filtering information or amplitude should be curated based on state flags before buffer is passed in to
   // write to raw wells
   if (_fitter) {
-  
+
     int blockW = _fitter->GetGlobalStage().bfmask->W(); 
     int numLBeads = _fitter->region_data->my_beads.numLBeads;
     RawWells *wellsFileHandle = _fitter->GetGlobalStage().getRawWellsHandle();   

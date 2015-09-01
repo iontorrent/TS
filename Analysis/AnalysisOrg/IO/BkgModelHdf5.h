@@ -122,12 +122,12 @@ class BkgParamH5
     void TryInitRegionParams ( H5File &h5_local_ref, const ImageSpecClass &my_image_spec );
 
     // all beads in the best region
-    void Init2 (int write_params_flag,int nBeads_live,const Region *,int nRegionCenters);
+    void Init2 (int write_params_flag,int nBeads_live,const Region *,int nRegions,int nSamples);
     void TryInitBeads_BestRegion ( H5File &h5_local_ref, int nBeads_live,Region *);
     void InitBeads_BestRegion (H5File &h5_local_ref, int nBeads_live, const Region *);
-    void InitBeads_RegionCenter (H5File &h5_local_ref, int nBeads_live);
+    void InitBeads_RegionSamples (H5File &h5_local_ref, int nBeads_live,int nSamples);
     void IncrementalWriteBestRegion(int flow, bool lastflow);
-    void IncrementalWriteRegionCenter(int flow, bool lastflow);
+    void IncrementalWriteRegionSamples(int flow, bool lastflow);
 
   public: // should be private eventually
 
@@ -186,21 +186,21 @@ class BkgParamH5
     MatchedCube beads_bestRegion_taub;
 
 
-    //  beads in the regionCenter
-    MatchedCubeInt beads_regionCenter_location;
-    MatchedCubeInt beads_regionCenter_fittype;
-    MatchedCube beads_regionCenter_predicted;
-    MatchedCube beads_regionCenter_corrected;
-    MatchedCube beads_regionCenter_amplitude;
-    MatchedCube beads_regionCenter_residual;
-    MatchedCube beads_regionCenter_kmult;
-    MatchedCube beads_regionCenter_dmult;
-    MatchedCube beads_regionCenter_SP;
-    MatchedCube beads_regionCenter_R;
-    MatchedCube beads_regionCenter_gainSens;
-    MatchedCube beads_regionCenter_timeframe;
-    MatchedCube beads_regionCenter_taub;
-    MatchedCube beads_regionCenter_regionParams;
+    //  beads in the regionSamples
+    MatchedCubeInt beads_regionSamples_location;
+    MatchedCubeInt beads_regionSamples_fittype;
+    MatchedCube beads_regionSamples_predicted;
+    MatchedCube beads_regionSamples_corrected;
+    MatchedCube beads_regionSamples_amplitude;
+    MatchedCube beads_regionSamples_residual;
+    MatchedCube beads_regionSamples_kmult;
+    MatchedCube beads_regionSamples_dmult;
+    MatchedCube beads_regionSamples_SP;
+    MatchedCube beads_regionSamples_R;
+    MatchedCube beads_regionSamples_gainSens;
+    MatchedCube beads_regionSamples_timeframe;
+    MatchedCube beads_regionSamples_taub;
+    MatchedCube beads_regionSamples_regionParams;
 
 //  beads specified in the sse/xyflow/rcflow file
     void InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_hash);
@@ -235,7 +235,7 @@ class BkgParamH5
     void saveRegionPointers();
     void saveBeadPointers();
     void saveBestRegionPointers();
-    void saveRegionCenterPointers();
+    void saveRegionSamplesPointers();
     std::string getBeadFilename() {return hgBeadDbgFile;}
     void ConstructOneFile ( H5File &h5_local_ref, std::string &hgLocalFile, std::string &local_results, const char *my_name );
 
@@ -260,6 +260,7 @@ class BkgParamH5
     int bead_row;
     // region
     int region_total;
+    int region_nSamples;
 };
 
 #define SAVE_DATA_EVERY_BLOCK 1

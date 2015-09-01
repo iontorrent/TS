@@ -2,271 +2,165 @@
 {% load url from future %}
 {% load static from staticfiles %}
 <div id="modal_configure_plugins_plugin_install" title="" class="modal modal-750 hide">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">&times;</button>
-		<h3>Install or Upgrade Plugin</h3>
-	</div>
-	<div class="modal-body" id="modal_configure_plugins_plugin_install_body">
-		<div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
-	    <ul class="nav nav-tabs inContentTabs" id="myTab">
-		    <li><a href="#tab-1" data-toggle="tab">Install via URL</a></li>
-		    <li><a href="#tab-2" data-toggle="tab">Install via Zip Upload</a></li>
-	    </ul>
-	    <div class="tab-content">
-			<div class="tab-pane active" id="tab-1">
-				<form id="modal_configure_plugins_plugin_install_download_form" class="form-horizontal">
-					<fieldset>
-						<div id="download-url" class="control-group">
-							<label for="pickfile" class="control-label" >URL</label>
-							<div class="controls" >
-								<input type="text" id="downloadPluginURL" class="input-xxlarge required validateHTTPUrl"/>
-								<div class="help-block">
-									Please enter the URL for the plugin you wish to install.
-				                	Plugins can be found at:
-				                    <ul>
-				                    	
-				                    {% value_from_settings "PLUGIN_WAREHOUSE" as plugin_warehouse %}
-									{% for name, user_url, api_url in plugin_warehouse %}
-						                <li><a href="{{user_url}}" target="_blank">{{name}}</a></li>
-					                {% endfor %}
-				                    </ul>
-								</div>
-							</div>
-						</div>
-	            </fieldset>
-	            </form>
-			</div>
-			<div class="tab-pane" id="tab-2">
-				<form class="form-horizontal">
-					<fieldset>
-						<div id="upload-zip" class="control-group">
-							<label for="pickfile" class="control-label">Upload a Plugin</label>
-							<div class="controls">
-								<div id="filelist"><a id="pickfile" name="pickfile" class="btn">Select File</a></div>
-								<div id="upload-help" class="help-block" >
-									In order to provide a better uploading experience either
-									Adobe Flash or Microsoft Silverlight plugins are required
-									for file uploading.
-									<ul>
-										<li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/"> microsoft.com </a></li>
-										<li>Adobe Flash can be found at <a href="http://get.adobe.com/flashplayer/">adobe.com</a></li>
-									</ul>
-									You may need to contact your local system administrator for assistance.
-								</div>
-								<div id="file_info" class="help-block"></div>
-							</div>
-							<div class="controls">
-								<div id="upload-progress" class="progress progress-striped active hide">
-									<div class="bar" style="width: 0%"></div>
-		  						</div>
-							</div>
-						</div>
-					</fieldset>
-					<div id="update"></div>
-					<input name="target_file" id="target_file" type="hidden"/>
-					<input name="reported_file_size" id="reported_file_size" type="hidden"/>
-				</form>
-			</div>
-		</div>
-		<form id="modal_configure_plugins_plugin_install_form" method="POST" action="{% url "configure_plugins_plugin_install" %}" enctype="multipart/form-data">
-	  	</form>
-	</div>
-	<div class="modal-footer" id="tab-1-footer">
-	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-    	<a id="downloadPluginButton" class="btn btn-primary">Download</a>
-	</div>
-	<div class="modal-footer hide" id="tab-2-footer">
-	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-		<a id="uploadfile" class="btn btn-primary">Upload file</a>		    	
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Install or Upgrade Plugin</h3>
     </div>
-<script type="text/javascript">
-$('#modal_configure_plugins_plugin_install_download_form').uniform({
-	holder_class : 'control-group'
-	, msg_selector: 'div.help-block'
-	, error_class : 'alert alert-error'
-	, prevent_submit : true
-});
-</script>      
-<script type="text/javascript">
-$('#myTab a:first').tab('show');
-var uploaderInit = false;
-$('a[data-toggle="tab"]').on('shown', function (e) {
-	console.log('activated: ', e.target, 'deactivated: ' , e.relatedTarget);
-	e.target // activated tab
-	$('#modal_configure_plugins_plugin_install .modal-footer').hide();
-	$($(e.target).attr('href') + '-footer').show();
-	if (!uploaderInit && $(e.target).attr('href') == '#tab-2') {
-		uploader.init();
-	}
-});
-$("#downloadPluginButton").click(function (e) {
-	e.preventDefault();
-    urlVAL = $("#downloadPluginURL").val();
-    downloadPluginJSON = { "url": urlVAL };
-    downloadPluginJSON = JSON.stringify(downloadPluginJSON);
-    $.ajax({
-        type: 'POST',
-        url: "/rundb/api/v1/plugin/install/",
-        contentType: "application/json; charset=utf-8",
-        data: downloadPluginJSON,
-        dataType: "json",
-        async: false,
-        beforeSend: function () {
-            if (isValid()) {
-                $("#modal_configure_plugins_plugin_install_body").html("<p>Starting download plugin <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
-                $('#modal_configure_plugins_plugin_install .modal-footer').hide();
-                $('#modal_configure_plugins_plugin_install .close').hide();
-            } else {
-              return false;
+    <div class="modal-body" id="modal_configure_plugins_plugin_install_body">
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+            <form class="form-horizontal">
+                <fieldset>
+                    <div id="upload-zip" class="control-group">
+                        <label for="pickfile" class="control-label">Upload a Plugin</label>
+                        <div class="controls">
+                            <div id="filelist"><a id="pickfile" name="pickfile" class="btn">Select File</a></div>
+                            <div id="upload-help" class="help-block" >
+                                In order to provide a better uploading experience either
+                                Adobe Flash or Microsoft Silverlight plugins are required
+                                for file uploading.
+                                <ul>
+                                    <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/"> microsoft.com </a></li>
+                                    <li>Adobe Flash can be found at <a href="http://get.adobe.com/flashplayer/">adobe.com</a></li>
+                                </ul>
+                                You may need to contact your local system administrator for assistance.
+                            </div>
+                            <div id="file_info" class="help-block"></div>
+                        </div>
+                        <div class="controls">
+                            <div id="upload-progress" class="progress progress-striped active hide">
+                                <div class="bar" style="width: 0%">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+                <div id="update"></div>
+                <input name="target_file" id="target_file" type="hidden"/>
+                <input name="reported_file_size" id="reported_file_size" type="hidden"/>
+            </form>
+        <form id="modal_configure_plugins_plugin_install_form" method="POST" action="{% url "configure_plugins_plugin_install" %}" enctype="multipart/form-data">
+      </form>
+    </div>
+    <div class="modal-footer" id="tab-2-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a id="uploadfile" class="btn btn-primary">Upload file</a>
+    </div>
+    <script type="text/javascript">
+        $('#modal_configure_plugins_plugin_install_download_form').uniform({
+            holder_class : 'control-group'
+            , msg_selector: 'div.help-block'
+            , error_class : 'alert alert-error'
+            , prevent_submit : true
+        });
+    </script>
+    <script type="text/javascript">
+        var flashFail = false;
+
+        function finish() {
+            var file_name = uploader.files[0].target_name
+            $("#target_file").val(file_name.split(' ').join(''));
+            $("#update").addClass('alert alert-info').html("Attempting to install plugin");
+            target_file = $("#target_file").val();
+
+            dataFile = {"file": target_file};
+            dataFile = JSON.stringify(dataFile);
+            $.ajax({
+                type: 'POST',
+                url: "/rundb/api/v1/plugin/install/",
+                contentType: "application/json; charset=utf-8",
+                data: dataFile,
+                dataType: "json",
+                async: false,
+                success: function () {
+                    $("#update").removeClass('alert-info').addClass('alert-success').html("Plugin success installing");
+                    setTimeout(function () {
+                        $('#modal_configure_plugins_plugin_install').trigger('modal_configure_plugins_plugin_install_done', {});
+                        $('#modal_configure_plugins_plugin_install').modal('hide');
+                    }, 2000);
+                },
+                error:function(){
+                    $("#update").removeClass('alert-info').addClass('alert-error').html("Plugin failed to install");
+                }
+            });
+        }
+
+        var uploader = new plupload.Uploader({
+            runtimes: 'flash,silverlight',
+            filters : [
+                {title : "Zip files", extensions : "zip"}
+            ],
+            browse_button: 'pickfile',
+            url: '{% url "configure_plugins_plugin_zip_upload" %}',
+            chunk_size: '15mb',
+            unique_names: true,
+            multi_selection: false,
+            multiple_queues: false,
+            silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}',
+            flash_swf_url: '{% static "resources/plupload/js/plupload.flash.swf"%}'
+        });
+
+        uploader.bind('FilesAdded', function (up, files) {
+            console.log('uploader FilesAdded', files);
+            this.removeFile(this.files[0]);
+            $('#upload-zip').removeClass('invalid alert alert-error').addClass('valid');
+            $("#file_info").html("");
+            $(".file_item").remove();
+            $.each(files, function (i, file) {
+                $('#filelist').append('<div class="file_item" id="' + file.id + '">' + file.name + ' (' + plupload.formatSize(file.size) + ') <b></b>' + '</div>'); //if they are using flash and select a file greater than 2 gigs give them a warning.
+                //TODO: remove this message if the user selects a 2 gig file, and then changes it.
+                if (up.runtime == "flash" && file.size > 2147483648) {
+                    $('#filelist').append(" <span id='flash_warn' class='file_item'>  <p> <em> The files must not be larger than 2 Gigabytes </em>  </p> </span>");
+                    $('#flash_warn').append("<p><em>You can also ZIP the FASTA file, and uploaded the compressed file.</em></p>");
+                    $('#flash_warn').effect('pulsate');
+                    flashFail = true;
+                }
+                //set the reported file size
+                $("#reported_file_size").val(file.size);
+            });
+        });
+
+        uploader.bind('UploadProgress', function (up, file) {
+            console.log('UploadProgress', file);
+            console.log(file.id, file.name);
+            $('#' + file.id + " b").html(file.percent + "%");
+            $('#upload-progress .bar').css('width', ''+file.percent + '%');
+            $("#file_info").html("");
+        });
+
+        uploader.bind('UploadComplete', function(up, file){
+            $('#' + file.id + " b").html("100%");
+            $('#upload-progress .bar').css('width', '100%');
+            $("#file_info").html("");
+            finish();
+        });
+
+        uploader.init();
+        $( "#modal_configure_plugins_plugin_install" ).data('uploader', uploader);
+
+        $('#uploadfile').click(function (e) {
+            var uploader = $("#modal_configure_plugins_plugin_install").data('uploader');
+            //don't allow them to upload a big file if they are using Flash, it will fail.
+            e.preventDefault();
+            console.log('flashFail', flashFail);
+            if (flashFail) {
+                $('#flash_warn').effect('pulsate');
+                return false;
             }
-        },
-        success: function () {
-            setTimeout(function(){
-                $("#modal_configure_plugins_plugin_install_body").html("<p>Installing plugin <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
-            }, 1000);
-            setTimeout(function () { 
-                $('#modal_configure_plugins_plugin_install').trigger('modal_configure_plugins_plugin_install_done', {});
-                $('#modal_configure_plugins_plugin_install').modal('hide');
-            }, 4000);
-        },
-        error: function (){
-            $("#downloadPlugin").html("<span>Failed To Install</span>");
-        }
-    });
-});
-var firstFinish = false;
-function finish() {
-    // Post to a this Django view
-    //plupload calls this twice, we don't want that.
-    if (firstFinish) return false;
-    firstFinish = true;
-    var file_name = uploader.files[0].target_name
-    $("#target_file").val(file_name.split(' ').join(''));
-    $("#update").addClass('alert alert-info').html("Attempting to install plugin");
-    target_file = $("#target_file").val();
+            $("#upload-zip").addClass('invalid alert alert-error');
+            console.log('uploader.files.length', uploader.files.length);
+            if (uploader.files.length == 1) {
+                $('#upload-zip').removeClass('invalid alert alert-error').addClass('valid');
+                uploader.start();
+                console.log('uploader.start()');
+                $('#pickfile').hide();
+                $("#uploadfile").hide();
+                $('#upload-progress').show();
+            }
+            else {
+                $('#upload-zip').addClass('invalid alert alert-error');
+                // $("#file_info").addClass('alert-error').html("You must select at a plugin file to upload.").show();
+            }
+        });
 
-    dataFile = {"file": target_file};
-    dataFile = JSON.stringify(dataFile);
-    $.ajax({
-        type: 'POST',
-        url: "/rundb/api/v1/plugin/install/",
-        contentType: "application/json; charset=utf-8",
-        data: dataFile,
-        dataType: "json",
-        async: false,
-        success: function () {
-            $("#update").removeClass('alert-info').addClass('alert-success').html("Plugin success installing");
-            setTimeout(function () {
-            	$('#modal_configure_plugins_plugin_install').trigger('modal_configure_plugins_plugin_install_done', {});
-				$('#modal_configure_plugins_plugin_install').modal('hide'); 
-        	}, 2000);
-        },
-        error:function(){
-            $("#update").removeClass('alert-info').addClass('alert-error').html("Plugin failure installing");
-        }
-    });
-}
-var flashFail = false;
-
-$('#modal_configure_plugins_plugin_install').on('hidden', function () {
-	if ($( "#modal_configure_plugins_plugin_install" ).data('uploader')){
-		if (uploaderInit) {
-			$( "#modal_configure_plugins_plugin_install" ).data('uploader').destroy();
-		}
-	}
-	$('body #modal_configure_plugins_plugin_install').remove();
-});	
-
-var uploader = new plupload.Uploader({
-    runtimes: 'flash,silverlight',
-	filters : [
-        {title : "Zip files", extensions : "zip"}
-    ],
-    browse_button: 'pickfile',
-  	url: '{% url "configure_plugins_plugin_zip_upload" %}',
-    chunk_size: '15mb',
-    unique_names: true,
-    multi_selection: false,
-    multiple_queues: false,
-    silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}',
-    flash_swf_url: '{% static "resources/plupload/js/plupload.flash.swf"%}'		
-});	
-$( "#modal_configure_plugins_plugin_install" ).data('uploader', uploader);
-
-$('#uploadfile').click(function (e) {
-    //don't allow them to upload a big file if they are using Flash, it will fail.
-    e.preventDefault();
-    console.log('flashFail', flashFail);
-    if (flashFail) {
-        $('#flash_warn').effect('pulsate');
-        return false;
-    }
-    $("#upload-zip").addClass('invalid alert alert-error');
-    console.log('uploader.files.length', uploader.files.length);
-    if (uploader.files.length == 1) {
-    	$('#upload-zip').removeClass('invalid alert alert-error').addClass('valid');
-        uploader.start();
-        console.log('uploader.start()'	);
-        $('#pickfile').hide();
-        $("#uploadfile").hide();
-        $('#upload-progress').show();
-    } else {
-        $('#upload-zip').addClass('invalid alert alert-error');
-        // $("#file_info").addClass('alert-error').html("You must select at a plugin file to upload.").show();
-    }
-});	
-
-uploader.bind('Init', function(up, params) {
-	console.log('uploader Init');
-	uploaderInit = true;
-	$('#upload-help').append("");
-});
-
-uploader.bind('FilesAdded', function (up, files) {
-	console.log('uploader FilesAdded', files);
-    this.removeFile(this.files[0]);
-	$('#upload-zip').removeClass('invalid alert alert-error').addClass('valid');
-	$("#file_info").html("");
-	$(".file_item").remove();
-    $.each(files, function (i, file) {
-		$('#filelist').append('<div class="file_item" id="' + file.id + '">' + file.name + ' (' + plupload.formatSize(file.size) + ') <b></b>' + '</div>');        //if they are using flash and select a file greater than 2 gigs give them a warning.
-        //TODO: remove this message if the user selects a 2 gig file, and then changes it.
-        if (up.runtime == "flash" && file.size > 2147483648) {
-            $('#filelist').append(" <span id='flash_warn' class='file_item'>  <p> <em> The files must not be larger than 2 Gigabytes </em>  </p> </span>");
-            $('#flash_warn').append("<p><em>You can also ZIP the FASTA file, and uploaded the compressed file.</em></p>");
-            $('#flash_warn').effect('pulsate');
-            flashFail = true;
-        }
-        //set the reported file size
-        $("#reported_file_size").val(file.size);
-    });
-});
-
-uploader.bind('UploadProgress', function (up, file) {
-	console.log('UploadProgress', file);
-	console.log(file.id, file.name);
-    $('#' + file.id + " b").html(file.percent + "%");
-    $('#upload-progress .bar').css('width', ''+file.percent + '%');
-    $("#file_info").html("");
-    //status 5 means transfer was a success
-    if (file.status == 5) {
-		uploaddone = true;
-		$('#' + file.id + " b").html("100%");
-		$('#upload-progress .bar').css('width', '100%');
-		$("#file_info").html("");
-		finish();
-    } 
-});
-
-
-function isValid() {
-	var form = $('#modal_configure_plugins_plugin_install_download_form');
-	var settings = form.uniform.defaults;
-    form.find(settings.field_selector).each(function () {
-        $(this).blur();
-    });
-	return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).exists();
-}
-
-</script>
+    </script>
 </div>

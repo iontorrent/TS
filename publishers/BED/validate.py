@@ -106,9 +106,16 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
 def plan_json(meta, upload_id, primary_path, secondary_path):
     run_type = meta['design']['plan'].get('runType', None)
     plan_name = meta["design"]["design_name"].encode("ascii", "ignore")
-    
+    applicationGroupDescription = meta['design']['plan'].get('applicationGroup',None)
+ 
     run_type_model = models.RunType.objects.get(runType=run_type)
-    app_group = run_type_model.applicationGroups.filter(isActive=True).order_by("id")[0]
+    app_group_name = ""
+    if applicationGroupDescription:
+        app_group = models.ApplicationGroup.objects.get(description=applicationGroupDescription)
+        app_group_name = app_group.description
+    else:
+        app_group = run_type_model.applicationGroups.filter(isActive=True).order_by("id")[0]
+        app_group_name = app_group.name
     # "choice": "None" will be in the JSON from 3.6 schema imports
     chip_type = ""
     if run_type == "AMPS_EXOME":
@@ -120,15 +127,25 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
         else:
             instrument_type = "pgm"
 
-    print("plan_json processing plan_name=%s; run_type=%s; instrument_type=%s" %(plan_name, run_type, instrument_type))
-
     #HACK
-    if instrument_type == "proton" and plan_name.endswith("_Hi-Q"):
+    if instrument_type == 'p1' or instrument_type.lower() == 'proton':
+        chip_type = "P1.1.17"
+        instrument_type = "proton"
+    elif instrument_type == '530' or instrument_type == '540' or instrument_type == '520':
+        chip_type = instrument_type
+        instrument_type = "s5"
+    print("plan_json processing plan_name=%s; run_type=%s; instrument_type=%s" %(plan_name, run_type, instrument_type))
+    if applicationGroupDescription == "Pharmacogenomics":
+        app = models.ApplProduct.objects.get(applType__runType=run_type, isActive = True, instrumentType=instrument_type,applicationGroup__description=applicationGroupDescription)
+        if instrument_type == "pgm":
+            chip_type = app.defaultChipType
+    elif instrument_type == "proton" and plan_name.endswith("_Hi-Q"):
         app = models.ApplProduct.objects.get(applType__runType=run_type, isActive = True, productName__contains="_Hi-Q", instrumentType=instrument_type)
     else:
         app = models.ApplProduct.objects.get(applType__runType=run_type, isActive = True, isDefault = True, instrumentType=instrument_type)
     
     plugin_details = meta["design"]["plan"].get("selectedPlugins", {});
+    alignmentargs_override = None
     if "variantCaller" in plugin_details and "userInput" in plugin_details["variantCaller"]:
         try:
             if "meta" not in plugin_details["variantCaller"]["userInput"]:
@@ -150,6 +167,8 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
             plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"] = {"chip":"pgm", "frequency":"germline", "library":"ampliseq","panel":"/rundb/api/v1/contentupload/"+str(upload_id)+"/"}
             if instrument_type == "proton":
                 plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = "proton_p1"
+            if "tmapargs" in plugin_details["variantCaller"]["userInput"]["meta"]:
+                alignmentargs_override = plugin_details["variantCaller"]["userInput"]["meta"]["tmapargs"]
         except:
             print "WARNING while generating plan entry"
             traceback.print_exc()
@@ -158,7 +177,7 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
     #print(plan_name)
     plan_stub = {
        "adapter": None,
-       "applicationGroupDisplayedName": app_group.name,
+       "applicationGroupDisplayedName": app_group_name,
        "autoAnalyze": True,
        "autoName": None,
        # Set if isBarcoded 
@@ -220,7 +239,7 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
        "usePreBeadfind": True,
        "username": "ionuser",
     }
-    return plan_stub
+    return plan_stub, alignmentargs_override
 
 
 def main():
@@ -288,6 +307,7 @@ def main():
         meta['is_ampliseq'] = True
         plan_data = json.load(open(os.path.join(args.path, "plan.json")))
         version, design, meta = ampliseq.handle_versioned_plans(plan_data, meta)
+
         meta['design'] = design
 
         try:
@@ -361,13 +381,30 @@ def main():
                     primary_path = os.path.join(args.path, meta["reference"]+"/unmerged/detail/"+target_regions_bed)
                 if hotspots_bed and not secondary_path:
                     secondary_path = os.path.join(args.path, meta["reference"]+"/unmerged/detail/"+hotspots_bed)
-            plan_prototype = plan_json(meta, args.upload_id, primary_path, secondary_path)
+            else:
+                run_type = meta['design']['plan'].get('runType', None)
+                if run_type and (run_type=="AMPS_RNA"):
+                    meta['reference']=None
+            plan_prototype, alignmentargs_override = plan_json(meta, args.upload_id, primary_path, secondary_path)
             success, response, content = api.post("plannedexperiment", **plan_prototype)
             if not success:
                 api.patch("contentupload", args.upload_id, status="Error: unable to create TS Plan")
-                raise Exception("Plan creation API request failed.")
+                err_content=json.loads(content)
+                error_message_array = []
+                if 'error' in err_content:
+                    error_json = json.loads(str(err_content['error'][3:-2]))
+                    for k in error_json:
+                        for j in range(len(error_json[k])):
+                            err_message = str(error_json[k][j])
+                            err_message = err_message.replace('&gt;','>')
+                            error_message_array.append(err_message)
+                error_messages = ','.join(error_message_array)
+                raise Exception(error_messages)
+            if alignmentargs_override:
+                content_dict=json.loads(content)
+                api.patch("plannedexperiment", content_dict["id"], alignmentargs=alignmentargs_override, thumbnailalignmentargs=alignmentargs_override)
         except Exception as err:
-            print("ERROR: Could not create plan from this zip: %s" % err)
+            print("ERROR: Could not create plan from this zip: %s." % err)
             raise
 
     api.update_meta(meta, args)

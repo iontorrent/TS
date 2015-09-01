@@ -75,8 +75,10 @@ option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
 if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "stretch" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "raring")
@@ -205,10 +207,14 @@ else()
   add_custom_target(hdf5_proj)
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
-  if (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
+  if (${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
+      ${LSB_RELEASE_CODENAME} STREQUAL "vivid")
     set(ION_HDF5_LIBS "hdf5;${HDF5_LIBRARIES}")
   else()
     set(ION_HDF5_LIBS "${HDF5_LIBRARIES}")
+  endif()
+  if (${LSB_RELEASE_CODENAME} STREQUAL "vivid")
+    link_directories("/usr/lib/x86_64-linux-gnu/hdf5/serial/")
   endif()
   message(STATUS "ION_HDF5_LIBS: ${ION_HDF5_LIBS}")
   include_directories("${HDF5_INCLUDE_DIRS}")
@@ -376,12 +382,12 @@ endif()
 
 if (NOT ION_USE_SYSTEM_BAMTOOLS)
     set(proj_name "bamtools")
-    set(revision_tag 6685b2f93f)#set date below accordingly
-    set(proj_version "2.3.0.20150527+git${revision_tag}")
+    set(revision_tag 15eadb925f)#set date below accordingly
+    set(proj_version "2.4.0.20150702+git${revision_tag}")
     set(proj_name_version "${proj_name}-${proj_version}")
     ExternalProject_add(${proj_name}
 
-      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.3.0.20150527+git6685b2f93f.tar.gz"
+      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.4.0.20150702+git15eadb925f.tar.gz"
 #      GIT_REPOSITORY "https://github.com/iontorrent/bamtools.git"
 #      GIT_TAG ${revision_tag}
       PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
@@ -426,6 +432,7 @@ ExternalProject_add(${proj_name}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make
     INSTALL_COMMAND ""
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/libstatgen-1.0.12.patch"
 )
 set(ION_STATGEN_LIBS  "${PROJECT_BINARY_DIR}/../${proj_name_version}/libStatGen.a")
 set(ION_STATGEN_INCLUDES "${PROJECT_BINARY_DIR}/../${proj_name_version}/include")

@@ -20,6 +20,7 @@ class IonReporterFieldNames():
     IR_VERSION = "irVersion"
     APPLICATION_TYPE = 'applicationType'
     CATEGORIES = "categories"
+    IRU_UPLOAD_MODE = "iru_UploadMode"
 
 
 class IonreporterStepData(AbstractStepData):
@@ -40,8 +41,9 @@ class IonreporterStepData(AbstractStepData):
         self.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] = '-1'
         self.savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME] = 'None'
         self.savedFields[IonReporterFieldNames.APPLICATION_TYPE] = ''
-
+        self.savedFields[IonReporterFieldNames.IRU_UPLOAD_MODE] = ''
         self.prepopulatedFields[IonReporterFieldNames.CATEGORIES] = ''
+        
         try:
             self.prepopulatedFields[IonReporterFieldNames.IR_PLUGIN] = Plugin.objects.get(name__iexact='IonReporterUploader', active=True)
         except Exception, e:
@@ -57,6 +59,8 @@ class IonreporterStepData(AbstractStepData):
             self.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = SampleGroupType_CV.objects.get(pk=self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING])
         if self.savedFields[IonReporterFieldNames.IR_WORKFLOW] and self.savedFields[IonReporterFieldNames.IR_WORKFLOW] == 'Upload Only':
             self.savedFields[IonReporterFieldNames.IR_WORKFLOW] = ''
+        if self.savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME] == 'None':
+            self.savedFields[IonReporterFieldNames.IRU_UPLOAD_MODE] = ''
     
     def updateFromStep(self, updated_step):
         pass

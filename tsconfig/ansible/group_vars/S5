@@ -6,6 +6,7 @@ queues:
   - { name: all.q, slots: 4}
   - { name: plugin.q, slots: 1}
   - { name: thumbnail.q, slots: 1}
-  - { name: tl.q, slots: 2}
+  - { name: thumbnail_worker.q, slots: 1}
+  - { name: tl.q, slots: 1}
 default_interface: eth0
 GRUB_BOOT_DEVICE: "/dev/vda"

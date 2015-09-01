@@ -644,7 +644,7 @@ fi
 DOCFILE="${OUTFILEROOT}.base.cov.xls"
 TRGOPTS="-g"
 if [ -n "$BEDFILE" -a $CONTIGS -eq 0 ]; then
-  trgsize=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
+  trgsize=`awk -F \$'\t' 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
   basereads=`cat $BASEREADS`
   TRGOPTS="-C $basereads -T $trgsize"
 fi
@@ -661,7 +661,7 @@ fi
 ########### AmpliSeq option for end-to-end reads ###########
 
 if [ $AMPE2EREADS -eq 1 ]; then
-  pce2erds=`awk 'NR>1 {e2e+=$8+$9;tr+=$10} END {if(tr>0){printf "%.2f",100*e2e/tr}else{print "0.00"}}' $TARGETCOVFILE`
+  pce2erds=`awk -F \$'\t' 'NR>1 {e2e+=$8+$9;tr+=$10} END {if(tr>0){printf "%.2f",100*e2e/tr}else{print "0.00"}}' $TARGETCOVFILE`
   echo "Percent end-to-end reads:          ${pce2erds}%" >> "$STATSFILE"
 fi
 

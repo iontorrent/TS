@@ -312,7 +312,7 @@ sub executeSystemCall {
 sub makePicardDictFile {
   my($picardDir,$fastaFile,$outDir) = @_;
 
-  my $jarFile = "$picardDir/picard.jar CreateSequenceDictionary";
+  my $jarFile = "$picardDir/picard.jar";
   if(! -e $picardDir) {
     return("$0: Picard dir $picardDir does not exist - unable to create Picard .dict file\n");
   } elsif(! -r $picardDir) {
@@ -327,7 +327,7 @@ sub makePicardDictFile {
     my $dictFile = $fastaFile;
     $dictFile = $1 if($dictFile =~ /^(.+)\.fasta$/);
     $dictFile .= ".dict";
-    my $command = "java -Xmx2g -jar $jarFile R=$fastaFile O=$dictFile 2>> $picardDictLogFile ";
+    my $command = "java -Xmx2g -jar $jarFile CreateSequenceDictionary R=$fastaFile O=$dictFile 2>> $picardDictLogFile ";
     return("$0: Problem encountered making Picard .dict file, check log file $outDir/$picardDictLogFile for details.\n") if(&executeSystemCall($command));
     print STDOUT "  ...Picard .dict file complete\n";
   }

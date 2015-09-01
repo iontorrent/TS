@@ -97,4 +97,6 @@ void ReduceEmptyAverage_k (
     //float * dcoffsetdebug
 );
 
+
+
 #endif // GENERATEBEADTRACEKERNELS_H

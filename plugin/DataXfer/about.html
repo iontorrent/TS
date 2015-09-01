@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <h2>Data Transfer Plugin</h2>
+        <p>
+        This plugin exports selected file categories of the Run to the designated directory.  It can be used to set up an automated data backup mechanism.
+        In effect, this plugin is an automated Manual Data Management Export action.
+        These are the File Categories to export.  Selecting all four will copy all files generated for an experiment.
+        </p>
+        <ul>
+            <li>Signal Processing Input
+            <li>Basecalling Input
+            <li>Output Files
+            <li>Intermediate Files
+        </ul>
+        <p>
+        An example of how to use it would be to have a network storage device mounted on the local filesystem.  The mountpoint directory would be entered into
+        the Upload Path field.  Select one or more file categories.  Set the plugin to autorun.  When a run completes analysis, all selected files will be
+        copied to the [Upload Path]/exportedReports directory.  (Raw data will be copied to a separate directory [Upload Path]/[run directory])
+        </p>
+        <p>
+        The action will be logged in the Data Management log for the given run.  A message banner will also be generated on the website, just as it is when a
+        manual Data Management action is initiated.
+        </p>
+        <p><small><i>This plugin is compatible with Torrent Suite version 3.6 or newer.</i></small></p>
+    </body>
+</html>

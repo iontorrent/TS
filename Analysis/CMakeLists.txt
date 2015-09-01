@@ -50,6 +50,7 @@ include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA/KernelIncludes")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Sampling")
 include_directories("${PROJECT_SOURCE_DIR}/BaseCaller")
+include_directories("${PROJECT_SOURCE_DIR}/Calibration")
 include_directories("${PROJECT_SOURCE_DIR}/Separator")
 include_directories("${PROJECT_SOURCE_DIR}/NormWells")
 include_directories("${PROJECT_SOURCE_DIR}/Util")
@@ -71,8 +72,8 @@ if(ION_USE_CUDA)
       BkgModel/CUDA/ResourcePool.cu
       BkgModel/CUDA/StreamManager.cu 
       BkgModel/CUDA/LayoutTranslator.cu 
-      BkgModel/CUDA/MasterKernel.cu
-      BkgModel/CUDA/LayoutTester.cu
+      BkgModel/CUDA/MasterKernel.cu      
+      BkgModel/CUDA/SampleHistory.cu
       SHARED
     )
 
@@ -187,7 +188,8 @@ add_library(ion-analysis
     
     BaseCaller/PIDloop.cpp
     BaseCaller/DPTreephaser.cpp
-    BaseCaller/RecalibrationModel.cpp
+    Calibration/FlowAlignment.cpp
+    Calibration/LinearCalibrationModel.cpp
     
     BkgModel/MathModel/MathOptim.cpp
     BkgModel/MathModel/PoissonCdf.cpp
@@ -291,8 +293,6 @@ add_library(ion-analysis
     SamUtils/BAMReader.cpp
     SamUtils/BAMUtils.cpp
     SamUtils/alignStats.cpp
-
-    Recall/FlowAlignment.cpp
 
     ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
     ${CUDA_TEMP_FILES}
@@ -453,8 +453,8 @@ add_executable(BaseCaller
     BaseCaller/BarcodeClassifier.cpp
     BaseCaller/BarcodeDatasets.cpp
     BaseCaller/OrderedDatasetWriter.cpp
-    BaseCaller/BaseCallerRecalibration.cpp
-    BaseCaller/RecalibrationModel.cpp
+    Calibration/HistogramCalibration.cpp
+    Calibration/LinearCalibrationModel.cpp
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BaseCaller IONVERSION bamtools)
 target_link_libraries(BaseCaller ion-analysis pthread ${ION_BAMTOOLS_LIBS} dl)
@@ -475,10 +475,12 @@ include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Reads")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Splice")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Filter")
 include_directories("${PROJECT_SOURCE_DIR}/realignment")
+include_directories("${PROJECT_SOURCE_DIR}/Calibration")
 
 add_executable(tvc
   VariantCaller/VariantCaller.cpp
   VariantCaller/BAMWalkerEngine.cpp
+  VariantCaller/OrderedBAMWriter.cpp
   VariantCaller/SampleManager.cpp
   VariantCaller/TargetsManager.cpp
   VariantCaller/HandleVariant.cpp
@@ -528,7 +530,8 @@ add_executable(tvc
   BaseCaller/PIDloop.cpp
   BaseCaller/DPTreephaser.cpp
   BaseCaller/TreephaserSSE.cpp
-  BaseCaller/RecalibrationModel.cpp
+  Calibration/LinearCalibrationModel.cpp
+  Calibration/FlowAlignment.cpp
   Util/OptArgs.cpp
   realignment/Realigner.cpp
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
@@ -539,16 +542,57 @@ add_dependencies(tvc IONVERSION bamtools armadillo_proj htslib_proj)
 install(TARGETS tvc DESTINATION bin)
 
 
+
+add_executable(tvcassembly
+  VariantCaller/IndelAssembly/IndelAssembly.cpp
+  VariantCaller/TargetsManager.cpp
+  VariantCaller/SampleManager.cpp
+
+  # TODO: Actually build vcflib as a static library and link to variant caller.
+  # TODO2: Resolve bgzf.c collisions between vcflib and bamtools
+  ${ION_VCFLIB_DIR}/Variant.cpp
+  ${ION_VCFLIB_DIR}/split.cpp
+  ${ION_VCFLIB_DIR}/tabixpp/tabix.cpp
+  ${ION_VCFLIB_DIR}/tabixpp/index.c
+  ${ION_VCFLIB_DIR}/tabixpp/bgzf.c
+  ${ION_VCFLIB_DIR}/smithwaterman/LeftAlign.cpp
+  ${ION_VCFLIB_DIR}/smithwaterman/Repeats.cpp
+  ${ION_VCFLIB_DIR}/smithwaterman/IndelAllele.cpp
+  ${ION_VCFLIB_DIR}/smithwaterman/SmithWatermanGotoh.cpp
+
+  Util/OptArgs.cpp
+  ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
+  ${PROJECT_BINARY_DIR}/IonVersion.cpp
+)
+
+target_link_libraries(tvcassembly ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} z pthread)
+add_dependencies(tvcassembly IONVERSION bamtools htslib_proj)
+install(TARGETS tvcassembly DESTINATION bin)
+
+
+
 add_executable(tvcutils
   VariantCaller/tvcutils/tvcutils.cpp
   VariantCaller/tvcutils/prepare_hotspots.cpp
   VariantCaller/tvcutils/validate_bed.cpp
+  VariantCaller/tvcutils/unify_vcf.cpp
+  VariantCaller/TargetsManager.cpp
   Util/OptArgs.cpp
-  Util/Utils.cpp
+#  Util/Utils.cpp
+  ${ION_VCFLIB_DIR}/Variant.cpp
+  ${ION_VCFLIB_DIR}/split.cpp
+  ${ION_VCFLIB_DIR}/tabixpp/tabix.cpp
+  ${ION_VCFLIB_DIR}/tabixpp/index.c
+  ${ION_VCFLIB_DIR}/tabixpp/bgzf.c
+  ${ION_VCFLIB_DIR}/smithwaterman/LeftAlign.cpp
+  ${ION_VCFLIB_DIR}/smithwaterman/Repeats.cpp
+  ${ION_VCFLIB_DIR}/smithwaterman/IndelAllele.cpp
+  ${ION_VCFLIB_DIR}/smithwaterman/SmithWatermanGotoh.cpp
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
-add_dependencies(tvcutils IONVERSION)
+target_link_libraries(tvcutils  ${ION_BAMTOOLS_LIBS} z)
+add_dependencies(tvcutils IONVERSION bamtools)
 install(TARGETS tvcutils DESTINATION bin)
 
 
@@ -564,11 +608,16 @@ add_dependencies(ionstats IONVERSION bamtools)
 target_link_libraries(ionstats ion-analysis ${ION_BAMTOOLS_LIBS} pthread dl)
 install(TARGETS ionstats DESTINATION bin)
 
-## calibrate - flowspace recalibration training in c++
-add_executable(calibrate Recall/calibrate.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(calibrate IONVERSION bamtools)
-target_link_libraries(calibrate ion-analysis ${ION_BAMTOOLS_LIBS} pthread dl)
-install(TARGETS calibrate DESTINATION bin)
+## Calibration - flowspace recalibration training in c++
+add_executable(Calibration 
+    Calibration/Calibration.cpp 
+    Calibration/CalibrationHelper.cpp
+    Calibration/FlowAlignment.cpp
+    Calibration/HistogramCalibration.cpp
+    ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(Calibration IONVERSION bamtools)
+target_link_libraries(Calibration ion-analysis ${ION_BAMTOOLS_LIBS} pthread dl)
+install(TARGETS Calibration DESTINATION bin)
 
 add_executable(bamrealignment
     realignment/bamrealignment.cpp
@@ -600,17 +649,18 @@ install(TARGETS PairedEndErrorCorrection DESTINATION bin)
 # target_link_libraries(WellsTimer ion-analysis pthread)
 # install(TARGETS WellsTimer DESTINATION bin)
 
-add_executable(Recall
-	Recall/Recall.cpp
-	${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(Recall ion-analysis file-io dl)
-install(TARGETS Recall DESTINATION bin)
+## CK XXX
+#add_executable(Recall
+#	Recall/Recall.cpp
+#	${PROJECT_BINARY_DIR}/IonVersion.cpp)
+#target_link_libraries(Recall ion-analysis file-io dl)
+#install(TARGETS Recall DESTINATION bin)
 
-add_executable(SeqBoost
-        Recall/SeqBoost.cpp
-        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(SeqBoost ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread dl)
-install(TARGETS SeqBoost DESTINATION bin)
+#add_executable(SeqBoost
+#        Recall/SeqBoost.cpp
+#        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+#target_link_libraries(SeqBoost ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread dl)
+#install(TARGETS SeqBoost DESTINATION bin)
 
 add_executable(sff2bam
         Converter/sff2bam.cpp
@@ -1070,7 +1120,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/updateref.py" DESTINATION bin RENAME upd
 
 install(DIRECTORY "${PROJECT_BINARY_DIR}/../picard-1.130/" DESTINATION "/opt/picard/picard-tools-current/")
 
-#add_subdirectory (MapLab)
+add_subdirectory (MapLab)
 add_subdirectory(TMAP)
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)

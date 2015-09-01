@@ -449,10 +449,11 @@ class Plugin(xmlrpc.XMLRPC):
                     pr.complete(state=state)
                 elif state == 'Started':
                     pr.start(jobid=jobid)
+                    pr.save()
             if store is not None:
                 # Validate JSON?
                 pr.store = store
-            pr.save()
+                pr.save(update_fields=["store"])
         except:
             logger.exception("Unable to update pluginresult %d: %s [%s]", pk, state, store[0:20])
             return False

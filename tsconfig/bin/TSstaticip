@@ -2,7 +2,6 @@
 # Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
 
-
 #-------------------------------------------------------------------------------
 # Launch appropriate script based on OS distribution
 #-------------------------------------------------------------------------------

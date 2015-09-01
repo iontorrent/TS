@@ -1,0 +1,7 @@
+This plugin generates statistics, down-loadable data files and interactive visualization of coverage over targeted regions of the reference genome.
+
+It is fully compatible with run plans that specify barcode-specific references and/or target region files and produces reports that are customized to the application (library) selected.
+
+Plan options may be re-specified for manual runs of the plugin and other application specific options are also available, e.g. for filtering reads and sample tracking
+
+Author: Guy Del Mistro

@@ -214,6 +214,7 @@ typedef struct __tmap_map_opt_t {
     int32_t input_compr;  /*!< the input compression type (-j,--input-bz2 and -z,--input-gz) */
     int32_t output_type;  /*!< the output type (0 - SAM, 1 - BAM (compressed), 2 - BAM (uncompressed)) (-o,--output-type) */
     int32_t end_repair; /*!< specifies to perform 5' end repair (0 - disabled, 1 - prefer mismatches, 2 - prefer indels) (--end-repair) */
+    int32_t min_indel_end_repair;  /*!< Try to save long indel from end repair by count a longest indel as 1 error */
     int32_t max_adapter_bases_for_soft_clipping; /*!< specifies to perform 3' soft-clipping (via -g) if at most this # of adapter bases were found (ZB tag) (--max-adapter-bases-for-soft-clipping) */ 
     key_t shm_key;  /*!< the shared memory key (-k,--shared-memory-key) */
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS

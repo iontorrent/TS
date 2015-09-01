@@ -140,7 +140,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
     endif()
     if(GCC_CXX_VERSION VERSION_EQUAL 5.0 OR (GCC_CXX_VERSION VERSION_GREATER 5.0))
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=bool-compare")
     endif()
 endif()
 

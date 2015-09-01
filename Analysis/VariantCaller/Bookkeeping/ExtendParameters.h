@@ -7,14 +7,8 @@
 #ifndef EXTENDPARAMETERS_H
 #define EXTENDPARAMETERS_H
 
-#include <cstdio>
-#include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
-#include <map>
-#include <getopt.h>
-#include <stdlib.h>
 #include "OptArgs.h"
 #include "json/json.h"
 

@@ -17,7 +17,6 @@ from iondb.bin.djangoinit import *
 from iondb.rundb.models import Experiment, DMFileSet, ReportStorage, Location, Message, EventLog, FileServer, Content, Sample
 from iondb.settings import RELVERSION
 from django.core import serializers
-from django.core.urlresolvers import reverse
 from django.utils import timezone
 from django.db.models import get_model
 from django.db import transaction
@@ -59,7 +58,7 @@ def update_Plan(saved_objs):
             if filename == os.path.basename(filepath):
                 return filepath
 
-        logger.debug('[Data Import] Update Plan: unable to find bedfile: %s for reference: %s' % (filename,reference))
+        logger.info('[Data Import] Update Plan: unable to find bedfile: %s for reference: %s' % (filename,reference))
         return ''
     
     eas = saved_objs['experiment analysis settings']
@@ -121,7 +120,7 @@ def create_obj(model_name, data, saved_objs):
                         setattr(obj, field.name, data_fields[ field.name ] )
 
             obj.save()
-            logger.debug('[Data Import] SAVED %s pk=%s' % (model_name, obj.pk) )
+            logger.info('[Data Import] SAVED %s pk=%s' % (model_name, obj.pk) )
 
             return obj
 
@@ -131,7 +130,7 @@ def load_serialized_json(json_path, create_result, log, add_warning):
     # serialized.json file is created during DataManagement export/archive and contains objects to be imported
     # Note that DB objects must be saved in specific sequence for correct relations to be set up
     log('Importing database objects ...')
-    logger.debug('[Data Import] Creating database objects from %s.' % json_path)
+    logger.info('[Data Import] Creating database objects from %s.' % json_path)
 
     with open(json_path) as f:
         data = json.load(f)
@@ -212,14 +211,14 @@ def load_serialized_json(json_path, create_result, log, add_warning):
             log(traceback.format_exc())
 
     log('Importing database objects done.', flush=True)
-    logger.debug('[Data Import] Done creating database objects from %s.' % json_path)
+    logger.info('[Data Import] Done creating database objects from %s.' % json_path)
     return saved_objs
 
 
 def copy_files_to_destination(source_dir, destination, dmfileset, cached_file_list, log, add_warning):
 
     to_process, to_keep = dm_utils._file_selector(source_dir, dmfileset.include, dmfileset.exclude, [], cached=cached_file_list)
-    logger.debug('[Data Import] Importing %d files from %s to %s' % (len(to_process), source_dir, destination) )
+    logger.info('[Data Import] Importing %d files from %s to %s' % (len(to_process), source_dir, destination) )
     log('Copy files to destination: %d files, source=%s destination=%s' % (len(to_process), source_dir, destination) )
     
     plugin_warnings = {}
@@ -239,13 +238,18 @@ def copy_files_to_destination(source_dir, destination, dmfileset, cached_file_li
     for plugin, count in plugin_warnings.items():
         add_warning('Unable to copy %d files for plugin %s' % (count,plugin))
 
-    # make sure we have plugin_out folder
     if dmfileset.type == dmactions_types.OUT:
+        # make sure we have plugin_out folder
         plugin_out = os.path.join(destination, 'plugin_out')
         if not os.path.isdir(plugin_out):
             oldmask = os.umask(0000)   #grant write permission to plugin user
             os.mkdir(plugin_out)
             os.umask(oldmask)
+
+        # remove pdf folder, it may have incorrect permissions
+        pdf_dir = os.path.join(destination, 'pdf')
+        if os.path.exists(pdf_dir):
+            shutil.rmtree(pdf_dir, ignore_errors=True)
 
     # for onboard results need to create sigproc_results link
     if dmfileset.type == dmactions_types.BASE:
@@ -260,7 +264,7 @@ def generate_report_pdf(source_dir, result, dmfilestat, log, add_warning):
     source_dir = source_dir.rstrip('/')
     pdf_filepath = os.path.join(report_dir, os.path.basename(report_dir)+'-full.pdf')
 
-    logger.debug('[Data Import] Generating report pdf %s.' % pdf_filepath)
+    logger.info('[Data Import] Generating report pdf %s.' % pdf_filepath)
     log('Generating report pdf %s' % pdf_filepath)
 
     if os.path.exists(os.path.join(source_dir, os.path.basename(source_dir)+'-full.pdf')):
@@ -352,13 +356,18 @@ class ImportData:
         msg_banner('Started', self)
 
     def fail(self, err, log_msg, result=None):
-        self.logfile.write(log_msg)
+        self.logfile.write('ERROR: ' + log_msg)
         self.logfile.close()
-        msg_banner('Error', self, msg_str=err)
+        msg_banner('ERROR', self, msg_str=err)
+
         if result:
-            result.dmfilestat_set.filter(action_state='IG').update(action_state='E')
             EventLog.objects.add_entry(result, "Importing Error: %s %s." % (self.name, err), self.user)
+            result.dmfilestat_set.filter(action_state='IG').update(action_state='E')
+            result.status = "Importing Failed"
+            result.save()
             copy_log_file(self.tmp_log_path, result.get_report_dir())
+
+        raise Exception(log_msg)
     
     def finish(self, result, exp):
         self.log('FINISHED Import of selected categories.')
@@ -383,6 +392,7 @@ class ImportData:
             EventLog.objects.add_entry(result, txt, self.user)
 
     def log(self, msg, flush=False):
+        logger.debug(msg)
         self.logfile.write("[ %s ] %s\n" % (time.strftime('%X'), msg))
         if flush:
             self.logfile.flush()
@@ -405,7 +415,7 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
     importing = ImportData(name, selected, username, copy_data, copy_report)
     importing.start()
     importing.log('Selected: %s, copy data: %s, copy report: %s.' % (importing.selected_str, copy_data, copy_report) )
-    logger.info('[Data Import] (%s) Started import %s using %s.' % (name, importing.selected_str, importing.json_path) )
+    logger.info('[Data Import] (%s) Started import %s using %s, copy data: %s, copy report: %s.' % (name, importing.selected_str, importing.json_path, copy_data, copy_report) )
 
     # create DB records
     try:
@@ -416,11 +426,19 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
     except Exception as e:
         msg = traceback.format_exc()
         importing.fail(e, msg)
-        logger.error(msg)
-        return
 
     if result:
-        result.dmfilestat_set.filter(dmfileset__type__in=selected.keys()).update(action_state='IG')
+        dmfilestats_to_import = result.dmfilestat_set.filter(dmfileset__type__in=selected.keys())
+        # check if importing is allowed
+        for dmfilestat in dmfilestats_to_import:
+            if dmfilestat.in_process():
+                error = "In Process: %s status is %s" % (dmfilestat.dmfileset.type, dmfilestat.get_action_state_display())
+                importing.fail(error, error)
+
+        # set status
+        dmfilestats_to_import.update(action_state='IG')
+        result.status = 'Importing'
+        result.save()
         EventLog.objects.add_entry(result, "Importing %s %s." % (name, importing.selected_str), username)
 
     # get list of files
@@ -439,7 +457,6 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
     except Exception as e:
         msg = traceback.format_exc()
         importing.fail(e, msg, result)
-        logger.error(msg)
 
     # copy files to destination
     for category in importing.categories:
@@ -461,15 +478,12 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
             if not os.path.exists(source_dir):
                 error = "Source path %s does not exist, exiting." % source_dir
                 importing.fail(error,error,result)
-                return
         
             try:
                 copy_files_to_destination(source_dir, destination, dmfileset, file_list, importing.log, importing.add_warning)
             except Exception as e:
                 msg = traceback.format_exc()
                 importing.fail(e, msg, result)
-                logger.error(msg)
-                return
 
         elif dmtype == dmactions_types.OUT:
             # special case: importing Report as Archived (copy_report=False)
@@ -564,18 +578,18 @@ def msg_banner(status, importing, result=None, exp=None, msg_str=''):
 
     if 'Completed' in status:
         if result:
-            logurl = reverse('dm_log', args=(result.pk,))
+            logurl = '/data/datamanagement/log/%s/' % result.pk
             msg += " <a href='%s' data-toggle='modal' data-target='#modal_report_log'>View Report Log</a>" % (logurl)
         if dmactions_types.OUT in importing.selected_str:
-            reporturl = reverse('report', args=(result.pk,))
+            reporturl = '/report/%s/' % result.pk
             msg += " Imported Report: <a href='%s'>%s</a>'" % (reporturl, result.resultsName)
         else:
             msg += " Imported Run available for analysis: <a href='/data/'>%s</a>" % exp.expName
 
     Message.objects.filter(tags=importing.tag).delete()
-    if status == 'Error':
-        errlog = reverse('import_data_log', args=(importing.logfile.name,))
-        msg += ": %s <a href='%s' data-toggle='modal' data-target='#modal_report_log'>Error Log</a>" % (msg_str, errlog)
+    if status == 'ERROR':
+        errlog = '/data/datamanagement/import_data_log/%s' % importing.logfile.name
+        msg += " %s <a href='%s' data-toggle='modal' data-target='#modal_report_log'>Error Log</a>" % (msg_str, errlog)
         Message.error(msg, tags=importing.tag, route=importing.user)
     else:
         Message.info(msg, tags=importing.tag, route=importing.user)

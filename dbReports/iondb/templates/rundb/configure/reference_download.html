@@ -2,15 +2,9 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
-{% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
-  <li><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
-{% endblock sub-nav %}
+{% block tab-configure-references %}
+    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+{% endblock tab-configure-references %}
 {% block extra_head %}
 
 {% endblock extra_head %}
@@ -18,7 +12,7 @@
 {% block content %}
 	<div class="content">
         <div class="row">
-            <div class="span6">
+            <div class="span12">
                 <h1>Ion References</h1>
                 {% if not references %}
                     <p>Could not retrieve list of references from the Internet</p>
@@ -30,10 +24,30 @@
                                 {% if ref.installed %}
                                     <a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.installed.status }}</a>
                                     <p>{{ ref.name }}</p>
+                                    {%if ref.installed.status == "complete" %}
+	                                    <form action="{% url "references_genome_download" %}" method="post">
+	                                    	{% if ref.refAnnotNotAvailable != 'N/A' %}
+	                                    		<i>Annotation</i>
+	                                    	{% endif %}
+	                                        <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
+	                                        <input type="hidden" name="annotation_meta" value="{{ ref.annotation_encoded }}" />
+	                                        {% if ref.isAnnotCompleted and not ref.isNewAnnotPosted and not ref.noLink %}
+	                                        	<a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.isAnnotCompleted }}</a>
+	                                        {% else %}
+	                                        	<a class="pull-right" title="{{ref.errURL}}"><font color="#FF6666">{{ ref.noLinkMsg }}</font></a>
+	                                    	{% endif %}
+	                                        {%if ref.isNewAnnotPosted %}
+	                                    		<input type="hidden" name="missingAnnotation_meta" value="{{ ref.missingAnnotation_meta }}" />
+	                                    		<input id=test type=file name=test style="visibility:hidden;position:absolute;top:0;left:0" value="{{ ref.missingAnnotation_data }}">
+	                                    		<input type="submit" name="ref_annot_update" class="btn btn-small" value="Download" />
+	                                    	{% endif %}
+	                                    </form>
+	                                  {% endif %}
                                 {% else %}
                                     <form action="{% url "references_genome_download" %}" method="post" class="pull-right">
                                         <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
                                         <input type="hidden" name="reference_url" value="{{ ref.url }}" />
+                                        <input type="hidden" name="missingAnnotation_meta" value="{{ ref.missingAnnotation_meta }}" />
                                         <input type="submit" class="btn btn-small" value="Import" />
                                     </form>
                                     <p><strong>{{ ref.name }}</strong></p>
@@ -47,61 +61,10 @@
                     </table>
                 {% endif %}
             </div>
-            <div id="download_custom_form"  class="span6">
-                <h1>Import Custom Reference</h1>
-                <form class="form form-horizontal" method="POST" action="{% url "references_custom_download" %}">
-                    <fieldset>
-                        <div class="control-group">
-                            <label for="reference_url" class="control-label">Reference URL <i>(required)</i></label>
-                            <div class="controls">
-                                <input name="reference_url" id="reference_url" placeholder="e.g. http://updates.iontorrent.com/reference_downloads/mm10.zip" type="text" class="input-xxlarge textInput required"/>
-                                <p class="help-block">
-                                    URL to the reference, a zip or gzip file on a remote server.
-                                </p>
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="short_name" class="control-label">Short name <i>(required)</i></label>
-                            <div class="controls">
-                                <input name="short_name" id="short_name" placeholder="e.g. hg19" maxlength="50" type="text" class="textInput required validateAlphaNumUnderscoreNoSpace"/>
-                                <p class="help-block">
-                                    Short form of reference name, use letters, numbers, and underscore only
-                                </p>
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="name" class="control-label">Description <i>(required)</i></label>
-                            <div class="controls">
-                                <input name="name" id="name" placeholder="e.g. Homo sapiens hg19"  maxlength="512" type="text" class="input-xxlarge textInput required"/>
-                                <p class="help-block">
-                                    A longer, more descriptive reference name.
-                                </p>
-                            </div>
-                        </div>
-                        <div class="control-group" title="The version information for this reference">
-                            <label for="version" class="control-label" style="font-weight: normal;">Version (optional)</label>
-                            <div class="controls">
-                                <input name="version" id="version" maxlength="100" type="text"/>
-                            </div>
-                        </div>
-                        <div class="control-group" title="Miscellaneous notes on this reference.">
-                            <label for="notes" class="control-label" style="font-weight: normal;">Notes (optional)</label>
-                            <div class="controls">
-                                <textarea name="notes" id="notes" class="input-xxlarge"></textarea>
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <div class="controls">
-                                <input type="submit" class="btn btn-primary" value="Import Custom" />
-                            </div>
-                        </div>
-                    </fieldset>
-                </form>
-            </div>
         </div>
         <div class="row">
             <div class="span12">
-                <p>Note: these downloads are larger than the tranditional zipped fasta file because they are pre-indexed for your convenience.  If you prefer a smaller total download, please visit the <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7185"> Ion Community</a></p>
+                <p>Note: these downloads are larger than the tranditional zipped fasta file because they are pre-indexed for your convenience.  If you prefer a smaller total download, please visit the <a href="http://ioncommunity.thermofisher.com/docs/DOC-7185"> Ion Community</a></p>
                 <h2>References Downloading <a href="{% url "references_genome_download" %}" class="btn"><i class="icon-refresh"></i> Refresh list</a></h2>
                 {% if downloads %}
                     <table class="table table-striped">

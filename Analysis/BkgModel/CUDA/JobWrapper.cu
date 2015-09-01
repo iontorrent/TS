@@ -614,12 +614,14 @@ void WorkSet::setJobToRemainRegionFit()
 
 void WorkSet::putJobToCPU(WorkerInfoQueueItem item)
 {
-  _info->pq->GetCpuQueue()->PutItem(item);
+  //_info->pq->GetCpuQueue()->PutItem(item);
+  _info->QueueControl->GetQueue()->PutItem(item);
 }
 
 void WorkSet::putJobToGPU(WorkerInfoQueueItem item)
 {
-  _info->pq->GetGpuQueue()->PutItem(item);
+  //_info->pq->GetGpuQueue()->PutItem(item);
+  _info->QueueControl->GetGpuQueue()->PutItem(item);
 }
 
 void WorkSet::printJobSummary()
@@ -700,7 +702,7 @@ void WorkSet::calculateCPUXtalkForBead(int ibd, float* buf) {
 
 bool WorkSet::performCrossTalkCorrection() const {
   if(isSet()) {
-    return _info->bkgObj->getXtalkExecute().xtalk_spec_p->do_xtalk_correction;
+    return _info->bkgObj->getTraceXTalkSpecs().do_xtalk_correction;
   }
   return false;
 }
@@ -892,3 +894,19 @@ int WorkSet::getNucIdForFlow(int flow) {
 }
 
 const EmphasisClass& WorkSet::getEmphasisData() { return _info->bkgObj->region_data->emphasis_data; }
+
+bool WorkSet::performTauAdjInExpTailFit() const {
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.exp_tail_tau_adj;
+}
+
+bool WorkSet::performBkgAdjInExpTailFit() const {
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.exp_tail_bkg_adj;
+}
+
+float WorkSet::expTailFitBkgAdjLimit() const {
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.exp_tail_bkg_limit;
+}
+
+float WorkSet::expTailFitBkgDcLowerLimit() const {
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.exp_tail_bkg_lower;
+}

@@ -378,8 +378,8 @@ class DRMAnalysis(Analysis):
             return None
         jt = _session.createJobTemplate()
         qname = 'tl.q'
-        if self.job_type == 'PairedEnd':
-            qname = 'all.q'
+        if self.job_type == 'thumbnail':
+            qname = 'thumbnail.q'
         #SGE
         jt.nativeSpecification = "%s -w w -q %s" % (self.get_sge_params(self.chips, self.chipType), qname)
         #TORQUE

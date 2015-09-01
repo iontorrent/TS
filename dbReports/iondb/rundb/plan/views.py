@@ -38,6 +38,7 @@ from iondb.utils.prepopulated_planning import apply_prepopulated_values_to_step_
 
 from iondb.rundb.plan.plan_csv_writer import get_template_data_for_batch_planning
 from iondb.rundb.plan.plan_csv_validator import validate_csv_plan
+from iondb.rundb.plan import plan_validator
 
 import os
 import string
@@ -149,7 +150,11 @@ def page_plan_new_template(request, code=None):
 #            if (not isSupported):
 #                return render_to_response("501.html")
 
-        step_helper = StepHelperDbLoader().getStepHelperForRunType(_get_runtype_from_code(code).pk)
+	if (code=="9"):
+	    step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, applicationGroupName="PGx")
+	else:
+	    step_helper = StepHelperDbLoader().getStepHelperForRunType(_get_runtype_from_code(code).pk)
+
         request.session['plan_step_helper'] = step_helper
     else:
         request.session['plan_step_helper'] = StepHelper()
@@ -157,11 +162,10 @@ def page_plan_new_template(request, code=None):
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
 
 @login_required
-def page_plan_new_template_by_sample(request, sampleset_id=None):
+def page_plan_new_template_by_sample(request, sampleset_id):
     """ Create a new template by sample """
     
-    step_helper = StepHelperDbLoader().getStepHelperForNewTemplateBySample(_get_runtype_from_code(0).pk)
-    step_helper.steps[StepNames.IONREPORTER].savedFields['sampleset_id'] = sampleset_id
+    step_helper = StepHelperDbLoader().getStepHelperForNewTemplateBySample(_get_runtype_from_code(0).pk, sampleset_id)
     request.session['plan_step_helper'] = step_helper
     
     ctxd = handle_step_request(request, 'Ionreporter')
@@ -214,8 +218,12 @@ def page_plan_new_plan_from_code(request, code):
 #        if (not isSupported):
 #            return render_to_response("501.html")
  
-    runType = _get_runtype_from_code(code)
-    step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
+    if (code=="9"):
+        step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="PGx")
+    else:
+        runType = _get_runtype_from_code(code)
+        step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
+
     apply_prepopulated_values_to_step_helper(request, step_helper)
     request.session['plan_step_helper'] = step_helper
     ctxd = handle_step_request(request, 'Ionreporter')
@@ -281,6 +289,7 @@ def page_plan_edit_run(request, exp_id):
 
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan.id, StepHelperType.EDIT_RUN)
     request.session['plan_step_helper'] = step_helper
+    request.session['return'] = request.META.get('HTTP_REFERER','')
     ctxd = handle_step_request(request, 'Save_plan')
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
 
@@ -423,7 +432,7 @@ def page_plan_save(request, exp_id=None):
             del request.session['post_planning_redirect_url']
             return response
         elif ctxd['helper'].isEditRun():
-            return HttpResponseRedirect('/data')
+            return HttpResponseRedirect(request.session.pop('return') if request.session.get('return') else '/data')
         elif ctxd['helper'].isPlan():
             return HttpResponseRedirect('/plan/planned')
         else:
@@ -1823,3 +1832,161 @@ def plan_transfer(request, pk, destination=None):
         'action': reverse('api_dispatch_transfer', kwargs={'resource_name': 'plannedexperiment', 'api_name': 'v1', 'pk': int(pk)})
     }
     return render_to_response("rundb/plan/modal_plan_transfer.html", context_instance=RequestContext(request, ctxd))
+
+
+def page_plan_samples_table_keys(is_barcoded, include_IR = False):
+    barcoded = (
+        ('barcodeId',           'Barcode'),
+    )
+    default = (
+        ('sampleName',          'Sample (required)'),
+        ('sampleExternalId',    'Sample ID'),
+        ('sampleDescription',   'Sample Description'),
+        ('nucleotideType',      'nucleotideType (DNA/RNA)'),
+        ('reference',           'Reference library'),
+        ('targetRegionBedFile', 'Target regions BED file'),
+        ('hotSpotRegionBedFile','Hotspot regions BED file'),
+    )
+    non_barcoded = (
+        ('tubeLabel',           'Sample tube label'),
+        ('chipBarcode',         'Chip ID'),
+    )
+    ir = (
+        ('ircancerType',        'Cancer Type'),
+        ('ircellularityPct',    'Cellularity %'),
+        ('irbiopsyDays',        'Biopsy Days'),
+        ('ircoupleID',          'Couple ID'),
+        ('irembryoID',          'Embryo ID'),
+        ('irWorkflow',          'IR Workflow'),
+        ('irRelationRole',      'IR Relation'),
+        ('irGender',            'IR Gender'),
+        ('irSetID',             'IR Set ID'),
+    )
+
+    if is_barcoded:
+        keys = barcoded + default
+    else:
+        keys = default + non_barcoded
+
+    if include_IR: keys += ir
+    return keys
+
+def page_plan_save_samples_table(request):
+    ''' request from editing Plan page to save samples table from js to csv '''
+    response = http.HttpResponse(mimetype='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=plan_samples_%s.csv'  % str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    writer = csv.writer(response)
+    table = json.loads(request.POST.get('samplesTable'))
+
+    has_IR = 'irWorkflow' in table[0]
+    is_barcoded = 'barcodeId' in table[0]
+    keys, header = zip(*page_plan_samples_table_keys(is_barcoded, has_IR))
+
+    writer.writerow(header)
+    for row in table:
+        values = [row[key] for key in keys]
+        writer.writerow(values)
+
+    return response
+
+def page_plan_load_samples_table(request):
+    ''' load and validate samples csv file '''
+    csv_file = request.FILES['csv_file']
+    has_IR = request.POST.get('irSelected') == '1'
+    barcodeSet = request.POST.get('barcodeSet')
+    default_reference = request.POST.get('default_reference')
+    default_targetBedFile = request.POST.get('default_targetBedFile')
+    default_hotSpotBedFile = request.POST.get('default_hotSpotBedFile')
+    runType = request.POST.get('runType_name')
+    applicationGroup = request.POST.get('applicationGroupName')
+    
+    bedFileDict = dict_bed_hotspot()
+    
+    keys = page_plan_samples_table_keys(barcodeSet, has_IR)
+    ret = {
+        'same_ref_and_bedfiles': True,
+        'samplesTable': [],
+        'ordered_keys': zip(*keys)[0]
+    }
+
+    destination = tempfile.NamedTemporaryFile(delete=False)
+    for chunk in csv_file.chunks():
+        destination.write(chunk)
+    destination.close()
+
+    try:
+        f = open(destination.name, 'rU')
+        reader = csv.DictReader(f)
+
+        error = ''
+        for n, row in enumerate(reader):
+            processed_row = dict([ (k, row[v]) for k,v in keys if v in row])
+            ret['samplesTable'].append(processed_row)
+
+            # validation
+            row_errors = []
+            for key, value in processed_row.items():
+                if barcodeSet:
+                    # barcoded
+                    if key == 'barcodeId' and barcodeSet not in dnaBarcode.objects.filter(id_str= value).values_list('name', flat=True):
+                        row_errors.append('Barcode %s is not part of selected %s Kit' % (value, barcodeSet))
+                else:
+                    # non-barcoded
+                    if key == 'chipBarcode' and value:
+                        row_errors.extend(plan_validator.validate_chipBarcode(value))
+                    if key == 'tubeLabel' and value:
+                        row_errors.extend(plan_validator.validate_sample_tube_label(value))
+
+                if key == 'sampleName' and value:
+                    row_errors.extend(plan_validator.validate_sample_name(value))
+                if key == 'sampleExternalId' and value:
+                    row_errors.extend(plan_validator.validate_sample_id(value))
+                if key == 'nucleotideType' and value:
+                    nuctype_err, processed_row[key] = plan_validator.validate_sample_nucleotideType(value, runType, applicationGroup)
+                    row_errors.extend(nuctype_err)
+
+                if key == 'reference' and value:
+                    ref_err, processed_row[key] = plan_validator.validate_reference(value, runType, applicationGroup)
+                    row_errors.extend(ref_err)
+                    if default_reference != processed_row[key]:
+                        ret['same_ref_and_bedfiles'] = False
+
+                if key == 'targetRegionBedFile' and value:
+                    validated = [bed.file for bed in bedFileDict.get("bedFiles") if value==bed.file or value==os.path.basename(bed.file)]
+                    if validated:
+                        processed_row[key] = validated[0]
+                        if default_targetBedFile != processed_row[key]:
+                            ret['same_ref_and_bedfiles'] = False
+                    else:
+                        row_errors.append('Target regions BED file not found for %s' % value)
+
+                if key == 'hotSpotRegionBedFile' and value:
+                    validated = [bed.file for bed in bedFileDict.get("hotspotFiles") if value==bed.file or value==os.path.basename(bed.file)]
+                    if validated:
+                        processed_row[key] = validated[0]
+                        if default_hotSpotBedFile != processed_row[key]:
+                            ret['same_ref_and_bedfiles'] = False
+                    else:
+                        row_errors.append('Hotspot regions BED file not found for %s' % value)
+
+            if row_errors:
+                error += 'Error in row %i: %s<br>' % (n+1, ' '.join(row_errors))
+
+            if ('Reference library' in row and row['Reference library'].strip() != default_reference ) \
+                or ('Target regions BED file' in row and row['Target regions BED file'].strip() != default_targetBedFile ) \
+                or ('Hotspot regions BED file' in row and row['Hotspot regions BED file'].strip() != default_hotSpotBedFile ):
+                    ret['same_ref_and_bedfiles'] = False
+
+        f.close()  # now close and remove the temp file
+        os.unlink(destination.name)
+
+        if len(ret['samplesTable']) == 0:
+            return http.HttpResponseBadRequest('Error: No rows could be parsed from %s' % csv_file.name)
+        elif error:
+            return http.HttpResponseBadRequest(error)
+        else:
+            return http.HttpResponse(json.dumps(ret), mimetype="text/html")
+
+    except Exception as err:
+        logger.error(format_exc())
+        return http.HttpResponseServerError(repr(err))

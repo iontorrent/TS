@@ -37,7 +37,6 @@ void GpuControlOpts::DefaultGpuControl()
     gpuUseAllDevices=false;
     gpuVerbose = false;
 
-    tMidNucShiftPerFlow = true;
     gpuFlowByFlowExecution = false;
     postFitHandshakeWorker = false; 
     switchToFlowByFlowAt = 20;
@@ -73,79 +72,84 @@ void GpuControlOpts::PrintHelp()
 
 void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-	gpuWorkLoad = RetrieveParameterFloat(opts, json_params, '-', "gpuworkload", 1.0);
-	if ( ( gpuWorkLoad > 1 ) || ( gpuWorkLoad < 0 ) )
+  gpuWorkLoad = RetrieveParameterFloat(opts, json_params, '-', "gpuworkload", 1.0);
+  if ( ( gpuWorkLoad > 1 ) || ( gpuWorkLoad < 0 ) )
+  {
+    fprintf ( stderr, "Option Error: gpuworkload must specify a value between 0 and 1 (%f invalid).\n", gpuWorkLoad );
+    exit ( EXIT_FAILURE );
+  }
+  gpuNumStreams = RetrieveParameterInt(opts, json_params, '-', "gpu-num-streams", 2);
+  if ( ( gpuNumStreams < 1 ) && ( gpuNumStreams > 16 ) )
+  {
+    fprintf ( stderr, "Option Error: gpu-num-streams must specify a value between 1 and 16 (%d invalid).\n", gpuNumStreams );
+    exit ( EXIT_FAILURE );
+  }
+  gpuAmpGuess = RetrieveParameterInt(opts, json_params, '-', "gpu-amp-guess", 1);
+  if ( gpuAmpGuess != 0 && gpuAmpGuess != 1 )
+  {
+    fprintf ( stderr, "Option Error: gpu-amp-guess must be either 0 or 1 (%d invalid).\n",gpuAmpGuess );
+    exit ( EXIT_FAILURE );
+  }
+  gpuSingleFlowFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit", 1);
+  if ( gpuSingleFlowFit != 0 && gpuSingleFlowFit != 1 )
+  {
+    fprintf ( stderr, "Option Error: gpu-single-flow-fit must be either 0 or 1 (%d invalid).\n", gpuSingleFlowFit );
+    exit ( EXIT_FAILURE );
+  }
+  gpuThreadsPerBlockSingleFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-blocksize", -1);
+  if(gpuThreadsPerBlockSingleFit >= 0)
+  {
+    if ( gpuThreadsPerBlockSingleFit <= 0 )
     {
-      fprintf ( stderr, "Option Error: gpuworkload must specify a value between 0 and 1 (%f invalid).\n", gpuWorkLoad );
+      fprintf ( stderr, "Option Error: gpu-single-flow-fit-blocksize must be > 0 (%d invalid).\n", gpuThreadsPerBlockSingleFit );
       exit ( EXIT_FAILURE );
     }
-	gpuNumStreams = RetrieveParameterInt(opts, json_params, '-', "gpu-num-streams", 2);
-	if ( ( gpuNumStreams < 1 ) && ( gpuNumStreams > 16 ) )
-    {
-      fprintf ( stderr, "Option Error: gpu-num-streams must specify a value between 1 and 16 (%d invalid).\n", gpuNumStreams );
-      exit ( EXIT_FAILURE );
-    }
-	gpuAmpGuess = RetrieveParameterInt(opts, json_params, '-', "gpu-amp-guess", 1);
-	if ( gpuAmpGuess != 0 && gpuAmpGuess != 1 )
-    {
-      fprintf ( stderr, "Option Error: gpu-amp-guess must be either 0 or 1 (%d invalid).\n",gpuAmpGuess );
-      exit ( EXIT_FAILURE );
-    }
-	gpuSingleFlowFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit", 1);
-	if ( gpuSingleFlowFit != 0 && gpuSingleFlowFit != 1 )
-	{
-		fprintf ( stderr, "Option Error: gpu-single-flow-fit must be either 0 or 1 (%d invalid).\n", gpuSingleFlowFit );
-		exit ( EXIT_FAILURE );
-	}
-	gpuThreadsPerBlockSingleFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-blocksize", -1);
-	if(gpuThreadsPerBlockSingleFit >= 0)
-	{
-		if ( gpuThreadsPerBlockSingleFit <= 0 )
-		{
-		  fprintf ( stderr, "Option Error: gpu-single-flow-fit-blocksize must be > 0 (%d invalid).\n", gpuThreadsPerBlockSingleFit );
-		  exit ( EXIT_FAILURE );
-		}
-	}
-	gpuL1ConfigSingleFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-l1config", -1);
-	gpuMultiFlowFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit", 1);
-	if ( gpuMultiFlowFit != 0 && gpuMultiFlowFit != 1 )
-	{
-	  fprintf ( stderr, "Option Error: gpu-multi-flow-fit must be either 0 or 1 (%d invalid).\n", gpuMultiFlowFit );
-	  exit ( EXIT_FAILURE );
-	}
-	gpuThreadsPerBlockMultiFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit-blocksize", 128);
-	if ( gpuThreadsPerBlockMultiFit <= 0 )
-	{
-	  fprintf ( stderr, "Option Error: gpu-multi-flow-fit-blocksize must be > 0 (%d invalid).\n", gpuThreadsPerBlockMultiFit );
-	  exit ( EXIT_FAILURE );
-	}
-	gpuL1ConfigMultiFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit-l1config", -1);
-	gpuSingleFlowFitType = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-type", 3);
-	gpuHybridIterations = RetrieveParameterInt(opts, json_params, '-', "gpu-hybrid-fit-iter", 3);
-	gpuThreadsPerBlockPartialD = RetrieveParameterInt(opts, json_params, '-', "gpu-partial-deriv-blocksize", 128);
-	if ( gpuThreadsPerBlockPartialD <= 0 )
-	{
-	  fprintf ( stderr, "Option Error: gpu-partial-deriv-blocksize must be > 0 (%d invalid).\n", gpuThreadsPerBlockPartialD );
-	  exit ( EXIT_FAILURE );
-	}
-	gpuL1ConfigPartialD = RetrieveParameterInt(opts, json_params, '-', "gpu-partial-deriv-l1config", -1);
-	gpuUseAllDevices = RetrieveParameterBool(opts, json_params, '-', "gpu-use-all-devices", false);
-	gpuVerbose = RetrieveParameterBool(opts, json_params, '-', "gpu-verbose", false);
-	vector<int> deviceIds;
-	RetrieveParameterVectorInt(opts, json_params, '-', "gpu-device-ids", "", deviceIds);
-	for (size_t i = 0; i < deviceIds.size(); ++i)
-	{
-		gpuDeviceIds.push_back(deviceIds[i]);
-	}
-    if (deviceIds.size() > 0) 
-	{
-      std::sort(gpuDeviceIds.begin(), gpuDeviceIds.end());
-    }
-	//jz the following comes from CommandLineOpts::GetOpts
-	doGpuOnlyFitting = RetrieveParameterBool(opts, json_params, '-', "gpu-fitting-only", true);
+  }
+  gpuL1ConfigSingleFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-l1config", -1);
+  gpuMultiFlowFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit", 1);
+  if ( gpuMultiFlowFit != 0 && gpuMultiFlowFit != 1 )
+  {
+    fprintf ( stderr, "Option Error: gpu-multi-flow-fit must be either 0 or 1 (%d invalid).\n", gpuMultiFlowFit );
+    exit ( EXIT_FAILURE );
+  }
+  gpuThreadsPerBlockMultiFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit-blocksize", 128);
+  if ( gpuThreadsPerBlockMultiFit <= 0 )
+  {
+    fprintf ( stderr, "Option Error: gpu-multi-flow-fit-blocksize must be > 0 (%d invalid).\n", gpuThreadsPerBlockMultiFit );
+    exit ( EXIT_FAILURE );
+  }
+  gpuL1ConfigMultiFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit-l1config", -1);
+  gpuSingleFlowFitType = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-type", 3);
+  gpuHybridIterations = RetrieveParameterInt(opts, json_params, '-', "gpu-hybrid-fit-iter", 3);
+  gpuThreadsPerBlockPartialD = RetrieveParameterInt(opts, json_params, '-', "gpu-partial-deriv-blocksize", 128);
+  if ( gpuThreadsPerBlockPartialD <= 0 )
+  {
+    fprintf ( stderr, "Option Error: gpu-partial-deriv-blocksize must be > 0 (%d invalid).\n", gpuThreadsPerBlockPartialD );
+    exit ( EXIT_FAILURE );
+  }
+  gpuL1ConfigPartialD = RetrieveParameterInt(opts, json_params, '-', "gpu-partial-deriv-l1config", -1);
+  gpuUseAllDevices = RetrieveParameterBool(opts, json_params, '-', "gpu-use-all-devices", false);
+  gpuVerbose = RetrieveParameterBool(opts, json_params, '-', "gpu-verbose", false);
+  vector<int> deviceIds;
+  RetrieveParameterVectorInt(opts, json_params, '-', "gpu-device-ids", "", deviceIds);
+  for (size_t i = 0; i < deviceIds.size(); ++i)
+  {
+    gpuDeviceIds.push_back(deviceIds[i]);
+  }
+  if (deviceIds.size() > 0) 
+  {
+    std::sort(gpuDeviceIds.begin(), gpuDeviceIds.end());
+  }
 
-	tMidNucShiftPerFlow = RetrieveParameterBool(opts, json_params, '-', "gpu-tmidnuc-shift-per-flow", true);
-	gpuFlowByFlowExecution = RetrieveParameterBool(opts, json_params, '-', "gpu-flow-by-flow", false);
-	postFitHandshakeWorker = RetrieveParameterBool(opts, json_params, '-', "post-fit-handshake-worker", false);
-	switchToFlowByFlowAt = RetrieveParameterInt(opts, json_params, '-', "gpu-switch-to-flow-by-flow-at", 20);
+  //jz the following comes from CommandLineOpts::GetOpts
+  doGpuOnlyFitting = RetrieveParameterBool(opts, json_params, '-', "gpu-fitting-only", true);
+  gpuFlowByFlowExecution = RetrieveParameterBool(opts, json_params, '-', "gpu-flow-by-flow", false);
+
+  if (gpuFlowByFlowExecution) {
+    postFitHandshakeWorker = RetrieveParameterBool(opts, json_params, '-', "post-fit-handshake-worker", true);
+    switchToFlowByFlowAt = RetrieveParameterInt(opts, json_params, '-', "gpu-switch-to-flow-by-flow-at", 20);
+  }
+  else {
+    postFitHandshakeWorker = false;
+  }
 }

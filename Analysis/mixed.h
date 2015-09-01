@@ -71,7 +71,6 @@ bool fit_normals (
   arma::vec& alpha,
   const std::deque<float>& ppf,
   const std::deque<float>& ssq,
-  bool verbose,
   const PolyclonalFilterOpts & opts
 );
 
@@ -142,7 +141,7 @@ std::ostream& operator<< (std::ostream& out, const filter_counts& counts);
 void make_filter (clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const std::vector<int>& key_ionogram, const PolyclonalFilterOpts & opts);
 
 // Make a clonality filter given ppf and ssq for a random sample of wells:
-void make_filter (clonal_filter& filter, filter_counts& counts, const std::deque<float>& ppf, const std::deque<float>& ssq, bool verbose, const PolyclonalFilterOpts & opts);
+void make_filter (clonal_filter& filter, filter_counts& counts, const std::deque<float>& ppf, const std::deque<float>& ssq, const PolyclonalFilterOpts & opts);
 
 #endif // MIXED_H
 

@@ -340,7 +340,7 @@ def get_planned_exp_objects(d, folder):
                 logger.debug("Chip-specific system default plan template not found in database for chip=%s; experiment=%s" % (explogChipType, expName))
                 systemDefaultPlanTemplate = models.PlannedExperiment.get_latest_plan_or_template_by_chipType()
 
-            logger.debug("Use system default plan template=%s for chipType=%s in experiment=%s" % (systemDefaultPlanTemplate.planDisplayedName, explogChipType, expName))
+            logger.info("Use system default plan template=%s for chipType=%s in experiment=%s" % (systemDefaultPlanTemplate.planDisplayedName, explogChipType, expName))
 
             # copy Plan
             currentTime = datetime.datetime.now()
@@ -380,6 +380,9 @@ def get_planned_exp_objects(d, folder):
 
             planObj.latestEAS = easObj
             planObj.save()
+
+            # update analysis args
+            easObj.reset_args_to_default()
 
             logger.debug("cloned systemDefaultPlanTemplate: planObj.pk=%s; easObj.pk=%s; expObj.pk=%s" % (planObj.pk, easObj.pk, expObj.pk))
 
@@ -503,11 +506,9 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
     easObj.save()
     logger.info("Updated EAS=%s" % easObj)
 
-    # Refresh default cmdline args - this is needed in case chip type or kits changed from their planned values
-    default_args = planObj.get_default_cmdline_args()
-    for key, value in default_args.items():
-        setattr(easObj, key, value)
-    easObj.save()
+    # must have analysis args
+    if not easObj.custom_args or not easObj.have_args():
+        easObj.reset_args_to_default()
 
     # *** Update samples associated with experiment***
     sampleCount = expObj.samples.all().count()

@@ -54,7 +54,9 @@ lnames <- colnames(data)
 xmax = as.integer(max(data)+0.95)
 ymax = 0
 for( i in 1:nplot) {
-  ym <- max( density(data[[i]])$y )
+  pdf <- try( density(data[[i]]), T )
+  if( class(pdf) == "try-error") next
+  ym <- max(pdf$y )
   if( ym > ymax ) { ymax = ym }
 }
 ymax = (ymax+0.001)*1.05
@@ -69,11 +71,15 @@ mtext("Frequency of Genes with N Reads (N > 0)",side=2,line=0.6,cex=1.8)
 mtext("Number of Reads : log10(N)",side=1,line=2,cex=1.8)
 box()
 
+usedcols <- c()
 for( i in 1:nplot) {
-  lines( density(data[[i]]), type="l", col=colors[i], lwd=2 )
+  pdf <- try( density(data[[i]]), T )
+  if( class(pdf) == "try-error") next
+  lines( pdf, type="l", col=colors[i], lwd=2 )
+  usedcols <- c(usedcols,colors[i])
 }
 if( nplot > 1 ) {
-  legend( legend=lnames, xpd=T, x="topright",cex=0.6,inset=c(-0.346,lgd),fill=colors,bty="n",x.intersp=0.5 )
+  legend( legend=lnames, xpd=T, x="topright",cex=0.6,inset=c(-0.346,lgd),fill=usedcols,bty="n",x.intersp=0.5 )
 }
 
 q()

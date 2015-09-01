@@ -27,12 +27,15 @@ COLUMN_GENDER = "Gender"
 COLUMN_GROUP_TYPE = "Type"
 COLUMN_GROUP = "Group"
 COLUMN_SAMPLE_DESCRIPTION = "Description"
-COLUMNS_BARCODE_KIT = "Barcodekit"
+COLUMN_BARCODE_KIT = "Barcodekit"
 COLUMN_BARCODE = "Barcode"
 COLUMN_CANCER_TYPE = "Cancer Type"
 COLUMN_CELLULARITY_PCT = "Cellularity %"
 COLUMN_NUCLEOTIDE_TYPE = "DNA/RNA"
 COLUMN_PCR_PLATE_POSITION = "PCR Plate Position"
+COLUMN_BIOPSY_DAYS = "Biopsy Days"
+COLUMN_COUPLE_ID = "Couple ID"
+COLUMN_EMBRYO_ID = "Embryo ID"
 
 def process_csv_sampleSet(csvSampleDict, request, user, sampleSet_ids):
     """ read csv contents and convert data to raw data to prepare for sample persistence
@@ -67,13 +70,17 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, None)
     sampleGroup = csvSampleDict.get(COLUMN_GROUP, '0').strip()
     sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
-    barcodeKit = csvSampleDict.get(COLUMNS_BARCODE_KIT, '').strip()
+    barcodeKit = csvSampleDict.get(COLUMN_BARCODE_KIT, '').strip()
     barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
     nucleotideType = csvSampleDict.get(COLUMN_NUCLEOTIDE_TYPE, "").strip()
     
     cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
     cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
     pcrPlateRow = csvSampleDict.get(COLUMN_PCR_PLATE_POSITION, "").strip()
+    
+    biopsyDays = csvSampleDict.get(COLUMN_BIOPSY_DAYS, "0").strip()
+    coupleId = csvSampleDict.get(COLUMN_COUPLE_ID, None).strip()
+    embryoId = csvSampleDict.get(COLUMN_EMBRYO_ID, "").strip()
     
     if not sampleGroup:
         sampleGroup = '0'
@@ -86,7 +93,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
 
     isValid, errorMessage, cancerType_CV_value = sample_validator.validate_cancerType(cancerType)            
     isValid, errorMessage, pcrPlateRow_internal_value = sample_validator.validate_pcrPlateRow(pcrPlateRow)
-    
+
     sampleName = sampleDisplayedName.replace(' ', '_')
     sample_kwargs = {
                      'displayedName' : sampleDisplayedName,
@@ -126,6 +133,9 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
                                  'relationshipGroup' : sampleGroup, 
                                  'cancerType' : cancerType_CV_value,
                                  'cellularityPct' : cellularityPct if cellularityPct else None,
+                                 'biopsyDays' : int(biopsyDays) if biopsyDays else 0,
+                                 "coupleId" : coupleId,
+                                 "embryoId" : embryoId,
                                  'creator' : user,
                                  'creationDate' : currentDateTime,
                                  'lastModifiedUser' : user,
@@ -239,7 +249,7 @@ def validate_csv_sample(csvSampleDict, request):
         sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, '').strip()
         sampleGroup = csvSampleDict.get(COLUMN_GROUP, '').strip()
         sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
-        barcodeKit = csvSampleDict.get(COLUMNS_BARCODE_KIT, '').strip()
+        barcodeKit = csvSampleDict.get(COLUMN_BARCODE_KIT, '').strip()
         barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
         
         nucleotideType = csvSampleDict.get(COLUMN_NUCLEOTIDE_TYPE, "").strip()
@@ -247,6 +257,10 @@ def validate_csv_sample(csvSampleDict, request):
         cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
         cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
         pcrPlateRow = csvSampleDict.get(COLUMN_PCR_PLATE_POSITION, "").strip()
+    
+        biopsyDays = csvSampleDict.get(COLUMN_BIOPSY_DAYS, "0").strip()
+        coupleId = csvSampleDict.get(COLUMN_COUPLE_ID, "").strip()
+        embryoId = csvSampleDict.get(COLUMN_EMBRYO_ID, "").strip()
         
         #skip blank line
         hasAtLeastOneValue = bool([v for v in csvSampleDict.values() if v != ''])
@@ -299,11 +313,26 @@ def validate_csv_sample(csvSampleDict, request):
             if not isValid:
                 failed.append((COLUMN_PCR_PLATE_POSITION, errorMessage))     
 
+        if biopsyDays:
+            isValid, errorMessage = sample_validator.validate_sampleBiopsyDays(biopsyDays)            
+            if not isValid:
+                failed.append((COLUMN_BIOPSY_DAYS, errorMessage))     
+        
+        if coupleId:
+            isValid, errorMessage = sample_validator.validate_sampleCoupleId(coupleId)            
+            if not isValid:
+                failed.append((COLUMN_COUPLE_ID, errorMessage))     
+        
+        if embryoId:
+            isValid, errorMessage = sample_validator.validate_sampleEmbryoId(embryoId)           
+            if not isValid:
+                failed.append((COLUMN_EMBRYO_ID, errorMessage))     
+
         ##NEW VALIDATION FOR BARCODEKIT AND BARCODE_ID_STR
         isValid, errorMessage, item = sample_validator.validate_barcodekit_and_id_str(barcodeKit, barcodeAssignment)
         if not isValid:
             if item == 'barcodeKit':
-                failed.append((COLUMNS_BARCODE_KIT, errorMessage))
+                failed.append((COLUMN_BARCODE_KIT, errorMessage))
             else:
                 failed.append((COLUMN_BARCODE, errorMessage))
         # if not isValid:
@@ -360,16 +389,16 @@ def validate_barcodes_are_unique(row_list):
     count = 0
     for row in row_list:
         count += 1
-        barcodeKit = row.get(COLUMNS_BARCODE_KIT, "").strip()
+        barcodeKit = row.get(COLUMN_BARCODE_KIT, "").strip()
         barcode = row.get(COLUMN_BARCODE, "").strip()
         if barcodeKit and barcode:
             barcodekits.append(barcodeKit)
             if len(set(barcodekits)) > 1:
-                msgs[count] = ((COLUMNS_BARCODE_KIT, "Error, Only one barcode kit can be used for a sample set"))
+                msgs[count] = ((COLUMN_BARCODE_KIT, "Error, Only one barcode kit can be used for a sample set"))
             
             dnabarcode = models.dnaBarcode.objects.filter(name__iexact=barcodeKit, id_str__iexact=barcode)
             if dnabarcode.count() != 1:
-                msgs[count] = ((COLUMNS_BARCODE_KIT, "Error, %s %s is an invalid barcodeKit and barcode combination" % (barcodeKit, barcode)))
+                msgs[count] = ((COLUMN_BARCODE_KIT, "Error, %s %s is an invalid barcodeKit and barcode combination" % (barcodeKit, barcode)))
             
             if dnabarcode.count() > 0:
                 if dnabarcode[0] in dnabarcodes:

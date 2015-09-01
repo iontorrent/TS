@@ -9,7 +9,11 @@
 
 #include "BAMWalkerEngine.h"
 
-void SampleManager::Initialize (ExtendParameters& parameters, const SamHeader& bam_header)
+// const string& force_sample_name,
+// const string& sample_name,
+
+
+void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name, const string& force_sample_name)
 {
 
   num_samples_ = 0;
@@ -17,10 +21,10 @@ void SampleManager::Initialize (ExtendParameters& parameters, const SamHeader& b
   for (SamReadGroupConstIterator read_group = bam_header.ReadGroups.Begin(); read_group < bam_header.ReadGroups.End(); ++read_group) {
 
     string sample_name;
-    if (parameters.force_sample_name.empty())
+    if (force_sample_name.empty())
       sample_name = read_group->Sample;
     else
-      sample_name = parameters.force_sample_name;
+      sample_name = force_sample_name;
 
 
     if (read_group->ID.empty()) {
@@ -66,11 +70,11 @@ void SampleManager::Initialize (ExtendParameters& parameters, const SamHeader& b
 
   bool default_sample = false;
   //now check if there are multiple samples in the BAM file and if so user should provide a sampleName to process
-  if (num_samples_ == 1 && parameters.sampleName.empty()) {
-    parameters.sampleName = sample_names_[0];
+  if (num_samples_ == 1 && sample_name.empty()) {
+    sample_name = sample_names_[0];
     default_sample = true;
 
-  } else if (num_samples_ > 1 && parameters.sampleName.empty())  {
+  } else if (num_samples_ > 1 && sample_name.empty())  {
     cerr << "ERROR: Multiple Samples found in BAM file/s provided. Torrent Variant Caller currently supports variant calling on only one sample. " << endl;
     cerr << "ERROR: Please select sample name to process using -g parameter. " << endl;
     exit(1);
@@ -78,14 +82,14 @@ void SampleManager::Initialize (ExtendParameters& parameters, const SamHeader& b
 
   bool primary_sample_found = false;
   for (int i = 0; i < num_samples_; ++i) {
-    if (sample_names_[i] == parameters.sampleName) {
+    if (sample_names_[i] == sample_name) {
       primary_sample_ = i;
       primary_sample_found = true;
     }
   }
 
-  if (not primary_sample_found) {
-    cerr << "ERROR: Sample " << parameters.sampleName << " provided using -g option "
+  if (!primary_sample_found) {
+    cerr << "ERROR: Sample " << sample_name << " provided using -g option "
          << "is not associated with any read groups in BAM file(s)" << endl;
     exit(1);
   }
@@ -96,25 +100,26 @@ void SampleManager::Initialize (ExtendParameters& parameters, const SamHeader& b
     if (primary_sample_ == p->second)
       num_primary_read_groups++;
 
-  if (not parameters.force_sample_name.empty())
-    cout << "SampleManager: All read groups forced to assume sample name " <<  parameters.force_sample_name << endl;
+  if (!force_sample_name.empty())
+    cout << "SampleManager: All read groups forced to assume sample name " <<  force_sample_name << endl;
 
   cout << "SampleManager: Found " << read_group_to_sample_idx_.size() << " read group(s) and " << num_samples_ << " sample(s)." << endl;
   if (default_sample)
-    cout << "SampleManager: Primary sample \"" << parameters.sampleName << "\" (default) present in " << num_primary_read_groups << " read group(s)" << endl;
+    cout << "SampleManager: Primary sample \"" << sample_name << "\" (default) present in " << num_primary_read_groups << " read group(s)" << endl;
   else
-    cout << "SampleManager: Primary sample \"" << parameters.sampleName << "\" (set via -g) " << num_primary_read_groups << " read group(s)" << endl;
+    cout << "SampleManager: Primary sample \"" << sample_name << "\" (set via -g) " << num_primary_read_groups << " read group(s)" << endl;
 
 }
 
 
 
-bool SampleManager::IdentifySample(Alignment& ra) const
+//bool SampleManager::IdentifySample(Alignment& ra) const
+bool SampleManager::IdentifySample(const BamAlignment& alignment, int& sample_index, bool& primary_sample) const
 {
 
   string read_group;
-  if (!ra.alignment.GetTag("RG", read_group)) {
-    cerr << "ERROR: Couldn't find read group id (@RG tag) for BAM Alignment " << ra.alignment.Name << endl;
+  if (!alignment.GetTag("RG", read_group)) {
+    cerr << "ERROR: Couldn't find read group id (@RG tag) for BAM Alignment " << alignment.Name << endl;
     exit(1);
   }
 
@@ -122,8 +127,8 @@ bool SampleManager::IdentifySample(Alignment& ra) const
   if (I == read_group_to_sample_idx_.end())
     return false;
 
-  ra.sample_index =I->second;
-  ra.primary_sample = (ra.sample_index == primary_sample_);
+  sample_index =I->second;
+  primary_sample = (sample_index == primary_sample_);
 
   return true;
 }

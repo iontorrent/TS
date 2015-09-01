@@ -131,6 +131,7 @@ IncorporationSignalCalculation(
 
 __global__
 void GenerateEmphasis(
+  const unsigned short * RegionMask,
   const int numEv,
   const float amult,
   const PerFlowParamsRegion *perFlowRegP,

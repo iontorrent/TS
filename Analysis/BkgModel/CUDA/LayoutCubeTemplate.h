@@ -266,9 +266,10 @@ template<typename T>
 void LayoutCube<T>:: copyPlanesOut( T * dst, size_t srcPlane, size_t numPlanes )
 {
   size_t sizePlaneBytes = getRWStrideZ() * sizeof(T);
-  size_t dstPlaneOffset = srcPlane* sizePlaneBytes;
+  size_t srcPlaneOffset = srcPlane* sizePlaneBytes;
   size_t sizeBytes = numPlanes * sizePlaneBytes;
-  this->copyOutSubSet(dst,dstPlaneOffset,sizeBytes);
+  //cout << "this->copyOutSubSet( " << dst << ", " << srcPlaneOffset << ", " << sizeBytes << " = " << getRWStrideZ() << " * " << sizeof(T) << " ); "<< endl;
+  this->copyOutSubSet(dst,srcPlaneOffset,sizeBytes);
 }
 
 
@@ -292,8 +293,7 @@ T * LayoutCube<T>::getPtrToPlane(int plane){
 template<typename T>
 ImgRegParams LayoutCube<T>::getParams() const
 {
-  ImgRegParams tmp;
-  tmp.init(this->getDimX(), this->getDimY(), this->getDimX(), this->getDimY());
+  ImgRegParams tmp(this->getDimX(), this->getDimY(), this->getDimX(), this->getDimY());
   return tmp;
 }
 

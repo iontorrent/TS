@@ -2,38 +2,44 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 ## SGE Epilog script
 
-makeVarsFromJson ()
+makeVarsFromJson()
 {
     local IFS=$'\n'
-    for line in $(jsonpipe < $1); do
-        if echo $line|egrep -q '(\{}|\[])'; then
+    for line in $(jsonpipe < $1);do
+        if echo $line|egrep -q '(\{}|\[]|barcodedSamples|sampleinfo)'; then
             :
         else
-            line=$(echo $line|sed 's:^/::g')
-            var_name=$(echo $line|awk '{print $1}')
-            var_val=$(echo $line|awk -F'\t' '{print $2}'|sed 's/"//g;s/^=//')
-            index=$(basename $var_name)
+            line=${line#/}
+            var_name=$(echo $line|awk '{print $1}') # =${line%%	*}
+            var_val=$(echo $line|awk -F'\t' '{print $2}'|sed 's/"//g') #=${line##*	}  #
+            index=$(basename $var_name) #=${var_name%%/*}
 
             # Sanitize
             #(sampleinfo can contain more chars than are valid variable names)
             var_name=${var_name//-/_} # $(echo $line|sed 's:-:_:g')
 
             # var_name ends in a number, its an array variable
-            if [ $index -eq $index 2>/dev/null ]; then
+            # (test fails with "integer expression expected" for non-numbers)
+            if [ "$index "-eq "$index" 2>/dev/null ]; then
                 #strip off number
-                var_name=$(dirname "$var_name")
-                #convert slashes to double underscore, convert to uppercase
-                var_name=$(echo ${var_name}|sed -E 's:(.*):\U\1:g;s:/:__:g')
-                eval $var_name[$index]="$var_val"
+                var_name=$(dirname $var_name) #=${var_name%%/$index}
+                #convert slashes to double underscore
+                #convert to uppercase
+                var_name=$(echo ${var_name^^}|sed 's:/:__:g')
+                #echo $var_name[$index]=$var_val
+                eval $var_name[$index]=\""$var_val"\"
                 export ${var_name}
             else
-                #convert slashes to double underscore, convert to uppercase
-                var_name=$(echo ${var_name}|sed -E 's:(.*):\U\1:g;s:/:__:g')
+                #convert slashes to double underscore
+                #convert to uppercase
+                var_name=$(echo ${var_name^^}|sed 's:/:__:g')
+                #echo $var_name=$var_val
                 export eval "${var_name}"="${var_val}"
             fi
         fi
     done
 }
+
 
 /bin/cp -u ${SGE_JOB_SPOOL_DIR}/usage .
 # should define exit_status

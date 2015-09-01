@@ -34,7 +34,8 @@ from iondb.rundb.models import (
     EventLog, GlobalConfig, ReferenceGenome, dnaBarcode, KitInfo, ContentType, Plugin, ExperimentAnalysisSettings, Sample,
     DMFileSet, DMFileStat, FileServer)
 from iondb.rundb.api import CompositeExperimentResource, ProjectResource
-from iondb.rundb.report.views import build_result, _report_started
+from iondb.rundb.report.analyze import build_result
+from iondb.rundb.report.views import _report_started
 from iondb.rundb.report import file_browse
 from iondb.rundb import forms
 from iondb.anaserve import client
@@ -738,9 +739,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
 
     eas_json = model_to_dict(eas)
     
-    barcodedSamples_reference_names = eas.get_barcoded_samples_reference_names()
-    #logger.debug("data.views._combine_results_sendto_project() barcodedSamples_reference_names=%s" %(barcodedSamples_reference_names))
-    
+    barcodedSamples_reference_names = eas.barcoded_samples_reference_names
     #use barcodedSamples' selected reference if NO plan default reference is specified
     reference = result.reference
     if not result.reference and barcodedSamples_reference_names:

@@ -60,6 +60,7 @@ urlpatterns = patterns(
     url(r'^configure/$', 'views.configure_configure', name="configure_configure"),
     url(r'^configure/editemail/(\d+)?$', 'views.edit_email', name="edit_email"),
     url(r'^configure/deleteemail/(\d+)?$', 'views.delete_email', name="delete_email"),
+	url(r'^product/update/$', 'updateProducts.update_product', name='update_product'),
 
     url(r'^services/controljob/(\d+)/((?:term)|(?:stop)|(?:cont))$', 'views.control_job', name='control_job'),
     (r'^chips/$', 'chips.showpage'),
@@ -74,8 +75,12 @@ urlpatterns = patterns(
     url(r'^services/cluster_info/refresh/$', 'views.cluster_info_refresh', name='cluster_info_refresh'),
     url(r'^services/cluster_info/log/(?P<pk>\d+)/$', 'views.cluster_info_log', name='cluster_info_log'),
     url(r'^services/cluster_info/history/$', 'views.cluster_info_history', name='cluster_info_history'),
+    url(r'^services/cluster_ctrl/(?P<name>\w+)/(?P<action>\w+)/$', 'views.cluster_ctrl', name='cluster_ctrl'),
     (r'^getZip/(.+)$', 'chips.getChipZip'),
     (r'^getChipLog/(.+)$', 'chips.getChipLog'),
     (r'^getChipPdf/(.+)$', 'chips.getChipPdf'),
     (r'^getProtonDiags/(.+)$', 'chips.getProtonDiags'),
+
+    url(r'^analysisargs/$', 'views.configure_analysisargs', name="configure_analysisargs"),
+    url(r'^analysisargs/(?P<pk>\d+)/(?P<action>\w+)$', 'views.configure_analysisargs_action', name="configure_analysisargs_action"),
 )

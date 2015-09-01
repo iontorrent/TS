@@ -87,7 +87,7 @@ def initTLReport():
     # Begin report writing
     os.umask(0002)
     #TMPL_DIR = os.path.join(distutils.sysconfig.get_python_lib(),'ion/web/db/writers')
-    TMPL_DIR = '/usr/share/ion/web/db/writers'
+    TMPL_DIR = '/usr/share/ion/web'
     templates = [
         # DIRECTORY, SOURCE_FILE, DEST_FILE or None for same as SOURCE
         (TMPL_DIR, "report_layout.json", None),
@@ -176,24 +176,24 @@ def get_plugins_to_run(plugins, report_type):
     """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
     blocklevel = False
     plugins_to_run = {}
-    printtime("Gettings plugins to run, report type = %s" % report_type)    
+    printtime("Get plugins to run, report type = %s" % report_type)
     for name in plugins.keys():
         plugin = plugins[name]
-        
+
         # default is run on wholechip and thumbnail, but not composite
-        selected = report_type in [RunType.FULLCHIP, RunType.THUMB]          
+        selected = report_type in [RunType.FULLCHIP, RunType.THUMB]
         if plugin.get('runtype',''):
             selected = (report_type in plugin['runtype'])
-    
-        if selected:            
+
+        if selected:
             plugin['runlevel'] = plugin.get('runlevel') if plugin.get('runlevel') else [RunLevel.DEFAULT]
-            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'],','.join(plugin['runlevel'])))
+            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'], ','.join(plugin['runlevel'])))
             plugins_to_run[name] = plugin
-  
-            # check if have any blocklevel plugins        
+
+            # check if have any blocklevel plugins
             if report_type == RunType.COMPOSITE and RunLevel.BLOCK in plugin['runlevel']:
                 blocklevel = True
-  
+
     return plugins_to_run, blocklevel
 
 
@@ -310,7 +310,7 @@ def spawn_cluster_job(rpath, scriptname, args, holds=None):
     #SGE
     sge_queue = 'all.q'
     if is_thumbnail:
-        sge_queue = 'thumbnail.q'
+        sge_queue = 'thumbnail_worker.q'
     jt_nativeSpecification = "-pe ion_pe 1 -q " + sge_queue
 
     printtime("Use "+ sge_queue)
@@ -469,8 +469,6 @@ if __name__=="__main__":
     re-analysis, from wells (BaseReport / no BaseReport(use OIA results))
     re-analysis, from raw (checkbox OnTS/OnInstrument)
     '''
-
-    do_composite_alignment = False
 
     reference_selected = False
     for barcode_name,barcode_info in sorted(env['barcodeInfo'].iteritems()):
@@ -682,9 +680,6 @@ if __name__=="__main__":
                         block_tlscript_options = ['--do-sigproc','--do-basecalling']
                     else:
                         block_tlscript_options = ['--do-basecalling']
-
-                    if is_composite and not do_composite_alignment:
-                        block_tlscript_options.append('--do-alignment')
 
                     block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py',block_tlscript_options,wait_list)
                     block_job_dict[block['id_str']] = str(block['jobid'])

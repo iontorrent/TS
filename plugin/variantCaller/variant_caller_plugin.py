@@ -6,9 +6,11 @@ import os
 import re
 import subprocess
 import json
+import shutil
 import time
 import traceback
 import unicodedata
+import copy
 from optparse import OptionParser
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -25,9 +27,11 @@ BASENAME_VARIANTS_XLS       = 'variants.xls'
 BASENAME_ALLELES_XLS        = 'alleles.xls'
 BASENAME_HOTSPOTS_XLS       = 'allele_counts.xls'
 BASENAME_VARIANTS_VCF       = 'TSVC_variants.vcf'
+BASENAME_GENOME_VCF         = 'TSVC_variants.genome.vcf'
 BASENAME_PARAMETERS_JSON    = 'local_parameters.json'
 HTML_BLOCK                  = 'variantCaller_block.html'    # Top report page block
 HTML_RESULTS                = 'variantCaller.html'          # Main plugin page
+BASENAME_VARIANT_COV_XLS    = 'variant_allele_counts.xls'
 
 
 # DEVELOPMENT/DEBUG options:
@@ -71,21 +75,11 @@ def execute_output(cmd):
         traceback.print_exc()
         return ''
 
-#check for BAM file compatibility
-def is_bam_invalid(bam_filename):
-    if SKIP_BAMFILE_VERSION_CHECK:
-        return False
-    #check for BAM file compatibility
-    validate_command  = 'java -Xmx500m -cp %s/share/TVC/jar/GenomeAnalysisTK.jar' % DIRNAME
-    validate_command += ' org.iontorrent.vc.locusWalkerAttributes.validateBamFile'
-    validate_command += ' "%s"' % bam_filename
-    RTBAM = run_command(validate_command, 'Verify BAM file compatibility')
-    return RTBAM != 0
-
 
 def generate_incomplete_report_page(output_html_filename, message, vc_options, autorefresh=False):
-
-    render_context = { 'run_name' : vc_options['run_name'], 'message' : message, 'autorefresh' : autorefresh,
+    run_name = ''
+    if ('run_name' in vc_options): run_name = vc_options['run_name']
+    render_context = { 'run_name' : run_name, 'message' : message, 'autorefresh' : autorefresh,
                        'startplugin_json' : startplugin_json}
 
     out = open(output_html_filename,'w')
@@ -123,8 +117,8 @@ def generate_barcode_links_page (results_html_path, barcode_data, vc_options):
         'startplugin_json' : startplugin_json
     }
 
-    for barcode_entry in barcode_data:
-        if barcode_entry['status'] == 'in_progress':
+    for barcode in barcode_data:
+        if barcode['status'] == 'in_progress':
             render_context['autorefresh'] = True
 
     out = open(results_html_path,'w')
@@ -153,46 +147,60 @@ def add_output_file(type, filename, barcode=None, sample=None):
     output_files.append(file_info)
 
 
-def call_variants(results_directory,input_bam,vc_options,barcode=None):
+def call_variants(dataset):
 
-    basename_input_bam   = os.path.basename(input_bam)
+    printtime("dataset: %s" % dataset) #TODO DEBUG
+
+    if (not 'name' in dataset): dataset['name'] = 'default'
+    if dataset['is_barcode']:
+        barcode_modifier       = '../'
+        basename_variants_vcf  = 'TSVC_variants_%s.vcf' % dataset['name']
+        basename_genome_vcf    = 'TSVC_variants_%s.genome.vcf' % dataset['name']
+        basename_variants_xls  = 'variants_%s.xls' % dataset['name']
+        basename_hotspots_xls  = 'allele_counts_%s.xls' % dataset['name']
+        basename_alleles_xls   = 'alleles_%s.xls' % dataset['name']
+        results_directory      = TSP_FILEPATH_PLUGIN_DIR + '/' + dataset['name']
+        basename_variant_cov_xls  = 'variant_allele_counts_%s.xls' % dataset['name']
+    else:
+        barcode_modifier = ''
+        basename_variants_vcf  = BASENAME_VARIANTS_VCF
+        basename_genome_vcf    = BASENAME_GENOME_VCF
+        basename_variants_xls  = BASENAME_VARIANTS_XLS
+        basename_hotspots_xls  = BASENAME_HOTSPOTS_XLS
+        basename_alleles_xls   = BASENAME_ALLELES_XLS
+        results_directory      = TSP_FILEPATH_PLUGIN_DIR
+        basename_variant_cov_xls  = BASENAME_VARIANT_COV_XLS
+
+    if not os.path.exists(results_directory):
+        os.makedirs(results_directory)
+
+    basename_input_bam   = os.path.basename(dataset['bam'])
     untrimmed_bam = os.path.join(results_directory,basename_input_bam)                      # Local symlink to untrimmed BAM
     processed_bam = os.path.join(results_directory,basename_input_bam[:-4] + '_processed.bam')
 
-    subprocess.call('ln -s %s %s' % (input_bam, untrimmed_bam),shell=True)
-    subprocess.call('ln -s %s.bai %s.bai' % (input_bam, untrimmed_bam),shell=True)
+    if dataset['bam'] != untrimmed_bam:
+        os.symlink(dataset['bam'],        untrimmed_bam)
+        os.symlink(dataset['bam']+'.bai', untrimmed_bam+'.bai')
 
-    assert not (vc_options['trim_reads'] and not vc_options['has_targets']), "Read trimming enabled but targets BED not provided"
-
-    barcode_modifier = ''
-    basename_variants_vcf = BASENAME_VARIANTS_VCF
-    basename_variants_xls = BASENAME_VARIANTS_XLS
-    basename_hotspots_xls = BASENAME_HOTSPOTS_XLS
-    basename_alleles_xls  = BASENAME_ALLELES_XLS
-    if barcode:
-        barcode_modifier = '../'
-        basename_variants_vcf = 'TSVC_variants_%s.vcf' % barcode
-        basename_variants_xls = 'variants_%s.xls' % barcode
-        basename_hotspots_xls = 'allele_counts_%s.xls' % barcode
-        basename_alleles_xls  = 'alleles_%s.xls' % barcode
-
+    assert not (dataset['trim_reads'] and not dataset['has_targets']), "Read trimming enabled but targets BED not provided"
 
     # Execute main variant caller script
     variantcaller_command        = '%s/bin/variant_caller_pipeline.py' % DIRNAME
     variantcaller_command   +=     '  --input-bam "%s"' % untrimmed_bam
-    if vc_options['trim_reads']:
-        variantcaller_command   += '  --primer-trim-bed "%s"' % vc_options['targets_bed_unmerged']
+    if dataset['trim_reads']:
+        variantcaller_command   += '  --primer-trim-bed "%s"' % dataset['targets_bed_unmerged']
         variantcaller_command   += '  --postprocessed-bam "%s"' % processed_bam
-    variantcaller_command       += '  --reference-fasta "%s"' % vc_options['genome_fasta']
+    variantcaller_command       += '  --reference-fasta "%s"' % dataset['reference_genome_fasta']
     variantcaller_command       += '  --output-dir "%s"' % results_directory
-    variantcaller_command       += '  --parameters-file "%s"' % os.path.join(results_directory,barcode_modifier+BASENAME_PARAMETERS_JSON)
+    variantcaller_command       += '  --parameters-file "%s"' % os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON) # TODO: barcode specific, or better application type specific ?
     variantcaller_command       += '  --bin-dir "%s/bin"' % DIRNAME
-    if vc_options['has_targets']:
-        variantcaller_command   += '  --region-bed "%s"' % vc_options['targets_bed_merged']
-    if vc_options['has_hotspots']:
-        variantcaller_command   += '  --hotspot-vcf "%s"' % vc_options['hotspots_vcf']
-    if vc_options['has_error_motifs']:
-        variantcaller_command   += '  --error-motifs "%s"' % vc_options['error_motifs']
+    if dataset['has_targets']:
+        variantcaller_command   += '  --region-bed "%s"' % dataset['targets_bed_merged']
+    if dataset['has_hotspots']:
+        variantcaller_command   += '  --hotspot-vcf "%s"' % dataset['hotspots_vcf']
+    if dataset['has_error_motifs']:
+        variantcaller_command   += '  --error-motifs "%s"' % dataset['error_motifs']
+    variantcaller_command       += '  --generate-gvcf on'
 
     if PLUGIN_DEV_SKIP_VARIANT_CALLING:
         printtime('Skipping calling variants on mapped reads...')
@@ -201,11 +209,11 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
 
 
     # Generate allele counts if hotspots loci BED provided
-    if vc_options['has_hotspots']:
+    if dataset['has_hotspots']:
         allelecount_command = 'samtools mpileup -BQ0 -d1000000'
-        allelecount_command += ' -f "%s"' % vc_options['genome_fasta']
-        allelecount_command += ' -l ' + vc_options['hotspots_bed_merged']
-        if vc_options['trim_reads']:
+        allelecount_command += ' -f "%s"' % dataset['reference_genome_fasta']
+        allelecount_command += ' -l ' + dataset['hotspots_bed_merged']
+        if dataset['trim_reads']:
             allelecount_command += ' ' + processed_bam
         else:
             allelecount_command += ' ' + untrimmed_bam
@@ -219,27 +227,31 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
         allelecount2_command = '%s/scripts/print_allele_counts.py' % DIRNAME
         allelecount2_command += ' ' + os.path.join(results_directory,'allele_counts.txt')
         allelecount2_command += ' ' + os.path.join(results_directory,BASENAME_HOTSPOTS_XLS)
-        allelecount2_command += ' "%s"' % vc_options['hotspots_bed_unmerged_leftalign']
-        allelecount2_command += ' "%s"' % vc_options['hotspots_bed_unmerged']
+        allelecount2_command += ' "%s"' % dataset['hotspots_bed_unmerged_leftalign']
+        allelecount2_command += ' "%s"' % dataset['hotspots_bed_unmerged']
         run_command(allelecount2_command,'Generate hotspots allele coverage')
 
-
-
     # Generate xls tables and statistics from final vcf
+
+    tvc_args = startplugin_json['pluginconfig']['meta'].get('tvcargs','')
     table_command        = '%s/scripts/generate_variant_tables.py' % DIRNAME
+    if (tvc_args.find("--suppress-no-calls off") != -1): 
+        table_command   += '  --suppress-no-calls off'
+    else: 
+        table_command   += '  --suppress-no-calls on'
     table_command       += '  --input-vcf %s'       % os.path.join(results_directory,BASENAME_VARIANTS_VCF)
-    if vc_options['has_targets']:
-        table_command   += '  --region-bed "%s"'      % vc_options['targets_bed_unmerged']
-    if vc_options['has_hotspots']:
+    if dataset['has_targets']:
+        table_command   += '  --region-bed "%s"'    % dataset['targets_bed_unmerged']
+    if dataset['has_hotspots']:
         table_command   += '  --hotspots'
     table_command       += '  --output-xls %s'      % os.path.join(results_directory,BASENAME_VARIANTS_XLS)
-    table_command       += '  --alleles2-xls %s'     % os.path.join(results_directory,BASENAME_ALLELES_XLS)
+    table_command       += '  --alleles2-xls %s'    % os.path.join(results_directory,BASENAME_ALLELES_XLS)
     table_command       += '  --summary-json %s'    % os.path.join(results_directory,'variant_summary.json')
-    table_command       += '  --scatter-png %s'  % os.path.join(results_directory,'scatter.png')
-    if barcode:
-        table_command   += '  --barcode %s'  % barcode
-        table_command   += '  --concatenated-xls "%s/%s.xls"' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-    table_command       += '  --run-name "%s"'  % vc_options['run_name']
+    table_command       += '  --scatter-png %s'     % os.path.join(results_directory,'scatter.png')
+    if dataset['is_barcode']:
+        table_command   += '  --barcode %s'  % dataset['name']
+        table_command   += '  --concatenated-xls "%s/%s.xls"' % (TSP_FILEPATH_PLUGIN_DIR,dataset['run_name'])
+    table_command       += '  --run-name "%s"'  % dataset['run_name']
 
 
     run_command(table_command,'Generate xls tables and statistics from final vcf')
@@ -255,60 +267,95 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     run_command(sqllite_command,'Transfer variants to sqllite database')
 
 
-    # Create symlinks to js/css folders and php scripts
+    # Create symlinks to js/css folders and php scripts # static data
     subprocess.call('ln -sf "%s/slickgrid" "%s"' % (DIRNAME,results_directory),shell=True)
     subprocess.call('cp -rf %s/copytoreport/* "%s"' % (DIRNAME,results_directory),shell=True)
     subprocess.call('ln -sf %s/scripts/*.php3 "%s"' % (DIRNAME,results_directory),shell=True)
 
-    if barcode:
-        subprocess.call('ln -s %s.gz %s.gz' % (os.path.join(results_directory,BASENAME_VARIANTS_VCF),
-                                               os.path.join(results_directory,basename_variants_vcf)),shell=True)
-        subprocess.call('ln -s %s.gz.tbi %s.gz.tbi' % (os.path.join(results_directory,BASENAME_VARIANTS_VCF),
-                                                       os.path.join(results_directory,basename_variants_vcf)),shell=True)
-        subprocess.call('ln -s %s %s' % (os.path.join(results_directory,BASENAME_VARIANTS_XLS),
-                                         os.path.join(results_directory,basename_variants_xls)),shell=True)
-        subprocess.call('ln -s %s %s' % (os.path.join(results_directory,BASENAME_ALLELES_XLS),
-                                         os.path.join(results_directory,basename_alleles_xls)),shell=True)
-        if vc_options['has_hotspots']:
-            subprocess.call('ln -s %s %s' % (os.path.join(results_directory,BASENAME_HOTSPOTS_XLS),
-                                             os.path.join(results_directory,basename_hotspots_xls)),shell=True)
+    if dataset['is_barcode']:
+        os.symlink(os.path.join(results_directory,BASENAME_VARIANTS_VCF+'.gz'),
+                   os.path.join(results_directory,basename_variants_vcf+'.gz'))
+        os.symlink(os.path.join(results_directory,BASENAME_VARIANTS_VCF+'.gz.tbi'),
+                   os.path.join(results_directory,basename_variants_vcf+'.gz.tbi'))
+        os.symlink(os.path.join(results_directory,BASENAME_GENOME_VCF+'.gz'),
+                   os.path.join(results_directory,basename_genome_vcf+'.gz'))
+        os.symlink(os.path.join(results_directory,BASENAME_GENOME_VCF+'.gz.tbi'),
+                   os.path.join(results_directory,basename_genome_vcf+'.gz.tbi'))
+        os.symlink(os.path.join(results_directory,BASENAME_VARIANTS_XLS),
+                   os.path.join(results_directory,basename_variants_xls))
+        os.symlink(os.path.join(results_directory,BASENAME_ALLELES_XLS),
+                   os.path.join(results_directory,basename_alleles_xls))
+        os.symlink(os.path.join(results_directory,BASENAME_VARIANT_COV_XLS),
+                   os.path.join(results_directory,basename_variant_cov_xls))
+        if dataset['has_hotspots']:
+            os.symlink(os.path.join(results_directory,BASENAME_HOTSPOTS_XLS),
+                       os.path.join(results_directory,basename_hotspots_xls))
 
     subprocess.call('touch %s/%s.done' % (results_directory,basename_variants_vcf),shell=True)
 
     render_context = {
-        'options'               : vc_options,
+        'options'               : dataset,
         'configuration_link'    : BASENAME_PARAMETERS_JSON,
         'mapped_bam_link'       : os.path.basename(untrimmed_bam),
         'mapped_bai_link'       : os.path.basename(untrimmed_bam)+'.bai',
         'variants_vcf_gz_link'  : basename_variants_vcf+'.gz',
         'variants_tbi_link'     : basename_variants_vcf+'.gz.tbi',
+        'genome_vcf_gz_link'    : basename_genome_vcf+'.gz',
+        'genome_tbi_link'       : basename_genome_vcf+'.gz.tbi',
         'variants_xls_link'     : basename_variants_xls,
         'alleles_xls_link'      : basename_alleles_xls,
         'hotspots_xls_link'     : basename_hotspots_xls,
+        'variant_cov_xls_link'  : basename_variant_cov_xls,
         'processed_bam_link'    : os.path.basename(processed_bam),
         'processed_bai_link'    : os.path.basename(processed_bam)+'.bai',
         'results_url'           : TSP_URLPATH_PLUGIN_DIR,
         'startplugin_json'      : startplugin_json
     }
 
-    if barcode:
-        render_context['results_url'] += '/' + barcode
+    if dataset['is_barcode']:
+        render_context['results_url'] += '/' + dataset['name']
 
     summary_in = open(os.path.join(results_directory,'variant_summary.json'))
     render_context['summary'] = json.load(summary_in)
     summary_in.close()
 
-    if vc_options['has_targets']:
-        render_context['targets_bed_link'] = os.path.basename(vc_options['targets_bed_unmerged'])
+    tvcutils_command = "tvcutils prepare_hotspots"
+    tvcutils_command += ' --reference "%s"' % dataset['reference_genome_fasta']
+    tvcutils_command += ' --input-vcf "%s"' % os.path.join(results_directory,BASENAME_VARIANTS_VCF)
+    tvcutils_command += ' --output-bed "%s"' % os.path.join(results_directory,'TSVC_variants.bed')
+    run_command(tvcutils_command,'Write variants bed')
+    allelecount_command = 'samtools mpileup -BQ0 -d1000000'
+    allelecount_command += ' -f "%s"' % dataset['reference_genome_fasta']
+    allelecount_command += ' -l ' + os.path.join(results_directory,'TSVC_variants.bed')
+    if dataset['trim_reads']:
+        allelecount_command += ' ' + processed_bam
+    else:
+        allelecount_command += ' ' + untrimmed_bam
+    allelecount_command += ' | %s/scripts/allele_count_mpileup_stdin.py' % DIRNAME
+    allelecount_command += ' > ' + os.path.join(results_directory,'TSVC_variants_allele_counts.txt')
+    if PLUGIN_DEV_SKIP_VARIANT_CALLING:
+        printtime('Skipping base pileup for variant alleles...')
+    else:
+        run_command(allelecount_command,'Base pileup for variant alleles')
+    allelecount2_command = '%s/scripts/print_variant_allele_counts.py' % DIRNAME
+    allelecount2_command += ' ' + dataset['name']
+    allelecount2_command += ' ' + render_context['summary']['sample_name']
+    allelecount2_command += ' ' + os.path.join(results_directory,BASENAME_VARIANTS_VCF)
+    allelecount2_command += ' ' + os.path.join(results_directory,'TSVC_variants_allele_counts.txt')
+    allelecount2_command += ' ' + os.path.join(results_directory,BASENAME_VARIANT_COV_XLS)
+    run_command(allelecount2_command,'Generate variant allele coverage')
+    
+    if dataset['has_targets']:
+        render_context['targets_bed_link'] = os.path.basename(dataset['targets_bed_unmerged'])
 
-    if vc_options['has_hotspots']:
-        render_context['hotspots_bed_link'] = os.path.basename(vc_options['hotspots_bed_unmerged_local'])
+    if dataset['has_hotspots']:
+        render_context['hotspots_bed_link'] = os.path.basename(dataset['hotspots_bed_unmerged_local'])
 
-    if vc_options['has_targets'] and vc_options['trim_reads']:
+    if dataset['has_targets'] and dataset['trim_reads']:
         render_context['effective_regions_bed_link'] = 'effective_regions.bed'
 
-    if barcode:
-        render_context['barcode'] = barcode
+    if dataset['is_barcode']:
+        render_context['barcode'] = dataset['name']
 
     out = open(results_directory + '/' + HTML_RESULTS,'w')
     out.write(render_to_string('report_details.html', render_context))
@@ -326,34 +373,34 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     # Create xml template required for adding IGV links
     fxml = open(os.path.join(results_directory,'igv_session.xml'), "w")
     fxml.write('<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n')
-    if (vc_options['genome_name'] == 'hg19'):
-        fxml.write('<Global genome="%s" version="3">\n' % vc_options['genome_name'])
+    if (dataset['reference_genome_name'] == 'hg19'):
+        fxml.write('<Global genome="%s" version="3">\n' % dataset['reference_genome_name'])
     else:    
-        fxml.write('<Global genome="{plugin_url}/%s.fasta" version="3">\n' % (barcode_modifier + vc_options['genome_name']))
+        fxml.write('<Global genome="{plugin_url}/%s.fasta" version="3">\n' % (barcode_modifier + dataset['reference_genome_name']))
     fxml.write('    <Resources>\n')
     fxml.write('        <Resource name="%s.gz" path="{plugin_url}/%s.gz"/>\n' % (basename_variants_vcf,basename_variants_vcf))
-    if vc_options['trim_reads']:
+    if dataset['trim_reads']:
         fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (os.path.basename(processed_bam),os.path.basename(processed_bam)))
     else:
         fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (os.path.basename(untrimmed_bam),os.path.basename(untrimmed_bam)))
-    if vc_options['has_targets']:
+    if dataset['has_targets']:
         fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['targets_bed_link'],barcode_modifier+render_context['targets_bed_link']))
-    if vc_options['has_hotspots']:
+    if dataset['has_hotspots']:
         fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['hotspots_bed_link'],barcode_modifier+render_context['hotspots_bed_link']))
-    if vc_options['has_targets'] and vc_options['trim_reads']:
+    if dataset['has_targets'] and dataset['trim_reads']:
         fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['effective_regions_bed_link'],render_context['effective_regions_bed_link']))
     fxml.write('    </Resources>\n')
     fxml.write('    <Panel name="DataPanel" height="150">\n')
     fxml.write('        <Track displayMode="EXPANDED" id="{plugin_url}/%s.gz" name="Variant Calls" visible="true"/>\n' % basename_variants_vcf)
-    if vc_options['has_targets']:
-        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (barcode_modifier+render_context['targets_bed_link'],vc_options['targets_name']))
-    if vc_options['has_hotspots']:
-        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (barcode_modifier+render_context['hotspots_bed_link'],vc_options['hotspots_name']))
-    if vc_options['has_targets'] and vc_options['trim_reads']:
-        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (render_context['effective_regions_bed_link'],vc_options['targets_name'] + '_effective'))
+    if dataset['has_targets']:
+        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (barcode_modifier+render_context['targets_bed_link'],dataset['targets_name']))
+    if dataset['has_hotspots']:
+        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (barcode_modifier+render_context['hotspots_bed_link'],dataset['hotspots_name']))
+    if dataset['has_targets'] and dataset['trim_reads']:
+        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (render_context['effective_regions_bed_link'],dataset['targets_name'] + '_effective'))
     fxml.write('    </Panel>\n')
     fxml.write('    <Panel height="525">\n')
-    if vc_options['trim_reads']:
+    if dataset['trim_reads']:
         fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s_coverage" name="Coverage" visible="true"/>\n' % os.path.basename(processed_bam))
         fxml.write('        <Track displayMode="EXPANDED" id="{plugin_url}/%s" name="Alignments" visible="true"/>\n' % os.path.basename(processed_bam))
     else:
@@ -370,24 +417,28 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
 
 
     # List of generated files:
-    if barcode:
-        add_output_file('variants_vcf_gz', barcode+'/'+basename_variants_vcf+'.gz', barcode, render_context['summary']['sample_name'])
-        add_output_file('variants_vcf_gz_tbi', barcode+'/'+basename_variants_vcf+'.gz.tbi', barcode, render_context['summary']['sample_name'])
-        add_output_file('alleles_xls', barcode+'/'+basename_alleles_xls, barcode, render_context['summary']['sample_name'])
-        add_output_file('mapped_bam', barcode+'/'+os.path.basename(untrimmed_bam), barcode, render_context['summary']['sample_name'])
-        add_output_file('mapped_bam_bai', barcode+'/'+os.path.basename(untrimmed_bam)+'.bai', barcode, render_context['summary']['sample_name'])
-        if vc_options['trim_reads']:
-            add_output_file('processed_bam', barcode+'/'+os.path.basename(processed_bam), barcode, render_context['summary']['sample_name'])
-            add_output_file('processed_bam_bai', barcode+'/'+os.path.basename(processed_bam)+'.bai', barcode, render_context['summary']['sample_name'])
-        add_output_file('filtered_variants_vcf', barcode+'/small_variants_filtered.vcf', barcode, render_context['summary']['sample_name'])
+    if dataset['is_barcode']:
+        add_output_file('variants_vcf_gz', dataset['name']+'/'+basename_variants_vcf+'.gz', dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('variants_vcf_gz_tbi', dataset['name']+'/'+basename_variants_vcf+'.gz.tbi', dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('genome_vcf_gz', dataset['name']+'/'+basename_genome_vcf+'.gz', dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('genome_vcf_gz_tbi', dataset['name']+'/'+basename_genome_vcf+'.gz.tbi', dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('alleles_xls', dataset['name']+'/'+basename_alleles_xls, dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('mapped_bam', dataset['name']+'/'+os.path.basename(untrimmed_bam), dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('mapped_bam_bai', dataset['name']+'/'+os.path.basename(untrimmed_bam)+'.bai', dataset['name'], render_context['summary']['sample_name'])
+        if dataset['trim_reads']:
+            add_output_file('processed_bam', dataset['name']+'/'+os.path.basename(processed_bam), dataset['name'], render_context['summary']['sample_name'])
+            add_output_file('processed_bam_bai', dataset['name']+'/'+os.path.basename(processed_bam)+'.bai', dataset['name'], render_context['summary']['sample_name'])
+        add_output_file('filtered_variants_vcf', dataset['name']+'/small_variants_filtered.vcf', dataset['name'], render_context['summary']['sample_name'])
 
     else:
         add_output_file('variants_vcf_gz', basename_variants_vcf+'.gz', sample=render_context['summary']['sample_name'])
         add_output_file('variants_vcf_gz_tbi', basename_variants_vcf+'.gz.tbi', sample=render_context['summary']['sample_name'])
+        add_output_file('genome_vcf_gz', basename_genome_vcf+'.gz', sample=render_context['summary']['sample_name'])
+        add_output_file('genome_vcf_gz_tbi', basename_genome_vcf+'.gz.tbi', sample=render_context['summary']['sample_name'])
         add_output_file('alleles_xls', basename_alleles_xls, sample=render_context['summary']['sample_name'])
         add_output_file('mapped_bam', os.path.basename(untrimmed_bam), sample=render_context['summary']['sample_name'])
         add_output_file('mapped_bam_bai', os.path.basename(untrimmed_bam)+'.bai', sample=render_context['summary']['sample_name'])
-        if vc_options['trim_reads']:
+        if dataset['trim_reads']:
             add_output_file('processed_bam', os.path.basename(processed_bam), sample=render_context['summary']['sample_name'])
             add_output_file('processed_bam_bai', os.path.basename(processed_bam)+'.bai', sample=render_context['summary']['sample_name'])
         add_output_file('filtered_variants_vcf', 'small_variants_filtered.vcf', sample=render_context['summary']['sample_name'])
@@ -396,7 +447,7 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
 
 
 
-def options_for_manual_start(startplugin_json):
+def get_options(startplugin_json):
     ''' Attempt to get plugin options '''
 
     options = {}
@@ -404,10 +455,17 @@ def options_for_manual_start(startplugin_json):
         options['parameters']       = startplugin_json['pluginconfig']
         configuration               = options['parameters']['meta']['configuration']
     except:
-        # TODO: Autostart without configuration no longer allowed
-        return {'error':'Automatic analysis was not performed. Plugin does not appear to be configured.'}
+        if ('barcodes' in startplugin_json['pluginconfig']):
+            startplugin_json['pluginconfig']['meta'] = startplugin_json['pluginconfig']['barcodes'][0]['json']['pluginconfig']['meta']
+        try:
+            options['parameters']       = startplugin_json['pluginconfig']
+            configuration               = options['parameters']['meta']['configuration']
+        except:    
+            # TODO: Autostart without configuration no longer allowed
+            return {'error':'Automatic analysis was not performed. Plugin does not appear to be configured.'}
 
-    # hard code for existing behavior with exception around HiQ on Proton 4.6 TSS release
+    # TODO, remove the folling lines, this needs to be handled one level higher
+    # hard code for existing behavior with exception around HiQ on Proton
     options['has_error_motifs'] = True
     options['error_motifs'] = os.path.join(DIRNAME,'share/TVC/sse/motifset.txt')
     try:
@@ -426,7 +484,8 @@ def options_for_manual_start(startplugin_json):
         built_in_parameters = json.load(f, parse_float=str)
 
     for reload_parameters in built_in_parameters:
-        if reload_parameters["meta"]["configuration"] != configuration:
+        if configuration not in reload_parameters["meta"]["replaces"]:
+        #if reload_parameters["meta"]["configuration"] != configuration:
             continue
 
         options['original_parameters'] = startplugin_json['pluginconfig']
@@ -441,13 +500,14 @@ def options_for_manual_start(startplugin_json):
         options["original_config_line2"] = ''
         if options['original_parameters']['meta'].get('configuration',''):
             options["original_config_line2"] += options['original_parameters']['meta']['configuration'] + ', '
-        options["original_config_line2"] += 'TS version: ' + options['original_parameters']['meta'].get('ts_version','4.6')
+        options["original_config_line2"] += 'TS version: ' + options['original_parameters']['meta'].get('ts_version','5.0')
+        break
 
     options["config_line1"] = options['parameters']['meta'].get('name','Legacy '+configuration)
     options["config_line2"] = ''
     if options['parameters']['meta'].get('configuration',''):
         options["config_line2"] += options['parameters']['meta']['configuration'] + ', '
-    options["config_line2"] += 'TS version: ' + options['parameters']['meta'].get('ts_version','4.6')
+    options["config_line2"] += 'TS version: ' + options['parameters']['meta'].get('ts_version','5.0')
 
     # Ensure nonstandard unicode characters are eliminated from config_line1, and original_config_line1
 
@@ -460,75 +520,153 @@ def options_for_manual_start(startplugin_json):
     options['parameters']['meta']['tvcargs'] = startplugin_json['pluginconfig']['meta'].get('tvcargs','')
     if not options['parameters']['meta']['tvcargs']:
         options['parameters']['meta']['tvcargs'] = 'tvc'
+    # Call tvc -v to get the version string
+    tvc_args = options['parameters'].get('meta',{}).get('tvcargs','tvc')
+    if tvc_args == 'tvc' and os.path.exists(DIRNAME + '/tvc'):   # try local binary first, then go to global one
+        tvc_args = DIRNAME + '/tvc'
+    options['tvc_version'] = execute_output(tvc_args + ' -v').splitlines()[0]
+    if options['tvc_version'].endswith('- Torrent Variant Caller'):
+        options['tvc_version'] = options['tvc_version'][:-24].strip()
 
+    # These two values are needed to display the 'Output Directory' in the HTML pages
+    options['plugin_name']               = startplugin_json['runinfo'].get('plugin_name','')
+    options['pluginresult']              = startplugin_json['runinfo'].get('pluginresult','')
 
-    options['trim_reads'] = startplugin_json['pluginconfig']['meta'].get('trimreads',True)
+    options['run_name']                  = startplugin_json['expmeta'].get('run_name','Current run')
+    options['has_barcodes']              = startplugin_json['expmeta'].get('barcodeId','') != ''
+
+    options['trim_reads']   = startplugin_json['pluginconfig']['meta'].get('trimreads',True)
     options['barcode_mode'] = startplugin_json['pluginconfig']['meta'].get('barcode_mode','match')
 
     try:
-        options['start_mode'] = 'Manual start'
-        local_library_type              = startplugin_json['pluginconfig']['meta']['librarytype']
-        local_targets_name              = startplugin_json['pluginconfig']['meta']['targetregions_id']
-        local_targets_bed_unmerged      = startplugin_json['pluginconfig']['meta']['targetregions']
-        local_targets_bed_merged        = startplugin_json['pluginconfig']['meta']['targetregions_merge']
-        local_hotspots_name             = startplugin_json['pluginconfig']['meta']['targetloci_id']
-        local_hotspots_bed_unmerged     = startplugin_json['pluginconfig']['meta']['targetloci']
-        local_hotspots_bed_merged       = startplugin_json['pluginconfig']['meta']['targetloci_merge']
-        local_genome_name               = startplugin_json['pluginconfig']['meta']['reference']
-
+        options['start_mode']               = 'Manual start'
+        options['library_type']             = startplugin_json['pluginconfig']['meta']['librarytype']
+        options['reference_genome_name']    = startplugin_json['pluginconfig']['meta']['reference']
+#       options['targets_name']             = startplugin_json['pluginconfig']['meta']['targetregions_id']
+        options['targets_bed_unmerged']     = startplugin_json['pluginconfig']['meta']['targetregions']
+#       options['targets_bed_merged']       = startplugin_json['pluginconfig']['meta']['targetregions_merge']
+#       options['hotspots_name']            = startplugin_json['pluginconfig']['meta']['targetloci_id']
+        options['hotspots_bed_unmerged']    = startplugin_json['pluginconfig']['meta']['targetloci']
+#       options['hotspots_bed_merged']      = startplugin_json['pluginconfig']['meta']['targetloci_merge']
     except:
-        options['start_mode'] = 'Auto start'
-        local_library_type = startplugin_json.get('plan',{}).get('runType',None)
-        local_targets_bed_unmerged = startplugin_json.get('plan',{}).get('bedfile','')
-        if not local_targets_bed_unmerged or local_targets_bed_unmerged == "none":
-            local_targets_bed_unmerged      = ""
-            local_targets_bed_merged        = ""
-            local_targets_name              = ""
-        else:
-            local_targets_bed_merged        = local_targets_bed_unmerged.replace('/unmerged/detail/','/merged/plain/')
-            local_targets_name              = os.path.basename(local_targets_bed_unmerged)[:-4]
-        local_hotspots_bed_unmerged = startplugin_json.get('plan',{}).get('regionfile','')
-        if not local_hotspots_bed_unmerged or local_hotspots_bed_unmerged == "none":
-            local_hotspots_name             = ""
-            local_hotspots_bed_unmerged     = ""
-            local_hotspots_bed_merged       = ""
-        else:
-            local_hotspots_bed_merged       = local_hotspots_bed_unmerged.replace('/unmerged/detail/','/merged/plain/')
-            local_hotspots_name             = os.path.basename(local_hotspots_bed_unmerged)[:-4]
-        local_barcode_mode = 'match'
-        local_genome_name = ''
+        options['start_mode']               = 'Auto start'
+        options['library_type']             = startplugin_json.get('plan',{}).get('runType',None)
+        options['reference_genome_name']    = startplugin_json['runinfo'].get('library','')
+        options['targets_bed_unmerged']     = startplugin_json.get('plan',{}).get('bedfile','')
+        options['hotspots_bed_unmerged']    = startplugin_json.get('plan',{}).get('regionfile','')
 
-    options['genome_name'] = local_genome_name
-    if  local_library_type  in ["wholegenome",'WGNM','GENS']:
+    cleanup_options(options)
+
+    return options
+
+
+def cleanup_options(options):
+
+    options['reference_genome_fasta']       = '/results/referenceLibrary/tmap-f3/' + options['reference_genome_name'] + '/' + options['reference_genome_name'] + '.fasta' #TODO
+
+    if not options['targets_bed_unmerged'] or options['targets_bed_unmerged'] == "none":
+        options['targets_bed_unmerged']     = ""
+        options['targets_bed_merged']       = ""
+        options['targets_name']             = ""
+        options['trim_reads']               = False
+    else:
+        options['targets_bed_merged']       = options['targets_bed_unmerged'].replace('/unmerged/detail/','/merged/plain/')
+        options['targets_name']             = os.path.basename(options['targets_bed_unmerged'])[:-4]
+
+    if not options['hotspots_bed_unmerged'] or options['hotspots_bed_unmerged'] == "none":
+        options['hotspots_bed_unmerged']    = ""
+        options['hotspots_bed_merged']      = ""
+        options['hotspots_name']            = ""
+    else:
+        options['hotspots_bed_merged']      = options['hotspots_bed_unmerged'].replace('/unmerged/detail/','/merged/plain/')
+        options['hotspots_name']            = os.path.basename(options['hotspots_bed_unmerged'])[:-4]
+
+    options['has_targets']                  = options['targets_name']
+    options['has_hotspots']                 = options['hotspots_name']
+
+    reference_genome_fasta_local = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(options['reference_genome_fasta']))
+    if not os.path.lexists(reference_genome_fasta_local):
+        os.symlink(options['reference_genome_fasta'], reference_genome_fasta_local)
+
+    reference_genome_fasta_index_local = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(options['reference_genome_fasta']) + '.fai')
+    if not os.path.lexists(reference_genome_fasta_index_local):
+        os.symlink(options['reference_genome_fasta'] + '.fai', reference_genome_fasta_index_local)
+
+    # Get local copy of BED files (may be deleted from system later)
+    if options['has_targets']:
+        if not os.path.exists( options['targets_bed_unmerged']):
+            printtime('ERROR: Cannot locate target regions file: ' +  options['targets_bed_unmerged'])
+            return 1
+        if not os.path.exists(options['targets_bed_merged']):
+            printtime('ERROR: Cannot locate merged target regions file: ' + options['targets_bed_merged'])
+            return 1
+        target_file = "%s/%s" % (TSP_FILEPATH_PLUGIN_DIR,os.path.basename(options['targets_bed_unmerged']))
+        if not os.path.exists(target_file):
+            shutil.copy(options['targets_bed_unmerged'], target_file)
+
+            add_output_file('target_regions_bed', os.path.basename(options['targets_bed_unmerged']))
+
+    # create 3 files in TSP_FILEPATH_PLUGIN_DIR and re-evaluate 'has_hotspots' and 'hotspots_vcf'
+    if options['has_hotspots']:
+        if not os.path.exists(options['hotspots_bed_unmerged']):
+            printtime('ERROR: Cannot locate hotspots file: ' +  options['hotspots_bed_unmerged'])
+            return 1
+        if not os.path.exists(options['hotspots_bed_merged']):
+            printtime('ERROR: Cannot locate merged hotspots file: ' + options['hotspots_bed_merged'])
+            return 1
+
+        options['hotspots_bed_unmerged_local']     = os.path.join(TSP_FILEPATH_PLUGIN_DIR,os.path.basename(options['hotspots_bed_unmerged']))
+        options['hotspots_bed_unmerged_leftalign'] = os.path.join(TSP_FILEPATH_PLUGIN_DIR,os.path.basename(options['hotspots_bed_unmerged'][:-4] + '.left.bed'))
+        options['hotspots_vcf']                    = os.path.join(TSP_FILEPATH_PLUGIN_DIR,os.path.basename(options['hotspots_bed_unmerged'][:-4] + '.hotspot.vcf'))
+
+        if not os.path.exists(options['hotspots_bed_unmerged_local']):
+            shutil.copy(options['hotspots_bed_unmerged'], options['hotspots_bed_unmerged_local'])
+
+            prepare_hotspots_command  = 'tvcutils prepare_hotspots'
+            prepare_hotspots_command += '  --input-bed %s' % options['hotspots_bed_unmerged']
+            prepare_hotspots_command += '  --reference %s' % options['reference_genome_fasta']
+            prepare_hotspots_command += '  --left-alignment on'
+            prepare_hotspots_command += '  --allow-block-substitutions on'
+            prepare_hotspots_command += '  --output-bed %s' % options['hotspots_bed_unmerged_leftalign']
+            prepare_hotspots_command += '  --output-vcf %s' % options['hotspots_vcf']
+            if options['has_targets']:
+                prepare_hotspots_command += '  --unmerged-bed %s' % options['targets_bed_unmerged']
+            run_command(prepare_hotspots_command, 'Generate filtered, left-aligned, and merged hotspot VCF file')
+
+            hotspot_file_empty = True
+            try:
+                f = open(options['hotspots_vcf'], 'r')
+                for line in f:
+                    if not line or line.startswith('#'):
+                        continue
+                    hotspot_file_empty = False
+                    break
+            except:
+                traceback.print_exc()
+                pass
+
+            if hotspot_file_empty:
+                printtime('Filtered hotspot file has no hotspot entries. Disabling hotspots')
+                options['has_hotspots'] = False
+                options['hotspots_vcf'] = ""
+            else:
+                #run_command('bgzip -c %s/hotspot.vcf > %s/hotspot.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,TSP_FILEPATH_PLUGIN_DIR), 'Generate compressed hotspot vcf')
+                #run_command('tabix -p vcf %s/hotspot.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR), 'Generate index for compressed hotspot vcf')
+                add_output_file('hotspots_bed', os.path.basename(options['hotspots_bed_unmerged']))
+
+    if options['library_type'] in ["wholegenome",'WGNM','GENS']:
         options['library_type'] = "Whole Genome"
-        options['trim_reads'] = False
-    elif local_library_type in ["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA']:
+        options['trim_reads']   = False
+    elif options['library_type'] in ["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA']:
         options['library_type'] = "AmpliSeq"
-    elif local_library_type in ["targetseq",'TARS']:
+    elif options['library_type'] in ["targetseq",'TARS']:
         options['library_type'] = "TargetSeq"
-        options['trim_reads'] = False
-    elif local_library_type is None:
-        return {'error':'Automatic analysis was not performed. Cannot determine run type from plan.'}
+        options['trim_reads']   = False
+    elif not options['library_type']:
+        return {'error':'Automatic analysis was not performed. Cannot determine library type from plan.'}
     else:
-        return {'error':'Automatic analysis was not performed. Runtype "%s" is not supported.' % local_library_type}
+        return {'error':'Automatic analysis was not performed. Library type "%s" is not supported.' % options['library_type']}
 
-
-    if local_targets_bed_unmerged:
-        options['has_targets'] = True
-        options['targets_bed_unmerged'] = local_targets_bed_unmerged
-        options['targets_bed_merged'] = local_targets_bed_merged
-        options['targets_name'] = local_targets_name
-    else:
-        options['has_targets'] = False
-        options['trim_reads'] = False
-
-    if local_hotspots_bed_unmerged:
-        options['has_hotspots'] = True
-        options['hotspots_bed_unmerged'] = local_hotspots_bed_unmerged
-        options['hotspots_bed_merged'] = local_hotspots_bed_merged
-        options['hotspots_name'] = local_hotspots_name
-    else:
-        options['has_hotspots'] = False
 
     if options['library_type'] == "AmpliSeq" and not options['has_targets']:
         return {'error':'Analysis aborted: AmpliSeq runs must have target regions specified.'}
@@ -552,7 +690,6 @@ def options_for_manual_start(startplugin_json):
         del options['parameters']['meta']['user_selections']
 
 
-    return options
 
 
 
@@ -568,9 +705,128 @@ def get_bam_reference_short_name(bam):
             break
     short_name = re.search(".*/(.*)\.fasta", fasta).group(1)
     return short_name
+    
+def tmap(cmd, new_aligned_bam):
+    print(cmd)
+    subprocess.call(cmd,shell=True)
+    cmd = "samtools sort " + new_aligned_bam + " " + new_aligned_bam[:-4]
+    print(cmd)
+    subprocess.call(cmd,shell=True)
+    cmd = "samtools index " + new_aligned_bam
+    print(cmd)
+    subprocess.call(cmd,shell=True)
+    return new_aligned_bam
 
+def runTmap(aligned_bam, new_reference, unaligned_bam, parameters, new_aligned_bam):
+    returncode = 0
+    files_string = " -n 24 -f " + new_reference + " -r " + unaligned_bam + " -s " + new_aligned_bam + " -v -Y -u --prefix-exclude 5 -o 2 "
+    cmd = parameters.replace(" ... ", files_string)
+    out = ""
+    try:
+        proc = subprocess.Popen(["samtools", "view", "-H", aligned_bam],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        (out, err) = proc.communicate()
+        returncode = proc.returncode
+    except subprocess.CalledProcessError:
+        returncode = 1
+        error(dir + " variant_caller_pipeline run failed.")
+    except OSError:
+        returncode = 1
+        error(dir + " variant_caller_pipeline run failed.")
+    pos = out.find("@PG	ID:tmap	CL:")
+    if pos == -1:
+        return tmap(cmd, new_aligned_bam)
+    else:
+        out = out[pos + 15:]
+        pos = out.find("	VN:")
+        if pos == -1:
+            return tmap(cmd, new_aligned_bam)
+        out = out[:pos]
+        out.replace(" -i ", " -r ")
+        pos1 = out.find(" -n ")
+        pos2 = out.find(" -f ")
+        pos3 = out.find(" -r ")
+        pos4 = out.find(" -o ")
+        if pos1 == -1 or pos2 == -1 or pos3 == -1 or pos4 == -1:
+            return tmap(cmd, new_aligned_bam)
+        if pos1 > pos2 or pos2 > pos3 or pos3 > pos4:
+            return tmap(cmd, new_aligned_bam)
+        pos = out.find(" -n ")
+        part_1 = out[:pos]
+        pos = out.find(" -f")
+        reference = out[pos+4:]
+        pos = reference.find(" -r")
+        reference = reference[:pos]
+        pos = out.find(" -o 2 ")
+        part_2 = out[pos+6:]
+        oldcmd = "tmap " + part_1 + files_string + part_2
+        cmd = "tmap " + part_1 + files_string + part_2
+        if ((reference != new_reference) or (parameters != "")):
+            if (parameters.find(" ... ") != -1): 
+                cmd = parameters.replace(" ... ", files_string)
+            elif (parameters != ""): 
+                part_2 = parameters
+                cmd = "tmap " + part_1 + files_string + part_2
+            if ((reference != new_reference) or (cmd != oldcmd)):
+                return tmap(cmd, new_aligned_bam)
+    return aligned_bam
+    
+def combine_files(combinedfilename, myfile):
+    try:
+        file_in = open(myfile, "r")
+        if (os.path.isfile(combinedfilename)):
+            file_out = open(combinedfilename, "a")
+            for line in file_in:
+                if (not line.startswith("#")): file_out.write(line)
+            file_out.close()
+        else:
+            file_out = open(combinedfilename, "w")
+            for line in file_in:
+                file_out.write(line)
+            file_out.close()
+        file_in.close()
+    except:
+        pass
 
+def print_options(vc_options, parameters_file):
+    global TSP_FILEPATH_PLUGIN_DIR
+    global startplugin_json
+    
+    printtime('Variant Caller plugin run options:')
+    printtime('  Plugin name                : ' + startplugin_json['runinfo'].get('plugin_name',''))
+    printtime('  Plugin start mode          : ' + vc_options['start_mode'])
+    printtime('  Variant Caller version     : ' + vc_options['tvc_version'])
+    printtime('  Run is barcoded            : ' + str(vc_options['has_barcodes']))
+    printtime('  Genome                     : ' + vc_options['reference_genome_name'])
+    printtime('  Library Type               : ' + vc_options['library_type'])
+    printtime('  Target Regions             : ' + (vc_options['targets_name'] if vc_options['has_targets'] else 'Not using'))
+    printtime('  Hotspots                   : ' + (vc_options['hotspots_name'] if vc_options['has_hotspots'] else 'Not using'))
+    if 'original_parameters' in vc_options:
+        printtime('  Requested Parameters       : ' + vc_options["original_config_line1"])
+        printtime('                               ' + vc_options["original_config_line2"])
+        printtime('  Auto-Updated Parameters    : ' + vc_options["config_line1"])
+        printtime('                               ' + vc_options["config_line2"])
+    else:
+        printtime('  Used Parameters            : ' + vc_options['config_line1'])
+        printtime('                               ' + vc_options["config_line2"])
 
+    printtime('  Trim Reads                 : ' + str(vc_options['trim_reads']))
+
+    printtime('')
+    printtime('Used files:')
+    printtime('  Reference Genome           : ' + vc_options['reference_genome_fasta'])
+    printtime('  Parameters file            : ' + os.path.join(TSP_FILEPATH_PLUGIN_DIR,parameters_file))
+    if 'parameters_source' in vc_options:
+        printtime('  Parameters source file     : ' + vc_options['parameters_source'])
+
+    if vc_options['has_targets']:
+        printtime('  Target unmerged BED        : ' + vc_options['targets_bed_unmerged'])
+        printtime('  Target merged BED          : ' + vc_options['targets_bed_merged'])
+    if vc_options['has_hotspots']:
+        printtime('  Hotspots unmerged BED      : ' + vc_options['hotspots_bed_unmerged'])
+        printtime('  Hotspots merged BED        : ' + vc_options['hotspots_bed_merged'])
+    printtime('  Barcode mode               : ' + vc_options['barcode_mode'])
+    printtime('')
+        
 def plugin_main():
 
     global PLUGIN_DEV_SKIP_VARIANT_CALLING
@@ -615,25 +871,12 @@ def plugin_main():
     # Uncomment to emulate autorun:
     #startplugin_json['pluginconfig'] = {}
 
-    vc_options = options_for_manual_start(startplugin_json)
-    #if not vc_options:
-    #    vc_options = options_for_plan_autostart(startplugin_json)
-
-
-    vc_options['run_name']      = startplugin_json['expmeta'].get('run_name','Current run')
-    if vc_options.get('genome_name','') == '':
-        vc_options['genome_name'] = startplugin_json['runinfo'].get('library','')
-    vc_options['plugin_name']   = startplugin_json['runinfo'].get('plugin_name','')
-    vc_options['pluginresult']             = startplugin_json['runinfo'].get('pluginresult','')
-    #vc_options['genome_fasta']  = options.genome_fasta   #os.environ['TSP_FILEPATH_GENOME_FASTA']
-    vc_options['genome_fasta'] = '/results/referenceLibrary/tmap-f3/' + vc_options['genome_name'] + '/' + vc_options['genome_name'] + '.fasta' #what is a better way of doing this?
+    vc_options = get_options(startplugin_json)
 
     if 'error' in vc_options:
         printtime(vc_options['error'])
         generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),vc_options['error'], vc_options)
         return 1
-
-
 
     f = open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON),'w')
     json.dump(vc_options['parameters'],f,indent=4)
@@ -641,59 +884,9 @@ def plugin_main():
 
     add_output_file('parameters_json', BASENAME_PARAMETERS_JSON)
 
-    TSP_FILEPATH_BARCODE_TXT    = ANALYSIS_DIR + '/barcodeList.txt'
-    vc_options['has_barcodes'] = False
-    if os.path.exists(TSP_FILEPATH_BARCODE_TXT):
-        vc_options['has_barcodes'] = True
-
-    # Call tvc -v to get the version string
-    tvc_args = vc_options['parameters'].get('meta',{}).get('tvcargs','tvc')
-    if tvc_args == 'tvc' and os.path.exists(DIRNAME + '/tvc'):   # try local binary first, then go to global one
-        tvc_args = DIRNAME + '/tvc'
-    vc_options['tvc_version'] = execute_output(tvc_args + ' -v').splitlines()[0]
-    if vc_options['tvc_version'].endswith('- Torrent Variant Caller'):
-        vc_options['tvc_version'] = vc_options['tvc_version'][:-24].strip()
-
-
     # Parameters from plugin customization
-    printtime('Variant Caller plugin run options:')
-    printtime('  Plugin name                : ' + vc_options['plugin_name'])
-    printtime('  Plugin start mode          : ' + vc_options['start_mode'])
-    printtime('  Variant Caller version     : ' + vc_options['tvc_version'])
-    printtime('  Run is barcoded            : ' + str(vc_options['has_barcodes']))
-    printtime('  Genome                     : ' + vc_options['genome_name'])
-    printtime('  Library Type               : ' + vc_options['library_type'])
-    printtime('  Target Regions             : ' + (vc_options['targets_name'] if vc_options['has_targets'] else 'Not using'))
-    printtime('  Hotspots                   : ' + (vc_options['hotspots_name'] if vc_options['has_hotspots'] else 'Not using'))
-    if 'original_parameters' in vc_options:
-        printtime('  Requested Parameters       : ' + vc_options["original_config_line1"])
-        printtime('                               ' + vc_options["original_config_line2"])
-        printtime('  Auto-Updated Parameters    : ' + vc_options["config_line1"])
-        printtime('                               ' + vc_options["config_line2"])
-    else:
-        printtime('  Used Parameters            : ' + vc_options['config_line1'])
-        printtime('                               ' + vc_options["config_line2"])
-
-    printtime('  Trim Reads                 : ' + str(vc_options['trim_reads']))
-
-    printtime('')
-    printtime('Used files:')
-    printtime('  Reference Genome           : ' + vc_options['genome_fasta'])
-    printtime('  Parameters file            : ' + os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON))
-    if 'parameters_source' in vc_options:
-        printtime('  Parameters source file     : ' + vc_options['parameters_source'])
-
-    if vc_options['has_targets']:
-        printtime('  Target unmerged BED        : ' + vc_options['targets_bed_unmerged'])
-        printtime('  Target merged BED          : ' + vc_options['targets_bed_merged'])
-    if vc_options['has_hotspots']:
-        printtime('  Hotspots unmerged BED      : ' + vc_options['hotspots_bed_unmerged'])
-        printtime('  Hotspots merged BED        : ' + vc_options['hotspots_bed_merged'])
-    printtime('  Barcode mode               : ' + vc_options['barcode_mode'])
-    printtime('')
-
-
-
+    if (not 'barcodes' in startplugin_json['pluginconfig']):
+        print_options(vc_options, BASENAME_PARAMETERS_JSON)
 
     PLUGIN_HS_ALIGN_DIR = TSP_FILEPATH_PLUGIN_DIR + '/hs_align'
 
@@ -721,91 +914,29 @@ def plugin_main():
 
     printtime('Results folder initialized')
 
-    subprocess.call('ln -sf %s %s/%s' % (vc_options['genome_fasta'], TSP_FILEPATH_PLUGIN_DIR,
-                                         os.path.basename(vc_options['genome_fasta'])), shell=True)
-    subprocess.call('ln -sf %s %s/%s' % (vc_options['genome_fasta'] + '.fai', TSP_FILEPATH_PLUGIN_DIR,
-                                         os.path.basename(vc_options['genome_fasta']) + '.fai'), shell=True)
-
-    # Get local copy of BED files (may be deleted from system later)
-    if vc_options['has_targets']:
-        if not os.path.exists( vc_options['targets_bed_unmerged']):
-            printtime('ERROR: Cannot locate target regions file: ' +  vc_options['targets_bed_unmerged'])
-            return 1
-        if not os.path.exists(vc_options['targets_bed_merged']):
-            printtime('ERROR: Cannot locate merged target regions file: ' + vc_options['targets_bed_merged'])
-            return 1
-        subprocess.call('cp -f %s %s/%s' % (vc_options['targets_bed_unmerged'],TSP_FILEPATH_PLUGIN_DIR,os.path.basename(vc_options['targets_bed_unmerged'])),shell=True)
-
-        add_output_file('target_regions_bed', os.path.basename(vc_options['targets_bed_unmerged']))
-
-
-    if vc_options['has_hotspots']:
-        if not os.path.exists(vc_options['hotspots_bed_unmerged']):
-            printtime('ERROR: Cannot locate hotspots file: ' +  vc_options['hotspots_bed_unmerged'])
-            return 1
-        if not os.path.exists(vc_options['hotspots_bed_merged']):
-            printtime('ERROR: Cannot locate merged hotspots file: ' + vc_options['hotspots_bed_merged'])
-            return 1
-
-        vc_options['hotspots_bed_unmerged_local'] = os.path.join(TSP_FILEPATH_PLUGIN_DIR,os.path.basename(vc_options['hotspots_bed_unmerged']))
-        vc_options['hotspots_bed_unmerged_leftalign'] = vc_options['hotspots_bed_unmerged_local'][:-4] + '.left.bed'
-
-        subprocess.call('cp -f %s %s' % (vc_options['hotspots_bed_unmerged'],vc_options['hotspots_bed_unmerged_local']),shell=True)
-
-        prepare_hotspots_command  = 'tvcutils prepare_hotspots'
-        prepare_hotspots_command += '  --input-bed %s' % vc_options['hotspots_bed_unmerged']
-        prepare_hotspots_command += '  --reference %s' % vc_options['genome_fasta']
-        prepare_hotspots_command += '  --left-alignment on'
-        prepare_hotspots_command += '  --allow-block-substitutions on'
-        prepare_hotspots_command += '  --output-bed %s' % vc_options['hotspots_bed_unmerged_leftalign']
-        prepare_hotspots_command += '  --output-vcf %s/hotspot.vcf' % TSP_FILEPATH_PLUGIN_DIR
-        run_command(prepare_hotspots_command, 'Generate filtered, left-aligned, and merged hotspot VCF file')
-
-        hotspot_file_empty = True
-        try:
-            f = open('%s/hotspot.vcf' % TSP_FILEPATH_PLUGIN_DIR, 'r')
-            for line in f:
-                if not line or line.startswith('#'):
-                    continue
-                hotspot_file_empty = False
-        except:
-            pass
-
-        if hotspot_file_empty:
-            printtime('Filtered hotspot file has no hotspot entries. Disabling hotspots')
-            vc_options['has_hotspots'] = False
-        else:
-            #run_command('bgzip -c %s/hotspot.vcf > %s/hotspot.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,TSP_FILEPATH_PLUGIN_DIR), 'Generate compressed hotspot vcf')
-            #run_command('tabix -p vcf %s/hotspot.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR), 'Generate index for compressed hotspot vcf')
-            vc_options['hotspots_vcf'] = TSP_FILEPATH_PLUGIN_DIR + '/hotspot.vcf'
-            add_output_file('hotspots_bed', os.path.basename(vc_options['hotspots_bed_unmerged']))
-
-
-
     # Make links to js/css used for barcodes table and empty results page
     subprocess.call('ln -sf "%s/js" "%s"' % (DIRNAME,TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('ln -sf "%s/css" "%s"' % (DIRNAME,TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('ln -sf %s/scripts/*.php3 "%s"' % (DIRNAME,TSP_FILEPATH_PLUGIN_DIR),shell=True)
 
-
+    #TODO, some values in here are barcode specific
     results_json = {
-        'Aligned Reads'     : vc_options['run_name'],
+        'Aligned Reads'     : vc_options['run_name'],  # TODO,BUG?
         'Library Type'      : vc_options['library_type'],
         'Configuration'     : vc_options['parameters']['meta']['configuration'],
         'Target Regions'    : (vc_options['targets_name'] if vc_options['has_targets'] else 'Not using'),
         'Target Loci'       : (vc_options['hotspots_name'] if vc_options['has_hotspots'] else 'Not using'),
         'Trim Reads'        : vc_options['trim_reads'],
-        'barcoded'          : 'false',
         'files'             : []
     }
-    if vc_options['has_targets']:
-        results_json['targets_bed'] = vc_options['targets_bed_unmerged']
-    if vc_options['has_hotspots']:
-        results_json['hotspots_bed'] = vc_options['hotspots_bed_unmerged']
+    if vc_options['has_barcodes']:
+        results_json['barcoded'] = 'true'
+        results_json['barcodes'] = {}
+    else:
+        results_json['barcoded'] = 'false'
 
 
-    if vc_options['has_barcodes']:      # Run for barcodes or single page
-
+    if vc_options['has_barcodes']:
         barcode_sample_info = {}
         samples = startplugin_json.get('plan',{}).get('barcodedSamples',"")
         if samples and not isinstance(samples,dict):
@@ -814,158 +945,226 @@ def plugin_main():
         for k,v in samples.iteritems():
             barcode_sample_info.update(v.get('barcodeSampleInfo',{}))
 
+        printtime("info: %s" % barcode_sample_info) # TODO, DEBUG
+
+        datasets = []
+
         # Load barcode list
-        barcode_data = []
-        bc_list_file = open(TSP_FILEPATH_BARCODE_TXT,'r')
-        for line in bc_list_file:
-            if not line.startswith('barcode '):
-                continue
+        if os.path.exists(ANALYSIS_DIR + '/barcodeList.txt'):
+            with open(ANALYSIS_DIR + '/barcodeList.txt','r') as bc_list_file:
+                for line in bc_list_file:
+                    if not line.startswith('barcode '):
+                        continue
+                    dataset = {}
+                    dataset['is_barcode'] = True
+                    dataset['name'] = line.split(',')[1]
+                    dataset['bam'] = os.path.join(ANALYSIS_DIR, dataset['name'] + '_rawlib.bam')
+                    datasets.append(dataset)
 
-            barcode_entry = {}
-            barcode_entry['name'] = line.split(',')[1]
-            barcode_entry['bam'] = os.path.join(ANALYSIS_DIR, barcode_entry['name'] + '_rawlib.bam')
-            barcode_entry['status'] = 'queued'
+        '''
+        # Non-barcoded sample
+        dataset = {}
+        dataset['is_barcode'] = False
+        dataset['name'] = 'no_barcode'
+        dataset['bam'] = os.path.join(ANALYSIS_DIR, 'rawlib.bam')
+        datasets.append(dataset)
+        '''
 
+
+        startplugin_json_save = copy.deepcopy(startplugin_json)
+        datasets_data = []
+        for dataset in datasets:
+
+            printtime("name: %s" % dataset['name']) # TODO, DEBUG
+
+            override = False
+            configuration_name = 'default'
+            tmap_args = startplugin_json['pluginconfig'].get('meta',{}).get('tmapargs','')
+            startplugin_json = copy.deepcopy(startplugin_json_save)
+            if ('barcodes' in startplugin_json['pluginconfig']):
+                for barcode_params in startplugin_json['pluginconfig']['barcodes']:
+                    if (barcode_params['bam'] == os.path.basename(dataset['bam'])):
+                        override = True
+                        startplugin_json = copy.deepcopy(barcode_params['json'])
+                        startplugin_json['plan'] = startplugin_json_save['plan']
+                        startplugin_json['expmeta'] = startplugin_json_save['expmeta']
+                        startplugin_json['runinfo'] = startplugin_json_save['runinfo']
+                        # Uncomment to emulate autorun:
+                        configuration_name = startplugin_json['pluginconfig'].get('meta',{}).get('configuration_name','')
+                        tmap_args = startplugin_json['pluginconfig'].get('meta',{}).get('tmapargs','')
+                        vc_options = get_options(startplugin_json)
+
+                        if 'error' in vc_options:
+                            printtime(vc_options['error'])
+                            generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),vc_options['error'], vc_options)
+                            return 1
+
+                        f = open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON),'w')
+                        json.dump(vc_options['parameters'],f,indent=4)
+                        f.close()
+                        
+                        f = open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,dataset['name'] + "_parameters.json"),'w')
+                        json.dump(vc_options['parameters'],f,indent=4)
+                        f.close()
+                        add_output_file('parameters_json', dataset['name'] + "_parameters.json")
+                        
+                        print_options(vc_options, dataset['name'] + "_parameters.json")
+                        
+                        break;
+                if (not override): continue
+            if ('override' in startplugin_json['pluginconfig'].get('meta',{})): override = True
+
+            # TODO: why is a barcode specific entry required to display the output directory?
+            # These two values are needed to display the 'Output Directory' in the HTML pages
+            dataset['plugin_name']               = vc_options['plugin_name']
+            dataset['pluginresult']              = vc_options['pluginresult']
+            # TODO: why is a barcode specific entry required to display global configuration settings in HTML pages?
+            dataset['config_line1']              = vc_options['config_line1']
+            dataset['config_line2']              = vc_options['config_line2']
+            dataset['tvc_version']               = vc_options['tvc_version']
+
+            dataset['run_name']                  = vc_options['run_name']
+            dataset['library_type']              = vc_options['library_type']
+            dataset['trim_reads']                = vc_options['trim_reads']
+            dataset['has_error_motifs']          = vc_options['has_error_motifs']
+            dataset['error_motifs']              = vc_options['error_motifs']
             if not PLUGIN_DEV_SKIP_VARIANT_CALLING:
-                subprocess.call('rm -rf %s/%s' % (TSP_FILEPATH_PLUGIN_DIR,barcode_entry['name']),shell=True)
+                subprocess.call('rm -rf %s/%s' % (TSP_FILEPATH_PLUGIN_DIR,dataset['name']),shell=True)
 
-            if not os.path.exists(barcode_entry['bam']):
+            dataset['status'] = 'queued'
+
+            if not os.path.exists(dataset['bam']):
+                dataset['status'] = 'no bam file'
                 continue
 
-            true_reference = get_bam_reference_short_name(barcode_entry['bam'])
-            if true_reference != vc_options['genome_name']:
-                printtime('Skipping barcode ' + barcode_entry['name'] + ' : Bam reference ' + true_reference +
-                          ' different from run reference ' + vc_options['genome_name'])
-                continue
+            if ((not override) and (dataset['name'] in barcode_sample_info)):
 
-            if barcode_entry['name'] in barcode_sample_info:
-                # assume 'dna' and 'DNA' and 'dNa' etc. are the same
-                barcode_nuc_type = barcode_sample_info[barcode_entry['name']].get('nucleotideType','').upper()
-                # assume DNA if no nucleotideType exists
-                if not barcode_nuc_type:
-                    barcode_nuc_type = 'DNA'
-                # revert decision to support variant calling for RNA type
-                if barcode_nuc_type != 'DNA':
-                    printtime('Skipping barcode ' + barcode_entry['name'] + ' : Unsupported nuc type ' + barcode_nuc_type)
-                    continue
+                dataset['reference_genome_name'] = barcode_sample_info[dataset['name']].get('reference','')
+                dataset['targets_bed_unmerged']  = barcode_sample_info[dataset['name']].get('targetRegionBedFile','')
+                dataset['hotspots_bed_unmerged'] = barcode_sample_info[dataset['name']].get('hotSpotRegionBedFile','')
 
-            if vc_options['barcode_mode'] == 'force':
-                if barcode_entry['name'] in barcode_sample_info:
-                    barcode_reference = barcode_sample_info[barcode_entry['name']].get('reference',vc_options['genome_name'])
-                    if barcode_reference != vc_options['genome_name']:
-                        printtime('Skipping barcode ' + barcode_entry['name'] + ' : Barcode reference ' + barcode_reference +
-                                  ' different from run reference ' + vc_options['genome_name'])
-                        continue
+                # assume 'dna' and 'DNA' and 'dNa' etc. are the same, assume DNA if no nucleotideType exists
+                dataset['nuc_type']              = barcode_sample_info[dataset['name']].get('nucleotideType','DNA').upper()
+            #elif not dataset['is_barcode']:
+            #    dataset['reference_genome_name'] = vc_options['reference_genome_name']
+            #    dataset['targets_bed_unmerged']  = vc_options['targets_bed_unmerged']
+            #    dataset['hotspots_bed_unmerged'] = vc_options['hotspots_bed_unmerged']
+            #    dataset['nuc_type']              = 'DNA'
             else:
-                assert vc_options['barcode_mode'] == 'match', "unrecognized barcode mode %s" % vc_options['barcode_mode']
-                if not barcode_entry['name'] in barcode_sample_info:
-                    printtime('Skipping barcode ' + barcode_entry['name'] + ' : Missing barcode sample info ')
-                    continue
-                else:
-                    barcode_reference = barcode_sample_info[barcode_entry['name']].get('reference','')
-                    if barcode_reference != vc_options['genome_name']:
-                        printtime('Skipping barcode ' + barcode_entry['name'] + ' : Barcode reference ' + barcode_reference +
-                                  ' different from run reference ' + vc_options['genome_name'])
-                        continue
-                    barcode_target = barcode_sample_info[barcode_entry['name']].get('targetRegionBedFile','')
-                    if vc_options['has_targets'] and barcode_target != vc_options['targets_bed_unmerged']:
-                        printtime('Skipping barcode ' + barcode_entry['name'] + ' : Barcode target region ' + barcode_target +
-                                  ' different from run target region ' + vc_options['targets_bed_unmerged'])
-                        continue
-                    if not vc_options['has_targets'] and barcode_target:
-                        printtime('Skipping barcode ' + barcode_entry['name'] + ' : Barcode has target region ' + barcode_target +
-                                  ' when there is no run target region')
-                        continue
+                dataset['reference_genome_name'] = vc_options['reference_genome_name']
+                dataset['targets_bed_unmerged']  = vc_options['targets_bed_unmerged']
+                dataset['hotspots_bed_unmerged'] = vc_options['hotspots_bed_unmerged']
+                dataset['nuc_type']              = 'DNA'
+
+                if (not dataset['name'] in barcode_sample_info): printtime('Detected barcode ' + dataset['name'] + ' : Missing barcode sample info ')
+
+            cleanup_options(dataset)
+                
+            # revert decision to support variant calling for RNA type
+            if (dataset['nuc_type'] == ''): dataset['nuc_type'] = 'DNA'
+            if dataset['nuc_type'] != 'DNA':
+                printtime('Skipping barcode ' + dataset['name'] + ' : Unsupported nuc type ' + dataset['nuc_type'])
+                dataset['status'] = 'Unsupported nuc type'
+                continue
+                
+            if (dataset['reference_genome_name'] == ''):
+                dataset['status'] = 'no reference genome'
+                continue
+            if not os.path.exists(dataset['reference_genome_fasta']):
+                dataset['status'] = 'no reference genome'
+                continue
+
+            true_reference = get_bam_reference_short_name(dataset['bam'])
+            if true_reference != dataset['reference_genome_name'] or tmap_args != "":
+                if true_reference != dataset['reference_genome_name']:
+                    printtime('Detected barcode ' + dataset['name'] + ' : Bam reference ' + true_reference +
+                          ' different from run reference ' + dataset['reference_genome_name'])
+                # TS-11423 Use previously aligned bam as unaligned bam. Previous alignment will be stripped off by tmap
+                unaligned_bam = dataset['bam']
+                new_aligned_bam = os.path.join(TSP_FILEPATH_PLUGIN_DIR, dataset['name'] + '_rawlib.' + 'realigned' + '.bam')
+                dataset['bam'] = runTmap(dataset['bam'], vc_options['reference_genome_fasta'], unaligned_bam, tmap_args, new_aligned_bam)
+                #continue
+
+            if dataset['has_targets'] and dataset['targets_bed_unmerged'] != dataset['targets_bed_unmerged']:
+                printtime('Detected barcode ' + dataset['name'] + ' : Barcode target region ' + dataset['targets_bed_unmerged'] +
+                          ' different from run target region ' + dataset['targets_bed_unmerged'])
+                #continue
+            if not dataset['has_targets'] and dataset['targets_bed_unmerged']:
+                printtime('Detected barcode ' + dataset['name'] + ' : Barcode has target region ' + dataset['targets_bed_unmerged'] +
+                          ' when there is no run target region')
+                #continue
 
             # Size enough to process? TODO - just get from datasets_basecaller.json
-            if os.stat(barcode_entry['bam']).st_size < BCFILE_MIN_SIZE:
-                barcode_entry['status'] = 'insufficient_reads'
-            elif is_bam_invalid(barcode_entry['bam']):
-                barcode_entry['status'] = 'invalid_bam'
+            if os.stat(dataset['bam']).st_size < BCFILE_MIN_SIZE:
+                dataset['status'] = 'insufficient_reads'
 
-            barcode_data.append(barcode_entry)
+            print("status: %s" % dataset['status'])
 
-        bc_list_file.close()
-        # End load barcode list
+            datasets_data.append(dataset)
 
         printtime('')
-        printtime('Processing %d barcodes...' % len(barcode_data))
+        printtime('Processing %d datasets...' % len(datasets_data))
 
-        results_json['barcoded'] = 'true'
-        results_json['barcodes'] = {}
+        all_datasets_successful = True
 
-        all_barcodes_successful = True
-
-        for barcode_idx in range(len(barcode_data)):
-            if barcode_data[barcode_idx]['status'] != 'queued':
-                printtime('Skipping barcode ' + barcode_data[barcode_idx]['name'])
+        for dataset in datasets_data:
+            if dataset['status'] != 'queued':
+                printtime('Skipping barcode ' + dataset['name'])
                 continue
 
-            barcode_data[barcode_idx]['status'] = 'in_progress'
-            generate_barcode_links_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS), barcode_data, vc_options)
+            dataset['status'] = 'in_progress'
+            # TODO: why datasets_data ?
+            generate_barcode_links_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS), datasets_data, dataset)
 
-            BARCODE_DIR = TSP_FILEPATH_PLUGIN_DIR + '/' + barcode_data[barcode_idx]['name']
-            if not os.path.exists(BARCODE_DIR):
-                os.makedirs(BARCODE_DIR)
-
-            # perform coverage anaysis and write content
+            # perform coverage anaysis and write content # TODO, wrong comment?
             printtime('')
-            printtime('Processing barcode ' + barcode_data[barcode_idx]['name'])
+            printtime('Processing dataset ' + dataset['name'])
 
             try:
-                summary = call_variants(BARCODE_DIR,barcode_data[barcode_idx]['bam'],vc_options,barcode_data[barcode_idx]['name'])
+                summary = call_variants(dataset)
 
-                results_json['barcodes'][barcode_data[barcode_idx]['name']] = {}
-                results_json['barcodes'][barcode_data[barcode_idx]['name']]['variants'] = summary.get('variants_total',{})
-                results_json['barcodes'][barcode_data[barcode_idx]['name']]['hotspots'] = summary.get('hotspots_total',{})
+                results_json['barcodes'][dataset['name']] = {}
 
-                barcode_data[barcode_idx]['summary'] = summary
-                barcode_data[barcode_idx]['status'] = 'completed'
+                if dataset['has_targets']:
+                    results_json['barcodes'][dataset['name']]['targets_bed']  = dataset['targets_bed_unmerged']
+                if dataset['has_hotspots']:
+                    results_json['barcodes'][dataset['name']]['hotspots_bed'] = dataset['hotspots_bed_unmerged']
+                results_json['barcodes'][dataset['name']]['variants'] = summary.get('variants_total',{})
+                results_json['barcodes'][dataset['name']]['hotspots'] = summary.get('hotspots_total',{})
+
+                dataset['summary'] = summary
+                dataset['status'] = 'completed'
 
             except:
                 traceback.print_exc()
-                all_barcodes_successful = False
-                barcode_data[barcode_idx]['status'] = 'error'
+                all_datasets_successful = False
+                dataset['status'] = 'error'
 
-# Replaced with python zip library because of failures due to too-long argument lists.
-#
-#        #Zip all vcf.gz and vcf.gz.tbi files
-#        zip_vcf_command =  'echo "'
-#        zip_vcf_command +=  '  '.join(('%s/%s/TSVC_variants_%s.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name']))
-#                                      for barcode in barcode_data if barcode['status'] == 'completed')
-#        zip_vcf_command +=  '  '
-#        zip_vcf_command +=  '  '.join(('%s/%s/TSVC_variants_%s.vcf.gz.tbi' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name']))
-#                                      for barcode in barcode_data if barcode['status'] == 'completed')
-#        zip_vcf_command += '" | xargs  zip  --junk-paths  %s/%s.vcf.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-#        run_command(zip_vcf_command, 'Store per-barcode vcf files in a single zip file')
-
-#
-#        #Zip all variants_*.xls files.
-#        zip_xls_command =  'echo "'
-#        zip_xls_command +=  '  '.join(('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name']))
-#                                      for barcode in barcode_data if barcode['status'] == 'completed')
-#        zip_xls_command +=  '" | xargs  zip  --junk-paths  %s/%s.xls.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-#        run_command(zip_xls_command, 'Store per-barcode xls files in a single zip file')
         printtime(' ')
         printtime('Task    : ' + 'Store per-barcode vcf files in a single zip file')
         zipfilename = '%s/%s.vcf.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-        for myfile in [('%s/%s/TSVC_variants_%s.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) for barcode in barcode_data if barcode['status'] == 'completed']:
+        for myfile in [('%s/%s/TSVC_variants_%s.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,dataset['name'],dataset['name'])) for dataset in datasets_data if dataset['status'] == 'completed']:
             compress.make_zip(zipfilename, myfile, arcname=os.path.basename(myfile), use_sys_zip = False)
-        for myfile in [('%s/%s/TSVC_variants_%s.vcf.gz.tbi' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) for barcode in barcode_data if barcode['status'] == 'completed']:
+        for myfile in [('%s/%s/TSVC_variants_%s.vcf.gz.tbi' % (TSP_FILEPATH_PLUGIN_DIR,dataset['name'],dataset['name'])) for dataset in datasets_data if dataset['status'] == 'completed']:
             compress.make_zip(zipfilename, myfile, arcname=os.path.basename(myfile), use_sys_zip = False)
         printtime(' ')
         printtime(' ')
         printtime('Task    : ' + 'Store per-barcode xls files in a single zip file')
         zipfilename = '%s/%s.xls.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-        for myfile in [('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) for barcode in barcode_data if barcode['status'] == 'completed']:
+        for myfile in [('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,dataset['name'],dataset['name'])) for dataset in datasets_data if dataset['status'] == 'completed']:
             compress.make_zip(zipfilename, myfile, arcname=os.path.basename(myfile), use_sys_zip = False)
         printtime(' ')
+        printtime('Task    : ' + 'Store per-barcode cov files in a single zip file')
+        combinedfilename = '%s/%s.cov.xls' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
+        for myfile in [('%s/%s/variant_allele_counts_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,dataset['name'],dataset['name'])) for dataset in datasets_data if dataset['status'] == 'completed']:
+            combine_files(combinedfilename, myfile)
+        printtime(' ')
 
+        # TODO, dont pass datasets_data and dataset at the same times
+        generate_barcode_links_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS), datasets_data, dataset)
+        generate_barcode_links_block(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_BLOCK), datasets_data, dataset)
 
-        generate_barcode_links_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS), barcode_data, vc_options)
-        generate_barcode_links_block(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_BLOCK), barcode_data, vc_options)
-
-        if not all_barcodes_successful:
+        if not all_datasets_successful:
             return 1
 
 
@@ -974,30 +1173,36 @@ def plugin_main():
 
         generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),
                                         'Variant calling still in progress', vc_options, autorefresh=True)
-        fullpath_input_bam = os.path.join(ANALYSIS_DIR, 'rawlib.bam')
-        true_reference = get_bam_reference_short_name(fullpath_input_bam)
-        if true_reference != vc_options['genome_name']:
-            generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),
-                                            'Run reference does not match bam reference.', vc_options)
-            generate_nonbarcoded_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK),
-                                            'Non-barcoded run: Run reference does not match bam reference. Variant calling was not carried out.')
-            return 0
-        if os.stat(fullpath_input_bam).st_size < BCFILE_MIN_SIZE:
+        vc_options['is_barcode'] = False
+        vc_options['bam'] = os.path.join(ANALYSIS_DIR, 'rawlib.bam')
+
+        if os.stat(vc_options['bam']).st_size < BCFILE_MIN_SIZE:
             generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),
                                             'Bam file size too small.', vc_options)
             generate_nonbarcoded_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK),
                                             'Non-barcoded run: Bam file size is too small. Variant calling was not carried out.')
             return 0
-        if is_bam_invalid(fullpath_input_bam):
-            generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),
-                                            'BAM file format validation failed. Regenerate BAM with latest TS.', vc_options)
-            generate_nonbarcoded_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK),
-                                            'Non-barcoded run: Bam file format validation failed. Variant calling was not carried out.')
-            return 0
-        #plan_bedfile = startplugin_json.get('plan',{}).get('bedfile',"")
+        
+        true_reference = get_bam_reference_short_name(vc_options['bam'])
+        tmap_args = startplugin_json['pluginconfig'].get('meta',{}).get('tmapargs','')
+        if true_reference != vc_options['reference_genome_name'] or tmap_args != "":
+            if true_reference != vc_options['reference_genome_name']:
+                printtime('Bam reference ' + true_reference +
+                      ' different from run reference ' + vc_options['reference_genome_name'])
+            # TS-11423 Use previously aligned bam as unaligned bam. Previous alignment will be stripped off by tmap
+            unaligned_bam = vc_options['bam']
+            new_aligned_bam = os.path.join(TSP_FILEPATH_PLUGIN_DIR, 'rawlib.' + 'realigned' + '.bam')
+            vc_options['bam'] = runTmap(vc_options['bam'], vc_options['reference_genome_fasta'], unaligned_bam, tmap_args, new_aligned_bam)
+                
+        #if true_reference != vc_options['reference_genome_name']:
+        #    generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),
+        #                                    'Run reference does not match bam reference.', vc_options)
+        #    generate_nonbarcoded_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK),
+        #                                    'Non-barcoded run: Run reference does not match bam reference. Variant calling was not carried out.')
+        #    return 0
 
         try:
-            summary = call_variants(TSP_FILEPATH_PLUGIN_DIR,fullpath_input_bam,vc_options)
+            summary = call_variants(vc_options)
             results_json['variants'] = summary.get('variants_total',{})
             results_json['hotspots'] = summary.get('hotspots_total',{})
         except:

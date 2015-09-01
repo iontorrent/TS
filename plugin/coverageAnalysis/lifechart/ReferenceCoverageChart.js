@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="RC-chart" class="unselectable" style="border:2px solid #666;display:none">\
+<div id="RC-chart" class="unselectable" style="border:2px solid #666;page-break-inside:avoid;display:none">\
   <div id="RC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="RC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse View"></span>\
     <span class="table-title" style="float:none">Reference Coverage Chart</span>\
@@ -163,6 +163,9 @@ $(function () {
   var timeout = null;
 
   var dblclickUnzoomFac = 10;
+
+  // Necessary to load data w/o PHP call for rendering to PDF
+  var directLoadTSV = true;
 
   var resiz_def = {
     alsoResize: "#RC-placeholder",
@@ -1336,7 +1339,9 @@ $(function () {
     var noTargets = false;
     var pspvars = baseRangeParam;
     var srcf = 'lifechart/region_coverage.php3';
-    if( plotStats.zoomInActive ) {
+    if( directLoadTSV ) {
+      srcf = chrcovFile;
+    } else if( plotStats.zoomInActive ) {
       srcf = wgncovFile;
     } else if( baseRangeParam.chrom === '' ) {
       var nlt = parseInt(0.5+plotStats.chromLbins*contigRangeParam.binsize);
@@ -1811,16 +1816,19 @@ $(function () {
 
   // automatically change initial view to full contig if only one
   if( plotStats.totalChroms == 1 || plotStats.totalChroms > plotStats.maxXaxisLabels ) {
+    chrcovFile = wgncovFile;
     wgncovFile = '';
   }
   setUnzoomTitle( wgncovFile !== '' );
 
   // done this way to plot only once (for sake of auto PDF)
   if( plotStats.totalChroms == 1 ) {
-    $("#RC-unzoomToggle").click();
+    $("#RC-unzoomToggle").click(); // calls unzoomData()
   } else {
     unzoomData();
   }
+  // enable full widget functionality
+  directLoadTSV = false;
 
   // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
   if( startCollapsed ) {

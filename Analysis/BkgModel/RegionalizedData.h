@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <vector>
+#include <map>
 
 #include "Image.h"
 #include "Region.h"
@@ -36,6 +37,8 @@ public:
   Region *region;
   bool isBestRegion;
   bool isRegionCenter(int ibd);
+  bool isLinePoint(int ibd, int nSamples);
+  bool isGridPoint(int ibd, int nSamples);
   //int outputCount;
 
     TimeCompression time_c; // region specific
@@ -195,7 +198,8 @@ private:
         t0_frame &
         doDcOffset &
         my_scratch &
-        regionAndTimingMatchSdat;
+        regionAndTimingMatchSdat &
+        region_nSamples;
 
      //fprintf(stdout, "done with RegionalizedData\n");
   }
@@ -218,7 +222,8 @@ private:
         t0_frame &
         doDcOffset &
         my_scratch &
-        regionAndTimingMatchSdat;
+        regionAndTimingMatchSdat &
+        region_nSamples;
 
     SetCrudeEmphasisVectors();
 
@@ -233,6 +238,26 @@ private:
   void SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgModel &global_defaults);
 
   BOOST_SERIALIZATION_SPLIT_MEMBER()
+
+  public:
+    int get_region_nSamples(void) { return (region_nSamples); }
+    int get_sampleIndex(int ibd);
+    int assign_sampleIndex(void); // return (nAssigned)
+    bool isRegionSample(int ibd);
+  private:
+	int assign_sampleIndex_even(void);
+	int assign_sampleIndex_even_random(void); // no uniqueness problem
+ 	int assign_sampleIndex_random(void); // uniqueness problem, not robust yet w/ infinite loop
+	int assign_sampleIndex_random_shuffle(void); // no uniqueness problem
+	void my_random_shuffle(vector<int>&cards, unsigned int nCards=52);
+	int random_in_range(int range) {return (range>1 ? (rand()%range): 0);}
+    std::map<int,int> regionSampleIndex;
+	bool sampleIndex_assigned;
+	// number of sample beads to trace.h5
+	int region_nSamples; // assigned in the constructor: region_nSamples = inception_state->bkg_control.pest_control.bkgDebug_nSamples;
+	int nAssigned;
+	//bool betterUseEvenSamples(float fraction=0.05) {return (false);} // debugging
+	bool betterUseEvenSamples(float fraction=0.05) {int nBeads=GetNumLiveBeads(); return (nBeads<100 ? true: (region_nSamples>nBeads*fraction ? true:false));}
 };
 
 #endif // REGIONALIZEDDATA_H

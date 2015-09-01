@@ -2,194 +2,190 @@
 
 {% block extra_head %}
 
-    <style> 
-        .alert-info{
-            background-color: #F6F6F6;
-            border: #E6E6E6;
-        }
+<style> 
+    /*----- Tabs -----*/
+    .tabs {
+        width:100%;
+        display:inline-block;
+    }
 
-         .accordion-group{
-            margin-bottom: 10px;
-        }
+    /*----- Tab Links -----*/
+    /* Clearfix */
+    .tab-links:after {
+        display:block;
+        clear:both;
+        content:'';
+    }
 
-        .accordion-body {display: none; height: auto;}
-        .accordion-body.in {display: block;}
+    .tab-links li {
+        margin:0px 5px;
+        float:left;
+        list-style:none;
+    }
 
-    </style>
+    .tab-links a {
+        padding:9px 10px;
+        display:inline-block;
+        border-radius:3px 3px 0px 0px;
+        background:#7FB5DA;
+        font-size:14px;
+        font-weight:400;
+        color: white;
+        background: #022098; /* Old browsers */
+        background: -moz-linear-gradient(top,  #022098 0%, #011b83 44%, #001464 100%); /* FF3.6+ */
+        background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#022098), color-stop(44%,#011b83), color-stop(100%,#001464)); /* Chrome,Safari4+ */
+        background: -webkit-linear-gradient(top,  #022098 0%,#011b83 44%,#001464 100%); /* Chrome10+,Safari5.1+ */
+        background: -o-linear-gradient(top,  #022098 0%,#011b83 44%,#001464 100%); /* Opera 11.10+ */
+        background: -ms-linear-gradient(top,  #022098 0%,#011b83 44%,#001464 100%); /* IE10+ */
+        background: linear-gradient(to bottom,  #022098 0%,#011b83 44%,#001464 100%); /* W3C */
+        filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#022098', endColorstr='#001464',GradientType=0 ); /* IE6-9 */
+
+
+        transition:all linear 0.15s;
+    }
+
+    .tab-links a:hover {
+        background:#a7cce5;
+        text-decoration:none;
+        color: white;
+    }
+
+    li.active a, li.active a:hover {
+        background: #F6F6F6;
+        border: #E6E6E6;
+        color: black;
+    }
+
+    /*----- Content of Tabs -----*/
+    .tab-content {
+        padding:15px;
+        border-radius:3px;
+        box-shadow:-1px 1px 1px rgba(0,0,0,0.15);
+        background:#fff;
+    }
+
+    .tab {
+        display:none;
+    }
+
+    .tab.active {
+        display:block;
+    }
+
+</style>
 {% endblock extra_head %}
 
 {% block report-header %}
-<div class="page-nav">
-	<div class="container-fluid">
-		<div class="row-fluid">
-			<div class="span10">
-			<ul class="nav nav-pills dynamic-navbar"><li><a href="#top" class="navitem">Top</a></li></ul>
-			</div>
-			<div class="span2">
-				<!--
-				<a href="#" class="btn btn-110 download-pdf pull-right" style="margin-top: 3px;margin-left: 15px;">Download as PDF</a>
-				<a href="#" class="report-log-file"><span class="message-icon error pull-right">&nbsp;</span></a>
-				-->
-			</div>
-		</div>
-	</div>		
-    </div>
+<!-- for the tabs -->
+<div class="tabs">
+    <ul class="tab-links">
 
-<div class="report-header">
-	<div class="container-fluid">
-		<div class="row-fluid">
-			<div class="span12">
-                <h1 class="pull-left">{{data.meta_data.plugin_name|upper }} Plugin Report </h1>
-				<!-- <a href="#" class="report-log-file"><span class="message-icon error pull-right">&nbsp;</span></a> -->
-			</div>
-		</div>				
-	</div>		
-    </div> <!--end of report-head-->
+        {% if data.errors %}
+        <li class="active"><a href="#ErrorMessages">Error Messages</a></li>
+
+        {% endif %}
+
+        {% if data.warnings %}
+        <li class="active"><a href="#WarningMessages">Warning Messages</a></li>
+
+        {% endif %}
+
+        {% for i in data.sections %}
+        <li><a href="#{{i.title}}">{{i.title}}</a></li>
+        {% endfor %}
+    </ul>
     {% endblock report-header %}
 
-<div class="main plugin-report">
-    <div class="container-fluid">
-{% block content %}
+
+
+    <div class="main plugin-report">
+        <div class="container-fluid">
+            {% block content %}
             <!-- SECTIONS start here -->
-            <div id="sections" class="accordion" data-collapse-type="manual">
-              {% if data.errors %}
-                <div id="ErrorMessages" class="accordion-group alert alert-error" dynamic-navbar-section="#ErrorMessages" dynamic-navbar-section-title="Error Messages">
-                    <div class="accordion-heading">
-                        <a href="#collapseErrors" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">Error Messages <i class="pull-right icon-plus"></i></a>
-                    </div>
-                    <div class="accordion-body collapse" id="collapseErrors" style="height: auto;">
-                        <div class="accordion-inner">
-                                            <ol>
-                                                {% for i in data.errors %}
-                                                <li>{{i}}</li>
-                                                {% endfor %}
-                                            </ol>
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
+            <div class="tab-content">
+                {% if data.errors %}
 
-            {% if data.warnings %}
-                <div id="WarningMessages" class="accordion-group alert alert-error" dynamic-navbar-section="#WarningMessages" dynamic-navbar-section-title="Warning Messages">
-                    <div class="accordion-heading">
-                        <a href="#collapseErrors" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">Warning Messages <i class="pull-right icon-plus"></i></a>
-                    </div>
-                    <div class="accordion-body collapse" id="collapseWarning" style="height: auto;">
-                        <div class="accordion-inner">
-                                            <ol>
-                                                {% for i in data.warnings %}
-                                                <li>{{i}}</li>
-                                                {% endfor %}
-                                            </ol>
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
+                <div id="ErrorMessages" class="tab active">
+                    <ol>
+                        {% for i in data.errors %}
+                        <li>{{i}}</li>
+                        {% endfor %}
+                    </ol>
+                </div> <!-- end div this tab-->
+                {% endif %}
+
+                {% if data.warnings %}
+                <div id="WarningMessages" class="tab active">
+                    <ol>
+                        {% for i in data.warnings %}
+                        <li>{{i}}</li>
+                        {% endfor %}
+                    </ol>
+                </div> <!-- end div this tab-->
+                {% endif %}
 
 
-            <!-- Sections-->
-        {% for i in data.sections %}
-          {% if i.type == "image" %}
-          <div id="{{i.title}}" class="accordion-group alert alert-info" dynamic-navbar-section="#{{i.title}}" dynamic-navbar-section-title="{{i.title}}">
-                <div class="accordion-heading">
-                    <a href="#imageSection{{i.id}}" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">{{i.title}}<i class="pull-right icon-minus"></i></a>
-                </div>
-                <div class="accordion-body collapse in" id="imageSection{{i.id}}" style="height: auto;">
-                    <div class="accordion-inner">
-                        <div id="thumbnail-gallery" data-toggle="modal-gallery" data-target="#modal-gallery" data-selector="div.thumbnail > a">
-                            <div class="row-fluid">
-                                <ul class="thumbnails">
-                                        {% for j in i.content %}
-                                            <li class="span3">
-                                            <div class="thumbnail">
-                                                <a class="" href={{j.source}} title={{j.caption}} ><img alt="" src={{j.source}}></a>
-                                                    <div class="caption">
-                                                        <h3>{{j.caption}}</h3>
-                                                            <p> {{j.description}}</p>
-                                                    </div>
-
-                                            </div>
-                                            </li>
-                                        {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                    </div><!--end of according-nner-->
-                </div><!--end of accordion-body collapse in-->
-
-                <!-- modal-gallery is the modal dialog used for the image gallery -->
-                    <div id="modal-gallery" class="modal modal-gallery hide fade">
-                        <div class="modal-header">
-                            <a class="close" data-dismiss="modal">&times;</a>
-                               <h3 class="modal-title">&nbsp;</h3>
-                        </div>
-                        <div class="modal-body"><div class="modal-image"></div></div>
-                          <div class="modal-footer">
-                            <a class="btn btn-primary modal-next">Next <i class="icon-arrow-right icon-white"></i></a>
-                            <a class="btn btn-info modal-prev"><i class="icon-arrow-left icon-white"></i> Previous</a>
-                            <a class="btn btn-success modal-play modal-slideshow" data-slideshow="5000"><i class="icon-play icon-white"></i> Slideshow</a>
-                            <a class="btn modal-download" target="_blank"><i class="icon-download"></i> Download</a>
-                          </div>
-                        </div><!--end of modal-gallery-->
-            </div><!--end of ImageSectionX-->
-        {% endif %}
-
-        {% if i.type == "html" %}
-        <div id="{{i.title}}" class="accordion-group alert alert-info" dynamic-navbar-section="#{{i.title}}" dynamic-navbar-section-title="{{i.title}}">
-                <div class="accordion-heading">
-                    <a href="#htmlSection{{i.id}}" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">{{i.title}}<i class="pull-right icon-minus"></i></a>
-                </div>
-                <div class="accordion-body collapse in" id="htmlSection{{i.id}}" style="height: auto;">
-                    <div class="accordion-inner">
+                <!-- Sections-->
+                {% for i in data.sections %}
+                {% if i.type == "image" %}
+                <div id="{{i.title}}" class="tab">
+                    <div id="thumbnail-gallery" data-toggle="modal-gallery" data-target="#modal-gallery" data-selector="div.thumbnail > a">
                         <div class="row-fluid">
-                            {% if i.content %}
-                                {{i.content|safe}}
-                            {% else %}
-                                <p></p>
-                            {% endif %}
-                        </div>
-                    </div><!--end of accordion-inner-->
-                </div><!--end of accordion-boy collapse-->
-            </div><!--End of HtmlSection1-->
-        {% endif %}
+                            <ul class="thumbnails">
+                                {% for j in i.content %}
+                                <li class="span3">
+                                    <div class="thumbnail">
+                                        <a class="" href={{j.source}} title={{j.caption}} ><img alt="" src={{j.source}}></a>
+                                        <div class="caption">
+                                            <h3>{{j.caption}}</h3>
+                                            <p> {{j.description}}</p>
+                                        </div>
 
-        {% endfor %}
-    </div><!--End for div sections-->
-    <script>
-            $('.download-pdf').click(function() {
-                alert('Download pdf file');
-            });
-            $('.report-log-file').click(function() {
-                alert('Display log file');
-            });
-            
-            $('#sections').on('shown', function(element) {
-                $(element.target).parent().find('.accordion-heading  i').removeClass('icon-plus').addClass('icon-minus');
-                // $('#' + $(element.target).attr('id')).parent().find('.accordion-heading  i').removeClass('icon-plus').addClass('icon-minus');
-            });
-            
-            // Reverse it for hide:
-            $('#sections').on('hidden', function(element) {
-               $(element.target).parent().find('.accordion-heading  i').removeClass('icon-minus').addClass('icon-plus');
-               //$('#' + $(element.target).attr('id')).parent().find('.accordion-heading  i').removeClass('icon-minus').addClass('icon-plus');
-            });
-            
-            //TODO: place elsewhere or REPLACE with more standard component / plugin
-            //if ($("#dynamic-navbar").length == false) {
-            // $("#dynamic-navbar").empty();
-            // $.each($("a[data-toggle='collapse']"), function(element) {
-            // //$.each($(".accordion-group.accordion-heading a"), function(element) {
-                // //append to navigation
-                // var href = $.trim($(this).attr("href"));
-                // var title = $.trim($(this).text());
-                // var section = '<li><a href="' + href + '" class="navitem">' + title + '</a></li>';
-                // // alert(section);
-                // $("#dynamic-navbar").append(section);
-            // });
-            //}
-            $("#sections").css("height", "auto")
-        </script>
-        <div class="main-push"></div>
-{% endblock content %}
-    </div><!--End for div container-fluid-->
-</div><!--End for div main plugin-report-->
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div><!-- end div this tab-->
+
+                {% endif %}
+
+
+                {% if i.type == "html" %}
+                <div id="{{i.title}}" class="tab">
+                    <div class="row-fluid">
+                        {% if i.content %}
+                        {{i.content|safe}}
+                        {% else %}
+                        <p></p>
+                        {% endif %}
+                    </div>
+                </div> <!-- end div this tab-->
+                {% endif %}
+
+                {% endfor %}
+            </div> <!-- end div tab content-->
+
+            <script>
+                $('.download-pdf').click(function() {
+                    alert('Download pdf file');
+                });
+                $('.report-log-file').click(function() {
+                    alert('Display log file');
+                });
+                $('.tabs, .tab-links, a').click(function(e)  {
+                    $('.tabs ' + $(this).attr('href')).show().siblings().hide();
+
+                    // Change/remove current tab to active
+                    $(this).parent('li').addClass('active').siblings().removeClass('active');
+
+                    e.preventDefault();
+                });
+
+            </script>
+            <div class="main-push"></div>
+            {% endblock content %}
+        </div><!--End for div container-fluid-->
+    </div><!--End for div main plugin-report-->
+</div> <!--End for div tabs-->

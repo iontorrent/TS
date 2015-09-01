@@ -189,6 +189,8 @@ check_paths() {
     if [ $CELERY_CREATE_RUNDIR -eq 1 ]; then
         create_default_dir "$CELERYD_PID_DIR"
     fi
+    # Touch a tracking file in the /results directory.
+    touch /results/.headnode_$HOSTNAME || true
 }
 
 create_paths() {

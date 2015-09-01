@@ -14,12 +14,17 @@
 
 //#define SCALE_TRACES 1
 //#define CLEAR_BEGINNING_OF_TRACE 1
-
+//#define SHORTEN_P2_FRONT_PORCH 1
 
 //#define OUTPUT_BASIS_VECTORS 1
 //#define OUTPUT_VECTOR_COEFFS 1
 //#define PCA_UNCOMP_MEAN_SMOOTHING 1
 //#define USE_LESS_BASIS_VECTS 3
+//#define OUTPUT_VECTOR_COEFFS 1
+//#define CLEAR_MEAN 1
+//#define CENTER_TRACES 1
+
+#define XTALK_FRAC (0.2f)
 #define GAIN_CORR_IN_ADVTEST 1
 
 
@@ -293,7 +298,8 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 				w * h * sizeof(float));
 	}
 
-#if 1
+#if 0
+	#ifndef BB_DC
 	if (fname && strstr(fname, "beadfind_pre_0003")){
 //		doGain = 1;
 		ComputeGain_FullChip();
@@ -301,6 +307,7 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 
 	}
 	else
+#endif
 #endif
 		doGain = 0;
 
@@ -352,11 +359,6 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 #ifndef PYEXT
     if(do_rnc) {
 		double start2 = AdvCTimer();
-        float xtalk_fraction = 0.2;
-        xtalkCorrect(raw, w,h,npts,0,xtalk_fraction);
-		timing.xtalk += AdvCTimer() - start2;
-
-		start2 = AdvCTimer();
 
         CorrNoiseCorrector rnc;
 		rnc.CorrectCorrNoise(raw, h, w, npts, 3, 0, 0,0,ThreadNum,targetAvg);
@@ -441,6 +443,11 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 #ifdef PCA_MEAN_SMOOTHING
 			SmoothMean();
 #endif
+#ifdef CLEAR_MEAN
+			for(int pt=0;pt<npts;pt++)
+				mean_trc[pt]=8192;
+#endif
+
 
 //			AddSavedMeanToTrace(saved_mean);
 			AddDcOffsetToMeanTrace();
@@ -457,6 +464,11 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 
 			total_iter += CompressBlock();
 
+#ifdef XTALK_FRAC
+			if(do_rnc) {
+		    	xtalkCorrect(XTALK_FRAC);
+		    }
+#endif
 			if (fd >= 0)
 				WriteTraceBlock();
 
@@ -524,9 +536,12 @@ void AdvCompr::ApplyGain_FullChip(float targetAvg)
 	v8f *lgcV = (v8f *) &gainCorr[0];
 	v8f_u tmpV;
 	v8s_u tmpVS;
+#ifdef CENTER_TRACES
 	v8f   targetAvgV=LD_VEC8F(targetAvg);
+#endif
 	for (int itrc = 0; itrc < frameStride; itrc+=8,lgcV++)
 	{
+#ifdef CENTER_TRACES
 		v8f sumV=LD_VEC8F(0);
 		for (int pt = 0; pt < npts; pt++)
 		{
@@ -537,13 +552,17 @@ void AdvCompr::ApplyGain_FullChip(float targetAvg)
 		}
 		sumV /= LD_VEC8F((float)npts);
 //		sumV -= LD_VEC8F(targetAvg);
-
+#endif
 		for (int pt = 0; pt < npts; pt++)
 		{
 			short int *rtrc = &raw[pt * frameStride + itrc];
 
 			LD_VEC8S_CVT_VEC8F(rtrc, tmpV);
+#ifdef CENTER_TRACES
 			tmpV.V = ((tmpV.V - sumV) * *lgcV) + targetAvgV; // for avg trace
+#else
+			tmpV.V = (tmpV.V * *lgcV); // for avg trace
+#endif
 
 			//  put it back
 			CVT_VEC8F_VEC8S(tmpVS,tmpV);
@@ -610,6 +629,15 @@ void AdvCompr::ComputeGain_FullChip()
 		}
 	}
 	float mean_height=mean_highest_point - mean_lowest_point;
+
+//	if(highest_pt < lowest_pt){
+//		//reverse the points to make a positive gain.
+//		int tmp=highest_pt;
+//		highest_pt=lowest_pt;
+//		lowest_pt=tmp;
+//	}
+
+
 	v8f mean_heightV=LD_VEC8F(mean_height);
 	v8f *lgcV = (v8f *) &gainCorr[0];
 	for (int itrc = 0; itrc < frameStride; itrc+=8,lgcV++)
@@ -856,27 +884,29 @@ int AdvComprTest(const char *_fname, Image *image, char *options, bool do_cnc)
         }
 	AdvComprPrintf("%s: dbgType=%d options=%s %s\n", __FUNCTION__, dbgType, options, _fname);
 
-//	while ((lptr = strstr(lptr, "/")))
-//	{
-//		if (lptr)
-//			lptr++;
-//		last_lptr = lptr;
-//	}
-//	if (last_lptr)
-//		fnlptr = last_lptr;
-//	else
+	while ((lptr = strstr(lptr, "/")))
+	{
+		if (lptr)
+			lptr++;
+		last_lptr = lptr;
+	}
+	if (last_lptr)
+		fnlptr = last_lptr;
+	else
 		fnlptr = (char *) tstName2;
 
 	lptr = strstr(fnlptr, ".");
 	if (lptr)
 		*lptr = 0;
 
-	sprintf(tstName, "%s_testPCA.dat", fnlptr);
+	sprintf(tstName, "%s_testPCA.dat", tstName2);
 
 #ifdef GAIN_CORR_IN_ADVTEST
-	if(!doneOnce && (strstr(_fname,"beadfind_pre_0003") == NULL))
+	if(!doneOnce/* && (strstr(_fname,"beadfind_pre_0003") == NULL)*/)
 	{
 		doneOnce=1;
+//		static const char *gainName="beadfind_pre_0003.dat";
+		static const char *gainName="Gain.lsr";
 		// compute the gain image first...
 		char tstName3[1024];
 		last_lptr=NULL;
@@ -889,17 +919,21 @@ int AdvComprTest(const char *_fname, Image *image, char *options, bool do_cnc)
 			last_lptr = lptr;
 		}
 		if(last_lptr)
-		strcpy(last_lptr,"beadfind_pre_0003.dat");
+		strcpy(last_lptr,gainName);
 		else
-		strcpy(tstName3, "beadfind_pre_0003.dat");
-		printf("Loading Beadfind mask from %s\n",tstName3);
-		Image img;
+		strcpy(tstName3, gainName);
+		printf("Loading gain mask from %s\n",tstName3);
+		if(AdvCompr::ReadGain(0, raw->cols, raw->rows, tstName3) == 0){
+			// load from beadfind
+		}
 
-		img.LoadRaw(tstName3); // this will call AdvCompress for gain calculation
-		AdvCompr advc(-1, img.raw->image, img.raw->cols, img.raw->rows,
-				img.raw->frames, img.raw->uncompFrames, img.raw->timestamps, img.raw->timestamps, dbgType, tstName3,options);
-		advc.Compress(0,0,1024);
-		img.Cleanup();
+//		Image img;
+//
+//		img.LoadRaw(tstName3); // this will call AdvCompress for gain calculation
+//		AdvCompr advc(-1, img.raw->image, img.raw->cols, img.raw->rows,
+//				img.raw->frames, img.raw->uncompFrames, img.raw->timestamps, img.raw->timestamps, dbgType, tstName3,options);
+//		advc.Compress(0,0,1024);
+//		img.Cleanup();
 	}
 #endif
 	//dbgType 1  - replace raw with pca/unpca'd data
@@ -1906,8 +1940,8 @@ void AdvCompr::doTestComprPost()
 	{
 		short int *oldRaw=raw;
 		raw = (short int *)malloc(2*w*h*npts);
-		for (int i = 0; i < npts; i++)
-			mean_trc[i] = 0;
+//		for (int i = 0; i < npts; i++)
+//			mean_trc[i] = 0;
 		ExtractTraceBlock(); // extract into image
 		for(int frame=0;frame<npts;frame++){
 			short int *ptr1=&raw[frame*w*h];
@@ -2132,10 +2166,130 @@ float AdvCompr::findt0()
 	return rc;
 }
 
+#ifndef BB_DC
+struct lsrow_header {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t rows;
+    uint32_t cols;
+};
+#define LSROWIMAGE_MAGIC_VALUE    0xFF115E3A
+#endif
+
+void AdvCompr::WriteGain(int region, int w, int h, char *destPath)
+{
+	char fnBuf[512];
+	float *LCorr = gainCorrection[region];
+
+	if(LCorr == NULL)
+		return;
+
+	sprintf(fnBuf,"%s/Gain.lsr",destPath);
+	FILE *fp = fopen(fnBuf,"wb");
+	if(fp)
+	{
+		struct lsrow_header hdr;
+
+		hdr.magic = LSROWIMAGE_MAGIC_VALUE;
+		hdr.version = 0;
+		hdr.rows = h;
+		hdr.cols = w;
+
+		if (fp)
+		{
+			fwrite(&hdr,sizeof(hdr),1,fp);
+			fwrite(LCorr,sizeof(float),h * w,fp);
+			fclose(fp);
+		}
+	}
+
+}
+
+int AdvCompr::ReadGain(int region, uint32_t cols, uint32_t rows, char *srcPath)
+{
+	int rc = 0;
+
+	struct lsrow_header hdr;
+	FILE *ofile = fopen(srcPath,"r");
+
+	if (ofile)
+	{
+		float *data = (float *)malloc(rows*cols*sizeof(float));
+		int lrc = fread(&hdr,sizeof(hdr),1,ofile);
+		if(lrc > 0 &&
+		   hdr.magic == LSROWIMAGE_MAGIC_VALUE &&
+		   hdr.rows == rows &&
+		   hdr.cols == cols)
+		{
+			lrc = fread(data,sizeof(float),hdr.rows * hdr.cols,ofile);
+			printf("read %d elements from file (%d/%d) opbuf(%d/%d) %s [%f %f %f %f]\n",lrc,
+					hdr.rows,hdr.cols,rows,cols,srcPath,data[0],data[1],data[2],data[3]);
+
+			if(lrc > 0){
+				rc = 1;
+				ReSetGain(region,cols,rows,data);
+			}
+		}
+		else
+		{
+			printf("%s: %d %x/%x %d/%d %d/%d",__FUNCTION__,lrc,hdr.magic,LSROWIMAGE_MAGIC_VALUE,
+					hdr.rows,rows, hdr.cols, cols);
+		}
+		fclose(ofile);
+		free(data);
+	}
+	else{
+		printf("failed to open %s\n",srcPath);
+	}
+
+	return rc;
+}
+
+void AdvCompr::ReSetGain(int region, int w, int h, float *gainPtr)
+{
+	uint32_t len=w*h*sizeof(float);
+	int high=0;
+	int low=0;
+	int justRight=0;
+	int nanCnt=0;
+#define GAIN_MAX 1.35f
+#define GAIN_MIN 0.80f
+
+	if(gainCorrection[region] == NULL || gainCorrectionSize[region] != len)
+	{
+		gainCorrection[region] = (float *) memalign(VEC8F_SIZE_B,len);
+		gainCorrectionSize[region] = len;
+	}
+	float *LCorr = gainCorrection[region];
+
+	for (int i=0;i<(w*h);i++)
+	{
+		LCorr[i] = gainPtr[i];
+		if(LCorr[i] != LCorr[i] || LCorr[i]==0)
+		{
+			LCorr[i] = 1.0f;
+			nanCnt++;
+		}
+		else if(LCorr[i] > GAIN_MAX)
+		{
+			LCorr[i] = GAIN_MAX;
+			high++;
+		}
+		else if(LCorr[i] < GAIN_MIN)
+		{
+			LCorr[i] = GAIN_MIN;
+			low++;
+		}
+		else
+			justRight++;
+	}
+	AdvComprPrintf("  SetGain %d) nan:%d %d/%d/%d [%f %f %f %f]  [%f %f %f %f]\n",
+			region,nanCnt,high,justRight,low,gainPtr[0],gainPtr[1],gainPtr[2],gainPtr[3],LCorr[0],LCorr[1],LCorr[2],LCorr[3]);
+
+}
 
 void AdvCompr::SetGain(int region, int w, int h, float conv, uint16_t *gainPtr)
 {
-	return;
 	uint32_t len=w*h*sizeof(float);
 	int high=0;
 	int low=0;
@@ -2366,6 +2520,8 @@ int AdvCompr::ExtractTraceBlock()
 	int nbasisV=hdr.nBasisVec;
 
 #ifdef PCA_UNCOMP_MEAN_SMOOTHING
+		int t0 = DCT0Finder(mean_trc, npts, NULL);
+
 		float nmean_trc[hdr.npts];
 		for (pt = 0; pt < hdr.npts; pt++){
 			int span=3;
@@ -2382,6 +2538,13 @@ int AdvCompr::ExtractTraceBlock()
 			}
 			avg /= (float)(end_pt-start_pt);
 			nmean_trc[pt] = avg;
+		}
+		if(t0 > 0 && t0 < (npts-1)){
+			// we found a valid t0 estimate.
+			// make the transition sharper.
+			// shouldn't matter as the neighbor subtracted data is what matters.
+			for (pt = 0; pt < t0; pt++)
+				nmean_trc[pt]=nmean_trc[0]; // copy it back
 		}
 		for (pt = 0; pt < hdr.npts; pt++)
 			mean_trc[pt]=nmean_trc[pt]; // copy it back
@@ -2791,6 +2954,25 @@ void AdvCompr::TimeTransform(int *timestamps, int *newtimestamps,
 		int prevNframes=0;
 		int tr=0;
 		transitions_t transitions[10];
+
+#ifdef SHORTEN_P2_FRONT_PORCH
+		for(int pt=0;pt<tmp_npts;pt++){
+			nframes[pt] = (timestamps[pt]-prevTs + 2)/timestamps[0];
+			prevTs = timestamps[pt];
+			prevNframes=nframes[pt];
+		}
+		if(nframes[1] == 8 && nframes[2] == 8 && nframes[3] == 8 && nframes[4] == 8){
+			int oldts = timestamps[4];
+			for(int j=1;j<=4;j++){
+				timestamps[j] = timestamps[0]*(1+4*j);
+			}
+			for(int j=5;j<tmp_npts;j++){//now make all the other timestamps line up
+				timestamps[j] -= oldts - timestamps[4];
+			}
+		}
+#endif
+		prevTs=0;
+		prevNframes=0;
 		for(int pt=0;pt<tmp_npts;pt++){
 			nframes[pt] = (timestamps[pt]-prevTs + 2)/timestamps[0];
 			if(nframes[pt] != prevNframes && prevNframes){
@@ -2857,14 +3039,14 @@ void AdvCompr::TimeTransform_trace(int npts_oldfr, int npts_newfr, int *timestam
 		}
 	}
 }
-void AdvCompr::xtalkCorrect(short int *raw, int nCols, int nRows, int nFrames, int chip_offset_y, float xtalk_fraction)
+void AdvCompr::xtalkCorrect(float xtalk_fraction)
 {
 //    int nRows = raw->rows;
 //    int nCols = raw->cols;
 //    int nFrames = raw->frames;
-        int frameStride=nRows*nCols;
+//        int frameStride=nRrows*nCols;
 
-    int phase = (chip_offset_y)%2;
+//    int phase = (chip_offset_y)%2;
     float denominator = (1-2*xtalk_fraction);
     float opposite_xtf = 1.0f-xtalk_fraction;
     v8f opposite_xtfV=LD_VEC8F(opposite_xtf);
@@ -2877,28 +3059,24 @@ void AdvCompr::xtalkCorrect(short int *raw, int nCols, int nRows, int nFrames, i
     // p1 = c1 + xtalk_fraction * c2
     // p2 = c2 + xtalk_fraction * c1
     // where p1,p2 - observed values, and c1,c2 - actual values. We solve the system for c1,c2.
+    //
+    // c1 = (p1 - xtalk_fraction * p2)/(1 - xtalk_fraction * xtalk_fraction)
+    // c2 = (p2 - xtalk_fraction * p1)/(1 - xtalk_fraction * xtalk_fraction)
     /*-----------------------------------------------------------------------------------------------------------*/
-    for( int f=0; f<nFrames; ++f ){
-        for(int r=phase; r<nRows-1; r+=2 ){
-    		short *p1 = &raw[f*frameStride+r*nCols];
-        	for( int c=0; c<nCols; c+=8,p1+=8 ){
-        		v8f_u valU1,valU2;
-        		v8f_u resF1,resF2;
-        		v8s_u resU1,resU2;
+	for(int vect=0;vect<hdr.nBasisVec;vect++){
+	    int idx=0;
+//	    int nidx=hdr.cend-hdr.cstart; // starts on second row
+		for(int r=hdr.rstart;r<hdr.rend;r+=2,idx+=2*(hdr.cend-hdr.cstart)){
+    		v8f *coefV1P=(v8f *)&TRC_COEFF_ACC(vect,idx);
+    		v8f *coefV2P=(v8f *)&TRC_COEFF_ACC(vect,idx+(hdr.cend-hdr.cstart));
+			for( int c=hdr.cstart; c<hdr.cend; c+=8,coefV1P++,coefV2P++ ){
+        		v8f coefV1=*coefV1P;
+        		v8f coefV2=*coefV2P;
 
-				LD_VEC8S_CVT_VEC8F(p1,valU1);
-				LD_VEC8S_CVT_VEC8F((&p1[nCols]),valU2);
-				resF1.V=((opposite_xtfV*valU1.V) - (xtfV*valU2.V))/denominatorV;
-				resF2.V=((opposite_xtfV*valU2.V) - (xtfV*valU1.V))/denominatorV;
-
-				CVT_VEC8F_VEC8S(resU1,resF1);
-				CVT_VEC8F_VEC8S(resU2,resF2);
-				*(v8s_u *)p1 = resU1;
-				*(v8s_u *)(p1+nCols) = resU2;
-//                raw[f*frameStride+r*nCols+c] = ((1-xtalk_fraction)*p1-xtalk_fraction*p2)/denominator;
-//                raw[f*frameStride+(r+1)*nCols+c] = ((1-xtalk_fraction)*p2-xtalk_fraction*p1)/denominator;
-            }
-        }
+        		*coefV1P = (opposite_xtfV*coefV1 - xtfV*coefV2) / denominatorV;
+        		*coefV2P = (opposite_xtfV*coefV2 - xtfV*coefV1) / denominatorV;
+    		}
+    	}
     }
 }
 

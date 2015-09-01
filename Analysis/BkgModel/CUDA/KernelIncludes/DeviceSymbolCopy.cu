@@ -10,8 +10,8 @@ void copySymbolsToDevice( const ConstantFrameParams & ciP){
   cudaMemcpyToSymbol( ConstFrmP, (void*) &ciP, sizeof(ConstantFrameParams), 0, cudaMemcpyHostToDevice);
 }
 
-void copySymbolsToDevice( const ImgRegParams& irP ){
-  cudaMemcpyToSymbol( ImgRegP, (void*) &irP, sizeof(ImgRegParams), 0, cudaMemcpyHostToDevice);
+void copySymbolsToDevice( const ImgRegParamsConst& irP ){
+  cudaMemcpyToSymbol( ImgRegP, (void*) &irP, sizeof(ImgRegParamsConst), 0, cudaMemcpyHostToDevice);
 }
 
 void copySymbolsToDevice( const ConstantParamsGlobal& pl){
@@ -23,9 +23,21 @@ void copySymbolsToDevice(const PerFlowParamsGlobal& fp ){
 void copySymbolsToDevice(const ConfigParams& cp){
   cudaMemcpyToSymbol( ConfigP, (void*) &cp, sizeof(ConfigParams), 0, cudaMemcpyHostToDevice);
 }
-void copySymbolsToDevice(const WellsLevelXTalkParams& cXtP){
-  cudaMemcpyToSymbol( ConstXTalkP, (void*) &cXtP, sizeof(WellsLevelXTalkParams), 0, cudaMemcpyHostToDevice);
+
+
+void copySymbolsToDevice(const WellsLevelXTalkParamsConst<MAX_WELL_XTALK_SPAN,MAX_WELL_XTALK_SPAN> & cXtP){
+  cudaMemcpyToSymbol( ConstXTalkP, (void*) &cXtP, sizeof(WellsLevelXTalkParamsConst<MAX_WELL_XTALK_SPAN,MAX_WELL_XTALK_SPAN>), 0, cudaMemcpyHostToDevice);
 }
+
+
+void copySymbolsToDevice(const XTalkNeighbourStatsConst<MAX_XTALK_NEIGHBOURS> & cTlXtP){
+  cudaMemcpyToSymbol( ConstTraceXTalkP, (void*) &cTlXtP, sizeof(XTalkNeighbourStatsConst<MAX_XTALK_NEIGHBOURS>), 0, cudaMemcpyHostToDevice);
+}
+
+void copySymbolsToDevice(const SampleCollectionConst& smplCol ){
+  cudaMemcpyToSymbol(ConstSmplCol, (void*) &smplCol, sizeof(SampleCollectionConst), 0, cudaMemcpyHostToDevice);
+}
+
 
 /*void copySymbolsToDevice(const ConstantRegParamBounds& cp){
   cudaMemcpyToSymbol( ConstBoundRegP, (void*) &cp, sizeof(ConstantRegParamBounds), 0, cudaMemcpyHostToDevice);

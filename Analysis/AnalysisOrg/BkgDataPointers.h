@@ -58,20 +58,20 @@ class BkgDataPointers {
       m_beads_bestRegion_timeframe = NULL;
       m_beads_bestRegion_taub = NULL;
 
-      m_beads_regionCenter_location = NULL;
-      m_beads_regionCenter_predicted = NULL;
-      m_beads_regionCenter_corrected = NULL;
-      m_beads_regionCenter_amplitude = NULL;
-      m_beads_regionCenter_residual = NULL;
-      m_beads_regionCenter_kmult = NULL;
-      m_beads_regionCenter_dmult = NULL;
-      m_beads_regionCenter_SP = NULL;
-      m_beads_regionCenter_R = NULL;
-      m_beads_regionCenter_gainSens = NULL;
-      m_beads_regionCenter_fittype = NULL;
-      m_beads_regionCenter_timeframe = NULL;
-      m_beads_regionCenter_taub = NULL;
-      m_beads_regionCenter_regionParams = NULL;
+      m_beads_regionSamples_location = NULL;
+      m_beads_regionSamples_predicted = NULL;
+      m_beads_regionSamples_corrected = NULL;
+      m_beads_regionSamples_amplitude = NULL;
+      m_beads_regionSamples_residual = NULL;
+      m_beads_regionSamples_kmult = NULL;
+      m_beads_regionSamples_dmult = NULL;
+      m_beads_regionSamples_SP = NULL;
+      m_beads_regionSamples_R = NULL;
+      m_beads_regionSamples_gainSens = NULL;
+      m_beads_regionSamples_fittype = NULL;
+      m_beads_regionSamples_timeframe = NULL;
+      m_beads_regionSamples_taub = NULL;
+      m_beads_regionSamples_regionParams = NULL;
 
       m_beads_xyflow_predicted = NULL;
       m_beads_xyflow_corrected = NULL;
@@ -157,21 +157,21 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_beads_bestRegion_timeframe;
   DataCube<float> *m_beads_bestRegion_taub;
 
-  // regionCenter beads
-  DataCube<int> *m_beads_regionCenter_location;
-  DataCube<int> *m_beads_regionCenter_fittype;
-  DataCube<float> *m_beads_regionCenter_corrected;
-  DataCube<float> *m_beads_regionCenter_predicted;
-  DataCube<float> *m_beads_regionCenter_amplitude;
-  DataCube<float> *m_beads_regionCenter_residual;
-  DataCube<float> *m_beads_regionCenter_kmult;
-  DataCube<float> *m_beads_regionCenter_dmult;
-  DataCube<float> *m_beads_regionCenter_SP;
-  DataCube<float> *m_beads_regionCenter_R;
-  DataCube<float> *m_beads_regionCenter_gainSens;
-  DataCube<float> *m_beads_regionCenter_timeframe;
-  DataCube<float> *m_beads_regionCenter_taub;
-  DataCube<float> *m_beads_regionCenter_regionParams;
+  // regionSamples beads
+  DataCube<int> *m_beads_regionSamples_location;
+  DataCube<int> *m_beads_regionSamples_fittype;
+  DataCube<float> *m_beads_regionSamples_corrected;
+  DataCube<float> *m_beads_regionSamples_predicted;
+  DataCube<float> *m_beads_regionSamples_amplitude;
+  DataCube<float> *m_beads_regionSamples_residual;
+  DataCube<float> *m_beads_regionSamples_kmult;
+  DataCube<float> *m_beads_regionSamples_dmult;
+  DataCube<float> *m_beads_regionSamples_SP;
+  DataCube<float> *m_beads_regionSamples_R;
+  DataCube<float> *m_beads_regionSamples_gainSens;
+  DataCube<float> *m_beads_regionSamples_timeframe;
+  DataCube<float> *m_beads_regionSamples_taub;
+  DataCube<float> *m_beads_regionSamples_regionParams;
 
   // traceOutput for positions specified in sse/xyf/rcf files
   DataCube<float> *m_beads_xyflow_predicted;

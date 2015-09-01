@@ -409,7 +409,9 @@ function set_search_subject_sampleTubeLabel(e) {
         <div class="completedrun-items span3">
             <ul class="unstyled">
                 {{#exp.barcodeId}}<li><b>Barcode:</b> {{exp.barcodeId}}</li>{{/exp.barcodeId}}
-                <li><b>Reference:</b> {{ exp.library }}</li>
+                <li><b>Reference:</b>
+		    {{ exp.references }}
+		</li>
             	{{#exp.sampleSetName}}
                 <li><b>Sample Set:</b>
     				{{exp.sampleSetName}}
@@ -599,8 +601,10 @@ function set_search_subject_sampleTubeLabel(e) {
             <a href="/report/{{king_report.id}}/" alt="Open report in new window." title="{{king_report.resultsName}}" target="_blank">{{king_report.resultsName}}</a>
         {{/king_report}}
     </td>
-    <td>{{ exp.library }}</td>
-    <td>{{ exp.barcodeId }}</td>
+    <td>
+        {{ king_report.eas.references }}
+    </td>
+    <td>{{ king_report.eas.barcodeKitName }}</td>
     <td>
         {{#exp.plan}}
            <span class="{{exp.plan.sampleTubeLabel}}" rel="tooltip" title=""> {{exp.plan.sampleTubeLabel}}</span>

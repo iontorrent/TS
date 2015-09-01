@@ -1,530 +1,563 @@
 #!/usr/bin/python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
-import fnmatch
+import glob
 import json
 import os
-import sys
-import glob
+import tarfile
+import urllib2
+import zipfile
+
 from ion.plugin import *
 from subprocess import *
-from django.utils.datastructures import SortedDict
-import zipfile
-import urllib2
-import requests
-import tarfile
 
 class FileExporter(IonPlugin):
-        version = '4.6.0.0'
+        version = '5.0.0.0'
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
-	features = [ Feature.EXPORT ]
 	
 	envDict = dict(os.environ)
 	json_dat = {}
+	json_barcodes = {}
 	renameString = ""
 	barcodeNames = []
 	sampleNameLookup = {} # dictionary allowing us to get the sample name associated with a particular barcode name
 	isBarcodedRun = False
 	variantCallerPath = "variantCaller_out" # path to the most recently run variant caller plugin, TS 4.4 and newer enables multiple instances, so this path may change
-	runName = 'unknown'
 	delim = '.'
+	selections= ""
+	variantExists = False
+	downloadDir =''
 
-	# Method to locate files matching a certain pattern within a directory.
-	# Was used for VC file finding, but has been depreciated since those locations are predicted rather than found. (The VC plugin takes far longer to run, so its directory structure cannot be relied on at runtime.)
-	def locate(self, pattern, root):
-		for path, dirs, files in os.walk(os.path.abspath(root)):
-			#for filename in fnmatch.filter(files, pattern):
-			for fileName in files:
-				#sys.stderr.write('LOC: %s\n'%fileName)
-				if fileName == pattern:
-					yield os.path.join(path, fileName)
+	# set defaults for user options
+	sffCreate = False
+	fastqCreate = False
+	vcfCreate = False
+	xlsCreate = False
+	bamCreate = False
 	
-	def getBarcodeNameFromFileName(self, fileName):
-		for testBarcode in self.barcodeNames:
-			testBarcode2 = testBarcode + '_'
-			if testBarcode2 in fileName:
-				barcodeName = testBarcode
+	zipSFF = False
+	zipFASTQ = False
+	zipBAM = False
+	zipVCF = False
+	zipXLS = False
+	
+	wantTar = True
 
-		return barcodeName
 
 	# Method to rename and symlink the .bam and .bai files.
-	def bamRename(self, bamFileList):
-		for fileName in bamFileList:
-			fileName = fileName.replace('./', '')
+	def bamRename(self):
+		for barcode in self.barcodeNames:
+			fileName = self.json_dat['runinfo']['report_root_dir'] + '/' + self.json_barcodes[barcode]['bam']
 			if self.isBarcodedRun:
-				barcodeName = self.getBarcodeNameFromFileName(fileName)
-
 				# build our new filename and move this file
-				finalName = self.renameString.replace('@BARINFO@', barcodeName)
-				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcodeName])
-				destName = self.OUTPUT_DIR + '/' + finalName + '.bam'
+				finalName = self.renameString.replace('@BARINFO@', barcode)
+				if not self.sampleNameLookup[barcode]: #if there is no sample
+					finalName = finalName.replace('@SAMPLEID@'+ self.delim, '')
+				else:
+					finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcode])
+				destName = self.PLUGIN_DIR + '/' + finalName + '.bam'
+				downloadsName = self.downloadDir + '/' + finalName + '.bam'
 			else:
-				destName = self.OUTPUT_DIR + '/' + self.renameString + '.bam'
+				destName = self.PLUGIN_DIR + '/' + self.renameString + '.bam'
+				downloadsName = self.downloadDir + '/' + self.renameString + '.bam'
 
-			# And, link.
-			print 'LINKING: %s --> %s'%(fileName, destName)
-			linkCmd = Popen(['ln', '-sf', fileName, destName], stdout=PIPE, env=self.envDict)
-			linkOut, linkErr = linkCmd.communicate()
+			if os.path.isfile(fileName):
+				# And, link.
+				print 'DEBUG: LINKING: %s --> %s'%(fileName, destName)
+				linkCmd = Popen(['ln', '-sf', fileName, destName], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+				print 'DEBUG: OUT: %s\nERR: %s'%(linkOut, linkErr)
+
+				
+				linkCmd = Popen(['ln', '-sf', fileName, downloadsName], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+			else:
+				print "Error: %s file does not exist" % fileName
+				
 			fileName = fileName.replace('.bam', '.bam.bai')
 			destName = destName.replace('.bam', '.bam.bai')
-			baiLink = Popen(['ln', '-sf', fileName, destName], stdout=PIPE, env=self.envDict)
-			baiOut, baiErr = baiLink.communicate()
-			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
-			print 'BAIOUT: %s\nBAIERR: %s'%(baiOut, baiErr)
+
+			if os.path.isfile(fileName):
+				baiLink = Popen(['ln', '-sf', fileName, destName], stdout=PIPE, env=self.envDict)
+				baiOut, baiErr = baiLink.communicate()
+				print 'DEBUG: BAIOUT: %s\nBAIERR: %s'%(baiOut, baiErr)
+
+				downloadsName = downloadsName.replace('.bam', '.bam.bai')
+				linkCmd = Popen(['ln', '-sf', fileName, downloadsName], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+			else:
+				print "Error: %s file does not exist" % fileName
 
 	# Method to rename and symlink the .vcf files.
-	def vcfRename(self, bamFileList):
-		for fileName in bamFileList:
-			fileName = fileName.replace('./', '')
+	def vcfRename(self):
+		for barcode in self.barcodeNames:
 			if self.isBarcodedRun:
-				barcodeName = self.getBarcodeNameFromFileName(fileName)
-
 				# build our new filename and move this file
-				finalName = self.renameString.replace('@BARINFO@', barcodeName)
-				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcodeName])
-				destName = self.OUTPUT_DIR + '/' + finalName + '.vcf'
-				srcName = '%s/plugin_out/%s/%s/TSVC_variants.vcf' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath, barcodeName)
-			else:
-				destName = self.OUTPUT_DIR + '/' + self.renameString + '.vcf'
-				srcName = '%s/plugin_out/%s/TSVC_variants.vcf' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath)
+				finalName = self.renameString.replace('@BARINFO@', barcode)
+				if not self.sampleNameLookup[barcode]: #if there is no sample
+					finalName = finalName.replace('@SAMPLEID@'+ self.delim, '')
+				else:
+					finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcode])
+				destName = self.PLUGIN_DIR + '/' + finalName + '.vcf'
+				downloadsName = self.downloadDir + '/' + finalName + '.vcf'
+				srcName = '%s/plugin_out/%s/%s/TSVC_variants.vcf' % (self.json_dat['runinfo']['analysis_dir'], self.variantCallerPath, barcode)
 
-			# And, link.
-			print 'LINKING: %s --> %s'%(srcName, destName)
-			linkCmd = Popen(['ln', '-sf', srcName, destName], stdout=PIPE, env=self.envDict)
-			linkOut, linkErr = linkCmd.communicate()
-			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+			else:
+				destName = self.PLUGIN_DIR + '/' + self.renameString + '.vcf'
+				srcName = '%s/plugin_out/%s/TSVC_variants.vcf' % (self.json_dat['runinfo']['analysis_dir'], self.variantCallerPath)
+				downloadsName = self.downloadDir + '/' + self.renameString + '.vcf'
+
+			if os.path.isfile(srcName):
+				# And, link.
+				print 'LINKING: %s --> %s'%(srcName, destName)
+				linkCmd = Popen(['ln', '-sf', srcName, destName], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+				print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+
+				linkCmd = Popen(['ln', '-sf', srcName, downloadsName], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+			else:
+				print "Error: %s file does not exist" % srcName
+
 
 	# Method to rename and symlink the .xls files.
-	def xlsRename(self, bamFileList):
-		for fileName in bamFileList:
-			fileName = fileName.replace('./', '')
+	def xlsRename(self):
+		for barcode in self.barcodeNames:
 			if self.isBarcodedRun:
-				barcodeName = self.getBarcodeNameFromFileName(fileName)
 
 				# build our new filename and move this file
-				finalName = self.renameString.replace('@BARINFO@', barcodeName)
-				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcodeName])
-				destNameAlleles = self.OUTPUT_DIR + '/' + finalName + self.delim + 'alleles' + '.xls'
-				destNameVariants = self.OUTPUT_DIR + '/' + finalName + self.delim + 'variants' + '.xls'
-				srcNameAlleles = '%s/plugin_out/%s/%s/alleles.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath, barcodeName)
-				srcNameVariants = '%s/plugin_out/%s/%s/variants.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath, barcodeName)
+				finalName = self.renameString.replace('@BARINFO@', barcode)
+				if not self.sampleNameLookup[barcode]: #if there is no sample
+					finalName = finalName.replace('@SAMPLEID@'+ self.delim, '')
+				else:
+					finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcode])
+				destNameAlleles = self.PLUGIN_DIR + '/' + finalName + self.delim + 'alleles' + '.xls'
+				downloadsNameAlleles = self.downloadDir + '/' + finalName + self.delim + 'alleles' + '.xls'
+				destNameVariants = self.PLUGIN_DIR + '/' + finalName + self.delim + 'variants' + '.xls'
+				downloadsNameVariants = self.downloadDir + '/' + finalName + self.delim + 'variants' + '.xls'
+				
+				srcNameAlleles = '%s/plugin_out/%s/%s/alleles.xls' % (self.json_dat['runinfo']['analysis_dir'], self.variantCallerPath, barcode)
+				srcNameVariants = '%s/plugin_out/%s/%s/variants.xls' % (self.json_dat['runinfo']['analysis_dir'], self.variantCallerPath, barcode)
+
 			else:
-				destNameAlleles = self.OUTPUT_DIR + '/' + self.renameString + self.delim + 'alleles' + '.xls'
-				destNameVariants = self.OUTPUT_DIR + '/' + self.renameString + self.delim + 'variants' + '.xls'
-				srcNameAlleles = '%s/plugin_out/%s/alleles.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath)
-				srcNameVariants = '%s/plugin_out/%s/variants.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath)
+				destNameAlleles = self.PLUGIN_DIR + '/' + self.renameString + self.delim + 'alleles' + '.xls'
+				downloadsNameAlleles = self.downloadDir + '/' + self.renameString + self.delim + 'alleles' + '.xls'
+				destNameVariants = self.PLUGIN_DIR + '/' + self.renameString + self.delim + 'variants' + '.xls'
+				downloadsNameVariants = self.downloadDir + '/' + self.renameString + self.delim + 'variants' + '.xls'
 
-			# And link alleles file
-			print 'LINKING: %s --> %s'%(srcNameAlleles, destNameAlleles)
-			linkCmd = Popen(['ln', '-sf', srcNameAlleles, destNameAlleles], stdout=PIPE, env=self.envDict)
-			linkOut, linkErr = linkCmd.communicate()
-			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+				srcNameAlleles = '%s/plugin_out/%s/alleles.xls' % (self.json_dat['runinfo']['analysis_dir'], self.variantCallerPath)
+				srcNameVariants = '%s/plugin_out/%s/variants.xls' % (self.json_dat['runinfo']['analysis_dir'], self.variantCallerPath)
 
-			# And link variants file
-			print 'LINKING: %s --> %s'%(srcNameVariants, destNameVariants)
-			linkCmd = Popen(['ln', '-sf', srcNameVariants, destNameVariants], stdout=PIPE, env=self.envDict)
-			linkOut, linkErr = linkCmd.communicate()
-			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+			if os.path.isfile(srcNameAlleles):
+				# And link alleles file
+				print 'LINKING: %s --> %s'%(srcNameAlleles, destNameAlleles)
+				linkCmd = Popen(['ln', '-sf', srcNameAlleles, destNameAlleles], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+				print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
 
+			
+				linkCmd = Popen(['ln', '-sf', srcNameAlleles, downloadsNameAlleles], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+			else:
+				print "Error: %s file does not exist" % srcNameAlleles
+			
+			if os.path.isfile(srcNameVariants):
+				# And link variants file
+				print 'LINKING: %s --> %s'%(srcNameVariants, destNameVariants)
+				linkCmd = Popen(['ln', '-sf', srcNameVariants, destNameVariants], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+				print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+
+			
+				linkCmd = Popen(['ln', '-sf', srcNameVariants, downloadsNameVariants], stdout=PIPE, env=self.envDict)
+				linkOut, linkErr = linkCmd.communicate()
+			else:
+				print "Error: %s file does not exist" % srcNameVariants
 
 	def moveRenameFiles(self, suffix):
-		print 'DEBUG: barcoded run: %s' % self.isBarcodedRun
-
 		# rename them as we move them into the output directory
-
-		# loop through all fastq files
-		#for fileName in glob.glob('%s/*.fastq' % self.envDict['TSP_FILEPATH_PLUGIN_DIR']):
-
+		# loop through all fastq/sff files
+		destName =''
 		for fileName in glob.glob('*.%s' % suffix):
+
 			print 'DEBUG: checking %s file: %s' % (suffix, fileName)
 			if self.isBarcodedRun:
-				barcodeName = self.getBarcodeNameFromFileName(fileName)
-				finalName = self.renameString.replace('@BARINFO@', barcodeName)
-				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcodeName])
-				destName = self.OUTPUT_DIR + '/' + finalName + '.' + suffix
+				for barcode in self.barcodeNames:
+					if barcode in fileName:
+						finalName = self.renameString.replace('@BARINFO@', barcode)
+						if not self.sampleNameLookup[barcode]: #if there is no sample
+							finalName = finalName.replace('@SAMPLEID@'+ self.delim, '')
+						else:
+							finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcode])
+						destName = self.PLUGIN_DIR + '/' + finalName + '.' + suffix
 
 			else:
-				destName = self.OUTPUT_DIR + '/' + self.renameString + '.' + suffix
+				destName = self.PLUGIN_DIR + '/' + self.renameString + '.' + suffix
 
-			print 'moving %s to %s' % (fileName, destName)
-			os.rename(fileName, destName)
+			
+			if destName and fileName:
+				print 'moving %s to %s' % (fileName, destName)
+				os.rename(fileName, destName)
+			else:
+				os.remove(fileName)
+				print 'Logged ERROR: File %s was not renamed' % fileName
 
 
+	def createFiles(self, type):
+		file = 'FastqCreator.py'
+		if (type == "sff"):
+			file = 'SFFCreator.py'
+
+		fromDir = '%s/%s' % (self.json_dat['runinfo']['plugin']['path'], file)
+		toDir = self.PLUGIN_DIR
+		print 'cp: from %s\n to %s\n'%(fromDir, toDir)
+		Cmd = Popen(['cp', fromDir, toDir], stdout=PIPE, env=self.envDict)
+		Out, Err = Cmd.communicate()
+		print 'exec: %s/%s' % (toDir, file)
+		Cmd = Popen(['python', file], stdout=PIPE, env=self.envDict)
+		Out, Err = Cmd.communicate()
+		print 'DEBUG: Create file out: %s\nError: %s'%(Out, Err)
+		print 'mv: %s -> specified format.' % type
+
+		self.moveRenameFiles(type)
+
+	def compressFiles(self, CompressType, zipSubdir, htmlOut):
+		htmlFiles = '<div id="files">'
+		for fileName in os.listdir(self.PLUGIN_DIR):
+			if (self.zipBAM and (fileName.endswith('.bam') or fileName.endswith('.bai') )) or (self.zipSFF and fileName.endswith('.sff')) or (self.zipFASTQ and fileName.endswith('.fastq')) or (self.zipVCF and fileName.endswith('.vcf')) or (self.zipXLS and fileName.endswith('.xls')):
+				print 'Adding file: %s' % fileName
+				fullPathAndFileName = self.PLUGIN_DIR + '/' + fileName
+				if os.path.isfile(fullPathAndFileName): # need to make sure sym links exist
+					if self.wantTar: 
+						storedName = zipSubdir + '/' + fileName
+						CompressType.add(fullPathAndFileName, arcname=storedName)
+					else: 
+						if os.path.getsize(fullPathAndFileName) > 1024*1024*1024*2: # store large files (>2G), don't try and compress
+							CompressType.write(fullPathAndFileName, zipSubdir + '/' + fileName, zipfile.ZIP_STORED)
+
+						else:
+							CompressType.write(fullPathAndFileName, zipSubdir + '/' + fileName, zipfile.ZIP_DEFLATED)
+					htmlFiles = htmlFiles + '<span><pre>' + fileName + '</pre></span>\n'
+
+			elif (fileName.endswith('.bam') or fileName.endswith('.bai') or fileName.endswith('.sff') or fileName.endswith('.fastq') or fileName.endswith('.vcf') or fileName.endswith('.xls')):
+				htmlOut.write('<a href="%s/%s" download>%s</a><br>\n'%(self.envDict['TSP_URLPATH_PLUGIN_DIR'],fileName, fileName))
+
+		htmlFiles = htmlFiles + "</div>\n"
+		return htmlFiles
 	def launch(self, data=None):
-		# Define output directory.
-		self.OUTPUT_DIR = os.path.join(self.envDict['ANALYSIS_DIR'], 'plugin_out', 'downloads')
-		if not os.path.isdir(self.OUTPUT_DIR):
-			Popen(['mkdir', self.OUTPUT_DIR], stdout=PIPE, env=self.envDict)
-		
 		try:
 			with open('startplugin.json', 'r') as fh:
 				self.json_dat = json.load(fh)
 		except:
 			print 'Error reading plugin json.'
-		
-		# Remove old html files if necessary.
-		try:
-			rmCmd = Popen(['rm', '%s/plugin_out/FileExporter_out/FileExporter_block.html'%self.envDict['ANALYSIS_DIR']], stdout=PIPE)
-			rmOut, rmErr = rmCmd.communicate()
-			rmCmd = Popen(['rm', 'FileExporter_block.html'%self.envDict['ANALYSIS_DIR']], stdout=PIPE)
-			rmOut, rmErr = rmCmd.communicate()
-		except:
-			pass
-		
-		try:
-			htmlOut = open('%s/plugin_out/FileExporter_out/FileExporter_block.html'%self.envDict['ANALYSIS_DIR'], 'a+')
-		except:
-			htmlOut = open('FileExporter_block.html', 'w')
-		htmlOut.write('<html><body>\n')
-		# htmlOut.write('<b>PLUGINCONFIG:</b> %s<br/><br/>\n'%self.json_dat['pluginconfig'])
+		# Define output directory.
+		self.PLUGIN_DIR = self.json_dat['runinfo']['results_dir'] 
+		self.downloadDir = os.path.join(self.json_dat['runinfo']['analysis_dir'], 'plugin_out', 'downloads')
+		if not os.path.isdir(self.downloadDir):
+			Popen(['mkdir', self.downloadDir], stdout=PIPE, env=self.envDict)
 
-		if os.path.isfile(self.envDict['TSP_FILEPATH_BARCODE_TXT']):
-			self.isBarcodedRun = True
+		print "DEBUG: PLUGIN_DIR in launch %s" % self.PLUGIN_DIR
 
-		# set defaults for user options
-		sffCreate = False
-		fastqCreate = False
-		vcCreate = False
-		zipSFF = False
-		zipFASTQ = False
-		zipBAM = False
-		zipVCF = False
-		zipXLS = False
-		wantTar = True
+		htmlOut = open('FileExporter_block.html', 'w')
+		htmlOut.write('<!DOCTYPE html>\n<html lang="en">\n<head>\n')
+		htmlOut.write('<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js">\n</script>\n')
+		htmlOut.write('<script>\n$(function() {\n\t$("#files").hide();\n\t$("#params").hide();\n')
+		
+		htmlOut.write('\t$("#showParams\").click(function() {\n\t\t$("#params").slideToggle("toggle");\n')
+		htmlOut.write('\t\tif ($("#showParams").html() == "Show Parameters"){\n\t\t\t$("#showParams").html("Hide Parameters");\n\t\t}\n')
+		htmlOut.write('\t\telse{\n\t\t\t$("#showParams").html("Show Parameters");\n\t\t}\n\t});\n\n')
+		
+		htmlOut.write('\t$("#showFiles\").click(function() {\n\t\t$("#files").slideToggle("toggle");\n')
+		htmlOut.write('\t\tif ($("#showFiles").html() == "Show Contents of Compressed File"){\n\t\t\t$("#showFiles").html("Hide Contents of Compressed File");\n\t\t}\n')
+		htmlOut.write('\t\telse{\n\t\t\t$("#showFiles").html("Show Contents of Compressed File");\n\t\t}\n\t});\n});\n')
+		htmlOut.write('\n</script>\n</head>\n<html>\n<body>\n')
+
+
+		try:
+			with open('barcodes.json', 'r') as fh:
+				self.json_barcodes = json.load(fh)
+			if len( self.json_barcodes) > 1 : #non-barcoded runs have 1 barcode called "no match"
+				self.isBarcodedRun = True
+			else:
+				self.isBarcodedRun = False
+			self.barcodeNames = self.json_barcodes.keys()
+		except:
+			print 'Error reading barcodes json.'
+			
+			
+		print "DEBUG: isBarcodedRun in launch: %s" % self.isBarcodedRun
 
 		# Parse pluginconfig json.
 		try:
+			#get all the button information 
 			self.delim = self.json_dat['pluginconfig']['delimiter_select']
-			selections = self.json_dat['pluginconfig']['select_dialog']
+			self.selections = self.json_dat['pluginconfig']['select_dialog']
+
+			try:
+				temp = self.json_dat['pluginconfig']['bamCreate']
+				if (temp == 'on'):
+					self.bamCreate = True	
+			except:
+				print 'Logged: no BAM creation.'
+
 			try:
 				temp = self.json_dat['pluginconfig']['sffCreate']
 				if (temp == 'on'):
-					sffCreate = True
+					self.sffCreate = True	
 			except:
 				print 'Logged: no SFF creation.'
+
 			try:
 				temp = self.json_dat['pluginconfig']['fastqCreate']
 				if (temp == 'on'):
-					fastqCreate = True
+					self.fastqCreate = True
 			except:
 				print 'Logged: no FASTQ creation.'
+
 			try:
-				temp = self.json_dat['pluginconfig']['vcCreate']
+				temp = self.json_dat['pluginconfig']['vcfCreate']
 				if (temp == 'on'):
-					vcCreate = True
+					self.vcfCreate = True
 			except:
-				print 'Logged: no VC linking.'
+				print 'Logged: no VCF linking.'
+
+			try:
+				temp = self.json_dat['pluginconfig']['xlsCreate']
+				if (temp == 'on'):
+					self.xlsCreate = True
+			except:
+				print 'Logged: no XLS included.'
+
 			try:
 				temp = self.json_dat['pluginconfig']['zipSFF']
 				if (temp == 'on'):
-					zipSFF = True
+					self.zipSFF = True
 			except:
 				print 'Logged: no ZIP SFF'
+
 			try:
 				temp = self.json_dat['pluginconfig']['zipFASTQ']
 				if (temp == 'on'):
-					zipFASTQ = True
+					self.zipFASTQ = True
 			except:
 				print 'Logged: no ZIP FASTQ'
+
 			try:
 				temp = self.json_dat['pluginconfig']['zipBAM']
 				if (temp == 'on'):
-					zipBAM = True
+					self.zipBAM = True
 			except:
 				print 'Logged: no ZIP BAM'
+
 			try:
 				temp = self.json_dat['pluginconfig']['zipVCF']
 				if (temp == 'on'):
-					zipVCF = True
+					self.zipVCF = True
 			except:
 				print 'Logged: no ZIP VCF'
+
 			try:
 				temp = self.json_dat['pluginconfig']['zipXLS']
 				if (temp == 'on'):
-					zipXLS = True
+					self.zipXLS = True
 			except:
 				print 'Logged: no ZIP XLS'
 
 			try:
 				temp = self.json_dat['pluginconfig']['compressedType']
 				if (temp == 'zip'):
-					wantTar = False
+					self.wantTar = False
 				if (temp == 'tar'):
-					wantTar = True
+					self.wantTar = True
 			except:
-				print 'Logged: no compress type selected?  tar.bz2 assumed.'
+				print 'Logged: no compress type selected-  tar.bz2 assumed.'
+
 		except:
 			print 'Warning: plugin does not appear to be configured, will default to run name with fastq zipped'
 			#sys.exit(0)
 			self.delim = '.'
-			selections = ['TSP_RUN_NAME']
-			fastqCreate = True
-			zipFASTQ = True
+			self.selections = ['run_name']
+			self.fastqCreate = True
+			self.zipFASTQ = True
 		
 		try:
 			self.runlevel = self.json_dat['runplugin']['runlevel']
+			print "DEBUG: runlevel: %s " % self.runlevel
 		except:
 			self.runlevel = ""
 			print 'No run level detected.'
+		print "DEBUG: selections: %s, TYPE: %s" % (self.selections, type(self.selections))
 
-		# DEBUG: Print barcoded sampleID data.
-		try:
-			samples = self.json_dat['plan']['barcodedSamples']
-			if samples and not isinstance(samples,dict):
-				samples = json.loads(samples)
-			print 'SAMPLEID DATA: %s'%samples
-			print 'TYPE: %s' % type(samples)
-		except KeyError:
-			samples = []
-			print 'No SAMPLEID DATA in plan'
-		
-		htmlOut.write('Create SFF? %s  Moved to compressed file? %s<br/>\n' % (sffCreate, zipSFF))
-		htmlOut.write('Create FASTQ? %s  Moved to compressed file? %s<br/>\n' % (fastqCreate, zipFASTQ))
-		htmlOut.write('Include variant caller files? %s  Move TVC files to compressed file: BAM/BAI: %s VCF: %s XLS: %s<br/>\n' % (vcCreate, zipBAM, zipVCF, zipXLS))
+		if not isinstance(self.selections, unicode):
+			self.selections[:] = [entry for entry in self.selections if entry != '']
 
-		# Remove empty values.
-		if not isinstance(selections, unicode):
-			selections[:] = [entry for entry in selections if entry != '']
-		elif selections != u'':
-			selections = [selections]
-		else:
-			print 'Warning: No options selected, will use default TSP_RUN_NAME'
-			selections = ['TSP_RUN_NAME']
-		
 		# Get appropriate values.
-		for i in range(len(selections)):
+		for i in range(len(self.selections)):
 			# Use an arbitrary value that nobody will ever use otherwise, so they're easy to replace.
 			# '@' is an invalid character, right? Maybe not, actually...
-			if (selections[i] == 'OPT_BARCODE'):
+			if self.selections[i] == 'barcodename':
 				if self.isBarcodedRun:
-					selections[i] = '@BARINFO@'
+					self.selections[i] = '@BARINFO@'
 				else:
-					selections[i] = ''
-			elif (selections[i] == 'TSP_SAMPLE'):
+					self.selections[i] = ""
+			elif (self.selections[i] == 'sample'):
 				if self.isBarcodedRun:
-					selections[i] = '@SAMPLEID@'
+					self.selections[i] = '@SAMPLEID@'
 				else:
-					selections[i] = self.envDict[selections[i]] # user may have provided a sample name to the single sample so just replace now
+					self.selections[i] = self.json_dat['expmeta'][self.selections[i]] # user may have provided a sample name to the single sample so just replace now
 			else:
-				selections[i] = self.envDict[selections[i]]
-				selections[i] = selections[i].replace('\\', '') # no idea why, but some chips look like \314R\ with backslashes?
+				try:
+					self.selections[i] = self.json_dat['expmeta'][self.selections[i]]
+				except:
+					if self.selections[i] == "Enter Text Here":
+						self.selections[i] = ""
+
+				
+		self.selections[:] = [entry for entry in self.selections if entry != '']
+		print "DEBUG: selections: %s, TYPE: %s, %s" % (self.selections, type(self.selections), not self.selections)
+		if not self.selections:
+			print 'Warning: No options selected, will use default run_name'
+			self.selections = [self.json_dat['expmeta']['run_name']]
 
 		# Take care of case where barcode info is not provided in barcoded run.
-		if not '@BARINFO@' in selections and self.isBarcodedRun:
-			selections = ['@BARINFO@'] + selections
-
-		try:
-			reference_path = self.envDict['TSP_FILEPATH_GENOME_FASTA']
-		except:
-			reference_path = ''
-
-		# won't make sense to create vcf links if no reference was specified, so don't waste the time
-		if reference_path == '':
-			vcCreate = False
-
-		# get the run name.
-		# normally I would have done self.json_dat['expmeta']['run_name'] but wanted to remain in sync with fastqcreator, both ways should be the same
-		try:
-			self.runName = self.envDict['TSP_FILEPATH_OUTPUT_STEM']
-		except:
-			self.runName = 'unknown'
-		if self.isBarcodedRun:
-			self.runName = '_' + self.runName
-
+		if not '@BARINFO@' in self.selections and self.isBarcodedRun:
+			self.selections = ['@BARINFO@'] + self.selections
+		if '@SAMPLEID@' in self.selections and len(self.selections) == 1:
+			self.selections .append([self.json_dat['expmeta']['run_name']])
+		elif '@BARINFO@' in self.selections and len(self.selections) == 1:
+			self.selections .append(self.json_dat['expmeta']['run_name'])
+		elif '@SAMPLEID@' in self.selections and '@BARINFO@' in self.selections and len(self.selections) == 2:
+			self.selections .append(self.json_dat['expmeta']['run_name'])
+			
 		# get the actual path to the variant caller plugin
-		if vcCreate:
+		if self.vcfCreate or self.xlsCreate:
 			try:
 				api_url = self.json_dat['runinfo']['api_url'] + '/v1/pluginresult/?format=json&plugin__name=variantCaller&result=' + str(self.json_dat['runinfo']['pk'])
-				api_key = self.json_dat['runinfo'].get('api_key', None)
-				prpk = self.json_data['runinfo'].get('pluginresult') or self.json_data['runinfo'].get('plugin',{}).get('pluginresult')
-				if prpk is not None and api_key is not None:
-					api_url = api_url + '&pluginresult=%s&api_key=%s' % (prpk, api_key)
-					print 'Using pluginresult %s with API key: %s' % (prpk, api_key)
+				api_key = self.json_dat['runinfo']['api_key']
+				pluginNumber = self.json_dat['runinfo'].get('pluginresult') or self.json_dat['runinfo'].get('plugin',{}).get('pluginresult')
+				print "DEBUG: api_url: %s" % api_url
+				print "DEBUG: api_key: %s" % api_key 
+				if pluginNumber is not None and api_key is not None:
+					api_url = api_url + '&pluginresult=%s&api_key=%s' % (pluginNumber, api_key)
+					print 'Using pluginresult %s with API key: %s' % (pluginNumber, api_key)
+					print "%s" % api_url
 				else:
 					print 'No API key available'
-				f = urllib2.urlopen(api_url)
-				d = json.loads(f.read())
+				d = json.loads(urllib2.urlopen(api_url).read())
 
 				self.variantCallerPath = d['objects'][0]['path']
+				print 'DEBUG: variantCallerPath %s' % self.variantCallerPath
 				self.variantCallerPath = self.variantCallerPath.split('/')[-1]
 				print 'INFO: using variant caller path: %s' % self.variantCallerPath
+				self.variantExists = True
+
 			except:
-				print 'ERROR!  Failed to get variant caller path, assuming old default'
+				print 'ERROR!  Failed to get variant caller path. Will not generate variant files.'
 
-		# Get bam filenames.
-		with open(os.path.join(self.json_dat['runinfo']['basecaller_dir'], 'datasets_basecaller.json'), 'r') as f:
-			json_basecaller = json.load(f)
-
-		bamPaths = []
-		bams = []
-		for datum in json_basecaller['datasets']:
-			if reference_path != '':
-				tempPath = os.path.join(self.json_dat['runinfo']['alignment_dir'], datum['file_prefix']+'.bam')
-			else:
-				tempPath = os.path.join(self.json_dat['runinfo']['basecaller_dir'], datum['file_prefix']+'.basecaller.bam')
-
-			print 'adding BAM: %s' % tempPath
-			if os.path.exists(tempPath):
-				bamPaths.append(tempPath)
-				if datum['dataset_name'][datum['dataset_name'].rfind('/')+1:] != 'No_barcode_match' and '/' in datum['dataset_name']:
-					bams.append(datum['dataset_name'])
-
-		# get the list of 'valid' barcodes or samples (could be either depending on whether user altered names with run planning
-		# and sort of hacky, but extract this from the BAM file names we just got above
-		for bamFileName in bamPaths:
-			barcodeName = bamFileName.split('/')[-1] # get the last part, just the name with no path (probably can use os method here too)
-			barcodeName = barcodeName.split('_rawlib')[0] # get just the barcode part of the name
-			# find a possible matching sample name
-			for sampleItemName in samples:
-				sampleItem = samples[sampleItemName]
-				if barcodeName in sampleItem['barcodes']:
-					self.sampleNameLookup[barcodeName] = sampleItemName
-			if barcodeName in self.sampleNameLookup.keys():
-				sampleName = self.sampleNameLookup[barcodeName]
-			else:
-				sampleName = ''
-				self.sampleNameLookup[barcodeName] = '' # makes it much easier later to do the lookup with no conditional tests
-			# MGD note: I considered setting blank sample names to the barcode name instead, but might not be what customer intended
-			print 'BARCODE FOUND: %s SAMPLE ID: %s' % (barcodeName, sampleName)
-			self.barcodeNames.append(barcodeName)
-		self.sampleNameLookup[''] = '' # allows us to easily handle case where barcode might not have been found
+		if self.isBarcodedRun:
+			for barcode in self.barcodeNames:
+				self.sampleNameLookup[barcode] = self.json_barcodes[barcode]['sample']
+				print 'DEBUG: sampleNameLookup with barcode %s is %s' % (barcode, self.sampleNameLookup[barcode])
+				if self.sampleNameLookup[barcode] == 'none':
+					self.sampleNameLookup[barcode] = ''
+				self.sampleNameLookup[''] = '' # allows us to easily handle case where barcode might not have been found
 
 		# log basic info for debug purposes
 		print 'PLUGINCONFIG:'
 		print '----------------------------------------------'
 		print 'DELIMETER: "%s"'%self.delim
-		htmlOut.write('<b>DELIMITER:</b> "%s"<br/>\n<b>SELECTIONS:</b><br/>\n'%self.delim)
 		print 'SELECTIONS:'
-		for sel in selections:
-			print '  %s'%sel
-			htmlOut.write('\t%s<br/>\n'%sel)
-		print '----------------------------------------------'
-		
-		# Produce string to rename to.
-		self.renameString = ""
-		# Avoid delimiting anywhere but in between the arguments.
-		firstSelectionDone = False
-		for sel in selections:
+		for sel in self.selections:
 			if sel != '':
-				if firstSelectionDone:
-					self.renameString += self.delim
+				print '  %s'%sel
 				self.renameString += sel
-				firstSelectionDone = True
+				self.renameString += self.delim 
+
+		print '----------------------------------------------'
+		#remove the last delimiter
+		if self.renameString.endswith(self.delim):
+			self.renameString = self.renameString.rsplit(self.delim ,1)[0]
+
 		print 'BASE RENAME STRING: %s' % self.renameString
 
 
 		# Create fastq file(s) if requested.
-		if (fastqCreate):
-			# create FASTQ file(s)
-			fromDir = '%s/FastqCreator.py'%self.envDict['DIRNAME']
-			toDir = self.envDict['TSP_FILEPATH_PLUGIN_DIR']
-			print 'cp: from %s\n to %s\n'%(fromDir, toDir)
-			fqCmd = Popen(['cp', fromDir, toDir], stdout=PIPE, env=self.envDict)
-			fqOut, fqErr = fqCmd.communicate()
-			print 'exec: %s/FastqCreator.py'%toDir
-			FastqCmd = Popen(['python', 'FastqCreator.py'], stdout=PIPE, env=self.envDict)
-			FastqOut, FastqErr = FastqCmd.communicate()
-			#print 'Fastq out: %s\nFastq err: %s'%(FastqOut, FastqErr)
-			print 'mv: fastq -> specified format.'
-
-			self.moveRenameFiles('fastq')
-
+		if (self.fastqCreate):
+			 self.createFiles('fastq')
 
 		# Create sff file(s) if requested.
-		if (sffCreate):
-			fromDir = '%s/SFFCreator.py'%self.envDict['DIRNAME']
-			toDir = self.envDict['TSP_FILEPATH_PLUGIN_DIR']
-			print 'cp: from %s\n to %s\n'%(fromDir, toDir)
-			sfCmd = Popen(['cp', fromDir, toDir], stdout=PIPE, env=self.envDict)
-			sfOut, sfErr = sfCmd.communicate()
-			print 'exec: %s/SFFCreator.py'%toDir
-			SFFCmd = Popen(['python', 'SFFCreator.py'], stdout=PIPE, env=self.envDict)
-			SFFOut, SFFErr = SFFCmd.communicate()
-			#print 'SFF out: %s\nSFF err: %s'%(SFFOut, SFFErr)
-			print 'mv: sff -> specified format.'
-
-			self.moveRenameFiles('sff')
-
+		if (self.sffCreate):
+			self.createFiles('sff')
 
 		# Link to TVC files if requested.
-		if (vcCreate):
-			self.bamRename(bamPaths)
-			self.vcfRename(bamPaths)
-			self.xlsRename(bamPaths)
+		if (self.bamCreate):
+			self.bamRename()
+		if self.variantExists:
+			if (self.vcfCreate):
+				self.vcfRename()
+			if (self.xlsCreate):
+				self.xlsRename()
+		else:
+			print "DEBUG: Variant Caller was not run. VCF and XLS not renamed (this message appears even if the user did not specify VCF or XLS"
 
-
-		#htmlOut.write('<br/><b>Files created: </b><a href="/report/%s/getZip">Download link</a><br/>'%self.envDict['RUNINFO__PK'])
-		htmlOut.write('<b/><b>Output Files:</b></br>')
-
-		webRootPathParts = self.envDict['ANALYSIS_DIR'].split('/')
-		try:
-			webRoot = webRootPathParts[-3] + '/' + webRootPathParts[-2] + '/' + webRootPathParts[-1]
-		except:
-			webRoot = self.envDict['ANALYSIS_DIR'].replace('/results/analysis/', '')
-		print 'WebRoot: %s' % webRoot
-
+		htmlOut.write('<b>Output Files:</b><br>\n')
 		# Create compressed files (note that we create html links to them if we are not adding to the compressed file)
-		if (zipBAM or zipSFF or zipFASTQ or zipVCF or zipXLS):
+
+
+		print "DEBUG: Enter if? %s, %s, %s, %s, %s" % (self.zipBAM, self.zipSFF, self.zipFASTQ, self.zipVCF, self.zipXLS)
+		if (self.zipBAM or self.zipSFF or self.zipFASTQ or self.zipVCF or self.zipXLS):
 			print 'Starting write to compressed file'
+			print "DEBUG: wantTar= %s" % self.wantTar
 			zipSubdir = self.renameString
 			if self.isBarcodedRun:
-				removeThisPart = self.delim + '@BARINFO@'
-				zipSubdir = self.renameString.replace(removeThisPart, '')
-			if wantTar:
+				zipSubdir = self.renameString.replace('@BARINFO@'+ self.delim , '')
+				zipSubdir = zipSubdir.replace(self.delim +'@BARINFO@' , '')
+				zipSubdir = zipSubdir.replace('@BARINFO@' , '')
+				print "subdir = %s" % zipSubdir
+				zipSubdir = zipSubdir.replace('@SAMPLEID@'+ self.delim , '')
+				zipSubdir = zipSubdir.replace(self.delim +'@SAMPLEID@', '')
+				zipSubdir = zipSubdir.replace('@SAMPLEID@', '')
+				print "subdir = %s" % zipSubdir
+
+			if self.wantTar:
 				compressedFileName = zipSubdir + '.tar.bz2'
-				tar = tarfile.open(compressedFileName, "w:bz2")
-				tar.dereference = True
-				for fileName in os.listdir(self.envDict['ANALYSIS_DIR'] + '/plugin_out/downloads'):
-					zipme = False
-					if (zipBAM and fileName[-4:] == '.bam') or (zipBAM and fileName[-4:] == '.bai') or (zipSFF and fileName[-4:] == '.sff') or (zipFASTQ and fileName[-6:] == '.fastq') or (zipVCF and fileName[-4:] == '.vcf') or (zipXLS and fileName[-4:] == '.xls'):
-						zipme = True
-					if zipme:
-						print 'TAR: Adding file: %s' % fileName
-						fullPathAndFileName = self.envDict['ANALYSIS_DIR'] + '/plugin_out/downloads/' + fileName
-						if os.path.isfile(fullPathAndFileName): # need to make sure sym links exist
-							storedName = zipSubdir + '/' + fileName
-							tar.add(fullPathAndFileName, arcname=storedName)
-					else:
-						htmlOut.write('<a href="../downloads/%s">%s</a><br>'%(fileName, fileName))
-				tar.close()
+				tarName = tarfile.open(compressedFileName, "w:bz2")
+				tarName.dereference = True
+				htmlFiles = self.compressFiles(tarName, zipSubdir, htmlOut)
+				tarName.close()
 			else:
 				compressedFileName = zipSubdir + '.zip'
-				downloads = zipfile.ZipFile(compressedFileName, "w", zipfile.ZIP_DEFLATED, True) # note we are enabling zip64 extensions here
-				for fileName in os.listdir(self.envDict['ANALYSIS_DIR'] + '/plugin_out/downloads'):
-					zipme = False
-					if (zipBAM and fileName[-4:] == '.bam') or (zipBAM and fileName[-4:] == '.bai') or (zipSFF and fileName[-4:] == '.sff') or (zipFASTQ and fileName[-6:] == '.fastq') or (zipVCF and fileName[-4:] == '.vcf') or (zipXLS and fileName[-4:] == '.xls'):
-						zipme = True
-					if zipme:
-						print 'ZIP: Adding file: %s' % fileName
-						fullPathAndFileName = self.envDict['ANALYSIS_DIR'] + '/plugin_out/downloads/' + fileName
-						if os.path.isfile(fullPathAndFileName): # need to make sure sym links exist
-							# if os.path.getsize(fullPathAndFileName) > 1024*1024*1024*2 and fileName[-4:] == '.bam': # store large BAM files (>2G), don't try and compress
-							if os.path.getsize(fullPathAndFileName) > 1024*1024*1024*2: # store large files (>2G), don't try and compress
-								downloads.write(fullPathAndFileName, zipSubdir + '/' + fileName, zipfile.ZIP_STORED)
-							else:
-								downloads.write(fullPathAndFileName, zipSubdir + '/' + fileName, zipfile.ZIP_DEFLATED)
-					else:
-						htmlOut.write('<a href="../downloads/%s">%s</a><br>'%(fileName, fileName))
-				downloads.close()
+				zipName = zipfile.ZipFile(compressedFileName, "w", zipfile.ZIP_DEFLATED, True) # note we are enabling zip64 extensions here
+				htmlFiles = self.compressFiles(zipName, zipSubdir, htmlOut)
+				zipName.close()
 			print 'Finished writing to compressed file.'
 
-			#htmlOut.write('<a href="/report/%s/getZip">Zipped Output</a>'%self.envDict['RUNINFO__PK'])
-			htmlOut.write('<a href="%s">Compressed Files</a><br>'%compressedFileName)
+			htmlOut.write('<a href="%s" download><b>Compressed Files</b></a><br>\n'%compressedFileName)
+			htmlOut.write('<div style="height:30px"><button type="button" class="btn" id="showFiles">Show Contents of Compressed File</button></div>\n')
+			htmlOut.write(htmlFiles)
 
-			#if (vcCreate):
-				#for vcName in vcNames:
-					#htmlOut.write('<br/><a href="%s.vcf">%s.vcf</a>'%(vcName, vcName))
-			
-			# Remove leftovers.
-			# rmCmd = Popen(['rm', '-f', '%s/plugin_out/downloads/*'%self.envDict['ANALYSIS_DIR']], stdout=PIPE, env=self.envDict)
-			# rmOut, rmErr = rmCmd.communicate()
 		
 		# Create file links.
 		else:
-			for datum in sorted(os.listdir("%s/plugin_out/downloads"%self.envDict['ANALYSIS_DIR'])):
-				htmlOut.write('<a href="../downloads/%s">%s</a><br>'%(datum, datum))
-		
+			for datum in sorted(os.listdir(self.PLUGIN_DIR)):
+				print "DEBUG: File: %s" % datum
+				if(datum.endswith('.bam') or datum.endswith('.bai') or datum.endswith('.sff') or datum.endswith('.fastq') or datum.endswith('.vcf') or datum.endswith('.xls')):
+					#at this time the download attribute with the filename specification is only supported by a few browsers
+					# if at some point it is supported fully, the process will be much easier and the download link itsself can be used to rename the file
+					htmlOut.write('<a href="%s/%s" download>%s</a><br>\n'%(self.envDict['TSP_URLPATH_PLUGIN_DIR'], datum, datum)) 
+		htmlOut.write('<div style="height:50px"><button type="button" class="btn" id="showParams">Show Parameters</button>\n<div id="params">\n')
+		htmlOut.write("<h3>Selected Parameters:</h3>\n<pre>Include BAM: %s &nbsp;Archive: %s\n" % (self.bamCreate, self.zipBAM))
+		htmlOut.write("Include VCF: %s &nbsp;Archive: %s\n" % (self.vcfCreate, self.zipVCF))
+		htmlOut.write("Include XLS: %s &nbsp;Archive: %s\n" % (self.xlsCreate, self.zipXLS))
+		htmlOut.write("Include SFF: %s &nbsp;Archive: %s\n" % (self.sffCreate, self.zipSFF))
+		htmlOut.write("Include FASTQ: %s Archive: %s\n</pre>\n" % (self.fastqCreate, self.zipFASTQ))
+
+		htmlOut.write('<h3>Naming Parameters:</h3>\n<pre>Delimiter: "%s"</pre>\n'%self.delim)
+		for sel in self.selections:
+			if sel != '':
+				htmlOut.write('<pre>"%s"</pre>\n'%sel)
+		htmlOut.write('</div>')
 		htmlOut.close()		
 		return True
 

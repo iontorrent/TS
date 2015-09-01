@@ -225,7 +225,16 @@ $(document).ready(function() {
                         },
                         pcrPlateRow : {
                             type : "string",
-                        }                        
+                        },
+                        biopsyDays : {
+                        	type : "number",
+                        },
+                        coupleId : {
+                        	type : "string",
+                        },
+                        embryoId : {
+                        	type : "string",
+                        },
     				}
                 }
             },
@@ -323,6 +332,18 @@ function getColumns() {
      } , {
          field: "cellularityPct",
          title: "Cellularity %",       
+         sortable: true,
+     } , {
+         field: "biopsyDays",
+         title: "Biopsy Days",       
+         sortable: true,
+     } , {
+         field: "coupleId",
+         title: "Couple ID",       
+         sortable: true,
+     } , {
+         field: "embryoId",
+         title: "Embryo ID",       
          sortable: true,
      }];
 

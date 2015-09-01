@@ -5,6 +5,7 @@
     {% load static %}
     <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
     <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_analysis_params_section.js"></script>
 {% endblock extra_head %}
 
 {% block main-title %}{% endblock main-title %}
@@ -40,7 +41,10 @@
     </div>
 </div>
 
-{% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
+{% include "rundb/plan/page_plan/page_plan_analysis_params_section.html" %}
+{% if helper.getApplProduct.isReferenceSelectionSupported %}
+    {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
+{% endif %}
 
 <div id="noteerror" style="color:red;"></div>
         

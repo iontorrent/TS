@@ -10,7 +10,7 @@
   script: "files/gridengine.preseed {{ groups.headnode[0] }}"
   
 - name: Install GridEngine APT packages
-  action: apt pkg={{item}} state=latest force=yes
+  apt: pkg={{item}} state=present force=yes
   with_items:
     - gridengine-master
     - gridengine-client
@@ -39,11 +39,11 @@
                 mode=0644
 
 - name: Install drmaa package - libdrmaa1.0
-  action: apt pkg=libdrmaa1.0 state=latest force=yes
+  apt: pkg=libdrmaa1.0 state=present force=yes
   when: ansible_distribution_release == "lucid"
   
 - name: Install drmaa package - gridengine-drmaa-dev
-  action: apt pkg=gridengine-drmaa-dev state=latest force=yes
+  apt: pkg=gridengine-drmaa-dev state=present force=yes
   when: ansible_distribution_release == "trusty"
   
 - name: Make sure gridengine-master is running by restarting it
@@ -99,6 +99,13 @@
 # plugin.q queue gets special settings
 - name: upload plugin.q configuration file
   template: src=plugin.q.j2 dest=/tmp/plugin.q.conf
+  
+# Raptor A hardware has 40GB RAM; needs modified plugin.q memory limits
+- name: S5 TSVM RAM = 40GB limit
+  when: "{{S5_virtual_guest|bool}}"
+  set_fact:
+    S_VMEM_LIMIT: 40GB
+    H_VMEM_LIMIT: 40GB
   
 - name: setup queues
   shell: bash -lc 'qconf -Aq /tmp/{{item['name']}}.conf; rm /tmp/{{item['name']}}.conf'

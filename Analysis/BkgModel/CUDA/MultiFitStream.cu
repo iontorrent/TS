@@ -640,7 +640,7 @@ void SimpleMultiFitStream::requestResources(
   size_t hostAlloc = max( getMaxHostMem(global_max_flow_key, global_max_flow_block_size),
                           getMaxHostMem(0,                   global_max_flow_block_size) );
 
-  cout << "CUDA MultiFitStream active and resources requested dev = "<< devAlloc/(1024.0*1024) << "MB ("<< (int)(deviceFraction*100)<<"%) host = " << hostAlloc/(1024.0*1024) << "MB" << endl;
+  cout << "CUDA: MultiFitStream active and resources requested dev = "<< devAlloc/(1024.0*1024) << "MB ("<< (int)(deviceFraction*100)<<"%) host = " << hostAlloc/(1024.0*1024) << "MB" << endl;
   cudaResourcePool::requestDeviceMemory(devAlloc);
   cudaResourcePool::requestHostMemory(hostAlloc);
 
@@ -749,7 +749,7 @@ void SimpleMultiFitStream::setL1SettingPartialD(int type) // 0:sm=l1, 1:sm>l1, 2
 void SimpleMultiFitStream::printSettings()
 {
 
-  cout << "CUDA MultiFitStream SETTINGS: blocksize = " << _bpb << " l1setting = " ;
+  cout << "CUDA: MultiFitStream SETTINGS: blocksize = " << _bpb << " l1setting = " ;
   switch(_l1type){
     case 0:
       cout << "cudaFuncCachePreferEqual" << endl;;
@@ -763,7 +763,7 @@ void SimpleMultiFitStream::printSettings()
     default:
      cout << " GPU specific default" << endl;;
   }
-  cout << "CUDA PartialDerivative SETTINGS: blocksize = " << _bpbPartialD << " l1setting = ";
+  cout << "CUDA: PartialDerivative SETTINGS: blocksize = " << _bpbPartialD << " l1setting = ";
   switch(_l1typePartialD){
     case 0:
       cout << "cudaFuncCachePreferEqual" << endl;;

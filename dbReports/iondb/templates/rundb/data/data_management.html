@@ -88,10 +88,22 @@
                 <tr class="{% cycle 'row1' 'row2' %}">
                     <td>{{ entry.type }}</td>
                     <td>{{ entry.get_auto_action_display }}</td>
-                    <td>{{ entry.auto_trigger_age }}</td>
-                    <td>{{ entry.auto_trigger_usage }}</td>
-                    <td>{{ entry.backup_directory }}</td>
-                    <td>{% if entry.mounted %} Mounted {% else %} Not Mounted {% endif %}</td>
+                    {% if entry.auto_action == "ARC" %}
+                        <td>{{ entry.auto_trigger_age }}</td>
+                        <td>--</td>
+                        <td>{{ entry.backup_directory }}</td>
+                        {% if entry.mounted %}<td>Mounted</td>{% else %}<td class="text-error">Not Mounted</td>{% endif %}
+                    {% elif entry.auto_action == "DEL" %}
+                        <td>{{ entry.auto_trigger_age }}</td>
+                        <td>{{ entry.auto_trigger_usage }}</td>
+                        <td>--</td>
+                        <td>--</td>
+                    {% elif entry.auto_action == "OFF" %}
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    {% endif %}
                 </tr>
             {% endfor %}
         </tbody>
@@ -113,9 +125,6 @@
                     <th>Used Space</th>
                     <th>Size (GB)</th>
                     <th>Free (GB)</th>
-                    <th>Raw Data (GB)</th>
-                    <th>Reports (GB)</th>
-                    <th>Other (GB)</th>
                 </tr>
             </thead>
             <tbody>
@@ -127,9 +136,6 @@
                         <td>{{ v.percentfull|floatformat:1 }}%</td>
                         <td>{{ v.disksize|floatformat:1 }}</td>
                         <td>{{ v.diskfree|floatformat:1 }}</td>
-                        <td>{{ v.rawused|floatformat:1 }}</td>
-                        <td>{{ v.reportsused|floatformat:1 }}</td>
-                        <td>{{ v.other|floatformat:1 }}</td>
                     </tr>
                 {% endfor %}
                 {% for key,v in archive_stats.items %}
@@ -139,9 +145,6 @@
                         <td>{{ v.percentfull|floatformat:1 }}%</td>
                         <td>{{ v.disksize|floatformat:1 }}</td>
                         <td>{{ v.diskfree|floatformat:1 }}</td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
                     </tr>
                 {% endfor %}<br />
             </tbody>

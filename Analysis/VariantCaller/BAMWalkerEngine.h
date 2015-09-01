@@ -211,8 +211,10 @@ private:
   int                       last_processed_chr_;    //! Reads up to this chr+pos are guaranteed to be processed
   long int                  last_processed_pos_;    //! Reads up to this chr+pos are guaranteed to be processed
   bool                      has_more_alignments_;   //! Are there still more reads in BAM?
-
+  bool                      has_more_positions_;    //! Are there still more positions within the target region to process?
+public:
   Alignment *               alignments_first_;      //! First in a list of all alignments in memory
+private:
   Alignment *               alignments_last_;       //! Last in a list of all alignments in memory
   int                       read_counter_;          //! Total # of reads retrieved so far
 

@@ -5,6 +5,7 @@
 
 using namespace std;
 
+void ApplySuperMixedFilter(Mask& mask, std::vector<RegionalizedData *>& sliced_chip);
 void ApplyClonalFilter(Mask& mask, std::vector<RegionalizedData *>& sliced_chip,  const deque<float>& ppf, const deque<float>& ssq, const PolyclonalFilterOpts & opts);
 void UpdateMask(Mask& mask, std::vector<RegionalizedData *>& sliced_chip);
 void GetFilterTrainingSample(deque<int>& row, deque<int>& col, deque<float>& ppf, deque<float>& ssq, deque<float>& nrm, std::vector<RegionalizedData *>& sliced_chip);
@@ -56,7 +57,13 @@ static void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vec
   GetFilterTrainingSample (row, col, ppf, ssq, nrm, sliced_chip);
   DumpPPFSSQ(results_folder, row, col, ppf, ssq, nrm);
   DumpPPFSSQtoH5(results_folder, sliced_chip);
-  ApplyClonalFilter (mask, sliced_chip, ppf, ssq, opts);
+  if (opts.filter_extreme_ppf_only){
+    std::cout << "************ Filtering for extreme ppf at flow 79" << std::endl;
+    ApplySuperMixedFilter(mask, sliced_chip);
+  }
+  else {
+    ApplyClonalFilter (mask, sliced_chip, ppf, ssq, opts);
+  } 
   UpdateMask(mask, sliced_chip);
 }
 
@@ -94,7 +101,7 @@ void ApplyClonalFilter (Mask& mask, std::vector<RegionalizedData *>& sliced_chip
 {
   clonal_filter filter;
   filter_counts counts;
-  make_filter (filter, counts, ppf, ssq, false, opts); // I dislike verbosity on trunk
+  make_filter (filter, counts, ppf, ssq, opts);
 
   unsigned int numRegions = sliced_chip.size();
   for (unsigned int rgn=0; rgn<numRegions; ++rgn)
@@ -118,6 +125,35 @@ void ApplyClonalFilter (Mask& mask, std::vector<RegionalizedData *>& sliced_chip
     }
   }
 }
+
+void ApplySuperMixedFilter (Mask& mask, std::vector<RegionalizedData *>& sliced_chip)
+{
+  unsigned int numRegions = sliced_chip.size();
+  for (unsigned int rgn=0; rgn<numRegions; ++rgn)
+  {
+    RegionalizedData& local_patch     = *sliced_chip[rgn];
+    int       numWells  = local_patch.GetNumLiveBeads();
+    int       rowOffset = local_patch.region->row;
+    int       colOffset = local_patch.region->col;
+
+    for (int well=0; well<numWells; ++well)
+    {
+      BeadParams& bead  = local_patch.GetParams (well);
+      bead_state&  state = *bead.my_state;
+
+      int row = rowOffset + bead.y;
+      int col = colOffset + bead.x;
+      if(mask.Match(col, row, MaskLib))
+        if (state.ppf < mixed_ppf_cutoff())
+          state.clonal_read = true;
+        else
+          state.clonal_read = false;
+      else if(mask.Match(col, row, MaskTF))
+        state.clonal_read = true;
+    }
+  }
+}
+
 
 void GetFilterTrainingSample (deque<int>& row, deque<int>& col, deque<float>& ppf, deque<float>& ssq, deque<float>& nrm, std::vector<RegionalizedData *>& sliced_chip)
 {

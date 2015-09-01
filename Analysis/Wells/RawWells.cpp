@@ -318,8 +318,9 @@ void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int 
   mIsLegacy = false;
   WELL_NOT_LOADED = -1;
   WELL_NOT_SUBSET = -2;
-  mWellChunkSize = 50;
-  mFlowChunkSize = 60;
+  mWellChunkSizeRow  = 50;
+  mWellChunkSizeCol  = 50;
+  mWellChunkSizeFlow = 60;
   mStepSize = 100;
   mCurrentRegionRow = mCurrentRegionCol = 0;
   mCurrentRow = 0;
@@ -493,24 +494,24 @@ size_t RawWells::GetNextRegionData()
   bool reload = false;
   if ( mCurrentCol == 0 && !mIsLegacy )
   {
-    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow,0ul ), mWellChunkSize ),
-               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol,0ul ), mWellChunkSize ),
+    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow,0ul ), mWellChunkSizeRow ),
+               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol,0ul ), mWellChunkSizeCol ),
                0, mFlows );
     ReadWells();
   }
-  if ( mCurrentCol >= mWellChunkSize || mCurrentRegionCol + mCurrentCol >= mCols )
+  if ( mCurrentCol >= mWellChunkSizeCol || mCurrentRegionCol + mCurrentCol >= mCols )
   {
     mCurrentCol = 0;
     mCurrentRow++;
-    if ( mCurrentRow >= mWellChunkSize || mCurrentRegionRow + mCurrentRow >= mRows )
+    if ( mCurrentRow >= mWellChunkSizeRow || mCurrentRegionRow + mCurrentRow >= mRows )
     {
       reload = true;
       mCurrentRow = 0;
-      mCurrentRegionCol += mWellChunkSize;
+      mCurrentRegionCol += mWellChunkSizeCol;
       if ( mCurrentRegionCol >= mCols )
       {
         mCurrentRegionCol = 0;
-        mCurrentRegionRow += mWellChunkSize;
+        mCurrentRegionRow += mWellChunkSizeRow;
       }
     }
   }
@@ -519,8 +520,8 @@ size_t RawWells::GetNextRegionData()
   size_t col = mCurrentRegionCol + mCurrentCol;
   if ( reload && mCurrentRegionRow < mRows && !InChunk ( row,col ) )
   {
-    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow,0ul ), mWellChunkSize ),
-               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol,0ul ), mWellChunkSize ),
+    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow,0ul ), mWellChunkSizeRow ),
+               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol,0ul ), mWellChunkSizeCol ),
                0, mFlows );
     ReadWells();
   }
@@ -772,9 +773,9 @@ void RawWells::OpenWellsForWrite()
 
   // Setup the chunking values, this is important for performance
   hsize_t cdims[3];
-  cdims[0] = std::min ( mWellChunkSize, mRows );
-  cdims[1] = std::min ( mWellChunkSize, mCols );
-  cdims[2] = std::min ( mFlowChunkSize, mFlows );
+  cdims[0] = std::min ( mWellChunkSizeRow, mRows );
+  cdims[1] = std::min ( mWellChunkSizeCol, mCols );
+  cdims[2] = std::min ( mWellChunkSizeFlow, mFlows );
   hid_t plist;
   plist = H5Pcreate ( H5P_DATASET_CREATE );
   assert ( ( cdims[0]>0 ) && ( cdims[1] >0 ) && ( cdims[2]>0 ) );
@@ -1327,6 +1328,19 @@ void RawWells::OpenWellsToRead()
     mChunk.flowDepth = mFlows;
   }
 
+  // Read the chunk size from the wells file creation property list
+  hid_t create_plist = H5Dget_create_plist( mWells.mDataset );
+  hsize_t cdims[3]; // We checked above that the rank is 3.
+  int rval = H5Pget_chunk ( create_plist, 3, cdims );
+  if (rval < 0) {
+    ION_WARN ( "RawWells::OpenWellsToRead: Unable to read wells file chunk size." );
+  } else {
+    mWellChunkSizeRow  = cdims[0];
+    mWellChunkSizeCol  = cdims[1];
+    mWellChunkSizeFlow = cdims[2];
+  }
+  H5Pclose( create_plist );
+
   mWellsCopies2.resize(mRows * mCols, 1.0);
   if(mSaveAsUShort && mConvertWithCopies)
   {
@@ -1452,12 +1466,12 @@ void RawWells::ReadWells()
     return;
   }
   vector<float> inputBuffer; // 100x100
-  uint64_t stepSize = mWellChunkSize;
-  inputBuffer.resize ( stepSize*stepSize*mChunk.flowDepth,0.0f );
+  uint64_t stepSize = (uint64_t)mWellChunkSizeRow*(uint64_t)mWellChunkSizeCol;
+  inputBuffer.resize ( stepSize*mChunk.flowDepth,0.0f );
   // Assume whole chip if region if region isn't set
   //  int currentWellStart = 0, currentWellEnd = min(stepSize,NumWells());
-  uint32_t currentRowStart = 0, currentRowEnd = min ( stepSize, ( uint64_t ) mRows );
-  uint32_t currentColStart = 0, currentColEnd = min ( stepSize, ( uint64_t ) mCols );
+  uint32_t currentRowStart = 0, currentRowEnd = min ( mWellChunkSizeRow, mRows );
+  uint32_t currentColStart = 0, currentColEnd = min ( mWellChunkSizeCol, mCols );
 
   size_t wellsInSubset = 0;
   for ( size_t i = 0; i < mIndexes.size(); i++ )
@@ -1470,14 +1484,14 @@ void RawWells::ReadWells()
 
   mFlowData.resize ( ( uint64_t ) wellsInSubset * mChunk.flowDepth );
   fill ( mFlowData.begin(), mFlowData.end(), -1.0f );
-  for ( currentRowStart = mChunk.rowStart, currentRowEnd = mChunk.rowStart + min ( ( size_t ) stepSize, mChunk.rowHeight );
+  for ( currentRowStart = mChunk.rowStart, currentRowEnd = mChunk.rowStart + min ( mWellChunkSizeRow, mChunk.rowHeight );
         currentRowStart < mRows && currentRowStart < mChunk.rowStart + mChunk.rowHeight;
-        currentRowStart = currentRowEnd, currentRowEnd += stepSize )
+        currentRowStart = currentRowEnd, currentRowEnd += mWellChunkSizeRow )
   {
     currentRowEnd = min ( ( uint32_t ) mRows, currentRowEnd );
-    for ( currentColStart = mChunk.colStart, currentColEnd = mChunk.colStart + min ( ( size_t ) stepSize, mChunk.colWidth );
+    for ( currentColStart = mChunk.colStart, currentColEnd = mChunk.colStart + min ( mWellChunkSizeCol, mChunk.colWidth );
           currentColStart < mCols && currentColStart < mChunk.colStart + mChunk.colWidth;
-          currentColStart = currentColEnd, currentColEnd += stepSize )
+          currentColStart = currentColEnd, currentColEnd += mWellChunkSizeCol )
     {
       currentColEnd = min ( ( uint32_t ) mCols, currentColEnd );
       // Don't go to disk unless we actually have a well to load.

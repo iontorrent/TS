@@ -3,6 +3,7 @@
 
 - name:
   include: '../../../globals.yml'
+  
 #-----------------------------------------------------------------------------
 # On each compute node, we need to replicate the Ion Repository configured
 # on the head node.
@@ -49,6 +50,27 @@
             value='core.%e.%p.%h.%t'
     
 #-----------------------------------------------------------------------------
+# Ensure grub does not hang at the grub menu on reboot after an error
+#-----------------------------------------------------------------------------
+- name: Make grub rebootable after shutdown
+  lineinfile: dest=/etc/default/grub
+               insertafter=EOF
+               line='GRUB_RECORDFAIL_TIMEOUT=$GRUB_TIMEOUT'
+               regexp='GRUB_RECORDFAIL_TIMEOUT.*'
+  notify: update grub
+  
+#-----------------------------------------------------------------------------
+# Enable a console for S5 only
+#-----------------------------------------------------------------------------
+- name: GRUB console enabled
+  lineinfile: dest=/etc/default/grub
+                insertafter=EOF
+                line='GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"'
+                regexp='GRUB_CMDLINE_LINUX=.*'
+  when: S5_virtual_guest|bool == True
+  notify: update grub
+
+#-----------------------------------------------------------------------------
 #NOTE: required: ionian user be created prior to initial installation of ion-dbreports
 # initialize_system_users
 
@@ -57,8 +79,9 @@
 - name: Add group ionian
   group: name=ionian gid=1100 state=present system=yes
   
+# NOTE: non_unique was added as result of TS-11113
 - name: Initialize ionian user
-  user: name=ionian uid=1100 state=present system=yes group=ionian
+  user: name=ionian uid=1100 state=present system=yes group=ionian non_unique=yes
   
 # Initialize ionadmin
 # This shell method is because of having to use this password creation method
@@ -150,16 +173,5 @@
                 line='\1          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
-#-----------------------------------------------------------------------------
-# Create/update the tsconf.log file
-#-----------------------------------------------------------------------------
-- name: Get version of ion-tsconfig
-  shell: dpkg -l ion-tsconfig | tail -1 | awk '{print $3}'
-  register: tsconfig_version
-  
-- name: Assures /etc/torrentserver dir exists
-  file: path=/etc/torrentserver state=directory mode=0755 owner=root group=root
-  
-- name: Create/Update tsconf.log
-  template: src=tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+
   

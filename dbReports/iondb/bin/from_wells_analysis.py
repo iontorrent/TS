@@ -230,12 +230,12 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if os.path.exists(os.path.join(src_dir, 'onboard_results', 'sigproc_results')):
-        test_dir = os.path.join(src_dir, 'onboard_results', 'sigproc_results')
+        os.symlink(os.path.join(src_dir, 'onboard_results', 'sigproc_results'),os.path.join(src_dir, 'sigproc_results'))
         is_fullchip = True
     else:
-        test_dir = os.path.join(src_dir, 'sigproc_results')
         is_fullchip = False
 
+    test_dir = os.path.join(src_dir, 'sigproc_results')
     #TODO: this test modified to support Proton
 
     if is_fullchip:

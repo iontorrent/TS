@@ -7,14 +7,14 @@
 # Install system packages for igv
 #-----------------------------------------------------------------------------
 - name: Install tomcat server - lucid
-  apt: name={{ item }} state=latest force=yes
+  apt: name={{ item }} state=present force=yes
   when: ansible_distribution_release == "lucid"
   with_items:
     - tomcat6
     - tomcat6-admin
   
 - name: Install tomcat server - trusty
-  apt: name={{ item }} state=latest force=yes
+  apt: name={{ item }} state=present force=yes
   when: ansible_distribution_release == "trusty"
   with_items:
     - tomcat7
@@ -24,7 +24,7 @@
 # Install Ion Torrent Packages for igv
 #-----------------------------------------------------------------------------
 - name: Install packages for igv node
-  apt: name={{ item }} state=latest force=yes
+  apt: name={{ item }} state=present force=yes
   with_items:
     - ion-jk
     - ion-igv

@@ -76,7 +76,6 @@ if __name__=="__main__":
         is_composite = True
 
     # Speedup Flags
-    do_composite_alignment          = False and is_composite
     do_unfiltered_processing        = True and not is_composite
     do_merge_all_barcodes           = True and not is_composite
     do_ionstats_spatial_accounting  = False
@@ -212,19 +211,6 @@ if __name__=="__main__":
 
 
         try:
-            RECALIBRATION_RESULTS = os.path.join(env['BASECALLER_RESULTS'],"recalibration")
-            if not os.path.isdir(RECALIBRATION_RESULTS):
-                os.makedirs(RECALIBRATION_RESULTS)            
-            cmd = "calibrate --hpmodelMerge"
-            printtime("DEBUG: Calling '%s':" % cmd)
-            ret = subprocess.call(cmd,shell=True)
-        except:
-            traceback.print_exc()
-            printtime("ERROR: Merge Basecaller Recalibration Results failed")
-
-
-
-        try:
             printtime("INFO: merging rawtf.basecaller.bam")
             block_bam_list = [os.path.join(adir, env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam') for adir in dirs]
             block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
@@ -293,15 +279,12 @@ if __name__=="__main__":
         if is_composite or not do_ionstats_spatial_accounting:
             basecaller_meta_information = None
 
-        if do_composite_alignment or not is_composite:
+        set_result_status('Alignment')
 
-            set_result_status('Alignment')
+        do_ionstats = True
+        do_indexing = True
 
-            do_ionstats = True
-            do_indexing = True
-
-            try:
-                alignment.process_datasets(
+        alignment.process_datasets(
                     dirs,
                     env['alignmentArgs'],
                     env['ionstatsArgs'],
@@ -316,12 +299,57 @@ if __name__=="__main__":
                     env['mark_duplicates'],
                     do_indexing,
                     env['barcodeInfo'])
-#                add_status("Alignment", 0)
-            except:
-                traceback.print_exc()
-#                add_status("Alignment", 1)
 
-        else: # is_composite and not do_composite_alignment:
+        '''
+
+    ### OLD per block processing
+    if args.do_alignment:
+
+        try:
+            c = open(os.path.join(env['BASECALLER_RESULTS'], "BaseCaller.json"),'r')
+            basecaller_meta_information = json.load(c)
+            c.close()
+        except:
+            traceback.print_exc()
+            raise
+
+        basecaller_datasets = blockprocessing.get_datasets_basecaller(env['BASECALLER_RESULTS'])
+
+        set_result_status('Alignment')
+
+        if isBlock:
+            do_indexing=False
+            do_ionstats=True
+        else:
+            do_indexing=True
+            do_ionstats=True
+
+        try:
+            blocks=[]
+            alignment.process_datasets(
+                blocks,
+                env['alignmentArgs'],
+                env['ionstatsArgs'],
+                env['BASECALLER_RESULTS'],
+                basecaller_meta_information if do_ionstats_spatial_accounting else None,
+                env['libraryKey'],
+                graph_max_x,
+                basecaller_datasets,
+                env['ALIGNMENT_RESULTS'],
+                env['realign'],
+                do_ionstats,
+                env['mark_duplicates'],
+                do_indexing,
+                env['barcodeInfo'])
+            add_status("Alignment", 0)
+        except:
+            traceback.print_exc()
+            add_status("Alignment", 1)
+            printtime ("ERROR: Alignment failed")
+            sys.exit(1)
+    ### OLD per block processing
+
+        else:
 
             set_result_status('Merge Bam Files')
 
@@ -338,7 +366,7 @@ if __name__=="__main__":
             #     ionstats_basecaller.json
             #     ionstats_alignment.json
             # compare with merged results
-            '''
+            # '' '
             try:
                 set_result_status('Create Statistics')
                 ionstats.create_ionstats(
@@ -352,7 +380,7 @@ if __name__=="__main__":
                     do_ionstats_spatial_accounting)
             except:
                 traceback.print_exc()
-            '''
+            # '' '
 
 
             # generates:
@@ -373,7 +401,7 @@ if __name__=="__main__":
                     graph_max_x)
             except:
                 traceback.print_exc()
-
+        '''
 
         try:
 

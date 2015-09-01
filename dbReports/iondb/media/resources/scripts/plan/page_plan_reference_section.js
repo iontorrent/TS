@@ -35,6 +35,7 @@
             //console.log("page_plan_reference_section.js - handle_isSampleRefInfoPerBarcodeSample() isCreate=", isCreate);
               
             //beware of hotSpot column which may not be shown for an application
+            var isReferenceSupported = $('input[id=isReferenceSupported]').val();
             var isTargetRegionBEDFileSupported = $('input[id=isTargetRegionBEDFileSupported]').val();
             var isHotspotRegionBEDFileSupported = $('input[id=isHotspotRegionBEDFileSupported]').val();
             var isTargetRegionBEDFileBySampleSupported = $('input[id=isTargetRegionBEDFileBySampleSupported]').val();
@@ -43,7 +44,7 @@
  			//beware of switching chevrons after the barcodedSamples' selections have been set
                 
             if (isChecked) {
-                toggleSampleReferenceColumnEnablements(isChecked, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported);
+                toggleSampleReferenceColumnEnablements(isChecked, isReferenceSupported, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported);
                     
                 //when editing or copying a plan, if it is not a barcoded plan, we need to populate sample ref info with defaults
                 if (isCreate == "True" || isInit == false || (isCreate == "False" && selectedBarcodeKit == "") ) {
@@ -60,9 +61,9 @@
                 }
             }
             else {                
-                showSampleReferenceColumns(isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported);
+                showSampleReferenceColumns(isReferenceSupported, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported);
 
-                toggleSampleReferenceColumnEnablements(isChecked, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported);
+                toggleSampleReferenceColumnEnablements(isChecked, isReferenceSupported, isTargetRegionBEDFileSupported, isHotspotRegionBEDFileSupported, isTargetRegionBEDFileBySampleSupported, isHotSpotBEDFileBySampleSupported);
 
             }
         }

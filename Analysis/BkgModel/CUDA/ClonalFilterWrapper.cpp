@@ -78,7 +78,7 @@ void ClonalFilterWrapper::ApplyClonalFilter (const PolyclonalFilterOpts & opts)
 {
   clonal_filter filter;
   filter_counts counts;
-  make_filter (filter, counts, ppf, ssq, false, opts); // I dislike verbosity on trunk
+  make_filter (filter, counts, ppf, ssq, opts);
 
   ImgRegParams irp = pBeadStateMask->getParams();
   pClonalFilterCube->setRWStrideZ();

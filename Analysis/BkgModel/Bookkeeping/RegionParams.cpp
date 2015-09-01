@@ -142,7 +142,7 @@ void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
 
   fit_taue = false;
   use_alternative_etbR_equation = false; 
-  use_log_taub = false;
+
 
   tshift    = 3.5f;
   nuc_shape.sigma = 8.5f; // increase for super slow project
@@ -211,7 +211,7 @@ void reg_params::SetStandardLow(float t0_start, int flow_block_size)
 
   fit_taue = false;
   use_alternative_etbR_equation = false; 
-  use_log_taub = false;
+
 
   tshift    = -1.5f;
   nuc_shape.sigma  = 0.4f;
@@ -354,7 +354,7 @@ void reg_params::SetTshift(float _tshift){
 
 //@TODO: can this be exported to a sensible JSON file?
 void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start, 
-        float *dntp_concentration_in_uM, bool _fit_taue, bool _use_alternative_etbR_equation, bool _use_log_taub,
+        float *dntp_concentration_in_uM, bool _fit_taue, bool _use_alternative_etbR_equation,
         int _hydrogenModelType, int flow_block_size)
 {
   // per-region parameters
@@ -372,7 +372,6 @@ void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start,
 
   fit_taue = _fit_taue;
   use_alternative_etbR_equation = _use_alternative_etbR_equation;
-  use_log_taub = _use_log_taub;
 
   hydrogenModelType = _hydrogenModelType;
 

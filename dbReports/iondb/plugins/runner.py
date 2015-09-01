@@ -166,8 +166,13 @@ class PluginRunner():
             else:
                 barcodeSampleInfo = BarcodeSampleInfo(start_json['runinfo']['pk'])
             barcode_json_fname = os.path.join(start_json['runinfo']['results_dir'], 'barcodes.json')
+            
             with open(barcode_json_fname, "w") as fp:
-                json.dump(barcodeSampleInfo.data(), fp, indent=2,cls=JSONEncoder)
+                json.dump(barcodeSampleInfo.data(start_json), fp, indent=2,cls=JSONEncoder)
+            
+        except IOError as e:
+            logger = logging.getLogger(__name__)
+            logger.error(e)
         except:
             logger = logging.getLogger(__name__)
             logger.exception("Failed to write barcodes.json")

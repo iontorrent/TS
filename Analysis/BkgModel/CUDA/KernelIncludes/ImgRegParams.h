@@ -24,8 +24,11 @@
  *
  */
 
-class ImgRegParams
+class ImgRegParamsConst
 {
+
+protected:
+
   size_t imgW;
   size_t imgH;
   size_t regW;
@@ -34,50 +37,13 @@ class ImgRegParams
 public:
 
 
-  __host__ __device__
-  void init(size_t imgW, size_t imgH, size_t regW,  size_t regH)
-  {
-    this->imgW = (imgW<1)?1:imgW;
-    this->imgH = (imgH<1)?1:imgH;
-    this->regW = (regW<1)?1:regW;
-    this->regH = (regH<1)?1:regH;
-
-  }
 
   __host__ __device__
-  void print()
+  void print() const
   {
     printf( "img %lu, %lu  reg %lu ,%lu numregs: %lu\n", imgW, imgH, regW, regH, getNumRegions());
   }
 
-  __host__
-  static ImgRegParams readImgRegParamsFromFile(const char * filename)
-  {
-    std::ifstream myFile (filename, std::ios::binary);
-
-    printf("reading GPU data for new GPU fitting pipeline from file: %s\n", filename);
-
-    if(!myFile){
-      printf("file %s could not be opened!\n", filename);
-      exit (-1);
-    }
-
-    ImgRegParams irtmp;
-    printf("%s: reading image params.\n", filename);
-    myFile.read((char*)&irtmp,sizeof(ImgRegParams));
-    if (myFile){
-      printf("%s: ImgRegParams read successfully.\n", filename);
-      irtmp.print();
-    }
-    else {
-      printf("%s: ImgregParams could not be read.\n", filename);
-      exit(-1);
-    }
-
-    myFile.close();
-
-    return irtmp;
-  }
 
   // Dimensions/Strides
   __host__ __device__ inline
@@ -114,15 +80,6 @@ public:
   __host__ __device__ inline
   size_t getGridDimY() const { return ((imgH +regH -1)/regH); }
 
-  //returns a ImgReg Params object that represents an image of the grid size
-  //with a reg size of imgRegP(gridX, gridY,1, 1)
-  //optional a regW > 1 and a regH > 1 can be provided to create an image object with the same number
-  //and order of regions as the original ImgRegParams but with new region dimensions
-  //imgRegP(gridX*regW, gridY*regH, regW, regH)
-  //can be used to quickly generate buffers layouts with fixed size per region buffers. e.g. background trace per region:
-  // RawImagP.getGridParam(numCompressedFrames) creates a layout for numCompressedFrames per region.
-  __host__ __device__ inline
-  ImgRegParams getGridParam(size_t regW = 1, size_t regH = 1) const { ImgRegParams ip; ip.init(getGridDimX()*regW, getGridDimY()*regH, regW, regH); return ip; }
 
   //returns number of regions in grid GridDimx*GridDimY
   __host__ __device__ inline
@@ -140,6 +97,40 @@ public:
   //return row in which the region with region Id regId is in
   __host__ __device__ inline
   size_t getRegRow(size_t regId) const { return regId/getGridDimX(); }
+
+  //returns the image X coordinate of the first region column
+  __host__ __device__ inline
+  size_t getRegBaseX(size_t regId) const {  return getRegCol(regId)*getRegW();}
+  //returns the image Y coordinate of the first region row
+  __host__ __device__ inline
+  size_t getRegBaseY(size_t regId) const {  return getRegRow(regId)*getRegH();}
+  //returns the image X coordinate of the first column after regId in x direction (upper bound for iterating over region in x)
+  __host__ __device__ inline
+  size_t getRegUpperX(size_t regId) const {  return getRegBaseX(regId)+getRegW(regId);}
+  //returns the image Y coordinate of the first row after regId in y direction (upper bound for iterating over region in y)
+  __host__ __device__ inline
+  size_t getRegUpperY(size_t regId) const {  return getRegBaseY(regId)+getRegH(regId);}
+
+  //helper for interpolation
+  //returns center in X direction in the image
+  __host__ __device__ inline
+  float getRegCenterX(size_t regId) const {  return getRegBaseX(regId) + getRegW(regId)*0.5f;}
+  //returns center in Y direction in the image
+  __host__ __device__ inline
+  float getRegCenterY(size_t regId) const {  return getRegBaseY(regId) + getRegH(regId)*0.5f;}
+  //returns distance of point ix, iy from the center of region regId
+  __host__ __device__ inline
+  float getRegDistanceX(size_t regId, float fix) const {  return abs(fix - getRegCenterX(regId));}
+  __host__ __device__ inline
+  float getRegDistanceX(size_t regId, size_t ix) const {  return abs((float)ix - getRegCenterX(regId));}
+  //returns center in Y direction in the image
+  __host__ __device__ inline
+  float getRegDistanceY(size_t regId, float fiy) const {  return abs(fiy - getRegCenterY(regId));}
+  __host__ __device__ inline
+  float getRegDistanceY(size_t regId, size_t iy) const {  return abs((float)iy - getRegCenterY(regId));}
+
+
+
 
   //returns the base idx of a region (can be used to determine base coords with get(X/Y)fromIdx()
   __host__ __device__ inline
@@ -171,14 +162,6 @@ public:
   __host__ __device__ inline
   size_t getRegId(size_t ix, size_t iy) const {
     return ((iy/regH) * getGridDimX() + (ix/regW));
-  }
-
-  //returns ImgRegParams for region regId.
-  __host__ __device__ inline
-    ImgRegParams getRegParam(size_t regId = 0) const {
-      ImgRegParams ip;
-      ip.init(getRegW(regId), getRegH(regId), getRegW(regId), getRegH(regId) );
-      return ip;
   }
 
 
@@ -244,11 +227,112 @@ public:
   //operator
   // == only compare image dimensions, but NOT the number of frames
   __host__ __device__ inline
-  bool operator == (const ImgRegParams &that) const {
+  bool operator == (const ImgRegParamsConst &that) const {
     return (this->imgW == that.imgW && this->imgH == that.imgH);
   }
 
 };
+
+class ImgRegParams : public ImgRegParamsConst
+{
+
+public:
+
+
+  __host__ __device__  ImgRegParams()
+    {
+      init(0,0,0,0);
+    }
+
+  __host__ __device__  ImgRegParams(const ImgRegParamsConst & that)
+  {
+    *this = that;
+  }
+
+  __host__ __device__  ImgRegParams(size_t imgW, size_t imgH, size_t regW,  size_t regH)
+  {
+    init(imgW,imgH,regW,regH);
+  }
+
+  __host__ __device__  void init(size_t imgW, size_t imgH, size_t regW,  size_t regH)
+  {
+    this->imgW = (imgW<1)?1:imgW;
+    this->imgH = (imgH<1)?1:imgH;
+    this->regW = (regW<1)?1:regW;
+    this->regH = (regH<1)?1:regH;
+  }
+
+  __host__ __device__
+  void print()
+  {
+    printf( "img %lu, %lu  reg %lu ,%lu numregs: %lu\n", imgW, imgH, regW, regH, getNumRegions());
+  }
+
+  __host__
+  static ImgRegParams readImgRegParamsFromFile(const char * filename)
+  {
+    std::ifstream myFile (filename, std::ios::binary);
+
+    printf("reading GPU data for new GPU fitting pipeline from file: %s\n", filename);
+
+    if(!myFile){
+      printf("file %s could not be opened!\n", filename);
+      exit (-1);
+    }
+
+    ImgRegParams irtmp;
+    printf("%s: reading image params.\n", filename);
+    myFile.read((char*)&irtmp,sizeof(ImgRegParams));
+    if (myFile){
+      printf("%s: ImgRegParams read successfully.\n", filename);
+      irtmp.print();
+    }
+    else {
+      printf("%s: ImgregParams could not be read.\n", filename);
+      exit(-1);
+    }
+
+    myFile.close();
+
+    return irtmp;
+  }
+
+  //returns a ImgReg Params object that represents an image of the grid size
+   //with a reg size of imgRegP(gridX, gridY,1, 1)
+   //optional a regW > 1 and a regH > 1 can be provided to create an image object with the same number
+   //and order of regions as the original ImgRegParams but with new region dimensions
+   //imgRegP(gridX*regW, gridY*regH, regW, regH)
+   //can be used to quickly generate buffers layouts with fixed size per region buffers. e.g. background trace per region:
+   // RawImagP.getGridParam(numCompressedFrames) creates a layout for numCompressedFrames per region.
+   __host__ __device__ inline
+   ImgRegParams getGridParam(size_t regW = 1, size_t regH = 1) const
+   {
+     ImgRegParams ip(getGridDimX()*regW, getGridDimY()*regH, regW, regH);
+     return ip;
+   }
+   //static version of above functions to generate grid out of ImgRegParamsConst object
+   __host__ __device__
+   static ImgRegParams getGridParam(const ImgRegParamsConst & that, size_t regW = 1, size_t regH = 1)
+   {
+     ImgRegParams ip(that.getGridDimX()*regW, that.getGridDimY()*regH, regW, regH);
+     return ip;
+   }
+
+   //returns ImgRegParams for region regId.
+   __host__ __device__ inline
+     ImgRegParams getRegParam(size_t regId = 0) const
+   {
+       ImgRegParams ip(getRegW(regId), getRegH(regId), getRegW(regId), getRegH(regId) );
+       return ip;
+   }
+
+
+
+
+
+};
+
+
 
 
 #endif //IMGREGPARAMS_H_

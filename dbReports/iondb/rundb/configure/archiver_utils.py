@@ -54,15 +54,6 @@ def disk_usage_stats():
             other = ''
             logger.error(traceback.format_exc())
 
-        # for experiment data:
-        experiments = Experiment.objects.filter(expDir__startswith=server.filesPrefix)
-        rawused = float(diskspace_used(experiments))/1024 #gbytes
-        # for results data:
-        results = Results.objects.filter(reportstorage__dirPath__startswith=server.filesPrefix)
-        reportsused = float(diskspace_used(results))/1024   #gbytes
-
-        other = total_gb - (reserved + avail_gb + rawused + reportsused)    #gbytes
-
         # get space used by data marked Keep
         keeper_used = get_keepers_diskspace(server.filesPrefix)
         keeper_used = float(sum(keeper_used.values()))/1024     #gbytes
@@ -73,9 +64,6 @@ def disk_usage_stats():
             'percentfull': percentfull,
             'disksize': total_gb,
             'diskfree': avail_gb,
-            'rawused': rawused,
-            'reportsused': reportsused,
-            'other': other,
             'keeper_used': keeper_used,
             'percentkeep': percentkeep,
         }

@@ -137,7 +137,7 @@
                     <span class="headvc">Reference Genome</span>
                 </div>
                 <div class="span4 movedown5">
-                    {{options.genome_name}}
+                    {{options.reference_genome_name}}
                 </div>
             </div>
 
@@ -268,10 +268,21 @@
                 <div class="span3 movedown5">
                     <span class="headvc">Variant Calls</span>
                 </div>
-                <div class="span6">
+                <div class="span9">
                     <a class="btn" href="{{variants_vcf_gz_link}}">VCF.GZ</a>
                     <a class="btn" href="{{variants_tbi_link}}">VCF.GZ.TBI</a>
                     <a class="btn" href="{{alleles_xls_link}}">XLS</a>
+                    <a class="btn" href="{{variant_cov_xls_link}}">COV</a>
+                </div>
+            </div>
+
+            <div class="row-fluid minibump">
+                <div class="span3 movedown5">
+                    <span class="headvc">Variants + Non-Variant Coverage</span>
+                </div>
+                <div class="span9">
+                    <a class="btn" href="{{genome_vcf_gz_link}}">gVCF.GZ</a>
+                    <a class="btn" href="{{genome_tbi_link}}">gVCF.GZ.TBI</a>
                 </div>
             </div>
 
@@ -301,7 +312,7 @@
                     <span class="headvc">Ion Community</span>
                 </div>
                 <div class="span4 movedown5">
-                    <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7426">Torrent Variant Caller documentation</a>
+                    <a href="http://ioncommunity.thermofisher.com/docs/DOC-7426">Torrent Variant Caller documentation</a>
                 </div>
             </div>
 
@@ -429,7 +440,7 @@
     </div>
   </div>
   <div class="clearfix" style="margin-bottom:10px;">
-    <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-8140">How to optimize variant caller parameters</a>
+    <a href="http://ioncommunity.thermofisher.com/docs/DOC-8140">How to optimize variant caller parameters</a>
   </div>
 
   <div class="clearfix collapse" id="filter_settings" style="height:0px;">

@@ -1,0 +1,111 @@
+<html>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
+
+<script type="text/javascript" src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+
+{% load humanize %}
+
+<script type="text/javascript">
+$(document).ready( function() {
+  $(".noheading tr:odd").addClass("zebra");
+  $(".heading tr:odd").addClass("zebra");
+  $(".heading tbody tr").live("mouseover", function(){ $(this).addClass("table_hover"); });
+  $(".heading tbody tr").live("mouseout", function(){ $(this).removeClass("table_hover"); });
+  $(".noheading tbody tr").live("mouseover", function(){ $(this).addClass("table_hover"); });
+  $(".noheading tbody tr").live("mouseout", function(){ $(this).removeClass("table_hover"); });
+});
+</script>
+
+<style type="text/css">
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+</style>
+
+<title>OncoFusionIR Report</title>
+
+</head>
+
+<body>
+<div class="topbar"><div class="logoholder">
+  <a href="http://www.iontorrent.com/"><img src="/site_media/images/raw_name_small.png"
+     alt="IonTorrent Systems, Inc." style="border:none;"/></a>
+</div></div>
+
+<h1><center>OncoFusionIR Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% endif %}
+<h3><center>{{run_name}}<center></h3>
+
+<div class="container-fluid" style="width:400px;margin:0 auto;">
+
+</br>
+<table id="oncofusionir" class="heading" style="width:100%;margin:0 auto;" >
+  <style type="text/css">
+    th { font-size: 12px; font-weight: bold; text-decoration: none }
+    td { text-align:right; padding-right:10px }
+  </style>
+  <col width='170px'/>
+  <col width='90px'/>
+  <thead>
+    <tr>
+      <th colspan='2' class="help" title="Targets are sequences spanning expected transcript fusions.">Coverage Summary</th>
+    </tr>
+  </thead>
+  <tbody style="text-align:center">
+    <tr><th class="help" title="Number of targeted sequences in alignment reference. End marker targets are typically two per gene.">Number of Targets</th>
+      <td>{{Results.Number_of_targets|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Number of targets with at least 1 aligned read.">Targets with at least 1 read</th>
+      <td>{{Results.Targets_with_at_least_1_reads|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Number of targets with at least 10 aligned reads.">Targets with at least 10 reads</th>
+      <td>{{Results.Targets_with_at_least_10_reads|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Number of targets with at least 100 aligned reads.">Targets with at least 100 reads</th>
+      <td>{{Results.Targets_with_at_least_100_reads|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Number of targets with at least 1000 aligned reads.">Targets with at least 1000 reads</th>
+      <td>{{Results.Targets_with_at_least_1000_reads|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Number of targets with at least 10000 aligned reads.">Targets with at least 10000 reads</th>
+      <td>{{Results.Targets_with_at_least_10000_reads|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Total number of (filtered) reads aligned to all targets.">Total reads aligned to targets</th>
+      <td>{{Results.Total_reads_mapped_to_targets|intcomma}}</td>
+    </tr>
+    <tr><th class="help" title="Total number of fusion target calls made to the VCF file.">Number of fusions called</th>
+      <td>{{Results.Number_of_fusions_called|intcomma}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 style='margin-left:-7px'>
+  <li><a href='{{fusion_counts}}'>Download Fusion Targets Read Counts</a></li>
+  <li><a href='{{fusion_vcf}}'>Download Fusion Targets VCF</a></li>
+  <li><a href='{{stats}}'>Download the Statistics Summary</a></li>
+  <li><a href='{{bam_link}}'>Download the fusion alignment BAM</a></li>
+  <li><a href='{{bai_link}}'>Download the fusion alignment BAI</a></li>
+  <li><a href='{{run_log}}'>Download the detailed Run Log</a></li>
+</h3>
+
+</div>
+
+<br/>
+<div class="footer">
+  <a href=http://www.iontorrent.com/support>Request Support</a>&nbsp;|&nbsp;<a href=/ion-docs/Home.html>Help/Documentation</a>&nbsp;|&nbsp;
+  <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+  <br/>Copyright&nbsp;&copy; 2011<a href="http://www.iontorrent.com/">Life Technologies, Inc.</a>
+</div>
+<br/><br/>
+</body>
+</html>
+

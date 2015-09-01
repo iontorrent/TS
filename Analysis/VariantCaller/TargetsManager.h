@@ -14,7 +14,6 @@
 #include "ReferenceReader.h"
 
 struct Alignment;
-class ExtendParameters;
 
 struct MergedTarget {
   int         chr;
@@ -28,7 +27,7 @@ public:
   TargetsManager();
   ~TargetsManager();
 
-  void Initialize(const ReferenceReader& ref_reader, const ExtendParameters& parameters);
+  void Initialize(const ReferenceReader& ref_reader, const string& _targets, bool _trim_ampliseq_primers = false);
 
 
   struct UnmergedTarget {

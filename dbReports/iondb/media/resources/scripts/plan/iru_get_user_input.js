@@ -1,9 +1,6 @@
 /**
     NOTE:  IRU and TS terminology differs slightly.  In IRU, the column "Relation" is equivalent to TS' "RelationRole",
     and IRU's column RelationshipType is TS' "Relation" in the JSON blob that is saved to the selectedPlugins BLOB.
-
-    In this script, we do a one off on the column "RelationshipType", and create a hidden column for it and when
-    we encounter the column "Relation", we name the associated drop down list "RelationRole" for the sake of sanity.
 */
 var USERINPUT = USERINPUT || {};
 
@@ -52,10 +49,9 @@ function create_iru_ui_elements(data) {
         }
 
         if (name == "SetID") {  
-        	name = "Analysis Set ID"  
-        	var $new_th = $("<th></th>", {"style" : "display: table-cell;", "name" : "ir"+name, "class" : "k-header k-widget", "rel" : "tooltip", "title" : "After file transfer, in Ion Reporter Software, samples with the same Analysis Group ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Analysis Group ID value (even if that value is zero or blank)."});
-        		
-        } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType") {
+            var $new_th = $("<th></th>", {"style" : "display: table-cell;", "name" : "ir"+name, "class" : "k-header k-widget", "rel" : "tooltip", "title" : "After file transfer, in Ion Reporter Software, samples with the same Set ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Set ID value (even if that value is zero or blank)."
+                    }).html("<i class='icon-info-sign'></i> IR Set ID");
+        } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType" || name == "biospyDays" || name == "coupleID" || name == "embryoID" ) {
         //20140317-temp } else if (name == "RelationshipType") { 
             //we are not creating a header for the relationshipType
             //we are simply creating a hidden element below
@@ -67,11 +63,10 @@ function create_iru_ui_elements(data) {
                         widthClass = "";
                         widthStyle = "width : 350px; display : table-cell; ";
                 }
-            	var $new_th = $("<th></th>", {"style" : widthStyle, "name" : "ir"+name, "class" : "k-header k-widget " + widthClass});
-
+                var $new_th = $("<th></th>", {"style" : widthStyle, "name" : "ir"+name, "class" : "k-header k-widget " + widthClass
+                        }).text(name);
         }
         
-        $new_th.text(name);
         $th.append($new_th);
     });
 
@@ -100,18 +95,18 @@ function create_iru_ui_elements(data) {
             var $elem, $new_td;
 
             if (name == "SetID") {           
-                $elem = $("<input/>", {"type" : "text", "name" : "ir"+name, "style" : "width:100px; display: table-cell", "class" : "ir"+name});
+                $elem = $("<input/>", {"type" : "number", "name" : "ir"+name, "style" : "width:100px; display: table-cell;", "class" : "ir"+name});
                 
                 if (isToDisable) {
-                	$elem = $("<input/>", {"type" : "text", "name" : "ir"+name,  "disabled" : "disabled", "style" : "width:100px; display: table-cell", "class" : "ir"+name});
+                    $elem = $("<input/>", {"type" : "text", "name" : "ir"+name,  "disabled" : "disabled", "style" : "width:100px; display: table-cell;", "class" : "ir"+name});
                 }
-            } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType") {
+            } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType" || name == "biospyDays" || name == "coupleID" || name == "embryoID" ) {
             	//20140317-temp
             	//no-op for now
             	
             	return;
             } else {
-                var widthClass = "input-medium";
+                var widthClass = "input-medium ";
                 var widthStyle = "display: table-cell; ";
                 if (name == "Workflow") {
                         widthClass = "";
@@ -121,10 +116,10 @@ function create_iru_ui_elements(data) {
                 // we need to rename "Relation" to RelationRole as explained 
                 //at the top of the script
                 if (name == "Relation") {name = "RelationRole";}
-                $elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "class" : widthClass +" ir"+name });
+                $elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "class" : widthClass +"ir"+name });
 
                 if (isToDisable) {
-                	$elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "disabled" : "disabled", "class" : widthClass +" ir"+name});
+                	$elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "disabled" : "disabled", "class" : widthClass +"ir"+name});
                 }
             }
             $new_td = $("<td></td>");
@@ -132,10 +127,6 @@ function create_iru_ui_elements(data) {
             $row.append($new_td);
            
         });
-        // This implementation is identical to what get's created if IR returns this column, so
-        $row.find("td").last().append(
-             $("<input/>", {"type" : "hidden", "name" : "irRelationshipType", "class" : "irRelationshipType"})
-        );
 
     });
 
@@ -143,6 +134,10 @@ function create_iru_ui_elements(data) {
     USERINPUT.irWorkflowSelects = $(".irWorkflow");
     USERINPUT.irSetIDInputs = $(".irSetID");
     USERINPUT.irRelationRoleSelects = $(".irRelationRole");
+    USERINPUT.irbiopsyDays = $(".irbiopsyDays");
+    USERINPUT.ircoupleIDs = $(".ircoupleId");
+    USERINPUT.irembryoIDs = $(".irembryoId");
+    
     //20140306-WIP
     //USERINPUT.irCancerType = $(".ircancerType");
     //USERINPUT.irCellularityPct = $(".ircellularityPct");
@@ -217,22 +212,6 @@ function add_ir_general_to_select(name, values) {
     });
 }
 
-/**
-    This function extracts that invalid value for the relation type
-    out of the restrictions list returned by the API
-*/
-function set_invalid_value(restrictions) {
-    var  invalid_value;
-    $.each(restrictions, function(i){
-    	var restriction = restrictions[i];
-        if (typeof restriction["Disabled"] != 'undefined' && restriction["For"]["Name"] == 'RelationshipType') {
-    		invalid_value = restriction["For"]["Value"];
-    	}
-    });
-
-    return invalid_value;
-}
-
 
 /**
     This function creates a two dimentional map of workflows to relationshipType and relationRole values
@@ -299,14 +278,19 @@ function populate_sample_grouping_to_workflow_map(data) {
     This function presets the IR fields based on either what was in the sample set if it is a new plan
     or what was saved if it is an existing plan
 */
-function preset_ir_fields(counter, irSampleName, irGender, irCancerType, irCellularityPct, irWorkflow, irRelationshipType, irRelationRole, irSetID) {
+function preset_ir_fields(counter, irSampleName, irGender, irCancerType, irCellularityPct, irbiopsyDays, ircoupleId, irembryoId, irWorkflow, irRelationshipType, irRelationRole, irSetID) {
 	//console.log("at iru_get_user_input.preset_ir_fields() irSampleName=", irSampleName, "; irWorkflow=", irWorkflow);
 	
     var $genderSelect = $(USERINPUT.irGenderSelects[counter]);
     var $workflowSelect = $(USERINPUT.irWorkflowSelects[counter]);
     var $relationRoleSelect = $(USERINPUT.irRelationRoleSelects[counter]);
     var $irSetIDInput = $(USERINPUT.irSetIDInputs[counter]);
-        
+    //20150515kchoi
+    var $irbiopsyDaysInput = $(USERINPUT.irbiopsyDays[counter]);  
+    var $ircoupleIdInput = $(USERINPUT.ircoupleIDs[counter]);
+    var $irembryoIdInput = $(USERINPUT.irembryoIDs[counter]);   
+
+    
     if (irGender.length > 0) {
         var irGenderTerms = USERINPUT.ir_sample_to_tss_sample[irGender];
             
@@ -356,13 +340,12 @@ function preset_ir_fields(counter, irSampleName, irGender, irCancerType, irCellu
         }
     }
 
-    if (irRelationshipType.length > 0) {
-        var $tr = $genderSelect.parent().parent();
-        var $relationshipTypeHiddenInput = $tr.find(".irRelationshipType");
-        $relationshipTypeHiddenInput.val(irRelationshipType);
-    }
-
     $irSetIDInput.val(irSetID);
+    //20150515kchoi
+    $irbiopsyDaysInput.val(irbiopsyDays);
+    $ircoupleIdInput.val(ircoupleId); 
+    $irembryoIdInput.val(irembryoId);   
+
 }
 
 /**
@@ -391,6 +374,32 @@ function set_relations_from_workflow($relation, relations, workflow, $gender) {
     }
 }
 
+/**
+    Attempt to auto populate SetID, if simple logic is not enough then display the column for user input
+*/
+function set_id_from_workflow($workflow, $setid, relations){
+    if ( $setid.is(':disabled') ) return;
+
+    var setid = $setid.val();
+    var $other_workflows = $(".irWorkflow").filter("[value='" + $workflow.val() + "']").not($workflow);
+    if ( (relations.length > 1) && ($other_workflows.length > 0) ){
+        // assign existing set id if available, otherwise show column for user input
+        if($other_workflows.length < relations.length){
+            setid = $other_workflows.eq(0).closest('tr').find('.irSetID').val();
+            $setid.val(setid);
+        } else {
+            $setid.val('');
+            console.log('unable to autofill IR SetID for', $workflow.val());
+        }
+    }else{
+        var other_setids = $(".irSetID").not($setid).map(function(){return this.value});
+        if (!setid || ( $.inArray(setid, other_setids) >= 0) ){
+            // assign unique set id for this workflow
+            setid = Math.max.apply(Math, other_setids) + 1;
+            $setid.val(setid);
+        }
+    }
+}
 
 /**
     This function populates the genders based on relation selected
@@ -578,7 +587,6 @@ function load_and_set_ir_fields() {
             if (typeof columns != 'undefined') {
 
                 $("input[name=irDown]").val('0');
-                var invalid_value = set_invalid_value(restrictions);
 
                 // populate IR dropdowns (except Relation which is Workflow-dependent)
                 $.each(columns, function(i){
@@ -590,55 +598,25 @@ function load_and_set_ir_fields() {
                     }
                 });
 
-                // create Workflows onChange event to populate Relation and hidden RelationshipType
+                // create Workflows onChange event to populate Relation
                 USERINPUT.irWorkflowSelects.on('change', function(){
-
                     var $tr = $(this).parent().parent();
                     var $relation = $tr.find(".irRelationRole");
-                    var $relationshipType = $tr.find(".irRelationshipType");
                     var $gender = $tr.find(".irGender");
+                    var $setid = $tr.find(".irSetID");
                     
                     var workflow = $(this).val();
                     var workflow_map = USERINPUT.sample_group_to_workflow_map[workflow];
-
-                	//console.log("iru_get_user_input.load_and_set_ir_fields() workflow=", workflow, "; workflow_map=", workflow_map);
-
-
-                    var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();                    
-                    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+                    //console.log("iru_get_user_input.load_and_set_ir_fields() workflow=", workflow, "; workflow_map=", workflow_map);
 
                     if (typeof workflow_map != 'undefined') {
-                    	//console.log("iru_get_user_input.load_and_set_ir_fields() GOING to call set_relations_from_workflow -- workflow=", workflow, "; invalid_value=", invalid_value);
-                            
-                        var relationshipType = workflow_map["relationshipType"];
+
                         var relations = workflow_map["relations"];
 
                         // set Relation (aka RelationRole) selects
                         set_relations_from_workflow($relation, relations, workflow, $gender);
+                        set_id_from_workflow($(this), $setid, relations);
 
-                        if (relationshipType != invalid_value) {
-                        	//we could be disabling an IR field intentionally, don't override it here
-                        	if (! isSameSampleForDual) {
-                        		$relation.attr('disabled', false);
-                        	}
-                        	else {
-                        		if (isSameSampleForDual && isBarcodeKitSelection && $tr.index() == 0) {
-
-                        			var row1 = $('#row1');                                    
-                                    var $relationshipTypeHiddenInput1 = row1.find(".irRelationshipType");
-
-                                    //console.log("iru_get_user_input relationshipType=", relationshipType);
-                                    $relationshipTypeHiddenInput1.val(relationshipType);
-                        		}
-                        	}
-                        } else {
-                            $relation.empty();
-                            $relation.attr('disabled', true);
-                        }
-                        
-                        // set hidden RelationshipType
-                        $relationshipType.val(relationshipType);
-                        
                     } else { // we remove this Workflow from the drop down list
                         var $index = 0;
                         $(this).children().filter(function(index, option) {
@@ -648,7 +626,6 @@ function load_and_set_ir_fields() {
                         //now change the value to the next option
                         $(this).children(":eq("+($index+1)+")").attr('selected', true);
                         $(this).change();
-
                     }
                 });
                 
@@ -675,17 +652,16 @@ function load_and_set_ir_fields() {
                 // Set all IR fields based on USERINPUT values
                 $.each(USERINPUT.preset_ir_fields, function(i){
                     var _array = USERINPUT.preset_ir_fields[i];
-                    //console.log("iru_get_user_input preset_ir_fields each _array=", _array);
+                    //console.log("iru_get_user_input preset_ir_fields i=", i , "; _array.length=", _array.length, "; _array=", _array);
                     
-                    //planByTemplate  pre_ir_fields _array= ["0", "s 1", "Male", "", "", "my ir workflow", "Self", "Self", "2"] (length = 9)
-                    //planBySampleSet pre_ir_fields _array= ["0", "s 1", "Male", "", "", "", "1"] (length = 7)
-                    //console.log("iru_get_user_input i=", i, "; _array.length=",  _array.length, "; pre_ir_fields _array=", _array);
-                    //TODO: TEMP workaround for planBySampleSet for now
-                    if (_array.length == 7) {
-                    	preset_ir_fields(_array[0], _array[1], _array[2], "", "", _array[3], _array[4], _array[5],_array[6]);
-                    }
+                    //planByTemplate  pre_ir_fields _array=["0", "Sample 1", "", "", "", "my ir workflow", "", "", ""] (length = 9)
+                    //planBySampleSet pre_ir_fields _array= ["2", "Sample x", "Female", "Breast Cancer", "21", "0", "", "", "my ir workflow", "", "Self", "2"] (length = 12)
+
+                    if (_array.length == 9) {
+                    	preset_ir_fields(_array[0], _array[1], _array[2], "", "", "", "", "", _array[5], _array[6], _array[7],_array[8]);
+                    } 
                     else {
-                    	preset_ir_fields(_array[0], _array[1], _array[2], _array[3], _array[4], _array[5],_array[6], _array[7], _array[8]);
+                    	preset_ir_fields(_array[0], _array[1], _array[2], _array[3], _array[4], _array[5],_array[6], _array[7], _array[8], _array[9], _array[10], _array[11]);
                     }
                 });
                 

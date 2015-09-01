@@ -10,28 +10,26 @@ set (SOURCES
 
 add_executable (seqdata_lib_test ${SOURCES})
 
-if ( NOT EXISTS ${ION_STATGEN_LIBS} )
-    find_library (ISGLIB name "StatGen" PATHS $ENV{HOME}/packages/libStatGen )
-    if ( NOT ISGLIB )
-        message ( FATAL_ERROR "Can not find libStatGen library" )
-    else ()
-        set (ION_STATGEN_LIBS ${ISGLIB} )
-    endif ()
-endif ()
+#if ( NOT EXISTS ${ION_STATGEN_LIBS} )
+#    find_library (ISGLIB name "StatGen" PATHS $ENV{HOME}/packages/libStatGen )
+#    if ( NOT ISGLIB )
+#        message ( FATAL_ERROR "Can not find libStatGen library" )
+#    else ()
+#        set (ION_STATGEN_LIBS ${ISGLIB} )
+#    endif ()
+#endif ()
 
-if ( NOT EXISTS ${ION_STATGEN_INCLUDES}/CigarRoller.h )
-    find_path (ISGINC NAMES CigarRoller.h PATHS $ENV{HOME}/packages/libStatGen/include )
-    if ( NOT ISGINC )
-        message ( FATAL_ERROR "Can not find libStatGen includes" )
-    else ()
-        set (ION_STATGEN_INCLUDES ${ISGINC} )
-    endif ()
-endif ()
-
+#if ( NOT EXISTS ${ION_STATGEN_INCLUDES}/CigarRoller.h )
+#    find_path (ISGINC NAMES CigarRoller.h PATHS $ENV{HOME}/packages/libStatGen/include )
+#    if ( NOT ISGINC )
+#        message ( FATAL_ERROR "Can not find libStatGen includes" )
+#    else ()
+#        set (ION_STATGEN_INCLUDES ${ISGINC} )
+#    endif ()
+#endif ()
 
 include_directories (../min_common_lib ../seqdata_lib ${ION_STATGEN_INCLUDES} )
 
 find_package(Threads REQUIRED)
 
 target_link_libraries ( seqdata_lib_test min_common seqdata ${ION_STATGEN_LIBS} ${CMAKE_THREAD_LIBS_INIT} rt )
-

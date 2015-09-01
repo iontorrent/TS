@@ -43,7 +43,7 @@
 # ftp configuration
 #============================================================================ 
 - name: install vsftpd package
-  apt: name=vsftpd state=latest
+  apt: name=vsftpd state=present
 
 # Create ftp user
 - name: initialize ftp system user
@@ -101,11 +101,11 @@
 # dhcp server package install
 #============================================================================ 
 - name: install dhcp3-server package for lucid
-  apt: name=dhcp3-server state=latest
+  apt: name=dhcp3-server state=present
   when: ansible_distribution_release == "lucid"
   
 - name: install isc-dhcp-server package for trusty
-  apt: name=isc-dhcp-server state=latest
+  apt: name=isc-dhcp-server state=present
   when: ansible_distribution_release == "trusty"
 
 #============================================================================  
@@ -139,7 +139,7 @@
 # Only DNS service is enabled; dhcp via dnsmasq is disabled
 #============================================================================
 - name: install dnsmasq package
-  apt: name=dnsmasq state=latest
+  apt: name=dnsmasq state=present
   when: S5_virtual_guest|bool == False
   
 - name: dnsmasq configuration
@@ -164,7 +164,7 @@
 # ntp configuration
 #============================================================================ 
 - name: install ntp server package
-  apt: name=ntp state=latest
+  apt: name=ntp state=present
   
 - name: Edit ntp.conf
   lineinfile: dest=/etc/ntp.conf

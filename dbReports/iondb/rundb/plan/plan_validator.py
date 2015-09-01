@@ -60,7 +60,7 @@ def validate_sample_name(value, displayedName='Sample Name'):
     return errors
 
 
-def validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sampleId, nucleotideType, runTypeName, sampleReference, sampleRnaReference, displayedName='Barcoded Sample'):
+def validate_barcoded_sample_info(sampleName, sampleId, nucleotideType, sampleReference, sampleRnaReference, runType, applicationGroupName, displayedName='Barcoded Sample'):
     errors = []
     if not validation.is_valid_chars(sampleName):
         errors.append(validation.invalid_chars_error(displayedName))
@@ -77,13 +77,13 @@ def validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sam
 
     sample_nucleotideType = ""
     
-    nucleotideType_errors, sample_nucleotideType = validate_sample_nucleotideType(nucleotideType, runTypeName, applicationGroupName)
+    nucleotideType_errors, sample_nucleotideType = validate_sample_nucleotideType(nucleotideType, runType, applicationGroupName)
 
     if (nucleotideType_errors):
         errors.extend(nucleotideType_errors)
 
     if runType == "AMPS_DNA_RNA" and sample_nucleotideType.upper() == "RNA":
-        rna_ref_errors, rna_ref_short_name = validate_reference(sampleRnaReference, displayedName = "RNA Sample Reference")
+        rna_ref_errors, rna_ref_short_name = validate_reference(sampleRnaReference, runType, applicationGroupName, displayedName = "RNA Sample Reference")
         logger.debug("plan_validator.validate_barcoded_sample_info() sampleRnaReference=%s; rna_ref_short_name=%s" %(sampleRnaReference, rna_ref_short_name))
         
         if (rna_ref_errors):
@@ -93,14 +93,12 @@ def validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sam
         rna_ref_errors = []
         rna_ref_short_name = ""
 
-    ref_errors, ref_short_name = validate_reference(sampleReference, displayedName = "Sample Reference")
+    ref_errors, ref_short_name = validate_reference(sampleReference, runType, applicationGroupName, displayedName = "Sample Reference")
     ##logger.debug("plan_validator.validate_barcoded_sample_info() sampleReference=%s; ref_short_name=%s" %(sampleReference, ref_short_name))
 
     if (ref_errors):
         errors.extend(ref_errors)
 
-    ##logger.debug("plan_validator.validate_barcoded_sample_info() errors=%s" %(errors))
-    
     return errors, ref_short_name, rna_ref_short_name, sample_nucleotideType 
 
 
@@ -141,33 +139,27 @@ def validate_sample_nucleotideType(nucleotideType, runType, applicationGroupName
     return errors, input
 
 
-def validate_reference(referenceName, displayedName='Reference'):
-
+def validate_reference(value, runType, applicationGroupName, displayedName='Reference'):
     errors = []
     ref_short_name = ""
-    
-    if referenceName:
-        input = referenceName.strip()
+    value = value.strip() if value else ""
 
-        selectedRefs = ReferenceGenome.objects.filter(name = input)
-
-        if selectedRefs:
-            ref_short_name = selectedRefs[0].short_name 
+    if value:
+        applProduct = ApplProduct.objects.filter(isActive=True, applType__runType=runType, applicationGroup__name=applicationGroupName) \
+                        or ApplProduct.objects.filter(isActive=True, applType__runType=runType)
+        
+        if applProduct and not applProduct[0].isReferenceSelectionSupported:
+            errors.append(displayedName+" selection is not supported for this Application")
         else:
-            selectedRefs = ReferenceGenome.objects.filter(name__iexact = input)
+            selectedRefs = ReferenceGenome.objects.filter(name = value) or \
+                            ReferenceGenome.objects.filter(name__iexact = value) or \
+                            ReferenceGenome.objects.filter(short_name = value) or \
+                            ReferenceGenome.objects.filter(short_name__iexact = value)
+
             if selectedRefs:
                 ref_short_name = selectedRefs[0].short_name 
             else:
-                selectedRefs = ReferenceGenome.objects.filter(short_name = input)
-            
-                if selectedRefs:
-                    ref_short_name = selectedRefs[0].short_name 
-                else:
-                    selectedRefs = ReferenceGenome.objects.filter(short_name__iexact = input)
-                    if selectedRefs:
-                        ref_short_name = selectedRefs[0].short_name 
-                    else:
-                         errors.append(validation.invalid_not_found_error(displayedName, referenceName))
+                errors.append(validation.invalid_not_found_error(displayedName, value))
       
     return errors, ref_short_name
 
@@ -178,8 +170,10 @@ def validate_reference_short_name(value, displayedName='Reference'):
         value = value.strip()
         reference = ReferenceGenome.objects.filter(short_name=value, enabled=True)
         if not reference.exists():
-            errors.append(validation.invalid_not_found_error(displayedName, value))
-
+            generic_not_found_error = validation.invalid_not_found_error(displayedName, value)
+            error_fixing_message = ". To import it, visit Settings > References > Import Preloaded Ion References"
+            reference_error_message = generic_not_found_error.strip() + error_fixing_message
+            errors.append(reference_error_message)
     return errors
 
 
@@ -348,6 +342,15 @@ def validate_plan_templating_kit_name(value, displayedName="Template Kit"):
             
     return errors
 
+def validate_runType(runType):
+    errors = []
+    if runType:
+        runTypeObjs = RunType.objects.filter(runType__iexact = runType)
+        if not runTypeObjs:
+            validRunTypes = RunType.objects.values_list('runType', flat=True)
+            validRunTypes = ', '.join(validRunTypes)
+            errors.append("%s not a valid Run Type. Valid Run Types are %s" % (runType, validRunTypes))
+    return errors
 
 def validate_application_group_for_runType(value, runType, displayedName="Application Group"):
     errors = []
@@ -363,6 +366,8 @@ def validate_application_group_for_runType(value, runType, displayedName="Applic
                     associations = runTypeObjs[0].applicationGroups.filter(name=applicationGroup.name)
                     if not associations:
                         errors.append("%s %s not valid for Run Type %s" %(displayedName, value, runType))
+            if not runType or not runTypeObjs:
+                errors.append("Invalid/Missing RunType")
         else:
             errors.append("%s %s not found" %(displayedName, value))
         
@@ -466,3 +471,22 @@ def validate_hotspot_bed(hotSpotRegionBedFile):
     logger.debug("plan_validator.validate_hotspot_bed() value=%s;" %(value))
 
     return errors
+
+def validate_chipBarcode(chipBarcode):
+    """
+    validate chip barcide is alphanumberic
+    """
+    errors = []
+    if chipBarcode:
+        value = chipBarcode.strip()
+
+        isValidated = False
+        if (value.isalnum()) or (len(value) == 0):
+            isValidated = True
+        if not isValidated:
+            errors.append("%s is invalid.  Chip ID can only contain letters and numbers." %(value))
+
+    logger.debug("plan_validator.validate_chipBarcode() value=%s;" %(chipBarcode))
+
+    return errors
+    

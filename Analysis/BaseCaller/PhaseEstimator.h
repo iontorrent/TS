@@ -194,7 +194,7 @@ protected:
   // Data needed by SpatialRefiner worker threads
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation
   vector<KeySequence>   keys_;                    //!< Key sequences, 0 = library, 1 = TFs.
-  bool                  key_norm_new_;            //!< Method to do key normalization;
+  string                key_norm_method_;         //!< Method to do key normalization;
   RawWells              *wells_;                  //!< Wells file reader
   Mask                  *mask_;                   //!< Beadfind and filtering outcomes for wells
   int                   region_size_x_;           //!< Wells hdf5 dataset chunk width

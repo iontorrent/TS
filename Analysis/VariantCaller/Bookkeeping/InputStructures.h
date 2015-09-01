@@ -14,11 +14,14 @@
 #include <map>
 #include <pthread.h>
 #include <Variant.h>
+#include <VariantCaller/OrderedBAMWriter.h>
 
-#include "RecalibrationModel.h"
+#include "LinearCalibrationModel.h"
 #include "../Splice/ErrorMotifs.h"
 #include "ExtendParameters.h"
+#ifdef __SSE3__
 #include "TreephaserSSE.h"
+#endif
 #include "DPTreephaser.h"
 #include "Realigner.h"
 
@@ -46,6 +49,7 @@ struct VariantCallerContext {
   TargetsManager *    targets_manager;              //! Manages target regions from BED file
   BAMWalkerEngine *   bam_walker;                   //! Manages traversing reference and retrieving reads covering each position
   AlleleParser *      candidate_generator;          //! Candidate variant generator
+  OrderedBAMWriter *  bam_writer;                   //! Container for reads ensuring ordering
   OrderedVCFWriter *  vcf_writer;                   //! Sorting, threading friendly VCF writer
   MetricsManager *    metrics_manager;              //! Keeps track of metrics to output in tvc_metrics.json
 
@@ -134,9 +138,9 @@ class RecalibrationHandler{
   public:
     bool use_recal_model_only;
     bool is_live;
-    RecalibrationModel recalModel;
+    LinearCalibrationModel recalModel;
     
-    map<string, RecalibrationModel> bam_header_recalibration; // look up the proper recalibration handler by run id + block coordinates
+    map<string, LinearCalibrationModel> bam_header_recalibration; // look up the proper recalibration handler by run id + block coordinates
     multimap<string,pair<int,int> > block_hash;  // from run id, find appropriate block coordinates available
     
  void ReadRecalibrationFromComments(const SamHeader &samHeader, const map<string, int> &max_flows_by_run_id);
@@ -196,35 +200,43 @@ public:
 
     //@brief Interface for setting the phasing model parameters
     void SetModelParameters(const int & flow_order_index, const vector<float> & phase_params) {
+#ifdef __SSE3__
       if (use_SSE_basecaller)
         treephaserSSE_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1));
       else
+#endif
         dpTreephaser_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1), phase_params.at(2));
     };
 
     //@brief Interface for setting the phasing model parameters
     void DisableRecalibration(const int & flow_order_index)
     {
+#ifdef __SSE3__
        if (use_SSE_basecaller)
          treephaserSSE_vector.at(flow_order_index).DisableRecalibration();
        else
+#endif
          dpTreephaser_vector.at(flow_order_index).DisableRecalibration();
     };
 
     //@brief Interface set the calibration coefficients
     bool SetAsBs(const int & flow_order_index, const vector<vector< vector<float> > > *As, const vector<vector< vector<float> > > *Bs)
     {
+#ifdef __SSE3__
       if (use_SSE_basecaller)
         return (treephaserSSE_vector.at(flow_order_index).SetAsBs(As, Bs));
       else
+#endif
         return (dpTreephaser_vector.at(flow_order_index).SetAsBs(As, Bs));
     };
 
     //@brief Interface for simulating and solving read bases
     void SolveRead(const int & flow_order_index, BasecallerRead& read, const int & begin_flow, const int & end_flow){
+#ifdef __SSE3__
       if (use_SSE_basecaller)
         treephaserSSE_vector.at(flow_order_index).SolveRead(read, begin_flow, end_flow);
       else
+#endif
         dpTreephaser_vector.at(flow_order_index).Solve(read, end_flow, begin_flow);
     };
 
@@ -233,7 +245,9 @@ public:
 
     Realigner              realigner;             // realignment tool
     vector<DPTreephaser >  dpTreephaser_vector;   // c++ treephaser
+#ifdef __SSE3__
     vector<TreephaserSSE>  treephaserSSE_vector;  // vectorized treephaser
+#endif
 
 
 

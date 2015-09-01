@@ -67,8 +67,7 @@ void GlobalWriter::WriteBeadParameterstoDataCubes ( int iFlowBuffer, bool last,R
 
 void GlobalWriter::SendErrorVectorToHDF5 ( BeadParams *p, error_track &err_t, Region *region, FlowBufferInfo &my_flow, int flow_block_start )
 {
-  if ( mPtrs!=NULL )
-  {
+    //if ( ! hasPointers() ) return;
     if ( mPtrs->mResError!=NULL )
     {
       int x = p->x+region->col;
@@ -82,14 +81,11 @@ void GlobalWriter::SendErrorVectorToHDF5 ( BeadParams *p, error_track &err_t, Re
         }
       }
     }
-  }
 }
 
 void GlobalWriter::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-  // placeholder
-  if ( mPtrs!=NULL )
-  {
+    //if ( ! hasPointers() ) return;
     if ( ( mPtrs->m_region_debug_bead_predicted!=NULL ) && ( ibd==my_region_data.my_beads.DEBUG_BEAD ) )
     {
       int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -104,14 +100,11 @@ void GlobalWriter::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted,
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_predicted,reg,j,flow,0 ); // pad 0's
       }
     }
-  }
 }
 
 void GlobalWriter::SendCorrectedToHDF5 ( int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-  // placeholder
-  if ( mPtrs!=NULL )
-  {
+    //if ( ! hasPointers() ) return;
     if ( ( mPtrs->m_region_debug_bead_corrected!=NULL ) && ( ibd==my_region_data.my_beads.DEBUG_BEAD ) )
     {
       int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -126,14 +119,12 @@ void GlobalWriter::SendCorrectedToHDF5 ( int ibd, float *block_signal_corrected,
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_corrected,reg,j,flow,0 ); // pad 0's
       }
     }
-  }
 }
 
 
 void GlobalWriter::SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_bestRegion_predicted!=NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -148,14 +139,12 @@ void GlobalWriter::SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_predicted,ibd,j,flow,0 ); // pad 0's
         }
       }
-    }
 }
 
 
 void GlobalWriter::SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_bestRegion_corrected!=NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -170,14 +159,12 @@ void GlobalWriter::SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_corrected,ibd,j,flow,0 ); // pad 0's
         }
       }
-    }
 }
 
 
 void GlobalWriter::SendBestRegion_LocationToHDF5 (int ibd, RegionalizedData &my_region_data )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_bestRegion_location!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -187,14 +174,75 @@ void GlobalWriter::SendBestRegion_LocationToHDF5 (int ibd, RegionalizedData &my_
           mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_location,ibd,0,0,p->y+my_region_data.region->row );
           mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_location,ibd,1,0,p->x+my_region_data.region->col );
       }
-    }
+}
+
+
+void GlobalWriter::SendBestRegion_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_bestRegion_gainSens!=NULL ) )
+      {
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+		  reg_params *reg_p =  &my_region_data.my_regions.rp;
+		  float gainSens = p->gain * reg_p->sens;
+          mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_gainSens,ibd,0,0,gainSens);
+      }
+}
+
+
+void GlobalWriter::SendBestRegion_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_bestRegion_kmult!=NULL ) )
+      {
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+        mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_kmult,ibd,0,0,p->kmult[0]);
+       }
+}
+
+
+void GlobalWriter::SendBestRegion_DmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_bestRegion_dmult!=NULL ) )
+      {
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_dmult,ibd,0,0,p->dmult);
+      }
+}
+
+
+void GlobalWriter::SendBestRegion_SPToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+      if (( mPtrs->m_beads_bestRegion_SP!=NULL ) )
+      {
+		BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+		reg_params *reg_p =  &my_region_data.my_regions.rp;
+		int flow= flow_block_start;
+		//int flow= flow_block_start + fnum;
+		//float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
+		//float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+		float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow); // flow=0
+		mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_SP,ibd,0,0,SP );
+      }
+}
+
+
+void GlobalWriter::SendBestRegion_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_bestRegion_R!=NULL ) )
+      {
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          //reg_params *reg_p =  &my_region_data.my_regions.rp;
+          mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_R,ibd,0,0,p->R );
+       }
 }
 
 
 void GlobalWriter::SendBestRegion_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_bestRegion_amplitude!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -208,14 +256,12 @@ void GlobalWriter::SendBestRegion_AmplitudeToHDF5 (int ibd, RegionalizedData &my
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_amplitude,ibd,0,flow,p->Ampl[fnum]);
           }
       }
-    }
 }
 
 
 void GlobalWriter::SendBestRegion_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_bestRegion_residual!=NULL ) )
       {
           for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
@@ -224,50 +270,27 @@ void GlobalWriter::SendBestRegion_ResidualToHDF5 (int ibd, error_track &err_t, R
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_residual,ibd,0,flow,err_t.mean_residual_error[fnum]);
           }
       }
-    }
 }
 
 
-void GlobalWriter::SendBestRegion_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+void GlobalWriter::SendBestRegion_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_bestRegion_kmult!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_bestRegion_fittype!=NULL ) )
       {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          //BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          //reg_params *reg_p =  &my_region_data.my_regions.rp;
           for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-              int flow= flow_block_start + fnum;
-              mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_kmult,ibd,0,flow,p->kmult[fnum]);
+            int flow= flow_block_start + fnum;
+            mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_fittype,ibd,0,flow,fitType[fnum] );
           }
-
       }
-    }
-}
-
-
-void GlobalWriter::SendBestRegion_DmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_bestRegion_dmult!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-              int flow= flow_block_start + fnum;
-              mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_dmult,ibd,0,flow,p->dmult);
-          }
-
-      }
-    }
 }
 
 
 void GlobalWriter::SendBestRegion_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
       if (( mPtrs->m_beads_bestRegion_taub!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -284,86 +307,12 @@ void GlobalWriter::SendBestRegion_TaubToHDF5 (int ibd, RegionalizedData &my_regi
               //mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_bot,ibd,0,flow,p->bot[fnum]);
           }
       }
-    }
-}
-
-
-void GlobalWriter::SendBestRegion_SPToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_bestRegion_SP!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          reg_params *reg_p =  &my_region_data.my_regions.rp;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-            int flow= flow_block_start + fnum;
-            //float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
-            //float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
-            float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
-            mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_SP,ibd,0,flow,SP );
-          }
-      }
-    }
-}
-
-
-void GlobalWriter::SendBestRegion_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_bestRegion_R!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          //reg_params *reg_p =  &my_region_data.my_regions.rp;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-            int flow= flow_block_start + fnum;
-            mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_R,ibd,0,flow,p->R );
-          }
-      }
-    }
-}
-
-
-void GlobalWriter::SendBestRegion_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_bestRegion_fittype!=NULL ) )
-      {
-          //BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          //reg_params *reg_p =  &my_region_data.my_regions.rp;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-            int flow= flow_block_start + fnum;
-            mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_fittype,ibd,0,flow,fitType[fnum] );
-          }
-      }
-    }
-}
-
-
-void GlobalWriter::SendBestRegion_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_bestRegion_gainSens!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-		  reg_params *reg_p =  &my_region_data.my_regions.rp;
-		  float gainSens = p->gain * reg_p->sens;
-          mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_gainSens,ibd,0,0,gainSens);
-      }
-    }
 }
 
 
 void GlobalWriter::SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_bestRegion_timeframe!=NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -377,301 +326,267 @@ void GlobalWriter::SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_d
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_timeframe,0,j,0,0 ); // pad 0's
         }
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
+void GlobalWriter::SendRegionSamples_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_predicted!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_predicted!=NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         int reg = my_region_data.region->index;
-        //printf("GlobalWriter::SendRegionCenterPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        reg = reg*nSampleOut + get_sampleIndex();
+        //printf("GlobalWriter::SendRegionSamplesPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
         for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
           int flow= flow_block_start + fnum;
           for ( int j=0; j<npts; j++ )
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_predicted,reg,j,flow,block_signal_predicted[j+fnum*npts] );
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_predicted,reg,j,flow,block_signal_predicted[j+fnum*npts] );
           for ( int j=npts; j<max_frames; j++ )
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_predicted,reg,j,flow,0 ); // pad 0's
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_predicted,reg,j,flow,0 ); // pad 0's
         }
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
+void GlobalWriter::SendRegionSamples_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_corrected!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_corrected!=NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         int reg = my_region_data.region->index;
-        //printf("GlobalWriter::SendRegionCenterCorrectedToHDF5... (r,b)=(%d,%d) corrected[10]=%f\n",reg,ibd,block_signal_corrected[10]);
+        reg = reg*nSampleOut + get_sampleIndex();
+        //printf("GlobalWriter::SendRegionSamplesCorrectedToHDF5... (r,b)=(%d,%d) corrected[10]=%f\n",reg,ibd,block_signal_corrected[10]);
         for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
           int flow= flow_block_start + fnum;
           for ( int j=0; j<npts; j++ )
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_corrected,reg,j,flow,block_signal_corrected[j+fnum*npts] );
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_corrected,reg,j,flow,block_signal_corrected[j+fnum*npts] );
           for ( int j=npts; j<max_frames; j++ )
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_corrected,reg,j,flow,0 ); // pad 0's
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_corrected,reg,j,flow,0 ); // pad 0's
         }
       }
+}
+
+
+void GlobalWriter::SendRegionSamples_LocationToHDF5 (int ibd, RegionalizedData &my_region_data)
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_location!=NULL ) )
+      {
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          int reg0 = my_region_data.region->index;
+          int reg = reg0*nSampleOut + get_sampleIndex();
+          int y = p->y+my_region_data.region->row;
+          int x = p->x+my_region_data.region->col;
+          //printf("GlobalWriter::SendRegionSamplesLocationToHDF5... reg=%d ibd=%d y=%d x=%d\n",reg,ibd,y,x);
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_location,reg,0,0,y );
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_location,reg,1,0,x );
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_location,reg,2,0,reg0 );
+      }
+}
+
+
+void GlobalWriter::SendRegionSamples_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data )
+{
+    //if ( ! hasPointers() ) return;
+    if (( mPtrs->m_beads_regionSamples_gainSens!=NULL ) )
+    {
+      BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+      reg_params *reg_p =  &my_region_data.my_regions.rp;
+      int reg = my_region_data.region->index;
+      reg = reg*nSampleOut + get_sampleIndex();
+      float gainSens = p->gain * reg_p->sens;
+      mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_gainSens,reg,0,0,gainSens);
     }
 }
 
 
-void GlobalWriter::SendRegionCenter_LocationToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendRegionSamples_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_location!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_kmult!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int reg = my_region_data.region->index;
-          int y = p->y+my_region_data.region->row;
-          int x = p->x+my_region_data.region->col;
-          //printf("GlobalWriter::SendRegionCenterLocationToHDF5... reg=%d ibd=%d y=%d x=%d\n",reg,ibd,y,x);
-          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_location,reg,0,0,y );
-          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_location,reg,1,0,x );
+          reg = reg*nSampleOut + get_sampleIndex();
+		  mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_kmult,reg,0,0,p->kmult[0]);
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_RegionParamsToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendRegionSamples_DmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_regionParams!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_dmult!=NULL ) )
+      {
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          int reg = my_region_data.region->index;
+          reg = reg*nSampleOut + get_sampleIndex();
+		  mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_dmult,reg,0,0,p->dmult);
+      }
+}
+
+
+void GlobalWriter::SendRegionSamples_SPToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_SP!=NULL ) )
+      {
+		BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+		reg_params *reg_p =  &my_region_data.my_regions.rp;
+		int reg = my_region_data.region->index;
+		reg = reg*nSampleOut + get_sampleIndex();
+		int flow= flow_block_start;
+		//int flow= flow_block_start + fnum;
+		//float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
+		//float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+		float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow); // flow=0
+		mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_SP,reg,0,0,SP );
+      }
+}
+
+
+void GlobalWriter::SendRegionSamples_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_R!=NULL ) )
+      {
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+        //reg_params *reg_p =  &my_region_data.my_regions.rp;
+        int reg = my_region_data.region->index;
+        reg = reg*nSampleOut + get_sampleIndex();
+		mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_R,reg,0,0,p->R );
+	  }
+}
+
+
+void GlobalWriter::SendRegionSamples_RegionParamsToHDF5 (int ibd, RegionalizedData &my_region_data )
+{
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_regionParams!=NULL ) )
       {
           reg_params *reg_p =  &my_region_data.my_regions.rp;
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int reg = my_region_data.region->index;
+          reg = reg*nSampleOut + get_sampleIndex();
           int n = 0;
-          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,p->gain);
-          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->sens );
-          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,(float)(COPYMULTIPLIER*p->Copies) );
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_regionParams,reg,n++,0,p->gain);
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_regionParams,reg,n++,0,reg_p->sens );
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_regionParams,reg,n++,0,(float)(COPYMULTIPLIER*p->Copies) );
           for (int i=0; i<NUMNUC; i++)
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->kmax[i] );
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_regionParams,reg,n++,0,reg_p->kmax[i] );
           for (int i=0; i<NUMNUC; i++)
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->krate[i] );
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_regionParams,reg,n++,0,reg_p->krate[i] );
           for (int i=0; i<NUMNUC; i++)
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->d[i] );
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_regionParams,reg,n++,0,reg_p->d[i] );
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+void GlobalWriter::SendRegionSamples_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_amplitude!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_amplitude!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int reg = my_region_data.region->index;
+          reg = reg*nSampleOut + get_sampleIndex();
           for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
             int flow= flow_block_start + fnum;
             // val in 1.wells, as in GlobalWriter::WriteAnswersToWells()
             // val = my_beads.params_nn[ibd].Ampl[iFlowBuffer] * my_beads.params_nn[ibd].Copies * my_regions->rp.copy_multiplier[iFlowBuffer];
             //float val = p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum];
-            //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_amplitude,ibd,0,flow,p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum]);
-            mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_amplitude,reg,0,flow,p->Ampl[fnum]);
+            //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_amplitude,ibd,0,flow,p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum]);
+            mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_amplitude,reg,0,flow,p->Ampl[fnum]);
           }
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+void GlobalWriter::SendRegionSamples_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_residual!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_residual!=NULL ) )
       {
           int reg = my_region_data.region->index;
+          reg = reg*nSampleOut + get_sampleIndex();
           for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
             int flow= flow_block_start + fnum;
-            mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_residual,reg,0,flow,err_t.mean_residual_error[fnum]);
+            mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_residual,reg,0,flow,err_t.mean_residual_error[fnum]);
           }
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+void GlobalWriter::SendRegionSamples_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_kmult!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          int reg = my_region_data.region->index;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-              int flow= flow_block_start + fnum;
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_kmult,reg,0,flow,p->kmult[fnum]);
-          }
-
-      }
-    }
-}
-
-
-void GlobalWriter::SendRegionCenter_DmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_dmult!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          int reg = my_region_data.region->index;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-              int flow= flow_block_start + fnum;
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_dmult,reg,0,flow,p->dmult);
-          }
-
-      }
-    }
-}
-
-
-void GlobalWriter::SendRegionCenter_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_taub!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          int reg = my_region_data.region->index;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-              int flow= flow_block_start + fnum;
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_taub,reg,0,flow,p->tauB[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_peak,reg,0,flow,p->peak[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_peak,reg,1,flow,p->valley[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_peak,reg,2,flow,p->top[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_peak,reg,3,flow,p->bot[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_valley,reg,0,flow,p->valley[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_top,reg,0,flow,p->top[fnum]);
-              //mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_bot,reg,0,flow,p->bot[fnum]);
-              //cerr << "SendRegionCenter_TaubToHDF5... fnum=" << fnum << " flow=" << flow << " taub=" << p->tauB[fnum] << endl << flush;
-          }
-
-      }
-    }
-}
-
-
-void GlobalWriter::SendRegionCenter_SPToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_SP!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          reg_params *reg_p =  &my_region_data.my_regions.rp;
-          int reg = my_region_data.region->index;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-            int flow= flow_block_start + fnum;
-            //float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
-            //float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
-            float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
-             mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_SP,reg,0,flow,SP );
-          }
-      }
-    }
-}
-
-
-void GlobalWriter::SendRegionCenter_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_R!=NULL ) )
-      {
-          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-          //reg_params *reg_p =  &my_region_data.my_regions.rp;
-          int reg = my_region_data.region->index;
-          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-          {
-            int flow= flow_block_start + fnum;
-            mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_R,reg,0,flow,p->R );
-          }
-      }
-    }
-}
-
-
-void GlobalWriter::SendRegionCenter_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
-{
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_fittype!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_fittype!=NULL ) )
       {
           //BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           //reg_params *reg_p =  &my_region_data.my_regions.rp;
           int reg = my_region_data.region->index;
+          reg = reg*nSampleOut + get_sampleIndex();
           for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
             int flow= flow_block_start + fnum;
-            mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_fittype,reg,0,flow,fitType[fnum] );
+            mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_fittype,reg,0,flow,fitType[fnum] );
           }
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendRegionSamples_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_gainSens!=NULL ) )
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_taub!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
-		  reg_params *reg_p =  &my_region_data.my_regions.rp;
           int reg = my_region_data.region->index;
-		  float gainSens = p->gain * reg_p->sens;
-          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_gainSens,reg,0,0,gainSens);
+          reg = reg*nSampleOut + get_sampleIndex();
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
+          {
+              int flow= flow_block_start + fnum;
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_taub,reg,0,flow,p->tauB[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_peak,reg,0,flow,p->peak[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_peak,reg,1,flow,p->valley[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_peak,reg,2,flow,p->top[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_peak,reg,3,flow,p->bot[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_valley,reg,0,flow,p->valley[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_top,reg,0,flow,p->top[fnum]);
+              //mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_bot,reg,0,flow,p->bot[fnum]);
+              //cerr << "SendRegionSamples_TaubToHDF5... fnum=" << fnum << " flow=" << flow << " taub=" << p->tauB[fnum] << endl << flush;
+          }
+
       }
-    }
 }
 
 
-void GlobalWriter::SendRegionCenter_TimeframeToHDF5 (RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames )
+void GlobalWriter::SendRegionSamples_TimeframeToHDF5 (RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames )
 {
-    if ( mPtrs!=NULL )
-    {
-      if (( mPtrs->m_beads_regionCenter_timeframe!=NULL ) )
-      {
-        int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
-        //int reg = my_region_data.region->index;
-        //printf("GlobalWriter::SendRegionCenterPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
-        {
-          for ( int j=0; j<npts; j++ )
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_timeframe,0,j,0,my_region_data.time_c.frameNumber[j] );
-          for ( int j=npts; j<max_frames; j++ )
-              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_timeframe,0,j,0,0 ); // pad 0's
-        }
-      }
+    //if ( ! hasPointers() ) return;
+      if (( mPtrs->m_beads_regionSamples_timeframe!=NULL ) )
+		{
+		int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
+		//int reg = my_region_data.region->index;
+		//printf("GlobalWriter::SendRegionSamplesPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+		for ( int j=0; j<npts; j++ )
+			mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_timeframe,0,j,0,my_region_data.time_c.frameNumber[j] );
+		for ( int j=npts; j<max_frames; j++ )
+			mPtrs->copyCube_element ( mPtrs->m_beads_regionSamples_timeframe,0,j,0,0 ); // pad 0's
+		}
     }
-}
 
 
+///====================Xyflow=================================================================================================================================
 void GlobalWriter::SendXyflow_Predicted_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_predicted != NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -693,13 +608,11 @@ void GlobalWriter::SendXyflow_Predicted_ToHDF5 (int ibd, float *block_signal_pre
         }
       }
     }
-}
 
-
+	
 void GlobalWriter::SendXyflow_Location_Keys_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras &my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_location_keys!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -727,14 +640,12 @@ void GlobalWriter::SendXyflow_Location_Keys_ToHDF5 (int ibd, RegionalizedData &m
               }
           }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_predicted_keys != NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -767,14 +678,12 @@ void GlobalWriter::SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signa
             }
         }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_Corrected_Keys_ToHDF5 (int ibd, float *block_signal, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_corrected_keys != NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -807,15 +716,13 @@ void GlobalWriter::SendXyflow_Corrected_Keys_ToHDF5 (int ibd, float *block_signa
             }
         }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_Corrected_ToHDF5 (int ibd, float *block_signal, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_corrected != NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -837,14 +744,12 @@ void GlobalWriter::SendXyflow_Corrected_ToHDF5 (int ibd, float *block_signal, Re
             }
         }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_Amplitude_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_amplitude!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -864,14 +769,12 @@ void GlobalWriter::SendXyflow_Amplitude_ToHDF5 (int ibd, RegionalizedData &my_re
             }
           }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_Residual_ToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_residual!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -887,15 +790,13 @@ void GlobalWriter::SendXyflow_Residual_ToHDF5 (int ibd, error_track &err_t, Regi
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_Kmult_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_kmult!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -911,15 +812,13 @@ void GlobalWriter::SendXyflow_Kmult_ToHDF5 (int ibd, RegionalizedData &my_region
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_Dmult_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_dmult!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -935,15 +834,13 @@ void GlobalWriter::SendXyflow_Dmult_ToHDF5 (int ibd, RegionalizedData &my_region
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_Taub_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_taub!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -967,14 +864,12 @@ void GlobalWriter::SendXyflow_Taub_ToHDF5 (int ibd, RegionalizedData &my_region_
             }
           }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_SP_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_SP!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -994,15 +889,13 @@ void GlobalWriter::SendXyflow_SP_ToHDF5 (int ibd, RegionalizedData &my_region_da
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_R!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -1018,15 +911,13 @@ void GlobalWriter::SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_dat
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_GainSens_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_gainSens!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -1044,14 +935,12 @@ void GlobalWriter::SendXyflow_GainSens_ToHDF5 (int ibd, RegionalizedData &my_reg
             }
           }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_timeframe != NULL ) )
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -1072,7 +961,6 @@ void GlobalWriter::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_re
           }
         }
       }
-    }
 }
 
 
@@ -1080,8 +968,7 @@ void GlobalWriter::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_re
 
 void GlobalWriter::SendXyflow_Location_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_location!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -1101,15 +988,13 @@ void GlobalWriter::SendXyflow_Location_ToHDF5 (int ibd, RegionalizedData &my_reg
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_MM_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_mm!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -1125,14 +1010,12 @@ void GlobalWriter::SendXyflow_MM_ToHDF5 (int ibd, RegionalizedData &my_region_da
             }
           }
       }
-    }
 }
 
 
 void GlobalWriter::SendXyflow_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_fittype!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -1148,18 +1031,15 @@ void GlobalWriter::SendXyflow_FitType_ToHDF5 (int ibd, RegionalizedData &my_regi
             }
           }
       }
-    }
 }
 
 
 
 void GlobalWriter::SendXyflow_HPlen_ToHDF5 (int ibd, RegionalizedData &my_region_data,
     SlicedChipExtras & extra,
-    int flow_block_start
-  )
+    int flow_block_start  )
 {
-    if ( mPtrs!=NULL )
-    {
+    //if ( ! hasPointers() ) return;
       if (( mPtrs->m_beads_xyflow_hplen!=NULL ) )
       {
           BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
@@ -1191,7 +1071,6 @@ void GlobalWriter::SendXyflow_HPlen_ToHDF5 (int ibd, RegionalizedData &my_region
                   if (nuc >=0 && nuc<=3 && hplen>=0) {
                       mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_hplen,ibd_select,0,0,nuc );
                       mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_hplen,ibd_select,1,0,hplen );
-                  }
               }
             }
           }
@@ -1243,9 +1122,7 @@ void GlobalWriter::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk,
     int max_frames , int flow_block_start
   )
 {
-  // placeholder
-  if ( mPtrs!=NULL )
-  {
+    //if ( ! hasPointers() ) return;
     if ( ( mPtrs->m_region_debug_bead_xtalk!=NULL ) && ( ibd==my_region_data.my_beads.DEBUG_BEAD ) )
     {
       int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
@@ -1257,7 +1134,6 @@ void GlobalWriter::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk,
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_xtalk,reg,j,flow,block_signal_xtalk[j+fnum*npts] );
         for ( int j=npts; j<max_frames; j++ )
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_xtalk,reg,j,flow,0 ); // pad 0's
-      }
     }
   }
 }
@@ -1415,7 +1291,6 @@ void GlobalWriter::DumpRegionOffsetH5 ( int reg, int col, int row )
     ///------------------------------------------------------------------------------------------------------------
     mPtrs->copyCube_element ( mPtrs->mRegionOffset,reg,0,0,col );
     mPtrs->copyCube_element ( mPtrs->mRegionOffset,reg,1,0,row );
-
   }
 }
 
@@ -1697,6 +1572,8 @@ GlobalWriter::GlobalWriter() {
   rawWells = NULL;
   mPtrs = NULL;
   washout_flow = NULL;
+  nSampleOut = 0;
+  sampleIndex = 0;
 }
 
 

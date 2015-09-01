@@ -51,14 +51,15 @@ def do_upgrade(plan, best_match_analysis_args):
     plan.beadfindargs = best_match_analysis_args.beadfindargs
     plan.calibrateargs = best_match_analysis_args.calibrateargs
     plan.prebasecallerargs = best_match_analysis_args.prebasecallerargs
-    plan.prethumbnailbasecallerargs = best_match_analysis_args.prethumbnailbasecallerargs
+    plan.ionstatsargs = best_match_analysis_args.ionstatsargs
     
+    plan.prethumbnailbasecallerargs = best_match_analysis_args.prethumbnailbasecallerargs
     plan.thumbnailalignmentargs = best_match_analysis_args.thumbnailalignmentargs
     plan.thumbnailanalysisargs = best_match_analysis_args.thumbnailanalysisargs
     plan.thumbnailbasecallerargs = best_match_analysis_args.thumbnailbasecallerargs
     plan.thumbnailbeadfindargs = best_match_analysis_args.thumbnailbeadfindargs
     plan.thumbnailcalibrateargs = best_match_analysis_args.thumbnailcalibrateargs
-    
+    plan.thumbnailionstatsargs = best_match_analysis_args.thumbnailionstatsargs
 
 def is_upgrade_needed(eas, best_match_analysis_args):
     """
@@ -72,6 +73,8 @@ def is_upgrade_needed(eas, best_match_analysis_args):
     beadfindargs = eas.beadfindargs
     calibrateargs = eas.calibrateargs
     prebasecallerargs = eas.prebasecallerargs
+    ionstatsargs = eas.ionstatsargs
+    
     prethumbnailbasecallerargs = eas.prethumbnailbasecallerargs
     
     thumbnailalignmentargs = eas.thumbnailalignmentargs
@@ -79,6 +82,7 @@ def is_upgrade_needed(eas, best_match_analysis_args):
     thumbnailbasecallerargs = eas.thumbnailbasecallerargs
     thumbnailbeadfindargs = eas.thumbnailbeadfindargs
     thumbnailcalibrateargs = eas.thumbnailcalibrateargs
+    thumbnailionstatsargs = eas.thumbnailionstatsargs
     
     if (alignmentargs != best_match_analysis_args.alignmentargs):
         log.info("DIFF...orig alignmentargs=%s" %(alignmentargs))
@@ -94,12 +98,14 @@ def is_upgrade_needed(eas, best_match_analysis_args):
         beadfindargs != best_match_analysis_args.beadfindargs or
         calibrateargs != best_match_analysis_args.calibrateargs or
         prebasecallerargs != best_match_analysis_args.prebasecallerargs or
+        ionstatsargs != best_match_analysis_args.ionstatsargs or
         prethumbnailbasecallerargs != best_match_analysis_args.prethumbnailbasecallerargs or
         thumbnailalignmentargs != best_match_analysis_args.thumbnailalignmentargs or
         thumbnailanalysisargs != best_match_analysis_args.thumbnailanalysisargs or
         thumbnailbasecallerargs != best_match_analysis_args.thumbnailbasecallerargs or
         thumbnailbeadfindargs != best_match_analysis_args.thumbnailbeadfindargs or
-        thumbnailcalibrateargs != best_match_analysis_args.thumbnailcalibrateargs):
+        thumbnailcalibrateargs != best_match_analysis_args.thumbnailcalibrateargs or
+        thumbnailionstatsargs != best_match_analysis_args.thumbnailionstatsargs):
         has_differences = True
             
     return has_differences
@@ -124,12 +130,14 @@ def check_analysis_args(plan_or_template, latest_analysisArgs_objs, intent):
         chipType = chipType[:3]
 
     latest_analysisArgs_objs_by_chip = latest_analysisArgs_objs.filter(chipType=chipType).order_by('-pk')
-                                                                                     
-    best_match_analysis_args = models.AnalysisArgs.best_match(chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, latest_analysisArgs_objs_by_chip)
 
-    ##log.info("for chipType=%s; sequenceKitName=%s; =%s; libraryKitName=%s; samplePrepKitName=%s - best_match_analysis_args=%s" %(chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, best_match_analysis_args))
+    runType = plan_or_template.runType
+    applicationGroupName = plan_or_template.applicationGroup.name if plan_or_template.applicationGroup else ""
+                                                                                     
+    best_match_analysis_args = models.AnalysisArgs.best_match(chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, latest_analysisArgs_objs_by_chip, runType, applicationGroupName)
 
     if best_match_analysis_args:
+        log.info("for chipType=%s; sequenceKitName=%s; =%s; libraryKitName=%s; samplePrepKitName=%s; applicationType=%s; applicationGroupName=%s - best_match_analysis_args.pk=%d" %(chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, runType, applicationGroupName, best_match_analysis_args.pk))       
         is_to_upgrade = is_upgrade_needed(plan_or_template.latestEAS, best_match_analysis_args)
     else:
         is_to_upgrade = False
@@ -222,10 +230,10 @@ def filter_querySet_for_analysisArgs(querySet):
                                  latestEAS__basecallerargs = "",
                                  latestEAS__thumbnailbasecallerargs = "",
                                  latestEAS__alignmentargs = "",
-                                 latestEAS__thumbnailalignmentargs = "")    
-   return querySet2    
-
-
+                                 latestEAS__thumbnailalignmentargs = "",
+                                 latestEAS__ionstatsargs = "",
+                                 latestEAS__thumbnailionstatsargs = "")    
+   return querySet2
 
 
 

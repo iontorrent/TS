@@ -270,6 +270,9 @@ public:
   void CreateEmpty(int numFlows, const char *flowOrder);
   void SetRegion(int rowStart, int height, int colStart, int width);
   void GetRegion(int &rowStart, int &height, int &colStart, int &width);
+  void SetH5ChunkSize(uint &rows, uint &cols, uint &flows) { mWellChunkSizeRow=rows; mWellChunkSizeCol=cols; mWellChunkSizeFlow=flows; };
+  void GetH5ChunkSize(uint &rows, uint &cols, uint &flows) { rows=mWellChunkSizeRow; cols=mWellChunkSizeCol; flows=mWellChunkSizeFlow; };
+
   /** Set the current gzip chunk compression level (0-9 valid only. */
   void SetCompression(int level) { mCompression = level; }
   int GetCompression() { return mCompression; }
@@ -442,8 +445,9 @@ private:
   RWH5DataSet mWells;       ///< Wells hdf5 dataset
   RWH5DataSet mInfoKeys;    ///< Dataset for keys matching mInfoValues order
   RWH5DataSet mInfoValues;  ///< Dataset for values matching mInfoKeys order
-  size_t mWellChunkSize;
-  size_t mFlowChunkSize;
+  size_t mWellChunkSizeRow;
+  size_t mWellChunkSizeCol;
+  size_t mWellChunkSizeFlow;
 
   /* For iterating the current region well. */
   size_t mCurrentRegionRow;

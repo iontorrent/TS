@@ -196,8 +196,19 @@ function UpdateParameterValues() {
 
   //write the advanced options to the ui
   $.each(parameter_sets[idx], function (key, value) {
-    if (key == "meta")
-      return true;
+    if (key == "meta") {
+		if ("tmapargs" in value) {
+    		 $("#tmapargs").val(value["tmapargs"]);
+		 }
+		 else {
+		 	$("#tmapargs").val("");
+		 }
+        if ("tvcargs" in value)
+          $("#tvcargs").val(value["tvcargs"]);
+        else
+          $("#tvcargs").val("tvc");
+        return true;
+    }
     $("#" + key + "> form").html("");
     $.each(value, function (subkey, subvalue) {
       if ($.inArray(subkey, topparams) === -1) {
@@ -245,20 +256,44 @@ function ApplyParameterFilters () {
 
   // Update the list of displayed panels based on chip selection
   if (chip_selection == 'pgm') {
-    if ($("#ampliseq_panel option:selected").data("chip") == 'proton') {
+    if ($("#ampliseq_panel option:selected").data("chip") != 'pgm') {
       $("#ampliseq_panel").val("");
       panel_selection = "";
     }
     $("#ampliseq_panel option[data-chip='pgm']").css("display","");
     $("#ampliseq_panel option[data-chip='proton']").hide();
+    $("#ampliseq_panel option[data-chip='530']").hide();
+    $("#ampliseq_panel option[data-chip='540']").hide();
   }
   if (chip_selection == 'proton_p1') {
-    if ($("#ampliseq_panel option:selected").data("chip") == 'pgm') {
+    if ($("#ampliseq_panel option:selected").data("chip") != 'proton_p1') {
       $("#ampliseq_panel").val("");
       panel_selection = "";
     }
     $("#ampliseq_panel option[data-chip='pgm']").hide();
     $("#ampliseq_panel option[data-chip='proton']").css("display","");
+    $("#ampliseq_panel option[data-chip='530']").hide();
+    $("#ampliseq_panel option[data-chip='540']").hide();
+  }
+  if (chip_selection == '530') {
+    if ($("#ampliseq_panel option:selected").data("chip") != '530') {
+      $("#ampliseq_panel").val("");
+      panel_selection = "";
+    }
+    $("#ampliseq_panel option[data-chip='pgm']").hide();
+    $("#ampliseq_panel option[data-chip='proton']").hide();
+    $("#ampliseq_panel option[data-chip='530']").css("display","");
+    $("#ampliseq_panel option[data-chip='540']").hide();
+  }
+  if (chip_selection == '540') {
+    if ($("#ampliseq_panel option:selected").data("chip") != '540') {
+      $("#ampliseq_panel").val("");
+      panel_selection = "";
+    }
+    $("#ampliseq_panel option[data-chip='pgm']").hide();
+    $("#ampliseq_panel option[data-chip='proton']").hide();
+    $("#ampliseq_panel option[data-chip='530']").hide();
+    $("#ampliseq_panel option[data-chip='540']").css("display","");
   }
   $(".dropdown").trigger("liszt:updated");
 
@@ -324,6 +359,7 @@ function serializeForm() {
 
   base_set["meta"]["trimreads"] = $("#trimreads").prop('checked');
   base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+  base_set["meta"]["tmapargs"] = $("#tmapargs").val().replace(/(\r\n|\n|\r)/gm, " ");
   base_set["meta"]["barcode_mode"] = "match";
   //base_set["meta"]["barcode_mode"] = $("#barcodeModeSelector input[type='radio']:checked").val();
   if ($("#barcodeModeSelector").is(":checked") || !barcoded) {
@@ -374,6 +410,8 @@ function ActualRestoreForm() {
     $("#trimreads").prop("checked", restore_form_data["meta"]["trimreads"]);
   if ("tvcargs" in restore_form_data["meta"])
     $("#tvcargs").val(restore_form_data["meta"]["tvcargs"]);
+  if ("tmapargs" in restore_form_data["meta"])
+    $("#tmapargs").val(restore_form_data["meta"]["tmapargs"]);
   //$("#barcodeModeSelector input[value='match']").prop("checked", true);
   $('#barcodeModeSelector').attr('checked', false);
   if ("barcode_mode" in restore_form_data['meta']) {
@@ -407,6 +445,7 @@ function ActualRestoreForm() {
     delete restore_form_data["meta"]["librarytype"];
     delete restore_form_data["meta"]["trimreads"];
     delete restore_form_data["meta"]["tvcargs"];
+    delete restore_form_data["meta"]["tmapargs"];
     delete restore_form_data["meta"]["compatibility"];
     delete restore_form_data["meta"]["barcode_mode"];
 
@@ -417,7 +456,7 @@ function ActualRestoreForm() {
     if (!("tooltip" in restore_form_data["meta"]))
       restore_form_data["meta"]["tooltip"] = "Legacy";
     if (!("ts_version" in restore_form_data["meta"]))
-      restore_form_data["meta"]["ts_version"] = "4.6";
+      restore_form_data["meta"]["ts_version"] = "5.0";
     //if (!("repository_id" in restore_form_data["meta"]))
     //  restore_form_data["meta"]["repository_id"] = "";
     if (!("compatibility" in restore_form_data["meta"]))
@@ -476,6 +515,8 @@ function LoadingPhaseCompleted() {
       if (experiment_details["chipType"].substr(0,2) == "31")
         $("#chipSelector input[value=pgm]").prop("checked", true);
       if (experiment_details["chipType"].substr(0,2) == "P1")
+        $("#chipSelector input[value=proton_p1]").prop("checked", true);
+      if (experiment_details["chipType"].substr(0,1) == "5")
         $("#chipSelector input[value=proton_p1]").prop("checked", true);
     }
     if (experiment_details["runtype"]) {
@@ -619,6 +660,8 @@ function RetrieveAmpliseqPanelInfo() {
                 if ("choice" in result["meta"]) {
                     if (result["meta"]["choice"] == 'pgm') ampliseq_panel_option += " - PGM";
                     if (result["meta"]["choice"] == 'proton') ampliseq_panel_option += " - Proton";
+                    if (result["meta"]["choice"] == '530') ampliseq_panel_option += " - 530";
+                    if (result["meta"]["choice"] == '540') ampliseq_panel_option += " - 540";
                 }
                 ampliseq_panel_option += " )</option>";
 
@@ -635,11 +678,11 @@ function RetrieveAmpliseqPanelInfo() {
                 if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
                     new_config["meta"]["configuration"] = "";
                 if (!("ts_version" in new_config["meta"]))
-                    new_config["meta"]["ts_version"] = "4.6";
+                    new_config["meta"]["ts_version"] = "5.0";
                 //if (!("repository_id" in new_config["meta"]))
                 //    new_config["meta"]["repository_id"] = "";
                 new_config["meta"]["compatibility"] = {
-                    "chip"        : ["pgm","proton_p1"],
+                    "chip"        : ["pgm","proton_p1","530","540"],
                     "library"     : ["ampliseq"],
                     "panel"       : result["resource_uri"]
                 };
@@ -843,6 +886,7 @@ $(function () {
       try {
         JsonObj = e.target.result;
         var new_config = JSON.parse(JsonObj);
+        new_config["meta"]["configuration"] += "_external_file";
 
         if (!("meta" in new_config))
           new_config["meta"] = {};
@@ -853,7 +897,7 @@ $(function () {
         if (!("configuration" in new_config["meta"]))
           new_config["meta"]["configuration"] = "";
         if (!("ts_version" in new_config["meta"]))
-          new_config["meta"]["ts_version"] = "4.6";
+          new_config["meta"]["ts_version"] = "5.0";
         //if (!("repository_id" in new_config["meta"]))
         //  new_config["meta"]["repository_id"] = "";
         //if (!("compatibility" in new_config["meta"]))
@@ -958,7 +1002,7 @@ $(function () {
 <div class="container">
 <div class="row-fluid" style="margin-bottom:0px">
 <div class="span8">
-<h3>Torrent Variant Caller 4.6</h3>
+<h3>Torrent Variant Caller 5.0</h3>
 </div>
   <div class="span4 hide_until_loaded" style="margin-top:14px;display:none">
       <input id="postbutton" class="btn btn-primary exclude-from-plan" style="float:right" type="submit" value="Submit">
@@ -980,6 +1024,18 @@ $(function () {
         <label>
             <input class="chipSelector" type="radio" name="chiptype" style="vertical-align:baseline" value="proton_p1">
             Proton PI
+        </label>
+        </div>
+        <div style="float:left;margin-right:30px">
+        <label>
+            <input class="chipSelector" type="radio" name="chiptype" style="vertical-align:baseline" value="530">
+            530
+        </label>
+        </div>
+        <div style="float:left;margin-right:30px">
+        <label>
+            <input class="chipSelector" type="radio" name="chiptype" style="vertical-align:baseline" value="540">
+            540
         </label>
         </div>
     </div>
@@ -1351,10 +1407,22 @@ $(function () {
                     <div class="span3">
                         <span>Torrent Variant Caller arguments</span>
                     </div>
-
+					<br/>
                     <div class="span7">
                         <textarea id="tvcargs" rows="5" cols="150">tvc</textarea>
                     </div>
+					<br/>
+					<br/>
+				</div>
+                <div class="row zebra">
+                    <div class="span3">
+                        <span>Alignment arguments</span>
+                    </div>
+					<br/>
+                    <div class="span7">
+                        <textarea id="tmapargs" rows="5" cols="150"></textarea>
+                    </div>
+
 
                 </div>
             </form>
@@ -1374,15 +1442,15 @@ $(function () {
 <div id="json_result"></div>
 
 <div>
-    <h4>About Torrent Variant Caller 4.6</h4>
-    <p>TVC 4.6 analyzes mapped reads covering each individual reference base
+    <h4>About Torrent Variant Caller</h4>
+    <p>TVC analyzes mapped reads covering each individual reference base
        to deduce whether there is sufficient statistical evidence to support calling
        a SNP or INDEL at a given position.
        The analysis can be restricted to a subset of the genome by defining targeted regions.
        If hotspot regions are defined, TVC includes their positions in the report,
        even if variants have not been specifically identified.</p>
 
-    <p>Get more information by visiting <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7426" target="_blank">
+    <p>Get more information by visiting <a href="http://ioncommunity.thermofisher.com/docs/DOC-7426" target="_blank">
       Torrent Variant Caller page on Ion Community</a>.</p>
 
 </div>

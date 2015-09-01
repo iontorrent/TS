@@ -27,9 +27,10 @@ from django.core.exceptions import ValidationError
 
 import iondb.settings
 
-
 from django.db import models
 from iondb.utils import devices
+
+from django.db.models.query_utils import Q
 
 from iondb.rundb import json_field
 
@@ -192,8 +193,9 @@ class KitInfo(models.Model):
         ("readLengthDerivableFromFlows;", "Non-Hi-Q sequencing kit categories"),
         ("s5v1Kit", "S5 v1 kit categories"),
         ("s5v1Kit;flowOverridable;", "S5 v1 kit categories with special flow count handling"),
+        ("s5v1Kit;flowOverridable;multipleReadLength;", "S5 v1 templating kit categories"),        
         ("s5v1Install", "S5 v1 install categories"),        
-    )    
+    )
     categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
     libraryReadLength = models.PositiveIntegerField(default = 0)
 
@@ -314,6 +316,7 @@ class ApplProduct(models.Model):
     productName = models.CharField(max_length = 128, blank=False)
     description = models.CharField(max_length = 1024, blank=True)
     applType = models.ForeignKey(RunType)
+    applicationGroup = models.ForeignKey(ApplicationGroup, blank=True, null=True)
     isActive = models.BooleanField(default = True)
     #if isVisible is false, it will not be shown as a choice in UI
     isVisible = models.BooleanField(default = False)
@@ -350,6 +353,7 @@ class ApplProduct(models.Model):
     defaultAvalancheTemplateKit = models.ForeignKey(KitInfo, related_name='avalancheTemplateKit_applProduct_set', blank=True, null=True)
     defaultAvalancheSequencingKit = models.ForeignKey(KitInfo, related_name='avalancheSeqKit_applProduct_set', blank=True, null=True)
 
+    isReferenceSelectionSupported = models.BooleanField(default = True)
     isTargetTechniqueSelectionSupported = models.BooleanField(default = True)
     isTargetRegionBEDFileSupported = models.BooleanField(default = True)
     isTargetRegionBEDFileSelectionRequiredForRefSelection = models.BooleanField(default = False)
@@ -377,7 +381,8 @@ class ApplProduct(models.Model):
     ALLOWED_INSTRUMENT_TYPES = (
         ('', 'Any'),
         ('pgm', 'PGM'),
-        ('proton', 'Proton')
+        ('proton', 'Proton'),
+        ('s5', 'S5')
     )
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
@@ -410,10 +415,11 @@ class PlannedExperimentManager(models.Manager):
         extra_kwargs['usePreBeadfind'] = kwargs.pop('x_usePreBeadfind', True)
         extra_kwargs['star'] = kwargs.pop('x_star', False)
         extra_kwargs['chipType'] = kwargs.pop('x_chipType', "")
+        extra_kwargs['chipBarcode'] = kwargs.pop('chipBarcode', "") or ""
         extra_kwargs['flows'] = kwargs.pop('x_flows', "0")
         extra_kwargs['notes'] = kwargs.pop('x_notes', "")
         extra_kwargs['sequencekitname'] = kwargs.pop('x_sequencekitname', "")
-        extra_kwargs['platform'] = kwargs.pop('x_platform', "")
+        if 'x_platform' in kwargs: extra_kwargs['platform'] = kwargs.pop('x_platform', "")
         extra_kwargs['x_isSaveBySample'] = kwargs.pop('x_isSaveBySample', False)
 
         # EAS
@@ -435,6 +441,24 @@ class PlannedExperimentManager(models.Manager):
         extra_kwargs['mixedTypeRNA_targetRegionBedFile'] = kwargs.pop("x_mixedTypeRNA_bedfile", "")
         extra_kwargs['mixedTypeRNA_hotSpotRegionBedFile'] = kwargs.pop("x_mixedTypeRNA_regionfile", "")
 
+        #EAS - analysis args
+        extra_kwargs["beadfindargs"] = kwargs.pop("x_beadfindargs", "")
+        extra_kwargs["analysisargs"] = kwargs.pop("x_analysisargs", "")
+        extra_kwargs["prebasecallerargs"] = kwargs.pop("x_prebasecallerargs", "")
+        extra_kwargs["calibrateargs"] = kwargs.pop("x_calibrateargs", "")
+        extra_kwargs["basecallerargs"] = kwargs.pop("x_basecallerargs", "")
+        extra_kwargs["alignmentargs"] = kwargs.pop("x_alignmentargs", "")
+        extra_kwargs["ionstatsargs"] = kwargs.pop("x_ionstatsargs", "")
+
+        extra_kwargs["thumbnailbeadfindargs"] = kwargs.pop("x_thumbnailbeadfindargs", "")
+        extra_kwargs["thumbnailanalysisargs"] = kwargs.pop("x_thumbnailanalysisargs", "")
+        extra_kwargs["prethumbnailbasecallerargs"] = kwargs.pop("x_prethumbnailbasecallerargs", "")
+        extra_kwargs["thumbnailcalibrateargs"] = kwargs.pop("x_thumbnailcalibrateargs", "")
+        extra_kwargs["thumbnailbasecallerargs"] = kwargs.pop("x_thumbnailbasecallerargs", "")
+        extra_kwargs["thumbnailalignmentargs"] = kwargs.pop("x_thumbnailalignmentargs", "")
+        extra_kwargs["thumbnailionstatsargs"] = kwargs.pop("x_thumbnailionstatsargs", "")
+        extra_kwargs["custom_args"] = kwargs.pop("x_custom_args", "")
+        
         # Sample
         extra_kwargs['sample'] = kwargs.pop('x_sample', "")
         extra_kwargs['sample_external_id'] = kwargs.pop('x_sample_external_id', "")
@@ -545,8 +569,6 @@ class PlannedExperiment(models.Model):
 
     #add metadata grab bag
     metaData = json_field.JSONField(blank=True)
-
-    chipBarcode = models.CharField(max_length=64, blank=True,null=True)
 
     seqKitBarcode = models.CharField(max_length=64, blank=True,null=True)
 
@@ -662,7 +684,7 @@ class PlannedExperiment(models.Model):
 
     ALLOWED_CATEGORIES = (
         ('', 'Unspecified'),
-        ('OncoNet', 'OncoNet'),
+        ('Onconet', 'OncoNet'),
         ('Oncomine', 'Oncomine'),          
     )    
     categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
@@ -784,6 +806,9 @@ class PlannedExperiment(models.Model):
             return chipType
         else:
             return ""
+
+    def get_chipBarcode(self):
+        return self.experiment.chipBarcode if self.experiment else ''
 
     def get_flows(self):
         experiment = self.experiment
@@ -953,6 +978,19 @@ class PlannedExperiment(models.Model):
         else:
             return False
 
+    def get_default_nucleotideType(self):
+        # return default nucleotideType based on runType and applicationGroup
+        nucleotideType = ""
+        if self.runType:
+            runTypeObjs = RunType.objects.filter(runType = self.runType)
+            if runTypeObjs:
+                nucleotideType = runTypeObjs[0].nucleotideType.upper()
+
+        if nucleotideType not in ["DNA", "RNA"]:
+            if self.applicationGroup:
+                nucleotideType = self.applicationGroup.name
+
+        return nucleotideType if nucleotideType in ["DNA", "RNA"] else ""
 
     def is_same_refInfo_as_defaults_per_sample(self):
         """
@@ -1081,10 +1119,11 @@ class PlannedExperiment(models.Model):
             'runMode' : self.runMode,
             'status'  : self.planStatus
         }
-        exp_keys = ['autoAnalyze', 'usePreBeadfind', 'star', 'chipType', 'flows', 'notes', 'sequencekitname', 'platform']
+        exp_keys = ['autoAnalyze', 'usePreBeadfind', 'star', 'chipType', 'flows', 'notes', 'sequencekitname', 'platform', 'chipBarcode']
         for key in exp_keys:
             if key in kwargs:
                 exp_kwargs[key] = kwargs[key]
+
 
         #there must be one experiment for each plan
         try:
@@ -1105,7 +1144,6 @@ class PlannedExperiment(models.Model):
                 'log' : '',
                 #db constraint requires a unique value for experiment. temp unique value below will be replaced in crawler
                 'unique' : self.planGUID,
-                'chipBarcode' : '',
                 'seqKitBarcode' : '',
                 'sequencekitbarcode' : '',
                 'reagentBarcode' : '',
@@ -1116,7 +1154,8 @@ class PlannedExperiment(models.Model):
                 'flowsInOrder' : '',
                 'ftpStatus' : '',
                 'displayName' : '',
-                'storageHost' : ''
+                'storageHost' : '',
+                'chipBarcode' : kwargs.get('chipBarcode','') or ''
             })
             experiment = Experiment(**exp_kwargs)
             logger.debug("PDD models.save_plannedExperiment_association() #2 going to CREATE experiment")
@@ -1135,26 +1174,30 @@ class PlannedExperiment(models.Model):
         experiment.save()
         logger.debug("PDD models.save_plannedExperiment_association() AFTER saving experiment_id=%d" %(experiment.id))
 
+
         # ===================== ExperimentAnalysisSettings =====================
         eas_kwargs = { 'status' : self.planStatus }
         eas_keys = [
             'barcodedSamples','barcodeKitName','targetRegionBedFile','hotSpotRegionBedFile','libraryKey','tfKey','threePrimeAdapter',
             'reference','selectedPlugins','isDuplicateReads','base_recalibration_mode','realign','libraryKitName',
             "mixedTypeRNA_reference","mixedTypeRNA_targetRegionBedFile","mixedTypeRNA_hotSpotRegionBedFile",
+            "beadfindargs", "analysisargs", "prebasecallerargs", "calibrateargs", "basecallerargs", "alignmentargs", "ionstatsargs",
+            "thumbnailbeadfindargs", "thumbnailanalysisargs", "prethumbnailbasecallerargs", "thumbnailcalibrateargs", 
+            "thumbnailbasecallerargs", "thumbnailalignmentargs", "thumbnailionstatsargs", "custom_args"
         ]
         for key in eas_keys:
             if key in kwargs:
                 eas_kwargs[key] = kwargs[key]
-        
-        # add default cmdline args
-        args = self.get_default_cmdline_args(libraryKitName=eas_kwargs.get('libraryKitName',''))
-        eas_kwargs.update(args)
 
         eas, eas_created = experiment.get_or_create_EAS(editable=True)
         for key,value in eas_kwargs.items():
             setattr(eas, key, value)
         eas.save()
         logger.debug("PDD models.save_plannedExperiment_association() AFTER saving EAS_id=%d" %(eas.id))
+
+        # update analysis args if needed
+        if not eas.have_args():
+            eas.reset_args_to_default()
 
         self.latestEAS = eas
         self.save()
@@ -1166,7 +1209,13 @@ class PlannedExperiment(models.Model):
             barcodedSamples = kwargs.get('barcodedSamples', {})
 
             if barcodedSamples:
-                barcodedSampleDict = json_field.loads(barcodedSamples)
+                if isinstance(barcodedSamples,str):
+                    barcodedSampleDict = json_field.loads(barcodedSamples)
+                else:
+                    barcodedSampleDict = barcodedSamples
+                if not isinstance(barcodedSampleDict,dict):
+                    logger.debug("PDD models.save_plannedExperiment_association() barcoded samples is not Dict. Verify the Input")#TS-11396
+
                 for displayedName, sampleDict in barcodedSampleDict.items():
                     if barcodedSampleDict[displayedName].get('barcodeSampleInfo'):
                         externalId = barcodedSampleDict[displayedName]['barcodeSampleInfo'].values()[0].get('externalId','')
@@ -1216,15 +1265,17 @@ class PlannedExperiment(models.Model):
                 logger.debug("PDD models.save_plannedExperiment_association() AFTER saving sample_id=%d" %(sample.id))
 
             # clean up old samples that may remain on experiment
-            sample_names = [ d['name'] for d in samples_kwargs ]
-            for sample in experiment.samples.all():
-                if sample.name not in sample_names:
-                    experiment.samples.remove(sample)
+            # only do this if samples were created/modified above
+            if samples_kwargs:
+                for sample in experiment.samples.all():
+                    found = [s for s in samples_kwargs if sample.name == s['name'] and sample.externalId == s['externalId']]
+                    if len(found) == 0:
+                        experiment.samples.remove(sample)
 
-                #delete sample if it is not associated with any experiments
-                if sample.experiments.all().count() == 0 and not (sample.status == "created"):
-                    logger.debug("PDD models.save_plannedExperiment_association() going to DELETE sample=%s" %(sample.name))
-                    sample.delete()
+                    #delete sample if it is not associated with any experiments
+                    if sample.experiments.all().count() == 0 and not (sample.status == "created"):
+                        logger.debug("PDD models.save_plannedExperiment_association() going to DELETE sample=%s" %(sample.name))
+                        sample.delete()
 
 
     def update_plan_qcValues(self, **kwargs):
@@ -1245,7 +1296,7 @@ class PlannedExperiment(models.Model):
                     plannedExpQc = PlannedExperimentQC(**plannedExpQc_kwargs)
                     plannedExpQc.save()
 
-    def get_default_cmdline_args(self, **kwargs):
+    def get_default_cmdline_args_obj(self, **kwargs):
         # retrieve args from AnalysisArgs table
         chipType = kwargs.get('chipType') or self.get_chipType()
         sequenceKitName = kwargs.get('sequenceKitName') or self.get_sequencekitname()
@@ -1253,7 +1304,19 @@ class PlannedExperiment(models.Model):
         libraryKitName = kwargs.get('libraryKitName') or self.get_librarykitname()
         samplePrepKitName = kwargs.get('samplePrepKitName') or self.samplePrepKitName
 
-        args = AnalysisArgs.best_match(chipType, sequenceKitName, templateKitName, libraryKitName, samplePrepKitName)
+        applicationTypeName = kwargs.get('runType') or self.runType
+        if kwargs.get('applicationGroupName') :
+            applicationGroupName = kwargs.get('applicationGroupName')
+        elif self.applicationGroup:
+            applicationGroupName = self.applicationGroup.name
+        else:
+            applicationGroupName = ""
+
+        args = AnalysisArgs.best_match(chipType, sequenceKitName, templateKitName, libraryKitName, samplePrepKitName, None, applicationTypeName, applicationGroupName)
+        return args
+
+    def get_default_cmdline_args(self, **kwargs):
+        args = self.get_default_cmdline_args_obj(**kwargs)
         if args:
             args_dict = args.get_args()
         else:
@@ -1813,8 +1876,10 @@ class ExperimentAnalysisSettings(models.Model):
      )
 
     base_recalibration_mode = models.CharField(max_length = 64, blank = False, null = False, choices = ALLOWED_RECALIBRATION_MODES, default = 'standard_recal')
-        
+
     realign = models.BooleanField(default=False)
+
+    custom_args = models.BooleanField(default=False)
 
     # Beadfind args
     beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Beadfind args")
@@ -1856,7 +1921,8 @@ class ExperimentAnalysisSettings(models.Model):
         else:
             return "Unsupported calibration mode"
 
-    def get_barcoded_samples_reference_names(self):
+    @cached_property
+    def barcoded_samples_reference_names(self):
         """
         Returns a sorted, unique list of references the barcoded samples are using
         """
@@ -1869,13 +1935,60 @@ class ExperimentAnalysisSettings(models.Model):
                         if sampleReference and sampleReference.lower() != "none":
                             ref_list.append(sampleReference)
 
-            unique_ref_list = list(set(ref_list))
-            unique_ref_list.sort()
-            #logger.debug("models.get_barcoded_samples_reference_names() unique_ref_list=%s" %(unique_ref_list))
-            return unique_ref_list
+            ref_list = sorted(list(set(ref_list)))
+            if self.reference and self.reference not in ref_list:
+                ref_list.insert(0, self.reference)
+
+        return ref_list
+
+    def have_args(self, thumbnail=False, include_calibration=False, include_alignment=False):
+        # check if we have required cmdline args
+        if thumbnail:
+            check_args = ["thumbnailbeadfindargs", "thumbnailanalysisargs", "thumbnailbasecallerargs"]
+            if include_calibration:
+                check_args += ["prethumbnailbasecallerargs", "thumbnailcalibrateargs"]
+            if include_alignment:
+                check_args += ["thumbnailalignmentargs"]
         else:
-            return ref_list
-    
+            check_args = ["beadfindargs", "analysisargs", "basecallerargs"]
+            if include_calibration:
+                check_args += ["prebasecallerargs", "calibrateargs"]
+            if include_alignment:
+                check_args += ["alignmentargs"]
+
+        have_args = all(bool(getattr(self, key)) for key in check_args)
+        return have_args
+
+    def reset_args_to_default(self):
+        # reset all command line args to default values
+        plan = self.experiment.plan
+        if plan:
+            args = plan.get_default_cmdline_args()
+        else:
+            args = AnalysisArgs.best_match(self.experiment.chipType).get_args()
+
+        for key,value in args.items():
+            setattr(self, key, value)
+        self.save()
+
+    def get_cmdline_args(self):
+        args = {
+            'beadfindargs': self.beadfindargs,
+            'analysisargs': self.analysisargs,
+            'basecallerargs': self.basecallerargs,
+            'prebasecallerargs': self.prebasecallerargs,
+            'calibrateargs': self.calibrateargs,
+            'alignmentargs': self.alignmentargs,
+            'ionstatsargs': self.ionstatsargs,
+            'thumbnailbeadfindargs':    self.thumbnailbeadfindargs,
+            'thumbnailanalysisargs':    self.thumbnailanalysisargs,
+            'thumbnailbasecallerargs':  self.thumbnailbasecallerargs,
+            'prethumbnailbasecallerargs':  self.prethumbnailbasecallerargs,
+            'thumbnailcalibrateargs': self.thumbnailcalibrateargs,
+            'thumbnailalignmentargs': self.thumbnailalignmentargs,
+            'thumbnailionstatsargs': self.thumbnailionstatsargs
+        }
+        return args
 
     def __unicode__(self):
         return "%s/%d" % (self.experiment, self.pk)
@@ -1992,7 +2105,7 @@ class SampleSet(models.Model):
     
     ALLOWED_LIBRARY_PREP_TYPES = (
         ('', 'Unspecified'),
-#         ('amps_on_chef_v1', 'AmpliSeq on Chef'),
+        ('amps_on_chef_v1', 'AmpliSeq on Chef'),
     )
     libraryPrepType = models.CharField(max_length=64, blank=True, choices=ALLOWED_LIBRARY_PREP_TYPES, default='')
     libraryPrepPlateType = models.CharField(max_length=64, blank=True, default='')
@@ -2085,7 +2198,11 @@ class SampleSetItem(models.Model):
 
     pcrPlateColumn = models.CharField(max_length = 10, default='', blank = True, null = True)
     pcrPlateRow = models.CharField(max_length = 10, default='', blank = True, null = True)
-
+    
+    biopsyDays = models.IntegerField(blank = True, null = True, default = 0)
+    coupleId = models.CharField(max_length=127, blank=True, null=True, default="")
+    embryoId = models.CharField(max_length=127, blank=True, null=True, default="")
+    
     ALLOWED_AMPLISEQ_PCR_PLATE_ROWS_V1 = (
         ('A', 'A'),
         ('B', 'B'),
@@ -2094,11 +2211,11 @@ class SampleSetItem(models.Model):
         ('E', 'E'),
         ('F', 'F'),
         ('G', 'G'),
-        ('H', 'H')         
+        ('H', 'H')     
     )
 
     ALLOWED_AMPLISEQ_PCR_PLATE_COLUMNS_V1 = (
-        ('1', '1')
+        ('1', '1'),
     )
                                              
     @staticmethod
@@ -3376,7 +3493,7 @@ class GlobalConfig(models.Model):
     check_news_posts = models.BooleanField("check for news posts", default=True)
     enable_auto_security = models.BooleanField("Enable Security Updates", default=True)
     sec_update_status = models.CharField(max_length=128,blank=True)
-    enable_compendia_OCP = models.BooleanField("Enable OCP?", default=False)
+    enable_compendia_OCP = models.BooleanField("Enable Oncomine?", default=False)
     enable_support_upload = models.BooleanField("Enable Support Upload?", default=False)
     enable_nightly_email = models.BooleanField("Enable Nightly Email Notifications?", default=True)
 
@@ -3866,11 +3983,7 @@ class ReferenceGenome(models.Model):
                     result.revoke(terminate=True)
         logger.warning("Revoking celery task: {0}".format(self.celery_task_id))
         if os.path.exists(self.reference_path):
-            try:
-                shutil.rmtree(self.reference_path)
-            except OSError:
-                logger.error("Failed to delete reference %d at %s" % (self.pk, self.reference_path))
-                return False
+            tasks.delete_that_folder.delay(self.reference_path, "Deleting reference %s (%s)" % (self.short_name, self.pk))
         else:
             logger.error("Files do not exists for reference %d at %s"  % (self.pk, self.reference_path))
 
@@ -4520,7 +4633,7 @@ class DMFileStat (models.Model):
         return bool(self.action_state in ['DG','DD'])
 
     def in_process(self):
-        return bool(self.action_state in ['AG','DG','EG','SA','SE','SD'])
+        return bool(self.action_state in ['AG','DG','EG','SA','SE','SD','IG'])
 
 
 class FileMonitor(models.Model):
@@ -4588,6 +4701,7 @@ class NewsPost(models.Model):
 class AnalysisArgs(models.Model):
     # Holds default command line args for selected chipType and kits
     name = models.CharField(max_length=256, blank=False, unique=True)
+    description = models.CharField(max_length=256, blank=True, null=True, unique=True)    
     chipType = models.CharField(max_length=128, default='')
     active = models.BooleanField(default=True)
     # specify these args are to be used as default for this chip type, only one chip_default should exist per chip
@@ -4620,6 +4734,15 @@ class AnalysisArgs(models.Model):
     ionstatsargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Ionstats args")
     thumbnailionstatsargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Ionstats args")
 
+    applType = models.ForeignKey(RunType, related_name="applType_analysisArgs", blank=True, null=True)
+    applGroup = models.ForeignKey(ApplicationGroup, related_name="applGroup_analysisArgs", blank=True, null=True)        
+ 
+    isSystem = models.BooleanField(default=False)
+    creator = models.ForeignKey(User, related_name = "created_analysisArgs", blank=True, null=True)
+    creationDate = models.DateTimeField(blank=True, null=True, auto_now_add=True, default=timezone.now)
+    lastModifiedUser  = models.ForeignKey(User, related_name = "lastModified_analysisArgs",  blank=True, null=True)
+    lastModifiedDate = models.DateTimeField(blank=True, null=True, auto_now=True, default=timezone.now)
+
 
     def get_args(self):
         args = {
@@ -4642,7 +4765,7 @@ class AnalysisArgs(models.Model):
 
 
     @classmethod
-    def best_match(cls, chipType, sequenceKitName='', templateKitName='', libraryKitName='', samplePrepKitName='', analysisArgs_objs = None):
+    def best_match(cls, chipType, sequenceKitName='', templateKitName='', libraryKitName='', samplePrepKitName='', analysisArgs_objs = None, applicationTypeName="", applicationGroupName=""):
         ''' Find args that best match given chip type and kits.
             If chipType not found returns None.
             If none of the kits matched returns chip default.
@@ -4655,7 +4778,7 @@ class AnalysisArgs(models.Model):
         if analysisArgs_objs:
             args = analysisArgs_objs
         else:
-            args = AnalysisArgs.objects.filter(chipType=chipType).order_by('-pk')
+            args = AnalysisArgs.objects.filter(chipType=chipType, isSystem=True).order_by('-pk')
             
         args_count = args.count()
 
@@ -4664,11 +4787,25 @@ class AnalysisArgs(models.Model):
         elif args_count == 1:
             best_match = args[0]
         else:
+            applicationType = None
+            if applicationTypeName:
+                applicationTypes = RunType.objects.filter(runType = applicationTypeName)
+                if applicationTypes:
+                    applicationType = applicationTypes[0]
+                    
+            applicationGroup = None
+            if applicationGroupName:
+                applicationGroups = ApplicationGroup.objects.filter(name = applicationGroupName)
+                if applicationGroups:
+                    applicationGroup = applicationGroups[0]
+                
             kits = {
                 'sequenceKitName': sequenceKitName,
                 'templateKitName': templateKitName,
                 'libraryKitName': libraryKitName,
-                'samplePrepKitName': samplePrepKitName
+                'samplePrepKitName': samplePrepKitName,
+                'applType' : applicationType,
+                'applGroup' :  applicationGroup
             }            
             match = [0]*args_count
             match_no_blanks = [0]*args_count
@@ -4697,7 +4834,124 @@ class AnalysisArgs(models.Model):
                 except:
                     best_match = None
 
+        if best_match is not None:
+            logger.debug("best_match() chipType=%s; applicationTypeName=%s; applicationGroupName=%s FOUND best_match.pk=%d" %(chipType, applicationTypeName, applicationGroupName, best_match.pk))
+
         return best_match
+
+
+    @classmethod
+    def possible_matches(cls, chipType, sequenceKitName='', templateKitName='', libraryKitName='', samplePrepKitName='', analysisArgs_objs = None, applicationTypeName="", applicationGroupName=""):
+        ''' Find all the args that are potentially good for to choose from.
+            If chipType not found returns None.
+            If none of the kits matched returns chip default.
+        '''
+        # chip name backwards compatibility
+        if chipType:
+            chipType = chipType.replace('"','')
+            if Chip.objects.filter(name=chipType).count() == 0:
+                chipType = chipType[:3]
+        else:
+            chipType = ""
+
+        best_match = AnalysisArgs.best_match(chipType, sequenceKitName, templateKitName, libraryKitName, samplePrepKitName, analysisArgs_objs, applicationTypeName,  applicationGroupName)
+        
+        active_analysisArgs_objs = AnalysisArgs.objects.filter(active = True).order_by("description")
+        
+        if best_match:
+            if applicationTypeName and applicationGroupName:
+                ##logger.debug("possible_matches() #1... chipType=%s; applicationTypeName=%s; applicationGroupName=%s" %(chipType, applicationTypeName, applicationGroupName))
+                
+                qset = (
+                    Q(pk = best_match.pk) |
+                    Q(chipType__in = [chipType]) |
+                    Q(chipType__in = ["", chipType]) & Q(applType__runType = applicationTypeName) |
+                    Q(chipType__in = ["", chipType]) & Q(applGroup__name = applicationGroupName)                
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+
+                ##logger.debug("possible_matches() #1...EXIT...  possible_analysisArgs_objs=%s" %(possible_analysisArgs_objs))
+                
+                return possible_analysisArgs_objs
+            elif best_match and applicationTypeName:
+                ##logger.debug("possible_matches() #2... chipType=%s; runType=%s" %(chipType, applicationTypeName))
+                            
+                qset = (
+                    Q(pk = best_match.pk) |
+                    Q(chipType__in = [chipType]) |
+                    Q(chipType__in = ["", chipType]) & Q(applType__runType = applicationTypeName)           
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+            elif best_match and applicationGroupName:
+                ##logger.debug("possible_matches() #3...  chipType=%s; applicationGroupName=%s" %(chipType, applicationGroupName))
+                            
+                qset = (
+                    Q(pk = best_match.pk) |
+                    Q(chipType__in = [chipType]) |
+                    Q(chipType__in = ["", chipType]) & Q(applGroup__name = applicationGroupName)                
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+            else:
+                ##logger.debug("possible_matches() #4...  best_match chipType=%s; " %(chipType))
+                
+                qset = (
+                    Q(pk = best_match.pk) |
+                    Q(chipType__in = ["", chipType])      
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+        else:
+
+            if applicationTypeName and applicationGroupName:
+                ##ogger.debug("possible_matches() #5... chipType=%s; applicationTypeName=%s; applicationGroupName=%s" %(chipType, applicationTypeName, applicationGroupName)) 
+                
+                qset = (
+                    Q(chipType__in = ["", chipType]) |
+                    Q(chipType__in = ["", chipType]) & Q(applType__runType = applicationTypeName) |
+                    Q(chipType__in = ["", chipType]) & Q(applGroup__name = applicationGroupName)
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+            elif applicationTypeName:
+                ##logger.debug("possible_matches() #6... chipType=%s; runType=%s" %(chipType, applicationTypeName))
+                            
+                qset = (
+                    Q(chipType__in = [chipType]) |
+                    Q(chipType__in = ["", chipType]) & Q(applType__runType = applicationTypeName)
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+            elif applicationGroupName:
+                ##logger.debug("possible_matches() #7...  chipType=%s; applicationGroupName=%s" %(chipType, applicationGroupName))
+                            
+                qset = (
+                    Q(chipType__in = [chipType]) |
+                    Q(chipType__in = ["", chipType]) & Q(applGroup__name = applicationGroupName)
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+            else:
+                ##logger.debug("possible_matches() #8...  best_match chipType=%s; " %(chipType))
+                
+                qset = (
+                    Q(chipType__in = ["", chipType])
+                )
+                possible_analysisArgs_objs = active_analysisArgs_objs.filter(qset).order_by("description")
+                
+                return possible_analysisArgs_objs
+
+        return best_match
+        
+    def __unicode__(self):
+        return self.name
 
     class Meta:
         verbose_name_plural = "Analysis Args"

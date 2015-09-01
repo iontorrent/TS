@@ -134,7 +134,7 @@ def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,ma
         merge_bam_files_picard(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates)
 
 
-def merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates):
+def extract_and_merge_bam_header(bamfilelist,composite_bam_filepath):
 
     try:
         for bamfile in bamfilelist:
@@ -151,7 +151,16 @@ def merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_fi
         cmd = cmd + ' VALIDATION_STRINGENCY=SILENT'
         printtime("DEBUG: Calling '%s'" % cmd)
         subprocess.call(cmd,shell=True)
+    except:
+        printtime("bam header merge failed")
+        traceback.print_exc()
+        return 1
 
+
+def merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates):
+
+    try:
+        extract_and_merge_bam_header(bamfilelist,composite_bam_filepath)
         if len(bamfilelist) == 1:
             # Usage: samtools reheader <in.header.sam> <in.bam>
             if mark_duplicates:
@@ -274,6 +283,33 @@ def merge_raw_key_signals(filelist,composite_file):
     return 0
 '''
 
+
+def merge_bams_one_dataset(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, dataset, reference, filtered, mark_duplicates):
+
+        try:
+            if reference and not filtered:
+                bamdir = ALIGNMENT_RESULTS
+                bamfile = dataset['file_prefix']+'.bam'
+            else:
+                bamdir = BASECALLER_RESULTS
+                bamfile = dataset['file_prefix']+'.basecaller.bam'
+#                bamfile = dataset['basecaller_bam']
+            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in dirs]
+            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+            composite_bam_filepath = os.path.join(bamdir, bamfile)
+            if block_bam_list:
+                if reference and not filtered:
+                    composite_bai_filepath = composite_bam_filepath+'.bai'
+                    merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates)
+                else:
+                    composite_bai_filepath=""
+                    merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates=False, method='samtools')
+
+        except:
+            print traceback.format_exc()
+            printtime("ERROR: merging %s unsuccessful" % bamfile)
+
+
 def merge_bams(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, basecaller_datasets, mark_duplicates):
 
     for dataset in basecaller_datasets['datasets']:
@@ -329,3 +365,25 @@ def merge_unmapped_bams(dirs, BASECALLER_RESULTS, basecaller_datasets, method):
 
     printtime("Finished merging basecaller BAM files")
 
+
+def merge_barcoded_alignment_bams(ALIGNMENT_RESULTS, basecaller_datasets, method):
+
+    try:
+        composite_bam_filename = os.path.join(ALIGNMENT_RESULTS,'rawlib.bam')
+
+        bam_file_list = []
+        for dataset in basecaller_datasets["datasets"]:
+            bam_name = os.path.join(ALIGNMENT_RESULTS,os.path.basename(dataset['file_prefix'])+'.bam')
+            if os.path.exists(bam_name):
+                bam_file_list.append(bam_name)
+            else:
+                printtime("WARNING: exclude %s from merging into %s" % (bam_name,composite_bam_filename))
+
+        composite_bai_filename = composite_bam_filename+'.bai'
+        mark_duplicates = False
+        merge_bam_files(bam_file_list, composite_bam_filename, composite_bai_filename, mark_duplicates, method)
+    except:
+        traceback.print_exc()
+        printtime("ERROR: Generate merged %s on barcoded run failed" % composite_bam_filename)
+
+    printtime("Finished barcode merging of %s" % ALIGNMENT_RESULTS)

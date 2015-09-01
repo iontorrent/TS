@@ -72,7 +72,7 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     const float* emphasisVec, //(MAX_POISSON_TABLE_COL)*F
     const int * nonZeroEmphFrames,
     const float* nucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
-        //in out parameters
+    //in out parameters
     float* ResultCube,
     const size_t * numFramesRegion,  //constant memory?
     const int * numLBeadsRegion,  //constant memory?
@@ -81,12 +81,12 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     const PerFlowParamsRegion * perFlowRegP,
     const PerNucParamsRegion * perNucRegP,
     const float * RegionFrameCube,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
-    const float * EmptyTracesRegion
+    const float * EmptyTraceRegion,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
+    //TraceLevelXTalk
+    const float * XTalkPerBead,
+    const float * genericXTalkRegion
+);
 
-    //TODO remove only for debugging
-    //int * numLBeads//,
-    //float * fgBuffer
-    );
 
 
 /*

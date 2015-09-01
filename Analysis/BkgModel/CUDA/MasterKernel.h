@@ -14,6 +14,7 @@
 #include "DeviceSymbolCopy.h"
 #include "UtilKernels.h"
 #include "GenerateBeadTraceKernels.h"
+#include "TraceLevelXTalk.h"
 #include "SingleFlowFitKernels.h"
 #include "RegionalFittingKernels.h"
 #include "FittingHelpers.h"

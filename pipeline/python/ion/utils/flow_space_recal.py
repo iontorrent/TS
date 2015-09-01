@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
+import os
 from ion.utils.blockprocessing import printtime
 import traceback
 import subprocess
@@ -11,34 +12,18 @@ def calibrate(dir_recalibration, sampleBAMFile, recalibArgs, chipflow):
         if recalibArgs:
             cmd = recalibArgs
         else:
-            cmd = "calibrate --skipDroop"
+            cmd = "Calibration"
 
         # default parameters
-        xMin = chipflow["BaseCaller"]['block_col_offset']
-        xMax = chipflow["BaseCaller"]['block_col_size'] + xMin -1
-        yMin = chipflow["BaseCaller"]['block_row_offset']
-        yMax = chipflow["BaseCaller"]['block_row_size'] + yMin - 1
-        yCuts = 2
-        xCuts = 2
-        numFlows = chipflow["BaseCaller"]['num_flows']
-        flowCuts = 2
+        block_offset_x = chipflow["BaseCaller"]['block_col_offset']
+        block_offset_y = chipflow["BaseCaller"]['block_row_offset']
+        block_size_x   = chipflow["BaseCaller"]['block_col_size']
+        block_size_y   = chipflow["BaseCaller"]['block_row_size']
 
-        if "--xMin" not in cmd:
-            cmd += " --xMin %d" % xMin #X_MAX=3391 =0 Y_MAX=3791 Y_MIN=0 X_CUTS=1 Y_CUTS=1 FLOW_SPAN=520
-        if "--xMax" not in cmd:
-            cmd += " --xMax %d" % xMax
-        if "--xCuts" not in cmd:
-            cmd += " --xCuts %d" % xCuts
-        if "--yMin" not in cmd:
-            cmd += " --yMin %d" % yMin
-        if "--yMax" not in cmd:
-            cmd += " --yMax %d" % yMax
-        if "--yCuts" not in cmd:
-            cmd += " --yCuts %d" % yCuts
-        if "--numFlows" not in cmd:
-            cmd += " --numFlows %d" % numFlows
-        if "--flowCuts" not in cmd:
-            cmd += " --flowCuts %d" % flowCuts
+        if "--block-offset" not in cmd:
+            cmd += " --block-offset %d,%d" % (block_offset_x, block_offset_y)
+        if "--block-size" not in cmd:
+            cmd += " --block-size %d,%d" % (block_size_x, block_size_y)
 
         cmd += " -i %s" % sampleBAMFile
         cmd += " -o %s" % dir_recalibration
@@ -46,33 +31,10 @@ def calibrate(dir_recalibration, sampleBAMFile, recalibArgs, chipflow):
         printtime("DEBUG: Calling '%s':" % cmd)
         ret = subprocess.call(cmd,shell=True)
         if ret == 0:
-            printtime("Finished HP table")
+            printtime("Calibration generated: %s" % (os.path.join(dir_recalibration,"Calibration.json")))
         else:
-            raise RuntimeError('HP table exit code: %d' % ret)
+            raise RuntimeError('Calibration exit code: %d' % ret)
     except:
         printtime('ERROR: HP training failed')
         traceback.print_exc()
         raise
-
-
-def HPaggregation(dir_recalibration, recalibArgs):
-    try:
-        if recalibArgs:
-            cmd = recalibArgs
-        else:
-            cmd = "calibrate"
-        cmd += " --performMerge"
-        cmd += " -o %s" % dir_recalibration
-        cmd += " --mergeParentDir %s" % dir_recalibration
-
-        printtime("DEBUG: Calling '%s':" % cmd)
-        ret = subprocess.call(cmd,shell=True)
-        if ret == 0:
-            printtime("Finished HP merging")
-        else:
-            raise RuntimeError('HP merging exit code: %d' % ret)
-    except:
-        printtime('ERROR: HP merging failed')
-        traceback.print_exc()
-        raise
-

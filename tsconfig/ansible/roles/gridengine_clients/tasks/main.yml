@@ -9,7 +9,7 @@
   script: "files/gridengine.preseed {{ groups.gridengine_master[0] }}"
   
 - name: Install GridEngine APT packages
-  action: apt pkg={{item}} state=latest force=yes
+  apt: pkg={{item}} state=present force=yes
   with_items:
     - gridengine-client
     - gridengine-exec

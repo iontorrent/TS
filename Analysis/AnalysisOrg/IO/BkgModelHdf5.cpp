@@ -16,6 +16,7 @@ BkgParamH5::BkgParamH5()
   bead_col = 0;
   bead_row = 0;
   region_total = 0;
+  region_nSamples = 0;
 }
 
 
@@ -376,17 +377,19 @@ void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, co
 {
     char buff[80];
     //cout << "BkgParamH5::InitBeads_BestRegion... bestRegion=" << bestRegion.first << "," << bestRegion.second << endl << flush;
+	// only once (the first flow, not all flows) 
     beads_bestRegion_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/bestRegion/timeframe", "Time Frame", "frameNumber");
-    beads_bestRegion_gainSens.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/gainSens","gain*sens","");
     beads_bestRegion_location.InitBasicCube (h5_local_ref,nBeads_live,2,1,"/bestRegion/location", "y(row),x(col) for each bead", "row,col" );
+    beads_bestRegion_gainSens.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/gainSens","gain*sens","");
+    beads_bestRegion_kmult.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/kmult","kMult","");
+    beads_bestRegion_dmult.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/dmult","dMult","");
+    beads_bestRegion_SP.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/SP","SP: copies*copy_multiplier","");
+    beads_bestRegion_R.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/R","R: ratio of bead buffering to empty buffering","");
+	// all flows 
     beads_bestRegion_predicted.InitBasicCube(h5_local_ref,nBeads_live,max_frames,datacube_numflows,"/bestRegion/predicted","predicted trace","");
     beads_bestRegion_corrected.InitBasicCube(h5_local_ref,nBeads_live,max_frames,datacube_numflows,"/bestRegion/corrected","background-adjusted trace","");
     beads_bestRegion_amplitude.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/amplitude","amplititude","");
     beads_bestRegion_residual.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/residual","residual error","");
-    beads_bestRegion_kmult.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/kmult","kMult","");
-    beads_bestRegion_dmult.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/dmult","dMult","");
-    beads_bestRegion_SP.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/SP","SP: copies*copy_multiplier","");
-    beads_bestRegion_R.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/R","R: ratio of bead buffering to empty buffering","");
     beads_bestRegion_fittype.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/fittype","fittype","");
     beads_bestRegion_taub.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/taub","taub","");
     sprintf(buff,"%d",nBeads_live);
@@ -402,23 +405,26 @@ void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, co
 }
 
 
-void BkgParamH5::InitBeads_RegionCenter( H5File &h5_local_ref, int nRegions)
+void BkgParamH5::InitBeads_RegionSamples( H5File &h5_local_ref, int nRegions,int nSamples)
 {
-    //char buff[80];
-    beads_regionCenter_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/regionCenter/timeframe", "Time Frame", "frameNumber");
-    beads_regionCenter_gainSens.InitBasicCube(h5_local_ref,nRegions,1,1,"/regionCenter/gainSens","gain*sens","");
-    beads_regionCenter_location.InitBasicCube (h5_local_ref,nRegions,2,1,"/regionCenter/location", "y(row),x(col) for each bead", "row,col" );
-    beads_regionCenter_regionParams.InitBasicCube (h5_local_ref,nRegions,3+NUMNUC*3,1,"/regionCenter/regionParams", "gain,sens,copies,kmax*4,krate*4,d*4", "" );
-    beads_regionCenter_predicted.InitBasicCube(h5_local_ref,nRegions,max_frames,datacube_numflows,"/regionCenter/predicted","predicted trace","");
-    beads_regionCenter_corrected.InitBasicCube(h5_local_ref,nRegions,max_frames,datacube_numflows,"/regionCenter/corrected","background-adjusted trace","");
-    beads_regionCenter_amplitude.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/amplitude","amplititude","");
-    beads_regionCenter_residual.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/residual","residual error","");
-    beads_regionCenter_kmult.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/kmult","kMult","");
-    beads_regionCenter_dmult.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/dmult","dMult","");
-    beads_regionCenter_SP.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/SP","SP: copies*copy_multiplier","");
-    beads_regionCenter_R.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/R","R: ratio of bead buffering to empty buffering","");
-    beads_regionCenter_fittype.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/fittype","fittype","");
-    beads_regionCenter_taub.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/taub","taub","");
+    int nBeads = nRegions * nSamples;
+	// only once (the first flow, not all flows) 
+    beads_regionSamples_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/regionSamples/timeframe", "Time Frame", "frameNumber");
+    beads_regionSamples_location.InitBasicCube (h5_local_ref,nBeads,3,1,"/regionSamples/location", "y(row),x(col),r(reg) for each bead", "row,col,reg" );
+    beads_regionSamples_gainSens.InitBasicCube(h5_local_ref,nBeads,1,1,"/regionSamples/gainSens","gain*sens","");
+    beads_regionSamples_kmult.InitBasicCube(h5_local_ref,nBeads,1,1,"/regionSamples/kmult","kMult","");
+    beads_regionSamples_dmult.InitBasicCube(h5_local_ref,nBeads,1,1,"/regionSamples/dmult","dMult","");
+    beads_regionSamples_SP.InitBasicCube(h5_local_ref,nBeads,1,1,"/regionSamples/SP","SP: copies*copy_multiplier","");
+    beads_regionSamples_R.InitBasicCube(h5_local_ref,nBeads,1,1,"/regionSamples/R","R: ratio of bead buffering to empty buffering","");
+	// extra for RegionSample, not in bestRegion
+    beads_regionSamples_regionParams.InitBasicCube (h5_local_ref,nBeads,3+NUMNUC*3,1,"/regionSamples/regionParams", "gain,sens,copies,kmax*4,krate*4,d*4", "" );
+	// all flows 
+    beads_regionSamples_predicted.InitBasicCube(h5_local_ref,nBeads,max_frames,datacube_numflows,"/regionSamples/predicted","predicted trace","");
+    beads_regionSamples_corrected.InitBasicCube(h5_local_ref,nBeads,max_frames,datacube_numflows,"/regionSamples/corrected","background-adjusted trace","");
+    beads_regionSamples_amplitude.InitBasicCube(h5_local_ref,nBeads,1,datacube_numflows,"/regionSamples/amplitude","amplititude","");
+    beads_regionSamples_residual.InitBasicCube(h5_local_ref,nBeads,1,datacube_numflows,"/regionSamples/residual","residual error","");
+    beads_regionSamples_fittype.InitBasicCube(h5_local_ref,nBeads,1,datacube_numflows,"/regionSamples/fittype","fittype","");
+    beads_regionSamples_taub.InitBasicCube(h5_local_ref,nBeads,1,datacube_numflows,"/regionSamples/taub","taub","");
 }
 
 
@@ -546,19 +552,21 @@ void BkgParamH5::Init ( const char *results_folder, const SpatialContext &loc_co
 }
 
 
-void BkgParamH5::Init2 (int write_params_flag, int nBeads_live, const Region *region, int nRegions)
+void BkgParamH5::Init2 (int write_params_flag, int nBeads_live, const Region *region, int nRegions,int nSamples)
 {
   if ( write_params_flag>1 )
   {
       ConstructOneFile ( h5TraceDbg, hgTraceDbgFile,local_results_directory, "trace.h5" );
       InitBeads_BestRegion ( h5TraceDbg,nBeads_live,region );
       saveBestRegionPointers();
-      InitBeads_RegionCenter ( h5TraceDbg,nRegions );
-      saveRegionCenterPointers();
+      InitBeads_RegionSamples ( h5TraceDbg,nRegions,nSamples );
+      saveRegionSamplesPointers();
+      region_nSamples = nSamples;
   }
   else
   {
     hgTraceDbgFile = "";
+    region_nSamples = 0;
   }
 }
 
@@ -690,52 +698,40 @@ void BkgParamH5::IncrementalWriteBestRegion ( int flow, bool lastflow )
     IncrementalWriteParam ( beads_bestRegion_amplitude.source, beads_bestRegion_amplitude.h5_set, flow );
     IncrementalWriteParam ( beads_bestRegion_residual.source, beads_bestRegion_residual.h5_set, flow );
     IncrementalWriteParam ( beads_bestRegion_fittype.source, beads_bestRegion_fittype.h5_set, flow );
-    IncrementalWriteParam ( beads_bestRegion_kmult.source, beads_bestRegion_kmult.h5_set, flow );
-    IncrementalWriteParam ( beads_bestRegion_dmult.source, beads_bestRegion_dmult.h5_set, flow );
-    IncrementalWriteParam ( beads_bestRegion_SP.source, beads_bestRegion_SP.h5_set, flow );
-    IncrementalWriteParam ( beads_bestRegion_R.source, beads_bestRegion_R.h5_set, flow );
     IncrementalWriteParam ( beads_bestRegion_taub.source, beads_bestRegion_taub.h5_set, flow );
 
     if ( lastflow ) // do only once at lastflow, for data independant of flow
     {
+        beads_bestRegion_timeframe.SafeWrite(); // this only has to done once for all flows
         beads_bestRegion_location.SafeWrite(); // this only has to done once for all flows
         beads_bestRegion_gainSens.SafeWrite();
-        beads_bestRegion_timeframe.SafeWrite();
-      /*
-      beads_bestRegion_corrected.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_predicted.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_amplitude.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_residual.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_fittype.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_kmult.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_dmult.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_taub.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_SP.SafeWrite(); // use IncrementalWriteParam() for each flow block
-      beads_bestRegion_R.SafeWrite(); // use IncrementalWriteParam() for each flow block
-     */
+        beads_bestRegion_kmult.SafeWrite();
+        beads_bestRegion_dmult.SafeWrite();
+        beads_bestRegion_SP.SafeWrite();
+        beads_bestRegion_R.SafeWrite();
      }
 }
 
 
-void BkgParamH5::IncrementalWriteRegionCenter ( int flow, bool lastflow )
+void BkgParamH5::IncrementalWriteRegionSamples ( int flow, bool lastflow )
 {
-    IncrementalWriteParam ( beads_regionCenter_predicted.source, beads_regionCenter_predicted.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_corrected.source, beads_regionCenter_corrected.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_amplitude.source, beads_regionCenter_amplitude.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_residual.source, beads_regionCenter_residual.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_fittype.source, beads_regionCenter_fittype.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_kmult.source, beads_regionCenter_kmult.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_dmult.source, beads_regionCenter_dmult.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_SP.source, beads_regionCenter_SP.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_R.source, beads_regionCenter_R.h5_set, flow );
-    IncrementalWriteParam ( beads_regionCenter_taub.source, beads_regionCenter_taub.h5_set, flow );
+    IncrementalWriteParam ( beads_regionSamples_predicted.source, beads_regionSamples_predicted.h5_set, flow );
+    IncrementalWriteParam ( beads_regionSamples_corrected.source, beads_regionSamples_corrected.h5_set, flow );
+    IncrementalWriteParam ( beads_regionSamples_amplitude.source, beads_regionSamples_amplitude.h5_set, flow );
+    IncrementalWriteParam ( beads_regionSamples_residual.source, beads_regionSamples_residual.h5_set, flow );
+    IncrementalWriteParam ( beads_regionSamples_fittype.source, beads_regionSamples_fittype.h5_set, flow );
+    IncrementalWriteParam ( beads_regionSamples_taub.source, beads_regionSamples_taub.h5_set, flow );
 
     if ( lastflow ) // do only once at lastflow, for data independant of flow
     {
-        beads_regionCenter_location.SafeWrite(); // this only has to done once for all flows
-        beads_regionCenter_gainSens.SafeWrite();
-        beads_regionCenter_timeframe.SafeWrite();
-        beads_regionCenter_regionParams.SafeWrite();
+        beads_regionSamples_timeframe.SafeWrite(); // this only has to done once for all flows
+        beads_regionSamples_location.SafeWrite(); // this only has to done once for all flows
+        beads_regionSamples_gainSens.SafeWrite();
+        beads_regionSamples_regionParams.SafeWrite();
+		beads_regionSamples_kmult.SafeWrite();
+		beads_regionSamples_dmult.SafeWrite();
+		beads_regionSamples_SP.SafeWrite();
+		beads_regionSamples_R.SafeWrite();
     }
 }
 
@@ -782,7 +778,7 @@ void BkgParamH5::IncrementalWrite ( int flow, bool last_flow, FlowBlockSequence:
     IncrementalWriteBeads ( flow, flow_block_id );
     IncrementalWriteRegions ( flow, flow_block_id );
     IncrementalWriteBestRegion ( flow, last_flow );
-    IncrementalWriteRegionCenter ( flow, last_flow );
+    IncrementalWriteRegionSamples ( flow, last_flow );
     IncrementalWrite_xyflow ( last_flow );
   }
 }
@@ -838,20 +834,20 @@ void BkgParamH5::CloseRegion()
   beads_bestRegion_timeframe.Close();
   beads_bestRegion_taub.Close();
 
-  beads_regionCenter_location.Close();
-  beads_regionCenter_predicted.Close();
-  beads_regionCenter_corrected.Close();
-  beads_regionCenter_amplitude.Close();
-  beads_regionCenter_residual.Close();
-  beads_regionCenter_kmult.Close();
-  beads_regionCenter_dmult.Close();
-  beads_regionCenter_SP.Close();
-  beads_regionCenter_R.Close();
-  beads_regionCenter_gainSens.Close();
-  beads_regionCenter_fittype.Close();
-  beads_regionCenter_timeframe.Close();
-  beads_regionCenter_taub.Close();
-  beads_regionCenter_regionParams.Close();
+  beads_regionSamples_location.Close();
+  beads_regionSamples_predicted.Close();
+  beads_regionSamples_corrected.Close();
+  beads_regionSamples_amplitude.Close();
+  beads_regionSamples_residual.Close();
+  beads_regionSamples_kmult.Close();
+  beads_regionSamples_dmult.Close();
+  beads_regionSamples_SP.Close();
+  beads_regionSamples_R.Close();
+  beads_regionSamples_gainSens.Close();
+  beads_regionSamples_fittype.Close();
+  beads_regionSamples_timeframe.Close();
+  beads_regionSamples_taub.Close();
+  beads_regionSamples_regionParams.Close();
 }
 
 
@@ -958,22 +954,22 @@ void BkgParamH5::saveBestRegionPointers()
 }
 
 
-void BkgParamH5::saveRegionCenterPointers()
+void BkgParamH5::saveRegionSamplesPointers()
 {
-  ptrs.m_beads_regionCenter_location = beads_regionCenter_location.Ptr();
-  ptrs.m_beads_regionCenter_corrected = beads_regionCenter_corrected.Ptr();
-  ptrs.m_beads_regionCenter_predicted = beads_regionCenter_predicted.Ptr();
-  ptrs.m_beads_regionCenter_amplitude = beads_regionCenter_amplitude.Ptr();
-  ptrs.m_beads_regionCenter_residual = beads_regionCenter_residual.Ptr();
-  ptrs.m_beads_regionCenter_kmult = beads_regionCenter_kmult.Ptr();
-  ptrs.m_beads_regionCenter_dmult = beads_regionCenter_dmult.Ptr();
-  ptrs.m_beads_regionCenter_SP = beads_regionCenter_SP.Ptr();
-  ptrs.m_beads_regionCenter_R = beads_regionCenter_R.Ptr();
-  ptrs.m_beads_regionCenter_gainSens = beads_regionCenter_gainSens.Ptr();
-  ptrs.m_beads_regionCenter_fittype = beads_regionCenter_fittype.Ptr();
-  ptrs.m_beads_regionCenter_timeframe = beads_regionCenter_timeframe.Ptr();
-  ptrs.m_beads_regionCenter_taub = beads_regionCenter_taub.Ptr();
-  ptrs.m_beads_regionCenter_regionParams = beads_regionCenter_regionParams.Ptr();
+  ptrs.m_beads_regionSamples_location = beads_regionSamples_location.Ptr();
+  ptrs.m_beads_regionSamples_corrected = beads_regionSamples_corrected.Ptr();
+  ptrs.m_beads_regionSamples_predicted = beads_regionSamples_predicted.Ptr();
+  ptrs.m_beads_regionSamples_amplitude = beads_regionSamples_amplitude.Ptr();
+  ptrs.m_beads_regionSamples_residual = beads_regionSamples_residual.Ptr();
+  ptrs.m_beads_regionSamples_kmult = beads_regionSamples_kmult.Ptr();
+  ptrs.m_beads_regionSamples_dmult = beads_regionSamples_dmult.Ptr();
+  ptrs.m_beads_regionSamples_SP = beads_regionSamples_SP.Ptr();
+  ptrs.m_beads_regionSamples_R = beads_regionSamples_R.Ptr();
+  ptrs.m_beads_regionSamples_gainSens = beads_regionSamples_gainSens.Ptr();
+  ptrs.m_beads_regionSamples_fittype = beads_regionSamples_fittype.Ptr();
+  ptrs.m_beads_regionSamples_timeframe = beads_regionSamples_timeframe.Ptr();
+  ptrs.m_beads_regionSamples_taub = beads_regionSamples_taub.Ptr();
+  ptrs.m_beads_regionSamples_regionParams = beads_regionSamples_regionParams.Ptr();
 }
 
 

@@ -1,0 +1,36 @@
+{% for sampleAttribute in sampleAttribute_list %}               
+	<div class="control-group">
+		<label class="control-label" for="sampleAttribute|{{sampleAttribute.id}}">{{sampleAttribute.displayedName}}</label>
+		<div class="controls">
+		<input maxlength="1024" id="sampleAttribute|{{sampleAttribute.id}}" name="sampleAttribute|{{sampleAttribute.id}}" 
+		{% if sampleAttribute.isMandatory %}
+			{% if sampleAttribute.dataType.dataType == "Integer" %}
+				class="mandatory integer" placeholder="Required (whole number)" 
+			{% else %}
+				placeholder="Required (text)" 
+			{% endif %}
+		{% else %}
+			{% if sampleAttribute.dataType.dataType == "Integer" %}
+				class="integer" placeholder="Optional (whole number)" 
+			{% else %}
+				placeholder="Optional (text)" 
+			{% endif %}                             
+		{% endif %}                         
+		{% if intent == "edit" %}
+			{% for attributeValue in sampleAttributeValue_list %}
+				{% if attributeValue.sampleAttribute.displayedName == sampleAttribute.displayedName  %}
+					value = "{{attributeValue.value}}" 
+				{% endif %}
+			{% endfor %}
+		{% elif intent == "edit_pending" %}
+			var attributeName = sampleAttribute.displayedName
+			 {% for pendingKey,pendingValue in pending_sampleSetItem.attribute_dict.items %}
+				{% if pendingKey == sampleAttribute.displayedName %}
+					value = "{{pendingValue}}"
+				{% endif %}
+			{% endfor %}
+		{% endif %}
+		/>
+		</div>
+	</div>
+{% endfor %} 

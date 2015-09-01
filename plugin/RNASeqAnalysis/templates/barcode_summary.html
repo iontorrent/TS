@@ -53,8 +53,10 @@
     return parts.join(".");
   }
   function numberToPercent(x) {
+    if( !x ) return "NA";
     if( isNaN(x) ) return x;
-    return (100 * x)+"%";
+    x *= 100;
+    return x.toFixed(2)+"%";
   }
 </script>
 
@@ -204,7 +206,7 @@ $(document).ready(function() {
 {% if rvalheatmap %}
   <div class="content" id="CorHeatmap">
     <div style="text-align:center">
-      <a href="{{heatmapplot}}" title="A heatmap of Spearman correlation r-values from comparing log2 RPM reads pair correlations barcodes, with dendrogram reflecting ordering of barcodes as being most similar by these values."><img style="height:auto" src="{{heatmapplot}}" alt="Heatmap of Barcode Pair Correlations"/></a>
+      <a href="{{rvalheatmap}}" title="A heatmap of Spearman correlation r-values from comparing log2 RPM reads pair correlations barcodes, with dendrogram reflecting ordering of barcodes as being most similar by these values."><img style="height:auto" src="{{rvalheatmap}}" alt="Heatmap of Barcode Pair Correlations"/></a>
     </div>
   </div>
 {% endif %}
@@ -268,7 +270,7 @@ $(document).ready(function() {
   <div class="pull-right">
     <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
     <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
-    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+    <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
     <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
   </div>
 </div> </div> </div> </div>

@@ -15,7 +15,7 @@ minisos  <- as.numeric(ifelse(is.na(args[7]),"0",args[7]))
 minfpkm  <- as.numeric(ifelse(is.na(args[8]),thrsfpkm,args[8]))
 
 if( !file.exists(nFileIn) ) {
-  write(sprintf("ERROR: Could not locate input file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Could not locate input file %s",nFileIn),stderr())
   q(status=1)
 }
 
@@ -23,19 +23,19 @@ if( !file.exists(nFileIn) ) {
 data <- read.table(nFileIn, header=TRUE, sep="\t", as.is=TRUE, comment.char="")
 ncols <- ncol(data)
 if( ncols < 2 ) {
-  write(sprintf("ERROR: Expected at least 1 data column plus row ids in data file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Expected at least 1 data column plus row ids in data file %s",nFileIn),stderr())
   q(status=1)
 }
 nrows <- nrow(data)
 if( nrows < 1 ) {
-  write(sprintf("ERROR: Expected at least 1 row of data plus header line in data file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Expected at least 1 row of data plus header line in data file %s",nFileIn),stderr())
   q(status=1)
 }
 if( maxisofs < 0 || maxisofs > nrows ) { maxisofs = nrows }
 
 # grab row names and strip, convert to matrix
 lnames <- data[[1]]
-data <- as.matrix(data[-1])
+data <- as.matrix(data[-1],drop=F)
 ncols <- ncol(data)
 
 # remove columns where the total number of detected isoforms is less than the threshold provided (if > 0)
@@ -45,15 +45,19 @@ if( minisos > 0 ) {
   for( i in 1:ncols ) {
     nfpkm <- sum(data[,i] >= thrsfpkm)
     if( nfpkm < minisos ) {
-      write(sprintf("Warning: %s data excluded for isoform heatmap as having too few (%d) isoforms detected.\n",cnames[i],nfpkm),stderr())
+      write(sprintf("Warning: %s data excluded for isoform heatmap as having too few (%d) isoforms detected.",cnames[i],nfpkm),stderr())
     } else {
       keep <- c( keep, i )
     }
   }
   if( length(keep) < ncols ) {
-    data <- data[,keep]
+    data <- data[,keep,drop=F]
     ncols <- ncol(data)
   }
+}
+if( ncols < 2 ) {
+  write("WARNING: Isoform heatmap plot not created for less than two columns of data.",stderr())
+  q(status=0)
 }
 
 # check maximum number of isoforms to plot vs. specified
@@ -65,14 +69,14 @@ if( novmin < maxisofs ) {
 
 # determine best n genes by maxmima across columns
 covar <- function(x) {
-  if( max(x) < minfpkm ) { return(0) }
+  if( suppressWarnings(max(x)) < minfpkm ) { return(0) }
   m <- mean(x,na.rm=TRUE)
   if( m <= 0 ) { m = 1 }
   sd(x,na.rm=TRUE)/m
 }
 kidx <- order(apply(data,1,covar),decreasing=T)[1:maxisofs]
 lnames <- lnames[kidx]
-data <- data[kidx,]
+data <- data[kidx,,drop=F]
 
 # convert to log10(x+1)
 data <- log10(data+1)

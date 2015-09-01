@@ -34,6 +34,7 @@ void IonstatsTestFragmentsHelp()
   printf ("  -r,--ref                   FILE       FASTA file containing TF sequences [required option]\n");
   printf ("  -o,--output                FILE       output json file [ionstats_tf.json]\n");
   printf ("  -h,--histogram-length      INT        read length histogram cutoff [400]\n");
+  printf ("  -t,--tf-read-threshold     INT        threshold number of TF reads[500]\n");
   printf ("\n");
 }
 
@@ -86,6 +87,7 @@ int IonstatsTestFragments(OptArgs &opts)
   string fasta_filename       = opts.GetFirstString('r', "ref", "");
   string output_json_filename = opts.GetFirstString('o', "output", "ionstats_tf.json");
   int histogram_length        = opts.GetFirstInt   ('h', "histogram-length", 400);
+  int tf_read_threshold       = opts.GetFirstInt   ('t', "tf-read-threshold", 500);
 
   if(input_bam_filename.empty() or fasta_filename.empty()) {
     IonstatsTestFragmentsHelp();
@@ -329,7 +331,7 @@ int IonstatsTestFragments(OptArgs &opts)
 
   for (int tf = 0; tf < num_tfs; ++tf) {
 
-    if (aligned_histogram[tf].num_reads() < 1000)
+    if (aligned_histogram[tf].num_reads() < (unsigned int)tf_read_threshold)
       continue;
 
     called_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["full"]);

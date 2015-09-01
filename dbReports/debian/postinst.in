@@ -2,21 +2,11 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
 #set -x
-echo "postinst $@"
 
-: <<'COMMENT'
-# GUI update troubleshooting
-# commented out to preserve default behavior
-#
-echo "stdout and stderr are redirected to /tmp/*.dbreports"
-## Store stdout fd
-exec 3<&1
-## Store stderr fd
-exec 4<&2
-## Redirect stderr to a file
-exec 1>/tmp/stdout.dbreports
-exec 2>/tmp/stderr.dbreports
-COMMENT
+LOGFILE=/tmp/ion-dbreports_install.log
+exec > >(tee "$LOGFILE") 2>&1
+
+echo "postinst $@"
 
 unset CELERY_LOADER
 

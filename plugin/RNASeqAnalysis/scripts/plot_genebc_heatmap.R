@@ -40,11 +40,15 @@ data <- as.matrix(data[-1])
 # remove columns whose sums are less than the counts threshold
 trds <- apply(data,2,sum)
 gidx <- trds >= rdthresh
-data <- data[,gidx]
+data <- data[,gidx,drop=F]
 ocols <- ncols-1
 ncols <- ncol(data)
 if( ncols < ocols ) {
   write(sprintf("Warning: Gene heatmap plot excluded %d barcodes as having less than %d aligned reads.",ocols-ncols,rdthresh),stderr())
+}
+if( ncols < 2 ) {
+  write("WARNING: Gene heatmap plot not created for less than two columns of data.",stderr())
+  q(status=0)
 }
 
 # convert to RPM reads

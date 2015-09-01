@@ -16,11 +16,11 @@ iface {{ansible_default_ipv4.interface|default(default_interface)}} inet static
 	address {{static_ip}}
 	netmask {{static_nm}}
 	gateway {{static_gw}}
-        {% if dns_nameserver %}
+{% if dns_nameserver|default(false) %}
 	dns-nameserver {{dns_nameserver}}
-        {%else%}
+{%else%}
 
-        {%endif%}
+{%endif%}
         
 {% else %}
 iface {{ ansible_default_ipv4.interface|default(default_interface) }} inet dhcp
@@ -35,7 +35,7 @@ netmask 255.255.255.0
 {% endfor %}
 {# Configure em1 and em2 as dhcp #}
 {% for interface in ansible_interfaces if 'em' in interface and interface != ansible_default_ipv4.interface|default(default_interface) %}
-auto {{interface}}
+#auto {{interface}}
 iface {{interface}} inet dhcp
 
 {% endfor %}

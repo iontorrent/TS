@@ -1,24 +1,25 @@
 {
     "meta":{
         "name"          : "AmpliSeq Panel - PGM - Somatic - Low Stringency",
-        "tooltip"       : "Panel-specific parameters optimized for Oncomine Comprehensive AmpliSeq Panel",
+        "tooltip"       : "Parameters optimized using Oncomine Comprehensive AmpliSeq Panel with AcroMetrix Oncology Hotspot Control AF at 5% at depth 500, minimizing FP with 48K NA12878 at depth 130",
         "configuration" : "ampliseq_somatic_lowstringency_pgm",
-        "ts_version"        : "4.6",
+        "ts_version"    : "5.0",
         "compatibility" : {
-          "chip"        : ["pgm"],
+          "chip"        : ["520","530","pgm"],
           "library"     : ["ampliseq"],
           "frequency"   : ["somatic"],
           "stringency"  : ["low"],
           "panel"       : true
-        }
+        },
+        "tmapargs"      : "tmap mapall ... --context -J 25 --end-repair 15 --do-repeat-clip stage1 map4"
     },
     "torrent_variant_caller":{
-    
+
         "data_quality_stringency":10,
         "hp_max_length":8,
         "filter_unusual_predictions":0.12,
         "filter_insertion_predictions": 0.2,
-        "filter_deletion_predictions": 0.2, 
+        "filter_deletion_predictions": 0.2,
         "indel_as_hpindel": 0,
 
         "snp_min_cov_each_strand":4,
@@ -28,6 +29,13 @@
         "snp_strand_bias":0.95,
         "snp_strand_bias_pval":0.01,
 
+        "mnp_min_cov_each_strand":4,
+        "mnp_min_coverage":100,
+        "mnp_min_variant_score":6,
+        "mnp_min_allele_freq":0.02,
+        "mnp_strand_bias":0.95,
+        "mnp_strand_bias_pval":0.01,
+
         "indel_min_cov_each_strand":4,
         "indel_min_coverage":100,
         "indel_min_variant_score":6,
@@ -35,27 +43,18 @@
         "indel_strand_bias":0.90,
         "indel_strand_bias_pval":1.0,
 
-        
-        "mnp_min_cov_each_strand":4,
-        "mnp_min_coverage":100,
-        "mnp_min_variant_score":6,
-        "mnp_min_allele_freq":0.02,
-        "mnp_strand_bias":0.95,
-        "mnp_strand_bias_pval":0.01,
-        
-        
         "hotspot_min_cov_each_strand":4,
         "hotspot_min_variant_score":6,
         "hotspot_min_allele_freq":0.02,
         "hotspot_min_coverage":100,
         "hotspot_strand_bias":0.95,
         "hotspot_strand_bias_pval":0.01,
-        
+
         "downsample_to_coverage":2000,
         "outlier_probability":0.005,
-        "do_snp_realignment":1,
-        "do_mnp_realignment":1,
-        "realignment_threshold":1,
+        "do_snp_realignment":0,
+        "do_mnp_realignment":0,
+        "realignment_threshold":0,
 
         "use_position_bias":0,
         "position_bias":0.75,

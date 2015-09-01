@@ -84,6 +84,11 @@ void WriteBeadFindForBkgModel (std::string& h5file, std::vector<float>& smooth_t
 void LoadBeadFindForBkgModel (std::string &h5file, std::vector<float>& smooth_t0_est, std::vector<float>& tauB, std::vector<float>& tauE,
 			      std::vector<RegionTiming> &region_timing)
 {
+  if (!isFile (h5file.c_str())) {
+    fprintf (stderr, "Unable to find beadfind file %s\n", h5file.c_str());
+    exit (EXIT_FAILURE);        
+  }
+      
   string h5_t_mid_nuc = h5file + ":/beadfind/t_mid_nuc";
   std::vector<float> t_mid_nuc;
   H5File::ReadVector (h5_t_mid_nuc, t_mid_nuc);

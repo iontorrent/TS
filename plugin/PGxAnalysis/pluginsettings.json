@@ -1,0 +1,11 @@
+{ 
+  "depends": [
+     "variantCaller",
+     "coverageAnalysis"
+     ],
+  "runtype": [
+    "composite",
+    "wholechip",
+    "thumbnail"
+  ]
+ }
