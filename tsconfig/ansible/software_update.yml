@@ -27,6 +27,11 @@
     - name: Set package preseed values
       script: "files/grub-pc.preseed {{GRUB_BOOT_DEVICE}}"
       when: GRUB_BOOT_DEVICE is defined
+    
+    # Make a backup of the postgres database.  Pkg ion-dbreports typically makes
+    # schema changes during installation so we want a backup.
+    - name: Backup postgres database
+      script: files/postgres_bckup.sh
 
     # Check for new entries in the common_syspkg_list and ionmaster_ionpkg_list.
     # This will only install packages not currently installed

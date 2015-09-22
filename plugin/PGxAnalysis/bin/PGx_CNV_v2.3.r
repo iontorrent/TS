@@ -147,7 +147,7 @@ if(dim(BCSummary)[1] != dim(BCMatrix)[2]-2) {
                 }
             }
         }
-        non_informativeBarcodes = which(BCSummary$Mean.Depth < 10)
+#        non_informativeBarcodes = which(BCSummary$Mean.Depth < 10)
 	if( length(non_informativeBarcodes)>0 ){
 	    if( length(non_informativeBarcodes) == dim(BCSummary)[1] ) {
 		   stop(paste("All bamfiles has file size < ",BCFILE_MIN_SIZE," bytes.  This run has very low coverage and CNV analysis will not be performed.",sep=""))

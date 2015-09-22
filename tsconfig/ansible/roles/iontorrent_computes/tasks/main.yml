@@ -35,14 +35,13 @@
  
 # Set host location of Ion Torrent Server Daemons
 #function config_cluster_settings()
-- name: Update cluster configuration file - cluster_settings.py
-  lineinfile: dest={{ tsconfig_dir }}/cluster_settings.py
+- name: Update cluster configuration file - local_cluster_settings.py
+  lineinfile: dest={{ tsconfig_dir }}/local_cluster_settings.py
                 state=present
                 create=yes
-                owner=ionadmin mode=0644
-                regexp="^({{item}})(.*)"
+                owner=ionadmin group=ionadmin mode=0644
+                regexp="^{{item}}.*"
                 line="{{item}} = '{{ groups.headnode[0] }}'"
-                mode=0644
   with_items:
     - PLUGINSERVER_HOST
     - JOBSERVER_HOST

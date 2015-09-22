@@ -244,9 +244,7 @@
     });
 
     // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
-    $('#sampleid').attr('checked',false);
     $('#barcodebeds').attr('checked',false);
-    $('#uniquemaps').attr('checked',false);
     $('.bcbed-shy').hide();
     
     var reportUrl = '/rundb/api/v1/results/'+TB_result+'/?format=json&noplugin=True';
@@ -537,7 +535,7 @@
      <td><span class="help"
        title="Check if this AmpliSeq library employed sampleID tracking amplicons.">
        Sample Tracking:</span></td>
-     <td><input type="checkbox" id="sampleid" name="sampleid" checked="checked" value="Yes"/></td> </tr>
+     <td><input type="checkbox" id="sampleid" name="sampleid" value="Yes"/></td> </tr>
     <tr id="tpadding" style="display:none">
      <td><span class="help"
        title="Specifiy the number of bases for option target padding. See Description and Notes below.">
@@ -547,7 +545,7 @@
      <td><span class="help"
        title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
        Use Only Uniquely Mapped Reads:</span></td>
-     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes" checked="checked"/></td> </tr>
+     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes"/></td> </tr>
     <tr id="nondups" style="display:none">
      <td><span class="help"
        title="Check to analyze only reads that are not demarked as duplicate reads. See Description and Usage Notes below.">

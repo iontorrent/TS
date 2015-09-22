@@ -362,7 +362,7 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
     # Samples
     sampleInfo = {}
     for sample in exp.samples.all():
-        sampleInfo[sample.name] = {
+        sampleInfo[sample.displayedName] = {
             'name': sample.name,
             'displayedName': sample.displayedName,
             'externalId': sample.externalId,

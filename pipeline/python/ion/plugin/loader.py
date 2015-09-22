@@ -116,18 +116,12 @@ class ModuleCache(object):
             return self.load_compat_module(module_name, module_path)
 
         try:
-            #_log.debug("Loading module '%s' from '%s'", module_name, module_path)
-            fp, filename, description = imp.find_module(module_name, [module_dir])
-            _log.debug("Loading module '%s' from '%s'", module_name, filename)
-            if not fp:
-                _log_error("Not found?")
-            #with open(filename,'r') as f:
-            ## FIXME - Don't really want to append sys.path every time
-            if module_dir not in sys.path:
-                sys.path.append(module_dir)
-            mod = imp.load_module(md5(module_path).hexdigest(), fp, filename, description)
-            #mod = imp.load_module(module_name, fp, filename, description)
+            _log.debug("Loading module '%s' from '%s'", module_name, module_path)
+            sys.path.append(module_dir)
+            mod = imp.load_source(md5(module_path).hexdigest(), module_path)
             _log.debug(mod)
+            # clean up sys.path
+            sys.path.remove(module_dir)
         except ImportError as e:
             _log.debug("Import Error '%s'", module_name, exc_info=True)
             self.module_errors[module_name] = e

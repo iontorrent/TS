@@ -1338,10 +1338,12 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                     previousReport = rpf.cleaned_data['previousThumbReport'] if rpf.cleaned_data.get('do_thumbnail') else rpf.cleaned_data['previousReport']
                     selected_previous_pk = int(previousReport.strip('/').split('_')[-1])
                     previousEAS = resultList.get(pk=selected_previous_pk).eas
-                    beadfindArgs = previousEAS.beadfindargs
-                    analysisArgs = previousEAS.analysisargs
-                    thumbnailBeadfindArgs = previousEAS.thumbnailbeadfindargs
-                    thumbnailAnalysisArgs = previousEAS.thumbnailanalysisargs
+                    if previousEAS.beadfindargs and previousEAS.analysisargs:
+                        beadfindArgs = previousEAS.beadfindargs
+                        analysisArgs = previousEAS.analysisargs
+                    if previousEAS.thumbnailbeadfindargs and previousEAS.thumbnailanalysisargs:
+                        thumbnailBeadfindArgs = previousEAS.thumbnailbeadfindargs
+                        thumbnailAnalysisArgs = previousEAS.thumbnailanalysisargs
                 except:
                     pass
 

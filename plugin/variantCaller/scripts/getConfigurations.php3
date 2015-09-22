@@ -1,4 +1,8 @@
 <?php
-
-print file_get_contents("/results/plugins/scratch/variantCallerConfigurations.txt");
+if (file_get_contents("/results/plugins/scratch/variantCallerConfigurations.txt") == "null") {
+	print "";
+}
+else {
+	print file_get_contents("/results/plugins/scratch/variantCallerConfigurations.txt");
+}
 ?>

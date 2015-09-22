@@ -249,6 +249,7 @@ void * VariantCallerWorker(void *input)
 
       if (not vc.bam_walker->HasMoreAlignments()) {
         pthread_mutex_unlock(&vc.read_loading_mutex);
+        pthread_cond_broadcast(&vc.memory_contention_cond);
         break;
       }
 
@@ -295,6 +296,7 @@ void * VariantCallerWorker(void *input)
     if (not vc.bam_walker->HasMoreAlignments() and not more_positions) {
       pthread_mutex_unlock(&vc.bam_walker_mutex);
       pthread_mutex_unlock(&vc.candidate_generation_mutex);
+      pthread_cond_broadcast(&vc.memory_contention_cond);
       break;
     }
 
@@ -354,9 +356,7 @@ void * VariantCallerWorker(void *input)
     pthread_mutex_unlock(&vc.bam_walker_mutex);
 
     if (signal_contention_removal)
-      //pthread_cond_broadcast(&vc.memory_contention_cond);
-      pthread_cond_signal(&vc.memory_contention_cond);
-
+      pthread_cond_broadcast(&vc.memory_contention_cond);
 
   }
   return NULL;

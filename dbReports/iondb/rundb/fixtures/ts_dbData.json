@@ -5163,7 +5163,7 @@
     "fields": {
       "name": "default_521",
       "description" : "Ion 521 chip analysis arguments",
-      "active": true,
+      "active": false,
       "isSystem" : true,      
       "chipType": "521",
       "chip_default": true,
@@ -5273,7 +5273,7 @@
     "fields": {
       "name": "default_P1.0.19",
       "description" : "Ion P0 chip analysis arguments 1",
-      "active": true,
+      "active": false,
       "isSystem" : true,       
       "chipType": "P1.0.19",
       "chip_default": true,
@@ -5299,7 +5299,7 @@
     "fields": {
       "name": "default_P1.0.20",
       "description" : "Ion P0 chip analysis arguments 2",
-      "active": true,
+      "active": false,
       "isSystem" : true,       
       "chipType": "P1.0.20",
       "chip_default": true,
@@ -5378,7 +5378,7 @@
       "name": "default_P2.2.1",
       "description" : "Ion PII chip analysis arguments 2",
       "active": false,
-      "isSystem" : true,    
+      "isSystem" : false,    
       "chipType": "P2.2.1",
       "chip_default": true,
       "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
@@ -5590,7 +5590,7 @@
     "fields": {
       "name": "default_P2.2.2",
       "description" : "Ion PII chip analysis arguments",
-      "active": true,
+      "active": false,
       "isSystem" : true,      
       "chipType": "P2.2.2",
       "chip_default": true,
@@ -5635,7 +5635,7 @@
     "fields": {
       "name": "default_550",
       "description" : "Ion 550 chip analysis arguments",
-      "active": true,
+      "active": false,
       "isSystem" : true,         
       "chipType": "550",
       "chip_default": true,
@@ -5707,7 +5707,7 @@
     "fields": {
       "name": "default_541",
       "description" : "Ion 541 chip analysis arguments",
-      "active": true,
+      "active": false,
       "isSystem" : true,     
       "chipType": "541",
       "chip_default": true,

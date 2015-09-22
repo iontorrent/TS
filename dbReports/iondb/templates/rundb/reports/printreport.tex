@@ -222,26 +222,33 @@ Run Report for {{report.resultsName|latexsafe}}
 \newpage %%starts new page
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%first column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-{% if isToShowAlignmentStats %}
+{% if isToShowAlignmentStats %}%%
 \section*{Alignment Summary \textit{(aligned to {{reference.name|latexsafe}}) } } 
- \begin{minipage}[t]{70mm}
- \fcolorbox{gray}{white}{\parbox[t][70mm]{66.5mm}{\setlength{\parindent}{0mm}\small\centering%
+ \begin{minipage}[t]{80mm}
+ \fcolorbox{gray}{white}{\parbox[t][85mm]{70mm}{\setlength{\parindent}{0mm}\small\centering%
  \begin{tabular}{P{30mm}P{30mm}}
  %column1									&   column2
  \bfseries\small {{ionstats_alignment.aligned.num_bases|ion_readable}}						&   \bfseries\small {{avg_coverage_depth_of_target}} \\
  \footnotesize Total Alignment Bases		&	\footnotesize Average Coverage Depth of Reference
  \end{tabular}
- \rule{62.5mm}{0.5pt}\\[8mm]
+ \rule{62.5mm}{0.5pt}\\[1mm]
  \includegraphics[width=65mm]{alignment_rate_plot.png} 		%UL %insert your figure-filename here{}
+ \\[1.5mm]
+ \begin{tabular}{lrr}%
+ \bf {}								& \bf Count &\bf \% \\
+ \midrule
+ \bf Total Reads	& {{ ionstats_alignment.full.num_reads|intcomma }}  &	--\\
+ \bf Aligned Reads	& {{ionstats_alignment.aligned.num_reads|intcomma}}  &	{{ionstats_alignment.aligned.p_num_reads|floatformat:"1"}}\% \\
+ \bf Unaligned Reads & {{ionstats_alignment.unaligned.num_reads|intcomma}}  &	{{ionstats_alignment.unaligned.p_num_reads|stringformat:".1f"}}\% \\
+ \end{tabular}
  }}
  \end{minipage}
- 
- {% if isToShowRawAccuracy %}
+ {% if isToShowRawReadAccuracy %}%
 %%%%%%%%%%first column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%second column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  \begin{minipage}[t]{70mm}
- \fcolorbox{gray}{white}{\parbox[t][70mm]{66.5mm}{\setlength{\parindent}{0mm}\small\centering%
+ \fcolorbox{gray}{white}{\parbox[t][85mm]{70mm}{\setlength{\parindent}{0mm}\small\centering%
  \begin{tabular}{P{40mm}}
  %column1
  \bfseries {{raw_accuracy}}\%
@@ -252,7 +259,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \includegraphics[width=60mm]{base_error_plot.png} 		%UL %insert your figure-filename here{}
  }}
  \end{minipage}
- {% endif %}
+ {% endif %}%
  
 %%%%%%%%%%second column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -261,6 +268,7 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  \begin{minipage}[c]{125mm}
  \fcolorbox{gray}{white}{\parbox[t][30mm]{120mm}{\setlength{\parindent}{0mm}\small\centering%%
+ {\bfseries Alignment Quality} \\[1mm]
  \begin{tabular}{lrrr}
  \bf {}								& \bf AQ17 &\bf AQ20		& \bf Perfect\\
  \midrule

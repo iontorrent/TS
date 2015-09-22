@@ -285,8 +285,6 @@ def call_variants(dataset):
                    os.path.join(results_directory,basename_variants_xls))
         os.symlink(os.path.join(results_directory,BASENAME_ALLELES_XLS),
                    os.path.join(results_directory,basename_alleles_xls))
-        os.symlink(os.path.join(results_directory,BASENAME_VARIANT_COV_XLS),
-                   os.path.join(results_directory,basename_variant_cov_xls))
         if dataset['has_hotspots']:
             os.symlink(os.path.join(results_directory,BASENAME_HOTSPOTS_XLS),
                        os.path.join(results_directory,basename_hotspots_xls))
@@ -339,12 +337,16 @@ def call_variants(dataset):
         run_command(allelecount_command,'Base pileup for variant alleles')
     allelecount2_command = '%s/scripts/print_variant_allele_counts.py' % DIRNAME
     allelecount2_command += ' ' + dataset['name']
-    allelecount2_command += ' ' + render_context['summary']['sample_name']
+    allelecount2_command += " '" + render_context['summary']['sample_name'] + "'"
     allelecount2_command += ' ' + os.path.join(results_directory,BASENAME_VARIANTS_VCF)
     allelecount2_command += ' ' + os.path.join(results_directory,'TSVC_variants_allele_counts.txt')
     allelecount2_command += ' ' + os.path.join(results_directory,BASENAME_VARIANT_COV_XLS)
     run_command(allelecount2_command,'Generate variant allele coverage')
-    
+
+    if dataset['is_barcode']:
+        os.symlink(os.path.join(results_directory,BASENAME_VARIANT_COV_XLS),
+                   os.path.join(results_directory,basename_variant_cov_xls))
+
     if dataset['has_targets']:
         render_context['targets_bed_link'] = os.path.basename(dataset['targets_bed_unmerged'])
 
@@ -707,19 +709,20 @@ def get_bam_reference_short_name(bam):
     return short_name
     
 def tmap(cmd, new_aligned_bam):
-    print(cmd)
+    cmd += " | samtools sort -m 1000M -l1 -@12 - " + new_aligned_bam[:-4]
+    printtime(cmd)
     subprocess.call(cmd,shell=True)
-    cmd = "samtools sort " + new_aligned_bam + " " + new_aligned_bam[:-4]
-    print(cmd)
-    subprocess.call(cmd,shell=True)
+    #cmd = "samtools sort " + new_aligned_bam + " " + new_aligned_bam[:-4]
+    #print(cmd)
+    #subprocess.call(cmd,shell=True)
     cmd = "samtools index " + new_aligned_bam
-    print(cmd)
+    printtime(cmd)
     subprocess.call(cmd,shell=True)
     return new_aligned_bam
 
 def runTmap(aligned_bam, new_reference, unaligned_bam, parameters, new_aligned_bam):
     returncode = 0
-    files_string = " -n 24 -f " + new_reference + " -r " + unaligned_bam + " -s " + new_aligned_bam + " -v -Y -u --prefix-exclude 5 -o 2 "
+    files_string = " -n 24 -f " + new_reference + " -r " + unaligned_bam + " -v -Y -u --prefix-exclude 5 -o 2 "
     cmd = parameters.replace(" ... ", files_string)
     out = ""
     try:
@@ -732,16 +735,39 @@ def runTmap(aligned_bam, new_reference, unaligned_bam, parameters, new_aligned_b
     except OSError:
         returncode = 1
         error(dir + " variant_caller_pipeline run failed.")
-    pos = out.find("@PG	ID:tmap	CL:")
+    pos = out.find("ID:tmap")
     if pos == -1:
-        return tmap(cmd, new_aligned_bam)
+        return aligned_bam
     else:
-        out = out[pos + 15:]
+        out = out[pos:]
+        pos = out.find ("CL:")
+        if pos == -1:
+            return aligned_bam
+        out = out[pos + 3:]
         pos = out.find("	VN:")
         if pos == -1:
-            return tmap(cmd, new_aligned_bam)
+            return aligned_bam
         out = out[:pos]
-        out.replace(" -i ", " -r ")
+        pos = out.find("\n")
+        if pos != -1:
+            out = out[:pos]
+        out = out.replace(" -i ", " -r ")
+        
+        q_param = ""
+        posq = out.find(" -q ")
+        if (posq != -1):
+            posq += 4
+            q_param = " -q "
+            temp = out[posq:]
+            while (out[posq] == " "):
+                posq += 1
+            while (out[posq] != " "):
+                q_param += out[posq]
+                posq += 1
+        files_string = q_param + files_string
+        cmd = parameters.replace(" ... ", files_string)
+
+        posq = out.find(" -q ")
         pos1 = out.find(" -n ")
         pos2 = out.find(" -f ")
         pos3 = out.find(" -r ")
@@ -751,6 +777,8 @@ def runTmap(aligned_bam, new_reference, unaligned_bam, parameters, new_aligned_b
         if pos1 > pos2 or pos2 > pos3 or pos3 > pos4:
             return tmap(cmd, new_aligned_bam)
         pos = out.find(" -n ")
+        if posq != -1 and posq < pos:
+            pos = posq
         part_1 = out[:pos]
         pos = out.find(" -f")
         reference = out[pos+4:]

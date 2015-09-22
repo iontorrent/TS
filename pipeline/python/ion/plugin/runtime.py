@@ -1,13 +1,7 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-import subprocess
 import logging
-import httplib2
-import urllib2
-
 import json
-
-from urllib import urlencode
 
 def parseJsonFile(jsonFile):
     try:
@@ -24,7 +18,6 @@ class IonPluginRuntime(object):
     Helper functions for plugin runtime
 
     * self.log - python logging instance for plugin.
-    * self.call - shortcut to subprocess.call. Invoke command line programs
 
     """
 
@@ -35,25 +28,22 @@ class IonPluginRuntime(object):
         self.log.error("An Error Occurred: %s", reason)
     """
 
-    call = subprocess.call
-
-    def get_apiurl(resource, params={}, api_version='v1'):
-        """Preprocess URL and return url, params, and headers. Override to change auth method."""
-        runinfo = self.startplugin.get('runinfo', {})
-        api_url = runinfo.get('api_url', "http://localhost/rundb/api")
-
-        # Authentication via api_key as GET parameter
-        api_key = runinfo.get('api_key')
-        prpk = runinfo.get('pluginresult') or runinfo.get('plugin', {}).get('pluginresult')
-        params.update({'pluginresult': prpk, 'api_key': api_key})
-
-        headers = {'content-type': 'application/json'}
-
-        query_url = '/'.join(s + '/' for s in (api_url, api_version, resource))
-        return (query_url, { 'params': params, 'headers': headers, })
-
-
     def get_restobj(self, resource, params={}, timeout=30, attempts=5):
+        def get_apiurl(resource, params={}, api_version='v1'):
+            """Preprocess URL and return url, params, and headers. Override to change auth method."""
+            runinfo = self.startplugin.get('runinfo', {})
+            api_url = runinfo.get('api_url', "http://localhost/rundb/api")
+
+            # Authentication via api_key as GET parameter
+            api_key = runinfo.get('api_key')
+            prpk = runinfo.get('pluginresult') or runinfo.get('plugin', {}).get('pluginresult')
+            params.update({'pluginresult': prpk, 'api_key': api_key})
+
+            headers = {'content-type': 'application/json'}
+
+            query_url = '/'.join(s + '/' for s in (api_url, api_version, resource))
+            return (query_url, { 'params': params, 'headers': headers, })
+
         (url, args) = get_apiurl(resource, params)
         while True:
             try:

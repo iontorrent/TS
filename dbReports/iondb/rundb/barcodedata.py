@@ -24,6 +24,7 @@ HOT_SPOT_BED = 'hotSpotRegionBedFile'
 BAM = 'bam'
 BAM_FULL_PATH = 'bamFullPath'
 NON_BARCODED = 'nonbarcoded'
+NO_MATCH = 'nomatch'
 
 class BarcodeSampleInfo(object):
     """
@@ -110,15 +111,32 @@ class BarcodeSampleInfo(object):
             #logger.debug("Pipeline found extra barcode [%s]: %s", bc, data[bc])
 
         # Probably redundant. Should be in barcodedata.keys()
-        if 'nomatch' not in data and NON_BARCODED not in data:
-            data['nomatch'] = getPipelineValue('nomatch')
-            logger.debug("Generated placeholder entry for nomatch: %s", data['nomatch'])
+        if NO_MATCH not in data and NON_BARCODED not in data:
+            data[NO_MATCH] = getPipelineValue(NO_MATCH)
+            logger.debug("Generated placeholder entry for nomatch: %s", data[NO_MATCH])
 
         # add full path values for a series of entriess
         reportFullPath = self.result.get_report_path()
         for currentBarcode in data.values():
             if BAM in currentBarcode:
-                currentBarcode[BAM_FULL_PATH] = os.path.join(reportFullPath, currentBarcode[BAM]) if currentBarcode[BAM] else ""
+                if currentBarcode[BAM]:
+
+                    if currentBarcode[REFERENCE] and currentBarcode['barcode_name'] != NO_MATCH:
+                        # if there is a reference file, then we need to look in the root directory
+                        currentBarcode[BAM_FULL_PATH] = os.path.join(reportFullPath, currentBarcode[BAM])
+                    else:
+                        # if there is not a reference file then we need to file the basecaller bam file
+                        barcodeFileName = currentBarcode[BAM]
+                        if not barcodeFileName.endswith("basecaller.bam"):
+                            barcodeFileName = barcodeFileName.replace(".bam", ".basecaller.bam")
+                            currentBarcode[BAM] = barcodeFileName
+                        currentBarcode[BAM_FULL_PATH] = os.path.join(reportFullPath, "basecaller_results", barcodeFileName)
+
+                    # sanity check to make sure we do not reference files which don't exist
+                    if not os.path.exists(currentBarcode[BAM_FULL_PATH]):
+                        currentBarcode[BAM_FULL_PATH] = ""
+                else:
+                    currentBarcode[BAM_FULL_PATH] = ""
             if start_json is not None and REFERENCE in currentBarcode and currentBarcode[REFERENCE]:
                 refName = currentBarcode[REFERENCE]
                 currentBarcode[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', start_json['runinfo']['tmap_version'],refName, "%s.fasta" % refName)
@@ -210,14 +228,13 @@ class BarcodeSampleInfo(object):
             singleDataset   = self.datasetsBaseCaller.get('datasets')[0]
             singleReadGroup = self.datasetsBaseCaller.get('read_groups').itervalues().next()
             unbarcoded = {}
-            unbarcoded['bam'] = singleDataset['basecaller_bam']
-            unbarcoded['barcode_sequence'] = ''
             unbarcoded[REFERENCE] = singleReadGroup[REFERENCE]
+            unbarcoded['bam'] = singleDataset['basecaller_bam'] if not unbarcoded[REFERENCE] else "rawlib.bam"
+            unbarcoded['barcode_sequence'] = ''
             unbarcoded['sample'] = singleReadGroup['sample']
-            unbarcoded['filtered'] = singleReadGroup['filtered']
+            unbarcoded['filtered'] = singleReadGroup['filtered'] if 'filtered' in singleReadGroup else False
             unbarcoded['description'] = singleReadGroup['description']
             unbarcoded['barcode_name'] = NON_BARCODED
-            unbarcoded['filtered'] = False
             unbarcoded['index'] = 0
             unbarcoded['read_count'] = singleReadGroup['read_count']
             ret[NON_BARCODED] = unbarcoded

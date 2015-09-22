@@ -11,7 +11,7 @@
           "stringency"  : ["low"],
           "panel"       : true
         },
-        "tmapargs"      : "tmap mapall ... --context -J 25 --end-repair 15 --do-repeat-clip stage1 map4"
+        "tmapargs"      : "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4"
     },
     "torrent_variant_caller":{
 
