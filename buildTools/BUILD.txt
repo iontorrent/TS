@@ -137,7 +137,7 @@ BUILD TORRENTR MODULE
 A number of R library modules need to be installed in order for the torrentR module to compile.
 
 Add to /etc/apt/sources.list:
-deb http://updates.iontorrent.com/updates/softare lucid/
+deb http://ionupdates.com/updates/software lucid/
 
 Then execute the following:
 apt-get update
