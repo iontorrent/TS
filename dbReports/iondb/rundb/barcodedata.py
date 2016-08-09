@@ -5,6 +5,7 @@ import json
 import os
 import ast
 import logging
+import iondb.bin.dj_config
 from django.conf import settings
 from django.utils.functional import cached_property
 from iondb.rundb.models import Results, dnaBarcode
@@ -80,7 +81,7 @@ class BarcodeSampleInfo(object):
 
         return bamFullPath
 
-    def dataNonBarcoded(self, start_json):
+    def dataNonBarcoded(self):
         """
         Generates a "barcodes" dataset for non-barcoded data
         :param start_json:
@@ -96,8 +97,11 @@ class BarcodeSampleInfo(object):
 
         # generate the reference genome information
         referenceGenome = singleReadGroup[REFERENCE]
+        tmap_version = iondb.bin.dj_config.get_tmap_version()
+        samples = self.result.experiment.samples.all()
+
         unbarcodedEntry[REFERENCE] = referenceGenome
-        unbarcodedEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', start_json['runinfo']['tmap_version'], referenceGenome, "%s.fasta" % referenceGenome) if start_json is not None and unbarcodedEntry[REFERENCE] else ''
+        unbarcodedEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, referenceGenome, "%s.fasta" % referenceGenome) if unbarcodedEntry[REFERENCE] else ''
         unbarcodedEntry[ALIGNED] = (REFERENCE in unbarcodedEntry) and bool(unbarcodedEntry[REFERENCE])
         unbarcodedEntry[BAM] = singleDataset['basecaller_bam'] if not unbarcodedEntry[REFERENCE] else "rawlib.bam"
         unbarcodedEntry[FILTERED] = singleReadGroup[FILTERED] if FILTERED in singleReadGroup else False
@@ -108,20 +112,16 @@ class BarcodeSampleInfo(object):
         unbarcodedEntry[NUCLEOTIDE_TYPE] = ''
         unbarcodedEntry[CONTROL_SEQUENCE_TYPE] = ''
         unbarcodedEntry[SAMPLE] = singleReadGroup[SAMPLE]
-        unbarcodedEntry[SAMPLE_ID] = start_json['sampleinfo']['externalId'] if 'sampleInfo' in start_json and 'externalId' in start_json['sampleInfo'] else ''
+        unbarcodedEntry[SAMPLE_ID] = samples.first().externalId if samples.count() == 1 else ''
         unbarcodedEntry[NUCLEOTIDE_TYPE] = ''
         data[NON_BARCODED] = unbarcodedEntry
 
         # construct the reference genome url which is web accessible
-        if start_json and unbarcodedEntry[REFERENCE]:
-            runinfo = start_json['runinfo']
-            unbarcodedEntry[GENOME_URL] = "/auth/output/" + runinfo['tmap_version'] + "/" + unbarcodedEntry[REFERENCE] + "/" + unbarcodedEntry[REFERENCE] + ".fasta"
-        else:
-            unbarcodedEntry[GENOME_URL] = ''
+        unbarcodedEntry[GENOME_URL] = "/auth/output/" + tmap_version + "/" + unbarcodedEntry[REFERENCE] + "/" + unbarcodedEntry[REFERENCE] + ".fasta" if unbarcodedEntry[REFERENCE] else ''
 
         return data
 
-    def dataBarcoded(self, start_json):
+    def dataBarcoded(self):
         """
         Gets data set for barcoded data
         :param start_json:
@@ -146,6 +146,7 @@ class BarcodeSampleInfo(object):
         # now we are going to handle barcode data and get all of the primary sources of information
         basecallerResults  = self.datasetsBaseCaller
         EASbarcodedSamples = self.barcodedSamples
+        tmap_version = iondb.bin.dj_config.get_tmap_version()
 
         for dataset in basecallerResults.get('datasets'):
             barcodeEntry = dict()
@@ -175,7 +176,7 @@ class BarcodeSampleInfo(object):
             singleReadGroup = basecallerResults.get('read_groups')[readGroupId]
             referenceGenome = singleReadGroup[REFERENCE] if REFERENCE in singleReadGroup else self.eas.reference
             barcodeEntry[REFERENCE] = referenceGenome
-            barcodeEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', start_json['runinfo']['tmap_version'], referenceGenome, "%s.fasta" % referenceGenome) if start_json is not None and barcodeEntry[REFERENCE] else ''
+            barcodeEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, referenceGenome, "%s.fasta" % referenceGenome) if barcodeEntry[REFERENCE] else ''
             barcodeEntry[FILTERED] = singleReadGroup.get(FILTERED, False)
 
             # if this is a "filtered" barcode, then we will skip including it.
@@ -214,14 +215,12 @@ class BarcodeSampleInfo(object):
 
 
             # if a sample has been defined the sample id should be the primary key to look up the sample by
-            barcodeEntry[SAMPLE_ID] = start_json['sampleinfo']['externalId'] if  'sampleInfo' in start_json and 'externalId' in start_json['sampleInfo'] else ''
+            if barcodeEntry[SAMPLE] != '':
+                sample = self.result.experiment.samples.filter(displayedName=barcodeEntry[SAMPLE])
+                barcodeEntry[SAMPLE_ID] = sample.first().externalId if sample.count() == 1 else ''
 
             # construct the reference genome url which is web accessible
-            if start_json and barcodeEntry[REFERENCE]:
-                runinfo = start_json['runinfo']
-                barcodeEntry[GENOME_URL] = "/auth/output/" + runinfo['tmap_version'] + "/" + barcodeEntry[REFERENCE] + "/" + barcodeEntry[REFERENCE] + ".fasta"
-            else:
-                barcodeEntry[GENOME_URL] = ''
+            barcodeEntry[GENOME_URL] = "/auth/output/" + tmap_version + "/" + barcodeEntry[REFERENCE] + "/" + barcodeEntry[REFERENCE] + ".fasta" if barcodeEntry[REFERENCE] else ''
 
             # assert the entry
             data[barcodeName] = barcodeEntry
@@ -237,9 +236,9 @@ class BarcodeSampleInfo(object):
 
         # we are going to handle unbarcoded data as a special case where as a single item is generated
         if not self.eas.barcodeKitName:
-            return self.dataNonBarcoded(start_json)
+            return self.dataNonBarcoded()
         else:
-            return self.dataBarcoded(start_json)
+            return self.dataBarcoded()
 
     @cached_property
     def barcodedSamples(self):

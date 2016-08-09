@@ -124,7 +124,7 @@ while(<TRDFILE>)
   my $tlen = $fields[$contig_end] - $fields[$contig_srt] + 1;
   my $depth = $fields[$cov_dpt];
   my $rE2E  = $basedepths ? ($tlen > 0 ? $fields[$overlaps]/$tlen : 0) : ($depth > 0 ? ($fields[$fwd_e2e]+$fields[$rev_e2e])/$depth : 0); 
-  my $rBias = $depth > $thresReads ? $fields[$fwd_reads]/($fields[$fwd_reads]+$fields[$rev_reads]) : 0.5; 
+  my $rBias = $depth >= $thresReads ? $fields[$fwd_reads]/($fields[$fwd_reads]+$fields[$rev_reads]) : 0.5; 
   $targetMaxDepth = $depth if( $depth > $targetMaxDepth );
   if( $basedepths ) {
     my $ntrgs = 1+($haveNVP ? ($fields[$region_id] =~ tr/&/&/) : ($fields[$region_id] =~ tr/,/,/));

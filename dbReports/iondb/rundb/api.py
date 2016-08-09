@@ -922,7 +922,6 @@ class ResultsResource(BaseMetadataResource):
         if result is None:
             return HttpGone()
         barcodeSampleInfo = BarcodeSampleInfo(kwargs["pk"],result=result)
-        logger.debug("BarcodeSampleInfo: %s", barcodeSampleInfo.to_json())
         return self.create_response(request, barcodeSampleInfo.data())
 
     def dispatch_pluginresult_set(self, request, **kwargs):

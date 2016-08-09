@@ -1201,7 +1201,23 @@ def plugin_main():
 
 
     else:   # Non-barcoded run
+        printtime('Non-barcoded run')
+        if not 'torrent_variant_caller' in vc_options['parameters']:
+            startplugin_json_save = copy.deepcopy(startplugin_json)
+            startplugin_json = copy.deepcopy(startplugin_json['pluginconfig']['barcodes'][0]['json'])
+            startplugin_json['plan'] = startplugin_json_save['plan']
+            startplugin_json['expmeta'] = startplugin_json_save['expmeta']
+            startplugin_json['runinfo'] = startplugin_json_save['runinfo']
+            vc_options = get_options(startplugin_json)
+            vc_options['parameters']['meta']['ts_version'] = ""
+            vc_options['parameters']['meta']['configuration_name'] = startplugin_json['pluginconfig'].get('meta',{}).get('configuration_name','')
 
+            f = open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON),'w')
+            json.dump(vc_options['parameters'],f,indent=4)
+            f.close()
+
+            print_options(vc_options, BASENAME_PARAMETERS_JSON)
+            
         generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS),
                                         'Variant calling still in progress', vc_options, autorefresh=True)
         vc_options['is_barcode'] = False

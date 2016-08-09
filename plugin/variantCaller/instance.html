@@ -634,7 +634,7 @@ Configuration: <select name="config_combo" id="config_combo" onchange="change_co
                     </div>
 					<br/>
                     <div class="span7">
-                        <textarea id="tvcargs" rows="5" cols="150">tvc</textarea>
+                        <textarea class="plugin_input" id="tvcargs" rows="5" cols="150">tvc</textarea>
                     </div>
 					<br/>
 					<br/>
@@ -645,7 +645,7 @@ Configuration: <select name="config_combo" id="config_combo" onchange="change_co
                     </div>
 					<br/>
                     <div class="span7">
-                        <textarea id="tmapargs" rows="5" cols="150"></textarea>
+                        <textarea class="plugin_input" id="tmapargs" rows="5" cols="150"></textarea>
                     </div>
 
 
@@ -681,7 +681,6 @@ Configuration: <select name="config_combo" id="config_combo" onchange="change_co
 </body>
 
 <script>
-
 var plan_page = false;
 //var plan_page = true;
 
@@ -713,6 +712,16 @@ var default_value = "";
 	$.ajaxSetup({async: false});
 
 document.getElementById("crumbs").style.display = 'none';
+
+if (!Array.prototype.indexOf) {
+    Array.prototype.indexOf = function(obj, start) {
+         for (var i = (start || 0), j = this.length; i < j; i++) {
+             if (this[i] === obj) { return i; }
+         }
+         return -1;
+    }
+}
+
 var newGuid = function () {
     var result = '';
     var hexcodes = "0123456789abcdef".split("");
@@ -741,6 +750,8 @@ var newGuid = function () {
     return result;
 };
 	
+$.ajaxSetup({ cache: false });
+
 $(function() {
 	guid = guid + newGuid();
 	plugin = TB_pluginMedia.split("/")[2];
@@ -1154,6 +1165,7 @@ $(function() {
     });
 	*/
     $('#initial_page').click(function () {
+		//window.location.reload(true);
 		configurations.unshift(guid);
 		configuration_values[guid] = default_value;
     var combo = document.getElementById("config_combo");
@@ -1352,7 +1364,7 @@ $(function() {
 	                tableBody.appendChild(tr);
 
 	                var td = document.createElement('TD');
-	                td.appendChild(document.createTextNode(element.bam));
+	                td.appendChild(document.createTextNode(element.bam_file));
 	                tr.appendChild(td);
 					td.style.width = '25%';
 					
@@ -1471,10 +1483,19 @@ $(function() {
 	HandleAmpliseqChange();
 	
   	configurations.push(guid);
-    obj = serializeForm();
+     obj = serializeForm();
     pluginAPIJSON = { "plugin": [TB_plugin.fields.name], "pluginconfig": obj };
-    pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+    try {
+        pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+    } catch(e) {
+        alert(e);
+    }
 	configuration_values[guid] = pluginAPIJSON;
+	  var index = configurations.indexOf(guid);
+	  if (index != -1) {configurations.splice(index, 1);}
+	  default_value = configuration_values[guid];
+	  delete configuration_values[guid];
+	$('#initial_page').click();
 });
 
 //
@@ -1718,15 +1739,16 @@ function serializeForm() {
   var idx = parseInt(config.substr(14));
   var base_set = parameter_sets[idx];
 
-  //delete base_set["meta"]["dom"];
+  delete base_set["meta"]["dom"];
 
   base_set["meta"]["configuration_name"] = document.getElementsByName('configuration_name')[0].value;
-base_set["meta"]["parameters"] = {}
+  base_set["meta"]["parameters"] = {}
   base_set["meta"]["parameters"]["config"] = config;
   base_set["meta"]["parameters"]["value"] = $("#parameter_sets_table input[type='radio']:checked").val();
   base_set["meta"]["trimreads"] = $("#trimreads").prop('checked');
   base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
   base_set["meta"]["barcode_mode"] = "match";
+
   //base_set["meta"]["barcode_mode"] = $("#barcodeModeSelector input[type='radio']:checked").val();
   if ($("#barcodeModeSelector").is(":checked") || !barcoded) {
     base_set["meta"]["barcode_mode"] = "force";
@@ -1752,10 +1774,17 @@ base_set["meta"]["parameters"] = {}
 	base_set["meta"]["targetloci_merge"] = base_set["meta"]["targetloci"].replace('/unmerged/detail/','/merged/plain/');
 	base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
 	base_set["meta"]["tmapargs"] = $("#tmapargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+
 	if (base_set["meta"]["parameters"]["value"] == 'custom') {
 		var element;
 		for (element in base_set["torrent_variant_caller"]) {
 			base_set["torrent_variant_caller"][element] = $("#" + element).val();
+		}
+		for (element in base_set["long_indel_assembler"]) {
+			base_set["long_indel_assembler"][element] = $("#" + element).val();
+		}
+		for (element in base_set["freebayes"]) {
+			base_set["freebayes"][element] = $("#" + element).val();
 		}
 	}
 
@@ -1769,10 +1798,11 @@ function unserializeForm(json) {
 	if (json != "Not specified") {
 		obj = JSON.parse(json);
 		document.getElementsByName('configuration_name')[0].value = obj["pluginconfig"]["meta"]["configuration_name"];
-		
+
 		$("#referenceid option[value='" + obj["pluginconfig"]["meta"]["reference"] + "']").prop('selected', true);
+
 		HandleReferenceChange();
-		
+
 		$("#chipSelector input[value='pgm']").attr("checked", false);
 		$("#chipSelector input[value='proton_p1']").attr("checked", false);
 		$("#chipSelector input[value='530']").attr("checked", false);
@@ -1802,10 +1832,20 @@ function unserializeForm(json) {
 		$("#targetloci option[value='" + obj["pluginconfig"]["meta"]["targetloci"] + "']").prop('selected', true);
 
 	    $(".dropdown").trigger("liszt:updated");
-		
+
 	    ApplyParameterFilters();
         var config = obj["pluginconfig"]["meta"]["parameters"]["config"];
         var idx = parseInt(config.substr(14));
+		if (obj["pluginconfig"]["meta"]["parameters"]['value'] == "custom") {idx = parameter_sets.length - 1;}
+		else {
+	        for (var temp_idx = 0; temp_idx < parameter_sets.length - 1; temp_idx++) {
+	            var param = parameter_sets[temp_idx]["meta"]["configuration"];
+				if (param == obj["pluginconfig"]["meta"]["parameters"]['value']) {
+					idx = temp_idx;
+					break;
+				}
+			}
+		}
         $("#parameter_set_" + idx).prop("checked", true);
 		//$("#parameter_sets_table input[value='" + obj["pluginconfig"]["meta"]["parameters"]["value"] + "']").attr("checked", true);
 		//$("#parameter_sets_table input[type='radio']:checked").attr("id", obj["pluginconfig"]["meta"]["parameters"]["config"]);

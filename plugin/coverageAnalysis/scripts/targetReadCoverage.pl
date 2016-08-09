@@ -240,8 +240,8 @@ while(1) {
       while( $cig =~ s/^(\d+)(.)// ) {
         $end += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
       }
-      my ($bestTn,$bestPrm) = (-1,0);
-      my ($maxOvlp,$bestPrmDist) = (0,$usLimit);
+      my ($bestTn,$bestOverlap,$bestEndDist) = (-1,0);
+      my ($haveBestEnd,$bestEndDist) = (0,$usLimit);
       my ($maxEndDist,$bestTrgLen);
       for( my $tn = $firstRegion; $tn < $nTrgs; ++$tn ) {
         # safe to looking when read end is prior to start of target
@@ -251,7 +251,7 @@ while(1) {
         my $tEnd = $targEnds[$tn];
         if( $srt > $tEnd ) {
           # adjust start of list for further reads if no earlier target end found
-          $firstRegion = $tn+1 if( $maxOvlp < 0 );
+          $firstRegion = $tn+1 if( $bestOverlap < 0 );
           next;
         }
         my $trgLen = $tEnd - $tSrt;
@@ -259,27 +259,26 @@ while(1) {
         ++$targOvpReads[$tn];
         $dSrt = $srt - $tSrt;
         $dEnd = $tEnd - $end;
+        my $endDist5p = $rev ? $dEnd : $dSrt;
         # test if this can be assigned using expected read starts
         if( $ampreads ) {
           # favor target with least distance BEFORE primer if within range of priming
-          my $ddSrt = $rev ? $dEnd : $dSrt;
-          if( $ddSrt < 0 && $ddSrt >= $bestPrmDist ) {
-            # force this as best choice if mostly likely start so far, else use ovlp to split ties
-            $maxOvlp = 0 if( $ddSrt > $bestPrmDist );
-            $bestPrm = 1;
-            $bestPrmDist = $ddSrt;
-          } elsif( $bestPrm ) {
-            # ignore this target if a suitable target start has been seen already
+          if( $endDist5p < 0 && $endDist5p > $bestEndDist ) {
+            $haveBestEnd = 1;
+            $bestEndDist = $endDist5p;
+            $bestOverlap = 0;  # force this as new best choice
+          } elsif( $haveBestEnd && $endDist5p != $bestEndDist ) {
+            # ignore this target if a suitable non-equivalent target start has been seen already
             next;
           }
         }
         # save region number for max overlap
         $dSrt = 0 if( $dSrt < 0 );
         $dEnd = 0 if( $dEnd < 0 );
-        $tSrt = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
+        my $overlap = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
         # in case of a tie, keep the most 3' match for backwards-compatibility to old 3.6 version
-        if( $tSrt >= $maxOvlp ) {
-          $maxOvlp = $tSrt;
+        if( $overlap >= $bestOverlap ) {
+          $bestOverlap = $overlap;
           $bestTn = $tn;
           $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
           $bestTrgLen = $trgLen;
@@ -289,14 +288,14 @@ while(1) {
         if( $rev ) {
           ++$targRevReads[$bestTn];
           if( $usePcCov ) {
-            ++$targRevE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+            ++$targRevE2E[$bestTn] if( ($bestOverlap+1)/($bestTrgLen+1) >= $tcovLimit );
           } else {
             ++$targRevE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
           }
         } else {
           ++$targFwdReads[$bestTn];
           if( $usePcCov ) {
-            ++$targFwdE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+            ++$targFwdE2E[$bestTn] if( ($bestOverlap+1)/($bestTrgLen+1) >= $tcovLimit );
           } else {
             ++$targFwdE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
           }

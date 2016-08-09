@@ -13,7 +13,7 @@ from ion.plugin import *
 from django.utils.datastructures import SortedDict
 
 class variantCaller(IonPlugin):
-        version = '5.0.3.5'
+        version = '5.0.4.0'
 	envDict = dict(os.environ)
 
 	def variantCall(self):

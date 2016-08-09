@@ -25,7 +25,7 @@ my $OPTIONS = "Options:
   -C <num> Percentage Coverage threshold for 'full' target coverage read to be counted. When more than 0,
      specifiying this value causes fwd_cov and rev_cov counts to replace fwd_e2e and rev_e2e. Default: 0.
   -D <int> Downstream limit for matching read start to target end (appropriate for +/- strand mapping).
-     This assignment parameter is only employed if the -a option is provided. Default: 5.
+     This assignment parameter is only employed if the -a option is provided. Default: 1. Currently unused.
   -U <int> Upstream limit for matching read start to target end (appropriate for +/- strand mapping).
      This assignment parameter is only employed if the -a option is provided. Default: 30.
   -N <int> (Algorithm) Minimum Number of merged targets to use per samtools command. Default: 50.
@@ -42,7 +42,7 @@ my $OPTIONS = "Options:
 my $logopt = 0;
 my $bedout = 0;
 my $ampreads = 0;
-my $dsLimit = 5;
+my $dsLimit = 1;
 my $usLimit = 30;
 my $e2eLimit = 2;
 my $tcovLimit = 0;
@@ -56,6 +56,8 @@ my $alenFilter = 0;
 my $minNumMerge = 50;
 my $endOvlp = 10000;
 my $maxMrgSep = 1000000;
+
+my $accuracy = 0.0000001;  # good enough for rational number bein compared here
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 ) {
@@ -103,7 +105,7 @@ $e2eLimit = 0 if( $e2eLimit < 0 );
 $usLimit *= -1;  # more convenient for testing
 
 my $usePcCov = ($tcovLimit > 0);
-$tcovLimit *= 0.01;  # % to fraction
+$tcovLimit = ($tcovLimit/100) - $accuracy;  # % to fraction with >= accuracy correction
 $maxMrgSep -= $endOvlp;
 
 $addRPM = ($rpmFactor >= 0);
@@ -247,9 +249,11 @@ while(1) {
       while( $cig =~ s/^(\d+)(.)// ) {
         $alen += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
       }
+      # do not assign any read to a target that is too short
+      next if( $alen < $alenFilter );
       my $end = $srt + $alen - 1;
-      my $maxOvlp = -1;
-      my $bestTn = 0;
+      my ($bestTn,$bestOverlap) = (-1,0);
+      my ($haveBestEnd,$bestEndDist) = (0,$usLimit);
       my ($maxEndDist,$bestTrgLen);
       for( my $tn = $firstRegion; $tn < $nTrgs; ++$tn ) {
         # safe to looking when read end is prior to start of target
@@ -259,51 +263,55 @@ while(1) {
         my $tEnd = $targEnds[$tn];
         if( $srt > $tEnd ) {
           # adjust start of list for further reads if no earlier target end found
-          $firstRegion = $tn+1 if( $maxOvlp < 0 );
+          $firstRegion = $tn+1 if( $bestOverlap < 0 );
           next;
         }
-        my $trgLen = $tEnd - $tSrt;
         # record a hit for any read overlap
         ++$targOvpReads[$tn];
-        # do not assign any read to a target that is too short
-        next if( $alen < $alenFilter );
         $dSrt = $srt - $tSrt;
         $dEnd = $tEnd - $end;
-        # test if this can be assigned to an amplicon
+        my $endDist5p = $rev ? $dEnd : $dSrt;
+        # test if this can be assigned using expected read starts
         if( $ampreads ) {
-          my $aSrt = $rev ? $dEnd : $dSrt;
-          next if( $aSrt < $usLimit || $aSrt > $dsLimit );
+          # favor target with least distance BEFORE primer if within range of priming
+          if( $endDist5p < 0 && $endDist5p > $bestEndDist ) {
+            $haveBestEnd = 1;
+            $bestEndDist = $endDist5p;
+            $bestOverlap = 0;  # force this as new best choice
+          } elsif( $haveBestEnd && $endDist5p != $bestEndDist ) {
+            # ignore this target if a suitable non-equivalent target start has been seen already
+            next;
+          }
         }
         # save region number for max overlap
         $dSrt = 0 if( $dSrt < 0 );
         $dEnd = 0 if( $dEnd < 0 );
-        $tSrt = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
+        my $overlap = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
         # in case of a tie, keep the most 3' match for backwards-compatibility to old 3.6 version
-        if( $tSrt >= $maxOvlp ) {
-          $maxOvlp = $tSrt;
+        if( $overlap >= $bestOverlap ) {
+          $bestOverlap = $overlap;
           $bestTn = $tn;
           $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
-          $bestTrgLen = $trgLen;
+          $bestTrgLen = $tEnd - $tSrt + 1;
         }
       }
-      # test if the read was assigned to a target
-      if( $maxOvlp >= 0 ) {
+      unless( $bestTn < 0 ) {
         if( $rev ) {
           ++$targRevReads[$bestTn];
           if( $usePcCov ) {
-            ++$targRevE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+            my $cov = ($bestOverlap+1)/$bestTrgLen;
+            ++$targRevE2E[$bestTn] if( ($bestOverlap+1)/$bestTrgLen >= $tcovLimit );
           } else {
             ++$targRevE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
           }
         } else {
           ++$targFwdReads[$bestTn];
           if( $usePcCov ) {
-            ++$targFwdE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+            ++$targFwdE2E[$bestTn] if( ($bestOverlap+1)/$bestTrgLen >= $tcovLimit );
           } else {
             ++$targFwdE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
           }
         }
-        my $nr = $targRevReads[$bestTn] + $targFwdReads[$bestTn];
       }
     }
     close( MAPPINGS );
