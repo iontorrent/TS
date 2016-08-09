@@ -22,14 +22,16 @@
   when: S5_virtual_guest
 
 # Define the default_interface
-# By design, it is first slot on the PCI network card or first on-board NIC.
-# Either em1, eth0, p5p1 or p6p1
-- name: find the interface string
-  shell: bash -c "egrep '(em1|p[0-9]p1|eth0|wlan0)' /proc/net/dev | awk '{print \$1}' | tail -1 | sed 's/://g' "
-  register: interface_name
-  
-- name: set the default_interface fact
-  set_fact:
-    default_interface: "{{interface_name.stdout}}"
+# By design, it is first slot on the PCI network card for T7500 or first on-board NIC for all others
+# Either em1, eth0
+- name: define the interface string for T7500
+  set_fact: default_interface=eth0
+  when: ansible_product_name == "Precision WorkStation T7500"
+- name: define the interface string for non-T7500
+  set_fact: default_interface=em1
+  when: ansible_product_name != "Precision WorkStation T7500"
+- name: set the default_interface
+  set_fact: default_interface={{ansible_default_ipv4.interface|default(default_interface)}}
+- debug: var=default_interface
 
 - debug: var=default_interface

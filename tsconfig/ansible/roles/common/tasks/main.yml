@@ -40,6 +40,26 @@
   apt: name={{item}} state=installed force=yes update_cache=yes cache_valid_time=300
   with_items: common_syspkg_list
 
+#=============================================================================
+# Install Perl modules
+# ion-tsconfig packages contains some perl module tarballs
+#=============================================================================
+- name: Create a temporary directory /tmp/perl
+  file: name=/tmp/perl state=directory
+
+- name: Copy Perl module files
+  copy: src={{item}} dest=/tmp/perl/{{item | basename}}
+  with_fileglob:
+    - /usr/share/ion-tsconfig/perl/*.tar.gz
+
+- name: Run script against each Perl module file to install that module
+  script: perl_installation.sh /tmp/perl/{{item | basename}}
+  with_fileglob:
+    - /usr/share/ion-tsconfig/perl/*.tar.gz
+
+- name: Remove the temporary directory /tmp/perl
+  file: name=/tmp/perl state=absent
+
 #-----------------------------------------------------------------------------
 #    named_core_files
 #-----------------------------------------------------------------------------

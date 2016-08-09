@@ -1,4 +1,4 @@
 # Version for target of current development cycle
 MAJOR=5
 MINOR=0
-RELEASE=16
+RELEASE=17

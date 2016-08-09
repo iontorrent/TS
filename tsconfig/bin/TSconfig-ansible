@@ -75,7 +75,7 @@ if test $EXECUTE; then
         #echo "Valid OS"
         :
     else
-        echo "This release not supported.  Try TSconfig"
+        echo "This release not supported"
         exit 0
     fi
 fi
@@ -178,7 +178,7 @@ done
 # Must be root
 #--------------------------------------
 needs_root
-    
+
 #---                                                                        ---#
 #---    Exit and call script again this time logging all stdout and stderr  ---#
 #---                                                                        ---#
@@ -228,7 +228,7 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
     echo "=================================================================="
     echo "Checking available disk space on the root partition"
     echo "=================================================================="
-    free_root=$(df -Pk |grep `mount|grep "on / type"|awk '{print $1}'`|awk '{print $4}')
+    free_root=$(df -k|awk '/.*\/$/ {print $4}')
     log "root partition free space:$free_root kb"
     free_threshold=10485760
         if [[ $free_root -lt $free_threshold ]]; then
@@ -241,12 +241,18 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
             user_msg ""
             user_msg "To override this limit, add the '--force' argument"
             user_msg "=================================================================="
-            exit 0
+            exit 1
         else
             log "Warning: Not enough disk space to install software (/ has $free_root kb free)"
             log "User has forced configuration"
         fi
     fi
+
+    # Configure apt repositories
+    config_repositories
+
+    # Install prerequisites
+    install_prerequisites
 
     #============================================================================================
     # Compute Node Handling
@@ -259,7 +265,7 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
     fi
 
     if $configure_computes; then
-        
+
         echo "=================================================================="
         echo "Preparing compute nodes for configuration"
         echo "=================================================================="
@@ -279,7 +285,7 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
                 ansible computes -i ${ANSIBLE_HOME}/${MY_HOSTS} -m authorized_key -a "user=$TSCONFIG_CLUSTER_ADMIN key='{{ lookup('file', '${ANSIBLE_RSA_KEY}.pub') }}' path=/home/$TSCONFIG_CLUSTER_ADMIN/.ssh/authorized_keys manage_dir=no" --ask-pass -c paramiko 1>&2
             fi
         fi
-        
+
     fi
 
     export ANSIBLE_HOST_KEY_CHECKING=False
@@ -288,7 +294,7 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
 
     log "Configure Head Node"
     echo "=================================================================="
-    echo "Starting the site configuration with ansible"
+    echo "Starting the site configuration"
     echo "=================================================================="
     cd $ANSIBLE_HOME
     ansible-playbook site.yml \
@@ -317,36 +323,46 @@ if [ $UPDATE_SOFTWARE == 1 ]; then
 
     log "Torrent Suite update"
     # Root partition space check
-    free_root=$(df -Pk |grep `mount|grep "on / type"|awk '{print $1}'`|awk '{print $4}')
+    free_root=$(df -k|awk '/.*\/$/ {print $4}')
     log "root partition free space:$free_root kb"
     free_threshold=1048576
     if [[ $free_root -lt $free_threshold ]]; then
-
-        log "Not enough disk space to update software (/ has $free_root kb free)"
-        user_msg "=================================================================="
-        user_msg "Not enough disk space to update software"
-        user_msg "/ partition has $free_root kb free and needs $free_threshold kb"
-        user_msg "Ion Software update has been cancelled."
-        user_msg "=================================================================="
-
-    else
-
-        log "Update software"
-        cd $ANSIBLE_HOME
-        ansible-playbook software_update.yml \
-            -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-            --sudo
-
-        if [ $? == 0 ]; then
-            echo "=================================================================="
-            echo "Software Update Complete"
-            echo "=================================================================="
+        if [ $FORCE = False ]; then
+            log "Not enough disk space to update software (/ has $free_root kb free)"
+            user_msg "=================================================================="
+            user_msg "Not enough disk space to update software"
+            user_msg "/ partition has $free_root kb free and needs $free_threshold kb"
+            user_msg "Ion Software update has been cancelled."
+            user_msg ""
+            user_msg "To override this limit, add the '--force' argument"
+            user_msg "=================================================================="
+            exit 1
         else
-            echo "=================================================================="
-            echo "There was an error.  Sorry.  Check the log files."
-            echo "=================================================================="
+            log "Warning: Not enough disk space to install software (/ has $free_root kb free)"
+            log "User has forced configuration"
         fi
+    fi
+    
+    # Configure apt repositories
+    config_repositories
 
+    # Install prerequisites
+    install_prerequisites
+
+    log "Update software"
+    cd $ANSIBLE_HOME
+    ansible-playbook software_update.yml \
+        -i ${ANSIBLE_HOME}/${MY_HOSTS} \
+        --sudo
+
+    if [ $? == 0 ]; then
+        echo "=================================================================="
+        echo "Software Update Complete"
+        echo "=================================================================="
+    else
+        echo "=================================================================="
+        echo "There was an error.  Sorry.  Check the log files."
+        echo "=================================================================="
     fi
 
     exit
@@ -373,11 +389,11 @@ if [ $UPDATE_HOSTNAME == 1 ]; then
 
     # Remove all queues
     for queue in $(qconf -sql); do qconf -dq $queue; done
-    
+
     # Stop gridengine daemons
     service gridengine-exec stop
     service gridengine-master stop
-    
+
     # Set new name (so Ansible will pick it up as {{ansible_hostname}} and {{ansible_fqdn}})
     /bin/hostname ${newHostName}
     echo "${newHostName}" > /etc/hostname
@@ -386,25 +402,25 @@ if [ $UPDATE_HOSTNAME == 1 ]; then
     if [ -f /etc/postfix/main.cf ]; then
         sed -i "s/${oldFQDN}/${newFQDN}/g" /etc/postfix/main.cf
     fi
-    
+
     hostfiles=$(find /usr/share/ion-tsconfig/ansible -name torrentsuite_hosts\*)
     for hostfile in ${hostfiles[@]}; do
         sed -i -e "/^\[headnode\]/ { n ; s/^.*/${newHostName} ansible_connection=local/ }" $hostfile
     done
-    
+
     log "Changing hostname"
     cd $ANSIBLE_HOME
     ansible-playbook rename_headnode.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
         --sudo
-    
+
     (
     set +e
     qconf -de $oldFQDN
     qconf -ds $oldFQDN
     qconf -dh $oldFQDN
     )
-    
+
     #DIAGNOSTICS
     if false; then
         echo "===================================================================="
@@ -426,10 +442,13 @@ fi
 if [ $SECURITY_UPDATE == 1 ]; then
     log "Installing security updates"
 
+    #Processes should be stopped, update completed, restart processes
+    ion_daemon_ctrl stop
     cd $ANSIBLE_HOME
     ansible-playbook security_update.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
         --sudo
+    ion_daemon_ctrl restart
 fi
 
 #---

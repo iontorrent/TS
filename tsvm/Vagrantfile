@@ -127,7 +127,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     # Bootstrap server to latest release of the Ion TS Platform
     #config.vm.provision :shell, :inline => 'apt-get install build-essential python-pkg-resources --no-upgrade -y'
     config.vm.provision :shell, :inline => 'apt-get install ion-tsconfig -y --force-yes'
-    config.vm.provision :shell, :inline => 'TSconfig --configure-server --skip-pgm-config --skip-init --configure-ntp'
+    config.vm.provision :shell, :inline => 'TSconfig -s'
+    config.vm.provision :shell, :inline => 'TSconfig --configure-server'
 
     config.vm.provision :shell, :path => './tsvm-postprov.sh', :args => "#{host} #{TS_VERSION} #{timezone} #{BASIC}"
 

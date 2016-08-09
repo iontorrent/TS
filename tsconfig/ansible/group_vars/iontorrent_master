@@ -8,6 +8,20 @@ ionmaster_syspkg_list:
     - samba
     - python-amqp
     - postgresql
+    - openipmi
+    - ipmitool
+    - expect
+    - gcc
+    - make
+    - build-essential
+    - lsscsi
+    - xfsprogs
+    - lvm2
+    - clusterssh
+    - libdevmapper-event1.02.1
+    - watershed
+    - megacli
+    - dkms
 
 # X server package list
 xserver_pkg_list:

@@ -3,26 +3,6 @@
 
 # Configuration outside of deb package install that needs to happen on compute nodes.
 
-#=============================================================================
-# Install Perl modules
-# ion-tsconfig packages contains some perl module tarballs.  install them on computes.
-#=============================================================================
-- name: Create a temporary directory /tmp/perl
-  file: name=/tmp/perl state=directory
-  
-- name: Copy Perl module files
-  copy: src={{item}} dest=/tmp/perl/{{item | basename}}
-  with_fileglob:
-    - /usr/share/ion-tsconfig/perl/*.tar.gz
-    
-- name: Run script against each Perl module file to install that module
-  script: perl_installation.sh /tmp/perl/{{item | basename}}
-  with_fileglob:
-    - /usr/share/ion-tsconfig/perl/*.tar.gz
-    
-- name: Remove the temporary directory /tmp/perl
-  file: name=/tmp/perl state=absent
-  
 #-----------------------------------------------------------------------------
 # Copy scripts for cluster_info.py run from headnode
 #-----------------------------------------------------------------------------
@@ -31,3 +11,4 @@
 
 - name: Copy grp_configuration_test script
   copy: src=/usr/sbin/grp_configuration_test dest=/usr/sbin/grp_configuration_test mode=0775
+  

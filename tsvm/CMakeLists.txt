@@ -64,7 +64,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 set(
 	CPACK_DEBIAN_PACKAGE_DEPENDS
 	"vagrant,
-	virtualbox (>=4.3),
+	virtualbox-4.3 (>=4.3),
 	msr-tools"
 )
 set(CPACK_PACKAGE_DESCRIPTION "This package configures the Ion Torrent Suite to download the Early Access Software version.")

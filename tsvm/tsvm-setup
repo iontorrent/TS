@@ -12,7 +12,7 @@ SELECTMAX=${#VER_AVAIL}
 INTERACTIVE=true
 DO_IMPORT=true
 BASIC_SERVER=false
-DIST=lucid
+DIST=trusty
 
 #=======================================================================
 # Common variables

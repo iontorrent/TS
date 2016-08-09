@@ -1599,7 +1599,7 @@
       "uid": "SEQ0024",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT_IC",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Hi-Q View Sequencing Kit",
       "categories" : "flowOverridable;readLengthDerivableFromFlows;"
     }
@@ -1616,7 +1616,7 @@
       "uid": "TEMPLT0018",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Hi-Q View OT2 Kit - 200"
     }
   },    
@@ -1632,7 +1632,7 @@
       "uid": "TEMPLT0019",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Hi-Q View OT2 Kit - 400"
     }
   },  
@@ -1650,7 +1650,7 @@
       "uid": "ICPREP0007",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "IC",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Hi-Q View Chef Kit",
       "categories" : "multipleTemplatingSize;supportLibraryReadLength"
     }
@@ -1666,7 +1666,7 @@
       "flowCount": 0,
       "uid": "LIB0022",
       "instrumentType": "pgm",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Controls 200 Kit v2"
     }
   },
@@ -6157,7 +6157,7 @@
     "fields": {
       "name"                       : "314_Hi-QView",
       "description" : "Ion 314 chip v2 Hi-Q View analysis arguments",
-      "active": false,
+      "active": true,
       "isSystem" : true,       
       "chipType"                   : "314",
       "chip_default"               : false,
@@ -6177,7 +6177,7 @@
     "fields": {
       "name"                       : "316v2_Hi-QView",
       "description" : "Ion 316 chip v2 Hi-Q View analysis arguments",
-      "active": false,
+      "active": true,
       "isSystem" : true,      
       "chipType"                   : "316v2",
       "chip_default"               : false,
@@ -6197,7 +6197,7 @@
     "fields": {
       "name"                       : "318_Hi-QView",
       "description" : "Ion 318 chip v2 Hi-Q View analysis arguments",
-      "active": false,
+      "active": true,
       "isSystem" : true,          
       "chipType"                   : "318",
       "chip_default"               : false,
@@ -6217,7 +6217,7 @@
     "fields": {
       "name"                       : "318D_Hi-QView",
       "description" : "Ion 318D chip Hi-Q View analysis arguments",
-      "active": false,
+      "active": true,
       "isSystem" : true,          
       "chipType"                   : "318D",
       "chip_default"               : false,

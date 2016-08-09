@@ -14,6 +14,10 @@ set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 configure_file (
+	"${PROJECT_SOURCE_DIR}/debian/preinst.in"
+	"${PROJECT_BINARY_DIR}/debian/preinst" @ONLY
+)
+configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/postinst.in"
 	"${PROJECT_BINARY_DIR}/debian/postinst" @ONLY
 )
@@ -83,7 +87,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/99torrentserver" DESTINATION /etc/ap
 # Deploy the ansible heirarchy for internal testing
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/ansible" DESTINATION share/ion-tsconfig
     USE_SOURCE_PERMISSIONS )
-	
+
 #################################
 # Install python library files
 #################################
@@ -107,22 +111,11 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect,
-    gcc,
-    make,
-    python-jsonpipe,
-    lsscsi,
-    xfsprogs,
-    lvm2,
-    pdsh,
-    clusterssh,
-    ansible (>=1.6),
-    build-essential,
-    libdevmapper-event1.02.1,
-    watershed,
-    megacli,
-    dkms")
+if (NOT ${LSB_RELEASE_CODENAME} STREQUAL "lucid")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "ansible (>=1.6)")
+endif()
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm
 )
