@@ -147,6 +147,8 @@ fi
 
 if [ ! -d $STAR_INDEX ]; then
   mkdir -p $SCRATCH
+  # set full access to circumvent update resetting owner - too late if this has already happened!
+  chmod 777 $SCRATCH
   TMPDIR=`mktemp -d -p $SCRATCH`
   echo "Created temp STAR index dir: $TMPDIR" >&2
   echo "(`date`) Running STAR --runMode genomeGenerate for reference '$REF_NAME' ..." >&2

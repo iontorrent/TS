@@ -34,7 +34,7 @@ public:
     bool invalid_input_cigar () const;
 
     // parameters setup
-    void set_scores (int mat, int mis, int gip, int gep);
+    void set_scores (double mat, double mis, double gip, double gep);
     void set_bandwidth (int bandwidth);
     void set_clipping (CLIPTYPE clipping);
     void set_gap_scale_mode (int) {}

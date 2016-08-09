@@ -663,11 +663,11 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         barcodedSamples = json_data.get('barcodedSamples',{})
         if barcodedSamples and common['barcodedSamples']:
             # try to update with original barcodeSampleInfo
-            for sample, value in barcodedSamples.items():
+            for sample_name, value in barcodedSamples.items():
                 for barcode in value['barcodes']:
                     barcodeSampleInfo = [v.get('barcodeSampleInfo',{}).get(barcode) for v in common['barcodedSamples'].values() if v.get('barcodeSampleInfo',{}).get(barcode)]
                     if barcodeSampleInfo:
-                        barcodedSamples[sample].setdefault('barcodeSampleInfo',{})[barcode] = barcodeSampleInfo[0]
+                        barcodedSamples[sample_name].setdefault('barcodeSampleInfo',{})[barcode] = barcodeSampleInfo[0]
         else:
             barcodedSamples = json.dumps(barcodedSamples, cls=DjangoJSONEncoder)
     else:

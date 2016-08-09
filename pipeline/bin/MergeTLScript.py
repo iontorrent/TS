@@ -103,7 +103,10 @@ if __name__=="__main__":
 
 
     blocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
-    dirs = ['block_%s' % block['id_str'] for block in blocks]
+    blocks_to_process = [block for block in blocks if block['autoanalyze'] and block['analyzeearly']]
+    number_of_total_blocks      = len(blocks)
+    number_of_blocks_to_process = len(blocks_to_process)
+    dirs = ['block_%s' % block['id_str'] for block in blocks_to_process]
     if not is_composite:
         dirs=[]
 
@@ -119,6 +122,33 @@ if __name__=="__main__":
             env['shortRunName'],
             exclusionMaskFile)
 
+        '''
+        # write composite return code, not needed anymore ?
+        try:
+            composite_return_code=number_of_total_blocks
+            for subdir in dirs:
+
+                blockstatus_return_code_file = os.path.join(subdir,"blockstatus.txt")
+                if os.path.exists(blockstatus_return_code_file):
+
+                    with open(blockstatus_return_code_file, 'r') as f:
+                        text = f.read()
+                        if 'Analysis=0' in text:
+                            composite_return_code-=1
+
+            composite_return_code_file = os.path.join(SIGPROC_RESULTS,"analysis_return_code.txt")
+            if not os.path.exists(composite_return_code_file):
+                printtime("DEBUG: create %s" % composite_return_code_file)
+                os.umask(0002)
+                f = open(composite_return_code_file, 'a')
+                f.write(str(composite_return_code))
+                f.close()
+            else:
+                printtime("DEBUG: skip generation of %s" % composite_return_code_file)
+        except:
+            traceback.print_exc()
+        '''
+
 
     if args.do_basecalling:
 
@@ -126,7 +156,7 @@ if __name__=="__main__":
 
         # write composite return code
         try:
-            composite_return_code=96
+            composite_return_code=number_of_total_blocks
             for subdir in dirs:
 
                 blockstatus_return_code_file = os.path.join(subdir,"blockstatus.txt")
@@ -142,8 +172,7 @@ if __name__=="__main__":
                                 #TODO
                                 corner_P1_blocks  = ['block_X0_Y0','block_X14168_Y0','block_X0_Y9324','block_X14168_Y9324']
                                 corner_P0_blocks  = ['block_X0_Y0','block_X7040_Y0','block_X0_Y4648','block_X7040_Y4648']
-                                corner_521_blocks = ['block_X0_Y1512','block_X0_Y1296','block_X0_Y216','block_X0_Y0','block_X7040_Y1512','block_X7040_Y1296','block_X7040_Y216','block_X7040_Y0']
-                                if return_code_text=="3" and subdir in corner_P0_blocks + corner_P1_blocks + corner_521_blocks:
+                                if return_code_text=="3" and subdir in corner_P0_blocks + corner_P1_blocks:
                                     printtime("INFO: suppress non-critical error in %s" % subdir)
                                     composite_return_code-=1
 

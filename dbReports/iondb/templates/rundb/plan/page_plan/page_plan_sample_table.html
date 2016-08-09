@@ -164,7 +164,7 @@
                             <select class="input-xlarge irSampleName" name="sampleName">
                             {%for item in step.prepopulatedFields.samplesetitems %}
                                 <option value="{{item.sample.displayedName}}" {%ifequal item.sample.displayedName row.sampleName%}selected {%endifequal%}>
-                                    {{item.sample.displayedName}}
+                                    {{item.sample.displayedName}} {% if step.prepopulatedFields.showSampleSetInfo %}({{item.sampleSet.displayedName}}){% endif %}
                                 </option>
                             {%endfor%}
                             </select>
@@ -218,7 +218,10 @@
                                                                                                                        />
 			</td>
 
-                        <!-- once the barcoded sample's reference is set, do not try to cascade plan's BED files to the barcoded sample -->
+			<!-- REFERENCE and BED FILES -->
+			{% if helper.getApplProduct.isReferenceSelectionSupported %}
+
+			<!-- once the barcoded sample's reference is set, do not try to cascade plan's BED files to the barcoded sample -->
                         <td class="hideable_referenceBySample hideable_referenceBySample_ref input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isReferenceSelectionSuported %} style="display: none;"{%endif%}>
                             <select class="input-large reference" name="reference">
                             
@@ -276,7 +279,14 @@
                                 {% endifequal %}                                                                              
                             {%endfor%}                           
                             </select>
-                        </td>    
+                        </td>
+
+			{% else %}
+			    <input type="hidden" name="reference" value="">
+			    <input type="hidden" name="targetRegionBedFile" value="">
+			    <input type="hidden" name="hotSpotRegionBedFile" value="">
+			{% endif %}
+			<!-- END REFERENCE and BED FILES -->
 
                         <td class="controlSeqTypeBySample input-medium" {%if not helper.isControlSeqTypeBySample %} style="display: none;"{%endif%}>
                             <select class="input-large controlSequenceType" name="controlSequenceType">

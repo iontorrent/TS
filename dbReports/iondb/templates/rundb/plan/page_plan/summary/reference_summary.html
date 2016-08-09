@@ -1,4 +1,5 @@
 {%include "rundb/plan/page_plan/summary/monitoring_summary.html"%}
+{% if helper.getApplProduct.isReferenceSelectionSupported %}
 <tr>
     <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Reference Library:</b></td>
     <td id="selectedReferenceLibrary"></td>
@@ -16,7 +17,7 @@
     </tr>
 {% endif %}
 
-{% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.applicationGroupName "DNA + RNA"%}
+{% ifequal helper.getApplicationGroupName "DNA + RNA"%}
     <tr>
         <td><b>RNA Reference Library:</b></td>
         <td id="selectedMixedTypeRNAReferenceLibrary">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference|default_if_none:""}}</td>
@@ -26,3 +27,4 @@
         <td id="selectedMixedTypeRNATargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile|default_if_none:""}}</td>
     </tr>
 {% endifequal %}
+{% endif %}

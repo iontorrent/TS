@@ -21,7 +21,7 @@ public:
     virtual bool invalid_input_cigar () const = 0;
 
     // parameters setup
-    virtual void set_scores (int mat, int mis, int gip, int gep) = 0;
+    virtual void set_scores (double mat, double mis, double gip, double gep) = 0;
     virtual void set_bandwidth (int bandwidth) = 0;
     virtual void set_clipping (CLIPTYPE clipping) = 0;
     virtual void set_gap_scale_mode (int gap_scale_mode) = 0;

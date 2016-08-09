@@ -387,7 +387,7 @@ void VcfOrderedMerger::generate_novel_annotations(vcf::Variant* variant) {
     // trim identical ends
     string::iterator orefi = oref.end();
     string::iterator alti = temp_alt.end();
-    for (; *orefi == *alti; orefi--, alti--) { }
+    for (; *orefi == *alti && orefi != oref.begin() && alti != temp_alt.begin(); orefi--, alti--) { }
 
     if (alti + 1 < temp_alt.end()) temp_alt.erase(alti + 1, temp_alt.end());
     if (orefi + 1 < oref.end()) oref.erase(orefi + 1, oref.end());
@@ -449,7 +449,7 @@ void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry) {
     filtered_oid.push_back(*oid);
 
     if (record_ref_extension) {
-      if (hotspot_queue.current()->ref.substr(hotspot_queue.current()->ref.length() - record_ref_extension) !=
+      if ((int)omapalt->length() < record_ref_extension || hotspot_queue.current()->ref.substr(hotspot_queue.current()->ref.length() - record_ref_extension) !=
           omapalt->substr(omapalt->length() - record_ref_extension)) {
         cout << UNIFY_VARIANTS << " Hotspot annotation " << merged_entry->sequenceName
         << ":" << merged_entry->position << ", allele " << *omapalt << " not eligible for shortening.\n";

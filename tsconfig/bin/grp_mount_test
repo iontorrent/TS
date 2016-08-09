@@ -74,7 +74,11 @@ function nfs_mount_test()
 }
 
 set -u
-mountname=$(readlink -f $1)
-nfs_mount_test $mountname
-
+if ! /usr/bin/timelimit -q -t 10 -T 1 df $1 >/dev/null; then
+    echo "$1 is not available, NFS hung?">&2
+    exit 1
+else
+    mountname=$(readlink -f -n $1)
+    nfs_mount_test $mountname
+fi
 exit

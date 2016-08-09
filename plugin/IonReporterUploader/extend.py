@@ -65,7 +65,7 @@ def get_httpResponseFromSystemTools(cmd):
     exitCode = proc.returncode
     write_debug_log("systemtools  out = "+ out)
     if (err):
-	    write_debug_log("systemtools  err = "+ err)
+       write_debug_log("systemtools  err = "+ err)
     else:
        err=""
     write_debug_log("systemtools  exitCode = "+ str(exitCode))
@@ -73,7 +73,7 @@ def get_httpResponseFromSystemTools(cmd):
         return {"status": "false", "error": err, "exitCode":exitCode, "stdout": out}
     else:
         return {"status": "true", "error": err, "exitCode":exitCode, "stdout": out}
-    return {"status": "false", "error": err, "exitCode":exitCode, "stdout": out}
+    #return {"status": "false", "error": err, "exitCode":exitCode, "stdout": out}
 
 def get_httpResponseFromSystemToolsAsJson(cmd):
     result = get_httpResponseFromSystemTools(cmd)
@@ -103,9 +103,13 @@ def get_httpResponseFromIRUJavaAsJson(cmd):
     #javaMemOptions=""       # perm size not required when using internally embedded java 1.8 and above.
 
     set_classpath()
+    cpstring=os.getenv('CLASSPATH')
+    cpstring=cpstring.strip('\n')
+
 
     result={}
-    result=get_httpResponseFromSystemToolsAsJson(javaBin + " -Xms3g -Xmx3g"+ javaMemOptions + " -Dlog.home=/tmp com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher " + cmd)
+    #write_debug_log(javaBin + " -Xms3g -Xmx3g"+ javaMemOptions + " -Djsse.enableSNIExtension=false -Dlog.home=/tmp com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher " + cmd)
+    result=get_httpResponseFromSystemToolsAsJson(javaBin + " -Xms3g -Xmx3g" + " -cp " + cpstring +" " + javaMemOptions + " -Djsse.enableSNIExtension=false -Dlog.home=/tmp com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher " + cmd)
     return result
 
 
@@ -377,12 +381,15 @@ def get_versions(inputJson):
 
     #curl -ks -H Authorization:rwVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78 https://xyz.com:443/grws_1_2/data/versionList
     url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/versionList/"
+    cmd="curl -ks -3 -H Authorization:"+token+ " " +url
+    result = get_httpResponseFromSystemToolsAsJson(cmd)
+    if (result["status"] =="true"):
+        return result["json"]
     cmd="curl -ks -H Authorization:"+token+ " " +url
     result = get_httpResponseFromSystemToolsAsJson(cmd)
     if (result["status"] =="true"):
         return result["json"]
-    else:
-        return result
+    return result
 
     try:
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/versionList/"
@@ -420,12 +427,15 @@ def getIRCancerTypesList(inputJson):
 
     #curl -ks --request POST -H Authorization:rwVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78 https://xyz.com:443/grws_1_2/data/getAvailableCancerType
     url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/getAvailableCancerType"
+    cmd="curl -ks -3 --request POST -H Authorization:"+token+ " " +url
+    result = get_httpResponseFromSystemToolsAsJson(cmd)
+    if (result["status"] =="true"):
+        return {"status":"true", "error":"none", "cancerTypes":result["json"]}
     cmd="curl -ks --request POST -H Authorization:"+token+ " " +url
     result = get_httpResponseFromSystemToolsAsJson(cmd)
     if (result["status"] =="true"):
         return {"status":"true", "error":"none", "cancerTypes":result["json"]}
-    else:
-        return result
+    return result
 
 
     try:
@@ -1026,12 +1036,15 @@ def authCheck(inputJson):
 
     #curl -ks -H Authorization:rwVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78 https://xyz.com:443/grws_1_2/usr/authcheck
     url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/usr/authcheck"
+    cmd="curl -ks -3 -H Authorization:"+token+ " " +url
+    result = get_httpResponseFromSystemTools(cmd)
+    if (   (result["status"] =="true")  and (result["stdout"] == "SUCCESS")   ):
+        return {"status": "true", "error": "none"}
     cmd="curl -ks -H Authorization:"+token+ " " +url
     result = get_httpResponseFromSystemTools(cmd)
     if (   (result["status"] =="true")  and (result["stdout"] == "SUCCESS")   ):
         return {"status": "true", "error": "none"}
-    else:
-        return result
+    return result
 
 
     try:
@@ -1089,17 +1102,20 @@ def getWorkflowList(inputJson):
 
         #curl -ks -H Authorization:rwVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78 -H Version:42 https://xyz.com:443/grws_1_2/data/workflowList
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/workflowList"
-        cmd="curl -ks    -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
-        cmdResult = get_httpResponseFromSystemToolsAsJson(cmd)
         result = {}
         returnJson = []
+        cmd="curl -ks -3  -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
+        cmdResult = get_httpResponseFromSystemToolsAsJson(cmd)
         if (cmdResult["status"] !="true"):
-            return cmdResult
-        else:
-            result = cmdResult["json"]
+            cmd="curl -ks -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
+            cmdResult = get_httpResponseFromSystemToolsAsJson(cmd)
+            if (cmdResult["status"] !="true"):
+                return cmdResult
 
+        result = cmdResult["json"]
 
-
+        # TBD quick fix on indent, with (if True:). need to back indent this block and remove this  (if True:) thing
+        if True: 
             try:
               for workflowBlob in result:
                 appType = str (workflowBlob.get("ApplicationType"))
@@ -1258,12 +1274,15 @@ def getUserDataUploadPath(inputJson):
 
     #curl -ks -H Authorization:rwVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78 https://xyz.com:443/grws_1_2/data/uploadpath
     url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/uploadpath/"
-    cmd="curl -ks    -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
+    cmd="curl -ks -3    -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
     result = get_httpResponseFromSystemTools(cmd)
     if (result["status"] =="true"):
         return {"status": "true", "error": "none", "userDataUploadPath": result["stdout"]}
-    else:
-        return result
+    cmd="curl -ks -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
+    result = get_httpResponseFromSystemTools(cmd)
+    if (result["status"] =="true"):
+        return {"status": "true", "error": "none", "userDataUploadPath": result["stdout"]}
+    return result
 
 
 
@@ -1311,15 +1330,18 @@ def sampleExistsOnIR(inputJson):
 
     #curl -ks --request POST -H Authorization:rwVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78 -H Version:42 https://xyz.com:443/grws_1_2/data/sampleExists?sampleName=xyz
     url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/sampleExists"
-    cmd="curl -ks --request POST -H Authorization:"+token  +   " -H Version:"+version   +   " "+url  + "?sampleName="+sampleName
+    cmd="curl -ks -3  --request POST -H Authorization:"+token  +   " -H Version:"+version   +   " "+url  + "?sampleName="+sampleName
     result = get_httpResponseFromSystemTools(cmd)
-    if (result["status"] =="true"):
-        if (result["stdout"] =="true"):
-            return {"status": "true", "error": "none"}
-        else:
-            return {"status": "false", "error": "none"}
+    if (result["status"] !="true"):
+        cmd="curl -ks --request POST -H Authorization:"+token  +   " -H Version:"+version   +   " "+url  + "?sampleName="+sampleName
+        result = get_httpResponseFromSystemTools(cmd)
+        if (result["status"] !="true"):
+            return result
+
+    if (result["stdout"] =="true"):
+        return {"status": "true", "error": "none"}
     else:
-        return result
+        return {"status": "false", "error": "none"}
 
 
     try:
@@ -3897,12 +3919,14 @@ def getIRGUIBaseURL(inputJson):
     #curl ${CURLOPT}  ${protocol}://${server}:${port}/grws_1_2/data/getIrGUIUrl
     url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/getIrGUIUrl"
     #cmd="curl -ks    -H Authorization:"+token  +   " -H Version:"+version   +   " "+url
-    cmd="curl -ks     "+url      #actually, this much will do for this webservice. token not required.
+    cmd="curl -ks -3     "+url      #actually, this much will do for this webservice. token not required.
     result = get_httpResponseFromSystemTools(cmd)
-    if (result["status"] =="true"):
-        return {"status": "true", "error": "none", "IRGUIBaseURL": result["stdout"], "version":version}
-    else:
-        return result
+    if (result["status"] !="true"):
+        cmd="curl -ks    "+url      #actually, this much will do for this webservice. token not required.
+        result = get_httpResponseFromSystemTools(cmd)
+        if (result["status"] !="true"):
+            return result
+    return {"status": "true", "error": "none", "IRGUIBaseURL": result["stdout"], "version":version}
 
 
 

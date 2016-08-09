@@ -10,23 +10,29 @@ auto lo
 iface lo inet loopback
 
 # The primary network interface
-auto {{ansible_default_ipv4.interface|default(default_interface)}}
+auto {{default_interface}}
 {% if S5_virtual_guest|bool or STATIC_IP|bool %}
-iface {{ansible_default_ipv4.interface|default(default_interface)}} inet static
+iface {{default_interface}} inet static
 	address {{static_ip}}
 	netmask {{static_nm}}
 	gateway {{static_gw}}
 {% if dns_nameserver|default(false) %}
-	dns-nameserver {{dns_nameserver}}
+	dns-nameservers {{dns_nameserver}}
 {%else%}
 
 {%endif%}
+{# Enable the firewall on all configurations except S5 VMs #}
+{% if not S5_virtual_guest|bool %}
+	pre-up iptables-restore < /etc/iptables.rules
+	pre-up iptables-restore --noflush < /etc/iptables.custom
+	
+{% endif %}
         
 {% else %}
-iface {{ ansible_default_ipv4.interface|default(default_interface) }} inet dhcp
+iface {{ default_interface }} inet dhcp
 
 {% endif %}
-{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != default_interface %}
 auto {{ interface }}
 iface {{ interface }} inet static
 address {{ b_subnet }}.{{ loop.index + class_c }}.1
@@ -34,14 +40,9 @@ netmask 255.255.255.0
 
 {% endfor %}
 {# Configure em1 and em2 as dhcp #}
-{% for interface in ansible_interfaces if 'em' in interface and interface != ansible_default_ipv4.interface|default(default_interface) %}
+{% for interface in ansible_interfaces if 'em' in interface and interface != default_interface %}
 #auto {{interface}}
 iface {{interface}} inet dhcp
 
 {% endfor %}
-{# Turn off the firewall on S5 VMs #}
-{% if not S5_virtual_guest|bool %}
-pre-up iptables-restore < /etc/iptables.rules
-pre-up iptables-restore --noflush < /etc/iptables.custom
-{% endif %}
 # the end

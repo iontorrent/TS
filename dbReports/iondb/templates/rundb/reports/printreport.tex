@@ -384,11 +384,10 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Chef Summary}
- 
-    {% if chefLibPrep_info %}
-    	\\\bf Chef Library Prep Information: \\
-    	\begin{tabular}{l|l}
-        {% for item, info in chefLibPrep_info %}
+    {% for sampleSetName, chefLibPrep in chefLibPrep_info.items %}
+        \subsection*{Chef Library Prep Information for Sample Set {{sampleSetName}}:}
+        \begin{tabular}{l|l}
+        {% for item, info in chefLibPrep %}
             {%if item == "Last Updated" %}
                \bf {{item|latexsafe}} & {{info}} \\
             {% else %}
@@ -396,11 +395,10 @@ Run Report for {{report.resultsName|latexsafe}}
            {% endif %}
         {% endfor %}
         \end{tabular}
-    {% endif %}
+    {% endfor %}
     {% if chef_info %}
-    	\newpage
-    	\bf Chef Template Prep Information: \\
-    	\begin{tabular}{l|l}
+        \subsection*{Chef Template Prep Information:}
+        \begin{tabular}{l|l}
         {% for item, info in chef_info %}
             {%if item == "Chef Last Updated" %}
                \bf {{item|latexsafe}} & {{info}} \\

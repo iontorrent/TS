@@ -10,14 +10,14 @@
         <div class="control-group offset1">
             <div class="applicationGroupOptionsContent">
                 {% for application in step.prepopulatedFields.applicationGroups %}
-                    {% if application.pk|stringformat:'s' == step.savedFields.applicationGroup|stringformat:'s' %}
+                    {% if application.name == step.savedFields.applicationGroupName %}
                         <label class="radio">
-                            <input type="radio" name="applicationGroup" value="{{application.pk}}" checked="checked">
+                            <input type="radio" name="applicationGroupName" value="{{application.name}}" checked="checked">
                             {{application.description}}
                         </label>
                     {% else %}
                         <label class="radio">
-                            <input type="radio" name="applicationGroup" value="{{application.pk}}">
+                            <input type="radio" name="applicationGroupName" value="{{application.name}}">
                             {{application.description}}
                         </label>
                     {% endif %}
@@ -119,15 +119,16 @@
      
 
     updateTargetTechnique = function(applicationId, selectedRuntypeId) {
-        if ((selectedRuntypeId == undefined) && (applicationId != "{{step.savedFields.applicationGroup}}")) {   
+        if ((selectedRuntypeId == undefined) && (applicationId != "{{step.savedFields.applicationGroupName}}")) {   
             console.log("#1 undefined selectedRuntypeId.  Going to show targetTechnique!!!");
         
             $('.runTypeOptionsContent  :input').attr('disabled', false);
             $('#runTypeHolder').attr('disabled', false);
-            $('#runTypeHolder').show();    
+            $('#runTypeHolder').show();
+            $("#selectedTechnique").text('');
         }        
         else {            
-            if ((selectedRuntypeId == "{{helper.getApplProduct.applType_id}}") || ((selectedRuntypeId == undefined) && (applicationId == "{{step.savedFields.applicationGroup}}"))) {
+            if ((selectedRuntypeId == "{{helper.getApplProduct.applType_id}}") || ((selectedRuntypeId == undefined) && (applicationId == "{{step.savedFields.applicationGroupName}}"))) {
                 var allowTargetTechniqueSelection = "{{helper.getApplProduct.isTargetTechniqueSelectionSupported}}";
                 var isAlwaysShow = "{{helper.isToMandateTargetTechniqueToShow}}";
                 
@@ -172,20 +173,16 @@
 
     $(document).ready(function () {
 
-        $(".runTypeOptionsContent input").change(function()  {
-            $("#selectedApplication").text(runTypeIdToAltName[$(this).val()]);
-        });
-        
         $(".applicationGroupOptionsContent input").change(function()  {
             var applicationId = $(this).val();
             updateRuntypeFromApplication(applicationId);
         });
         
-        updateRuntypeFromApplication('{{step.savedFields.applicationGroup}}', '{{step.savedFields.runType}}');
-        updateInstrumentFromRunType('{{step.savedFields.applicationGroup}}', '{{step.savedFields.runType}}');
+        updateRuntypeFromApplication('{{step.savedFields.applicationGroupName}}', '{{step.savedFields.runType}}');
+        updateInstrumentFromRunType('{{step.savedFields.applicationGroupName}}', '{{step.savedFields.runType}}');
                 
         //display the application in the summary
-        $("input[name=applicationGroup]").on('click', function(){
+        $("input[name=applicationGroupName]").on('click', function(){
             $("#selectedApplication").text($(this).parent().text().trim());   
         });
 

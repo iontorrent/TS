@@ -26,6 +26,7 @@ from django.contrib.auth.models import User
 from iondb.rundb.ajax import render_to_json
 from iondb.rundb.models import ReferenceGenome, FileMonitor
 from django.db.models import get_model
+from distutils.version import StrictVersion
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,8 @@ def get_productUpdateList(url=None):
 def TS_version_comparison(tsVersion, version_req, url, **ctx):
     isValid = True
     # Compare local TS version with Required TS Version for any update
-    if tsVersion.strip() < version_req.strip():
+
+    if StrictVersion(str(tsVersion.strip())) < StrictVersion(str(version_req.strip())):
         isValid = False
         ctx['versionMismatch'] = True
         ctx['versionMismatch_url'] = url
@@ -79,8 +81,16 @@ def validate_product_fixture(productjsonURL, **ctx):
             ctx['msg'] = err
     except urllib2.URLError, err:
         isValid = False
+        ctx['versionMismatch_url'] = productjsonURL
         ctx['errCode'] = 'E007'
-        ctx['msg'] = "Host not reachable. Please check your Internet connectivity and try again ({0})".format(err)
+        ctx['msg'] = "Host not reachable. Please check your internet connectivity and try again ({0})".format(err)
+        logger.debug(ctx['msg'])
+    except Exception, err:
+        isValid = False
+        ctx['versionMismatch_url'] = productjsonURL
+        ctx['errCode'] = 'E008'
+        ctx['msg'] = "{0}. Please check the network and try again".format("err")
+        logger.debug(ctx['msg'])
     ctx['isValid'] = isValid
     return (isValid, productInfo, ctx)
 
@@ -116,14 +126,16 @@ def validate_product_updateVersion(productContents, downloads, tsVersion):
         product['TSVersion'] = tsVersion
     return productContents
 
-def getOnlyTwoDigits_TSversion():
+def getOnlyTwo_ThreeDigits_TSversion():
+    #TS-11832: TS release comparison should extend to the patch release version if available
     versionsAll, versionTS = ion.utils.TSversion.findVersions()
-    getOnlyTwoDigits = re.findall(r'([0-9]+\.[0-9])', versionTS)
-    return getOnlyTwoDigits[0];
+    getOnlyTwoDigits = re.match(r'([0-9]+\.[0-9]+(\.[0-9]+)?)', str(versionTS))
+
+    return (getOnlyTwoDigits.group(1));
 
 @login_required
 def update_product(request):
-    tsVersion = getOnlyTwoDigits_TSversion()
+    tsVersion = getOnlyTwo_ThreeDigits_TSversion()
     productContents, isValidNetwork, network_or_file_errorMsg = get_productUpdateList() or []
 
     if not isValidNetwork:

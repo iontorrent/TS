@@ -186,7 +186,7 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
                 continue
 
             if "__MACOSX" in filename:
-                logging.warn("ZIP archive contains __MACOSX meta folder. Skipping", member.filename)
+                logging.warn("ZIP archive contains __MACOSX meta folder. Skipping %s", member.filename)
                 continue
 
             # Get permission set inside archive
@@ -901,6 +901,13 @@ def _do_the_install():
         tsconfig.set_securityinstall(enable_security_update)
 
         success = tsconfig.TSexec_update()
+    except Exception as err:
+        models.GlobalConfig.objects.update(ts_update_status="Install failure")
+        raise
+    else:
+        from django.db import connection
+        connection.close() # refresh dbase connection
+
         if success:
             models.GlobalConfig.objects.update(ts_update_status="Finished installing")
             models.Message.success("Upgrade completed successfully!")
@@ -909,9 +916,6 @@ def _do_the_install():
             models.Message.error("Upgrade failed during installation.")
         models.Message.objects.filter(expires="system-update-finished").delete()
         models.Message.objects.filter(tags__contains="new-upgrade").delete()
-    except Exception as err:
-        models.GlobalConfig.objects.update(ts_update_status="Install failure")
-        raise
     finally:
         # This will start celeryd if it is not running for any reason after
         # attempting installation.
@@ -1294,6 +1298,7 @@ def install_reference(args, reference_id):
         extracted_path = os.path.join(monitor.local_dir, "reference_contents")
         extract_zip(full_path, extracted_path)
         reference.reference_path = extracted_path
+        reference.save()
         if reference.index_version == settings.TMAP_VERSION:
             reference.status = "complete"
             reference.enabled = True
@@ -1558,14 +1563,35 @@ def post_run_nodetests(result):
     cluster_queue_info()
 
 
-@task(queue = 'w1', soft_time_limit = 60)
+@task(queue = 'w1', soft_time_limit = 60, expires=600)
 def test_node_and_update_db(node, head_versions):
     '''run tests'''
     logger.info("Testing node: %s" % node.name)
-    node_status = connect_nodetest(node.name)
+    node_status = {
+        'name': node.name,
+        'status': '',
+        'connect_tests': [],
+        'error': ''
+    }
+    try:
+        node_status = connect_nodetest(node.name)
+    except SoftTimeLimitExceeded:
+        logger.error("Time limit exceeded for connect_nodetest on %s" % node.name)
+        node_status['status'] = 'error'
+        node_status['error'] = "Time limit exceeded for connect_nodetest()"
+    except:
+        logger.error(traceback.format_exc())
+        
     if node_status['status'] == 'good':
         logger.info("Node: %s passed connect test" % node.name)
-        node_status.update(config_nodetest(node.name, head_versions))
+        try:
+            node_status.update(config_nodetest(node.name, head_versions))
+        except SoftTimeLimitExceeded:
+            logger.error("Time limit exceeded for config_nodetest on %s" % node.name)
+            node_status['status'] = 'error'
+            node_status['error'] = "Time limit exceeded for config_nodetest().  NFS mounts could be hung up."
+        except:
+            logger.error(traceback.format_exc())
 
     try:
         add_eventlog(node, node_status)
@@ -1769,7 +1795,7 @@ def start_annotation_download(annot_url, reference, callback=None, updateVersion
     import mimetypes
     tagsInfo = "reference_annotation_{0}".format(float(updateVersion))
     monitor = FileMonitor(url=annot_url, tags=tagsInfo)
-    monitor.status = "downloading"
+    monitor.status = "Downloading"
     monitor.save()
     fileToRegister = None
     downloaded_fileTempPath = None

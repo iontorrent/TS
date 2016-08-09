@@ -30,6 +30,25 @@ source $TSCONFIG_SRC_DIR/ts_functions||source ../ts_functions||true
 #--------------------------------------
 # Functions
 #--------------------------------------
+function error ()
+{
+    local PARENT_LINENO="$1"
+    local MESSAGE="${2-}"
+    local CODE="${3:-1}"
+    user_msg "=================================================================="
+    if [[ -n $MESSAGE ]]; then
+        user_msg "ERROR on or near line ${PARENT_LINENO}; ${MESSAGE}; exiting with status ${CODE}"
+    else
+        user_msg "ERROR on or near line ${PARENT_LINENO}; exiting with status ${CODE}"
+    fi
+    user_msg "\nSee file $TSCONFIG_LOG_DIR/$TSCONFIG_LOG_BASENAME for error details"
+    user_msg "=================================================================="
+    errmsg="ERROR: $CODE."
+    if [[ -n $MESSAGE ]]; then errmsg=$errmsg" ${MESSAGE}"; fi
+    errmsg=$errmsg" on line ${PARENT_LINENO}"
+    log $errmsg
+    exit ${CODE}
+}
 function network_functionality ()
 {
     network_test_results=$(mktemp -t init_netstat.XXXXX)
@@ -43,18 +62,20 @@ function network_functionality ()
 function print_help ()
 {
     echo
-    echo "Usage: TSstaticip [option]..."
-    echo -e "\t--ip                          Define host IP address"
-    echo -e "\t--nm                          Define subnet mask (netmask)"
-    echo -e "\t--gw                          Define gateway/router IP address"
-    echo -e "\t--device                      Define the ethernet port to configure"
-    echo -e "\t--remove                      Sets up dhcp, removing any static IP settings"
+    echo "Usage: TSstaticip --ip ipaddress --nm netmask --gw gateway [option]..."
+    echo -e "\nREQUIRED ARGUMENTS:"
+    echo -e "\t--ip <ipaddress>              Define host IP address"
+    echo -e "\t--nm <netmask>                Define subnet mask (netmask)"
+    echo -e "\t--gw <gateway>                Define gateway/router IP address"
+    echo -e "\nOPTIONAL ARGUMENTS:"
+    echo -e "\t--remove, --reset             Sets up dhcp, removing any static IP settings"
     echo -e "\t--debug, -d                   Prints script commands when executing (set -x)"
     echo -e "\t--demo                        Prints what changes would be executed only.  No changes are made"
     echo -e "\t--help, -h                    Prints command line args"
     echo -e "\t--version, -v                 Prints version"
     echo
-    echo "Executing the command with no options will force prompting of each parameter"
+    echo "EXAMPLE USAGE:"
+    echo -e "\tsudo TSstaticip --ip 10.25.3.123 --nm 255.255.255.0 --gw 10.25.3.1"
     echo
 }
 
@@ -66,9 +87,9 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
+set -e
 version=`echo '$Revision$'|awk '{print $2}'`
-device=$(outbound_net_port)
-DEBUG=False
+DEMO=False
 REMOVE=False
 CONFIG_FILENAME="${ANSIBLE_HOME}/group_vars/all_local"
 
@@ -80,10 +101,13 @@ if [ $# == 0 ]; then
     exit
 fi
 
+# Log command line arguments
+log $cmdline
+
 #--------------------------------------
 # command line argument parsing
 #--------------------------------------
-#---    We convert all arguments to lower case  ---#
+#---    Convert all arguments to lower case  ---#
 while [ $# != 0 ]; do
     case ${1,,} in
         '--help'|'-h')
@@ -104,21 +128,18 @@ while [ $# != 0 ]; do
         set -x
         ;;
         
-        '--device')
-        shift
-        device=$1
-        ;;
-        
         '--demo'|'--dry-run')
-        DEBUG=True
+        DEMO=True
         ;;
         
         '--ip'|'-ip')
         shift
         ipaddress=$1
         if ! is_valid_ipaddress $ipaddress; then
-            echo "Exiting $0 early due to error"
-            error ${LINENO} "Invalid IP address $ipaddress" 11
+            errmsg="Invalid IP address $ipaddress"
+            echo $errmsg
+            log $errmsg
+            exit 11
         fi
         ;;
         
@@ -126,8 +147,10 @@ while [ $# != 0 ]; do
         shift
         netmask=$1
         if ! is_valid_netmask $netmask; then
-            echo "Exiting $0 early due to error"
-            error ${LINENO} "Invalid netmask address $netmask" 12
+            errmsg="Invalid netmask address $netmask"
+            echo $errmsg
+            log $errmsg
+            exit 12
         fi
         ;;
         
@@ -135,12 +158,14 @@ while [ $# != 0 ]; do
         shift
         gateway=$1
         if ! is_valid_ipaddress $gateway; then
-            echo "Exiting $0 early due to error"
-            error ${LINENO} "Invalid gateway address $gateway" 15
+            errmsg="Invalid gateway address $gateway"
+            echo $errmsg
+            log $errmsg
+            exit 15
         fi
         ;;
         
-        '--remove')
+        '--remove'|'--reset')
         REMOVE=True
         ;;
         
@@ -159,8 +184,14 @@ done
 #--------------------------------------
 needs_root
 
-# Log command line arguments
-log $cmdline
+# Test for required inputs
+if [ -z $ipaddress ] || [ -z $netmask ] || [ -z $gateway ] && [ $REMOVE = False ]; then
+    errmsg="ERROR: A required input is missing.  See usage below"
+    echo -e "\n$errmsg\n"
+    log errmsg
+    print_help
+    exit 1
+fi
 
 if [ ! -r $CONFIG_FILENAME ]; then
     cp -p ${ANSIBLE_HOME}/group_vars/all $CONFIG_FILENAME
@@ -173,7 +204,7 @@ if [ $REMOVE == True ]; then
     #--------------------------------------
     #Remove the static IP and restore to dhcp
     #--------------------------------------
-    if [ $DEBUG == False ]; then
+    if [ $DEMO == False ]; then
         sed -i 's/STATIC_IP:.*$/STATIC_IP: False/' $CONFIG_FILENAME
     else
         echo "CMD: sed -i 's/STATIC_IP:.*$/STATIC_IP: False/' $CONFIG_FILENAME"
@@ -182,7 +213,7 @@ else
     #--------------------------------------
     # Set static ip settings
     #--------------------------------------
-    if [ $DEBUG == False ]; then
+    if [ $DEMO == False ]; then
         sed -i "s/STATIC_IP:.*$/STATIC_IP: True/" $CONFIG_FILENAME
         sed -i "s/static_ip:.*$/static_ip: $ipaddress/" $CONFIG_FILENAME
         sed -i "s/static_nm:.*$/static_nm: $netmask/" $CONFIG_FILENAME
@@ -199,7 +230,7 @@ fi
 #-------------------------------------------------------------------------
 # Run ansible playbook and restart networking
 #-------------------------------------------------------------------------
-if [ $DEBUG == False ]; then
+if [ $DEMO == False ]; then
     cd $ANSIBLE_HOME
     ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} roles/fileserver/tasks/config_network.yml --sudo
 else

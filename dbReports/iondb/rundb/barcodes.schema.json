@@ -1,0 +1,195 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Barcodes Set",
+  "description": "This is a file which will define the communication of all of the barcodes used if any exists.",
+  "type": "object",
+  "items": {
+    "oneOf": [
+      {
+        "title": "barcoded",
+        "type": "object",
+        "properties": {
+          "aligned": {
+            "type": "boolean",
+            "description": "Flags if the reads in bam_file are aligned to the reference genome."
+          },
+          "analysis_parameters": {
+            "type": "string",
+            "description": "API key used by plugins such as variantCaller to obtain parameters required to analyze this barcode."
+          },
+          "bam_file": {
+            "type": "string",
+            "description": "Name of reads file. (May or may not be be aligned to the reference.)"
+          },
+          "bam_filepath": {
+            "type": "string",
+            "description": "Full file path to bam_file on the local torrent server."
+          },
+          "control_sequence_type": {
+            "type": "string",
+            "description": "Currently either ERCC Mix 1 or ERCC Mix 2 and only defined in Plan Wizard for RNA Sequencing. (Purpose unspecified.)"
+          },
+          "filtered": {
+            "type": "boolean",
+            "description": "Flags if the barcode passed the Torrent Suite analysis pipeline filtering criteria."
+          },
+          "hotspot_filepath": {
+            "type": "string",
+            "description": "Full file path to HotSpot target regions (BED) file on the local torrent server. (empty if not used.)"
+          },
+          "genome_url": {
+            "type": "string",
+            "description": "URL used to specify the genome for applications like IGV. Typically the URL to the FASTA file on the local torrent server."
+          },
+          "nucleotide_type": {
+            "type": "string",
+            "description": "Currently either DNA or RNA depending on application. Primarily used to distinguish barcodes with AmpliSeq DNA+RNA runs."
+          },
+          "read_count": {
+            "type": "integer",
+            "description": "Total number of barcode-assigned reads in bam_file (prior to alignment)."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Common (short) name of the reference genome used in the pipeline for this barcode, e.g. hg19"
+          },
+          "reference_fullpath": {
+            "type": "string",
+            "description": "Full file path to the to the reference sequences in FASTA format on the local torrent server. (May be empty for unaligned reads.)"
+          },
+          "sample": {
+            "type": "string",
+            "description": "Name of the sample associated with this barcode. (May be associated with multiple barcodes.)"
+          },
+          "sample_id": {
+            "type": "string",
+            "description": "Sample identification code associated with sample."
+          },
+          "target_region_filepath": {
+            "type": "string",
+            "description": "Full file path to target regions (BED) file on the local torrent server. (empty if not used.)"
+          },
+          "barcode_adapter": {
+            "type": "string",
+            "description": "DNA adapter sequence used to separate barcode_sequence from sequenced read."
+          },
+          "barcode_annotation": {
+            "type": "string",
+            "desecription": "User-specified annotation for this barcode."
+          },
+          "barcode_description": {
+            "type": "string",
+            "description": "Description text associated with this barcode."
+          },
+          "barcode_index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Index of barcode in the barcode set, starting at 1. (0 for nomatch.)"
+          },
+          "barcode_name": {
+            "type": "string",
+            "description": "Name of the barcode in the barcode set."
+          },
+          "barcode_sequence": {
+            "type": "string",
+            "description": "DNA sequence used to identify this barcode."
+          },
+          "barcode_type": {
+            "type": "string",
+            "description": "User-specified type for this barcode."
+          },
+          "required": [
+            "aligned",
+            "analysis_parameters",
+            "bam_file",
+            "bam_filepath",
+            "control_sequence_type",
+            "filtered",
+            "hotspot_filepath",
+            "genome_url",
+            "nucleotide_type",
+            "read_count",
+            "reference",
+            "reference_fullpath",
+            "sample",
+            "sample_id",
+            "target_region_filepath"
+          ]
+        }
+      },
+      {
+        "title": "non-barcoded",
+        "type": "object",
+        "properties": {
+          "aligned": {
+            "type": "boolean",
+            "description": "Flags if the reads in bam_file are aligned to the reference genome."
+          },
+          "analysis_parameters": {
+            "type": "string",
+            "description": "API key used by plugins such as variantCaller to obtain parameters required to analyze this barcode."
+          },
+          "control_sequence_type": {
+            "type": "string",
+            "description": "Currently either ERCC Mix 1 or ERCC Mix 2 and only defined in Plan Wizard for RNA Sequencing. (Purpose unspecified.)"
+          },
+          "filtered": {
+            "type": "boolean",
+            "description": "Flags if the barcode passed the Torrent Suite analysis pipeline filtering criteria."
+          },
+          "hotspot_filepath": {
+            "type": "string",
+            "description": "Full file path to HotSpot target regions (BED) file on the local torrent server. (empty if not used.)"
+          },
+          "genome_url": {
+            "type": "string",
+            "description": "URL used to specify the genome for applications like IGV. Typically the URL to the FASTA file on the local torrent server."
+          },
+          "nucleotide_type": {
+            "type": "string",
+            "description": "Currently either DNA or RNA depending on application. Primarily used to distinguish barcodes with AmpliSeq DNA+RNA runs."
+          },
+          "read_count": {
+            "type": "integer",
+            "description": "Total number of barcode-assigned reads in bam_file (prior to alignment)."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Common (short) name of the reference genome used in the pipeline for this barcode, e.g. hg19"
+          },
+          "reference_fullpath": {
+            "type": "string",
+            "description": "Full file path to the to the reference sequences in FASTA format on the local torrent server. (May be empty for unaligned reads.)"
+          },
+          "sample": {
+            "type": "string",
+            "description": "Name of the sample associated with this barcode. (May be associated with multiple barcodes.)"
+          },
+          "sample_id": {
+            "type": "string",
+            "description": "Sample identification code associated with sample."
+          },
+          "target_region_filepath": {
+            "type": "string",
+            "description": "Full file path to target regions (BED) file on the local torrent server. (empty if not used.)"
+          },
+          "required": [
+            "aligned",
+            "analysis_parameters",
+            "control_sequence_type",
+            "filtered",
+            "hotspot_filepath",
+            "genome_url",
+            "nucleotide_type",
+            "read_count",
+            "reference",
+            "reference_fullpath",
+            "sample",
+            "sample_id",
+            "target_region_filepath"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -463,26 +463,16 @@ def report_chef_libPrep_display(report):
     """
     Returns Library Prep data to be displayed in "Chef Summary tab"
     """
+    chefLibPrepInfo = {}
 
-    chefLibPrepInfo = []
-    sampleSet = report.experiment.plan.sampleSet_id if report.experiment.plan else None
-
-    if not sampleSet:
-        return chefLibPrepInfo
-
-    libPrepSampleSet = models.SampleSet.objects.get(pk = sampleSet)
-    libPrepInstName = libPrepSampleSet.libraryPrepInstrumentData.instrumentName if libPrepSampleSet.libraryPrepInstrumentData else ""
-
-    if not libPrepInstName:
-        return chefLibPrepInfo
-
-    chefLibPrep_infoList  = [
-        [("libraryPrepType", "Library Prep Type"),
+    sampleSet_keys  = [
+        ("libraryPrepType", "Library Prep Type"),
         ("libraryPrepPlateType", "Library Prep Plate Type"),
         ("pcrPlateSerialNum", "PCR Plate Serial Number"),
-        ("combinedLibraryTubeLabel", "Combined Library Tube Label")],
-
-        [("lastUpdate", "Last Updated"),
+        ("combinedLibraryTubeLabel", "Combined Library Tube Label"),
+    ]
+    libraryPrepInstrumentData_keys=[
+        ("lastUpdate", "Last Updated"),
         ("instrumentName", "Instrument Name"),
         ("tipRackBarcode", "Tip Rack Barcode"),
         ("kitType", "Kit Type"),
@@ -493,26 +483,29 @@ def report_chef_libPrep_display(report):
         ("solutionsPart", "Solution Part Number"),
         ("solutionsExpiration", "Solution Expiration"),
         ("scriptVersion", " Script Version"),
-        ("packageVer", "Package Version")]
+        ("packageVer", "Package Version"),
     ]
 
+    plan = report.experiment.plan
+    libPrepSampleSets = plan.sampleSets.filter(libraryPrepInstrumentData__isnull=False) if plan else []
+
     #Display Lib Prep Info if Instrument Name exists for AmpSeq on Chef
-    allowed_lib_prep_type = models.SampleSet.ALLOWED_LIBRARY_PREP_TYPES
-    for prepkey, preplabel in chefLibPrep_infoList[0]:
-        if prepkey == "libraryPrepType":
-            libPrepType = getattr(libPrepSampleSet, prepkey)
-            for key,value in allowed_lib_prep_type:
-                if key == libPrepType:
-                    customer_facing_prepType = value
-                    chefLibPrepInfo.append((preplabel,customer_facing_prepType))
-        else:
-            libPrepValue = getattr(libPrepSampleSet, prepkey)
-            chefLibPrepInfo.append((preplabel,libPrepValue))
-    InstrumentData = libPrepSampleSet.libraryPrepInstrumentData
-    if InstrumentData:
-        for key, label in chefLibPrep_infoList[1]:
-            value = getattr(InstrumentData, key)
-            chefLibPrepInfo.append((label,value))
+    for libPrepSampleSet in libPrepSampleSets:
+        info = []
+        if libPrepSampleSet.libraryPrepInstrumentData.instrumentName:
+            for key, label in sampleSet_keys:
+                if key == "libraryPrepType":
+                    value = libPrepSampleSet.get_libraryPrepType_display()
+                else:
+                    value = getattr(libPrepSampleSet, key)
+                info.append((label, value))
+
+            InstrumentData = libPrepSampleSet.libraryPrepInstrumentData
+            for key, label in libraryPrepInstrumentData_keys:
+                value = getattr(InstrumentData, key)
+                info.append((label,value))
+
+            chefLibPrepInfo[libPrepSampleSet.displayedName] = info
 
     return chefLibPrepInfo
 

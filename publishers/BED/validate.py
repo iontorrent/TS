@@ -167,6 +167,10 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
             plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"] = {"chip":"pgm", "frequency":"germline", "library":"ampliseq","panel":"/rundb/api/v1/contentupload/"+str(upload_id)+"/"}
             if instrument_type == "proton":
                 plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = "proton_p1"
+            if chip_type == "530":
+                plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = "530"
+            if chip_type == "540":
+                plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = "540"
             if "tmapargs" in plugin_details["variantCaller"]["userInput"]["meta"]:
                 alignmentargs_override = plugin_details["variantCaller"]["userInput"]["meta"]["tmapargs"]
         except:

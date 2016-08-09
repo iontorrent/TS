@@ -17,7 +17,7 @@ class DataXfer (IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.0.0.0'
+    version = '5.0.3.0'
     author = "bernard.puc@thermofisher.com"
     runlevels = [ RunLevel.LAST ]
 
@@ -124,13 +124,13 @@ class DataXfer (IonPlugin):
                 print "File categories: %s" % (self.categories)
                 print "Destination: %s" % (self.dest_dir)
                 error_msg = []
-                connection_url = "http://localhost/data/datamanagement/dm_actions/%d/%s/" % (self.result_pk, self.EXPORT)
+                connection_url = "http://localhost/data/datamanagement/dm_actions/%s/%s/" % (self.result_pk, self.EXPORT)
                 try:
                     conn = urllib.urlopen(connection_url, json.dumps(raw_post_data))
                 except IOError:
                     print('could not make connection %s' % connection_url)
                     try:
-                        connection_url = 'https://localhost/data/datamanagement/dm_actions/%d/%s/' % (self.result_pk, self.EXPORT)
+                        connection_url = 'https://localhost/data/datamanagement/dm_actions/%s/%s/' % (self.result_pk, self.EXPORT)
                         conn = urllib.urlopen(connection_url, json.dumps(raw_post_data))
                     except IOError:
                         error_msg.append(" !! Failed to submit URL.  could not connect to %s" % connection_url)
@@ -173,7 +173,7 @@ class DataXfer (IonPlugin):
             'categories': self.categories,
             'comment': "Wildfires",
         }
-        connection_url = "http://localhost/data/datamanagement/dm_list_files/%d/%s/" % (self.result_pk, self.EXPORT)
+        connection_url = "http://localhost/data/datamanagement/dm_list_files/%s/%s/" % (self.result_pk, self.EXPORT)
         try:
             conn = urllib.urlopen(connection_url, json.dumps(raw_post_data))
             file_payload = json.loads(conn.read())

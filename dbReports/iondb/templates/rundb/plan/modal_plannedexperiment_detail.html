@@ -40,12 +40,12 @@
 							</tr>
 							<tr>
 								<td><b>Sample Set:</b></td>
-								<td>{{ plan.sampleSet.displayedName }}</td>
+								<td>{{ plan.sampleSets.all|join:", " }}</td>
 							</tr>
-							{% if isAmpsOnChef %}
+							{% if ampsOnChef_sampleSets %}
                                 <tr>
                                     <td><b>Combined Library Tube Label:</b></td>
-                                    <td>{{ plan.sampleSet.combinedLibraryTubeLabel }}</td>
+                                    <td>{% for set in ampsOnChef_sampleSets %}{{set.combinedLibraryTubeLabel}} {% endfor %}</td>
                                 </tr>
                             {% endif %}
 						</table>

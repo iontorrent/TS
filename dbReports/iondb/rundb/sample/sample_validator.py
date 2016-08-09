@@ -957,3 +957,26 @@ def validate_user_chef_barcodeKit(samplesetitems,chef_barcodeKit, allPcrPlates):
         return isValid, errorMessage
     return isValid, errorMessage
 
+
+def validate_sampleSets_for_planning(sampleSets):
+    ''' Validate multiple sampleSets are compatible to create a Plan from '''
+    errors = []
+    items = SampleSetItem.objects.filter(sampleSet__in=sampleSets)
+    if not items:
+        errors.append('Sample Set must have at least one sample')
+        return errors
+    
+    samples_w_barcodes = items.exclude(dnabarcode__isnull=True)
+    barcodeKitNames = samples_w_barcodes.values_list('dnabarcode__name', flat=True).distinct()
+    if len(barcodeKitNames) > 1:
+        errors.append('Selected Sample Sets have different Barcode Kits: %s.' % ', '.join(barcodeKitNames))
+    elif len(barcodeKitNames) == 1:
+        barcodes = {}
+        for barcode, sample, setname in samples_w_barcodes.values_list('dnabarcode__id_str', 'sample__name', 'sampleSet__displayedName'):
+            if barcode in barcodes:
+                msg = 'Multiple samples are assigned to barcode %s: %s (%s), %s (%s)' % (barcode, sample, setname, barcodes[barcode][0], barcodes[barcode][1])
+                errors.append(msg)
+            else:
+                barcodes[barcode] = (sample, setname)
+
+    return errors

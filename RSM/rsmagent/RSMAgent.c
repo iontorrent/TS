@@ -1299,6 +1299,7 @@ void WriteAeStringDataItem(char const * const subcat, char const * const key,
 
 // Server status queries
 
+// key and/or value can be null after execution
 void getKeyAndValue(char *inputBuf, const char delim, char **key, char **value)
 {
 	char *cpos;
@@ -1371,9 +1372,12 @@ void parseServerStatus(char const * const filename, serverStatus_t * const serve
 					&serverStatus->size,
 					(serverStatus->count + 1) * sizeof(serverStatusItem_t));
 
-			if (serverStatus->server) {
+			if (serverStatus->server && key) {
 				serverStatus->server[serverStatus->count].name = strdup(key);
-				serverStatus->server[serverStatus->count].status = strdup(value);
+				if (value)
+					serverStatus->server[serverStatus->count].status = strdup(value);
+				else
+					serverStatus->server[serverStatus->count].status = "no data";
 				serverStatus->count++;
 			}
 		}

@@ -173,9 +173,9 @@ class PluginRunner():
         except IOError as e:
             logger = logging.getLogger(__name__)
             logger.error(e)
-        except:
+        except Exception as e:
             logger = logging.getLogger(__name__)
-            logger.exception("Failed to write barcodes.json")
+            logger.exception("Failed to write barcodes.json --- " + str(e))
 
         return start_json_fname
 

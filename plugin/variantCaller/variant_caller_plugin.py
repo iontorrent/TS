@@ -454,13 +454,13 @@ def get_options(startplugin_json):
 
     options = {}
     try:
-        options['parameters']       = startplugin_json['pluginconfig']
+        options['parameters']       = copy.deepcopy(startplugin_json['pluginconfig'])
         configuration               = options['parameters']['meta']['configuration']
     except:
         if ('barcodes' in startplugin_json['pluginconfig']):
-            startplugin_json['pluginconfig']['meta'] = startplugin_json['pluginconfig']['barcodes'][0]['json']['pluginconfig']['meta']
+            startplugin_json['pluginconfig']['meta'] = copy.deepcopy(startplugin_json['pluginconfig']['barcodes'][0]['json']['pluginconfig']['meta'])
         try:
-            options['parameters']       = startplugin_json['pluginconfig']
+            options['parameters']       = copy.deepcopy(startplugin_json['pluginconfig'])
             configuration               = options['parameters']['meta']['configuration']
         except:    
             # TODO: Autostart without configuration no longer allowed
@@ -490,7 +490,7 @@ def get_options(startplugin_json):
         #if reload_parameters["meta"]["configuration"] != configuration:
             continue
 
-        options['original_parameters'] = startplugin_json['pluginconfig']
+        options['original_parameters'] = copy.deepcopy(startplugin_json['pluginconfig'])
         options['parameters'] = reload_parameters
 
         if 'meta' not in options['parameters']:
@@ -926,7 +926,7 @@ def plugin_main():
     subprocess.call('rm -f %s/*.fasta.fai' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -rf %s/*.bam*' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -rf %s' % (PLUGIN_HS_ALIGN_DIR),shell=True)
-    subprocess.call('rm -f %s/hotspot*' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
+    #subprocess.call('rm -f %s/hotspot*' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -f %s/variant*' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -f %s/allele*' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -f %s/*.xls' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
@@ -1005,6 +1005,8 @@ def plugin_main():
 
             printtime("name: %s" % dataset['name']) # TODO, DEBUG
 
+            dataset['parameters'] = vc_options['parameters']
+
             override = False
             configuration_name = 'default'
             tmap_args = startplugin_json['pluginconfig'].get('meta',{}).get('tmapargs','')
@@ -1021,6 +1023,7 @@ def plugin_main():
                         configuration_name = startplugin_json['pluginconfig'].get('meta',{}).get('configuration_name','')
                         tmap_args = startplugin_json['pluginconfig'].get('meta',{}).get('tmapargs','')
                         vc_options = get_options(startplugin_json)
+                        dataset['parameters'] = vc_options['parameters']
 
                         if 'error' in vc_options:
                             printtime(vc_options['error'])

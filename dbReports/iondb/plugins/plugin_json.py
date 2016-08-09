@@ -179,10 +179,6 @@ def get_plan(ion_params):
         
         "sampleGrouping": plan.get("sampleGrouping"),
         "sampleTubeLabel": plan.get("sampleTubeLabel"),
-        "sampleSet_name": plan.get("sampleSet_name"),
-        "sampleSet_planIndex": plan.get("sampleSet_planIndex"),
-        "sampleSet_planTotal": plan.get("sampleSet_planTotal"),
-        "sampleSet_uid": plan.get("sampleSet_uid"),
         
         "sequencekitname": ion_params.get('exp_json',{}).get('sequencekitname',''), 
     }

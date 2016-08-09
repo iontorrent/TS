@@ -31,7 +31,7 @@ javaBin=""
 
 
 class IonReporterUploader(IonPlugin):
-    version = '5.0.0.21'
+    version = '5.0.3.27'
     runtypes = [RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE]
     #runlevels = [RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST]
     runlevels = [RunLevel.PRE, RunLevel.POST]
@@ -123,11 +123,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o pre ||true")
         elif launchOption == "upload_only":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o pre ||true")
         os.system("sleep 2")
         return True
@@ -143,11 +143,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o block ||true")
         elif launchOption == "upload_only":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o block ||true")
         os.system("sleep 2")
         self.write_log(
@@ -178,11 +178,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o default")
         elif launchOption == "upload_only":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o default")
         os.system("sleep 2")
         return True
@@ -197,11 +197,11 @@ class IonReporterUploader(IonPlugin):
         print "LAUNCH OPTION " + launchOption
         if launchOption == "upload_and_launch":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o post  ||true")
         elif launchOption == "upload_only":
             os.system(
-                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
+                javaBin + " -Xms3g -Xmx3g -XX:MaxPermSize=256m -Djsse.enableSNIExtension=false -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(
                     log_text, data) + " -o post  ||true")
         os.system("sleep 2")
         return True

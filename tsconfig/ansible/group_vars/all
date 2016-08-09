@@ -89,8 +89,6 @@ security_limits_file: /etc/security/limits.conf
 
 MAX_FILES_OPEN: 8192
 
-default_interface: eth0
-
 # crypted password created with:
 # python -c "from passlib.hash import sha512_crypt; import getpass; print sha512_crypt.encrypt(getpass.getpass())"
 ftp_username: ionguest
@@ -141,3 +139,4 @@ common_syspkg_list:
     - tmpreaper
     - timelimit
     - dkms
+    - expect

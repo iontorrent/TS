@@ -1,8 +1,8 @@
 <div id="modal_planexperiment" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_planexperimentLabel" aria-hidden="false">
 	<div class="modal-body">
-		<div class="alert alert-error modal-error-messages hide"></div>
-		<div class="alert alert-info modal-info-messages hide"></div>
-		<div class="alert alert-success modal-success-messages hide"></div>
+	    {% for warning in warnings %}
+		<div class="alert alert-error">{{warning}}</div>
+	    {% endfor %}
 		<form class="">
 			<label for="sampleset" class="form-label">Select a Run Template to apply to this experiment</label>
 			<select name="sampleset" class="span4" id="templates">
@@ -19,7 +19,8 @@
 </div>
 
 <script>
-allTemplatePkToObj = [];
+var allTemplatePkToObj = [];
+var sampleGroupTypes = [];
 
 updateTemplateList = function() {
     while ($('#templates option:nth-child(3)').length > 0) {
@@ -27,41 +28,40 @@ updateTemplateList = function() {
     }
     
     $.each(allTemplatePkToObj, function(index, templateMap){
+	var samplegroup = templateMap['sg_name'];
+
         var newOpt = $('<option>');
         newOpt.val(templateMap['pk']);
-        
         var optText = templateMap['name'];
-        if (templateMap['sg_name'].length > 0) {
-                optText += " (" + templateMap['sg_name'] + ")";
+        if (samplegroup.length > 0) {
+            optText += " (" + samplegroup + ")";
         }
         newOpt.text(optText);
-        if ($('#showAllTemplates').is(":checked")) {
+        
+	if ($('#showAllTemplates').is(":checked")) {
             //show all if checked
             $('#templates').append(newOpt);
-        } else if('{{sampleSet.SampleGroupType_CV|default_if_none:""}}'.length > 0) {
+        } else if(sampleGroupTypes.length > 0) {
             // only show templates with matching sample group if sampleset has one.
-            if ('{{sampleSet.SampleGroupType_CV.displayedName}}' == templateMap['sg_name']){
+            if (sampleGroupTypes.indexOf( samplegroup ) >= 0){
                 $('#templates').append(newOpt);
             }
         } else {
             // only show templates without a samplegroup if the sampleset does not have one.
-            if (templateMap['sg_name'].length == 0){
+            if (samplegroup.length == 0){
                 $('#templates').append(newOpt);
             }
         }
-        
-        
-        
     });
 }
 
 $(document).ready(function(){
-    {% for template in all_templates %}
-        allTemplatePkToObj.push({'pk': '{{template.pk}}', 'name': '{{template.planDisplayedName}}', 'sg_pk': 'template.sampleGrouping', 'sg_name': '{{template.sg_name|default_if_none:""}}'});
+    {% for template in template_params %}
+        allTemplatePkToObj.push({'pk': '{{template.pk}}', 'name': '{{template.planDisplayedName}}', 'sg_name': '{{template.sampleGrouping__displayedName|default_if_none:""}}'});
     {% endfor %}
     
-    {% for template in all_systemTemplates %}
-    	allTemplatePkToObj.push({'pk': '{{template.pk}}', 'name': '{{template.planDisplayedName}}', 'sg_pk': 'template.sampleGrouping', 'sg_name': '{{template.sg_name|default_if_none:""}}'});
+    {% for type in sampleGroupTypes %}
+	sampleGroupTypes.push('{{type}}');
     {% endfor %}
     
     updateTemplateList();
@@ -72,8 +72,8 @@ $(document).ready(function(){
 			template_id = 0;
 		}
 
-		var sampleset_id = "{{sampleSet.pk}}";
-		var url = "/plan/page_plan_new_plan_by_sample/" + template_id + "/" + sampleset_id;
+		var sampleSet_ids = "{{sampleSet_ids}}";
+		var url = "/plan/page_plan_new_plan_by_sample/" + template_id + "/" + sampleSet_ids;
 
 		window.location.href = url;
 	});

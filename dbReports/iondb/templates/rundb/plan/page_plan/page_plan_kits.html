@@ -22,7 +22,7 @@
     </div>
     <div class="span6">
         <label class="form-label">Control Sequence (optional)</label>
-        <select id="controlsequence" name="controlsequence">
+        <select id="controlsequence" name="controlsequence" {% if step.getPrePopulatedFieldDict.controlSeqKits|length == 0 %} disabled {% endif %}>
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.controlSeqKits %}
                 {% ifequal kit.name step.getCurrentSavedFieldDict.controlsequence %}

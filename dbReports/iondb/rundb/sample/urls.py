@@ -19,7 +19,7 @@ urlpatterns = patterns(
     url(r'^sampleset/edited/$', 'views.save_sampleset', name='save_sampleset'),   
     url(r'^sampleset/added/$', 'views.save_sampleset', name='save_sampleset'), 
     url(r'^sampleset/(\d+)/delete/$', 'views.delete_sampleset', name="delete_sampleset"),      
-    url(r'^sampleset/(\d+)/plan_run/$', 'views.show_plan_run', name='sampleset_plan_run'),
+    url(r'^sampleset/([\d,]+)/plan_run/$', 'views.show_plan_run', name='sampleset_plan_run'),
 
     url(r'^sampleattribute/$', 'views.show_sample_attributes', name="sample_attributes"),
         

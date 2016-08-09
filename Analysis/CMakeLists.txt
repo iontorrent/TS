@@ -1120,7 +1120,6 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/updateref.py" DESTINATION bin RENAME upd
 
 install(DIRECTORY "${PROJECT_BINARY_DIR}/../picard-1.130/" DESTINATION "/opt/picard/picard-tools-current/")
 
-add_subdirectory (MapLab)
 add_subdirectory(TMAP)
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)

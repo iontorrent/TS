@@ -64,38 +64,26 @@ class StepHelperDbSaver():
         runType = ""
         if application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE]:
             runType = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].runType 
-                           
-        #if user has changed the application or target technique during template copying, reset categories value        
-        applicationGroup = application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP]
-        applicationGroupNames = ApplicationGroup.objects.filter(pk = applicationGroup)
-        if (applicationGroupNames):
-            applicationGroupName = applicationGroupNames[0].name
-        else:
-            applicationGroupName = application_step_data.prepopulatedFields.get(ApplicationFieldNames.APPLICATION_GROUP_NAME, "")
-        
-        #if user has changed the application or target technique during template copying, reset categories value
-        if applicationGroupName != "DNA + RNA":
-            #workaround: OCP DNA has DNA as applicationGroupName and AMPS as run type so it can be ambiguous. 
-            #If user creates/copies/edits a template or plan from an OCP template, preserve the categories that starts out with.
-            if categories and applicationGroupName != "DNA" and runType != "AMPS":
-                categories = categories.replace("Onconet", "");
-                categories = categories.replace("Oncomine", ""); 
 
-                            
         if not step_helper.isPlan():
             isFavorite = save_template_step_data.savedFields[SaveTemplateStepDataFieldNames.SET_AS_FAVORITE]
                                
-        logger.debug(" step_helper_db_saver.__get_universal_params() applicationGroupName=%s; categories=%s" %(applicationGroupName, categories))
-
-        #logger.debug("step_helper_db_saver.__get_universal_params() application_step_data.savedFields=%s" %(application_step_data.savedFields))
-
         application_group = None
         sampleGrouping = None
-        if application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE]:
+
+        if application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]:
+            application_group = ApplicationGroup.objects.get(name=application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
+        elif application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE]:
             application_group = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].applicationGroups.all()[0:1][0]
-        
-        if application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP]:
-            application_group = ApplicationGroup.objects.get(pk=application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP])
+
+        #if user has changed the application or target technique during template copying, reset categories value
+        if application_group and application_group.name != "DNA + RNA":
+            #workaround: OCP DNA has DNA as applicationGroupName and AMPS as run type so it can be ambiguous. 
+            #If user creates/copies/edits a template or plan from an OCP template, preserve the categories that starts out with.
+            if categories and application_group.name != "DNA" and runType != "AMPS":
+                categories = categories.replace("Onconet", "");
+                categories = categories.replace("Oncomine", ""); 
+
 
         if ionreporter_step_data.savedFields[IonReporterFieldNames.SAMPLE_GROUPING]:
             sampleGrouping = ionreporter_step_data.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING]
@@ -235,7 +223,7 @@ class StepHelperDbSaver():
         return retval
 
 
-    def __get_specific_params_by_sample(self, step_helper, index=0, sample_set_item_display_Name=None, sample_external_id='', sample_description='', sampleSet_uid=None, planTotal=1, tubeLabel = "", chip_barcode=""):
+    def __get_specific_params_by_sample(self, step_helper, index=0, sample_set_item_display_Name=None, sample_external_id='', sample_description='', tubeLabel = "", chip_barcode=""):
         save_step = step_helper.steps[StepNames.SAVE_PLAN_BY_SAMPLE]
         barcoding_step = step_helper.steps[StepNames.BARCODE_BY_SAMPLE]
         sampleset = save_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET]
@@ -268,8 +256,6 @@ class StepHelperDbSaver():
                   'metaData' : self.__update_metaData_for_LIMS(existing_meta, LIMS_meta), 
                   'isReusable': isReusable,
                   'sampleSet': sampleset,
-                  'sampleSet_planIndex' : index,
-                  'sampleSet_uid' : sampleSet_uid,
                   'x_barcodedSamples': barcodedSamples,
                   # 'x_numberOfChips' : barcoding_step.savedFields[BarcodeBySampleFieldNames.NUMBER_OF_CHIPS],
                   'x_selectedPlugins': selectedPluginsValue,
@@ -280,14 +266,9 @@ class StepHelperDbSaver():
             retval.update({'irworkflow' : ionreporter_step_data.savedFields[IonReporterFieldNames.IR_WORKFLOW]})
         if not step_helper.isBarcoded():
             retval.update({
-                    'sampleSet_planTotal' : planTotal,
                     'x_sample_external_id': sample_external_id,
                     'x_sample_description': sample_description,
                     'x_sampleDisplayedName': sample_set_item_display_Name,
-                    })
-        else:
-            retval.update({
-                    'sampleSet_planTotal' : planTotal,
                     })
 
         return retval
@@ -498,13 +479,12 @@ class StepHelperDbSaver():
             
     def __innser_save_by_sample(self, step_helper, username):        
         projectObjList = self.getProjectObjectList(step_helper, username)
-        sampleSet_uid = str(uuid.uuid4())
         if step_helper.isPlanBySample():
             barcoding_step_data = step_helper.steps[StepNames.BARCODE_BY_SAMPLE]
             
             if step_helper.isBarcoded():
                 kwargs = self.__get_universal_params(step_helper, username)
-                kwargs.update(self.__get_specific_params_by_sample(step_helper, sampleSet_uid=sampleSet_uid))
+                kwargs.update(self.__get_specific_params_by_sample(step_helper))
                 self.__update_plugins_with_ir(step_helper, kwargs, barcoding_step_data.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES])
 
                 if step_helper.sh_type == StepHelperType.EDIT_PLAN_BY_SAMPLE and step_helper.previous_plan_id > 0:
@@ -528,7 +508,7 @@ class StepHelperDbSaver():
                     kwargs = self.__get_universal_params(step_helper, username)
                     kwargs.update(self.__get_specific_params_by_sample(step_helper, index=index, \
                             sample_set_item_display_Name=valueDict[SavePlanFieldNames.SAMPLE_NAME], sample_external_id=valueDict[SavePlanFieldNames.SAMPLE_EXTERNAL_ID], sample_description=valueDict[SavePlanFieldNames.SAMPLE_DESCRIPTION], \
-                            sampleSet_uid=sampleSet_uid, planTotal=len(sampleDicts), tubeLabel=valueDict[SavePlanFieldNames.TUBE_LABEL], chip_barcode=valueDict[SavePlanFieldNames.CHIP_BARCODE]))
+                            tubeLabel=valueDict[SavePlanFieldNames.TUBE_LABEL], chip_barcode=valueDict[SavePlanFieldNames.CHIP_BARCODE]))
 
                     self.__update_non_barcode_ref_info(step_helper, kwargs, valueDict)
                     

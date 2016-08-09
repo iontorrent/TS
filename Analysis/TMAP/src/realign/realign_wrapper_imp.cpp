@@ -96,7 +96,7 @@ bool RealignImp::invalid_input_cigar () const
 }
 
 // parameters setup
-void RealignImp::set_scores (int mat, int mis, int gip, int gep)
+void RealignImp::set_scores (double mat, double mis, double gip, double gep)
 {
     std::vector<int> scores (4);
     scores [0] = mat, scores [1] = mis, scores [2] = gip, scores [3] = gep;

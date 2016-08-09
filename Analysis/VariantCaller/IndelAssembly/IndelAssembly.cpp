@@ -189,7 +189,7 @@ public:
       cout << "ERROR: Argument --reference is required\n";
       exit(1);
     }
-    if (reference.empty()) {
+    if (output_vcf.empty()) {
       cout << "ERROR: Argument --output-vcf is required\n";
       exit(1);
     }
@@ -1037,6 +1037,9 @@ public:
 
 
   void SegmentAssembly(int assemStart, int assemLength) {
+
+    if (assemStart >= (int)reference_reader->chr_size(curChrom))
+      return;
 
     //cout << "SegmentAssembly(" << assemStart << "," << assemLength << ",chr="<< curChrom <<",nreads=" << ReadsBuffer.size() << ")\n";
 

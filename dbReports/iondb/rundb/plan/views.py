@@ -252,7 +252,7 @@ def page_plan_edit_plan(request, plan_id):
         return render_to_response("501.html")
                         
     plan = PlannedExperiment.objects.get(pk=plan_id)
-    if plan.sampleSet:
+    if plan.sampleSets.exists():
         return HttpResponseRedirect(reverse('page_plan_edit_plan_by_sample', args=(plan_id,)))
 
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.EDIT_PLAN)
@@ -303,7 +303,7 @@ def page_plan_copy_plan(request, plan_id):
         return render_to_response("501.html")                    
 
     plan = PlannedExperiment.objects.get(pk=plan_id)
-    if plan.sampleSet:
+    if plan.sampleSets.exists():
         return HttpResponseRedirect(reverse('page_plan_copy_plan_by_sample', args=(plan_id,)))
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.COPY_PLAN)
     request.session['plan_step_helper'] = step_helper
@@ -781,8 +781,8 @@ class PlanDetailView(DetailView):
         context["chipTypeSecondaryPrefix"] = getChipDisplayedNameSecondaryPrefix(chipType[0]) if chipType else  plan.experiment.chipType
         context["chipTypeVersion"] = getChipDisplayedVersion(chipType[0]) if chipType else ""
 
-        context["isAmpsOnChef"] = True if plan.sampleSet and plan.sampleSet.libraryPrepType and "amps_on_chef" in plan.sampleSet.libraryPrepType else False
-                                                                                                    
+        context["ampsOnChef_sampleSets"] = plan.sampleSets.filter(libraryPrepInstrumentData__isnull=False, libraryPrepType__contains="amps_on_chef")
+
         context['thumbnail'] = True if report_pk and result.isThumbnail else False
         context['show_thumbnail'] = True if state != 'Plan' and (plan.experiment.getPlatform in ['s5', 'proton']) else False
         
@@ -1387,7 +1387,8 @@ def _get_base_planTemplate_data(isForTemplate):
     ##for barcodeKitName in barcodeKitNames:
     ##    data[barcodeKitName] = dnaBarcode.objects.filter(name=barcodeKitName).order_by('index')
 
-    data["barcodeKitInfo"] = list(dnaBarcode.objects.all().order_by('name', 'index'))
+    ##barcodeKitInfo not currently used now that we have removed ability to select barcode kit from the sample config page
+    ##data["barcodeKitInfo"] = list(dnaBarcode.objects.values('name', 'index', 'id_str', 'sequence').order_by('name', 'index'))
 
     references = list(ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION))
     data["references"] = references

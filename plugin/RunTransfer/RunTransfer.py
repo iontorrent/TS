@@ -12,7 +12,7 @@ from ion.plugin import *
 
 class RunTransfer(IonPlugin):
     '''Main class definition for this plugin'''
-    version = '5.0.0.0'
+    version = '5.0.3.0'
     DEBUG = False
     author = "bernard.puc@thermofisher.com"
 
@@ -297,6 +297,7 @@ class RunTransfer(IonPlugin):
         #Not the final status of the reanalysis, but the final status of the renalysis kick-off.
         print ("Function: %s()" % sys._getframe().f_code.co_name)
         time.sleep(70)
+        stat_line = ""  # provide default
         cmd = "sshpass -p %s ssh %s@%s \"cd %s; cat stdout.log\"" % (self.user_password,
                                                                      self.user_name,
                                                                      self.server_ip,
@@ -346,7 +347,7 @@ class RunTransfer(IonPlugin):
             display_fs.write("raw_data_dir = %s</br>" % self.raw_data_dir)
             display_fs.write("results_dir_base = %s</br>" % self.results_dir_base)
             display_fs.write("output_dir = %s</br>" % self.output_dir)
-            display_fs.write("chipType = %s</br>" % self.chipType)
+            display_fs.write("platform = %s</br>" % self.platform)
             display_fs.write("server_ip = %s</br>" % self.server_ip)
             display_fs.write("user_name = %s</br>" % self.user_name)
             display_fs.write("user_password = %s</br>" % self.user_password)
@@ -434,7 +435,7 @@ class RunTransfer(IonPlugin):
                 self.results_dir_base = os.path.basename(spj['runinfo']['report_root_dir'])
                 self.output_dir      = spj['runinfo']['results_dir']
                 self.plugin_name     = spj['runinfo']['plugin_name']
-                self.chipType        = spj['runinfo']['chipType']
+                self.platform        = spj['runinfo']['platform']
                 self.sigproc_dir     = spj['runinfo']['sigproc_dir']
                 self.analysis_dir    = spj['runinfo']['analysis_dir']
                 self.plugin_dir      = spj['runinfo']['plugin_dir']
@@ -463,7 +464,7 @@ class RunTransfer(IonPlugin):
             print("raw_data_dir = %s" % self.raw_data_dir)
             print("results_dir_base = %s" % self.results_dir_base)
             print("output_dir = %s" % self.output_dir)
-            print("chipType = %s" % self.chipType)
+            print("platform = %s" % self.platform)
             print("server_ip = %s" % self.server_ip)
             print("user_name = %s" % self.user_name)
             print("user_password = %s" % self.user_password)
@@ -494,7 +495,7 @@ class RunTransfer(IonPlugin):
             self.show_standard_status("Starting")
 
             # Determine Dataset Type
-            if self.chipType in ['900','fubar'] or self.chipType.startswith('P'):
+            if self.platform.lower() in ['proton', 's5']:
                 self.is_proton = True
             else:
                 self.is_proton = False

@@ -9,7 +9,32 @@
 #include <cassert>
 #include <boost/concept_check.hpp>
 #include <ext/stdio_filebuf.h>
+#include <cfloat>
 
+// #define EXPANDED_LOG
+
+#if defined (EXPANDED_LOG)
+    #define LOG_UNIT_WIDTH (3+3*9)
+#else
+    #define LOG_UNIT_WIDTH (3+6)
+#endif
+
+typedef union {
+  long long ll;
+  double d;
+} dpbits;
+
+static inline double epsilon (double val)
+{
+    dpbits test;
+    if (val < 0) val = -val;
+    test.d = val;
+    ++ test.ll;
+    return test.d - val;
+}
+
+// const double FEB = 0.0000001;
+#define FEB float_error_bound
 /*
 member inner loops used for finding alignment
 fill backtrace matrix and store max score position
@@ -19,6 +44,9 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
 {
     //initialise bottom boundary
     double prev_w, save_w;
+#if defined (EXPANDED_LOG)
+    double save_h, save_v;
+#endif
     if (bottom_in)
     {
         if (to_first)
@@ -43,7 +71,7 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
         (*logp_) << "\n";
         (*logp_) << std::setw (6) << std::right << x << " " << (char) ((base < 4) ? base2char (base) : base) << " ";
         if (y > yref)
-            (*logp_) << std::setw (9 * (y-yref)) << std::left << " ";
+            (*logp_) << std::setw (LOG_UNIT_WIDTH * (y-yref)) << std::left << " ";
         (*logp_) << std::flush;
     }
 
@@ -54,12 +82,24 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
 
         //w = max (0, h, v, prev_w + s(x, y))
         w = prev_w + ((ap->r == base || ap->r == 'N') ? mat : mis); // HACK - need proper handling for non-standard IUPACs
-
-        if (w < v)
-            w = v, dir = ALIGN_DOWN;
-
-        if (w < ap->h)
+        float_error_bound += epsilon (w);
+#if defined (EXPANDED_LOG)        
+        save_h = ap->h;
+#endif
+        if (w + FEB < ap->h)   // hack to support left-align
             w = ap->h, dir = ALIGN_LEFT;
+
+#if defined (EXPANDED_LOG)
+        save_v = v;
+#endif
+        if (w + FEB < v)
+            w = v, dir = ALIGN_DOWN;
+#if 0
+        if (logp_ && x >= 12 && x <= 14 && y-len >= 12 && y-len <= 14)
+        {
+            (*logp_) << x << ":" << y-len << ": float_error_bound = " << std::scientific << std::setprecision (6) << float_error_bound << ", w-v = " << (v-w) << " h-w = " << (ap->h - w) << std::endl;
+        }
+#endif
 
         if (w <= 0)
         {
@@ -85,16 +125,20 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
 
         // h = max (w - gip, h) - gep;
         nh = w - ((scale_type_ == SCALE_GIP_GEP) ? gip / xdivisor : gip);
+        float_error_bound += epsilon (nh);
 
         if (nh > ap->h)
             ap->h = nh, dir |= ALIGN_HSKIP;
         ap->h -= ((scale_type_ == SCALE_NONE) ? gep : gep / xdivisor);
+        float_error_bound += epsilon (ap->h);
 
         //v = max (w - gip, v) - gep;
         nv = w - ((scale_type_ == SCALE_GIP_GEP) ? gip / ap->div : gip);
+        float_error_bound += epsilon (nv);
         if (nv > v)
             v = nv, dir |= ALIGN_VSKIP;
         v -= ((scale_type_ == SCALE_NONE) ? gep : gep / ap->div); 
+        float_error_bound += epsilon (v);
 
         if (logp_)
         {
@@ -116,8 +160,13 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
             else
                 (*logp_) << "-";
 
+            #if defined (EXPANDED_LOG)
+            (*logp_) << std::setw (9) << std::resetiosflags (std::ios::floatfield) << std::left  << std::showpos << std::setprecision (3) << save_v
+                     << std::setw (9) << std::resetiosflags (std::ios::floatfield) << std::left  << std::showpos << std::setprecision (3) << save_w
+                     << std::setw (9) << std::resetiosflags (std::ios::floatfield) << std::left  << std::showpos << std::setprecision (3) << save_h;
+            #else
             (*logp_) << std::setw (6) << std::resetiosflags (std::ios::floatfield) << std::left  << std::showpos << std::setprecision (3) << save_w;
-            // (*logp_) << std::setw (6) << std::left  << std::fixed << save_w;
+            #endif
         }
 
         //save bactrace pointer (4bits / byte)
@@ -190,7 +239,7 @@ void ContAlign::init (int max_ylen, int max_xlen, int max_size, int gip, int gep
     xhomo = new char [max_xlen+1];
 }
 
-void ContAlign::set_scoring ( int gip, int gep, int mat, int mis)
+void ContAlign::set_scoring ( double gip, double gep, double mat, double mis)
 {
     ContAlign::gip = gip;
     ContAlign::gep = gep;
@@ -303,6 +352,7 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
     last_reached = false;
     to_first = tobeg, to_last = toend;
     accum_hor_skip = 0;
+    float_error_bound = 0;
 
     if (width_right == -1)
         width_right = width;
@@ -328,11 +378,11 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
     {
         (*logp_) << std::setw (9) << "";
         for (int yy = yref; yy != ylast; ++yy)
-            (*logp_) << std::setw (9) << std::left << yy;
+            (*logp_) << std::setw (LOG_UNIT_WIDTH) << std::left << yy;
         (*logp_) << "\n";
         (*logp_) << std::setw (9) << "";
         for (int yy = yref; yy != ylast; ++yy)
-            (*logp_) << std::setw (9) << std::left << (char) yseq [yy];
+            (*logp_) << std::setw (LOG_UNIT_WIDTH) << std::left << (char) yseq [yy];
         (*logp_) << "\n" << std::flush;
         (*logp_) << std::setw (9) << "";
     }
@@ -345,7 +395,7 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
     {
         ap [i].w = curw;
         if (logp_)
-            (*logp_) << "   " << std::left << std::setw (6) << std::left  << std::resetiosflags (std::ios::floatfield) << std::setprecision (3) << curw << std::flush;
+            (*logp_) <<  std::left << std::setw (LOG_UNIT_WIDTH) << std::left  << std::resetiosflags (std::ios::floatfield) << std::setprecision (3) << curw << std::flush;
             // (*logp_) << "   " << std::left << std::setw (6) << std::left  << std::fixed << std::setprecision (4) << curw << std::flush;
 
         curw -= gep;

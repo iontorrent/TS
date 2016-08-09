@@ -15,7 +15,7 @@ using namespace std;
 class Alignment;
 
 template<typename T>
-int cmp(T p1, T p2) { return p1 < p2 ? 1 : p1 > p2 ? -1 : 0; }
+int cmp(T p1, T p2) { return p1 < p2 ? 1 : (p1 > p2 ? -1 : 0); }
 
 template<typename T1, typename T2>
 int cmp_pairs(T1 p11, T2 p12, T1 p21, T2 p22) { int lvl1 = cmp(p11, p21); if (lvl1) return lvl1; return cmp(p12, p22); }

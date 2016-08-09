@@ -1260,14 +1260,11 @@ class SampleSetValidation(Validation):
 class SampleSetResource(ModelResource):
     SampleGroupType_CV = fields.ToOneField('iondb.rundb.api.SampleGroupType_CVResource', 'SampleGroupType_CV', full=False, null=True, blank=True)
     samples = fields.ToManyField('iondb.rundb.api.SampleSetItemResource', 'samples', full=False, null=True, blank=True)
-
     sampleCount = fields.IntegerField(readonly = True)
     sampleGroupTypeName = fields.CharField(readonly = True, attribute="sampleGroupTypeName", null=True, blank=True)
 
     libraryPrepInstrumentData = fields.ToOneField('iondb.rundb.api.SamplePrepDataResource', 'libraryPrepInstrumentData', full=True, null=True, blank=True)
-
     libraryPrepTypeDisplayedName = fields.CharField(readonly = True, attribute="libraryPrepTypeDisplayedName", null=True, blank=True)
-
     libraryPrepKitDisplayedName = fields.CharField(readonly = True, attribute="libraryPrepKitDisplayedName", null=True, blank=True)
 
     def dehydrate(self, bundle):
@@ -1294,6 +1291,8 @@ class SampleSetResource(ModelResource):
                     bundle.data['libraryPrepKitDisplayedName'] = kitInfo.description
                 except Exception, Err:
                     logger.debug("Error at SampleSetResources.dehydrate() : %s" %(Err))
+
+        bundle.data['readyForPlanning'] = (bundle.data['sampleCount'] > 0) and bundle.obj.status not in ['libPrep_pending', 'voided']
 
         return bundle
 
@@ -2198,6 +2197,8 @@ class PlannedExperimentValidation(Validation):
 
         for key, value in bundle.data.items():
             err = []
+            if key == "planStatus":
+                err = plan_validator.validate_planStatus(value)
             if key == "sample":
                 err = plan_validator.validate_sample_name(value)
             if key == "sampleTubeLabel":
@@ -2384,7 +2385,7 @@ class PlannedExperimentDbResource(ModelResource):
     childPlans = fields.ListField(default=[])
     experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
 
-    sampleSet = fields.ToOneField(SampleSetResource, 'sampleSet', full=False, null=True, blank=True)
+    sampleSets = fields.ToManyField(SampleSetResource, 'sampleSets', full=False, null=True, blank=True)
     applicationGroup = fields.ToOneField(ApplicationGroupResource, 'applicationGroup', full=False, null=True, blank=True)
     sampleGrouping = fields.ToOneField(SampleGroupType_CVResource, 'sampleGrouping', full=False, null=True, blank=True)
 
@@ -2417,6 +2418,15 @@ class PlannedExperimentDbResource(ModelResource):
 
         bundle.data['projects'] = project_objs
         bundle.data['project'] = None
+
+        # hydrate SampleSets
+        sampleSetDisplayedName = bundle.data.get('sampleSetDisplayedName', "")
+        if sampleSetDisplayedName:
+            sampleSets = models.SampleSet.objects.filter(displayedName__in = sampleSetDisplayedName.split(','))
+            if sampleSets:
+                bundle.data['sampleSets'] = sampleSets
+        else:
+            bundle.data['sampleSets'] = bundle.obj.sampleSets.all()
 
         return super(PlannedExperimentDbResource, self).hydrate_m2m(bundle)
 
@@ -2478,12 +2488,12 @@ class PlannedExperimentDbResource(ModelResource):
         if combinedLibraryTubeLabel is not None:
             combinedLibraryTubeLabel = combinedLibraryTubeLabel.strip()
             qset = (
-                Q(sampleSet__combinedLibraryTubeLabel__icontains=combinedLibraryTubeLabel)
+                Q(sampleSets__combinedLibraryTubeLabel__icontains=combinedLibraryTubeLabel)
             )
             base_object_list = base_object_list.filter(qset)
 
 
-        return base_object_list
+        return base_object_list.distinct()
 
 
     class Meta:
@@ -2494,7 +2504,8 @@ class PlannedExperimentDbResource(ModelResource):
             'projects',
             'plannedexperimentqc_set',
             'plannedexperimentqc_set__qcType',
-            'experiment__samples'
+            'experiment__samples',
+            'sampleSets'
         ).all()
 
         transfer_allowed_methods = ['get','post']
@@ -2502,7 +2513,6 @@ class PlannedExperimentDbResource(ModelResource):
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
-        field_list = field_list + ['sampleSet']
         ordering = field_list
         filtering = field_dict(field_list)
 
@@ -2538,14 +2548,14 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     realign = fields.BooleanField()
     flowsInOrder = fields.CharField(blank=True, null=True, default='')
 
+    # this is a comma-separated string if multiple sampleset names
     sampleSetDisplayedName = fields.CharField(readonly = True, blank = True, null = True)
-    sampleSetGroupType = fields.CharField(readonly = True, blank = True, null = True)
 
     applicationGroupDisplayedName = fields.CharField(readonly = True, blank=True, null=True)
     sampleGroupingName = fields.CharField(readonly = True, blank=True, null=True)
 
-    libraryPrepType = fields.CharField(readonly = True, blank=True, null=True)
-    libraryPrepTypeDisplayedName = fields.CharField(readonly = True, blank=True, null=True)
+    libraryPrepType = fields.CharField(readonly = True, blank=True, null=True, default='')
+    libraryPrepTypeDisplayedName = fields.CharField(readonly = True, blank=True, null=True, default='')
 
     platform = fields.CharField(blank=True, null=True)
 
@@ -2670,22 +2680,17 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         except models.Experiment.DoesNotExist:
             logger.error('Missing experiment for Plan %s(%s)' % (bundle.obj.planName, bundle.obj.pk))
 
-        sampleSet = bundle.obj.sampleSet
-        bundle.data['sampleSetDisplayedName'] = sampleSet.displayedName if sampleSet else ""
 
-        bundle.data['libraryPrepType'] = ""
-        bundle.data['libraryPrepTypeDisplayedName'] = ""
-        if sampleSet:
-            bundle.data['sampleSetGroupType'] = sampleSet.SampleGroupType_CV.displayedName if sampleSet.SampleGroupType_CV else ""
-            bundle.data['libraryPrepType'] = sampleSet.libraryPrepType
+        sampleSets = bundle.obj.sampleSets.order_by('displayedName')
+        bundle.data['sampleSetDisplayedName'] = ','.join(sampleSets.values_list('displayedName', flat=True))
 
-            if sampleSet.libraryPrepType:
-                allowed_lib_prep_type = sampleSet.ALLOWED_LIBRARY_PREP_TYPES
-                for internalValue, displayedValue in allowed_lib_prep_type:
-                    if internalValue == sampleSet.libraryPrepType:
-                        bundle.data['libraryPrepTypeDisplayedName'] = displayedValue
+        for sampleset in sampleSets:
+            if sampleset.libraryPrepType:
+                bundle.data['libraryPrepType'] = sampleset.libraryPrepType
+                bundle.data['libraryPrepTypeDisplayedName'] = sampleset.get_libraryPrepType_display()
 
-            bundle.data['combinedLibraryTubeLabel'] = sampleSet.combinedLibraryTubeLabel
+            if sampleset.combinedLibraryTubeLabel:
+                bundle.data['combinedLibraryTubeLabel'] = sampleset.combinedLibraryTubeLabel
 
         applicationGroup = bundle.obj.applicationGroup
         bundle.data['applicationGroupDisplayedName'] = applicationGroup.description if applicationGroup else ""
@@ -2758,6 +2763,15 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['barcodeId'] = ""
         if 'barcodeId' in bundle.data:
             bundle.data['barcodeKitName'] = bundle.data['barcodeId']
+        return bundle
+
+    def hydrate_planStatus(self, bundle):
+        planStatus = bundle.data.get('planStatus')
+        if planStatus:
+            defaultPlanStatus = plan_validator.get_default_planStatus()
+            for status in defaultPlanStatus:
+                if planStatus.lower()==status and planStatus != status:
+                    bundle.data['planStatus'] = status
         return bundle
 
     def hydrate_bedfile(self, bundle):
@@ -2845,18 +2859,6 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     def hydrate_realign(self, bundle):
         if 'realign' in bundle.data:
             bundle.data['realign'] = toBoolean(bundle.data['realign'], False)
-        return bundle
-
-    def hydrate_sampleSet(self, bundle):
-        sampleSetDisplayedName = bundle.data.get('sampleSetDisplayedName', "")
-
-        logger.debug("api.PlannedExperimentResource.hydrate_sampleSet() sampleSetDisplaydName=%s" %(sampleSetDisplayedName))
-
-        if sampleSetDisplayedName:
-            sampleSets = models.SampleSet.objects.filter(displayedName = sampleSetDisplayedName)
-            if sampleSets:
-                bundle.data['sampleSet'] = sampleSets[0]
-
         return bundle
 
     def hydrate_metaData(self, bundle):
@@ -4382,8 +4384,8 @@ class CompositeExperimentResource(ModelResource):
         bundle.data['keep'] = bundle.obj.storage_options == 'KI'
 
         if bundle.obj.plan:
-            sampleSet = bundle.obj.plan.sampleSet
-            bundle.data['sampleSetName'] = sampleSet.displayedName if sampleSet else ""
+            sampleSets = bundle.obj.plan.sampleSets.order_by('displayedName')
+            bundle.data['sampleSetName'] = ','.join(sampleSets.values_list('displayedName', flat=True))
         else:
             bundle.data['sampleSetName'] = ""
 
@@ -4531,6 +4533,7 @@ class TemplateResource(ModelResource):
 
 class ApplProductResource(ModelResource):
     appl = fields.ToOneField(RunTypeResource, 'applType', full=True)
+    applicationGroup = fields.ToOneField('iondb.rundb.api.ApplicationGroupResource', 'applicationGroup', full=True, null=True)
     defaultSeqKit = fields.ToOneField(KitInfoResource, 'defaultSequencingKit', full=True, null=True)
     defaultLibKit = fields.ToOneField(KitInfoResource, 'defaultLibraryKit', full=True, null=True)
     defaultControlSeqKit = fields.ToOneField(KitInfoResource, 'defaultControlSeqKit', full=False, null=True)
@@ -4785,6 +4788,8 @@ class NetworkResource(ModelResource):
 class AnalysisArgsResource(ModelResource):
     creator = fields.ToOneField(UserResource, 'creator', null=True, full=True)
     lastModifiedUser = fields.ToOneField(UserResource, 'lastModifiedUser', null=True, full=True)
+    applType = fields.ToOneField(RunTypeResource, "applType", null=True, full=True)
+    applGroup = fields.ToOneField(ApplicationGroupResource, "applGroup", null=True, full=True)
 
     def prepend_urls(self):
         return [

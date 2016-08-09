@@ -104,25 +104,29 @@ def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
 
             result.save()
             
+            # handle from-Basecalling reAnalysis
             if previousReport:
-                # copy previous report's Basecalling Input dmfilestat
-                selected_previous_pk = None
+                parent_obj = None
                 try:
                     selected_previous_pk = int(previousReport.strip('/').split('_')[-1])
-                except ValueError:
+                    parent_obj = models.Results.objects.get(pk=selected_previous_pk)
+                except:
                     # TorrentSuiteCloud plugin 3.4.2 uses reportName for this value
-                    previous_obj = models.Results.objects.filter(resultsName = os.path.basename(previousReport))
-                    if previous_obj:
-                        selected_previous_pk = previous_obj[0].pk
+                    try:
+                        parent_obj = models.Results.objects.get(resultsName = os.path.basename(previousReport))
+                    except:
+                        pass
                 
-                if selected_previous_pk:
-                    dmfilestat = models.Results.objects.get(pk=selected_previous_pk).get_filestat(dmactions_types.BASE)
+                if parent_obj:
+                    result.parentResult = parent_obj
+                    result.save()
                     # replace dmfilestat
+                    dmfilestat = parent_obj.get_filestat(dmactions_types.BASE)
                     result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
                     dmfilestat.pk = None
                     dmfilestat.result = result
                     dmfilestat.save()
-                    
+
             return result
 
     except Exception as e:
@@ -350,9 +354,6 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
 
     if exp.plan:
         plan_json = model_to_dict(exp.plan)
-        # add SampleSet name to be passed to plugins
-        if exp.plan.sampleSet:
-            plan_json['sampleSet_name'] = exp.plan.sampleSet.displayedName
     else:
         plan_json = {}
 
@@ -370,7 +371,7 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
             'attributes': {}
         }
         for attributeValue in sample.sampleAttributeValues.all():
-            sampleInfo[sample.name]['attributes'][attributeValue.sampleAttribute.displayedName] = attributeValue.value
+            sampleInfo[sample.displayedName]['attributes'][attributeValue.sampleAttribute.displayedName] = attributeValue.value
 
 
     barcodedSamples_reference_names = eas.barcoded_samples_reference_names

@@ -222,13 +222,13 @@ def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sam
         #logger.debug("views_helper - _create_or_update_sample_for_sampleSetItem_with_id_values - #1 can REUSE SAMPLE for sure!! sampleSetItem.id=%d; sample.id=%d" %(orig_sampleSetItem.id, orig_sample.id))
        
         new_sample = orig_sample
-    
+
         if (new_sample.description != sampleDesc):
             new_sample.description = sampleDesc
             new_sample.date = currentDateTime
             
             #logger.debug("views_helper - _create_or_update_sample_for_sampleSetItem_with_id_values - #2 REUSE SAMPLE + UPDATE DESC sampleSetItem.id=%d; sample.id=%d" %(orig_sampleSetItem.id, new_sample.id))            
-            new_sample.save()        
+            new_sample.save()
     else:
         # link the renamed sample to an existing sample if one is found. Otherwise, rename the sample only if the sample has not yet been planned.
         existingSamples = Sample.objects.filter(displayedName = sampleDisplayedName, externalId = sampleExternalId)
@@ -719,7 +719,7 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" %(attributeValue.id))                                                                        
               
 def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, \
-                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId):
+                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId, sampleSetItemDescription):
     currentDateTime = timezone.now()  ##datetime.datetime.now()      
     
     if selectedBarcode:
@@ -759,6 +759,7 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                         'biopsyDays' : sampleBiopsyDays,
                                         'coupleId' : sampleCoupleId,
                                         'embryoId' : sampleEmbryoId,
+                                        'description' : sampleSetItemDescription,
                                         'lastModifiedUser' : user,                     
                                         'lastModifiedDate' : currentDateTime   
                                         }
@@ -776,11 +777,12 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                      'cellularityPct' : sampleCellularityPct,
                                      'biopsyDays' : sampleBiopsyDays,
                                      'coupleId' : sampleCoupleId,
-                                     'embryoId' : sampleEmbryoId,                                                                      
+                                     'embryoId' : sampleEmbryoId,
+                                     'description' : sampleSetItemDescription,
                                      'creator' : user,
                                      'creationDate' : currentDateTime,
                                      'lastModifiedUser' : user,
-                                     'lastModifiedDate' : currentDateTime                                     
+                                     'lastModifiedDate' : currentDateTime
                                  }
 
             logger.debug("_create_or_update_pending_sampleSetItem - sampleSetItem_kwargs=%s" %(sampleSetItem_kwargs))
@@ -806,7 +808,7 @@ def _create_or_update_sampleSetItem(request, user, sample):
     gender = queryDict.get("gender", "")
     relationshipRole = queryDict.get("relationshipRole", "")
     relationshipGroup = queryDict.get("relationshipGroup", None)
-
+    sampleSetItemDescription = queryDict.get("sampleDescription", "")
     sampleSetItem = get_object_or_404(SampleSetItem, pk = sampleSetItem_id)
 
     selectedBarcodeKitName = queryDict.get("barcodeKit", "").strip()
@@ -832,7 +834,7 @@ def _create_or_update_sampleSetItem(request, user, sample):
     if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and \
         (sampleSetItem.dnabarcode == selectedDnaBarcode) and sampleSetItem.cancerType == cancerType and (sampleSetItem.cellularityPct == cellularityPct) and \
         (sampleSetItem.nucleotideType == selectedNucleotideType) and sampleSetItem.pcrPlateRow == pcrPlateRow and sampleSetItem.biopsyDays == sampleBiopsyDays and \
-        sampleSetItem.coupleId == sampleCoupleId and sampleSetItem.embryoId == sampleEmbryoId:                   
+        sampleSetItem.coupleId == sampleCoupleId and sampleSetItem.embryoId == sampleEmbryoId and sampleSetItem.description == sampleSetItemDescription:                   
         logger.debug("views_helper - _create_or_update_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
     else:
         isValid, errorMessage = sample_validator.validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType, pcrPlateRow)
@@ -850,6 +852,7 @@ def _create_or_update_sampleSetItem(request, user, sample):
                                     'biopsyDays' : sampleBiopsyDays if sampleBiopsyDays else "0",
                                     'coupleId' : sampleCoupleId,
                                     'embryoId' : sampleEmbryoId,
+                                    'description' : sampleSetItemDescription,
                                     'lastModifiedUser' : user,
                                     'lastModifiedDate' : currentDateTime
                                     }

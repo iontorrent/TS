@@ -421,19 +421,4 @@ endif()
   set(ION_KMEANS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-build/libkmeans.a")
 
 
-set (proj_name "libStatGen")
-set (proj_version "1.0.12")
-set (proj_name_version "${proj_name}-${proj_version}")
-ExternalProject_add(${proj_name}
-    URL "http://genome.sph.umich.edu/w/images/0/09/LibStatGen.1.0.12.tgz"
-    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND make
-    INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/libstatgen-1.0.12.patch"
-)
-set(ION_STATGEN_LIBS  "${PROJECT_BINARY_DIR}/../${proj_name_version}/libStatGen.a")
-set(ION_STATGEN_INCLUDES "${PROJECT_BINARY_DIR}/../${proj_name_version}/include")
 

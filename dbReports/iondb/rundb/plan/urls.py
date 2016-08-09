@@ -17,8 +17,8 @@ urlpatterns = patterns(
     url(r'^page_plan_new_plan/(\d+)/$', 'views.page_plan_new_plan', name="page_plan_new_plan"),
     url(r'^get_ir_config/$', 'views.get_ir_config', name='get_ir_config'),
 
-    url(r'^page_plan_new_template_by_sample/(\d+)/$', 'views.page_plan_new_template_by_sample', name="page_plan_new_template_by_sample"),
-    url(r'^page_plan_new_plan_by_sample/(\d+)/(\d+)$', 'views.page_plan_new_plan_by_sample', name="page_plan_new_plan_by_sample"),
+    url(r'^page_plan_new_template_by_sample/([\d,]+)/$', 'views.page_plan_new_template_by_sample', name="page_plan_new_template_by_sample"),
+    url(r'^page_plan_new_plan_by_sample/(\d+)/([\d,]+)$', 'views.page_plan_new_plan_by_sample', name="page_plan_new_plan_by_sample"),
     url(r'^page_plan_by_sample_barcode/$', 'views.page_plan_by_sample_barcode', name="page_plan_by_sample_barcode"),
     url(r'^page_plan_by_sample_save_plan/$', 'views.page_plan_by_sample_save_plan', name="page_plan_by_sample_save_plan"),
     url(r'^page_plan_edit_plan_by_sample/(\d+)$', 'views.page_plan_edit_plan_by_sample', name="page_plan_edit_plan_by_sample"),

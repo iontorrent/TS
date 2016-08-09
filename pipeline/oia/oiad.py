@@ -378,7 +378,8 @@ class Run:
 
     def discover_blocks(self):
 
-        block_dirs = [self.block_name_to_block_dir('block_%03d' % i) for i in range(self.block_to_process_start,self.block_to_process_end+1)]
+        range_of_blocks = [('block_%03d' % i) for i in range(self.block_to_process_start,self.block_to_process_end+1)]
+        block_dirs = [self.block_name_to_block_dir(x) for x in range_of_blocks if x in self.explogdict]
 #        for block_dir in ['thumbnail'] + block_dirs:
         for block_dir in block_dirs:
 

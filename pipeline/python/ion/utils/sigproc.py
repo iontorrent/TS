@@ -112,35 +112,6 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title, exclusionMask=''):
     bfmaskPath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.bin')
     bfmaskstatspath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.stats')
 
-    ########################################################
-    # write composite return code                          #
-    ########################################################
-
-    try:
-        if len(dirs)==96:
-            composite_return_code=96
-            for subdir in dirs:
-
-                blockstatus_return_code_file = os.path.join(subdir,"blockstatus.txt")
-                if os.path.exists(blockstatus_return_code_file):
-
-                    with open(blockstatus_return_code_file, 'r') as f:
-                        text = f.read()
-                        if 'Analysis=0' in text:
-                            composite_return_code-=1
-
-            composite_return_code_file = os.path.join(SIGPROC_RESULTS,"analysis_return_code.txt")
-            if not os.path.exists(composite_return_code_file):
-                printtime("DEBUG: create %s" % composite_return_code_file)
-                os.umask(0002)
-                f = open(composite_return_code_file, 'a')
-                f.write(str(composite_return_code))
-                f.close()
-            else:
-                printtime("DEBUG: skip generation of %s" % composite_return_code_file)
-    except:
-        traceback.print_exc()
-
     ######################################################################
     # Merge individual block bead metrics files and generate bead stats  #
     ######################################################################

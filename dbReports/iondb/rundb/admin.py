@@ -678,7 +678,10 @@ class dnaBarcodeAdmin(admin.ModelAdmin):
 
 
 class RunTypeAdmin(admin.ModelAdmin):
-    list_display = ('runType','description')
+    list_display = ('runType','description','application_groups')
+    
+    def application_groups(self, obj):
+        return ", ".join([applicationGroup.name for applicationGroup in obj.applicationGroups.all()])
 
 
 class ReferenceGenomeAdmin(admin.ModelAdmin):

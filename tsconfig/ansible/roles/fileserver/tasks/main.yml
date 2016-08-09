@@ -3,12 +3,27 @@
 
 - name:
   include: '../../../globals.yml'
+  
+#============================================================================
+# Fix erroneous setup of resolv.conf as a regular file
+#============================================================================
+- name: /etc/resolv.conf needs to be symbolic link
+  file: path=/etc/resolv.conf state=link src=/run/resolvconf/resolv.conf force=True
+  notify: resolvconf update
+  
 #============================================================================ 
 # network interfaces configuration
 #============================================================================ 
-- name: Edit /etc/network/interfaces and restart networking
+- name: Stop default network interface device
+  shell: bash -lc "ifdown {{default_interface}}"
+  register: output
+- debug: var=output
+- name: Edit /etc/network/interfaces
   template: src=interfaces.j2 dest=/etc/network/interfaces mode=0644 backup=yes
-  notify: restart network
+- name: Restart default network interface device
+  shell: bash -lc "ifup {{default_interface}}"
+  register: output
+- debug: var=output
   
 #============================================================================
 # Enable IP forwarding

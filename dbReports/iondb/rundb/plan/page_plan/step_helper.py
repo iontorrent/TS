@@ -232,8 +232,6 @@ class StepHelper(object):
         this is a workaround until applproduct supports application-group sepecific rules
         """
         if self.getApplicationGroupName():
-            savedApplGroup = self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP];
-            logger.debug("step_helper.isToMandateTargetTechniqueToShow() savedApplGroup=%s; applicationGroupName=%s" %(savedApplGroup, self.getApplicationGroupName()))
             return True if self.getApplicationGroupName() in ["DNA + RNA"] else False;
         else:
             return True
@@ -250,21 +248,13 @@ class StepHelper(object):
     
 
     def getRunTypeObject(self):
-        logger.debug("getRunTypeObject nucleotideType=%s" %(self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.RUN_TYPE].nucleotideType))
+        #logger.debug("getRunTypeObject nucleotideType=%s" %(self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.RUN_TYPE].nucleotideType))
                 
         #save_plan_step_data.savedFields[SavePlanFieldNames.SAMPLES_TABLE]
         return self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.RUN_TYPE]
 
     def getApplicationGroupName(self):
-        #logger.debug("ENTER getApplicationGroupName() applicationGroup=%s" %(self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP]))
-        #logger.debug("..getApplicationGroupName applicationGroupName=%s" %(self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]))
-        
-        #20150301-TODO- this may be fixed. Need to retest
-        #20140401-BUG-could be None sometimes!! return self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
-        #20140401-WORKAROUND
-        applicationGroupName = self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
-        return applicationGroupName if applicationGroupName else self.getSelectedApplicationGroupName()
-
+        return self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
    
     def isControlSeqTypeBySample(self):
         return self.getApplProduct().isControlSeqTypeBySampleSupported
@@ -326,18 +316,6 @@ class StepHelper(object):
         return False
 
 
-    def getSelectedApplicationGroupName(self):
-        #logger.debug("ENTER getSelectedApplicationGroupName...self.steps[StepNames.APPLICATION].savedFields=%s" %(self.steps[StepNames.APPLICATION].savedFields))
-
-        value = self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP]
-
-        if value:
-            applGroupObjs = ApplicationGroup.objects.filter(isActive = True).filter(id = value)
-            if applGroupObjs:
-                return applGroupObjs[0].name
-        return ""
-   
-        
     def validateAll(self):
         for step_name, step in self.steps.items():
             # do not validate plan step if this is a template helper and vice versa

@@ -148,7 +148,7 @@ def barcode_report_stats(barcode_names):
         ionstats.reduce_stats(ionstats_file_list,'ionstats_alignment.json')
 
 
-def generate_datasets_json(barcodeSet, found_barcode_names, barcodeSet_Info, sample, barcodeSamples, runID):
+def generate_datasets_pipeline_json(barcodeSet, found_barcode_names, barcodeSet_Info, sample, barcodeSamples, runID):
     # Note this writes a file with some but not all of regular report's datasets_pipeline.json parameters
     
     datasets_json_path = "datasets_pipeline.json"
@@ -206,8 +206,72 @@ def generate_datasets_json(barcodeSet, found_barcode_names, barcodeSet_Info, sam
 
     with open(datasets_json_path,"w") as f:
         json.dump(datasets, f, indent=4)
+        
+    return datasets
 
-    os.symlink(datasets_json_path, "datasets_basecaller.json")
+
+def generate_datasets_basecaller_json(datasets, parentBAMs, barcodeSet):
+    # Note this writes a file with some but not all of regular report's datasets_basecaller.json parameters
+
+    datasets_path = "basecaller_results/datasets_basecaller.json"
+    basecaller_results = "basecaller_results"
+
+    readgroups_init = {
+        "read_count": 0,
+        "Q20_bases": 0,
+        "total_bases": 0,
+        "filtered": [],
+        "reference": "",
+    }
+    non_barcoded_file_prefix = "rawlib"
+    by_file_prefix = {}
+
+    for bamfile in parentBAMs:
+        # read parent datasets files and merge relevant fields
+        parent_folder = os.path.dirname(bamfile)
+        datasetsFile = os.path.join(parent_folder,datasets_path)
+        try:
+            with open(datasetsFile) as f:
+                parent_datasets_json = json.load(f)
+
+            for parent_read_group in parent_datasets_json['read_groups'].values():
+                if barcodeSet:
+                    prefix = '%s_rawlib' % parent_read_group.get('barcode_name', 'nomatch')
+                else:
+                    prefix = non_barcoded_file_prefix
+
+                if prefix not in by_file_prefix:
+                    by_file_prefix[prefix] = dict(readgroups_init)
+
+                by_file_prefix[prefix]['read_count'] += parent_read_group['read_count']
+                by_file_prefix[prefix]['Q20_bases'] += parent_read_group['Q20_bases']
+                by_file_prefix[prefix]['total_bases'] += parent_read_group['total_bases']
+
+                if parent_read_group.get('reference'):
+                    by_file_prefix[prefix]['reference'] = parent_read_group['reference']
+                by_file_prefix[prefix]['filtered'].append(parent_read_group.get('filtered', False))
+        except:
+            printtime("DEBUG: unable to update datasets_basecaller.json from %s" % datasetsFile)
+            traceback.print_exc()
+            break
+    else:
+        # now update the combined datasets
+        for merged_dataset in datasets['datasets']:
+            prefix = merged_dataset['file_prefix']
+            if prefix in by_file_prefix:
+                merged_dataset['read_count'] = by_file_prefix[prefix]['read_count']
+                read_group_key = merged_dataset['read_groups'][0]
+
+                merged_read_group = datasets['read_groups'][read_group_key]
+                merged_read_group['read_count'] = by_file_prefix[prefix]['read_count']
+                merged_read_group['Q20_bases'] = by_file_prefix[prefix]['Q20_bases']
+                merged_read_group['total_bases'] = by_file_prefix[prefix]['total_bases']
+                merged_read_group['reference'] = by_file_prefix[prefix]['reference']
+                merged_read_group['filtered'] = all(by_file_prefix[prefix]['filtered'])
+
+    os.mkdir(basecaller_results)
+    with open(datasets_path,"w") as f:
+        json.dump(datasets, f, indent=4)
 
 
 def find_barcodes_to_process(parentBAMs, barcodeSet):
@@ -419,7 +483,13 @@ if __name__ == '__main__':
     # Generate files needed to display Report
     if barcodeSet:
         barcode_report_stats(barcode_files.keys())
-    generate_datasets_json(barcodeSet, barcode_files.keys(), barcodeSet_Info, sample, barcodeSamples, runID)
+
+    # Generate files needed by Plugins
+    try:
+        datasets = generate_datasets_pipeline_json(barcodeSet, barcode_files.keys(), barcodeSet_Info, sample, barcodeSamples, runID)
+        generate_datasets_basecaller_json(datasets, parentBAMs, barcodeSet)
+    except:
+        traceback.print_exc()
 
     jobId = submit_job(script, ['--merge-plots']) 
     printtime("DEBUG: Submitted %s job %s" % ('MergePlots', jobId))  

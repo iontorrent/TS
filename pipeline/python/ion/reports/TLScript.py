@@ -664,7 +664,7 @@ if __name__=="__main__":
                     else: # is_thumbnail or is_single:
                         data_file = os.path.join(env['SIGPROC_RESULTS'],'analysis_return_code.txt')
 
-                    if os.path.exists(data_file):
+                    if os.path.exists(data_file) and os.path.getsize(data_file)>0:
                         blocks_to_process_ready.append(block)
                     else:
                         if debug_mode:

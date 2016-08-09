@@ -1,27 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <!-- java script required for interacting with the RESTful API -->
+  <!-- java script required for interacting with the RESTful API -->
   <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-  <script type="text/javascript" src="/pluginMedia/RunTransfer/bootstrap-scrollspy.js"></script>
-  <link href="/pluginMedia/RunTransfer/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
-  <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-  <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
-
+  
   <!--page style-->
   <style type='text/css'>
     #formwrap {
-     line-height: 2em;
-     background: #eef;
-     margin: 10px;
-     padding: 10px;
-     height: 130px;
-     text-align: center;
+      line-height: 2em;
+      background: #eef;
+      margin: 10px;
+      padding: 10px;
+      height: 130px;
+      text-align: center;
     }
 
     input {
-     height:30px;
+      height:30px;
     }
 
     body {
@@ -116,8 +112,7 @@
 
           //set the value of upload_path
           else if(key == "chiptype"){
-            document.getElementById("chiptype").value = "foobar";
-            //document.getElementById("chiptype").value = chipType;
+            document.getElementById("chiptype").value = chipType;
           }
 
           //set the value of thumbnail_only checkbox
@@ -136,7 +131,6 @@
               $("#thumbnailonly").prop('disabled', true).prop('checked', false);
             }
           }
-          document.getElementById("chiptype").value = "foobar";
        });
       }
      });
@@ -226,34 +220,35 @@
   <div>
     <!-- the form name here, in this case "inputform" should match the one used in the put java script -->
     <div class="page-header">
-      <h1> Configuration</h1></center>
+      <h1> RunTransfer Settings</h1></center>
     </div>
 
     <center>This will push data for this analysis to the receiving Torrent Server using the settings provided in the global configuration.
 
     <form id="inputform">
       <div id="adv_parent">
-        <h3 id="adv" align=right>Advanced Settings:&nbsp &nbsp &nbsp &nbsp<a href="javascript:;" class="expandCollapseButton" title="Collapse Section"></a></h3>
         <div>
-          <fieldset id=Error_vs_Coverage>
-          <b>Do not change these settings unless you are sure of what you are doing</b>
           <center><table align="center">
             <tr>
-              <td align=right>IP: </td><td align=left><input id="ip" name="ip" value=""/></td>
-            </tr><tr>
-            <td align=right>User: </td><td align=left><input id="user_name" name="user_name" value=""/></td>
-            </tr><tr>
-              <td align=right>Password: </td><td align=left><input type="password" id="user_password" name="user_password" value=""/></td>
-            </tr><tr>
-              <td align=right>Upload Path: </td><td align=left><input id="upload_path" name="upload_path" value=""/></td>
-            <tr>
-              <td align=right>Thumbnail-only: </td><td><input type="checkbox" size="50" id="thumbnailonly" name="thumbnailonly" unchecked
-                                                              title="Only affects Proton datasets"/></td>
+              <td>IP address or fully qualified hostname: </td>
+              <td><input id="ip" name="ip" value="" size="50"/></td>
             </tr>
             <tr>
-              <td align=right>ChipType: </td><td align=left><input id="chiptype" name="chiptype" value=""/></td>
-            </tr></table>
-          </fieldset>
+              <td>Remote TS Username: </td>
+              <td><input id="user_name" name="user_name" value="" size="50"/></td>
+            </tr>
+            <tr>
+              <td>Password: </td>
+              <td><input id="user_password" name="user_password" value="" type="password" size="50"/></td>
+            </tr>
+            <tr>
+              <td>Upload Path: </td>
+              <td><input id="upload_path" name="upload_path" value="" size="50"/></td>
+            <tr>
+              <td>Thumbnail-only: </td>
+              <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" uncheckedtitle="Only affects Proton datasets" size="50"/></td>
+            </tr>
+          </table></center>
         </div>
       </div>
     </form>
@@ -262,34 +257,6 @@
   <br><center><input id="postbutton" type="submit" value="Submit"></center> <p><br>
 
   <div id="json_result"> </div>
-  <script>
-    $('.expandCollapseButton').toggle(function() {
-    if ( $(this).attr('title') == 'Collapse Section'){
-    $(this).css('background-position','right top');
-    $(this).attr('title','Expand Section');
-    }else{
-    $(this).css('background-position','left top');
-    $(this).attr('title','Collapse Section');
-    }
-    }, function() {
-    if ( $(this).attr('title') == 'Expand Section'){
-    $(this).css('background-position','left top');
-    $(this).attr('title','Collapse Section');
-    }else{
-    $(this).css('background-position','right top');
-    $(this).attr('title','Expand Section');
-    }
-    });
 
-    $('.expandCollapseButton').click(function(event){
-    $(event.target).parent().parent().toggleClass('small');
-    $(event.target).parent().next().slideToggle();
-    });
-
-    $('#adv .expandCollapseButton').css('background-position','right top');
-    $('#adv .expandCollapseButton').attr('title','Expand Section');
-    $('#adv').parent().toggleClass('small');
-    $('#adv').next().toggle();
-  </script>
 </body>
 </html>

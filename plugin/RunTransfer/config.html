@@ -3,22 +3,21 @@
   <head>
     <!-- java script required for interacting with the RESTful API -->
     <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-    <script type="text/javascript" src="/pluginMedia/RunTransfer/bootstrap-scrollspy.js"></script>
-    <link href="/pluginMedia/RunTransfer/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
 
     <!-- page style -->
     <style type='text/css'>
       #formwrap {
-       line-height: 2em;
-     background: #eef;
-       margin: 10px;
-       padding: 10px;
-       height: 130px;
-       text-align: center;
+        line-height: 2em;
+        background: #eef;
+        margin: 10px;
+        padding:10px;
+        height: 130px;
+        text-align: center;
       }
 
       input {
-       height:30px;
+        height:30px;
       }
 
       body {
@@ -161,24 +160,42 @@
 
   <!-- set up the html page that the user interacts with -->
   <body>
-    <div id="formwrap">
+    <div>
+      <div class="page-header">
+	<h1>RunTransfer Global Settings</h1>
+      </div>
+      
       <!-- this form id, in this case "pluginconfig", should match the one called in PUT java script -->
       <form id="pluginconfig" align="center">
-	<div class="page-header">
-	  <h1>Global Settings</h1>
-	</div>
-	<table align="center">
-	  <!-- input_text will become the json variable  -->
-	  <tr><td>IP: </td><td><input size="50" type="text" id="ip" name="ip" value=""/></td></tr>
-	  <tr><td>User Name (default ionadmin): </td><td><input size="50" type="text" id="user_name" name="user_name" value=""/></td></tr>
-	  <tr><td>Password: </td><td><input size="50" type="password" id="user_password" name="user_password" value=""/></td></tr>
-	  <tr><td>Upload Path (default /results/uploads/): </td><td><input size="50" id="upload_path" name="upload_path" value=""/></td></tr>
-      <tr><td align=right>Thumbnail-only: </td><td><input type="checkbox" size="50" id="thumbnailonly" name="thumbnailonly" title="Only affects Proton datasets"/></td></tr>
-    </table>
-      </form><p>
-
-      <input id="postbutton" type="submit" value="Submit">
-
+        <div id="adv_parent">
+          <div>
+            <center><table align="center">
+              <!-- input_text will become the json variable  -->
+              <tr>
+                <td>IP address or fully qualified hostname: </td>
+                <td><input id="ip" name="ip" value="" type="text" size="50"/></td>
+              </tr>
+              <tr>
+                <td>Remote TS Username (default ionadmin): </td>
+                <td><input id="user_name" name="user_name" value="" type="text" size="50"/></td>
+              </tr>
+              <tr>
+                <td>Password: </td>
+                <td><input id="user_password" name="user_password" value="" type="password" size="50"/></td>
+              </tr>
+              <tr>
+                <td>Upload Path (default /results/uploads/): </td>
+                <td><input id="upload_path" name="upload_path" value="" size="50"/></td>
+              </tr>
+              <tr>
+                <td align=right>Thumbnail-only: </td>
+                <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" title="Only affects Proton datasets" size="50"/></td>
+              </tr>
+            </table></center>
+          </div>
+        </div>
+      </form>
     </div>
+    <br><center><input id="postbutton" type="submit" value="Submit"></center> <p>
   </body>
 </html>

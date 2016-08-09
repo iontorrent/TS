@@ -463,7 +463,7 @@ class TSconfig_ansible (object):
     
             try:
                 self.logger.debug("Starting configuration")
-                cmd = ["/usr/sbin/TSconfig", "--configure-server", "--force" ]
+                cmd = ["/usr/sbin/TSconfig", "--configure-server", "--force", "--noninteractive" ]
                 p1 = subprocess.call(cmd)
                 success = p1 == 0
             except:
@@ -472,11 +472,14 @@ class TSconfig_ansible (object):
                 
             if success:
                 self.logger.info("TS Configured !")
+                self.update_progress("Finished installing")
             else:
                 self.logger.error("Failed to Configure TS.")
+                self.update_progress("Install failure")
 
         else:
             self.logger.error("Failed to Update Software.")
+            self.update_progress("Install failure")
 
         return success
 

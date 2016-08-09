@@ -18,7 +18,6 @@ class ApplicationFieldNames():
 
     APPL_PRODUCT = 'applProduct'
     RUN_TYPE = 'runType'
-    APPLICATION_GROUP = 'applicationGroup'
     APPLICATION_GROUP_NAME = "applicationGroupName"
     SAMPLE_GROUPING = 'sampleGrouping'
     RUN_TYPES = 'runTypes'
@@ -41,7 +40,7 @@ class ApplicationStepData(AbstractStepData):
         # self._dependsOn = [StepNames.IONREPORTER]
         
         self.savedFields[ApplicationFieldNames.RUN_TYPE] = None
-        self.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = None
+        self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = ""
         self.savedFields[ApplicationFieldNames.SAMPLE_GROUPING] = None
         self.prepopulatedFields[ApplicationFieldNames.PLAN_STATUS] = ""
         
@@ -50,7 +49,6 @@ class ApplicationStepData(AbstractStepData):
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
         self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.all().order_by('nucleotideType', 'runType'))
 
-        self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = None  
         self.prepopulatedFields[ApplicationFieldNames.CATEGORIES] = ''
 
 #        isSupported = isOCP_enabled()
@@ -75,7 +73,19 @@ class ApplicationStepData(AbstractStepData):
         
         if self.savedFields[ApplicationFieldNames.RUN_TYPE]:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = RunType.objects.get(pk=self.savedFields[ApplicationFieldNames.RUN_TYPE])
-            self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
+
+            if self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]:
+                #for applicationGroup-specific applProduct, only one should be visible 
+                applProducts = ApplProduct.objects.filter(isActive=True, isVisible=True,
+                                                              applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                                                              applicationGroup__name = self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
+                if applProducts:
+                    self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = applProducts[0]
+                else:
+                    self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
+                                                                       applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
+            else:
+                self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
                                                                        applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
         else:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None

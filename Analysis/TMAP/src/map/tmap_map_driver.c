@@ -315,7 +315,7 @@ unsigned trim_cigar_right (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsign
     return opno;
 }
 
-unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigned trim_at)
+unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigned trim_at, unsigned* ref_rep_off_p)
 {
     uint32_t* cigar = *cigar_buff;
     // unconditionally add the left hard-clip if any;
@@ -330,8 +330,11 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
     uint8_t lhard_present = 0; // flag indicating that left hard clip is present
     uint8_t lsoft_present = 0; // flag indicating that left soft clip is present
     uint32_t op, op1; // cigar operation
+    uint32_t oplen; // number of bases in cigar operation
     uint32_t constype; // ref/query consuming type, as returned by bam_cigar_type
     unsigned new_cigar_sz = 0; // number of items in new scigar (after trimming)
+
+    *ref_rep_off_p = 0;
 
     // skip to the beginning of non-trimmed operations
     if (trim_at) 
@@ -363,12 +366,21 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
 
             // update op_beg and op_end to coordinates of current cigar item
             constype = bam_cigar_type (cigar [op_idx]);
+            oplen = bam_cigar_oplen (cigar [op_idx]);
             if (constype & CONSUME_QRY) 
-                op_end += bam_cigar_oplen (cigar [op_idx]);
+                op_end += oplen;
+
+            if (constype & CONSUME_REF)
+            {
+                *ref_rep_off_p += oplen;
+                if (op_end > trim_at) // can happen only on M(or X/=) operation, so safe
+                    *ref_rep_off_p -= (op_end - trim_at);
+            }
 
             if (op_end >= trim_at) // reached point at or beyond trim position
             // if (op_end > trim_at) // reached point at or beyond trim position
                 break;
+
 
 #if PARANOID_TESTS
             if (op_idx == orig_cigar_sz) // should never rich the end!
@@ -383,7 +395,7 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
     }
     if (in_lclip) // new clip is covered by already present one; no need for changes
         return orig_cigar_sz;
-    
+
 #if PARANOID_TESTS
     if (op_end < trim_at) // this is abberant case, should not happen
     {
@@ -403,15 +415,19 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
         while (op_idx + 1 < orig_cigar_sz && bam_cigar_op (cigar [op_idx + 1]) != BAM_CMATCH)
         {
             ++ op_idx;
-            if (bam_cigar_type (cigar [op_idx]) & 1) // consumes query
+            constype = bam_cigar_type (cigar [op_idx]);
+            oplen = bam_cigar_oplen (cigar [op_idx]);
+            if (constype & CONSUME_QRY) // consumes query
             {
-                unsigned ol = bam_cigar_oplen (cigar [op_idx]);
+                unsigned ol = oplen;
                 trim_at += ol;
                 op_end  += ol;
             }
+            if (constype & CONSUME_REF) // consumes reference
+                *ref_rep_off_p += oplen;
         }
     }
-    
+
     // now we are guaranteed to be inside or at the right edge of the non-clipping cigar operator (at the index op_idx)
 
     // finish computing new cigar length
@@ -466,13 +482,13 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
 
     return new_cigar_sz;
 }
-unsigned trim_cigar (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigned qry_len, unsigned trim_at, uint8_t forward)
+unsigned trim_cigar (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigned qry_len, unsigned trim_at, uint8_t forward, unsigned* ref_rep_off_p)
 {
     // trim_at is in query forward coordinates. Cigar is in reference forward coordinates.
     if (forward)
         return trim_cigar_right (cigar_buff, orig_cigar_sz, qry_len, trim_at);
     else
-        return trim_cigar_left (cigar_buff, orig_cigar_sz, qry_len - trim_at);
+        return trim_cigar_left (cigar_buff, orig_cigar_sz, qry_len - trim_at, ref_rep_off_p);
 }
 
 static void cigar_log (const uint32_t* cigar, unsigned cigar_sz)
@@ -513,6 +529,133 @@ static void cigar_log (const uint32_t* cigar, unsigned cigar_sz)
     }
 }
 
+typedef struct
+{
+    unsigned xpos;
+    unsigned ypos;
+    unsigned len;
+} AlBatch;
+
+static uint32_t cigar_to_batches (const uint32_t* cigar, uint32_t cigar_sz, uint32_t* x_clip, AlBatch* batches, uint32_t max_batches)
+{
+    uint32_t xpos = 0, ypos = 0;  // x is query, y is reference
+    AlBatch* curb = batches;
+    const uint32_t* sent = cigar + cigar_sz;
+    for (; cigar != sent && curb - batches != max_batches; ++cigar)
+    {
+        uint32_t curop = bam_cigar_op (*cigar);
+        uint32_t count = bam_cigar_oplen (*cigar);
+        switch (curop)
+        {
+            case BAM_CHARD_CLIP: // skip
+            case BAM_CSOFT_CLIP: // skip
+                if (x_clip) *x_clip += count;
+                break;
+            case BAM_CMATCH:
+            case BAM_CEQUAL:
+            case BAM_CDIFF:
+                curb->xpos = xpos;
+                curb->ypos = ypos;
+                curb->len = count;
+                xpos += count;
+                ypos += count;
+                ++curb;
+                x_clip = NULL;
+                break;
+            case BAM_CINS:
+                xpos += count;
+                x_clip = NULL;
+                break;
+            case BAM_CDEL:
+                ypos += count;
+                x_clip = NULL;
+                break;
+            default:
+                ;
+        }
+    }
+    return curb - batches;
+}
+
+#define MAXSTRLEN 256
+#define NUMSTRLEN 11
+
+void log_batches (const char* xseq, unsigned xlen, uint8_t xrev, const char* yseq, unsigned ylen, uint8_t yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff)
+{
+    const unsigned margin = 0, width = 120, zero_based = 1;
+
+    unsigned slen = 0;
+    unsigned blen = 0;
+    unsigned x = b_ptr->xpos;
+    unsigned y = b_ptr->ypos;
+    unsigned xstart = x;
+    unsigned ystart = y;
+    unsigned char xc, yc;
+    char s[3][MAXSTRLEN];
+
+    assert (width < MAXSTRLEN);
+
+
+    while (b_cnt > 0)
+    {
+        xc = xseq [x];
+        yc = yseq [y];
+
+        // special handling for (x < b_ptr->xpos && y < b_ptr->ypos)
+        // treating as batch with special match symbols
+
+        if (x < b_ptr->xpos && y < b_ptr->ypos)
+        {
+            s[0][slen] = xc;
+            s[2][slen] = yc;
+            s[1][slen] = '#';
+            x++, y++, slen++;
+        }
+        // X insert
+        else if (x < b_ptr->xpos)
+        {
+            s[0][slen] = xc;
+            s[1][slen] = ' ';
+            s[2][slen] = '-';
+            x++, slen++;
+        }
+        // Y insert
+        else if (y < b_ptr->ypos)
+        {
+            s[0][slen] = '-';
+            s[1][slen] = ' ';
+            s[2][slen] = yc;
+            y++, slen++;
+        }
+        // emit text batch
+        else if (blen < b_ptr->len)
+        {
+            s[0][slen] = xc;
+            s[2][slen] = yc;
+            s[1][slen] = (toupper (xc) == toupper (yc) || toupper (xc) == 'N' || toupper (yc) == 'N') ? '*' : ' ';
+            x++, y++, slen++, blen++;
+        }
+        else
+            blen = 0, b_cnt--, b_ptr++;
+
+        //print accumulated lines
+        if ((slen + NUMSTRLEN > width) || b_cnt <= 0)
+        {
+            //null terminate all strings
+            for (int i = 0; i < 3; i++)
+                s[i][slen] = 0;
+
+            unsigned xdisp = (xrev ? xlen - xstart - 1 : xstart) + xoff + (zero_based ? 0 : 1);
+            unsigned ydisp = (yrev ? ylen - ystart - 1 : ystart) + yoff + (zero_based ? 0 : 1);
+
+            tmap_log ("\n%*s%*d %s", margin, "", NUMSTRLEN, xdisp, s[0]);
+            tmap_log ("\n%*s%*s %s", margin, "", NUMSTRLEN, "", s[1]);
+            tmap_log ("\n%*s%*d %s\n", margin, "", NUMSTRLEN, ydisp, s[2]);
+
+            xstart = x, ystart = y, slen = 0;
+        }
+    }
+}
 
 void
 tmap_map_driver_core_worker(sam_header_t *sam_header,
@@ -912,6 +1055,25 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 cigar_log (orig_cigar, orig_cigar_sz);
                                 tmap_log ("; new (%d op) at %d: ", cigar_dest_sz, new_offset);
                                 cigar_log (cigar_dest, cigar_dest_sz);
+
+                                if (driver->opt->log_text_als)
+                                {
+                                    const unsigned MAX_BATCHNO = 100;
+                                    AlBatch batches [MAX_BATCHNO];
+                                    uint32_t q_clip = 0;
+                                    int bno =  cigar_to_batches (orig_cigar, orig_cigar_sz, &q_clip, batches, MAX_BATCHNO);
+                                    // (const char* xseq, unsigned xlen, bool xrev, const char* yseq, unsigned ylen, bool yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff, unsigned margin = 0, unsigned width = 120, bool zero_based = 1)
+                                    tmap_log ("\n  Before realignment:\n");
+                                    log_batches (qry+q_clip, qrybases->l-q_clip, !forward, (const char*) ref, r_len_cigar, 0, batches, bno, q_clip, ref_off);
+
+                                    uint32_t q_len_dest, r_len_dest;
+                                    seq_lens_from_bin_cigar (cigar_dest, cigar_dest_sz, &q_len_dest, &r_len_dest);
+                                    q_clip = 0;
+                                    bno =  cigar_to_batches (cigar_dest, cigar_dest_sz, &q_clip, batches, MAX_BATCHNO);
+                                    // (const char* xseq, unsigned xlen, bool xrev, const char* yseq, unsigned ylen, bool yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff, unsigned margin = 0, unsigned width = 120, bool zero_based = 1)
+                                    tmap_log ("  After realignment:\n");
+                                    log_batches (qry+q_clip, qrybases->l-q_clip, !forward, (const char*) ref, r_len_dest, 0, batches, bno, q_clip, new_offset);
+                                }
                             }
                             tmap_log ("\n");
                         }
@@ -997,7 +1159,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 NULL))
                             {
                                 // check if changes were introduced
-                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof (orig_cigar)))
+                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof (*orig_cigar)))
                                 {
                                     if (tmap_log_enabled ())
                                     {
@@ -1007,6 +1169,26 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                         tmap_log ("; new (%d op) at %d: ", cigar_dest_sz, new_offset);
                                         cigar_log (cigar_dest, cigar_dest_sz);
                                         tmap_log ("\n");
+
+                                        if (driver->opt->log_text_als)
+                                        {
+                                            const unsigned MAX_BATCHNO = 100;
+                                            AlBatch batches [MAX_BATCHNO];
+                                            uint32_t q_clip = 0;
+                                            int bno =  cigar_to_batches (orig_cigar, orig_cigar_sz, &q_clip, batches, MAX_BATCHNO);
+                                            // (const char* xseq, unsigned xlen, bool xrev, const char* yseq, unsigned ylen, bool yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff, unsigned margin = 0, unsigned width = 120, bool zero_based = 1)
+                                            tmap_log ("  Before context realignment:\n");
+                                            log_batches (qry+q_clip, qrybases->l-q_clip, !forward, (const char*) ref, r_len_cigar, 0, batches, bno, q_clip, ref_off);
+
+
+                                            uint32_t q_len_dest, r_len_dest;
+                                            seq_lens_from_bin_cigar (cigar_dest, cigar_dest_sz, &q_len_dest, &r_len_dest);
+                                            q_clip = 0;
+                                            bno =  cigar_to_batches (cigar_dest, cigar_dest_sz, &q_clip, batches, MAX_BATCHNO);
+                                            // (const char* xseq, unsigned xlen, bool xrev, const char* yseq, unsigned ylen, bool yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff, unsigned margin = 0, unsigned width = 120, bool zero_based = 1)
+                                            tmap_log ("  After context realignment:\n");
+                                            log_batches (qry+q_clip, qrybases->l-q_clip, !forward, (const char*) ref, r_len_dest, 0, batches, bno, q_clip, new_offset);
+                                        }
                                     }
 
                                     ++(stat->num_hpcost_modified);
@@ -1100,7 +1282,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 continue;
                             }
                             const char* ref_name = refseq->annos [ref_id].name->s;
-                            unsigned rep_off;
+                            unsigned qry_rep_off;
                             if (driver->opt->repclip_continuation)
                             {
                                 // extract reference 'tail' (continuation). This returns reference sequence in UNPACKED but BINARY CONVERTED form - values of 0-4, one byte per base!
@@ -1134,36 +1316,38 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                     tmap_reverse_compliment ((char*) ref, ref_tail_len);
                                 // check if there is a tail periodicity extending by at least one period into reference overhang; 
                                 // tailrep returns 0 if entire (unclipped) alignment gets trimmed
-                                rep_off = tailrep_cont (ref_tail_len, (char*) ref, q_al_end, qry);
+                                qry_rep_off = tailrep_cont (ref_tail_len, (char*) ref, q_al_end, qry);
                             }
                             else
                             {
-                                rep_off = tailrep (q_al_end, qry, MAX_PERIOD);
+                                qry_rep_off = tailrep (q_al_end, qry, MAX_PERIOD);
                             }
-                            // rep_off is where ON THE READ (in read's forward direction) the clip should start.
+                            // qry_rep_off is where ON THE READ (in read's forward direction) the clip should start.
                             ++ stat->num_seen_tailclipped;
                             stat->bases_seen_tailclipped += q_al_end;
                             // soft-clip longest one, if any
-                            if (rep_off != q_al_end)
+                            if (qry_rep_off != q_al_end)
                             {
                                 // save original cigar for reporting
                                 uint32_t* orig_cigar = alloca (sizeof (uint32_t) * orig_cigar_sz);
                                 memcpy (orig_cigar, sams->sams [filtered].cigar, sizeof (uint32_t) * orig_cigar_sz);
-
-                                unsigned trimmed_cigar_sz = trim_cigar (&(sams->sams [filtered].cigar), orig_cigar_sz, qrybases->l, rep_off, forward);
+                                unsigned ref_rep_off = 0;
+                                unsigned trimmed_cigar_sz = trim_cigar (&(sams->sams [filtered].cigar), orig_cigar_sz, qrybases->l, qry_rep_off, forward, &ref_rep_off);
                                 if (trimmed_cigar_sz)
                                 {
+                                    sams->sams [filtered].n_cigar = trimmed_cigar_sz;
                                     if (!forward)
-                                        sams->sams [filtered].pos += q_al_end - rep_off;
-                                    tmap_log ("TAIL_REP_TRIM: %s(%s) vs %s:%d TRIMMED %d bases. ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off, q_al_end - rep_off);
+                                        // sams->sams [filtered].pos += q_al_end - qry_rep_off; - BUG (TS-11736): query may be imperfectly aligned to ref in repeat zone, causing wrong coords
+                                        sams->sams [filtered].pos += ref_rep_off;
+
+                                    tmap_log ("TAIL_REP_TRIM: %s(%s) vs %s:%d TRIMMED %d bases. ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off, q_al_end - qry_rep_off);
                                     tmap_log ("orig (%d op) at %d: ", orig_cigar_sz, ref_off);
                                     cigar_log (orig_cigar, orig_cigar_sz);
                                     tmap_log ("; new (%d op) at %d: ", trimmed_cigar_sz, sams->sams [filtered].pos);
                                     cigar_log (sams->sams [filtered].cigar, trimmed_cigar_sz);
                                     tmap_log ("\n");
 
-                                    sams->sams [filtered].n_cigar = trimmed_cigar_sz;
-                                    stat->bases_tailclipped += q_al_end - rep_off;
+                                    stat->bases_tailclipped += q_al_end - qry_rep_off; // with respect to the read
                                     filtered ++;
                                 }
                                 else

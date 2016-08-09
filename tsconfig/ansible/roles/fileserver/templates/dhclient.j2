@@ -11,7 +11,7 @@ send host-name "<hostname>";
 send host-name = gethostname();
 {% endif %}
 
-interface "{{ansible_default_ipv4.interface|default(default_interface)}}"
+interface "{{default_interface}}"
 {
 request subnet-mask, broadcast-address, time-offset, routers,
         domain-name, domain-name-servers, domain-search, host-name,

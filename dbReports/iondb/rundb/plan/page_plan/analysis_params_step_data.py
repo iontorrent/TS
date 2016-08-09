@@ -26,7 +26,7 @@ class AnalysisParamsFieldNames():
     AP_ENTRY_SYSTEM_SELECTED = "analysisParamsEntrySystemSelected"
 
     AP_ENTRY_SELECTED_VALUE = "<Previous custom selection>"
-    AP_ENTRY_PREVIOUSLY_SELECTED_VALUE = "<Selection before chip selection change>"    
+    AP_ENTRY_PREVIOUSLY_SELECTED_VALUE = "<Selection before chip/kits selection change>"
     AP_ENTRY_BEST_MATCH_PLAN_VALUE = "System default for this plan"
     AP_ENTRY_BEST_MATCH_TEMPLATE_VALUE = "System default for this template"
         
@@ -48,7 +48,6 @@ class AnalysisParamsFieldNames():
 
     APPL_PRODUCT = 'applProduct'
     RUN_TYPE = 'runType'
-    APPLICATION_GROUP = 'applicationGroup'
     APPLICATION_GROUP_NAME = "applicationGroupName"
     
     CHIP_TYPE = 'chipType'
@@ -96,7 +95,6 @@ class AnalysisParamsStepData(AbstractStepData):
         
         self.prepopulatedFields[AnalysisParamsFieldNames.APPL_PRODUCT] = ""
         self.prepopulatedFields[AnalysisParamsFieldNames.RUN_TYPE] = ""
-        self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP] = ""
         self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME] = ""
         
         self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE] = ""
@@ -149,37 +147,24 @@ class AnalysisParamsStepData(AbstractStepData):
                 
         #reset best match if key attributes on other chevrons have changed
         needToRefreshSelectionList = False
-        hasChipTypeChanged = False
-        
+
         if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
+
             applProduct = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
              
-            logger.debug("analysis_params_step_data - APPL CHEVRON...  applProduct %s; runType=%s; applicationGroup=%s; applicationGroupName=%s" \
-                            %(applProduct.productCode, updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType, updated_step.savedFields[ApplicationFieldNames.APPLICATION_GROUP], \
-                               updated_step.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]))          
+            logger.debug("analysis_params_step_data - APPL CHEVRON...  applProduct %s; runType=%s; applicationGroupName=%s" \
+                    %(applProduct.productCode, updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType, updated_step.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]))
 
             if self.prepopulatedFields[AnalysisParamsFieldNames.RUN_TYPE]  !=  updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType or \
-                self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME] != updated_step.prepopulatedFields.get(ApplicationFieldNames.APPLICATION_GROUP_NAME, ""):
+                self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME] != updated_step.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]:
                 needToRefreshSelectionList = True
                     
             self.prepopulatedFields[AnalysisParamsFieldNames.APPL_PRODUCT] = ""
             self.prepopulatedFields[AnalysisParamsFieldNames.RUN_TYPE] = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
-            self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP] = updated_step.savedFields[ApplicationFieldNames.APPLICATION_GROUP]
-            self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME] = updated_step.prepopulatedFields.get(ApplicationFieldNames.APPLICATION_GROUP_NAME, "")
+            self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME] = updated_step.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
 
-            
         elif updated_step.getStepName() == StepNames.KITS:         
-            logger.debug("analysis_params_step_data - KITS CHEVRON ... OLD CHIP TYPE=%s; NEW chipType=%s" %(self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE], updated_step.savedFields[KitsFieldNames.CHIP_TYPE]))
 
-            #blank or null
-            ##if self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE] in ["", None] and updated_step.savedFields[KitsFieldNames.CHIP_TYPE] in ["", None]:
-            if not self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE] and not updated_step.savedFields[KitsFieldNames.CHIP_TYPE]:
-                hasChipTypeChanged = False
-            elif self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE]  !=  updated_step.savedFields[KitsFieldNames.CHIP_TYPE]:           
-                hasChipTypeChanged = True
- 
-            logger.debug("analysis_params_step_data - KITS CHEVRON ... #0 DIFFERENCE?? hasChipTypeChanged=%s" %(hasChipTypeChanged))
-                
             if self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE] != updated_step.savedFields[KitsFieldNames.CHIP_TYPE] or \
                 self.prepopulatedFields[AnalysisParamsFieldNames.SAMPLE_PREPARATION_KIT] != updated_step.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT] or \
                 self.prepopulatedFields[AnalysisParamsFieldNames.LIBRARY_KIT_NAME] != updated_step.savedFields[KitsFieldNames.LIBRARY_KIT_NAME] or \
@@ -195,7 +180,7 @@ class AnalysisParamsStepData(AbstractStepData):
             self.prepopulatedFields[AnalysisParamsFieldNames.LIBRARY_KIT_NAME] = updated_step.savedFields[KitsFieldNames.LIBRARY_KIT_NAME]
             self.prepopulatedFields[AnalysisParamsFieldNames.TEMPLATE_KIT_NAME] = updated_step.savedFields[KitsFieldNames.TEMPLATE_KIT_NAME]
             self.prepopulatedFields[AnalysisParamsFieldNames.SEQUENCE_KIT_NAME] = updated_step.savedFields[KitsFieldNames.SEQUENCE_KIT_NAME]
-               
+
         if needToRefreshSelectionList:
             self. _update_analysisParamsData_selection_list(self.prepopulatedFields[AnalysisParamsFieldNames.CHIP_TYPE], 
                                                  self.prepopulatedFields[AnalysisParamsFieldNames.SEQUENCE_KIT_NAME], 
@@ -203,15 +188,12 @@ class AnalysisParamsStepData(AbstractStepData):
                                                  self.prepopulatedFields[AnalysisParamsFieldNames.LIBRARY_KIT_NAME], 
                                                  self.prepopulatedFields[AnalysisParamsFieldNames.SAMPLE_PREPARATION_KIT], 
                                                  self.prepopulatedFields[AnalysisParamsFieldNames.RUN_TYPE], 
-                                                 self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME],
-                                                 hasChipTypeChanged)
-     
-        ##logger.debug("EXIT analysis_params_step_data.updateFromStep() needToRefreshSelectionList=%s; self.prepopulatedFields=%s" %(needToRefreshSelectionList, self.prepopulatedFields))
-        ##logger.debug("EXIT analysis_params_step_data.updateFromStep() self.savedFields=%s" %(self.savedFields))
-        ##logger.debug("EXIT analysis_params_step_data.updateFromStep() self.savedObjects=%s" %(self.savedObjects))        
+                                                 self.prepopulatedFields[AnalysisParamsFieldNames.APPLICATION_GROUP_NAME]
+                                                )
 
 
-    def _update_analysisParamsData_selection_list(self, chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, applicationType, applicationGroupName, hasChipTypeChanged):       
+    def _update_analysisParamsData_selection_list(self, chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, applicationType, applicationGroupName):
+
         possible_match_entries = AnalysisArgs.possible_matches(chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, 
                                                           None, applicationType, applicationGroupName)
 
@@ -219,41 +201,40 @@ class AnalysisParamsStepData(AbstractStepData):
         best_match_entry = AnalysisArgs.best_match(chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, None, applicationType, applicationGroupName);
 
         if best_match_entry:
-            ##logger.debug("analysis_params_step_data._update_analysisParamsData_selection_list() BEST MATCH FOUND!!! chipType=%s; beadFind=%s" %(chipType, best_match_entry.beadfindargs))
-        
-            isCreate = self.sh_type in [StepHelperType.CREATE_NEW_PLAN, StepHelperType.CREATE_NEW_TEMPLATE, StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE]
-            isCopy = self.sh_type in [StepHelperType.COPY_PLAN, StepHelperType.COPY_TEMPLATE, StepHelperType.COPY_PLAN_BY_SAMPLE]
-            isTemplate = self.sh_type in StepHelperType.TEMPLATE_TYPES
-               
-            logger.debug("analysis_params_step_data._update_analysisParamsData_selection_list() isCreate=%s; isCopy=%s; isTemplate=%s;hasChipTypeChanged=%s" %(isCreate, isCopy, isTemplate, hasChipTypeChanged))
-            
-            if hasChipTypeChanged and  (isCreate or isCopy):
 
+            isTemplate = self.sh_type in StepHelperType.TEMPLATE_TYPES
+            
+            for ap in possible_match_entries:
+                if ap.name == best_match_entry.name:
+                    ap.name = AnalysisParamsFieldNames.AP_ENTRY_BEST_MATCH_TEMPLATE_VALUE if isTemplate else AnalysisParamsFieldNames.AP_ENTRY_BEST_MATCH_PLAN_VALUE
+                    ap.best_match = True
+
+            if self.savedFields[AnalysisParamsFieldNames.AP_CUSTOM] == "False":
                 previously_selected_analysisArgs = {
-                                                  'description' : AnalysisParamsFieldNames.AP_ENTRY_PREVIOUSLY_SELECTED_VALUE,
-                                                  'name' : '',
-                                                  'beadfindargs' : self.savedFields[AnalysisParamsFieldNames.AP_BEADFIND_SELECTED],
-                                                  'analysisargs' : self.savedFields[AnalysisParamsFieldNames.AP_ANALYSISARGS_SELECTED],
-                                                  'prebasecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_PREBASECALLER_SELECTED],
-                                                  'calibrateargs' : self.savedFields[AnalysisParamsFieldNames.AP_CALIBRATE_SELECTED],
-                                                  'basecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_BASECALLER_SELECTED],
-                                                  'alignmentargs' : self.savedFields[AnalysisParamsFieldNames.AP_ALIGNMENT_SELECTED],
-                                                  'ionstatsargs' : self.savedFields[AnalysisParamsFieldNames.AP_IONSTATS_SELECTED],
-                                                   
-                                                  'thumbnailbeadfindargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BEADFIND_SELECTED],
-                                                  'thumbnailanalysisargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ANALYSISARGS_SELECTED],
-                                                  'prethumbnailbasecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_PREBASECALLER_SELECTED],
-                                                  'thumbnailcalibrateargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_CALIBRATE_SELECTED],
-                                                  'thumbnailbasecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BASECALLER_SELECTED],
-                                                  'thumbnailalignmentargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ALIGNMENT_SELECTED],
-                                                  'thumbnailionstatsargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_IONSTATS_SELECTED],                                          
-                                                  }
+                    'description' : AnalysisParamsFieldNames.AP_ENTRY_PREVIOUSLY_SELECTED_VALUE,
+                    'name' : '',
+                    'beadfindargs' : self.savedFields[AnalysisParamsFieldNames.AP_BEADFIND_SELECTED],
+                    'analysisargs' : self.savedFields[AnalysisParamsFieldNames.AP_ANALYSISARGS_SELECTED],
+                    'prebasecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_PREBASECALLER_SELECTED],
+                    'calibrateargs' : self.savedFields[AnalysisParamsFieldNames.AP_CALIBRATE_SELECTED],
+                    'basecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_BASECALLER_SELECTED],
+                    'alignmentargs' : self.savedFields[AnalysisParamsFieldNames.AP_ALIGNMENT_SELECTED],
+                    'ionstatsargs' : self.savedFields[AnalysisParamsFieldNames.AP_IONSTATS_SELECTED],
+
+                    'thumbnailbeadfindargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BEADFIND_SELECTED],
+                    'thumbnailanalysisargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ANALYSISARGS_SELECTED],
+                    'prethumbnailbasecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_PREBASECALLER_SELECTED],
+                    'thumbnailcalibrateargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_CALIBRATE_SELECTED],
+                    'thumbnailbasecallerargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BASECALLER_SELECTED],
+                    'thumbnailalignmentargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ALIGNMENT_SELECTED],
+                    'thumbnailionstatsargs' : self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_IONSTATS_SELECTED],
+                }
 
                 self.savedObjects[AnalysisParamsFieldNames.AP_ENTRY_PREVIOUSLY_SELECTED] = previously_selected_analysisArgs
 
                 best_match_entry.description = AnalysisParamsFieldNames.AP_ENTRY_SELECTED_VALUE
                 self.savedObjects[AnalysisParamsFieldNames.AP_ENTRY_SELECTED] = best_match_entry
-                
+
                 self.savedFields[AnalysisParamsFieldNames.AP_BEADFIND_SELECTED] = best_match_entry.beadfindargs
                 self.savedFields[AnalysisParamsFieldNames.AP_ANALYSISARGS_SELECTED] = best_match_entry.analysisargs
                 self.savedFields[AnalysisParamsFieldNames.AP_PREBASECALLER_SELECTED] = best_match_entry.prebasecallerargs
@@ -261,7 +242,7 @@ class AnalysisParamsStepData(AbstractStepData):
                 self.savedFields[AnalysisParamsFieldNames.AP_BASECALLER_SELECTED] = best_match_entry.basecallerargs
                 self.savedFields[AnalysisParamsFieldNames.AP_ALIGNMENT_SELECTED] = best_match_entry.alignmentargs
                 self.savedFields[AnalysisParamsFieldNames.AP_IONSTATS_SELECTED] = best_match_entry.ionstatsargs
-               
+
                 self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BEADFIND_SELECTED] = best_match_entry.thumbnailbeadfindargs
                 self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ANALYSISARGS_SELECTED] = best_match_entry.thumbnailanalysisargs
                 self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_PREBASECALLER_SELECTED] = best_match_entry.prethumbnailbasecallerargs
@@ -269,12 +250,7 @@ class AnalysisParamsStepData(AbstractStepData):
                 self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_BASECALLER_SELECTED] = best_match_entry.thumbnailbasecallerargs
                 self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_ALIGNMENT_SELECTED] = best_match_entry.thumbnailalignmentargs
                 self.savedFields[AnalysisParamsFieldNames.AP_THUMBNAIL_IONSTATS_SELECTED] = best_match_entry. thumbnailionstatsargs
-                              
-            for ap in possible_match_entries:
-                if ap.name == best_match_entry.name:
-                    ap.name = AnalysisParamsFieldNames.AP_ENTRY_BEST_MATCH_TEMPLATE_VALUE if isTemplate else AnalysisParamsFieldNames.AP_ENTRY_BEST_MATCH_PLAN_VALUE
-                    ap.best_match = True
-  
+
         else:
             logger.debug("analysis_params_step_data._update_analysisParamsData_selection_list() BEST MATCH NOT FOUND!!! chipType=%s;" %(chipType))
 

@@ -437,6 +437,24 @@ jQuery.fn.uniform = function (extended_settings) {
             }
         },
         /**
+         * Letters and numbers with out spaces, do allow dashes, underscores, plus sign and dot
+         *
+         * @param jQuery field
+         * @param string caption
+         */
+        validateAlphaNumUnderscorePlusDotDashNoSpace : function(field, caption) {
+
+            if ( field.val() == '') {
+                return true;
+            }
+
+            if(field.val().match(/^[a-zA-Z0-9\_\+\.\-]+$/)) {
+                return true;
+            } else {
+                return i18n('anunderplusdotdashnospace', caption);
+            }
+        },
+        /**
          * Positive Whole numbers are allowed
          *
          * @param jQuery field
@@ -919,6 +937,7 @@ jQuery.fn.uniform.language = {
     nuc           : '%s needs to be one of the following:  A, T, C, G',
     annospace     : '%s should contain only numbers, letters, and the following: . - _ ',
     anundernospace     : '%s should contain only numbers, letters or underscore.',
+    anunderplusdotdashnospace     : '%s should contain only numbers, letters, plus, dot, dash or underscore(+.-_).',
     uint          : '%s needs to be a whole number greater than 0',
     uniq          : '%s is already in use, please enter another barcode id',
     url_http      : '%s is not a valid HTTP-based URL. Must begin with http:// or https://.',

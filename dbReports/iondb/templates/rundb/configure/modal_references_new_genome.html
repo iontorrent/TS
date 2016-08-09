@@ -47,9 +47,9 @@
                 <div class="control-group">
                     <label for="short_name" class="control-label">Short name <i>(required)</i></label>
                     <div class="controls">
-                        <input name="short_name" id="short_name" placeholder='eg "hg19", "rs_005296_1", "hs_ampl_set1"' maxlength="50" type="text" class="input-xlarge textInput required validateAlphaNumUnderscoreNoSpace"/>
+                        <input name="short_name" id="short_name" placeholder='eg "hg19", "rs_005296_1", "hs_ampl_set1"' maxlength="50" type="text" class="input-xlarge textInput required validateAlphaNumUnderscorePlusDotDashNoSpace"/>
                         <p class="help-block">
-                            Short form of reference name, use letters, numbers, and underscore only
+                            Short form of reference name, use letters, numbers and (+.-_) only
                         </p>
                     </div>
                 </div>
@@ -149,7 +149,7 @@ $(function(){
         container : 'upload-fasta',
         runtimes : 'silverlight,flash,html5,gears,browserplus',
         filters : [
-            {title : "FASTA files", extensions : "fasta,fas,fa,seq"},
+            {title : "FASTA files", extensions : "fasta,fas,fa,fna,seq"},
             {title : "FASTA Compressed Zip files", extensions : "zip"}
         ],
         browse_button: 'pickfile',

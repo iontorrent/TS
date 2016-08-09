@@ -102,14 +102,12 @@ background: #dbdbdb;
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group" id="sampleSet_actions">
 	# var _id = id;# 
-	# var _status = status; #
-	# var _sampleCount = sampleCount; #
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
 			<a href="#= '{% url "edit_sampleset" 999999 %}'.replace('999999',_id)#" class="edit_sampleset" data-toggle="modal">Edit Set</a>
 		</li>
-		# if (_status !== "libPrep_pending" && _status !== "voided" && _sampleCount != 0) { #
+        # if (readyForPlanning) { #
             <li>
                 <a data-id="#=_id#" data-name="#=name#" href="#= '{% url "sampleset_plan_run" 999999 %}'.replace('999999',_id)#" class="plan-run" data-toggle="modal">Plan Run</a>
             </li>
@@ -303,7 +301,7 @@ function CustomSampleAttributeTemplate_old(index) {
 
 			<div class="row-fluid">
 			     <div class="span12">
-                    <div class="input-append search-field" style="width: 450px;">
+                    <div class="input-append search-field" style="width: 450px; display:inline-block;">
                         <label for="searchText" class=" hide">Search</label>                                   
                         <input id="search_text" type="text" placeholder="Search name or label" style="width: 200px;" />
             
@@ -321,10 +319,11 @@ function CustomSampleAttributeTemplate_old(index) {
                             <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
                         </div>
                     </div>
-                        
-                    <!-- div class="search-field" style="width: 50px;">
-                        <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
-                    </div -->
+                    <div style="display:inline-block;float: right;">
+                            <span rel="tooltip" data-original-title="Select at least one sampleSet to Plan Run">
+                                    <a id="plan_from_selected" href="{% url "sampleset_plan_run" 999999 %}" class="btn btn-primary" disabled>Plan Run</a>
+                            </span>
+                    </div>
                 </div>				
 			</div>
 

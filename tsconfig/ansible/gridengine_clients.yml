@@ -1,5 +1,6 @@
 ---
 # file: gridengine_clients.yml
+# Configures the gridengine client and exec packages, adds server to gridengine queues
 - hosts: gridengine_clients
   roles:
     - gridengine_clients

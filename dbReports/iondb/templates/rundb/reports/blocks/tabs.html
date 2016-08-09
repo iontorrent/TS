@@ -248,23 +248,47 @@ function precisionUnits(num, div) {
 		</div>
 
         <div id="ChefSummary" data-title="Chef Summary" class="tab-pane">
+            {% if chefLibPrep_info %}
+                {% if chefLibPrep_info|length > 1 %}
+                    <h3>Chef Library Prep Information for Sample Set:
+                        <select id="cheflibPrep_select" class="input-xlarge">
+                            {% for sampleSetName in chefLibPrep_info.keys %}
+                            <option value="{{sampleSetName|slugify}}"{% if forloop.first %}selected{% endif %}>{{sampleSetName}}</option>
+                            {% endfor %}
+                        </select>
+                    </h3>
+                    <script type="text/javascript">
+                        $('#cheflibPrep_select').change(function(){
+                            var val = $(this).val();
+                            $(".libprep_table").hide().filter("#"+val).show();
+                        });
+                    </script>
+                {% else %}
+                    <h3>Chef Library Prep Information:</h3>
+                {% endif %}
+
+                {% for sampleSetName, chefLibPrep in chefLibPrep_info.items %}
+                <table id="{{sampleSetName|slugify}}" class="libprep_table table table-striped" {% if not forloop.first %}style="display: none;"{% endif %}>
+                    {% for item, info in chefLibPrep %}
+                    <tr><td align="center" valign="middle">{{item}}</td><td>{{info}}</td></tr>
+                    {% endfor %}
+                </table>
+                {% endfor %}
+
+            {% endif %}
+
+            {% if chef_info %}
+            <h3>Chef Template Prep Information:</h3>
             <table class="table table-striped">
-                {% if chefLibPrep_info %}
-                	<tr><td colspan=2><h3 style="display:inline;">Chef Library Prep Information:</h3></td></tr>
-                    {% for item, info in chefLibPrep_info %}
-                        <tr><td align="center" valign="middle">{{item}}</td><td>{{info}}</td></tr>
-                    {% endfor %}
-                {% endif %}
-        		{% if chef_info %}
-                	<tr><td colspan=2><h3 style="display:inline;">Chef Template Prep Information:</h3></td></tr>
-                	{% for item, info in chef_info %}
-                        <tr><td>{{item}}</td><td>{{info}}</td></tr>
-                    {% endfor %}
-                {% endif %}
-                {% if not chef_info and not chefLibPrep_info %}
-                    <h2>Ion Chef was not used for this run</h2>
-                {% endif %}                
+                {% for item, info in chef_info %}
+                    <tr><td>{{item}}</td><td>{{info}}</td></tr>
+                {% endfor %}
             </table>
+            {% endif %}
+
+            {% if not chef_info and not chefLibPrep_info %}
+                <h2>Ion Chef was not used for this run</h2>
+            {% endif %}
         </div>		
 	</div>
 </section>

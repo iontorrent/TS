@@ -3,7 +3,6 @@ LOCALHEADNODE ansible_connection=local
 
 [computes]
 
-
 [webserver:children]
 headnode
 
@@ -23,6 +22,7 @@ computes
 headnode
 
 [gridengine_clients:children]
+headnode
 computes
 
 [igv:children]

@@ -39,9 +39,24 @@
   with_items:
     - { 'name':'{{LOCAL_EPILOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{EPILOG_SCRIPT}}' }
     - { 'name':'{{LOCAL_PROLOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{PROLOG_SCRIPT}}' }
-  
-# set number of slots
-#    qconf -aattr queue slots $set_slots $qname
+
+# Add server as execution host
+- name: upload host configuration file
+  template: src=host.j2 dest=/tmp/host.conf
+  with_items:
+    - '{{ansible_hostname}}'
+- name: Configure as execution host
+  shell: bash -lc "if ! qconf -sel | egrep -q '(localhost|{{item}})'; then qconf -Ae /tmp/host.conf;fi"
+  with_items:
+    - '{{ansible_hostname}}'
+
+# Add server to queues
+- name: Add server to queues
+  shell: bash -lc 'qconf -aattr queue hostlist {{ansible_hostname}} {{item.name}}'
+  with_items:
+    - '{{queues}}'
+
+# Set number of slots for this host
 - name: Modify number of slots per queue
   shell: bash -lc 'qconf -rattr queue slots [{{ansible_hostname}}={{item['slots']}}] {{item['name']}}'
   with_items:

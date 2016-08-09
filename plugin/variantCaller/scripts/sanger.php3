@@ -51,7 +51,7 @@ foreach($vcf_array as $val) {
 <body>
 <h2>Re-directing to Life Technologies PCR/Sanger Sequencing primer design page ...</h2>
 
-    <form id='search_form' action="https://www.lifetechnologies.com/order/genome-database/MultipleTargets" method="POST" enctype="multipart/form-data">
+    <form id='search_form' action="https://www.thermofisher.com/order/genome-database/MultipleTargets" method="POST" enctype="multipart/form-data">
         <div style='display:none'>
             <input type="hidden" name="productTypeSelect" value="ceprimer" />
             <input type="hidden" name="species" value="Homo sapiens" />

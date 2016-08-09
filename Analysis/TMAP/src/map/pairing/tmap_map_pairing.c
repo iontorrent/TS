@@ -53,6 +53,7 @@ tmap_map_pairing_get_position_diff(tmap_map_sam_t *one, tmap_map_sam_t *two, int
       switch(positioning) {
         case TMAP_MAP_PAIRING_POSITIONING_AB:
           diff = (0 == one->strand) ? (pos_two_right - pos_one_left) : (pos_one_right - pos_two_left);
+          break;
         case TMAP_MAP_PAIRING_POSITIONING_BA:
         default:
           diff = (0 == one->strand) ? (pos_one_right - pos_two_left) : (pos_two_right - pos_one_left);

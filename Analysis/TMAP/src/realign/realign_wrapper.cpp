@@ -47,7 +47,7 @@ uint8_t  realigner_invalid_input_cigar (RealignProxy* r)
 }
 
 // parameters setup
-void realigner_set_scores (RealignProxy* r, int mat, int mis, int gip, int gep)
+void realigner_set_scores (RealignProxy* r, double mat, double mis, double gip, double gep)
 {
     r->set_scores (mat, mis, gip, gep);
 }

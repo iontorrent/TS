@@ -586,7 +586,11 @@ $(function () {
             });
 
             authXHR.done(function(data){
-                if (data["status"] === "true"){
+                //The extend.py result is ambiguous at best. The endpoint returns status: 'true' but a stdout: "FAILED"
+                // for failed auth checks. Work around here.
+                var authCheckPassed = (data["status"] === "true" && data["stdout"] != "FAILED");
+
+                if (authCheckPassed){
                     $("#" + that.get("id")).attr("src","/pluginMedia/IonReporterUploader/img/green.png");
                     $("#" + that.get("id")).attr("title","Account is active and working");
                     $('.status-icon').tooltip('destroy');
@@ -613,7 +617,9 @@ $(function () {
                 required: true,
                 fn: function (value, attr, computedState) {
                     if (!iru.configs.uniqName(this, value))
-                        return "Name is already being used"
+                        return "Name is already being used";
+                    if (!/^[\x00-\x7F]*$/.test(value)) //Ensure all characters are ASCII
+                        return "Name must not contain any special characters";
                 }
             },
             port: {
@@ -924,6 +930,8 @@ $(function () {
                 if (this.model.has("_details_failed")) {
                     console.log("there is a _details  login failed");
                     $(".update").button('reset');
+                } else {
+                    delete extended["token"];
                 }
             }
 
@@ -1063,8 +1071,7 @@ $(function () {
             authXHR.done(function (data) {
                 if (data["error"] === "none") {
                     $("#timeout").hide();
-                    that.model.set({"details": data["details"]});
-                    that.model.set({"token": data["details"]["token"]});
+                    that.model.set({"details": data["details"], "token": data["details"]["token"]});
                     that.model.unset("_details_failed");
                     that.model.unset("_details_timeout");
                 } else if (data["error"] === "Connection" && data["protocol_error"] === false) {

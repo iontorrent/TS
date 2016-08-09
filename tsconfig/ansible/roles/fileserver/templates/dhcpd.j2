@@ -6,7 +6,7 @@ max-lease-time 300;
 log-facility local7;
 option domain-name "instrument.local";
 
-{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != default_interface %}
 # Torrent Server Subnet - {{interface}}
 subnet {{b_subnet}}.{{loop.index + class_c}}.0 netmask 255.255.255.0 {
     range {{b_subnet}}.{{loop.index + class_c}}.10 {{b_subnet}}.{{loop.index + class_c}}.10;

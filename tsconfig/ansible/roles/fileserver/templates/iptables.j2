@@ -3,8 +3,8 @@
 :PREROUTING ACCEPT [22:1936]
 :POSTROUTING ACCEPT [2:127]
 :OUTPUT ACCEPT [2:127]
-{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
--A POSTROUTING -s {{ b_subnet }}.{{loop.index + class_c}}.0/24 -o {{ ansible_default_ipv4.interface|default(default_interface) }} -j MASQUERADE
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != default_interface %}
+-A POSTROUTING -s {{ b_subnet }}.{{loop.index + class_c}}.0/24 -o {{ default_interface}} -j MASQUERADE
 {% endfor %}
 
 COMMIT
@@ -30,7 +30,7 @@ COMMIT
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 6445 -j ACCEPT
 {%endif%}
 
-{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != default_interface %}
 {% if loop.first %}
 #Allow all traffic from instrument subnets
 {% endif %}

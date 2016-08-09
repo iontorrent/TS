@@ -27,7 +27,7 @@ uint8_t realigner_invalid_input_cigar (struct RealignProxy* r);
 void realigner_set_log (struct RealignProxy* r, int posix_file_handle);
 
 // parameters setup
-void realigner_set_scores (struct RealignProxy* r, int mat, int mis, int gip, int gep);
+void realigner_set_scores (struct RealignProxy* r, double mat, double mis, double gip, double gep);
 void realigner_set_bandwidth (struct RealignProxy* r, int bandwidth);
 void realigner_set_clipping (struct RealignProxy* r, enum CLIPTYPE clipping);
 void realigner_set_gap_scale_mode (struct RealignProxy* r, int scale_mode);

@@ -1442,13 +1442,16 @@ $(function() {
 	        target = target.parentNode;
 	    }
 	    if (target) {
-			delete configuration_values[configurations[target.rowIndex - 1]];
-			configurations.splice(target.rowIndex - 1, 1);
-    		document.getElementById("configurations_table_id").deleteRow(target.rowIndex);
-			var url = plugin_url + "/scripts/postConfigurations.php3";
-			$.post(url, {"configuration_values": configuration_values}, function() {
-				//alert("Configuration saved.");
-			});
+			var ok = confirm("Are you sure you wish to delete configuration " + configurations[target.rowIndex - 1] + "?");
+			if (ok) {
+				delete configuration_values[configurations[target.rowIndex - 1]];
+				configurations.splice(target.rowIndex - 1, 1);
+				document.getElementById("configurations_table_id").deleteRow(target.rowIndex);
+				var url = plugin_url + "/scripts/postConfigurations.php3";
+				$.post(url, {"configuration_values": configuration_values}, function() {
+					//alert("Configuration saved.");
+				});
+			}
 		}
 	});
 
@@ -1626,7 +1629,7 @@ function ApplyParameterFilters () {
     $("#ampliseq_panel option[data-chip='540']").hide();
   }
   if (chip_selection == 'proton_p1') {
-    if ($("#ampliseq_panel option:selected").data("chip") != 'proton_p1') {
+    if (($("#ampliseq_panel option:selected").data("chip") != 'proton_p1') && ($("#ampliseq_panel option:selected").data("chip") != 'proton')) {
       $("#ampliseq_panel").val("");
       panel_selection = "";
     }
@@ -1736,6 +1739,7 @@ base_set["meta"]["parameters"] = {}
   };
 
   base_set["meta"]["librarytype"] = $("#libraryGroup input[type='radio']:checked").val();
+
 	base_set["meta"]["ampliseq_panel_id"] = $("#ampliseq_panel option:selected").text();
 	base_set["meta"]["ampliseq_panel"] = $("#ampliseq_panel option:selected").val();
 	base_set["meta"]["referenceid"] = $("#referenceid option:selected").text();
@@ -1765,6 +1769,10 @@ function unserializeForm(json) {
 	if (json != "Not specified") {
 		obj = JSON.parse(json);
 		document.getElementsByName('configuration_name')[0].value = obj["pluginconfig"]["meta"]["configuration_name"];
+		
+		$("#referenceid option[value='" + obj["pluginconfig"]["meta"]["reference"] + "']").prop('selected', true);
+		HandleReferenceChange();
+		
 		$("#chipSelector input[value='pgm']").attr("checked", false);
 		$("#chipSelector input[value='proton_p1']").attr("checked", false);
 		$("#chipSelector input[value='530']").attr("checked", false);
@@ -1788,18 +1796,13 @@ function unserializeForm(json) {
 
 		$("#barcodeModeSelector").attr("checked", (obj["pluginconfig"]["meta"]["barcode_mode"] == "force"));
 		
-		$("#ampliseq_panel option:selected").text(obj["pluginconfig"]["meta"]["ampliseq_panel_id"]);
-		$("#ampliseq_panel option:selected").val(obj["pluginconfig"]["meta"]["ampliseq_panel"]);
-		$("#referenceid option:selected").text(obj["pluginconfig"]["meta"]["referenceid"]);
-		$("#referenceid option:selected").val(obj["pluginconfig"]["meta"]["reference"]);
-		$("#targetregions option:selected").text(obj["pluginconfig"]["meta"]["targetregions_id"]);
-		$("#targetregions option:selected").val(obj["pluginconfig"]["meta"]["targetregions"]);
-		$("#targetloci option:selected").text(obj["pluginconfig"]["meta"]["targetloci_id"]);
-		$("#targetloci option:selected").val(obj["pluginconfig"]["meta"]["targetloci"]);
+		$("#ampliseq_panel option[value='" + obj["pluginconfig"]["meta"]["ampliseq_panel"] + "']").prop('selected', true);
+		HandleAmpliseqChange();
+		$("#targetregions option[value='" + obj["pluginconfig"]["meta"]["targetregions"] + "']").prop('selected', true);
+		$("#targetloci option[value='" + obj["pluginconfig"]["meta"]["targetloci"] + "']").prop('selected', true);
 
 	    $(".dropdown").trigger("liszt:updated");
-
-	    HandleAmpliseqChange();
+		
 	    ApplyParameterFilters();
         var config = obj["pluginconfig"]["meta"]["parameters"]["config"];
         var idx = parseInt(config.substr(14));
@@ -1809,15 +1812,19 @@ function unserializeForm(json) {
 		UpdateParameterValues();
 		$("#tvcargs").val(obj["pluginconfig"]["meta"]["tvcargs"]);
 		$("#tmapargs").val(obj["pluginconfig"]["meta"]["tmapargs"]);
-		
 		if (obj["pluginconfig"]["meta"]["parameters"]["value"] == 'custom') {
 			var element;
 			for (element in obj["pluginconfig"]["torrent_variant_caller"]) {
         		$("#" + element).val(obj["pluginconfig"]["torrent_variant_caller"][element]);
 			}
+			for (element in obj["pluginconfig"]["long_indel_assembler"]) {
+        		$("#" + element).val(obj["pluginconfig"]["long_indel_assembler"][element]);
+			}
+			for (element in obj["pluginconfig"]["freebayes"]) {
+        		$("#" + element).val(obj["pluginconfig"]["freebayes"][element]);
+			}
 		}
 	}
-	
 }
 
 
@@ -1956,6 +1963,16 @@ function LoadingPhaseCompleted() {
     "long_indel_assembler" : {},
     "freebayes" : {}
   };
+  var base_set = builtin_sets[0];
+  $.each(base_set["torrent_variant_caller"], function(k,v) {
+    custom_set["torrent_variant_caller"][k] = v;
+  });
+  $.each(base_set["long_indel_assembler"], function(k,v) {
+    custom_set["long_indel_assembler"][k] = v;
+  });
+  $.each(base_set["freebayes"], function(k,v) {
+    custom_set["freebayes"][k] = v;
+  });
 
   NewParameterSet(custom_set);
 

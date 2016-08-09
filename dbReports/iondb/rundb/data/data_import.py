@@ -311,6 +311,10 @@ class ImportData:
     def __init__(self, name, selected, username, copy_data, copy_report):
         self.name = name
         self.user = username
+        self.result = None
+        self.exp = None
+
+        self.dmtypes = selected.keys()
         self.selected_str = ', '.join(selected.keys())
         self.createResult = (dmactions_types.OUT in selected) or (dmactions_types.BASE in selected)
         self.json_path = selected.get(dmactions_types.OUT) or selected.get(dmactions_types.BASE) or selected.values()[0]
@@ -330,24 +334,28 @@ class ImportData:
                     'diskspace': 0,
                     'copy_files': copy_report if dmtype == dmactions_types.OUT else copy_data
                 })
-        
+
     def update_destinations(self, result, exp):
         # update destination paths for selected categories
+        self.result = result
+        self.exp = exp
+
         for category in self.categories:
             if category['copy_files']:
                 dmtype = category['dmtype']
                 if dmtype == dmactions_types.OUT:
-                    category['dest_path'] = result.get_report_dir()
+                    category['dest_path'] = self.result.get_report_dir()
                 elif dmtype == dmactions_types.BASE:
-                    category['dest_path'] = exp.expDir if 'onboard_results' in category['src_path'] else result.get_report_dir()
+                    category['dest_path'] = self.exp.expDir if 'onboard_results' in category['src_path'] else self.result.get_report_dir()
                 elif dmtype == dmactions_types.SIG:
-                    category['dest_path'] = exp.expDir
+                    category['dest_path'] = self.exp.expDir
+
     
-    def update_diskspace(self, file_list, result):
+    def update_diskspace(self, file_list):
         for category in self.categories:
             if category['copy_files']:
                 dmtype = category['dmtype']
-                dmfileset = result.get_filestat(dmtype).dmfileset if result else DMFileSet.objects.get(version=RELVERSION, type=dmtype)
+                dmfileset = self.result.get_filestat(dmtype).dmfileset if self.result else DMFileSet.objects.get(version=RELVERSION, type=dmtype)
                 category['diskspace'] = get_diskspace(category['src_path'], dmfileset, file_list, self.add_warning)
     
     def start(self):
@@ -355,41 +363,39 @@ class ImportData:
         self.log('(%s) Import of selected categories started' % self.name)
         msg_banner('Started', self)
 
-    def fail(self, err, log_msg, result=None):
-        self.logfile.write('ERROR: ' + log_msg)
+    def fail(self, err, trace):
+        self.logfile.write('ERROR: ' + trace)
         self.logfile.close()
-        msg_banner('ERROR', self, msg_str=err)
+        msg_banner('ERROR', self, error_str=err)
 
-        if result:
-            EventLog.objects.add_entry(result, "Importing Error: %s %s." % (self.name, err), self.user)
-            result.dmfilestat_set.filter(action_state='IG').update(action_state='E')
-            result.status = "Importing Failed"
-            result.save()
-            copy_log_file(self.tmp_log_path, result.get_report_dir())
+        if self.result:
+            EventLog.objects.add_entry(self.result, "Importing Error: %s %s." % (self.name, err), self.user)
+            self.result.dmfilestat_set.filter(action_state='IG').update(action_state='E')
+            self.result.status = "Importing Failed"
+            self.result.save()
+            copy_log_file(self.tmp_log_path, self.result.get_report_dir())
 
-        raise Exception(log_msg)
-    
-    def finish(self, result, exp):
+    def finish(self):
         self.log('FINISHED Import of selected categories.')
         self.logfile.close()
 
         # save log file to local destination
-        save_log_dir = result.get_report_dir() if result else ''
+        save_log_dir = self.result.get_report_dir() if self.result else ''
         if not save_log_dir and self.categories[0]['copy_files']:
-            save_log_dir = exp.expDir
+            save_log_dir = self.exp.expDir
         if save_log_dir and os.path.exists(save_log_dir):
             copy_log_file(self.tmp_log_path, save_log_dir)
 
         if self.warnings:
-            msg_banner('Completed with %d warnings' % len(self.warnings), self, result, exp)
+            msg_banner('Completed with %d warnings' % len(self.warnings), self)
         else:
-            msg_banner('Completed', self, result, exp)
+            msg_banner('Completed', self)
 
-        if result:
+        if self.result:
             txt = "Imported from %s" % self.json_path
             if self.warnings:
                 txt += "<br>Warnings:<br>" + "<br>".join(self.warnings)
-            EventLog.objects.add_entry(result, txt, self.user)
+            EventLog.objects.add_entry(self.result, txt, self.user)
 
     def log(self, msg, flush=False):
         logger.debug(msg)
@@ -406,17 +412,26 @@ class ImportData:
 def data_import(name, selected, username, copy_data=False, copy_report=True):
     ''' Data import main task.
         Selected dict contains categories to import and path to their serialized json
-        Log file can be used to display progress on webpage.
         Copy options:
-            if copy_data=True copy Signal Processing or Basecalling Input files to local drive, otherwise mark these categories Archived
+            if copy_data=True copy Signal Processing and/or Basecalling Input files to local drive, otherwise mark these categories Archived
             if copy_report=True copy Output files to local drive, otherwise mark it Archived and copy/create report.pdf
     '''
+    try:
+        importing = ImportData(name, selected, username, copy_data, copy_report)
+        importing.start()
+        importing.log('Selected: %s, copy data: %s, copy report: %s.' % (importing.selected_str, copy_data, copy_report) )
+        logger.info('[Data Import] (%s) Started import %s using %s, copy data: %s, copy report: %s.' % (name, importing.selected_str, importing.json_path, copy_data, copy_report) )
+        process_import(importing, copy_data, copy_report)
+        # finish up
+        importing.finish()
+        logger.info('[Data Import] (%s) Done.' % importing.name)
+    except Exception as e:
+        trace = traceback.format_exc()
+        logger.error(trace)
+        importing.fail(str(e), trace)
 
-    importing = ImportData(name, selected, username, copy_data, copy_report)
-    importing.start()
-    importing.log('Selected: %s, copy data: %s, copy report: %s.' % (importing.selected_str, copy_data, copy_report) )
-    logger.info('[Data Import] (%s) Started import %s using %s, copy data: %s, copy report: %s.' % (name, importing.selected_str, importing.json_path, copy_data, copy_report) )
 
+def process_import(importing, copy_data, copy_report):
     # create DB records
     try:
         objs = load_serialized_json(importing.json_path, importing.createResult, importing.log, importing.add_warning)
@@ -424,22 +439,20 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
         exp = objs['experiment']
         importing.update_destinations(result, exp)
     except Exception as e:
-        msg = traceback.format_exc()
-        importing.fail(e, msg)
+        raise
 
     if result:
-        dmfilestats_to_import = result.dmfilestat_set.filter(dmfileset__type__in=selected.keys())
+        dmfilestats_to_import = result.dmfilestat_set.filter(dmfileset__type__in=importing.dmtypes)
         # check if importing is allowed
         for dmfilestat in dmfilestats_to_import:
-            if dmfilestat.in_process():
-                error = "In Process: %s status is %s" % (dmfilestat.dmfileset.type, dmfilestat.get_action_state_display())
-                importing.fail(error, error)
+            if dmfilestat.action_state in ['AG','DG','EG','SA','SE','SD']:
+                raise Exception("Cannot import %s when data is in process: %s" % (dmfilestat.dmfileset.type, dmfilestat.get_action_state_display()) )
 
         # set status
         dmfilestats_to_import.update(action_state='IG')
         result.status = 'Importing'
         result.save()
-        EventLog.objects.add_entry(result, "Importing %s %s." % (name, importing.selected_str), username)
+        EventLog.objects.add_entry(result, "Importing %s %s." % (importing.name, importing.selected_str), importing.user)
 
     # get list of files
     file_list = []
@@ -448,15 +461,14 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
         file_list = get_walk_filelist(list(source_paths), list_dir=False, save_list=False)
 
     # calculate dmfilestat diskspace
-    importing.update_diskspace(file_list, result)
+    importing.update_diskspace(file_list)
     importing.log('Selected categories:' + json.dumps(importing.categories,indent=1))
     
     # destination validation
     try:
         validate_destination(importing.categories)
-    except Exception as e:
-        msg = traceback.format_exc()
-        importing.fail(e, msg, result)
+    except:
+        raise
 
     # copy files to destination
     for category in importing.categories:
@@ -476,14 +488,12 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
             importing.log('Start processing files for %s.' % dmtype)
     
             if not os.path.exists(source_dir):
-                error = "Source path %s does not exist, exiting." % source_dir
-                importing.fail(error,error,result)
-        
+                raise Exception("Source path %s does not exist, exiting." % source_dir)
+
             try:
                 copy_files_to_destination(source_dir, destination, dmfileset, file_list, importing.log, importing.add_warning)
-            except Exception as e:
-                msg = traceback.format_exc()
-                importing.fail(e, msg, result)
+            except:
+                raise
 
         elif dmtype == dmactions_types.OUT:
             # special case: importing Report as Archived (copy_report=False)
@@ -512,14 +522,10 @@ def data_import(name, selected, username, copy_data=False, copy_report=True):
         result.status = 'Completed'
         result.save()
 
-    elif dmactions_types.SIG in selected.keys() and not copy_data:
+    elif dmactions_types.SIG in importing.dmtypes and not copy_data:
         # only Sigproc imported (no dmfilestats) and data files not copied
         exp.expDir = os.path.dirname(importing.json_path)
         exp.save()
-
-    # finish up
-    importing.finish(result, exp)
-    logger.info('[Data Import] (%s) Done.' % name)
 
 
 def find_data_to_import(start_dir, maxdepth=7):
@@ -573,23 +579,23 @@ def find_data_to_import(start_dir, maxdepth=7):
     return sorted(found_results, key=lambda r:r['name'].lower())
 
 
-def msg_banner(status, importing, result=None, exp=None, msg_str=''):
+def msg_banner(status, importing, error_str=''):
     msg = '(%s) Import %s, %s.' % (importing.name, importing.selected_str, status)
 
     if 'Completed' in status:
-        if result:
-            logurl = '/data/datamanagement/log/%s/' % result.pk
+        if importing.result:
+            logurl = '/data/datamanagement/log/%s/' % importing.result.pk
             msg += " <a href='%s' data-toggle='modal' data-target='#modal_report_log'>View Report Log</a>" % (logurl)
-        if dmactions_types.OUT in importing.selected_str:
-            reporturl = '/report/%s/' % result.pk
-            msg += " Imported Report: <a href='%s'>%s</a>'" % (reporturl, result.resultsName)
+        if dmactions_types.OUT in importing.dmtypes:
+            reporturl = '/report/%s/' % importing.result.pk
+            msg += " Imported Report: <a href='%s'>%s</a>'" % (reporturl, importing.result.resultsName)
         else:
-            msg += " Imported Run available for analysis: <a href='/data/'>%s</a>" % exp.expName
+            msg += " Imported Run available for analysis: <a href='/data/'>%s</a>" % importing.exp.expName
 
     Message.objects.filter(tags=importing.tag).delete()
     if status == 'ERROR':
         errlog = '/data/datamanagement/import_data_log/%s' % importing.logfile.name
-        msg += " %s <a href='%s' data-toggle='modal' data-target='#modal_report_log'>Error Log</a>" % (msg_str, errlog)
+        msg += " %s <a href='%s' data-toggle='modal' data-target='#modal_report_log'>Error Log</a>" % (error_str, errlog)
         Message.error(msg, tags=importing.tag, route=importing.user)
     else:
         Message.info(msg, tags=importing.tag, route=importing.user)
@@ -621,6 +627,9 @@ def validate_destination(categories):
         if category['copy_files']:
             destination = category['dest_path']
             if destination:
+                if os.path.normpath(destination) == os.path.normpath(category['src_path']):
+                    raise Exception("%s destination is the same as source path: %s" % (category['dmtype'], destination))
+
                 if category['diskspace']:
                     dest[destination] = dest.setdefault(destination,0) + category['diskspace']
             else:

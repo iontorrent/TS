@@ -10,21 +10,20 @@
       shell: bash -lc "ifdown {{ansible_default_ipv4.alias}} && ifup {{ansible_default_ipv4.alias}}"
       when: "ansible_default_ipv4.alias is defined"
       register: output
-      
     - debug: var=output.stderr
 
     - name: Execute the gridengine-master playbook
       include: roles/gridengine_master/tasks/main.yml
-      
+
     - name: Restart celeryd processes
       service: name=celeryd state=restarted
-      
+
     - name: restart ionJobServer
       service: name=ionJobServer state=restarted
-      
+
     - name: restart ionPlugin
       service: name=ionPlugin state=restarted
-  
+
     - name: Regenerate self-signed SSL cert with current hostname
       shell: /usr/sbin/make-ssl-cert generate-default-snakeoil --force-overwrite
       ignore_errors: True
@@ -58,16 +57,18 @@
 
 # gridengine-exec on compute nodes needs to be shutdown and reconfigured for the new hostname
 - hosts: gridengine_clients
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]
+    - roles/gridengine_clients/defaults/main.yml
   tasks:
-    - name: Shutdown gridengine-exec from compute node
+    - name: Shutdown gridengine-exec on compute node
       service: name=gridengine-exec state=stopped
-
-    - name: Edit act_qmaster file
+    - name: Edit act_qmaster file on compute node
       shell: bash -lc "echo {{groups.headnode[0]}} > /var/lib/gridengine/iontorrent/common/act_qmaster"
-      
-    - name: Restart gridengine-exec
-      service: name=gridengine-exec state=started
-      
+    - name: Execute the gridengine-clients playbook
+      include: roles/gridengine_clients/tasks/main.yml
+
+# TODO
 # If headnode's /results is being exported to compute nodes, the mount instructions need updating.
 #- hosts: computes
 #  roles:

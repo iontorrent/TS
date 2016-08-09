@@ -29,6 +29,7 @@ class BarcodeBySampleFieldNames():
     ONCO_SAME_SAMPLE = "isOncoSameSample"
     HAS_PGS_DATA = "hasPgsData"
     HAS_ONCO_DATA = "hasOncoData"
+    SHOW_SAMPLESET_INFO = "showSampleSetInfo"
 
 class BarcodeBySampleStepData(AbstractStepData):
 
@@ -48,6 +49,7 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.savedFields[SavePlanFieldNames.IR_DOWN] = '0'
 
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = []
+        self.prepopulatedFields[BarcodeBySampleFieldNames.SHOW_SAMPLESET_INFO] = False
         self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
         self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "1"
 

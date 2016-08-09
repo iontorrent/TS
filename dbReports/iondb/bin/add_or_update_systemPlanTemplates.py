@@ -687,18 +687,18 @@ def add_or_update_all_system_templates():
         OCP_FOCUS_BARCODE_KIT_NAME = "Ion Select BC Set-1"
         #29
         templateName = "Oncomine Focus DNA"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")
-        finish_sys_template(sysTemplate, isCreated, "318select", 400, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318D", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")
+        finish_sys_template(sysTemplate, isCreated, "318D", 400, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
         
         #30
         templateName = "Oncomine Focus Fusions"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318select", 400, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "", {}, instrumentType)
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318D", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")        
+        finish_sys_template(sysTemplate, isCreated, "318D", 400, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "", {}, instrumentType)
                       
         #31
         templateName = "Oncomine Focus DNA and Fusions"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "DNA_RNA", "Oncomine")
-        finish_sys_template(sysTemplate, isCreated, "318select", 400, OCP_FOCUS_SEQ_KIT_NAME,  OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318D", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "DNA_RNA", "Oncomine")
+        finish_sys_template(sysTemplate, isCreated, "318D", 400, OCP_FOCUS_SEQ_KIT_NAME,  OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
                       
         #32
         templateName = "Ion ReproSeq Aneuploidy"

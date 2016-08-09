@@ -33,6 +33,7 @@ private:
     char* max_bp;
     char* last_bp;
     char* btrmx;
+    double float_error_bound;
     ALIGN_FVECT* ap;
     double gip, gep, mat, mis;
     bool to_first, to_last;
@@ -62,7 +63,7 @@ public:
 
     void init (int max_ylen, int max_xlen, int max_size, int gip, int gep, int mat, int mis);
 
-    void set_scoring (int gip, int gep, int mat, int mis);
+    void set_scoring (double gip, double gep, double mat, double mis);
 
     void set_log (std::ostream& log);
     void set_log (int posix_handle);

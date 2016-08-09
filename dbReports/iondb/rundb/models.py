@@ -465,6 +465,9 @@ class PlannedExperimentManager(models.Manager):
         extra_kwargs['sample_description'] = kwargs.pop('x_sample_description', "")
         extra_kwargs['sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
 
+        # Sample Set
+        extra_kwargs['sampleSet'] = kwargs.pop('sampleSet', "")
+
         logger.info("EXIT PlannedExpeirmentManager.extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
 
         return kwargs, extra_kwargs
@@ -478,11 +481,6 @@ class PlannedExperimentManager(models.Manager):
 
         if planOid < 0:
             plan = self.create(**popped_kwargs)
-            # if extra_kwargs.pop('x_isSaveBySample', False):
-            #     plan.sampleSet_uid = str(uuid.uuid4())
-            #     #setattr(plan, 'sampleSet', extra_kwargs.get('x_sampleSet'))
-            #     plan.sampleSet_planTotal = 1
-            #     plan.save()
         else:
             plan = self.get(pk = planOid)
 
@@ -496,6 +494,11 @@ class PlannedExperimentManager(models.Manager):
             plan.save_plannedExperiment_association(isPlanCreated, **extra_kwargs)
             plan.update_plan_qcValues(**popped_kwargs)
 
+            # sampleSets
+            sampleSets = extra_kwargs.get('sampleSet')
+            if sampleSets:
+                for sampleSet in sampleSets.all():
+                    plan.sampleSets.add(sampleSet)
 
         return plan, extra_kwargs
 
@@ -672,10 +675,7 @@ class PlannedExperiment(models.Model):
     #the barcode sample prep label on the sample tube
     sampleTubeLabel = models.CharField(max_length=512, blank=True, null=True)
 
-    sampleSet = models.ForeignKey('SampleSet', related_name = "plans", null = True, blank = True)
-    sampleSet_uid = models.CharField(max_length = 512, blank = True, null = True)
-    sampleSet_planIndex = models.PositiveIntegerField(default=0)
-    sampleSet_planTotal = models.PositiveIntegerField(default=0)
+    sampleSets = models.ManyToManyField('SampleSet', related_name = "plans", null = True, blank = True)
 
     sampleGrouping = models.ForeignKey("SampleGroupType_CV", blank=True, null=True, default=None)
     applicationGroup = models.ForeignKey(ApplicationGroup, null=True)
@@ -1088,20 +1088,11 @@ class PlannedExperiment(models.Model):
                 if PlannedExperiment.objects.filter(planShortID=self.planShortID, planExecuted=False):
                     self.planShortID = self.findShortID()
 
-                if (self.sampleSet):
-                        if (not self.sampleSet_uid):
-                            self.sampleSet_uid = str(uuid.uuid4())
-                        if (self.sampleSet_planTotal == 0):
-                            self.sampleSet_planTotal = 1
-                            self.sampleSet_planIndex = 0
-
                 #logger.info('Going to CREATE the 1 UNTOUCHED plan with name=%s' % self.planName)
                 super(PlannedExperiment, self).save()
 
-                if (self.sampleSet):
-                        if (self.sampleSet.status in ["", "created"]):
-                            self.sampleSet.status = "planned"
-                            self.sampleSet.save()
+                # update status for any sampleSets that have status = "" or "created"
+                self.sampleSets.filter(status__in=["", "created"]).update(status='planned')
 
 
     def save_plannedExperiment_association(self, isPlanCreated, **kwargs):
@@ -2174,7 +2165,7 @@ class SampleSetItem(models.Model):
     gender = models.CharField(max_length = 127, blank = True, null = True)
     relationshipRole = models.CharField(max_length = 127, blank = True, null = True)
     relationshipGroup = models.IntegerField()
-
+    description = models.CharField(max_length=1024, blank=True, null=True, default='')
     creator = models.ForeignKey(User, related_name = "created_sampleSetItem")
 
     # This will be set to the time a new record is created
@@ -2418,6 +2409,9 @@ class Results(models.Model, Lookup):
     analysismetrics = models.OneToOneField('AnalysisMetrics', null=True, blank=True)
     libmetrics = models.OneToOneField('LibMetrics', null=True, blank=True)
     qualitymetrics = models.OneToOneField('QualityMetrics', null=True, blank=True)
+
+    # link for re-Analysis starting from a parent report
+    parentResult = models.ForeignKey('self', null=True, blank=True, related_name='childResults_set', on_delete=models.SET_NULL)
 
     def save(self, *args, **kwargs):
 
@@ -4012,7 +4006,7 @@ class ReferenceGenome(models.Model):
         try:
             shutil.move(self.reference_path, disabled_path)
         except:
-            logger.exception("Failed to disable gnome %s" % reference.short_name)
+            logger.exception("Failed to disable gnome %s" % self.short_name)
             return False
         else:
             self.reference_path = disabled_path

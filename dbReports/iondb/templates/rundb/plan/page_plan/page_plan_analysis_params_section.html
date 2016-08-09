@@ -21,7 +21,11 @@
     <div class="row-fluid">
         <div class="span10 offset2">
             <select id="analysis_params_select" name="analysis_params" class="input-medium analysis_params" style="width: 440px;">                      
-                <option value="">&lt;Current selection&gt;</option>
+                {% if helper.getStepDict.Analysis_params.prepopulatedFields.chipType %}
+                    <option value="">&lt;Current selection&gt;</option>
+                {% else %}
+                    <option value="">Please select Chip Type to view available Analysis Parameters</option>
+                {% endif %}
                  {% if  helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "True" %}
                     <option SELECTED value="{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description}}">{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description}}</option>
                 {% endif %}

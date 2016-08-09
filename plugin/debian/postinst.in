@@ -25,8 +25,15 @@ case "$1" in
     chmod -c a+rx @ION_INSTALL_PREFIX@/plugins/implementations
 
     # Set common owner, if ionadmin user exists
+    # BPP - Why is it necessary to set the ownership here of all plugins?
+    # Delete this bit if you can show that its not necessary.
+    # Only for plugin directories, TS-11727
     if getent passwd | grep -q "^ionadmin:"; then
-    	chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins
+        chown ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins
+        cd @ION_INSTALL_PREFIX@/plugins
+        for subdir in `ls|egrep -v '(scratch|implementations)'`; do
+            chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins/$subdir
+        done
     fi
 
     # Force a plugin rescan after installation

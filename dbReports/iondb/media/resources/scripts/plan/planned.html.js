@@ -199,22 +199,16 @@ $(document).ready(function() {
                         projects : {
                             type : "string"
                         },
-                        sampleDisplayedName : {
-                            type : "string"
-                        },
                         date : {
                             type : "string"
                         },
                         planStatus : {
                             type : "string"
                         },
-                        sampleSet : {
-                        	type : "string"
-                        },
                         sampleSetDisplayedName : {
                         	type : "string"
                         },
-                        sampleSetGroupType : {
+                        sampleGroupingName : {
                         	type : "string"
                         },
                          libraryPrepType : {
@@ -265,7 +259,8 @@ $(document).ready(function() {
         }, {
             field : "sampleSetDisplayedName",
             title : "Sample Set",
-            sortable : true
+            sortable : false,
+            template : kendo.template($('#SampleSetColumnTemplate').html())
         }, {
             field : "planShortID",
             title : "Run Code",
@@ -289,7 +284,7 @@ $(document).ready(function() {
             width: '75px',
             template : kendo.template($('#RunTypeColumnTemplate').html())
         }, {
-            field : "sampleSetGroupType",
+            field : "sampleGroupingName",
         	title : "Group",
         	sortable : true
         }, {
@@ -435,19 +430,19 @@ function switch_to_view(view){
         data.hideColumn('id');
         data.hideColumn('projects');
         data.showColumn('sampleSetDisplayedName');
-        data.showColumn('sampleSetGroupType');
+        data.showColumn('sampleGroupingName');
     } else {
         data.showColumn('id');
         data.showColumn('projects');
         data.hideColumn('sampleSetDisplayedName');
-        data.hideColumn('sampleSetGroupType');
+        data.hideColumn('sampleGroupingName');
     }
     
     // update dataSource url
     if(view=='byTemplate'){
-        base_url += '&sampleSet__isnull=True'
+        base_url += '&sampleSets__isnull=True'
     } else if(view=='bySample'){
-        base_url += '&sampleSet__isnull=False'
+        base_url += '&sampleSets__isnull=False'
     }
     data.dataSource.transport.options.read.url = base_url;
     data.dataSource.read();

@@ -1,7 +1,5 @@
 {% extends "rundb/data/base.html" %}
-
 {% block extra_head %}
-
 <style> 
     /*----- Tabs -----*/
     .tabs {
@@ -39,8 +37,6 @@
         background: -ms-linear-gradient(top,  #022098 0%,#011b83 44%,#001464 100%); /* IE10+ */
         background: linear-gradient(to bottom,  #022098 0%,#011b83 44%,#001464 100%); /* W3C */
         filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#022098', endColorstr='#001464',GradientType=0 ); /* IE6-9 */
-
-
         transition:all linear 0.15s;
     }
 
@@ -71,7 +67,6 @@
     .tab.active {
         display:block;
     }
-
 </style>
 {% endblock extra_head %}
 
@@ -79,56 +74,43 @@
 <!-- for the tabs -->
 <div class="tabs">
     <ul class="tab-links">
-
-        {% if data.errors %}
-        <li class="active"><a href="#ErrorMessages">Error Messages</a></li>
-
-        {% endif %}
-
-        {% if data.warnings %}
-        <li class="active"><a href="#WarningMessages">Warning Messages</a></li>
-
-        {% endif %}
-
         {% for i in data.sections %}
-        <li><a href="#{{i.title}}">{{i.title}}</a></li>
+        <li {% if forloop.first %}class="active"{% endif %}><a href="#{{i.title|slugify}}">{{i.title}}</a></li>
         {% endfor %}
     </ul>
     {% endblock report-header %}
 
-
-
     <div class="main plugin-report">
         <div class="container-fluid">
             {% block content %}
+
+            {% if data.errors %}
+            <div id="ErrorMessages" class="alert alert-error">
+                <a class="close">x</a>
+                <ol>
+                    {% for i in data.errors %}
+                    <li>{{i}}</li>
+                    {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+
+            {% if data.warnings %}
+            <div id="WarningMessages" class="alert">
+                <a class="close">x</a>
+                <ol>
+                    {% for i in data.warnings %}
+                    <li>{{i}}</li>
+                    {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+
             <!-- SECTIONS start here -->
             <div class="tab-content">
-                {% if data.errors %}
-
-                <div id="ErrorMessages" class="tab active">
-                    <ol>
-                        {% for i in data.errors %}
-                        <li>{{i}}</li>
-                        {% endfor %}
-                    </ol>
-                </div> <!-- end div this tab-->
-                {% endif %}
-
-                {% if data.warnings %}
-                <div id="WarningMessages" class="tab active">
-                    <ol>
-                        {% for i in data.warnings %}
-                        <li>{{i}}</li>
-                        {% endfor %}
-                    </ol>
-                </div> <!-- end div this tab-->
-                {% endif %}
-
-
-                <!-- Sections-->
                 {% for i in data.sections %}
                 {% if i.type == "image" %}
-                <div id="{{i.title}}" class="tab">
+                <div id="{{i.title|slugify}}" {% if forloop.first %}class="tab active"{% else %}class="tab"{% endif %}>
                     <div id="thumbnail-gallery" data-toggle="modal-gallery" data-target="#modal-gallery" data-selector="div.thumbnail > a">
                         <div class="row-fluid">
                             <ul class="thumbnails">
@@ -140,7 +122,6 @@
                                             <h3>{{j.caption}}</h3>
                                             <p> {{j.description}}</p>
                                         </div>
-
                                     </div>
                                 </li>
                                 {% endfor %}
@@ -148,12 +129,10 @@
                         </div>
                     </div>
                 </div><!-- end div this tab-->
-
                 {% endif %}
 
-
                 {% if i.type == "html" %}
-                <div id="{{i.title}}" class="tab">
+                <div id="{{i.title|slugify}}" {% if forloop.first %}class="tab active"{% else %}class="tab"{% endif %}>
                     <div class="row-fluid">
                         {% if i.content %}
                         {{i.content|safe}}
@@ -174,15 +153,15 @@
                 $('.report-log-file').click(function() {
                     alert('Display log file');
                 });
-                $('.tabs, .tab-links, a').click(function(e)  {
+                $('.tabs .tab-links a').click(function(e)  {
                     $('.tabs ' + $(this).attr('href')).show().siblings().hide();
-
                     // Change/remove current tab to active
                     $(this).parent('li').addClass('active').siblings().removeClass('active');
-
                     e.preventDefault();
                 });
-
+                $('.close').click(function(){
+                    $(this).parent().remove();
+                });
             </script>
             <div class="main-push"></div>
             {% endblock content %}

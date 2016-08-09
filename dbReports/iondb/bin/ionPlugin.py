@@ -442,6 +442,8 @@ class Plugin(xmlrpc.XMLRPC):
         #return PluginResult.objects.filter(id=pk).update(state=state, store=store)
         try:
             # with transaction.atomic():
+
+            # TODO: should do an explicit check for the database object in case it's been deleted
             pr = PluginResult.objects.get(id=pk)
             if (state is not None) and (state != pr.state):
                 # Caller provided state change, trigger special events
@@ -455,7 +457,6 @@ class Plugin(xmlrpc.XMLRPC):
                 pr.store = store
                 pr.save(update_fields=["store"])
         except:
-            logger.exception("Unable to update pluginresult %d: %s [%s]", pk, state, store[0:20])
             return False
 
         return True

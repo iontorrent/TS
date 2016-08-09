@@ -384,7 +384,7 @@ def new_genome(request):
     """
     def is_fasta(filename):
         ext = os.path.splitext(filename)[1]
-        return ext.lower() in ['.fasta', '.fas', '.fa', '.seq']
+        return ext.lower() in ['.fasta', '.fas', '.fa', '.fna', '.seq']
 
 
     if request.method == "POST":
@@ -408,8 +408,8 @@ def new_genome(request):
         if not all((name, short_name, fasta)):
             return render_to_json({"status": "Form validation failed", "error": True})
 
-        if not set(short_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"):
-            return render_to_json({"status": "The short name has invalid characters. The valid values are letters, numbers, and underscores.", "error": True})
+        if not set(short_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-+"):
+            return render_to_json({"status": "The short name has invalid characters. Valid values are letters, numbers, and '_.-+'.", "error": True})
 
         #TODO: check to make sure the zip file only has one fasta or fa
         if not url:
@@ -659,7 +659,9 @@ def get_annotation(references, downloads_annot):
                                 logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
                                 updateVersion = None
                             download.updateVersion = updateVersion
-                            if (fm_pk.status == 'downloading'):
+                            filemonitor_status = fm_pk.status
+                            filemonitor_status = filemonitor_status.lower()
+                            if (filemonitor_status == 'downloading'):
                                 newAnnotFlag = False
                             # Check if there is any newer version of annotation file has been posted
                             if ((fm_pk.url == remoteAnnotUrl)  and (float(updateVersion) >= float(remoteAnnotUpdateVersion))):
@@ -672,7 +674,7 @@ def get_annotation(references, downloads_annot):
                                         logger.debug("Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
                                         isValid = False
                                         ctx['msg'] = fm_pk.status
-                                    if (fm_pk.status not in ["starting", "downloading", "download failed"]):
+                                    if (filemonitor_status not in ["starting", "downloading", "download failed"]):
                                         logger.debug("get_annotation() Error: Status is not in the expected state: {0}".format(fm_pk.status))
                                         if ((not download.status) and (not fm_pk.status)):
                                             # Query FileMonitor and Get the status if there was any lag in the network/celery task

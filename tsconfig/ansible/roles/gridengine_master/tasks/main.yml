@@ -13,10 +13,10 @@
   apt: pkg={{item}} state=present force=yes
   with_items:
     - gridengine-master
-    - gridengine-client
     - gridengine-common
     - gridengine-qmon
-    - gridengine-exec
+    - gridengine-client
+    - gridengine-drmaa-dev
 
 # TEST.  Force running package configuration for case where gridengine is installed but need to be
 # reconfigured (during headnode host renaming for example)
@@ -37,28 +37,20 @@
                 line="ignore_fqdn             true"
                 regexp="^ignore_fqdn.*"
                 mode=0644
-
-- name: Install drmaa package - libdrmaa1.0
-  apt: pkg=libdrmaa1.0 state=present force=yes
-  when: ansible_distribution_release == "lucid"
-  
-- name: Install drmaa package - gridengine-drmaa-dev
-  apt: pkg=gridengine-drmaa-dev state=present force=yes
-  when: ansible_distribution_release == "trusty"
   
 - name: Make sure gridengine-master is running by restarting it
 #  service: name=gridengine-master state=running
   shell: bash -lc '/etc/init.d/gridengine-master restart && sleep 5'
   
-# N.B.  This is non-intuitive that in our configuration, the gridengine master also is exec host.
-- name: Make sure gridengine-exec is running by restarting it
-  shell: bash -lc '/etc/init.d/gridengine-exec restart'
+## N.B.  This is non-intuitive that in our configuration, the gridengine master also is exec host.
+#- name: Make sure gridengine-exec is running by restarting it
+#  shell: bash -lc '/etc/init.d/gridengine-exec restart'
 
 # add submission host
-- name: add the frontend as submission host
-  shell: bash -lc 'qconf -as {{groups.headnode[0]}}'
+- name: Add server as submission host
+  shell: bash -lc 'qconf -as {{ansible_hostname}}'
 
-# this is necessary if the compute node configures itself.
+# Give compute node permissions to admin the sge configuration
 - name: add admin hosts
   shell: bash -lc 'qconf -ah {{item}}'
   with_items:
@@ -85,10 +77,12 @@
   
 - include_vars: "../../../group_vars/PowerEdge T620 PGM"
   when: "p.stat.exists == false and '{{ansible_product_name}}' == 'PowerEdge T620'"
-  
-# Remove all existing queues
-- name: Remove all existing queues
-  shell: bash -lc 'for queue in $(qconf -sql); do qconf -dq $queue; done'
+ 
+## TS-11618.  This operation fails when there are jobs in the queue.  Running this playbook
+## without removing the queues works as expected.  I submit removing queues is not required.
+## Remove all existing queues
+#- name: Remove all existing queues
+#  shell: bash -lc 'for queue in $(qconf -sql); do qconf -dq $queue; done'
   
 # Stage the queue definition template files
 - name: upload queue configuration files
@@ -112,13 +106,12 @@
   with_items:
     - '{{queues}}'
   
-# set number of slots
-#    qconf -aattr queue slots $set_slots $qname
+# set default number of slots
 - name: Assign number of slots per queue
   shell: bash -lc 'qconf -aattr queue slots {{item.slots}} {{item.name}}'
   with_items:
     - '{{queues}}'
-
+    
 # Make mem_free a consumable resource
 - name: create consumable resource file
   shell: bash -lc 'qconf -sc > /tmp/consumable'
@@ -141,33 +134,6 @@
 - name: For network-using plugins, set a consumable resource to control bandwidth utilization
   shell: bash -lc 'qconf -aattr exechost complex_values export_plugins=10 global'
   
-# add execution hosts
-- name: upload host configuration file
-  template: src=host.j2 dest=/tmp/host.{{item}}.conf
-  with_items:
-    - '{{groups.computes}}'
-    - '{{groups.headnode[0]}}'
-    
-- name: add execution hosts
-  shell: bash -lc "if ! qconf -sel | egrep -q '(localhost|{{item}})'; then qconf -Ae /tmp/host.{{item}}.conf;fi"
-  with_items:
-    - '{{groups.computes}}'
-    - '{{groups.headnode[0]}}'
-    
-# add master host to queues
-- name: add master host to queues
-  shell: bash -lc 'qconf -aattr queue hostlist {{item[0]}} {{item[1].name}}'
-  with_nested:
-    - "{{groups.headnode[0]}}"
-    - '{{queues}}'
-    
-# add compute hosts to queues
-- name: add compute hosts to queues
-  shell: bash -lc 'qconf -aattr queue hostlist {{item[0]}} {{item[1].name}}'
-  with_nested:
-    - "{{groups.computes}}"
-    - '{{queues}}'
-
 # configure parallel environment
 - name: upload PE configuration file
   template: src=ion_pe.j2 dest=/tmp/ion_pe.conf

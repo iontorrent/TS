@@ -93,7 +93,7 @@ bool ContAlignImp::invalid_input_cigar () const
 }
 
 // parameters setup
-void ContAlignImp::set_scores (int mat, int mis, int gip, int gep)
+void ContAlignImp::set_scores (double mat, double mis, double gip, double gep)
 {
     ContAlign::set_scoring (gip, gep, mat, mis);
 }

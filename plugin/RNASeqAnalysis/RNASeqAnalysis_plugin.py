@@ -32,6 +32,10 @@ def toMega(value):
 
 template.builtins.append(register) 
 
+# defines exceptional bacode names to check against
+NONBARCODED = "nonbarcoded"
+NOMATCH = "nomatch"
+
 # global data collecters common to functions
 barcodeInput = {}
 pluginParams = {}
@@ -500,8 +504,17 @@ def createProgressReport(progessMsg,last=False):
 # --------------- Base code for standard plugin runs -------------
 #
 
+def getOrderedBarcodes():
+  if NONBARCODED in barcodeInput:
+    return []
+  barcodes = {}
+  for barcode in barcodeInput:
+    if barcode == NOMATCH: continue
+    barcodes[barcode] = barcodeInput[barcode]["barcode_index"]
+  return sorted(barcodes,key=barcodes.get) 
+  
 def sampleName( barcode, default = '' ):
-  if not barcode: barcode = "nonbarcoded"
+  if not barcode: barcode = NONBARCODED
   sample = default
   if barcode in barcodeInput:
     sample = barcodeInput[barcode].get('sample',default)
@@ -509,9 +522,9 @@ def sampleName( barcode, default = '' ):
   return default
 
 def bamFilepath( barcode ):
-  if not barcode: barcode = "nonbarcoded"
+  if not barcode: barcode = NONBARCODED
   if barcode in barcodeInput:
-    return barcodeInput[barcode].get('bamFullPath','')
+    return barcodeInput[barcode].get('bam_filepath','')
   return ''
 
 def emptyResultsFolder():
@@ -631,7 +644,7 @@ def loadPluginParams():
     resurl = os.path.join( jsonParams['runinfo'].get('url_root','.'), resurl[plgpos:] )
   pluginParams['results_url'] = resurl
 
-  pluginParams['barcoded'] = "nonbarcoded" not in barcodeInput
+  pluginParams['barcoded'] = NONBARCODED not in barcodeInput
 
   # disable run skip if no report exists => plugin has not been run before
   pluginParams['report_name'] = pluginParams['plugin_name']+'.html'
@@ -717,32 +730,16 @@ def runNonBarcoded():
     createScraperLinksFolder( pluginParams['output_dir'], pluginParams['output_prefix'] )
 
 def runForBarcodes():
-  global pluginParams, pluginResult, pluginReport
-  # read barcode ids
-  # TODO: get this ordered list from barcodeInput when barcode set index has been added
-  barcodes = []
-  try:
-    bcfileName = pluginParams['analysis_dir']+'/barcodeList.txt'
-    with open(bcfileName) as bcfile:
-      for line in bcfile:
-        if line.startswith('barcode '):
-          barcodes.append(line.split(',')[1])
-  except:
-    printerr("Reading barcode list file '%s'" % bcfileName)
-    raise
   # iterate over listed barcodes to pre-test barcode files
+  global pluginParams, pluginResult, pluginReport
+  barcodes = getOrderedBarcodes()
   numGoodBams = 0
   numInvalidBarcodes = 0
   minFileSize = pluginParams['cmdOptions'].minbamsize
   bcBamFile = []
   for barcode in barcodes:
-    # assume missing barcodes were filtered
-    if not barcode in barcodeInput:
-      bcBamFile.append(": Barcode excluded (not enough reads)")
-      continue
-    # use BAM specified by barcodes.json
     bcbam = bamFilepath(barcode)
-    if barcode == 'nomatch' or barcodeInput[barcode]['filtered']:
+    if barcode == NOMATCH or barcodeInput[barcode]['filtered']:
       bcbam = ": Barcode excluded (not enough reads)"
     elif not os.path.exists(bcbam):
       bcbam = ": BAM file not found"

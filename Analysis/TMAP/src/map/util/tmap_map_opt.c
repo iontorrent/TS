@@ -203,6 +203,7 @@ __tmap_map_opt_option_print_func_int_init(realign_cliptype)
 
 __tmap_map_opt_option_print_func_tf_init(report_stats)
 __tmap_map_opt_option_print_func_chars_init(realign_log, "")
+__tmap_map_opt_option_print_func_tf_init(log_text_als)
 
 // end tandem repeat clip
 __tmap_map_opt_option_print_func_tf_init(do_repeat_clip)
@@ -210,12 +211,12 @@ __tmap_map_opt_option_print_func_tf_init(do_repeat_clip)
 __tmap_map_opt_option_print_func_tf_init(repclip_continuation)
 
 // context-dependent gaps
-__tmap_map_opt_option_print_func_int_init(do_hp_weight)
+__tmap_map_opt_option_print_func_tf_init(do_hp_weight)
 __tmap_map_opt_option_print_func_int_init(gap_scale_mode)
-__tmap_map_opt_option_print_func_int_init(context_mat_score)
-__tmap_map_opt_option_print_func_int_init(context_mis_score)
-__tmap_map_opt_option_print_func_int_init(context_gip_score)
-__tmap_map_opt_option_print_func_int_init(context_gep_score)
+__tmap_map_opt_option_print_func_double_init(context_mat_score)
+__tmap_map_opt_option_print_func_double_init(context_mis_score)
+__tmap_map_opt_option_print_func_double_init(context_gip_score)
+__tmap_map_opt_option_print_func_double_init(context_gep_score)
 __tmap_map_opt_option_print_func_int_init(context_extra_bandwidth)
 __tmap_map_opt_option_print_func_int_init(context_debug_log)
 // __tmap_map_opt_option_print_func_int_init(context_noclip)
@@ -805,6 +806,14 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_realign_log,
                            TMAP_MAP_ALGO_GLOBAL);
+
+  tmap_map_opt_options_add(opt->options, "text-als", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "include textual alignments in realignment log",
+                           NULL,
+                           tmap_map_opt_option_print_func_log_text_als,
+                           TMAP_MAP_ALGO_GLOBAL);
+
   // alignment end repeat clipping
   tmap_map_opt_options_add(opt->options, "do-repeat-clip", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
@@ -837,28 +846,28 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            TMAP_MAP_ALGO_GLOBAL);
   // context match score
   tmap_map_opt_options_add(opt->options, "c-mat", required_argument, 0, 0, 
-                           TMAP_MAP_OPT_TYPE_INT,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
                            "context match score",
                            NULL,
                            tmap_map_opt_option_print_func_context_mat_score,
                            TMAP_MAP_ALGO_GLOBAL);
   // context mismatch penalty
   tmap_map_opt_options_add(opt->options, "c-mis", required_argument, 0, 0, 
-                           TMAP_MAP_OPT_TYPE_INT,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
                            "context mismatch score",
                            NULL,
                            tmap_map_opt_option_print_func_context_mis_score,
                            TMAP_MAP_ALGO_GLOBAL);
   // context gap initiation penalty
   tmap_map_opt_options_add(opt->options, "c-gip", required_argument, 0, 0, 
-                           TMAP_MAP_OPT_TYPE_INT,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
                            "context gap opening score",
                            NULL,
                            tmap_map_opt_option_print_func_context_gip_score,
                            TMAP_MAP_ALGO_GLOBAL);
   // context gap extension penalty
   tmap_map_opt_options_add(opt->options, "c-gep", required_argument, 0, 0, 
-                           TMAP_MAP_OPT_TYPE_INT,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
                            "context gap extension score",
                            NULL,
                            tmap_map_opt_option_print_func_context_gep_score,
@@ -1351,16 +1360,17 @@ tmap_map_opt_init(int32_t algo_id)
   opt->realign_cliptype = 2;
   opt->report_stats = 0;
   opt->realign_log = NULL;
+  opt->log_text_als = 0;
   // tail repeat clipping
   opt->do_repeat_clip = 0;
   opt->repclip_continuation = 0;
   // context dependent gap scores
   opt->do_hp_weight = 0;
   opt->gap_scale_mode = TMAP_CONTEXT_GAP_SCALE_GEP;
-  opt->context_mat_score =  1;
-  opt->context_mis_score = -3;
-  opt->context_gip_score = -5;
-  opt->context_gep_score = -2;
+  opt->context_mat_score =  1.;
+  opt->context_mis_score = -3.;
+  opt->context_gip_score = -5.;
+  opt->context_gep_score = -2.;
   opt->context_extra_bandwidth = 5;
   opt->context_debug_log = 0;
   // alignment length filtering
@@ -1889,6 +1899,9 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           free(opt->realign_log);
           opt->realign_log = tmap_strdup(optarg);
       }
+      else if (0 == c && 0 == strcmp ("text-als", options [option_index].name)) {
+          opt->log_text_als = 1;
+      }
       // tail-repeat clipping
       else if (0 == c && 0 == strcmp ("do-repeat-clip", options [option_index].name)) {
           opt->do_repeat_clip = 1;
@@ -1904,16 +1917,16 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           opt->gap_scale_mode = atoi (optarg);
       }
       else if (0 == c && 0 == strcmp ("c-mat", options [option_index].name)) {
-          opt->context_mat_score = atoi (optarg);
+          opt->context_mat_score = atof (optarg);
       }
       else if (0 == c && 0 == strcmp ("c-mis", options [option_index].name)) {
-          opt->context_mis_score = atoi (optarg);
+          opt->context_mis_score = atof (optarg);
       }
       else if (0 == c && 0 == strcmp ("c-gip", options [option_index].name)) {
-          opt->context_gip_score = atoi (optarg);
+          opt->context_gip_score = atof (optarg);
       }
       else if (0 == c && 0 == strcmp ("c-gep", options [option_index].name)) {
-          opt->context_gep_score = atoi (optarg);
+          opt->context_gep_score = atof (optarg);
       }
       else if (0 == c && 0 == strcmp ("c-bw", options [option_index].name)) {
           opt->context_extra_bandwidth = atoi (optarg);
@@ -2129,7 +2142,6 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           opt->stage_seed_max_length = atoi(optarg);
       }
       // MAPALL
-      
       else {
           break;
       }
@@ -2498,15 +2510,17 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   // context dependent gap scores
   tmap_error_cmd_check_int (opt->do_hp_weight, 0, 1, "--context");
   tmap_error_cmd_check_int (opt->gap_scale_mode, 0, 2, "--hpscale");
-  tmap_error_cmd_check_int (opt->context_mat_score, -127, 128, "--c-mat");
-  tmap_error_cmd_check_int (opt->context_mis_score, -127, 128, "--c-mis");
-  tmap_error_cmd_check_int (opt->context_gip_score, -127, 128, "--c-gip");
-  tmap_error_cmd_check_int (opt->context_gep_score, -127, 128, "--c-gep");
+  tmap_error_cmd_check_int (opt->context_mat_score, INT32_MIN, INT32_MAX, "--c-mat");
+  tmap_error_cmd_check_int (opt->context_mis_score, INT32_MIN, INT32_MAX, "--c-mis");
+  tmap_error_cmd_check_int (opt->context_gip_score, INT32_MIN, INT32_MAX, "--c-gip");
+  tmap_error_cmd_check_int (opt->context_gep_score, INT32_MIN, INT32_MAX, "--c-gep");
   tmap_error_cmd_check_int (opt->context_extra_bandwidth, 0, 256, "--c-bw");
   tmap_error_cmd_check_int (opt->context_debug_log, 0, 1, "--context-debug-log");
-  
+
   if (opt->num_threads > 1 && opt->context_debug_log)
       tmap_error ("Context logging is available only in single-threaded mode", Exit, CommandLineArgument);
+
+  tmap_error_cmd_check_int (opt->log_text_als, 0, 1, "--text-als");
 
   // alignment length filtering
   tmap_error_cmd_check_int (opt->min_al_len, 0, INT32_MAX, "--min-al-len");

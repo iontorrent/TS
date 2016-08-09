@@ -11,6 +11,7 @@ import traceback
 from iondb.rundb import models
 from socket import gethostname
 from django.contrib.auth.models import User
+from django.contrib.auth.models import Group
 
 from django.core.exceptions import ValidationError
 from django.core.exceptions import ObjectDoesNotExist
@@ -20,17 +21,18 @@ from django.core import management
 int_test_file = "/opt/ion/.ion-internal-server"
 
 def add_user(username,password):
-    
+    is_newly_added = False
     try:
         user_exists = User.objects.get(username=username)
         #print "User", username, "already existed"
-        return None
+        return user_exists, is_newly_added
     except:
         #print username, "added"
         user = User.objects.create_user(username,"ionuser@iontorrent.com",password)
         #user.is_staff = True # demoted to block use of admin interface
         user.save()
-        return user
+        is_newly_added = True
+        return user, is_newly_added
 
 def create_user_profiles():
     for user in User.objects.all():
@@ -1376,25 +1378,35 @@ if __name__=="__main__":
         print 'Adding Global Config Failed'
         print traceback.format_exc()
         sys.exit(1)
+
     try:
-        add_user("ionuser","ionuser")
+        user, is_newly_added = add_user("ionuser","ionuser")
+        if user:
+            try:
+                group = Group.objects.get(name='ionusers')
+                if group and user.groups.count() == 0:
+                    user.groups.add(group)
+                    user.save()
+            except:
+                print 'Assigning user group to ionuser failed'
+                print traceback.format_exc()
     except:
         print 'Adding ionuser failed'
         print traceback.format_exc()
         sys.exit(1)
-
+            
     create_user_profiles()
 
     try:
         # TODO: for these users, set_unusable_password()
         # These users exists only to uniformly store records of their contact
         # information for customer support.
-        lab = add_user("lab_contact","lab_contact")
+        lab, is_newly_added = add_user("lab_contact","lab_contact")
         if lab is not None:
             lab_profile = lab.userprofile
             lab_profile.title = "Lab Contact"
             lab_profile.save()
-        it = add_user("it_contact","it_contact")
+        it, is_newly_added = add_user("it_contact","it_contact")
         if it is not None:
             it_profile = it.userprofile
             it_profile.title = "IT Contact"
@@ -1539,3 +1551,4 @@ if __name__=="__main__":
         chip.delete()
 
     load_dbData("rundb/fixtures/ts_dbData.json")
+    load_dbData("rundb/fixtures/ionusers_group.json")

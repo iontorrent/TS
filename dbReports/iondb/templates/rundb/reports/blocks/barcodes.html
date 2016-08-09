@@ -13,7 +13,7 @@
         return parts.join(".");
     }
 </script>
-{% if datasets.barcode_config %}
+{% if datasets.barcode_config and report.resultsType != 'CombinedAlignments' %}
 <script>
     var barcodes_json = {{barcodes_json|safe}};
 </script>

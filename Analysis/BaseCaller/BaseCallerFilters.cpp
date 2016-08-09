@@ -500,10 +500,10 @@ void BaseCallerFilters::PrintHelp()
   printf ("     --clonal-filter-solve    on/off     apply polyclonal filter [off]\n");
   printf ("     --clonal-filter-tf       on/off     apply polyclonal filter to TFs [off]\n");
   printf ("     --clonal-filter-maxreads INT        maximum number of library reads used for polyclonal filter training [100000]\n");
-  printf ("     --min-read-length        INT        apply minimum read length filter [8]\n");
+  printf ("     --min-read-length        INT        apply minimum read length filter [25]\n");
   printf ("     --cr-filter              on/off     apply cafie residual filter [off]\n");
   printf ("     --cr-filter-tf           on/off     apply cafie residual filter to TFs [off]\n");
-  printf ("     --cr-filter-max-value    FLOAT      cafie residual filter threshold [0.8]\n");
+  printf ("     --cr-filter-max-value    FLOAT      cafie residual filter threshold [0.08]\n");
   printf ("     --beverly-filter      FLOAT,FLOAT   filter_ratio,trim_ratio / off\n");
   printf ("                                         apply Beverly filter/trimmer [off]\n");
   printf ("     --qual-filter            on/off     apply quality filter based on expected number of errors [off]\n");
@@ -526,7 +526,7 @@ void BaseCallerFilters::PrintHelp()
   printf ("                                         mode \"expected-errors\" :  quality trimming based on expected number of errors in read\n");
   printf ("                                         mode \"all\"             :  shortest trimming point of all methods\n");
   printf ("     --trim-qual-window-size  INT        window size for windowed quality trimming [30]\n");
-  printf ("     --trim-qual-cutoff       FLOAT      cutoff for windowed quality trimming, 100=off [16]\n");
+  printf ("     --trim-qual-cutoff       FLOAT      cutoff for windowed quality trimming, 100=off [15]\n");
   printf ("     --trim-qual-offset       FLOAT      error threshold offset for expected error quality trimming [0.7]\n");
   printf ("     --trim-qual-slope        FLOAT      increase of expected errors allowed for expected error quality trimming [0.005]\n");
   printf (" Avalanche trimming (does anybody use this?):\n"); // XXX

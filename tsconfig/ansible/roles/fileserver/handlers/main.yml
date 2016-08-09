@@ -9,9 +9,6 @@
 - name: flush iptables
   shell: bash -lc '/sbin/iptables -F && iptables -P INPUT ACCEPT'
   
-- name: restart network
-  service: name=networking state=restarted
-  
 - name: restart dhcp
   service: name=dhcp3-server state=restarted
   ignore_errors: yes
@@ -29,3 +26,5 @@
 - name: restart exportfs
   shell: bash -lc 'exportfs -ra'
   
+- name: resolvconf update
+  shell: bash -lc "resolvconf -u"

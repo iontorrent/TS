@@ -145,7 +145,7 @@
   	            		refreshKendoGrid("#input_samplesetitem_grid");
   	            	}
   	            	else {
-  	            		refreshKendoGrid(".samples");
+                        $(".samples").each(function(){refreshKendoGrid($(this))});
   	            		refreshKendoGrid("#samplesetitem_attribute_grid");
   	            	}
                 }else {

@@ -258,32 +258,39 @@ def show_edit_sampleset(request, _id=None):
     return render_to_response("rundb/sample/modal_add_sampleset.html", context_instance=ctx, mimetype="text/html")
 
 @login_required
-def show_plan_run(request, _id):
+def show_plan_run(request, ids):
     """
     show the plan run popup
     """
-    ctxd = {}
-    sampleSet = get_object_or_404(SampleSet, pk = _id)
-    all_templates = _get_all_userTemplates(request)
+    warnings = []
+    sampleset_ids = ids.split(',')
+    sampleSets = SampleSet.objects.filter(pk__in = sampleset_ids)
+    if len(sampleSets) < 1:
+        raise http.Http404("SampleSet not found")
 
-    all_templates = all_templates.extra(select={'sg_name': 
-                                                'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id" = %s' %
-                                                ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping_id"')})
+    # validate
+    errors = sample_validator.validate_sampleSets_for_planning(sampleSets)
+    if errors:
+        msg = "Cannot Plan Run from %s<br>" % ', '.join(sampleSets.values_list('displayedName', flat=True))
+        return http.HttpResponseServerError(msg + '<br>'.join(errors))
+
+    # multiple sample group types are allowed, with a warning
+    sampleGroupTypes = sampleSets.filter(SampleGroupType_CV__isnull=False).values_list('SampleGroupType_CV__displayedName', flat=True).distinct()
+    if len(sampleGroupTypes) > 1:
+        warnings.append('Warning: multiple Group Types selected: %s' % ', '.join(sampleGroupTypes))
+    
+    all_templates = _get_all_userTemplates(request)
+    all_templates_params = list(all_templates.values('pk', 'planDisplayedName', 'sampleGrouping__displayedName'))
 
     #we want to display the system templates last    
     all_systemTemplates = _get_all_systemTemplates(request)
-    
-    all_systemTemplates = all_systemTemplates.extra(select={'sg_name': 
-                                                'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id" = %s' %
-                                                ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping_id"')})
-
-    for template in all_templates:
-        print template.sg_name
+    all_systemTemplates_params = list(all_systemTemplates.values('pk', 'planDisplayedName', 'sampleGrouping__displayedName'))
 
     ctxd = {
-            'sampleSet' : sampleSet,
-            'all_templates': all_templates,
-            'all_systemTemplates': all_systemTemplates,            
+            'sampleSet_ids' : ids,
+            'sampleGroupTypes': sampleGroupTypes,
+            'template_params': all_templates_params + all_systemTemplates_params,
+            'warnings': warnings,
             }
 
     ctx = RequestContext(request, ctxd)
@@ -471,6 +478,18 @@ def save_samplesetitem(request):
             transaction.rollback()            
             return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")            
             
+        if errorMessage:
+            transaction.rollback()
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
+
+        try:
+            sampleSetItemDescription = queryDict.get("sampleDescription", "").strip()
+            isValid, errorMessage = sample_validator.validate_sampleDescription(sampleSetItemDescription)
+        except:
+            logger.exception(format_exc())
+            transaction.rollback()
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
+
         if errorMessage:
             transaction.rollback()
             return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
@@ -674,7 +693,7 @@ def save_input_samples_for_sampleset(request):
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
 
                 views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, \
-                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId)
+                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId, sampleDesc)
                    
             clear_samplesetitem_session(request)
                        
@@ -1148,7 +1167,7 @@ def delete_sampleset(request, _id):
     
     sample_count = sampleSetItems.count()
     
-    plans = PlannedExperiment.objects.filter(sampleSet = sampleSet)
+    plans = PlannedExperiment.objects.filter(sampleSets = sampleSet)
     
     if plans:
         planCount = plans.count()
@@ -1199,7 +1218,7 @@ def remove_samplesetitem(request, _id):
     
     logger.debug("views.remove_samplesetitem - sampleSetItem.id=%s; name=%s; sampleSet.id=%s" %(str(_id), sample.displayedName, str(sampleSet.id)))
     
-    plans = PlannedExperiment.objects.filter(sampleSet = sampleSet)
+    plans = PlannedExperiment.objects.filter(sampleSets = sampleSet)
     
     if plans:
         planCount = plans.count()

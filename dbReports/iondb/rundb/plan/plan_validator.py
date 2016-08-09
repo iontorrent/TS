@@ -1,6 +1,6 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
-from iondb.rundb.models import Chip, RunType, KitInfo, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct
+from iondb.rundb.models import Chip, RunType, KitInfo, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct, PlannedExperiment
 from iondb.utils import validation
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 import os
@@ -489,4 +489,32 @@ def validate_chipBarcode(chipBarcode):
     logger.debug("plan_validator.validate_chipBarcode() value=%s;" %(chipBarcode))
 
     return errors
-    
+
+def get_default_planStatus():
+    defaultPlanStatus = [status[1] for status in PlannedExperiment.ALLOWED_PLAN_STATUS]
+    defaultPlanStatus = [status.lower() for status in defaultPlanStatus]
+
+    return defaultPlanStatus
+
+def validate_planStatus(planStatus):
+    """
+    validate planStatus is in ALLOWED_PLAN_STATUS
+    """
+    errors = []
+
+    if planStatus:
+        planStatus = planStatus.strip()
+        isValid = False
+        defaultPlanStatus = get_default_planStatus()
+
+        for status in defaultPlanStatus:
+            if planStatus.lower()==status:
+                isValid = True
+
+        if not isValid:
+            defaultPlanStatus_display = ', '.join([status for status in defaultPlanStatus])
+            errors.append("The plan status(%s) is not valid. Default Values are: %s"  % (planStatus, defaultPlanStatus_display))
+
+    logger.debug("plan_validator.validate_planStatus() value=%s;" %(planStatus))
+
+    return errors

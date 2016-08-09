@@ -228,9 +228,10 @@ report
 	</div>
 {%endif%}
 
-	{%if report.isProton %}
 	{%if isInternalServer %}
+	{%if report.getPlatform == "s5" or report.getPlatform == "proton" %}
 		<h2>Proton <abbr title="Ion Sphere Particles">ISP</abbr> Map</h2> (on internal server only)
+		<br>Platform: '{{report.getPlatform}}'</br>
 		<div id="proton">
 
 		</div>

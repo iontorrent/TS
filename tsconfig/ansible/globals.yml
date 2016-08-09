@@ -20,3 +20,16 @@
 # ...or if its an S5, load the S5 variables
 - include_vars: 'group_vars/S5'
   when: S5_virtual_guest
+
+# Define the default_interface
+# By design, it is first slot on the PCI network card or first on-board NIC.
+# Either em1, eth0, p5p1 or p6p1
+- name: find the interface string
+  shell: bash -c "egrep '(em1|p[0-9]p1|eth0|wlan0)' /proc/net/dev | awk '{print \$1}' | tail -1 | sed 's/://g' "
+  register: interface_name
+  
+- name: set the default_interface fact
+  set_fact:
+    default_interface: "{{interface_name.stdout}}"
+
+- debug: var=default_interface

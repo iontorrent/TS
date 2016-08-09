@@ -62,6 +62,7 @@ PURGE_ALL_DEB=0         # Delete all deb package files in apt cache
 RECONFIGURE=0           # Re-run configuration steps only
 SECURITY_UPDATE=0       # Run apt-get unattended-upgrade
 FORCE=False             # Some cases, ignore disk space requirement
+NONINTERACTIVE=False    # Set to true to disable any user interaction operations
 version=5.0
 
 
@@ -124,6 +125,19 @@ while [ $# != 0 ]; do
         '--change-hostname'|'-r')
             if [ $EXECUTE == 1 ];then user_msg "Change server hostname"; fi
             UPDATE_HOSTNAME=1
+            # If additional arg is provided, assume its the hostname
+            if [ {$2,,} ]; then
+                input=${2,,}
+                shift
+                #newHostName, newDomainName, newFQDN
+                newHostName=${input%%.*}
+                if echo ${input}|grep  -q "\."; then
+                    newDomainName=${input#*.}
+                else
+                    newDomainName=""
+                fi
+                newFQDN=${input}
+            fi
         ;;
         '--configure-timezone'|'-z')
             if [ $EXECUTE == 1 ];then user_msg "Configure time zone settings"; fi
@@ -135,6 +149,9 @@ while [ $# != 0 ]; do
         ;;
         '--purge-all-deb')
             PURGE_ALL_DEB=1
+        ;;
+        '--noninteractive')
+            NONINTERACTIVE=True
         ;;
         '--help'|'-h'|\?)
             print_help_1404
@@ -253,9 +270,15 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
             log "Generate ssh key"
             sudo -u $TSCONFIG_CLUSTER_ADMIN ssh-keygen -q -f ${ANSIBLE_RSA_KEY} -t rsa -N ''
         fi
-        # This prompts for a password every time.
-        echo -e "\nEnter compute node password..."
-        sudo -u $TSCONFIG_CLUSTER_ADMIN ansible all -i ${ANSIBLE_HOME}/${MY_HOSTS} -m authorized_key -a "user=$TSCONFIG_CLUSTER_ADMIN key='{{ lookup('file', '${ANSIBLE_RSA_KEY}.pub') }}' path=/home/$TSCONFIG_CLUSTER_ADMIN/.ssh/authorized_keys manage_dir=no" --ask-pass -c paramiko -vvvv 1>&2 || true
+        # Test for connectivity.  We expect to only copy secure keys on initial configuration, done from CLI.
+        # This is a potential problem for a GUI software update in which the connectivity fails.  Will bork the install.
+        if [ ! ansible computes -i ${ANSIBLE_HOME}/${MY_HOSTS} -m setup > /dev/null ]; then
+            if [ $NONINTERACTIVE = False ]; then
+                # This prompts for a password every time.
+                echo -e "\nEnter compute node password..."
+                ansible computes -i ${ANSIBLE_HOME}/${MY_HOSTS} -m authorized_key -a "user=$TSCONFIG_CLUSTER_ADMIN key='{{ lookup('file', '${ANSIBLE_RSA_KEY}.pub') }}' path=/home/$TSCONFIG_CLUSTER_ADMIN/.ssh/authorized_keys manage_dir=no" --ask-pass -c paramiko 1>&2
+            fi
+        fi
         
     fi
 
@@ -337,7 +360,19 @@ if [ $UPDATE_HOSTNAME == 1 ]; then
     oldFQDN=$(hostname)
     ## User prompts to get new hostname and domain
     # Defines three variables: newHostName, newDomainName, newFQDN
-    get_input_hostname
+    if [ -z $newFQDN ]; then
+        get_input_hostname
+    else
+        echo "===================================================================="
+        echo "CLI provided variables"
+        echo newHostName = $newHostName
+        echo newDomainName = $newDomainName
+        echo newFQDN = $newFQDN
+        echo "===================================================================="
+    fi
+
+    # Remove all queues
+    for queue in $(qconf -sql); do qconf -dq $queue; done
     
     # Stop gridengine daemons
     service gridengine-exec stop
@@ -412,9 +447,7 @@ fi
 #---    Execute the postfix configuration script
 #---
 if [ $CONF_POSTFIX == 1 ]; then
-    not_implemented
-#	log "configuring postfix"
-#    dpkg-reconfigure postfix
+    dpkg-reconfigure postfix
 fi
 #---
 #---    Execute the deb package purge command
@@ -425,8 +458,7 @@ if [ $PURGE_ALL_DEB == 1 ]; then
 fi
 
 if [ $CHANGE_PASSWORD == 1 ]; then
-    not_implemented
-#    exec 2>&3   # Redirect stderr (which points to a file) back to stderr (console)
-#    config_password
+    exec 2>&3   # Redirect stderr (which points to a file) back to stderr (console)
+    config_password
 fi
 exit 0

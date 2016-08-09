@@ -103,6 +103,10 @@
 {% include "rundb/plan/page_plan/page_plan_analysis_params_section.html" %}
 {% if helper.getApplProduct.isReferenceSelectionSupported %}
     {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
+{% else %}
+    <input type="hidden" id="default_reference" name="default_reference" value="">
+    <input type="hidden" id="default_targetBedFile" name="default_targetBedFile" value="">
+    <input type="hidden" id="default_hotSpotBedFile" name="default_hotSpotBedFile" value="">
 {% endif %}
 {% include "rundb/plan/page_plan/page_plan_sample_table.html" %}
 

@@ -58,13 +58,13 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 {
   // go through the entire vcf to generate the blacklist
   ifstream hotspot_vcf;
-  hotspot_vcf.open(&hotspot_vcf_filename[0], ifstream::in);
+  hotspot_vcf.open(hotspot_vcf_filename.c_str(), ifstream::in);
 
   string bstrand = "BSTRAND";
   while (!hotspot_vcf.eof()) {
-    string line(2048,'\0');
-    hotspot_vcf.getline(&line[0], 2048);
-    if ((hotspot_vcf.gcount() < 2048) && (line[0] != '#')) {
+    string line;
+    getline(hotspot_vcf, line);
+    if (line[0] != '#') {
       // look for the BSTRAND tag
       size_t found = line.find(bstrand);
       if (found != string::npos) {

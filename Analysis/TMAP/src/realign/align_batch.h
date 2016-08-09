@@ -34,6 +34,7 @@ inline void batch_dbgout (std::ostream& o, const BATCH* b, int bno, const char d
     }
 }
 
+
 int align_score (const BATCH* bm, unsigned bno, const char* xseq, const char* yseq, int gip, int gep, int mat, int mis);
 
 #endif // ALIGN_BATCH_H

@@ -59,6 +59,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_configuration_test" DESTINATION 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_mount_test" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_addnodes.sh" DESTINATION share/ion-tsconfig/tools )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/prep_node_sudo.sh" DESTINATION share/ion-tsconfig/tools )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/add_compute.sh" DESTINATION share/ion-tsconfig/tools )
 install(FILES "${PROJECT_SOURCE_DIR}/README.clusters" DESTINATION share/ion-tsconfig )
 
 # perl modules used by plugins for json file parsing

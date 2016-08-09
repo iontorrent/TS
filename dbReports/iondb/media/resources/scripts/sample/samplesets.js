@@ -17,44 +17,41 @@ $(function() {
 	
 });
 
+function show_busy(show){
+    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+    if (show){
+        $('body').css("cursor", "wait");
+        $('body').prepend(busyDiv);
+    } else {
+        $('body').css("cursor", "default");
+        $('.myBusyDiv').remove();
+    }
+}
 
 function onDataBinding(arg) {
-	//20130707-TODO-the busy cursor neds to be shown earlier!!
-    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-    $('body').prepend(busyDiv);
-
+    show_busy(true);
 }
 
 function onDataBound(arg) {
-	console.log("at samplesets.js onDataBound...");
-	//20130707-TODO-test
-    $('body').css("cursor", "default");
-    $('.myBusyDiv').empty();
-    $('body').remove('.myBusyDiv');
+    show_busy(false)
     
     var source = '#sampleset_grid';
     bindActions(source);
+    
+    checked_ids = [];
 }
 
 
 function bindActions(source) {
 
     $(".edit_sampleset").click(function(e) {
-    	console.log("at samplesets.js - bindActions - edit_sampleset e=", e);
-
-        $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
-
-        url = $(this).attr('href');
-        //url = "/sampleattribute/add/"    
-        //url = "/sampleset/" + _id + "/edit/"
+        show_busy(true);
         
-        console.log("at samplesets.js - bindActions - edit_sampleset - url=", url);
-        
+        var url = $(this).attr('href');
         $('body #modal_add_sampleset_popup').remove();
+
         $.get(url, function(data) {
             $('body').append(data);
     		//$( "#modal_add_attribute_popup" ).data('source', "#sampleset_grid");
@@ -63,36 +60,23 @@ function bindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
+            show_busy(false);
         });
     });
 
     $(".plan-run").click(function(e) {
-        console.log("at samplesets.js - bindActions - plan_run e=", e);
-
-        $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
+        show_busy(true);
 
-        url = $(this).attr('href');
-        
-        console.log("at samplesets.js - bindActions - plan_run - url=", url);
-        
+        var url = $(this).attr('href');
         $('body #modal_planexperiment').remove();
+
         $.get(url, function(data) {
             $('body').append(data);
             $("#modal_planexperiment").modal("show");
@@ -100,37 +84,21 @@ function bindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-
         }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
+            show_busy(false);
         });
     });
     	
     $(".delete_set").click(function(e) {
-    	console.log("at samplesets.js  - bindActions - delete_set e=", e);
-    	
-        $('body').css("cursor", "wait");
         e.preventDefault();
-        
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
+        show_busy(true);
 
-        url = $(this).attr('href');
-        //alert(url);
-        
+        var url = $(this).attr('href');
         $('body #modal_confirm_delete').remove();
-        $('modal_confirm_delete_done');
         $.get(url, function(data) {
 
         	if (data.indexOf("Error,") >= 0) {
@@ -145,19 +113,11 @@ function bindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {        	
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-
         }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
+            show_busy(false);
         });
     });
     
@@ -171,42 +131,39 @@ function bindActions(source) {
 	       $('#modal_libraryprep_detail').modal("show");
 	    });
 	});
+    
+    $(source + ' [name=selected_sets]').click(function(e){
+        var id = $(this).attr("id");
+        if ($(this).attr("checked")){
+            checked_ids.push(id);
+        } else {
+            checked_ids.splice(checked_ids.indexOf(id), 1);
+        }
+        $('#plan_from_selected').attr('disabled', checked_ids.length == 0)
+    });
 }
-
+var checked_ids = [];
 
 function onDetailDataBinding(arg) {
 	//20130707-TODO-set cursor earlier
-  var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-  $('body').prepend(busyDiv);
-
+    show_busy(true);
 }
 
 function onDetailDataBound(arg) {
 	console.log("at samplesets.js onDetailDataBound...");
-  $('body').css("cursor", "default");
-  $('.myBusyDiv').empty();
-  $('body').remove('.myBusyDiv');
+    show_busy(false);
 
   var source = '#samplesetitem_attribute_grid';
   detailBindActions(source);
 }
 
 function detailBindActions(source) {
-    $(".edit_sample_in_sampleset").click(function(e) {
-    	console.log("at samplesets.js - detailBindActions - edit_sample_in_sampleset e=", e);
-
-        $('body').css("cursor", "wait");
+    $(".edit_sample_in_sampleset").unbind('click').click(function(e) {
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
+        show_busy(true);
 
-        url = $(this).attr('href');
-        
-        //url = "/sampleattribute/add/"    
-        //url = "/sampleset/" + _id + "/edit/"
-        
-        console.log("at samplesets.js - detailBindActions - edit_sample_in_sampleset - url=", url);
+        var url = $(this).attr('href');
         
         $('body #modal_add_samplesetitem_popup').remove();
         $.get(url, function(data) {
@@ -217,37 +174,23 @@ function detailBindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-
         }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
+            show_busy(false);
         });
     });
    
 
-    $(".remove_sample_from_set").click(function(e) {
-    	
-        $('body').css("cursor", "wait");
+    $(".remove_sample_from_set").unbind('click').click(function(e) {
         e.preventDefault();
-        
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
+        show_busy(true);
 
-        url = $(this).attr('href');
-        //alert(url);
+        var url = $(this).attr('href');
         
         $('body #modal_confirm_delete').remove();
-        $('modal_confirm_delete_done');
         $.get(url, function(data) {
         	if (data.indexOf("Error,") >= 0) {
                 apprise(data);
@@ -261,19 +204,11 @@ function detailBindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {       	
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-
         }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
+            show_busy(false);
         });        
 
     });
@@ -290,8 +225,7 @@ $(document).ready(function() {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
+        show_busy(true);
 
         //url = $(this).attr('href');
         url = "/sample/sampleattribute/add/"    
@@ -305,24 +239,43 @@ $(document).ready(function() {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-
         }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
+            show_busy(false);
+        });
+    });
+    
+    $('#plan_from_selected').click(function(e){
+        e.preventDefault();
+        $('#error-messages').hide().empty();
+
+        var ids = checked_ids.toString();
+        if (ids == ""){
+            console.log('no SampleSets selected');
+            return;
+        }
+
+        var url = $(this).attr('href').replace('999999',ids);
+        $('body #modal_planexperiment').remove();
+        show_busy(true);
+
+        $.get(url, function(data) {
+            $('body').append(data);
+            $("#modal_planexperiment").modal("show");
+            return false;
+        }).done(function(data) {
+            console.log("success:", url);
+        }).fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            console.log("error:", data);
+        }).always(function(data) {/*console.log("complete:", data);*/
+            show_busy(false);
         });
     });
 
-    
-    var checked_ids = [];
     var grid = $("#sampleset_grid").kendoGrid({
         dataSource : {
             type : "json",
@@ -428,10 +381,15 @@ $(document).ready(function() {
 		dataBinding : onDataBinding,
 		dataBound : onDataBound,        
         columns : [{
+            field : "id",
+            title : "Select",
+            sortable : false,
+            width: '50px',
+            template : "<input id='${id}' name='selected_sets' type='checkbox' # if(!readyForPlanning){ # disabled # } # >"
+        }, {
             field : "displayedName",
             title : "Set Name"
 //            sortable : true
-            // template: "<a href='/data/project/${id}/results'>${name}</a>"
         }, {
             field : "lastModifiedDate",
             title : "Date",
@@ -510,7 +468,7 @@ function detailInit(e) {
 	console.log("samplesets.js - detailInit - detailRow=", detailRow);
 	console.log("samplesets.js - detailInit - data.id=", sampleSetPk);
 
-	var detailUrl = "/rundb/api/v1/samplesetiteminfo/?order_by=sample__displayedName";
+	var detailUrl = "/rundb/api/v1/samplesetiteminfo/?sampleSet="+sampleSetPk+"&order_by=sample__displayedName";
 	
 	console.log("samplesets.js detailInit() sampleSetPk=", sampleSetPk, "; detailUrl=", detailUrl);
 	
@@ -564,7 +522,7 @@ function detailInit(e) {
 //								required : true
 //							}
 						},
-						sampleDescription : {
+						description : {
 							type : "string",
 //							nullable : true,
 //							editable : true,
@@ -753,7 +711,7 @@ function getColumns() {
          title: "Barcode",        
          sortable: true         
      } , {
-         field: "sampleDescription",
+         field: "description",
          title: "Description",        
          sortable: false,
          //template: kendo.template($('#sample_barcoding_id_kendo_template').html())    

@@ -178,7 +178,7 @@
                             <h3>
                                 Summary
                                 {% if helper.isPlanBySample %}
-                                    (sample_set: {{helper.getStepDict.Save_plan_by_sample.savedObjects.sampleset.displayedName}})
+                                <h4>Sample Set: {{helper.getStepDict.Save_plan_by_sample.savedObjects.sampleset.all|join:", "}}</h4>
                                 {% endif %}
                             </h3>
                             <hr class="summary">
@@ -202,17 +202,16 @@
     $(document).ready(function () {
         $("#{{step.getStepName}}").attr("class", "active");
 
-        applicationToDesc = {};
         applicationToRuntype = {};
         {% for application in helper.getStepDict.Application.getPrePopulatedFieldDict.applicationGroups %}
-            applicationToDesc['{{application.pk}}'] = '{{application.description}}';
-            applicationToRuntype['{{application.pk}}'] = [];
+            applicationToRuntype['{{application.name}}'] = [];
             {% for runType in application.applications.all %}
-                applicationToRuntype['{{application.pk}}'].push('{{runType.pk}}');
+                applicationToRuntype['{{application.name}}'].push('{{runType.pk}}');
             {% endfor %}
+            {% if application.name == helper.getApplicationGroupName %}
+                $("#selectedApplication").text('{{application.description}}');
+            {% endif %}
         {% endfor %}
-
-        $("#selectedApplication").text(applicationToDesc['{{helper.getStepDict.Application.getCurrentSavedFieldDict.applicationGroup}}']);
 
         runTypeIdToDesc = {};
         runTypeIdToAltName = {};

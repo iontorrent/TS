@@ -140,11 +140,13 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
                                  'creationDate' : currentDateTime,
                                  'lastModifiedUser' : user,
                                  'lastModifiedDate' : currentDateTime,
+                                 'description' : sampleDescription
                              }
 
         sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample = sample, 
                                                                        sampleSet_id = sampleSetId, 
                                                                        dnabarcode = dnabarcode,
+                                                                       description = sampleDescription,
                                                                        nucleotideType = nucleotideType_internal_value, 
                                                                        pcrPlateRow = pcrPlateRow_internal_value, 
                                                                        pcrPlateColumn = pcrPlateColumn,                                                                     

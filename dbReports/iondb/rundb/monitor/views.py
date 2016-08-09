@@ -113,17 +113,18 @@ def chef(request):
     for plan in plans:
         data = {
             'planName': plan.planDisplayedName,
-            'sampleSetName': plan.sampleSet.displayedName if plan.sampleSet else '',
+            'sampleSetName': ', '.join(plan.sampleSets.order_by('displayedName').values_list('displayedName', flat=True)),
             'last_updated' : plan.experiment.chefLastUpdate,
             'instrumentName': plan.experiment.chefInstrumentName,
             'template_prep_progress': plan.experiment.chefProgress,
             'template_prep_status': plan.experiment.chefStatus
         }
-        if plan.sampleSet and plan.sampleSet.libraryPrepInstrumentData:
-            libprep_done.append(plan.sampleSet.pk)
+        samplesets_w_libprep = plan.sampleSets.filter(libraryPrepInstrumentData__isnull=False)
+        if samplesets_w_libprep:
+            libprep_done.extend(list(samplesets_w_libprep.values_list('pk', flat=True)))
             data.update({
-            'lib_prep_progress': plan.sampleSet.libraryPrepInstrumentData.progress,
-            'lib_prep_status': plan.sampleSet.libraryPrepInstrumentData.instrumentStatus
+                'lib_prep_progress': samplesets_w_libprep[0].libraryPrepInstrumentData.progress,
+                'lib_prep_status': samplesets_w_libprep[0].libraryPrepInstrumentData.instrumentStatus
             })
         chef_table.append(data)
 

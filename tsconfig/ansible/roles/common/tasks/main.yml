@@ -139,7 +139,7 @@
 #-----------------------------------------------------------------------------
 - name: Configure tmpreaper
   lineinfile: dest=/etc/tmpreaper.conf state=present
-                regexp='^SHOWWARNING=true'
+                regexp='.*SHOWWARNING.*'
                 line='#SHOWWARNING=true'
 - name: Configure tmpreaper
   lineinfile: dest=/etc/tmpreaper.conf state=present
@@ -150,27 +150,27 @@
 # Configure maximum number of open file descriptors allowed
 #-----------------------------------------------------------------------------
 - name: Set soft limit
-  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
-                regexp='(\*.*soft.*nofile).*'
-                line='\1          {{ MAX_FILES_OPEN }}'
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='.*\*.*soft.*nofile.*$'
+                line="*                soft    nofile          {{MAX_FILES_OPEN}}"
                 insertbefore='# End of file'
 
 - name: Set hard limit
-  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
-                regexp='(\*.*hard.*nofile).*'
-                line='\1          {{ MAX_FILES_OPEN }}'
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='.*\*.*hard.*nofile.*$'
+                line='*                hard    nofile          {{MAX_FILES_OPEN}}'
                 insertbefore='# End of file'
 
 - name: Set soft limit
-  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
-                regexp='(^root.*soft.*nofile).*'
-                line='\1          {{ MAX_FILES_OPEN }}'
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='.*root.*soft.*nofile.*$'
+                line='root             soft    nofile          {{MAX_FILES_OPEN}}'
                 insertbefore='# End of file'
 
 - name: Set hard limit
-  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
-                regexp='(^root.*hard.*nofile).*'
-                line='\1          {{ MAX_FILES_OPEN }}'
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='.*root.*hard.*nofile.*$'
+                line='root             hard    nofile          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
 

@@ -234,10 +234,10 @@ typedef struct __tmap_map_opt_t {
     int32_t do_hp_weight; /*!< perform realignment with context-specific gap scores */
     // int32_t context_noclip; /*!< perform realignment with context-specific gap scores */
     int32_t gap_scale_mode; /*!< determines gap scaling mode (none, gep-only, gip-and-gep */
-    int32_t context_mat_score; /*!< context realignment match score */
-    int32_t context_mis_score; /*!< context realignment mismatch score */
-    int32_t context_gip_score; /*!< context realignment gap opening score */
-    int32_t context_gep_score; /*!< context realignment gap extension score */
+    double context_mat_score; /*!< context realignment match score */
+    double context_mis_score; /*!< context realignment mismatch score */
+    double context_gip_score; /*!< context realignment gap opening score */
+    double context_gep_score; /*!< context realignment gap extension score */
     int32_t context_extra_bandwidth; /*!< context realignment DP matrix extra band width */
     int32_t context_debug_log; /*!< output detailed log of alignment operation into log */
 
@@ -252,6 +252,7 @@ typedef struct __tmap_map_opt_t {
     // stats output control
     int32_t report_stats;
     char* realign_log;
+    int32_t log_text_als;
 
     // flowspace tags
     int32_t fscore;  /*!< the flow score penalty (-X,--pen-flow-error) */
@@ -287,7 +288,7 @@ typedef struct __tmap_map_opt_t {
     // map3/map4 options
     int32_t seed_step; /*!< the number of bases to increase the seed for each seed increase iteration (--seed-step) */ 
     double hit_frac; /*!< the fraction of seed positions that are under the maximum (--hit-frac) */
-    
+
     // map1 options
     int32_t seed_max_diff;  /*!< maximum number of edits in the seed (--seed-max-diff) */
     int32_t seed2_length;  /*!< the secondary seed length (--seed2-length) */
@@ -305,7 +306,7 @@ typedef struct __tmap_map_opt_t {
     int32_t indel_ends_bound;  /*!< indels are not allowed within INT number of bps from the end of the read (--indel-ends-bound) */
     int32_t max_best_cals;  /*!< stop searching when INT optimal CALs have been found (--max-best-cals) */
     int32_t max_entries;  /*!< maximum number of alignment nodes (--max-nodes) */
-    
+
     // map2 options
     //double mask_level;  /*!< the mask level (-m) */
     double length_coef;  /*!< the coefficient of length-threshold adjustment (--length-coef) */

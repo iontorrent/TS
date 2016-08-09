@@ -545,6 +545,7 @@ tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t b
   va_list ap;
   bam1_t *b = NULL;
   tmap_sam_convert_tag_opt_t *t = NULL;
+  tmap_string_t *bases=NULL, *qualities=NULL;
 
   b = tmap_calloc(1, sizeof(bam1_t), "b"); 
 
@@ -578,6 +579,20 @@ tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t b
       tmap_sam_convert_remove_tag(b, "XI", t);
       tmap_sam_convert_remove_tag(b, "XE", t);
       tmap_sam_convert_remove_tag(b, "XF", t);
+
+      if(b->core.flag & 0x10 ) { // reverse back
+          b->core.flag ^= 0x10;
+          // Apparently seq->data.sam->bases and seq->data.sam->qual are already inverted, but raw seq->data.sam->b->data is not
+          bases = tmap_seq_get_bases(seq);
+          qualities = tmap_seq_get_qualities(seq);
+          for(i=0;i<bases->l;i++) {
+              bam1_seq_seti(bam1_seq(b), i, bam_nt16_table[(int)bases->s[i]]);
+          }
+          for(i=0;i<qualities->l;i++) {
+              bam1_qual(b)[i] = qualities->s[i] - 33;
+          }
+      }
+
   }
   else {
       // init the BAM structure

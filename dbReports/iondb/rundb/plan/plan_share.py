@@ -64,15 +64,16 @@ def create_associated_objects(status, plan, obj_dict, user):
             status.update(error='Error processing samples: %s' % err)
 
     # SampleSet
-    if 'sampleSet' in obj_dict:
-        set_dict = obj_dict['sampleSet']
+    for set_dict in obj_dict['sampleSets']:
         try:
             set_dict['creator_id'] = set_dict['lastModifiedUser_id'] = user.pk
-            libraryPrep_dict = set_dict.pop('libraryPrepInstrumentData')
+            libraryPrep_dict = set_dict.pop('libraryPrepInstrumentData','')
+            samplesetitems = set_dict.pop('sampleSetItems',[])
 
             sampleSet,created = SampleSet.objects.get_or_create(displayedName=set_dict['displayedName'], defaults=set_dict)
             sampleSet.plans.add(plan)
-            for setitem_dict in obj_dict.get('sampleSetItems',[]):
+
+            for setitem_dict in samplesetitems:
                 sample = plan.experiment.samples.get(name = setitem_dict.pop('sample__name'))
                 if 'dnabarcode' in setitem_dict:
                     barcode = setitem_dict.pop('dnabarcode')
@@ -166,7 +167,7 @@ def prepare_for_copy(bundle):
     # remove obj keys that need to be recreated
     bundle.data.pop('id')
     bundle.data.pop('experiment')
-    bundle.data.pop('sampleSet')
+    bundle.data.pop('sampleSets')
 
     # qcValues
     qcValues = bundle.data.pop('qcValues',[])
@@ -201,12 +202,13 @@ def get_associated_objects_json(plan):
         obj_dict['samples'].append(d)
     
     # SampleSet
-    sampleSet = plan.sampleSet
-    if sampleSet:
-        obj_dict['sampleSet'] = get_obj_dict(sampleSet)
-        obj_dict['sampleSet']['SampleGroupType_CV_id'] = sampleSet.SampleGroupType_CV_id
-        obj_dict['sampleSet']['libraryPrepInstrumentData'] = get_obj_dict(sampleSet.libraryPrepInstrumentData) if sampleSet.libraryPrepInstrumentData else {}
-        obj_dict['sampleSetItems'] = []
+    obj_dict['sampleSets'] = []
+    for sampleSet in plan.sampleSets.all():
+        sampleSet_dict = get_obj_dict(sampleSet)
+        sampleSet_dict['SampleGroupType_CV_id'] = sampleSet.SampleGroupType_CV_id
+        sampleSet_dict['libraryPrepInstrumentData'] = get_obj_dict(sampleSet.libraryPrepInstrumentData) if sampleSet.libraryPrepInstrumentData else {}
+
+        sampleSet_dict['sampleSetItems'] = []
         for setitem in sampleSet.samples.filter(sample__in=samples):
             setitem_dict = get_obj_dict(setitem)
             setitem_dict['sample__name'] = setitem.sample.name
@@ -215,7 +217,10 @@ def get_associated_objects_json(plan):
                     'name': setitem.dnabarcode.name,
                     'id_str': setitem.dnabarcode.id_str
                 }
-            obj_dict['sampleSetItems'].append(setitem_dict)
+            sampleSet_dict['sampleSetItems'].append(setitem_dict)
+
+        obj_dict['sampleSets'].append(sampleSet_dict)
+
 
     # Ion Reporter account
     eas = plan.latest_eas

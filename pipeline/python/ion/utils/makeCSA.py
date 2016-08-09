@@ -49,6 +49,7 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None):
 
     # Files to find in the results directory hierarchy
     patterns = [
+                'ion_params_00.json',
                 'alignment.log',
                 'report.pdf',
                 'backupPDF.pdf',
@@ -83,6 +84,7 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None):
                 'datasets_basecaller.json',
                 'datasets_pipeline.json',
                 'datasets_tf.json',
+                '*ionstats_tf.json',
                 'TFStats.json',
                ]
     zipList = []

@@ -175,7 +175,7 @@ void FilterByBasicThresholds( int i_alt, MultiBook &m_summary_stats,
 
      string my_reason1 = "STDBIASPVAL";
      my_reason1 += convertToString( strand_bias_pval );
-     my_reason1 += "<=";
+     my_reason1 += "<";
      my_reason1 += convertToString(effective_strand_bias_pval_thr);
      l_summary_info.filterReason.push_back(my_reason1);
 

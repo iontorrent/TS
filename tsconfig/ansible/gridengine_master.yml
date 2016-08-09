@@ -1,5 +1,6 @@
 ---
 # file: gridengine_master.yml
+# Configures the gridengine master and associated setup.
 - hosts: gridengine_master
   roles:
     - gridengine_master
