@@ -6,7 +6,7 @@ from iondb.rundb.plan.views import PlanDetailView
 urlpatterns = patterns(
     'iondb.rundb.plan',
     url(r'^$', 'views.plan_run_home', name="planRuns"),
-    ##url(r'^plan/$', 'views.plans', name="plans"),
+    # url(r'^plan/$', 'views.plans', name="plans"),
     url(r'^plan_templates/$', 'views.plan_templates', name="plan_templates"),
     url(r'^planned/$', 'views.planned', name="planned"),
     url(r'^reset_page_plan_session/$', 'views.reset_page_plan_session', name="reset_page_plan_session"),
@@ -22,7 +22,7 @@ urlpatterns = patterns(
     url(r'^page_plan_by_sample_barcode/$', 'views.page_plan_by_sample_barcode', name="page_plan_by_sample_barcode"),
     url(r'^page_plan_by_sample_save_plan/$', 'views.page_plan_by_sample_save_plan', name="page_plan_by_sample_save_plan"),
     url(r'^page_plan_edit_plan_by_sample/(\d+)$', 'views.page_plan_edit_plan_by_sample', name="page_plan_edit_plan_by_sample"),
-    
+
     url(r'^page_plan_new_plan_from_code/(\d+)/$', 'views.page_plan_new_plan_from_code', name="page_plan_new_plan_from_code"),
     url(r'^page_plan_edit_plan/(\d+)/$', 'views.page_plan_edit_plan', name="page_plan_edit_plan"),
     url(r'^page_plan_edit_run/(\d+)/$', 'views.page_plan_edit_run', name="page_plan_edit_run"),
@@ -55,12 +55,12 @@ urlpatterns = patterns(
     url(r'^save/(\d+)/$', 'views.save_plan_or_template', name='save_plan_or_template'),
 
     url(r'^template/presets/$', 'views.get_application_product_presets', name="get_application_product_presets"),
-    
+
     url(r'^batchplanrunsfromtemplate/(\d+)/$', 'views.batch_plans_from_template', name='batch_plans_from_template'),
     url(r'^uploadplansfortemplate/$', 'views.upload_plans_for_template', name='upload_plans_for_template'),
     url(r'^saveuploadedplansfortemplate/$', 'views.save_uploaded_plans_for_template', name='save_uploaded_plans_for_template'),
-    url(r'^template/(?P<templateId>\d+)/planCount/(?P<count>\d+)/getcsvforbatchplanning.csv/$', 'views.getCSV_for_batch_planning', name='getCSV_for_batch_planning'),
-    
+    url(r'^template/(?P<templateId>\d+)/planCount/(?P<count>\d+)/getcsvforbatchplanning.csv/(?P<uploadtype>\w+)/$', 'views.getCSV_for_batch_planning', name='getCSV_for_batch_planning'),
+
     url(r'^toggle_template_favorite/(\d+)/$', 'views.toggle_template_favorite', name="toggle_template_favorite"),
-       
+
 )

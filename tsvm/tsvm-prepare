@@ -1,0 +1,15 @@
+#!/bin/bash
+# Copyright (C) 2016 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Purpose: prepare the TSVM ansible environment for configuration
+#
+ANSIBLE_DIR=/usr/share/ion-tsconfig/ansible
+if [[ ! -e /usr/share/ion-tsconfig/ansible/group_vars/all_local ]]; then
+    cp $ANSIBLE_DIR/group_vars/all $ANSIBLE_DIR/group_vars/all_local
+fi
+
+sed -i 's/edit_interfaces:.*/edit_interfaces: False/g' $ANSIBLE_DIR/group_vars/all_local
+sed -i 's/config_firewall:.*/config_firewall: False/g' $ANSIBLE_DIR/group_vars/all_local
+sed -i 's/enable_dhcp:.*/enable_dhcp: False/g' $ANSIBLE_DIR/group_vars/all_local
+sed -i 's/all.q, slots:.*/all.q, slots: 4}/' $ANSIBLE_DIR/group_vars/all_local
+sed -i 's/plugin.q, slots:.*/plugin.q, slots: 2}/' $ANSIBLE_DIR/group_vars/all_local

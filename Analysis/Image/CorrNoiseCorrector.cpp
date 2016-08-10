@@ -24,12 +24,13 @@
 #endif
 //#define DBG_SAVETEMPS 1
 //#define USE_ONE_AVERAGE 1
-#define SMOOTH_NNAVG 5
+//#define SMOOTH_NNAVG 5
 //#define DBG_PRINT_TIMES 1
 //#define SCALE_TRACES 1
 //#define AVG_END_FRAMES 4
 //#define AVG_START_FRAMES 4
 #define THROW_AWAY_START_FRAMES 1
+//#define LOOSE_DC_OFFSET 1
 
 #ifdef DBG_SAVETEMPS
 #include "crop/Acq.h"
@@ -109,8 +110,14 @@ double CorrNoiseCorrector::CorrectCorrNoise(short *_image, int _rows, int _cols,
 
 	if(correctRows & 1){
 	   printf("correcting row correlated noise %s\n",(thumbnail?"thumbnail":"normal"));
-       NNSpan = 500;
-       ncomp=1;
+       if(thumbnail){
+         NNSpan = 50;
+         ncomp=12;
+       }
+       else{
+         NNSpan = 500;
+         ncomp=1;
+       }
 	   CorrLen=_rows;
 	   allocPtr=AllocateStructs(threadNum, _rows, _cols, _frames);
 	   rc = CorrectRowNoise_internal( verbose,1);
@@ -119,8 +126,14 @@ double CorrNoiseCorrector::CorrectCorrNoise(short *_image, int _rows, int _cols,
 	}
 	if((correctRows & 2) || !correctRows){
 		printf("correcting col correlated noise %s\n",(thumbnail?"thumbnail":"normal"));
-		NNSpan = 100;
-		ncomp=2;
+       if(thumbnail){
+         NNSpan = 50;
+         ncomp=12;
+       }
+       else{
+         NNSpan = 100;
+         ncomp=2;
+       }
 		CorrLen=_cols;
 		allocPtr=AllocateStructs(threadNum, _rows, _cols, _frames);
 		CorrectRowNoise_internal( verbose,0);
@@ -357,6 +370,20 @@ void CorrNoiseCorrector::FixouterPixels()
 		else{
 			mCorr_mask[idx]=1;
 			// not pinned
+#ifdef LOOSE_DC_OFFSET
+			float avg = 0;
+			int initial_frames=4;
+			for (int frame = 0; frame < initial_frames; frame++){
+				avg += srcPtr[frame*frameStride];
+			}
+			avg /= (float)initial_frames;
+			avg -= 8192;
+
+			for (int frame = 0; frame < frames; frame++){
+				srcPtr[frame*frameStride] -= (short int)avg;
+			}
+
+#else
 			if(*srcPtr < 1000 || *endPtr < 1000){
 				// shift this pixel up by 1000
 				for (int frame = 0; frame < frames; frame++){
@@ -369,6 +396,7 @@ void CorrNoiseCorrector::FixouterPixels()
 					srcPtr[frame*frameStride] -= 1000;
 				}
 			}
+#endif
 		}
 	}
 }
@@ -513,7 +541,7 @@ double CorrNoiseCorrector::ApplyCorrection_rows()
 			}
 #else
 			for(;x<(reg+1)*(cols/ncomp);x+=8,srcPtr++){
-				v8s corr0=LD_VEC8S((short int)NOISE_ACC(y,reg,1));
+//				v8s corr0=LD_VEC8S((short int)NOISE_ACC(y,reg,1));
 				for (int frame = 0; frame < frames; frame++)
 				{
 					v8s corr=LD_VEC8S((short int)(NOISE_ACC(y,reg,frame)));
@@ -783,7 +811,7 @@ void CorrNoiseCorrector::NNSubtractComparatorSigs(int row_span, int time_span, i
 //			my_rowspan = CorrLen-y;
 		int start_y = std::max(y-my_rowspan,0);
 		int end_y   = std::min(y+my_rowspan,CorrLen);
-		if(thumbnail && !correctRows){
+		if(thumbnail/* && !correctRows*/){
 			// keep the ns within the 100x100 block
 			start_y = y - y%100; // the beginning of the 100x100 block
 			end_y=start_y+100;
@@ -823,7 +851,12 @@ void CorrNoiseCorrector::NNSubtractComparatorSigs(int row_span, int time_span, i
 			}
 #endif
 			for (int frame = 0; frame < frames; frame++){
-				NOISE_ACC(y,comp,frame) = SIGS_ACC(y,comp,frame) - nn_avg_smoothed[frame];
+				float tmp = SIGS_ACC(y,comp,frame) - nn_avg_smoothed[frame];
+				if(tmp != tmp)
+					tmp=0;
+
+				NOISE_ACC(y,comp,frame) = tmp;
+
 //				if(y<5 && comp==0)
 //					printf("%d start_frame=%d end_frame=%d avg=%f noise=%f\n",frame,start_frame,end_frame,nn_avg[frame],NOISE_ACC(y,comp,frame));
 			}

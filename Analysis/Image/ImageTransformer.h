@@ -4,7 +4,7 @@
 
 
 #include <stdio.h>
-
+#include <string>
 #include "Mask.h"
 #include "datahdr.h"
 #include "ByteSwapUtils.h"
@@ -15,9 +15,9 @@
 class Image;
 struct RawImage;
 
+using namespace std;
 
 #define DEFAULT_VECT_LEN  7
-class SynchDat;
 
 // Clarify current state of image transformation available globally for all image loading
 // this is state that needs to be re-entrant
@@ -56,7 +56,8 @@ public:
   static ChannelXTCorrection *custom_correction_data;
 
   //---------------gain corrections-------------------------------------------------
-
+  
+  static bool ReadDataCollectGainCorrection(const string &gainFile, unsigned int rows, unsigned int cols);
   static void CalculateGainCorrectionFromBeadfindFlow (char *_datDir, bool gain_debug_output);
   static void CalculateGainCorrectionFromBeadfindFlow (bool gain_debug_output, Image &bfImg, Mask &mask);
   /* uses a beadfind flow to compute the gain of each pixel this can
@@ -68,7 +69,6 @@ public:
                                                     int row_step, int col_step, ImageNNAvg *imageNN);
 
   static void GainCorrectImage(RawImage *raw);
-  static void GainCorrectImage(SynchDat *sdat);
   static float getPixelGain(int row,int col,int img_cols)
   {
     return(gain_correction[row*img_cols+ col]);

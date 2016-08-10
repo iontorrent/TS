@@ -25,13 +25,11 @@ execute_process (
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/usr" CACHE PATH "Ion Install Prefix")
 set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
-
 
 add_custom_target(compileall ALL
     COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/python/"
@@ -62,14 +60,18 @@ install(DIRECTORY web DESTINATION share/ion
 
 install(DIRECTORY python/ion DESTINATION ${PYTHON_SITE_PACKAGES}
     USE_SOURCE_PERMISSIONS
+    PATTERN "*.pyc" EXCLUDE
+    PATTERN "*.in" EXCLUDE
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/cluster_settings.py" DESTINATION /etc/torrentserver )
 # We are copying an existing __init__.py, they are all the same.
-install(FILES "${PROJECT_SOURCE_DIR}/python/ion/__init__.py" DESTINATION /etc/torrentserver )
-
-
-
+configure_file (
+	"${PROJECT_SOURCE_DIR}/python/ion/__init__.py.in"
+	"${PROJECT_BINARY_DIR}/python/ion/__init__.py" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/python/ion/__init__.py" DESTINATION /etc/torrentserver)
+install(FILES "${PROJECT_BINARY_DIR}/python/ion/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion )
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")
@@ -85,9 +87,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-imaging,
     python-argparse,
     python-dev")
+
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
     "python-markdown,
     python-pygments")
+
 set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-dbreports (<= 2.1.6)")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-dbreports (<= 2.1.6)")
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Suite pipeline.")

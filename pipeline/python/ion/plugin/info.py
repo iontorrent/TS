@@ -11,14 +11,16 @@ from ion.plugin.launchcompat import get_launch_class
 
 _logger = logging.getLogger(__name__)
 
-## TODO: Move behavior to launchcompat
+# TODO: Move behavior to launchcompat
+
+
 def get_version_launchsh(launch):
     # Regex to capture version strings from launch.sh
     # Flanking Quotes optional, but help delimit
     # Leading values ignored, usually '#VERSION' or '# VERSION'
     # Must be all-caps VERSION
     # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
-    VERSION=re.compile(r'VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?')
+    VERSION = re.compile(r'VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?')
     try:
         with open(launch, 'r') as f:
             for line in f:
@@ -36,23 +38,23 @@ def get_version_launchsh(launch):
         _logger.exception("Failed to parse VERSION from '%s'", pluginscript)
     return "0"
 
-class PluginInfo(object):
-    """ Class to encapsulate plugin introspection, to and from json block or plugin class instances """
 
+class PluginInfo(object):
+
+    """ Class to encapsulate plugin introspection, to and from json block or plugin class instances """
 
     def __init__(self, infojson=None):
         self._meta = 'IonPlugin Definition format 1.0'
         self.name = None
         self.version = "0.0"
-        self.allow_autorun = True
-        self.config = {} ## getUserInput
+        self.config = {}  # getUserInput
         self.runtypes = []
         self.features = []
         self.runlevels = []
         self.depends = []
         self.docs = ""
         self.major_block = ""
-        #self.description = ""
+        # self.description = ""
         self.pluginorm = None
         if infojson:
             try:
@@ -76,7 +78,7 @@ class PluginInfo(object):
         # simplify to objects json can handle
         for k, v in d.iteritems():
             if isinstance(v, property):
-                #d[k] = v.__get__()
+                # d[k] = v.__get__()
                 d[k] = str(v)
         return d
 
@@ -90,7 +92,7 @@ class PluginInfo(object):
         except:
             _logger.exception("Failed to query plugin for getUserInput")
 
-        for a in ('runtypes', 'features', 'runlevels', 'depends', 'allow_autorun', 'major_block'):
+        for a in ('runtypes', 'features', 'runlevels', 'depends', 'major_block'):
             v = getattr(plugin, a, None)
             if v is not None:
                 setattr(self, a, v)
@@ -118,5 +120,3 @@ class PluginInfo(object):
                 'version': get_version_launchsh(launch),
             }
         return info
-
-

@@ -11,7 +11,8 @@ TraceCorrector::~TraceCorrector()
 
 }
 
-void TraceCorrector::ReturnBackgroundCorrectedSignal(float *block_signal_corrected, int ibd,
+void TraceCorrector::ReturnBackgroundCorrectedSignal(float *block_signal_corrected, float *block_signal_original, float *block_signal_sbg,
+                                                     int ibd,
     int flow_block_size, int flow_block_start
   )
 {
@@ -20,10 +21,13 @@ void TraceCorrector::ReturnBackgroundCorrectedSignal(float *block_signal_correct
 
 
   bkg.region_data->my_trace.MultiFlowFillSignalForBead (block_signal_corrected, ibd, flow_block_size);
-//  my_trace.FillNNSignalForBead (block_nn_signal, ibd);
+  // store original away now that it has been brought from background so we can refer to it if needed for debugging
+  // if this is a big drag, can fix debugging paths - but really this isn't noticeable on the profile
+  if (block_signal_original!=NULL)
+    memcpy(block_signal_original, block_signal_corrected, sizeof ( float[bkg.region_data->my_scratch.bead_flow_t] ));
+  if (block_signal_sbg!=NULL)
+    memcpy(block_signal_sbg,bkg.region_data->my_scratch.shifted_bkg,  sizeof ( float[bkg.region_data->my_scratch.bead_flow_t] ));
 
-
-    
   // calculate proton flux from neighbors
   bkg.region_data->my_scratch.ResetXtalkToZero();
 
@@ -47,6 +51,8 @@ void TraceCorrector::ReturnBackgroundCorrectedSignal(float *block_signal_correct
 
   // make my corrected signal
   // subtract computed zeromer signal
+  // subtract dark matter
+  // adjust for trace xtalk
   // uses parameters above
   MathModel::MultiCorrectBeadBkg (block_signal_corrected,p,
                        bkg.region_data->my_scratch,*bkg.region_data_extras.cur_buffer_block,
@@ -54,29 +60,4 @@ void TraceCorrector::ReturnBackgroundCorrectedSignal(float *block_signal_correct
                        bkg.region_data->my_regions,bkg.region_data->my_scratch.shifted_bkg,bkg.global_defaults.signal_process_control.use_vectorization, flow_block_size);
 
  
-}
-
-// point of no-return ..sort of.  After this function call all beads are already background
-// corrected in the fg_buffer...so after this step we don't have the background any more.
-// we could always generate the background and un-correct them of course
-void TraceCorrector::BackgroundCorrectBeadInPlace (int ibd, int flow_block_size, int flow_block_start)
-{
-  float block_signal_corrected[bkg.region_data->my_scratch.bead_flow_t];
-
-  ReturnBackgroundCorrectedSignal(block_signal_corrected, ibd, flow_block_size, flow_block_start);
-  // now write it back
-  bkg.region_data->my_trace.WriteBackSignalForBead (&block_signal_corrected[0],ibd, -1, flow_block_size);
-}
-
-// corrects all beads in the trace buffer..no going back!
-void TraceCorrector::BackgroundCorrectAllBeadsInPlace (int flow_block_size, int flow_block_start)
-{
-  bkg.region_data->my_scratch.FillShiftedBkg (*bkg.region_data->emptytrace,bkg.region_data->my_regions.rp.tshift,bkg.region_data->time_c,true, flow_block_size);
-
-  for (int ibd = 0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
-  {
-    if (bkg.region_data->my_beads.params_nn[ibd].FitBeadLogic()) // if we'll be fitting this bead
-      BackgroundCorrectBeadInPlace (ibd, flow_block_size, flow_block_start);
-  }
-  bkg.region_data->my_trace.SetBkgCorrectTrace(); // warning that data is not raw traces
 }

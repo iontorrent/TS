@@ -64,6 +64,11 @@ $(function() {
     <tr>
      <th class="k-header"><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
       <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
+      {% if options.library_type == "tagseq" %}
+		<th class="k-header"><span class="help" title="Median number of reads covering on target position">Median Read Cov</span></th>
+		<th class="k-header"><span class="help" title="Median number of Molecules per target">Median Mol Cov</span></th>
+           <th class="k-header"><span class="help" title="Targets with Molecular coverage above 80% of Median">Targets >0.8MM Cov</span></th>
+      {% endif %}
       <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
       {% if options.has_hotspots %}
         <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
@@ -80,6 +85,11 @@ $(function() {
         </td>
         
         <td style="text-align:left">{{barcode.summary.sample_name}}</td>
+      {% if options.library_type == "tagseq" %}
+		<td>{{barcode.summary.median_depth}}</td>
+		<td>{{barcode.summary.median_num_fam3}}</td>
+		<td>{{barcode.summary.fm3_pass80}}</td>
+      {% endif %}
 
         <td>{{barcode.summary.variants_total.variants}}</td>
         
@@ -89,8 +99,11 @@ $(function() {
         
         <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
             <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
+        {% if options.library_type == "tagseq" %}
+        {% else %}
             <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz">gVCF.GZ</a>
             <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz.tbi">gVCF.GZ.TBI</a></td>
+        {% endif %}
 
       {% elif barcode.status == "queued" %}
         <td style="text-align:left">{{barcode.name}}</td><td colspan="3" style="text-align:left">Queued</td>

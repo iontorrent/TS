@@ -228,3 +228,15 @@ void EmphasisClass::DetermineNonZeroEmphasisFrames(int hp) {
   }
   nonZeroEmphasisFrames[hp] = npts - zeroCnt;
 }
+
+void EmphasisClass::SaveEmphasisVector()
+{
+	printf("dst VFC profile: ");
+	for ( int i=0; i<npts; i++ )
+	{
+		  printf(" %d(%.1lf)", my_frames_per_point[i],my_frameNumber[i]);
+		  //printf(" %.1lf", my_frameNumber[i]);
+	}
+	printf("\n");
+}
+

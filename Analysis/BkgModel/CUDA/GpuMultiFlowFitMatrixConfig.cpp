@@ -6,13 +6,13 @@
 GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(fit_descriptor* fd, CpuStep* Steps, int maxSteps, int flow_key, int flow_block_size)
 {
    // num of partial derivative steps to compute for this fit descriptor
-   _numSteps = GetNumParDerivStepsForFitDescriptor(fd);
+   _numSteps = BkgFitStructures::GetNumParDerivStepsForFitDescriptor(fd);
 
    // number of actual partial derivative steps to compute
    _numSteps = _numSteps + 2; // Need to calculate FVAL and YERR always
 
    // calculate num of params to fit based on param sensitivity classification
-   _numParamsToFit = GetNumParamsToFitForDescriptor(fd, flow_key, flow_block_size);
+   _numParamsToFit = BkgFitStructures::GetNumParamsToFitForDescriptor(fd, flow_key, flow_block_size);
 
    // collect partial derivative steps from Steps structure in 
    // BkgFitStructures.cpp for this fit

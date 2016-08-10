@@ -16,50 +16,10 @@ namespace {
   enum ModelFuncEvaluationOutputMode { NoOutput, OneParam, TwoParams };
 }
 
-
-/*__device__
-const float4*  precompute_pois_LUT_params_SingelFLowFit (int il, int ir)
-{
-  int n;
-  if( il == 0 && ir == 0 )
-    n = 0; //special case for the packed case for 0 < A < 1
-  else
-    n = il+1; //layout: poiss_cdf[ei][i], poiss_cdf[ei+1][i], poiss_cdf[ei][i+1], poiss_cdf[ei+1][i+1]
-
-  const float4* ptr =  POISS_APPROX_LUT_CUDA_BASE + n * MAX_POISSON_TABLE_ROW;
-
-  return ptr;
-}
-
-__device__
-float poiss_cdf_approx_float4_SingelFLowFit (float x, const float4* ptr, float occ_l, float occ_r)
-{
-  float ret;
-  x *= 20.0f;
-  int left = (int) x;
-
-  int max_dim_minus_one = MAX_POISSON_TABLE_ROW - 1;
-
-  float idelta = x-left;
-
-  if (left > max_dim_minus_one ){
-    left = max_dim_minus_one;
-
-  }
-  float ifrac = 1.0f-idelta;
-
-  float4 mixLUT = LDG_ACCESS(ptr, left);
-
-  ret = ( ifrac * ( occ_l * mixLUT.w + occ_r * mixLUT.z ) + idelta * (occ_l * mixLUT.y + occ_r * mixLUT.x ));
-
-  return ret;
-}
-*/
-
-
 //empty t
 __device__
-void interpolateEmpty( float * interPolTrace, const float * emptyTracesRegion, const unsigned short * RegionMask, const size_t regId, const size_t ix, const size_t iy, int nframes)
+//void interpolateEmpty( float * interPolTrace, const float * emptyTracesRegion, const unsigned short * RegionMask, const size_t regId, const size_t ix, const size_t iy, int nframes)
+void interpolateEmpty( float * interPolTrace, const unsigned short * RegionMask, const size_t regId, const size_t ix, const size_t iy, int nframes)
 {
 
   int nRegId;
@@ -127,7 +87,8 @@ void interpolateEmpty( float * interPolTrace, const float * emptyTracesRegion, c
 
 
   for(int i=0;i<9;i++){
-    const float * nEmptyTrace = emptyTracesRegion + RegIds[i] * ConstFrmP.getUncompFrames();
+    //const float * nEmptyTrace = emptyTracesRegion + RegIds[i] * ConstFrmP.getUncompFrames();
+    const float * nEmptyTrace = ConstHistCol.getLatestEmptyTraces() + RegIds[i] * ConstFrmP.getUncompFrames();
     for(int f=0; f<nframes; f++){
        if(weights[i] > 0 && RegIds[i] != -1){
         float thisFrame = LDG_ACCESS(nEmptyTrace, f);
@@ -159,117 +120,6 @@ void GenerateSmoothingKernelForExponentialTailFit_dev(
     kern[i] = __expf(dt);   
   }
 }
-
-
-/*
-__device__
-float ApplyDarkMatterToFrame(
-    const float* beadParamCube,
-    const float* regionFrameCube,
-    const float darkness,
-    const int frame,
-    const int num_frames,
-    const int frameStride,
-    const int regionFrameStride)
-{
-
-  if( !ConfigP.UseDarkMatterPCA() )
-    return ((*(regionFrameCube + (RfDarkMatter0 + ConstFlowP.getNucId())*regionFrameStride + frame))
-        *darkness);
-
-  float val = 0;
-
-  regionFrameCube += RfDarkMatter0*regionFrameStride + frame;  //RfDarkMatter0
-  beadParamCube += BpPCAval0*frameStride;  //BpPCAval0
-  val += (*regionFrameCube) * (*beadParamCube);
-  regionFrameCube += regionFrameStride; //RfDarkMatter1
-  beadParamCube += frameStride; //BpPCAval1
-  val += (*regionFrameCube) * (*beadParamCube);
-  regionFrameCube += regionFrameStride; //RfDarkMatter2
-  beadParamCube += frameStride; //BpPCAval2
-  val += (*regionFrameCube) * (*beadParamCube);
-  regionFrameCube += regionFrameStride; //RfDarkMatter3
-  beadParamCube += frameStride; //BpPCAval3
-  val += (*regionFrameCube) * (*beadParamCube);
-
-  return val;
-}
-
-// compute tmid muc. This routine mimics CPU routine in BookKeeping/RegionaParams.cpp
-__device__
-float ComputeMidNucTime(
-    const PerFlowParamsRegion * perFlowRegP,
-    const PerNucParamsRegion * perNucRegP
-)
-{
-  float tmid = perFlowRegP->getTMidNuc();
-  tmid +=  perNucRegP->getTMidNucDelay()*
-      (perFlowRegP->getTMidNuc() -  ConstGlobalP.getValveOpen()) /
-      ( ConstGlobalP.getMagicDivisorForTiming() + SAFETYZERO);
-  tmid +=  perFlowRegP->getTMidNucShift();
-
-  return tmid;
-}
-
-
-
-__device__ 
-float ComputeETBR(
-    const PerFlowParamsRegion * perFlowRegP,
-    const PerNucParamsRegion * perNucRegP,
-    const float R,
-    float copies
-) {
-
-  float etbR;
-
-  if (ConfigP.FitTauE()) {
-    etbR = R;
-    if (etbR)
-      etbR = perNucRegP->getNucModifyRatio() /(perNucRegP->getNucModifyRatio() +
-          (1.0f - (perFlowRegP->getRatioDrift() * (ConstFlowP.getRealFnum())/SCALEOFBUFFERINGCHANGE))*
-          (1.0f / etbR - 1.0f));
-  }
-  else {
-    if ( !ConfigP.UseAlternativeEtbRequation()) {
-      etbR = R*perNucRegP->getNucModifyRatio() +
-          (1.0f - R*perNucRegP->getNucModifyRatio())*
-          perFlowRegP->getRatioDrift()*(ConstFlowP.getRealFnum())/SCALEOFBUFFERINGCHANGE;
-    }
-    else {
-      etbR = R*perNucRegP->getNucModifyRatio() +
-          perFlowRegP->getRatioDrift()*copies*(ConstFlowP.getRealFnum())/(6.0*SCALEOFBUFFERINGCHANGE);
-    }
-  }
-  return etbR;
-}
-
-__device__
-float ComputeTauB( 
-    const ConstantParamsRegion * constRegP,
-    const float etbR) {
-
-  float tauB;
-  if (ConfigP.FitTauE()) {
-    tauB = etbR  ? (constRegP->getTauE() / etbR) : ConstGlobalP.getMinTauB();
-  }
-  else {
-    tauB = constRegP->getTauRM()*etbR + constRegP->getTauRO();
-  }
-
-  clampT(tauB, ConstGlobalP.getMinTauB(), ConstGlobalP.getMaxTauB());
-
-  return tauB;
-}
-
-__device__
-float ComputeSP(
-    const PerFlowParamsRegion * perFlowRegP,
-    const float copies
-) {
-  return ((float)(COPYMULTIPLIER * copies) * pow(perFlowRegP->getCopyDrift(), ConstFlowP.getRealFnum()));
-}
-*/
 
 __device__ 
 float BlockLevel_DecideOnEmphasisVectorsForInterpolation(
@@ -791,158 +641,6 @@ Keplar_ModelFuncEvaluationForSingleFlowFit(
   }
 }
 
-/*
-__device__ void
-BkgModelRedTraceCalculation(
-    const ConstantParamsRegion * constRegP,
-    const PerNucParamsRegion * perNucRegP,
-    const int startFrame,
-    const float * nucRise,
-    float A,
-    const float Krate,
-    const float tau,
-    const float gain,
-    const float SP,
-    const float d,
-    float sens,
-    int c_dntp_top_ndx,
-    float * fval,
-    const float* deltaFrame,
-    int endFrames
-)
-{
-  if ( A!=A )
-    A=0.0001f; // safety check
-
-  if (A < 0.0f) {
-    A = -A;
-    sens = -sens;
-  }
-
-  else if (A > LAST_POISSON_TABLE_COL)
-    A = LAST_POISSON_TABLE_COL;
-
-  if ( A<0.0001f )
-    A = 0.0001f; // safety
-
-  int ileft = ( int ) A;
-  float idelta = A-ileft;
-  int iright = ileft+1;
-  float ifrac = 1-idelta;
-  ileft--;
-  iright--;
-
-  float occ_l = ifrac; // lower mixture
-  float occ_r = idelta; // upper mixture
-
-
-  if (ileft < 0)
-  {
-    occ_l = 0.0;
-    ileft = 0;
-  }
-
-  if (iright == LAST_POISSON_TABLE_COL)
-  {
-    iright = ileft;
-    occ_r = occ_l;
-    occ_l = 0;
-  }
-
-  occ_l *= SP;
-  occ_r *= SP;
-  float pact = occ_l + occ_r;
-
-
-  const float4 * LUTptr = precompute_pois_LUT_params_SingelFLowFit (ileft, iright);
-
-  float totocc = SP*A;
-  float totgen = totocc;
-
-  // We reuse this constant every loop...
-  float cp_sid_kmax_nucid = perNucRegP->getKmax();
-
-  float c_dntp_sum = 0.0;
-  float c_dntp_old_rate = 0;
-  float c_dntp_new_rate = 0;
-
-  float scaled_kr = Krate*constRegP->getMoleculesToMicromolarConversion()/d;
-  float half_kr = Krate*0.5f;
-
-  // variables used for solving background signal shape
-  float aval = 0.0f;
-
-  //new Solve HydrogenFlowInWell
-
-  float one_over_two_tauB = 1.0f;
-  float one_over_one_plus_aval = 1.0f/ (1.0f+aval);
-  float red_hydro_prev; 
-  float fval_local  = 0.0f;
-
-  float red_hydro;
-
-  float c_dntp_bot_plus_kmax = 1.0f/cp_sid_kmax_nucid;
-
-  bool start_frame = true;
-  for (int i=startFrame;i < endFrames;i++)
-  {
-    if (totgen > 0.0f)
-    {
-      float ldt = (deltaFrame[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr;
-      for (int st=1; (st <= ISIG_SUB_STEPS_SINGLE_FLOW) && (totgen > 0.0f);st++)
-      {
-        // assume instantaneous equilibrium
-        c_dntp_old_rate = c_dntp_new_rate;
-
-        // All the threads should be grabbing from the same nucRise location.
-        // c_dntp_bot is the concentration of dNTP in the well
-        float c_dntp_bot = LDG_ACCESS(nucRise, c_dntp_top_ndx++) / (1.0f + scaled_kr*pact*c_dntp_bot_plus_kmax);
-        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + cp_sid_kmax_nucid);
-
-        c_dntp_new_rate = c_dntp_bot*c_dntp_bot_plus_kmax;
-        float c_dntp_int = ldt* (c_dntp_new_rate+c_dntp_old_rate);
-        c_dntp_sum += c_dntp_int;
-
-        // calculate new number of active polymerase
-        float pact_new = poiss_cdf_approx_float4_SingelFLowFit(c_dntp_sum, LUTptr, occ_l, occ_r);
-
-
-        totgen -= ( (pact+pact_new) * 0.5f) * c_dntp_int;
-        pact = pact_new;
-      }
-
-      if (totgen < 0.0f) totgen = 0.0f;
-      red_hydro = (totocc-totgen);
-    }else{
-
-      red_hydro = totocc;
-    }
-
-    // calculate the 'background' part (the accumulation/decay of the protons in the well
-    // normally accounted for by the background calc)
-
-    red_hydro *= sens;  
-
-    one_over_two_tauB = 1.0f/ (2.0f*tau);
-    aval = deltaFrame[i]*one_over_two_tauB; //CP_SINGLEFLOWFIT
-    one_over_one_plus_aval = 1.0f/ (1.0f+aval);
-
-    if(start_frame) { //CP_SINGLEFLOWFIT
-      fval_local = red_hydro; // *one_over_one_plus_aval;
-      start_frame = false;
-    } else {
-      fval_local = red_hydro - red_hydro_prev + (1.0f-aval)*fval_local; // *one_over_one_plus_aval;
-    }
-
-    red_hydro_prev = red_hydro;
-
-    fval_local *=  one_over_one_plus_aval;
-
-    fval[i] = fval_local * gain;  
-  }
-}
-*/
-
 __device__ 
 void ZeromerCorrectionFromRawTrace(
     const float* bkgTrace,
@@ -1137,64 +835,6 @@ void ExponentialTailFitCorrection(
   }
 }
 
-/*__device__
-float ProjectionSearch(
-    const ConstantParamsRegion * constRegP,
-    const PerFlowParamsRegion * perFlowRegP,
-    const PerNucParamsRegion * perNucRegP,
-    const float* observedTrace,
-    const float* emphasisVec,
-    const int * nonZeroEmphFrames,
-    const float* nucRise,
-    const float* deltaFrames,
-    const float kmult,
-    const float d,
-    const float tauB,
-    const float gain,
-    const float SP,
-    float* tmp_fval
-    //bool print
-)
-{
-  float Ampl = 1.0f;
-
-  for (int i=0; i<2; ++i) { //TODO invariant code motion?
-
-
-    BkgModelRedTraceCalculation(
-        constRegP,
-        perNucRegP,
-        perFlowRegP->getStart(),
-        nucRise, 
-        Ampl, 
-        kmult*perNucRegP->getKrate(),
-        tauB, 
-        gain, 
-        SP, 
-        d, 
-        constRegP->getSens()*SENSMULTIPLIER,
-        ISIG_SUB_STEPS_SINGLE_FLOW * perFlowRegP->getStart(),
-        tmp_fval, 
-        deltaFrames, 
-        nonZeroEmphFrames[0]);
-
-
-    float num = 0, den = 0.0001f;
-    float emphasisVal;
-    for (int j=perFlowRegP->getStart(); j<nonZeroEmphFrames[0]; ++j) {
-      emphasisVal = emphasisVec[j*MAX_POISSON_TABLE_COL] * emphasisVec[j*MAX_POISSON_TABLE_COL];
-      num += tmp_fval[j]*observedTrace[j]*emphasisVal; // multiply by emphasis vectors
-      den += tmp_fval[j]*tmp_fval[j]*emphasisVal;
-    }
-    Ampl *= (num/den);
-    if (isnan(Ampl))
-      Ampl = 1.0f;
-    else
-      clampT(Ampl, 0.001f, (float)LAST_POISSON_TABLE_COL);
-  }
-  return Ampl;
-}*/
-
 __device__ float 
 ResidualCalculationPerFlow(
     const int startFrame,
@@ -1274,9 +914,12 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
     const unsigned short * BStateMask, //needed to update corrupt state
     const short * RawTraces, // imgW*imgHxF
     const float * BeadParamCube, //Copies, R, dmult, gain, tau_adj, phi, stride == frameStride
-    const float* emphasisVec, //(MAX_POISSON_TABLE_COL)*F
-    const int * nonZeroEmphFrames,
-    const float* nucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+    const float* fineemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * finenonZeroEmphFrames,
+    const float* crudeemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * crudenonZeroEmphFrames,
+    const float* finenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+    const float* coarsenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
     //per region
     const ConstantParamsRegion * constRegP,
     const PerFlowParamsRegion * perFlowRegP,
@@ -1350,6 +993,20 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
       );
 
 
+  /*if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+    printf("Corrected Trace\n");
+    for (int fr=0; fr<num_frames; ++fr)
+      printf("%f ", correctedTrace[fr]);
+    printf("\n");
+    printf("RawTrace Trace\n");
+    for (int fr=0; fr<num_frames; ++fr)
+      printf("%f ", (float)(RawTraces[fr*frameStride]));
+    printf("\n");
+    printf("Empty Trace\n");
+    for (int fr=0; fr<num_frames; ++fr)
+      printf("%f ", bkgTrace[fr]);
+    printf("\n");
+  }*/
 
   // projection search for initial ampl estimates
   float Ampl = ProjectionSearch(
@@ -1357,9 +1014,9 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
       perFlowRegP,
       perNucRegP,
       correctedTrace,
-      emphasisVec,
-      nonZeroEmphFrames[0],
-      nucRise,
+      crudeemphasisVec,
+      crudenonZeroEmphFrames[0],
+      coarsenucRise,
       deltaFrames,
       kmult,
       d,
@@ -1367,10 +1024,10 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
       gain,
       SP,
       tmp_fval,
-      perFlowRegP->getStart(),
+      perFlowRegP->getCoarseStart(),
       frameStride,
-      emphStride,
-      ISIG_SUB_STEPS_SINGLE_FLOW
+      1,
+      ISIG_SUB_STEPS_MULTI_FLOW
       //print
   );
 
@@ -1383,7 +1040,6 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
 #if !PROJECTION_ONLY
   }
 #endif
-
 
 
   // exponential tail fit
@@ -1400,10 +1056,6 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
         adjustTauB,
         num_frames,
         correctedTrace);
-
-
-    // TODO
-    // recompress tail of raw trace
   }
 
 
@@ -1434,12 +1086,6 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
 
 
   // perform gauss newton fit
-  deltaFrames = ConfigP.PerformRecompressTailRawTrace() ?
-      RegionFrameCube + RfDeltaFramesStd*regionFrameStride :
-      RegionFrameCube + RfDeltaFrames*regionFrameStride;
-  const int* nonZeroEmpFramesVec = (ConfigP.PerformRecompressTailRawTrace())?
-      (nonZeroEmphFrames + ImgRegP.getNumRegions()*MAX_POISSON_TABLE_COL):(nonZeroEmphFrames);
-
   float localMinKmult = ConstGlobalP.getMinKmult();
   float localMaxKmult= ConstGlobalP.getMaxKmult();
 
@@ -1454,7 +1100,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
 
   float sens = constRegP->getSens() * SENSMULTIPLIER;
   int relax_kmult_pass = 0;
-  int startFrame = perFlowRegP->getStart();
+  int startFrame = perFlowRegP->getFineStart();
 
 
   while (relax_kmult_pass < 2)
@@ -1467,7 +1113,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
         perNucRegP,
         twoParamFit,
         startFrame,
-        nucRise, 
+        finenucRise, 
         Ampl, 
         kmult*perNucRegP->getKrate(),
         tauB, 
@@ -1485,7 +1131,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
         constRegP,
         perNucRegP,
         startFrame,
-        nucRise, 
+        finenucRise, 
         Ampl, 
         kmult*perNucRegP->getKrate(),
         tauB, 
@@ -1505,11 +1151,11 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
     const float EmphSel = Ampl;
     int nonZeroEmpFrames;
     float frac = BlockLevel_DecideOnEmphasisVectorsForInterpolation(
-        nonZeroEmpFramesVec,
+        finenonZeroEmphFrames,
         &emLeft,
         &emRight,
         EmphSel,
-        emphasisVec,
+        fineemphasisVec,
         num_frames,
         nonZeroEmpFrames);
 
@@ -1553,7 +1199,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
           perNucRegP,
           twoParamFit, 
           startFrame,
-          nucRise,
+          finenucRise,
           newAmpl, 
           kmult*perNucRegP->getKrate(),
           tauB, 
@@ -1584,7 +1230,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
             perNucRegP,
             twoParamFit,
             startFrame,
-            nucRise, 
+            finenucRise, 
             Ampl,
             newKmult*perNucRegP->getKrate(),
             tauB, 
@@ -1613,7 +1259,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
           constRegP,
           perNucRegP,
           startFrame,
-          nucRise,
+          finenucRise,
           newAmpl,
           Ampl,
           kmult*perNucRegP->getKrate(),
@@ -1647,7 +1293,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
       }else
         delta0 = rhs0 / aa;
 
-      if( !isnan(delta0) && !isnan(delta1)){
+      if( !::isnan(delta0) && !::isnan(delta1)){
         // add delta to params to obtain new params
         newAmpl = Ampl + delta0;
         if(twoParamFit)
@@ -1661,11 +1307,11 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
         // Evaluate using new params
         if (ConfigP.UseDynamicEmphasis())
           frac = BlockLevel_DecideOnEmphasisVectorsForInterpolation(
-              nonZeroEmpFramesVec,
+              finenonZeroEmphFrames,
               &emLeft,
               &emRight,
               newAmpl,
-              emphasisVec,
+              fineemphasisVec,
               num_frames,
               nonZeroEmpFrames);
 
@@ -1675,7 +1321,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
             perNucRegP,
             twoParamFit,
             startFrame,
-            nucRise,
+            finenucRise,
             newAmpl,
             newKmult*perNucRegP->getKrate(),
             tauB,
@@ -1693,7 +1339,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
             constRegP,
             perNucRegP,
             startFrame,
-            nucRise,
+            finenucRise,
             newAmpl, 
             newKmult*perNucRegP->getKrate(),
             tauB, 
@@ -1730,11 +1376,11 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
         else {
           if (ConfigP.UseDynamicEmphasis()) {
             frac = BlockLevel_DecideOnEmphasisVectorsForInterpolation(
-                nonZeroEmpFramesVec,
+                finenonZeroEmphFrames,
                 &emLeft,
                 &emRight,
                 Ampl,
-                emphasisVec,
+                fineemphasisVec,
                 num_frames, 
                 nonZeroEmpFrames);
           }
@@ -1775,7 +1421,7 @@ SingleFlowFitUsingRelaxKmultGaussNewton(
       startFrame,
       correctedTrace,
       fval,
-      emphasisVec+LAST_POISSON_TABLE_COL,
+      fineemphasisVec+LAST_POISSON_TABLE_COL,
       num_frames);
 
   //   printf("DEBUG: final residual %f\n",residual); //T*** REMOVE!!  DEBUG ONLY
@@ -2113,9 +1759,12 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     //in parameters
     const short * RawTraces, // NxF
     const float * BeadParamCube,
-    const float* emphasisVec, //(MAX_POISSON_TABLE_COL)*F
-    const int * nonZeroEmphFrames,
-    const float* nucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+    const float* crudeemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * crudenonZeroEmphFrames,
+    const float* fineemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * finenonZeroEmphFrames,
+    const float* finenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+    const float* coarsenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
     //in out parameters
     float* ResultCube,
     const size_t * numFramesRegion,  //constant memory?
@@ -2125,7 +1774,6 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     const PerFlowParamsRegion * perFlowRegP,
     const PerNucParamsRegion * perNucRegP,
     const float * RegionFrameCube,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
-    const float * EmptyTraceRegion,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
     //TraceLevelXTalk
     const float * XTalkPerBead,
     const float * genericXTalkRegion
@@ -2176,13 +1824,14 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
 
 
 #ifndef USE_INTERPOLATED_EMPTY
-    const float * emptyTraceAvg = EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
+    const float * emptyTraceAvg =  ConstHistCol.getLatestEmptyTraces() + regId*ConstFrmP.getUncompFrames(); // EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
 #endif
 
 
   ////////////////////////////////////////////////////////////
   // setup code that needs to be done by all threads
-  emphasisVec += regId * MAX_POISSON_TABLE_COL * ConstFrmP.getMaxCompFrames();
+  fineemphasisVec += regId * MAX_POISSON_TABLE_COL * ConstFrmP.getMaxCompFrames();
+  crudeemphasisVec += regId * MAX_POISSON_TABLE_COL * ConstFrmP.getMaxCompFrames();
 
   //
   //careful when accessing pointers since threads that would work out of bounds
@@ -2194,7 +1843,7 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     for(int i=warpIdx; i<numf; i += numWarps)
     {
       if (threadWarpIdx < MAX_POISSON_TABLE_COL)
-        emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = emphasisVec[numf*threadWarpIdx + i ];
+        emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = fineemphasisVec[numf*threadWarpIdx + i ];
     }
   }else{
     const int numthreads = blockDim.x*blockDim.y;
@@ -2205,7 +1854,7 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     for(int i=warpIdx; i<numf; i += numWarps)
     {
       if (threadWarpIdx < MAX_POISSON_TABLE_COL)
-        emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = emphasisVec[numf*threadWarpIdx + i ];
+        emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = fineemphasisVec[numf*threadWarpIdx + i ];
     }
   }
 
@@ -2222,8 +1871,10 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     genericXTalkRegion += ConstFrmP.getMaxCompFrames() * regId;
   }
 
-  nonZeroEmphFrames += regId*MAX_POISSON_TABLE_COL;
-  nucRise += regId *  ISIG_SUB_STEPS_SINGLE_FLOW * ConstFrmP.getMaxCompFrames() ;
+  finenonZeroEmphFrames += regId*MAX_POISSON_TABLE_COL;
+  crudenonZeroEmphFrames += regId*MAX_POISSON_TABLE_COL;
+  finenucRise += regId *  ISIG_SUB_STEPS_SINGLE_FLOW * ConstFrmP.getMaxCompFrames() ;
+  coarsenucRise += regId *  ISIG_SUB_STEPS_MULTI_FLOW * ConstFrmP.getMaxCompFrames() ;
 
   float rezero_t_start =  perFlowRegP->getTMidNuc()+perFlowRegP->getTMidNucShift();
 
@@ -2319,7 +1970,8 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
 
 #ifdef USE_INTERPOLATED_EMPTY
       float emptyTraceAvg[MAX_COMPRESSED_FRAMES_GPU] = {0};
-      interpolateEmpty( emptyTraceAvg, EmptyTraceRegion, RegionMask, regId, ix+myOffset, iy, numf);
+      //interpolateEmpty( emptyTraceAvg,  EmptyTraceRegion, RegionMask, regId, ix+myOffset, iy, numf);
+      interpolateEmpty( emptyTraceAvg, RegionMask, regId, ix+myOffset, iy, numf);
       //if( regId == 27 && myOffset%20 == 0 && ry%28 == 0 ){
       //const float * rt = emptyTraceAvg;
       //int i=0;
@@ -2353,8 +2005,11 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
             lBeadParamCube, //Copies, R, dmult, gain, tau_adj, phi, stride == frameStride
             //per region
             emphasis, //(MAX_POISSON_TABLE_COL)*F
-            nonZeroEmphFrames,
-            nucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+            finenonZeroEmphFrames,
+            crudeemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+            crudenonZeroEmphFrames,
+            finenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+            coarsenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
             constRegP,
             perFlowRegP,
             perNucRegP,

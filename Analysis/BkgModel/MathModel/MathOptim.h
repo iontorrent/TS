@@ -16,7 +16,7 @@
 #include "PoissonCdf.h"
 
 
-#if !defined( __CUDACC__ )
+#if defined( __SSE__ ) && !defined( __CUDACC__ )
     #include <x86intrin.h>
 #else
     typedef float __m128 __attribute__ ((vector_size (16)));

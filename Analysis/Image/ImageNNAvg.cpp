@@ -21,19 +21,23 @@ void ImageNNAvg::Alloc(int n_rows, int n_cols, int n_frames) {
     /* Data cube for cumulative sum for calculating averages fast. 
        Note the padding by 1 row and colum for easy code flow */
   m_cum_sum_size = (size_t)(m_num_cols +1) * (m_num_rows + 1) * m_num_frames;
-  m_cum_sum = (int64_t *__restrict)memalign(VEC8F_SIZE_B, sizeof(int64_t) * m_cum_sum_size);
+  m_cum_sum = (int64_t *)memalign(VEC8F_SIZE_B, sizeof(int64_t) * m_cum_sum_size);
   assert(m_cum_sum);
   memset(m_cum_sum, 0, sizeof(int64_t) * m_cum_sum_size); // zero out
   int cs_frame_stride = (m_num_cols + 1) * (m_num_rows + 1);
   
   /* Mask of the cumulative number of good wells so we know denominator of average also padded. */
-  m_num_good_wells = (int *__restrict) memalign(VEC8F_SIZE_B, sizeof(int) * cs_frame_stride);
+  m_num_good_wells = (int *) memalign(VEC8F_SIZE_B, sizeof(int) * cs_frame_stride);
   assert(m_num_good_wells);
   memset(m_num_good_wells, 0, sizeof(int) * cs_frame_stride);
   
   /* Data cube for our averages */
-  m_nn_avg = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) frame_stride * m_num_frames);
-  assert(m_nn_avg);
+  m_nn_avg = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) frame_stride * m_num_frames);
+  if (!m_nn_avg) {
+    perror("memalign");
+    printf("memalign failed to allocate %zu bytes", (sizeof(float) * (size_t) frame_stride * m_num_frames));
+    exit(1);
+  }
 }
 
 void  ImageNNAvg::Cleanup() {
@@ -56,15 +60,18 @@ void ImageNNAvg::CalcCumulativeSum(const short *__restrict image, const Mask *ma
       const short *__restrict col_ptr =  image + fIx * frame_stride + rowIx * m_num_cols;
       const short *__restrict col_ptr_end = col_ptr + m_num_cols;
       const unsigned short *__restrict c_mask = p_mask + rowIx * m_num_cols;
-      const char *__restrict c_bad_wells = bad_wells + rowIx * m_num_cols;
+      const char *__restrict c_bad_wells = NULL;
+      if(bad_wells)
+    	  c_bad_wells = bad_wells + rowIx * m_num_cols;
       cs_prev = m_cum_sum + (fIx * cs_frame_stride + rowIx * (m_num_cols+1)); // +1 due to padding
       cs_cur = cs_prev + m_num_cols + 1; // pointing at zero so needs to be incremented before assignment
       int64_t value;
       while(col_ptr != col_ptr_end) {
         value = *col_ptr++;
-        if ((*c_mask & mask_ignore) != 0 || *c_bad_wells != 0) { value = 0.0f; }
+        if ((*c_mask & mask_ignore) != 0 || (bad_wells && *c_bad_wells != 0)) { value = 0.0f; }
         c_mask++;
-        c_bad_wells++;
+        if(bad_wells)
+        	c_bad_wells++;
         value -= *cs_prev++;
         value += *cs_cur++ + *cs_prev;
         *cs_cur = value;
@@ -77,12 +84,15 @@ void ImageNNAvg::CalcCumulativeSum(const short *__restrict image, const Mask *ma
     const unsigned short *__restrict c_mask = p_mask + rowIx * m_num_cols;
     int *__restrict g_prev = m_num_good_wells + (rowIx * (m_num_cols+1));
     int *__restrict g_cur = g_prev + m_num_cols + 1;
-    const char *__restrict c_bad_wells = bad_wells + rowIx * m_num_cols;
+    const char *__restrict c_bad_wells = NULL;
+    if(bad_wells)
+    	c_bad_wells = bad_wells + rowIx * m_num_cols;
     for (int colIx = 0; colIx < m_num_cols; colIx++) {
       int good = 1;
-      if ((*c_mask & mask_ignore) != 0 || *c_bad_wells != 0) { good = 0; }
+      if ((*c_mask & mask_ignore) != 0 || (bad_wells && *c_bad_wells != 0)) { good = 0; }
       c_mask++;
-      c_bad_wells++;
+      if(bad_wells)
+    	  c_bad_wells++;
       int x =  *g_cur++ + good - *g_prev++;
       x += *g_prev;
       *g_cur = x;

@@ -6,5 +6,6 @@
 int PrepareHotspots(int argc, const char *argv[]);
 int ValidateBed(int argc, const char *argv[]);
 int UnifyVcf(int argc, const char *argv[]);
+int SplitVcf(int argc, const char *argv[]);
 
 #endif // TVCUTILS_H

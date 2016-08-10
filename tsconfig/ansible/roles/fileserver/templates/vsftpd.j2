@@ -14,10 +14,5 @@ xferlog_enable=YES
 connect_from_port_20=YES
 secure_chroot_dir=/var/run/vsftpd/empty
 pam_service_name=vsftpd
-{% if ansible_distribution_release == 'trusty' %}
 rsa_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
 rsa_private_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
-{% else %}
-rsa_cert_file=/etc/ssl/private/vsftpd.pem
-{% endif %}
-

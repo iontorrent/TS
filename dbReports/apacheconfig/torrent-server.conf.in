@@ -27,6 +27,7 @@
 
     ErrorDocument 404 /404.html
     ErrorDocument 500 /500.html
+    ErrorDocument 503 /maintenance.html
 
     ErrorLog /var/log/apache2/error.log
 
@@ -36,8 +37,16 @@
     # Log is filtered
     CustomLog /var/log/apache2/access.log combined env=!dontlog
 
+    # Maintenance activated when /var/www/maintenance.enable file exists
+    # TS update page is excluded from redirect
     <IfModule mod_rewrite.c>
       RewriteEngine On
+      RewriteCond %{DOCUMENT_ROOT}/maintenance.enable -f
+      RewriteCond %{SCRIPT_FILENAME} !maintenance.html
+      RewriteCond %{REQUEST_URI} !^/admin/update
+      RewriteCond %{REQUEST_URI} !^/rundb/api/v1/globalconfig/1/
+      RewriteCond %{REQUEST_URI} !^/site_media/
+      RewriteRule ^.*$ /maintenance.html [R=503,L]
       RewriteOptions inherit
     </IfModule>
 

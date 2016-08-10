@@ -44,9 +44,9 @@ H5DataSet * H5Arma::CreateDataSet(H5File &h5, const std::string &name, arma::Mat
   hsize_t rank = 2;
   hsize_t dims[rank];
   hsize_t chunking[rank];
-  chunking[0] = std::min(1000u, mat.n_rows);
+  chunking[0] = std::min((arma::uword)1000, mat.n_rows);
   dims[0] = mat.n_rows;
-  chunking[1] = std::min(1000u, mat.n_cols);
+  chunking[1] = std::min((arma::uword)1000, mat.n_cols);
   dims[1] = mat.n_cols;
   T t = 0;
   hid_t type = h5.GetH5Type(t);

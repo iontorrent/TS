@@ -10,6 +10,10 @@ NucStep::NucStep()
 
   i_start_coarse_step = i_start_fine_step = NULL;
   per_flow_coarse_step = per_flow_fine_step = NULL;
+
+  t_mid_nuc_actual = NULL;
+  t_sigma_actual = NULL;
+
   all_flow_t = 0;
   precomputed_step = false;
 }
@@ -20,6 +24,9 @@ void NucStep::Alloc ( int npts, int flow_block_size )
   per_flow_fine_step   = new float* [flow_block_size];
   i_start_coarse_step  = new int    [flow_block_size];
   i_start_fine_step    = new int    [flow_block_size];
+
+  t_mid_nuc_actual = new float [flow_block_size];
+  t_sigma_actual = new float [flow_block_size];
 
   for ( int fnum=0;fnum<flow_block_size;fnum++ )
   {
@@ -82,9 +89,11 @@ void NucStep::CalculateNucRiseFineStep (
     for ( int fnum=0;fnum<my_flow.GetMaxFlowCount();fnum++ )
     {
       int NucID = my_flow.flow_ndx_map[fnum];
+      t_mid_nuc_actual[fnum] = GetModifiedMidNucTime ( & ( a_region->nuc_shape ),NucID, fnum );
+      t_sigma_actual[fnum] = GetModifiedSigma ( & ( a_region->nuc_shape ),NucID );
       i_start_fine_step[fnum]=dntpMod.CalcCDntpTop ( per_flow_fine_step[fnum],
-                              GetModifiedMidNucTime ( & ( a_region->nuc_shape ),NucID,fnum ),
-                              GetModifiedSigma ( & ( a_region->nuc_shape ),NucID ), a_region->nuc_shape.nuc_flow_span,NucID );
+                                                     t_mid_nuc_actual[fnum],
+                                                     t_sigma_actual[fnum], a_region->nuc_shape.nuc_flow_span,NucID );
     }
   }
 }
@@ -116,9 +125,11 @@ void NucStep::CalculateNucRiseCoarseStep (
     for ( int fnum=0;fnum<my_flow.GetMaxFlowCount();fnum++ )
     {
       int NucID = my_flow.flow_ndx_map[fnum];
+      t_mid_nuc_actual[fnum] = GetModifiedMidNucTime ( & ( a_region->nuc_shape ),NucID, fnum );
+      t_sigma_actual[fnum] = GetModifiedSigma ( & ( a_region->nuc_shape ),NucID );
       i_start_coarse_step[fnum]=dntpMod.CalcCDntpTop ( per_flow_coarse_step[fnum],
-                                GetModifiedMidNucTime ( & ( a_region->nuc_shape ),NucID, fnum ),
-                                GetModifiedSigma ( & ( a_region->nuc_shape ),NucID ), a_region->nuc_shape.nuc_flow_span,NucID );
+                                                       t_mid_nuc_actual[fnum],
+                                                       t_sigma_actual[fnum], a_region->nuc_shape.nuc_flow_span,NucID );
     }
   }
 }
@@ -149,6 +160,9 @@ void NucStep::Delete()
   delete [] per_flow_fine_step;
   delete [] i_start_coarse_step;
   delete [] i_start_fine_step;
+
+  delete [] t_mid_nuc_actual;
+  delete [] t_sigma_actual;
 }
 
 NucStep::~NucStep()

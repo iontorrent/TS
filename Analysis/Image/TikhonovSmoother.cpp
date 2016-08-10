@@ -25,7 +25,6 @@
 #include "Utils.h"
 #include "deInterlace.h"
 #include "LinuxCompat.h"
-#include "ChipIdDecoder.h"
 #include "LSRowImageProcessor.h"
 
 #include "IonErr.h"
@@ -238,7 +237,7 @@ TikhonovSmoother::TikhonovSmoother ( const char *datDirectory, const char *smoot
     bytes_to_read = sizeof ( sh );
     bytes_read = read ( infd, &sh, bytes_to_read );
     if ( bytes_read != bytes_to_read ) { //ERROR
-      fprintf ( stdout, "bytes_read=%lu != bytes_to_read=%lu\n", bytes_read, bytes_to_read );
+      fprintf ( stdout, "bytes_read=%zu != bytes_to_read=%zu\n", bytes_read, bytes_to_read );
       return;
     }
     if ( sh.magic != 0xABCDBEEF ) {  // ERROR

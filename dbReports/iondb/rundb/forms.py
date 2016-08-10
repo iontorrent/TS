@@ -24,10 +24,13 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 from django.utils.safestring import mark_safe
+
+
 class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
+
     def render(self, name, value, attrs=None):
         csm = super(Plugins_SelectMultiple, self).render(name, value, attrs=None)
-        csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>',u'').replace(u'</label>',u'')
+        csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>', u'').replace(u'</label>', u'')
         # add 'configure' button for plugins
         btn_html = '&nbsp; <button type="button" class="configure_plugin" id="configure_plugin_XXX" data-plugin_pk=XXX style="display: none;"> Configure </button>'
         output = ''
@@ -46,7 +49,7 @@ class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
                 pk = line.split('value="')[1].split('"')[0]
                 plugin = models.Plugin.objects.get(pk=pk)
                 if plugin.isPlanConfig:
-                    output += btn_html.replace('XXX',pk)
+                    output += btn_html.replace('XXX', pk)
                 output += '</div>'
                 # disable IRU if not configured
                 if 'IonReporterUploader' == plugin.name:
@@ -59,7 +62,9 @@ class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
 
         return mark_safe(output)
 
+
 class DataSelect(djangoWidget.Widget):
+
     """this is added to be able to have data attribs to the options"""
 
     allow_multiple_selected = False
@@ -102,26 +107,28 @@ class DataSelect(djangoWidget.Widget):
                 output.append(self.render_option(selected_choices, option_value, option_label, option_pk, option_version))
         return u'\n'.join(output)
 
+
 class CmdlineArgsField(forms.CharField):
-    
+
     def __init__(self):
         super(CmdlineArgsField, self).__init__(
             max_length=1024,
             required=False,
-            widget = forms.Textarea(attrs={'class':'span12 args','rows':4})
+            widget=forms.Textarea(attrs={'class': 'span12 args', 'rows': 4})
         )
-    
+
     def clean(self, value):
         value = super(CmdlineArgsField, self).clean(value)
         if not set(value).issubset(string.printable):
             raise forms.ValidationError(("Command contains non ascii characters."))
         return value
 
+
 class RunParamsForm(forms.Form):
 
     report_name = forms.CharField(max_length=128,
-                                widget=forms.TextInput(attrs={'size':'60','class':'textInput input-xlarge'}) )
-    
+                                widget=forms.TextInput(attrs={'size': '60', 'class': 'textInput input-xlarge'}))
+
     beadfindArgs = CmdlineArgsField()
     analysisArgs = CmdlineArgsField()
     prebasecallerArgs = CmdlineArgsField()
@@ -142,24 +149,24 @@ class RunParamsForm(forms.Form):
 
     blockArgs = forms.CharField(max_length=128, required=False, widget=forms.HiddenInput)
 
-    libraryKey = forms.CharField(max_length=128, required=False, initial="TCAG", widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
-    tfKey= forms.CharField(max_length=128, required=False,initial="ATCG", widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
+    libraryKey = forms.CharField(max_length=128, required=False, initial="TCAG", widget=forms.TextInput(attrs={'size': '60', 'class': 'input-xlarge'}))
+    tfKey = forms.CharField(max_length=128, required=False, initial="ATCG", widget=forms.TextInput(attrs={'size': '60', 'class': 'input-xlarge'}))
 
     # unused?
     align_full = forms.BooleanField(required=False, initial=False)
 
     do_thumbnail = forms.BooleanField(required=False, initial=False, label="Thumbnail only")
     do_base_recal = forms.CharField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}), label="Base Recalibration Mode")
-    
+
     realign = forms.BooleanField(required=False)
     mark_duplicates = forms.BooleanField(required=False, initial=False)
 
-    previousReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}) )
-    previousThumbReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}) )
+    previousReport = forms.CharField(required=False, widget=DataSelect(attrs={'class': 'input-xlarge'}))
+    previousThumbReport = forms.CharField(required=False, widget=DataSelect(attrs={'class': 'input-xlarge'}))
 
     project_names = forms.CharField(max_length=1024,
                            required=False,
-                           widget=forms.TextInput(attrs={'size':'60','class':'textInput input-xlarge'}))
+                           widget=forms.TextInput(attrs={'size': '60', 'class': 'textInput input-xlarge'}))
 
     def clean_report_name(self):
         """
@@ -169,11 +176,11 @@ class RunParamsForm(forms.Form):
         errors = []
         if reportName[0] == "-":
             errors.append(("The Report name can not begin with '-'"))
-        if len(reportName) > 128:
-            errors.append(("Report Name needs to be less than 128 characters long"))
+        if len(reportName) > 60:
+            errors.append(("Report Name needs to be less than 60 characters long"))
         if not set(reportName).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
             errors.append(("That Report name has invalid characters. The valid values are letters, numbers, underscore and period."))
-        
+
         if errors:
             raise forms.ValidationError(errors)
         else:
@@ -208,61 +215,63 @@ class RunParamsForm(forms.Form):
                   raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
         return ','.join(names)
 
-           
+
 
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 
+
 class AnalysisSettingsForm(forms.ModelForm):
 
-    reference = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
-    targetRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
-    hotSpotRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    reference = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    targetRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    hotSpotRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     plugins = forms.ModelMultipleChoiceField(required=False, widget=Plugins_SelectMultiple(),
     queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
     pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
     #barcodeKitName = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'input-xlarge', 'readonly':'true'}) )
-    barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
 
-    threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     barcodedReferences = forms.CharField(required=False, widget=forms.HiddenInput())
-        
+
     def __init__(self, *args, **kwargs):
         super(AnalysisSettingsForm, self).__init__(*args, **kwargs)
         # initialize choices when form instance created
         references = models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION, enabled=True)
-        self.fields['reference'].choices= [('','none')] + [(v[0],"%s (%s)" % (v[0],v[1])) for v in references.values_list('short_name', 'name')]
+        self.fields['reference'].choices = [('', 'none')] + [(v[0], "%s (%s)" % (v[0], v[1])) for v in references.values_list('short_name', 'name')]
         bedfiles = dict_bed_hotspot()
-        self.fields['targetRegionBedFile'].choices= [('','')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('bedFiles',[])]
-        self.fields['hotSpotRegionBedFile'].choices= [('','')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('hotspotFiles',[])]
-        self.fields['barcodeKitName'].choices= [('','')]+list(models.dnaBarcode.objects.order_by('name').distinct('name').values_list('name','name'))
+        self.fields['targetRegionBedFile'].choices = [('', '')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('bedFiles', [])]
+        self.fields['hotSpotRegionBedFile'].choices = [('', '')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('hotspotFiles', [])]
+        self.fields['barcodeKitName'].choices = [('', '')]+list(models.dnaBarcode.objects.order_by('name').distinct('name').values_list('name', 'name'))
         adapters = models.ThreePrimeadapter.objects.all().order_by('-isDefault', 'name')
-        self.fields['threePrimeAdapter'].choices= [(v[1],"%s (%s)" % (v[0],v[1])) for v in adapters.values_list('name', 'sequence')]
+        self.fields['threePrimeAdapter'].choices = [(v[1], "%s (%s)" % (v[0], v[1])) for v in adapters.values_list('name', 'sequence')]
 
     class Meta:
         model = models.ExperimentAnalysisSettings
         fields = ('reference', 'targetRegionBedFile', 'hotSpotRegionBedFile', 'barcodeKitName', 'threePrimeAdapter')
 
+
 class ExperimentSettingsForm(forms.ModelForm):
 
-    sample = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    sample = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     barcodedSamples = forms.CharField(required=False, widget=forms.HiddenInput())
     runtype = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     libraryKitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     sequencekitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    chipBarcode = forms.CharField(required=False, max_length=64, widget=forms.TextInput(attrs={'class':'textInput input-xlarge validateAlphaNumNoSpace'}) )
-    libraryKey = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
-    notes = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class':'textInput input-xlarge'}) )
-    mark_duplicates = forms.BooleanField(required = False, initial = False)
-    sampleTubeLabel = forms.CharField(required=False, max_length=512, widget=forms.TextInput(attrs={'class':'textInput input-xlarge'}) )    
-    
+    chipBarcode = forms.CharField(required=False, max_length=64, widget=forms.TextInput(attrs={'class': 'textInput input-xlarge validateAlphaNumNoSpace'}))
+    libraryKey = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    notes = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'textInput input-xlarge'}))
+    mark_duplicates = forms.BooleanField(required=False, initial=False)
+    sampleTubeLabel = forms.CharField(required=False, max_length=512, widget=forms.TextInput(attrs={'class': 'textInput input-xlarge'}))
+
     def __init__(self, *args, **kwargs):
         super(ExperimentSettingsForm, self).__init__(*args, **kwargs)
         # initialize sample and key choices when form instance created
-        self.fields['sample'].choices = [('','')]+ list(models.Sample.objects.filter().values_list('id', 'displayedName'))
-        self.fields['libraryKey'].choices = [(v[0],"%s (%s)" % (v[0],v[1])) for v in models.LibraryKey.objects.filter().values_list('sequence', 'description')]
-        self.fields['runtype'].choices = [(v[0], "%s (%s)" % (v[1],v[0])) for v in models.RunType.objects.all().order_by("id").values_list('runType','description')]
-        self.fields['libraryKitname'].choices = [('','')] + list(models.KitInfo.objects.filter(kitType='LibraryKit').values_list('name','name'))
-        self.fields['sequencekitname'].choices = [('','')]+list(models.KitInfo.objects.filter(kitType='SequencingKit').values_list('name','name'))
+        self.fields['sample'].choices = [('', '')] + list(models.Sample.objects.filter().values_list('id', 'displayedName'))
+        self.fields['libraryKey'].choices = [(v[0], "%s (%s)" % (v[0], v[1])) for v in models.LibraryKey.objects.filter().values_list('sequence', 'description')]
+        self.fields['runtype'].choices = [(v[0], "%s (%s)" % (v[1], v[0])) for v in models.RunType.objects.all().order_by("id").values_list('runType', 'description')]
+        self.fields['libraryKitname'].choices = [('', '')] + list(models.KitInfo.objects.filter(kitType='LibraryKit').values_list('name', 'name'))
+        self.fields['sequencekitname'].choices = [('', '')]+list(models.KitInfo.objects.filter(kitType='SequencingKit').values_list('name', 'name'))
 
     class Meta:
         model = models.Experiment
@@ -270,16 +279,17 @@ class ExperimentSettingsForm(forms.ModelForm):
 
 
 class EmailAddress(forms.ModelForm):
+
     "Made to have full symetry with the EmailAddress model fields"
     class Meta:
         model = models.EmailAddress
 
 
 class EditReferenceGenome(forms.Form):
-    name = forms.CharField(max_length=512,required=True, label="Short Name")
+    name = forms.CharField(max_length=512, required=True, label="Short Name")
     version = forms.CharField(max_length=100, required=False, label="Version")
-    NCBI_name = forms.CharField(max_length=512,required=True, label="Description")
-    notes = forms.CharField(max_length=1048,required=False,widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
+    NCBI_name = forms.CharField(max_length=512, required=True, label="Description")
+    notes = forms.CharField(max_length=1048, required=False, widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
     enabled = forms.BooleanField(required=False)
     genome_key = forms.IntegerField(widget=forms.HiddenInput(), required=True)
     index_version = forms.CharField(widget=forms.HiddenInput(), required=True)
@@ -298,7 +308,7 @@ class EditReferenceGenome(forms.Form):
             raise forms.ValidationError(("The short name has invalid characters. The valid values are letters, numbers, and underscores."))
 
         for g in genomes:
-            if get_name == g.name and g.index_version == index_version :
+            if get_name == g.name and g.index_version == index_version:
                 error_str = "A reference with the name" + get_name + " and index version" + index_version + " already exists"
                 raise forms.ValidationError(error_str)
         return get_name
@@ -327,17 +337,20 @@ class UserProfileForm(forms.ModelForm):
 
 
 class NetworkConfigForm(forms.Form):
-    modes = (("dhcp","DHCP",), ("static", "Static"))
+    modes = (("dhcp", "DHCP",), ("static", "Static"))
     mode = forms.ChoiceField(widget=forms.widgets.RadioSelect, choices=modes)
     address = forms.IPAddressField(label="IP Address", required=False)
     subnet = forms.IPAddressField(required=False, label="Subnet")
     gateway = forms.IPAddressField(required=False)
     nameservers = forms.CharField(required=False, max_length=256)
+    dnssearch = forms.CharField(required=False, max_length=256, label="Search Domain")
     proxy_address = forms.CharField(required=False, max_length=256)
     proxy_port = forms.CharField(required=False)
     proxy_username = forms.CharField(required=False)
     proxy_password = forms.CharField(required=False)
-
+    no_proxy = forms.CharField(required=False, max_length=256, label="Set no_proxy")
+    default_no_proxy = settings.DEFAULT_NO_PROXY
+    
     def get_network_settings(self):
         """Usage: /usr/sbin/TSquery [option]...
         --eth-dev                 Specify eth device to query
@@ -350,23 +363,27 @@ class NetworkConfigForm(forms.Form):
             proxy_port:
             proxy_username:
             proxy_password:
+            no_proxy:
             network_device:
             network_mode:
             network_address:10.25.3.211
             network_subnet:255.255.254.0
             network_gateway:10.25.3.1
             network_nameservers:10.25.3.2,10.45.16.11
+            network_dnssearch:ite,itw,cbd
         """
         settings = {
-                "mode":"",
-                "address":"",
-                "subnet":"",
-                "gateway":"",
-                "nameservers":"",
+                "mode": "",
+                "address": "",
+                "subnet": "",
+                "gateway": "",
+                "nameservers": "",
+                "dnssearch": "",
                 "proxy_address": "",
                 "proxy_port": "",
                 "proxy_username": "",
                 "proxy_password": "",
+                "no_proxy": "",
                 }
         cmd = ["/usr/sbin/TSquery"]
         try:
@@ -396,28 +413,38 @@ class NetworkConfigForm(forms.Form):
         self.fields['subnet'].initial = settings["subnet"]
         self.fields['gateway'].initial = settings["gateway"]
         self.fields['nameservers'].initial = settings["nameservers"]
+        self.fields['dnssearch'].initial = settings["dnssearch"]
         self.fields['proxy_address'].initial = settings["proxy_address"]
         self.fields['proxy_port'].initial = settings["proxy_port"]
         self.fields['proxy_username'].initial = settings["proxy_username"]
         self.fields['proxy_password'].initial = settings["proxy_password"]
+        self.fields['no_proxy'].initial = settings["no_proxy"]
 
     def __init__(self, *args, **kw):
         super(NetworkConfigForm, self).__init__(*args, **kw)
         self.set_to_current_values()
 
     def save(self, *args, **kw):
-        host_task, proxy_task, dns_task = None, None, None
+        host_task, proxy_task, no_proxy_task = None, None, None
         settings = self.get_network_settings()
-        host_config = ["mode", "address", "subnet", "gateway"]
+        host_config = ["mode", "address", "subnet", "gateway", "nameservers", "dnssearch"]
         if self.new_config(self.cleaned_data, settings, host_config):
-            logger.info("User changed the host network settings.")
             if self.cleaned_data['mode'] == "dhcp":
                 host_task = tasks.dhcp.delay()
             elif self.cleaned_data['mode'] == "static":
                 address = self.cleaned_data['address']
                 subnet = self.cleaned_data['subnet']
                 gateway = self.cleaned_data['gateway']
-                host_task = tasks.static_ip.delay(address, subnet, gateway)
+                nameservers = self.cleaned_data['nameservers']
+                dnssearch = self.cleaned_data['dnssearch']
+                host_task = tasks.static_ip.delay(address,
+                                                  subnet,
+                                                  gateway,
+                                                  nameserver=nameservers,
+                                                  search=dnssearch)
+        else:
+            logger.info("new_config has no changed settings")
+            
         proxy_config = ["proxy_address", "proxy_port", "proxy_username", "proxy_password"]
         if self.new_config(self.cleaned_data, settings, proxy_config):
             logger.info("User changed the proxy settings.")
@@ -429,16 +456,25 @@ class NetworkConfigForm(forms.Form):
                 proxy_task = tasks.proxyconf.delay(address, port, user, password)
             else:
                 proxy_task = tasks.ax_proxy.delay()
-        if self.new_config(self.cleaned_data, settings, ["nameservers"]):
-            logger.info("User changed the DNS settings.")
-            if self.cleaned_data['nameservers']:
-                dns_task = tasks.dnsconf.delay(self.cleaned_data['nameservers'])
+        else:
+            logger.info("proxy_config has no changed settings")
+        
+        if self.new_config(self.cleaned_data, settings, ["no_proxy"]):
+            logger.info("User changed the no_proxy setting.")
+            if self.cleaned_data['no_proxy']:
+                no_proxy = self.cleaned_data['no_proxy']
+                no_proxy_task = tasks.noproxyconf.delay(no_proxy)
+            else:
+                no_proxy_task = tasks.noproxyconf.delay(None)
+        else:
+            logger.info("no_proxy has not changed")
+            
         if host_task:
             host_task.get()
         if proxy_task:
             proxy_task.get()
-        if dns_task:
-            dns_task.get()
+        if no_proxy_task:
+            no_proxy_task.get()
         self.set_to_current_values()
 
 

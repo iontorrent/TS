@@ -19,12 +19,16 @@ void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name
   num_samples_ = 0;
 
   for (SamReadGroupConstIterator read_group = bam_header.ReadGroups.Begin(); read_group < bam_header.ReadGroups.End(); ++read_group) {
-
+    string barcode = read_group->PlatformUnit;
+    string::size_type pos = barcode.rfind("/");
+    if (pos != string::npos) {barcode = barcode.substr(pos + 1);}
     string sample_name;
-    if (force_sample_name.empty())
-      sample_name = read_group->Sample;
-    else
+    if (force_sample_name.empty()) {
+      sample_name = read_group->Sample + "." + barcode;
+    }
+    else {
       sample_name = force_sample_name;
+    }
 
 
     if (read_group->ID.empty()) {
@@ -75,9 +79,10 @@ void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name
     default_sample = true;
 
   } else if (num_samples_ > 1 && sample_name.empty())  {
-    cerr << "ERROR: Multiple Samples found in BAM file/s provided. Torrent Variant Caller currently supports variant calling on only one sample. " << endl;
-    cerr << "ERROR: Please select sample name to process using -g parameter. " << endl;
-    exit(1);
+      sample_name = sample_names_[0];
+      //cerr << "ERROR: Multiple Samples found in BAM file/s provided. Torrent Variant Caller currently supports variant calling on only one sample. " << endl;
+      //cerr << "ERROR: Please select sample name to process using -g parameter. " << endl;
+      //exit(1);
   }
 
   bool primary_sample_found = false;
@@ -85,6 +90,13 @@ void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name
     if (sample_names_[i] == sample_name) {
       primary_sample_ = i;
       primary_sample_found = true;
+    }
+    else {
+      string test = sample_name + ".";
+      if (strncmp(sample_names_[i].c_str(), test.c_str(), test.length()) == 0) {
+        primary_sample_ = i;
+        primary_sample_found = true;
+      }
     }
   }
 

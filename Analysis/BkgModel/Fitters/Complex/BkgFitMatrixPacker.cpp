@@ -3,7 +3,6 @@
 #include "BkgFitMatrixPacker.h"
 #include "BkgFitMatDat.h"
 #include <armadillo>
-#include <cblas.h>
 #include <MathUtil.h>
 #include <DotProduct.h>
 
@@ -95,7 +94,7 @@ LinearSolverResult BkgFitMatrixPacker::GetOutput (BeadParams *bp, reg_params *rp
       }
     }
   }
-  catch (std::runtime_error le)
+  catch (std::runtime_error& le)
   {
     data->delta->set_size (nOutputs);
     data->delta->zeros (nOutputs);

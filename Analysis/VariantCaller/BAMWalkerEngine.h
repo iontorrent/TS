@@ -15,6 +15,7 @@
 #include "api/BamMultiReader.h"
 #include "api/BamWriter.h"
 #include "TargetsManager.h"
+#include "MolecularTagTrimmer.h"
 
 using namespace std;
 using namespace BamTools;
@@ -67,7 +68,6 @@ struct Alignment {
     refmap_has_allele.clear();
     refmap_allele.clear();
     is_reverse_strand = false;
-    evaluator_filtered = false;
     measurements.clear();
     measurements_length = 0;
     phase_params.clear();
@@ -85,8 +85,9 @@ struct Alignment {
     flow_index.clear();
     flow_order_index = -1;
     read_group.clear();
-
-    worth_saving = false;
+    prefix_bases.clear();
+    tag_info.Clear();
+	read_count = 1;
   }
 
   BamAlignment          alignment;          //! Raw BamTools alignment
@@ -98,6 +99,9 @@ struct Alignment {
   bool                  processed;          //! Is candidate generator's pre-processing finished?
   Alignment*            processing_prev;    //! Previous in a list of alignments being processed
   Alignment*            processing_next;    //! Next in a list of alignments being processed
+
+  // Read Tag information
+  MolTag                tag_info;           //! Structure to store tag information for this read
 
   // Candidate generation information
   bool                  filtered;           //! Is unusable for candidate generator?
@@ -113,7 +117,6 @@ struct Alignment {
 
   // Candidate evaluator information
   bool                  is_reverse_strand;  //! Indicates whether read is from the forward or reverse strand
-  bool                  evaluator_filtered; //! Is unusable for candidate evaluator?
   vector<float>         measurements;       //! The measurement values for this read blown up to the length of the flow order
   int                   measurements_length;//! Original trimmed length of the ZM measurements vector
   vector<float>         phase_params;       //! cf, ie, droop parameters of this read
@@ -131,9 +134,11 @@ struct Alignment {
   vector<int>           flow_index;         //! Main incorporating flow for each base in read_bases
   short                 flow_order_index;   //! Index of the flow order belonging to this read
   string                read_group;         //! Read group of this read
+  string                prefix_bases;       //! hard clipped start of the read
 
   // Post-processing information
-  bool                  worth_saving;
+  vector<CigarOp>       old_cigar;          //! Cigar information before primer trimming
+  int                   read_count;         //! The number of reads associated with this alignment. Used to capture consensus depth.
 };
 
 
@@ -148,7 +153,9 @@ struct PositionInProgress {
 };
 
 
+class VariantCallerContext;
 class ReferenceReader;
+class IndelAssembly;
 
 class BAMWalkerEngine {
 public:
@@ -172,18 +179,19 @@ public:
 
   // Loading new reads
   void RequestReadProcessingTask(Alignment*& new_read);
-  bool GetNextAlignmentCore(Alignment* new_read);
+  bool GetNextAlignmentCore(Alignment* new_read, VariantCallerContext& vc, vector<MergedTarget>::iterator& indel_target);
   void FinishReadProcessingTask(Alignment* new_read, bool success);
 
   // Processing genomic position
+  void SetupPositionTicket(list<PositionInProgress>::iterator& position_ticket) const;
   void BeginPositionProcessingTask(list<PositionInProgress>::iterator& position_ticket);
   bool AdvancePosition(int position_increment, int next_hotspot_chr = -1, long next_hotspot_position = -1);
   void FinishPositionProcessingTask(list<PositionInProgress>::iterator& position_ticket);
 
   // Deleting or saving used up reads
   void RequestReadRemovalTask(Alignment*& removal_list);
-  void SaveAlignments(Alignment* removal_list);
-  void FinishReadRemovalTask(Alignment* removal_list);
+  void SaveAlignments(Alignment*& removal_list, VariantCallerContext& vc, vector<MergedTarget>::iterator& depth_target);
+  void FinishReadRemovalTask(Alignment* removal_list, int recycle_limit = 55000);
 
   void PrintStatus();
   int GetRecentUnmergedTarget();
@@ -195,6 +203,10 @@ public:
     basecaller_version = basecaller_version_;
     tmap_version = tmap_version_;
   }
+  void processDepth(BamAlignment& alignment, TargetsManager* targets_manager, vector<MergedTarget>::iterator& curr_target);
+  void openDepth(const string& filename);
+  void writeDepth(ReferenceReader* reference_reader, std::map<long int, int>::size_type offset = 0);
+  void closeDepth(ReferenceReader* reference_reader);
 
 private:
   void InitializeBAMs(const ReferenceReader& ref_reader, const vector<string>& bam_filenames);
@@ -241,6 +253,12 @@ private:
   vector<BamAlignment>      temp_reads;
   BamAlignment              *next_temp_read;
   vector<BamAlignment *>    temp_heap;
+
+  std::map<long int, int> depth_map;
+  ofstream depth_out;
+  pthread_mutex_t mutexdepth;
+  int prevRefID;
+  long int prevEndPos;
 
 };
 

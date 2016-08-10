@@ -5,26 +5,41 @@ set(PROJECT_DESCRIPTION "Ion Torrent GPU Libraries")
 enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
-include(../buildTools/cmake/CMakeLists.compiler.txt)
 
-FIND_PACKAGE(PythonInterp)
-# Determine python site-packages or dist-packages directory
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
-        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')"
-        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
-        OUTPUT_VARIABLE PYTHON_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
+#set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
 
+#set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+
+# Use the closest ION_UPDATE_SERVER we can find.
+message(STATUS "Searching for an ION_UPDATE_SERVER...")
+foreach ( SERVER updates updates.itw updates.iontorrent.com )
+    # See if we can look up the server in question.
+    execute_process( COMMAND host -W 2 ${SERVER}
+       RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
+
+    # If we can find it, great! We're done!
+    if ( NOT ${NOT_FOUND} )
+       set( ION_UPDATE_SERVER ${SERVER} )
+       break()
+    endif()
+endforeach()
+
+# If we find a server, let everyone know.
+if (ION_UPDATE_SERVER)
+    message(STATUS "Using ION_UPDATE_SERVER: ${ION_UPDATE_SERVER}")
+else()
+    message(WARNING "Could not find a valid ION_UPDATE_SERVER.")
+endif()
+
+#custom ExternalProject_add with timeout feature
+IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.2)
+  SET(CMAKE_MODULE_PATH
+    ${CMAKE_MODULE_PATH}
+    ${ION_TS_EXTERNAL}/CMake
+  )
+ENDIF ()
+include(ExternalProject)
 
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/opt/ion/gpu" CACHE PATH "Ion Install Prefix")
@@ -32,9 +47,6 @@ set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepende
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
-add_custom_target(compileall ALL
-    COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/python/"
-)
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/debian/postinst"
@@ -53,60 +65,28 @@ configure_file (
     "${PROJECT_BINARY_DIR}/debian/postrm" @ONLY
 )
 
-message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
+set(gpu_devdriver_version "352.41")
+set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-352.41-no-compat32.run")
 
-include(../buildTools/cmake/CMakeLists.dependencies.txt)
+set(gpu_devdriver "gpu_devdriver")
+set(gpu_devdriver_version "${gpu_devdriver}-${gpu_devdriver_version}")
+
+ExternalProject_add(${gpu_devdriver}
+    PREFIX ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${gpu_devdriver_file}.tar.gz" # cmake doesn't download .run files
+#    URL_MD5 ""
+    TIMEOUT "3600"
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+)
+
 install(PROGRAMS ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}/${gpu_devdriver_file}
         DESTINATION .)
 
-install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib
-        DESTINATION /usr/local/cuda)
-
-install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64
-        DESTINATION /usr/local/cuda)
-
-install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc
-        DESTINATION /usr/local/cuda/bin)
-
-# from https://pypi.python.org/pypi/nvidia-ml-py/
-install(FILES python/nvidia_smi.py    DESTINATION ${PYTHON_SITE_PACKAGES})
-install(FILES python/nvidia_smi.pyc   DESTINATION ${PYTHON_SITE_PACKAGES})
-install(FILES python/pynvml.py        DESTINATION ${PYTHON_SITE_PACKAGES})
-install(FILES python/pynvml.pyc       DESTINATION ${PYTHON_SITE_PACKAGES})
-install(PROGRAMS python/pynvml_test.py         DESTINATION /usr/local/bin)
-install(PROGRAMS python/nvidia_smi_test.py     DESTINATION /usr/local/bin)
-
-
-if (1)
-    set (CMAKE_C_FLAGS_RELEASE "")
-    set (CMAKE_CXX_FLAGS_RELEASE "")
-    include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
-
-    CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
-    CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
-    CUDA_ADD_EXECUTABLE(xtalk_sim
-                        xtalk_sim/xtalk_sim.cpp
-                        xtalk_sim/DiffEqModel_Init.cpp
-                        xtalk_sim/DiffEqModel.cpp
-                        xtalk_sim/DelsqCUDA.cu
-                        xtalk_sim/utils.cpp
-                        xtalk_sim/xtalk_sim.cpp
-                        xtalk_sim/sim_incorp_flux.cpp
-                        xtalk_sim/WorkerInfoQueue.cpp)
-
-    target_link_libraries(xtalk_sim pthread)
-
-    add_dependencies(bandwidthTest cuda_toolkit)
-    add_dependencies(deviceQuery cuda_toolkit)
-    add_dependencies(xtalk_sim cuda_toolkit)
-
-    install(PROGRAMS ${PROJECT_BINARY_DIR}/deviceQuery DESTINATION .)
-    install(PROGRAMS ${PROJECT_BINARY_DIR}/bandwidthTest DESTINATION .)
-    install(PROGRAMS ${PROJECT_BINARY_DIR}/xtalk_sim DESTINATION .)
-
-endif()
-
-install(PROGRAMS create_nvidia_files DESTINATION .)
+install(PROGRAMS create_nvidia_files
+        DESTINATION .)
 
 
 include(InstallRequiredSystemLibraries)
@@ -114,15 +94,15 @@ set(CPACK_GENERATOR "DEB")
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 
-set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-analysis (<< 2.9)")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-analysis (<< 2.9)")
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-analysis (<< 5.1.5)")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-analysis (<< 5.1.5)")
 
 # Compiling GPU kernel code requires
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "build-essential, linux-headers, dkms")
 
 
 #% nice to automate this
-set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job crawler, and the archive daemon.")
+set(CPACK_PACKAGE_DESCRIPTION "This package contains the NVIDIA device driver for the Torrent Server and instruments.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

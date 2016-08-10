@@ -71,7 +71,15 @@ function stop()
   if [ "$pid" != "" ]
   then
     echo "stopping service: RSMAgent_TS"
-    kill -2 $pid
+    pkill -f /opt/ion/RSM/RSMAgent.sh
+    pkill -f /opt/ion/RSM/RSMAgent_TS
+    pkill -f /opt/ion/RSM/location_helper.sh
+    pkill -f /opt/ion/RSM/find_serial.py
+    pkill -f /opt/ion/RSM/get_nexenta_for_axeda.py
+    pkill -f /opt/ion/RSM/queryFileServers.py
+    pkill -f /opt/ion/RSM/s5serial.py
+    pkill -f /opt/ion/RSM/status.py
+    pkill -f /opt/ion/RSM/updateContactInfo.py
     sleep 1
   else
     echo "service: RSMAgent_TS not running"

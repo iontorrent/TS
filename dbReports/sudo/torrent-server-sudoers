@@ -1,0 +1,12 @@
+# sudo permissions for the torrent suite
+www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
+                             /usr/bin/at, \
+                             /usr/bin/aptitude, \
+                             /usr/bin/apt-get, \
+                             /usr/sbin/TSconfig, \
+                             /opt/ion/onetouch/findHosts.py, \
+                             /opt/ion/iondb/bin/ion_plugin_install.py, \
+                             /opt/ion/iondb/bin/ion_plugin_install_deb.py, \
+                             /opt/ion/iondb/bin/sudo_utils.py, \
+                             /opt/ion/iondb/bin/write_nms_access.py
+

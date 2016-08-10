@@ -297,10 +297,6 @@ if [ $CONF_HEAD_NODE == 1 -o $CONF_COMPUTE_NODE == 1 ]; then
         echo
     fi
 
-    # See TS-13119
-    apt-get update
-    apt-get install -y --allow-unauthenticated python-jsonpipe python-simplejson
-
     if [ $CONF_HEAD_NODE == 1 ]; then
     	log "Configure Head Node"
         config_head_node
@@ -326,9 +322,6 @@ if [ $CONF_HEAD_NODE == 1 -o $CONF_COMPUTE_NODE == 1 ]; then
     if [ $CONF_NTP_SERVER == 1 ]; then
         config_ntp_server
     fi
-
-    #Install Perl libraries that used to be installed with postinst from ion-dbreports
-    install_perl_libs
 
     #Call initial configuration steps which require user input
     if [ $INITIAL_CONFIG == 1 ]; then

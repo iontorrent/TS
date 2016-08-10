@@ -49,6 +49,7 @@ using namespace std;
 // Forward declaration of classes
 class HistogramCalibration;
 class LinearCalibrationModel;
+class MolecularTagTrimmer;
 
 //! @brief    Verify path exists and if it does, canonicalize it
 //! @ingroup  BaseCaller
@@ -73,11 +74,12 @@ struct BaseCallerFiles
     string    filename_mask;
     string    filename_filter_mask;
     string    filename_json;
+    string    filename_phase;
 
     string    lib_datasets_file;      //!< Datasets file containing all the barcodes that are used in the run
     string    calibration_panel_file; //!< Datasets file containing the barcodes that are used for calibration panel
 
-    bool      options_set;
+    bool      options_set;            //!< Flag whether options have been read to ensure order
 };
 
 // ------------------------------------------------------------
@@ -92,7 +94,7 @@ struct BCwellSampling
     bool      have_calib_panel;      //!< Inidactes the presence of a calibration panel in this run
     MaskType  MaskNotWanted;         //!< Type of beads to be excluded from sampling (e.g. for cal. training)
 
-    bool      options_set;
+    bool      options_set;           //!< Flag whether options have been read to ensure order
 };
 
 // ------------------------------------------------------------
@@ -101,7 +103,6 @@ struct BCwellSampling
 struct BCcontextVars {
 
     string    run_id;                 //!< Run ID string, prepended to each read name
-    int       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
     bool      process_tfs;            //!< If set to false, TF-related BAM will not be generated
     bool      only_process_unfiltered_set;
     string    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased,
@@ -109,6 +110,7 @@ struct BCcontextVars {
                                       //                         "key-normalized" - Key normalized and not dephased,
                                       //                         "adaptive-normalized" - Adaptive normalized and not dephased, and
                                       //                         "unclipped" - Normalized and phased but unclipped.
+    string    wells_norm_method;      //!< Well file normalization method
 
     // Treephaser options
     string    keynormalizer;          //!< Name of selected key normalization algorithm
@@ -117,8 +119,11 @@ struct BCcontextVars {
     bool      diagonal_state_prog;    //!< Switch to enable a diagonal state progression
     bool      skip_droop;             //!< Switch to include / exclude droop in cpp basecaller
     bool      skip_recal_during_norm; //!< Switch to exclude recalibration from the normalization stage
+    bool      debug_normalization_bam;//!< Switch to output debug data to the bam file
+    bool      just_phase_estimation;  //!< BaseCaller will only do phase estimation and nothing else
+    bool      calibrate_TFs;          //!< Switch to apply calibration to TFs
 
-    bool options_set;
+    bool      options_set;            //!< Flag whether options have been read to ensure order
 };
 
 // ==============================================================================
@@ -131,12 +136,13 @@ struct BaseCallerContext {
     string                    run_id;                 //!< Run ID string, prepended to each read name
     string                    keynormalizer;          //!< Name of selected key normalization algorithm
     string                    dephaser;               //!< Name of selected dephasing algorithm
+    bool                      sse_dephaser;           //!< Flag to indicate whether vectorized code version is to be used
     string                    filename_wells;         //!< Filename of the input wells file
     ion::FlowOrder            flow_order;             //!< Flow order object, also stores number of flows
     vector<KeySequence>       keys;                   //!< Info about key sequences in use by library and TFs
     string                    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased, "wells" - Raw values (unnormalized and not dephased), "key-normalized" - Key normalized and not dephased, "adaptive-normalized" - Adaptive normalized and not dephased, and "unclipped" - Normalized and phased but unclipped.
     string                    output_directory;       //!< Root directory for all output files
-    int                       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
+    string                    wells_norm_method;      //!< Normalization method for wells file before any processing
     bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
     int                       windowSize;             //!< Normalization window size
     bool                      have_calibration_panel; //!< Signales the presence of a recalibration panel
@@ -145,6 +151,8 @@ struct BaseCallerContext {
     bool                      only_process_unfiltered_set;
     bool                      skip_droop;             //!< Switch to include / exclude droop in cpp basecaller
     bool                      skip_recal_during_norm; //!< Switch to exclude recalibration from the normalization stage
+    bool                      debug_normalization_bam;//!< Switch to output debug info to the bam file
+    bool                      calibrate_TFs;          //!< Switch to apply calibration to TFs
 
     // Important outside entities accessed by BaseCaller
     ion::ChipSubset           chip_subset;            //!< Chip coordinate & region handling for Basecaller
@@ -159,6 +167,7 @@ struct BaseCallerContext {
     HistogramCalibration      *histogram_calibration; //!< Posterior base call and signal adjustment algorithm
     LinearCalibrationModel    *linear_cal_model;      //!< Model estimation of simulated predictions and observed measurements
     PolyclonalFilterOpts      polyclonal_filter;      //!< User options for polyclonal filtering
+    MolecularTagTrimmer       *tag_trimmer;           //!< Class for tag accounting within read groups
 
     // Threaded processing
     pthread_mutex_t           mutex;                  //!< Shared read/write mutex for BaseCaller worker threads
@@ -201,6 +210,8 @@ public:
 
     bool SaveParamsToJson(Json::Value& basecaller_json, const BaseCallerContext& bc, const string& chip_type);
 
+    bool JustPhaseEstimation() { return context_vars.just_phase_estimation; };
+
 
     const BaseCallerFiles & GetFiles() const {
      if (not bc_files.options_set){
@@ -223,7 +234,7 @@ public:
     int NumBamWriterThreads() const { return num_bamwriter_threads_; };
 
 private:
-    int                 num_threads_;              //!< NUmber of worker threads to do base calling
+    int                 num_threads_;              //!< Number of worker threads to do base calling
     int                 num_bamwriter_threads_;    //!< Number of threads one bam writer object uses
     BaseCallerFiles     bc_files;
     BCcontextVars       context_vars;

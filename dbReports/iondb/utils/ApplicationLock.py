@@ -1,12 +1,13 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-## {{{ http://code.activestate.com/recipes/576891/ (r1)
+# {{{ http://code.activestate.com/recipes/576891/ (r1)
 #! /usr/bin/env python
 import os
 import errno
 import fcntl
 
 
-class ApplicationLock:
+class ApplicationLock(object):
+
     '''
     Ensures application is running only once, by using a lock file.
 
@@ -22,6 +23,7 @@ class ApplicationLock:
         lockfile  -- Full path to lock file
         lockfd    -- File descriptor of lock file exclusively locked
     '''
+
     def __init__(self, lockfile):
         self.lockfile = lockfile
         self.lockfd = None
@@ -68,7 +70,7 @@ class ApplicationLock:
             os.unlink(self.lockfile)
             # Just in case, let's not leak file descriptors
             os.close(self.lockfd)
-        except (OSError, IOError), e:
+        except (OSError, IOError):
             # Ignore error destroying lock file.  See class doc about how
             # lockfile can be erased and everything still works normally.
             pass
@@ -77,12 +79,12 @@ class ApplicationLock:
 if __name__ == '__main__':
     import time
     applock = ApplicationLock('Test.lock')
-    if (applock.lock()):
+    if applock.lock():
         # Hint: try running 2nd program instance while this instance sleeps
-        print ("Obtained lock, sleeping 10 seconds")
+        print "Obtained lock, sleeping 10 seconds"
         time.sleep(10)
-        print ("Unlocking")
+        print "Unlocking"
         applock.unlock()
     else:
-        print ("Unable to obtain lock, exiting")
-## end of http://code.activestate.com/recipes/576891/ }}}
+        print "Unable to obtain lock, exiting"
+# end of http://code.activestate.com/recipes/576891/ }}}

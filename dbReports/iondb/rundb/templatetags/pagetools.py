@@ -146,3 +146,15 @@ class ValueFromSettings(Node):
             return ''
         else:
             return ret_val
+
+@register.filter
+def makeColumns(mylist, ncol):
+    # reshape a list to display n columns
+    try:
+        l = len(mylist)
+        ncol = int(ncol)
+    except:
+        return mylist
+    nrows = 1+int(l/ncol) if (l%ncol > 0) else int(l/ncol)
+    return [mylist[nrows*i:nrows*(i+1)] for i in range(ncol) if i<l]
+

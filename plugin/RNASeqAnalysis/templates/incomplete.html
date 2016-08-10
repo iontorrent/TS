@@ -40,6 +40,10 @@
 <b>Reference:</b> {{ref_name}}<br/>
 </h4>
 
+{% if num_barcodes_filtered > 0 %}
+<h3><span title="Reads for some barcodes were ignored as having less than {{barcode_filter}}% of the file size of the largest barcode aligned reads file. To include these barcodes in the analysis, re-run with the Filter Barcodes option unchecked." style="cursor:help;color:red">WARNING: {{num_barcodes_filtered}} barcodes were discounted from analysis as having relatively too few reads.</span></h3>
+{% endif %}
+
 {% if Error and Error != "" %}
   <h2 style="text-align:center;color:red">*** Analysis failed to complete ***</h2>
   <h3 style="text-align:center">{{Error}}</h3>

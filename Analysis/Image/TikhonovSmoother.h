@@ -10,7 +10,6 @@
 #include "datahdr.h"
 #include "ByteSwapUtils.h"
 #include "Region.h"
-#include "ChipIdDecoder.h"
 #include "ChannelXTCorrection.h"
 
 #include <vector>

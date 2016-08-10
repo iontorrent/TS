@@ -23,7 +23,7 @@ RegionParamDefault::RegionParamDefault()
   tau_R_o_default = 25.16;
   tau_E_default = tau_R_m_default + tau_R_o_default;
   min_tauB_default = 4;
-  mid_tauB_default = 12.5;
+
   max_tauB_default = 65;
   tshift_default = 0.4f;
 
@@ -67,73 +67,42 @@ void RegionParamDefault::FromJson(Json::Value &gopt_params){
   tau_R_m_default = gopt_params["tau_R_m"].asFloat();
   tau_R_o_default = gopt_params["tau_R_o"].asFloat();
 
+  if (tau_R_m_default>0){
+    printf("Alert: Unphysical starting parameters for tau_R_m %f\n", tau_R_m_default);
+  }
+  if ((tau_R_o_default<4) or (tau_R_m_default>tau_R_o_default) or (tau_R_o_default>4*tau_R_m_default)){
+    printf("Alert: suspiscious values for tau_R_o tau_R_m: %f %f\n", tau_R_o_default, tau_R_m_default);
+  }
+
   // new params for taue (im1) optimization
   if (!gopt_params["tau_E"].isNull())
     tau_E_default = gopt_params["tau_E"].asFloat();
   if (!gopt_params["min_tauB"].isNull())
     min_tauB_default = gopt_params["min_tauB"].asFloat();
-  if (!gopt_params["mid_tauB"].isNull())
-    mid_tauB_default = gopt_params["mid_tauB"].asFloat();
+
   if (!gopt_params["max_tauB"].isNull())
     max_tauB_default = gopt_params["max_tauB"].asFloat();
+
+  if ((max_tauB_default<4*min_tauB_default) or (min_tauB_default<4)){
+    printf("Alert: suspicious range for tauB: %f %f\n", min_tauB_default, max_tauB_default);
+  }
 
   // of interest: we historically have not controlled this
   if (!gopt_params["tshift"].isNull())
     tshift_default = gopt_params["tshift"].asFloat();
 
-}
+  // add concentration back as a tunable parameter
+  if (!gopt_params["dntp"].isNull()){
+    const Json::Value dntp = gopt_params["dntp"];
+    for ( int index = 0; index < (int) dntp.size(); ++index )
+      dntp_uM[index] = dntp[index].asFloat();
 
-void RegionParamDefault::FromCharacterLine(char *line){
-  float d[10];
-  int num;
+  }
 
-  if ( strncmp ( "km_const",line,8 ) == 0 )
-  {
-    num = sscanf ( line,"km_const: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-    if ( num > 0 )
-      for ( int i=0;i<NUMNUC;i++ ) kmax_default[i] = d[i];
-  }
-  if ( strncmp ( "krate",line,5 ) == 0 )
-  {
-    num = sscanf ( line,"krate: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-    if ( num > 0 )
-      for ( int i=0;i<NUMNUC;i++ ) krate_default[i] = d[i];
-  }
-  if ( strncmp ( "d_coeff",line,7 ) == 0 )
-  {
-    num = sscanf ( line,"d_coeff: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-    if ( num > 0 )
-      for ( int i=0;i<NUMNUC;i++ ) d_default[i] = d[i];
-  }
-  if ( strncmp ( "n_to_uM_conv",line,12 ) == 0 )
-    num = sscanf ( line,"n_to_uM_conv: %f",&molecules_to_micromolar_conv );
-  if ( strncmp ( "sens",line,4 ) == 0 )
-    num = sscanf ( line,"sens: %f",&sens_default );
-  if ( strncmp ( "tau_R_m",line,7 ) == 0 )
-    num = sscanf ( line,"tau_R_m: %f",&tau_R_m_default );
-  if ( strncmp ( "tau_R_o",line,7 ) == 0 )
-    num = sscanf ( line,"tau_R_o: %f",&tau_R_o_default );
-  if ( strncmp ( "tau_E",line,5 ) == 0 )
-    num = sscanf ( line,"tau_E: %f",&tau_E_default );
-  if ( strncmp ( "min_tauB",line,8 ) == 0 )
-    num = sscanf ( line,"min_tauB: %f",&min_tauB_default );
-  if ( strncmp ( "mid_tauB",line,8 ) == 0 )
-    num = sscanf ( line,"mid_tauB: %f",&mid_tauB_default );
-  if ( strncmp ( "max_tauB",line,8 ) == 0 )
-    num = sscanf ( line,"max_tauB: %f",&max_tauB_default );
-  if ( strncmp ( "sigma_mult", line, 10 ) == 0 )
-  {
-    num = sscanf ( line,"sigma_mult: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
-    for ( int i=0;i<num;i++ ) sigma_mult_default[i]=d[i];
-  }
-  if ( strncmp ( "t_mid_nuc_delay", line, 15 ) == 0 )
-  {
-    num = sscanf ( line,"t_mid_nuc_delay: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
-    for ( int i=0;i<num;i++ ) t_mid_nuc_delay_default[i]=d[i];
-  }
 }
 
 void RegionParamDefault::DumpPoorlyStructuredText(){
+  printf ( "dntp_uM: %f\t%f\t%f\t%f\n",dntp_uM[0],dntp_uM[1],dntp_uM[2],dntp_uM[3] );
   printf ( "km_const: %f\t%f\t%f\t%f\n",kmax_default[0],kmax_default[1],kmax_default[2],kmax_default[3] );
   printf ( "krate: %f\t%f\t%f\t%f\n",krate_default[0],krate_default[1],krate_default[2],krate_default[3] );
   printf ( "d_coeff: %f\t%f\t%f\t%f\n",d_default[0],d_default[1],d_default[2],d_default[3] );
@@ -145,7 +114,6 @@ void RegionParamDefault::DumpPoorlyStructuredText(){
   printf ( "tau_R_o: %f\n",tau_R_o_default );
   printf ( "tau_E: %f\n",tau_E_default );
   printf ( "min_tauB: %f\n",min_tauB_default );
-  printf ( "mid_tauB: %f\n",mid_tauB_default );
   printf ( "max_tauB: %f\n",max_tauB_default );
   printf ( "tshift: %f\n",tshift_default);
 

@@ -1,0 +1,16 @@
+---
+# file: roles/iontorrent_auxiliary/tasks/main.yml
+
+- name:
+  include: '../../../globals.yml'
+
+#-----------------------------------------------------------------------------
+# Install Ion Torrent Auxiliary Packages
+#-----------------------------------------------------------------------------
+- name: Install Ion auxiliary packages
+  apt: name={{ item }} state=present force=yes
+  with_items:
+    - ion-referencelibrary
+    - ion-sampledata
+    - ion-rsmts
+    - ion-usbmount

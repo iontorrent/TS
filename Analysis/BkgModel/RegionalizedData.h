@@ -59,19 +59,13 @@ public:
   float   t_mid_nuc_start;
   int   t0_frame;
 
-  // BkgModel wants to rezero and do other things that are
-  // detrimental if using sdat data Save a little state here to
-  // indicate don't rezero
-  bool doDcOffset;
-
   // space for processing current bead in optimization (multiflow levmar)
   // recycled for use in other optimizers
   // possibly should have more than one instance
   BeadScratchSpace my_scratch; // @TODO: transfer to >fitters<
 
-  // flag for copying data from sdat chunks without interpolation
-  bool regionAndTimingMatchSdat;
-
+  void regParamsToJson(Json::Value &regparams_json);
+  void LoadRestartRegParamsFromJson(const Json::Value &regparams_json);
   void DumpRegionParameters (float cur_avg_resid);
   void DumpTimeAndEmphasisByRegion (FILE *my_fp);
   void NoData();
@@ -155,7 +149,6 @@ public:
   void AddOneFlowToBuffer (GlobalDefaultsForBkgModel &global_defaults, 
                     FlowBufferInfo & my_flow, int flow);
   void UpdateTracesFromImage (Image *img, FlowBufferInfo &my_flow, int flow, int flow_block_size);
-  void UpdateTracesFromImage (SynchDat &chunk, FlowBufferInfo &my_flow, int flow, int flow_block_size);
 
   bool LoadOneFlow (Image *img, GlobalDefaultsForBkgModel &global_defaults, 
                     FlowBufferInfo & my_flow, int flow, int flow_block_size);
@@ -163,15 +156,14 @@ public:
                     FlowBufferInfo & my_flow, int flow);
   bool FinalizeLoadOneFlowGPU ( FlowBufferInfo & my_flow, int flow_block_size );
 
-  bool LoadOneFlow (SynchDat &data, GlobalDefaultsForBkgModel &global_defaults, 
-                    FlowBufferInfo & my_flow, int flow, int flow_block_size);
-  void SetTshiftLimitsForSynchDat();
   // technically trivial fitters that fit the dc_offset model
   // so we may think about doing this on a coprocessor
   void RezeroByCurrentTiming(int flow_block_size);
   void RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int flow_buffer_index, int flow_block_size );
   void RezeroTracesAllFlows (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int flow_block_size);
-  void PickRepresentativeHighQualityWells (float ssq_filter, int flow_block_size);
+
+  void PickRepresentativeHighQualityWells (float stringent_filter, int min_beads,  int max_rank, bool revert_regional_sampling, int flow_block_size);
+
   void ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_ix, size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer, std::vector<int>& keyLen, int flow_block_size);
   void ZeromerAndOnemerOneBead(std::vector<int> const& key, int const keyLen, std::vector<float> const& signal, float& key_zeromer, float& key_onemer);
   void CalculateFirstBlockClonalPenalty(float nuc_flow_frame_width, std::vector<float>& penalty, const int penalty_type, int flow_block_size);
@@ -196,9 +188,7 @@ private:
         sigma_start &
         t_mid_nuc_start &
         t0_frame &
-        doDcOffset &
         my_scratch &
-        regionAndTimingMatchSdat &
         region_nSamples;
 
      //fprintf(stdout, "done with RegionalizedData\n");
@@ -220,9 +210,7 @@ private:
         sigma_start &
         t_mid_nuc_start &
         t0_frame &
-        doDcOffset &
         my_scratch &
-        regionAndTimingMatchSdat &
         region_nSamples;
 
     SetCrudeEmphasisVectors();

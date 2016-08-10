@@ -134,7 +134,7 @@ void *worker(void *arg)
 
 
 	if(verbose)
-		printf("Thread %ld:  startIdx=%d endIdx=%d numFiles=%d numDirs=%d\n",threadNum,startIdx,endIdx,numFiles,numDirs);
+		printf("Thread %" PRIu64 ":  startIdx=%d endIdx=%d numFiles=%d numDirs=%d\n",threadNum,startIdx,endIdx,numFiles,numDirs);
 
 	for(i=0;i<numFiles;i++)
 	{

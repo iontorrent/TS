@@ -1,0 +1,13 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+
+case "$1" in
+    upgrade|remove)
+    
+    ;;
+esac
+
+exit 0

@@ -37,6 +37,7 @@ class EmphasisClass
     void BuildCurrentEmphasisTable ( float t_center, float amult );
     void SetupEmphasisTiming ( int _npts, int *frames_per_point, float *frameNumber );
     int  ReportUnusedPoints ( float threshold, int min_used );
+    void SaveEmphasisVector();
     EmphasisClass();
     ~EmphasisClass();
 

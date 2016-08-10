@@ -5,11 +5,7 @@
 
 option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
 
-{% if ansible_distribution_release == 'lucid' %}
-send host-name "<hostname>";
-{% else %}
 send host-name = gethostname();
-{% endif %}
 
 interface "{{default_interface}}"
 {

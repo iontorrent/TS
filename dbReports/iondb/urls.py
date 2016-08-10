@@ -13,7 +13,7 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 # Uncomment the next two lines to enable the admin:
 from django.contrib import admin
 admin.autodiscover()
-#admin.site.login_template = "rundb/login.html"
+# admin.site.login_template = "rundb/login.html"
 
 from iondb.rundb.login.urls import urlpatterns as login_patterns
 from iondb.servelocation import serve_wsgi_location
@@ -45,6 +45,7 @@ urlpatterns = patterns(
     (r'^admin/update/install_log$', 'iondb.rundb.admin.install_log'),
     (r'^admin/update/install_lock$', 'iondb.rundb.admin.install_lock'),
     (r'^admin/update/version_lock/(?P<enable>[\w\.]+)', 'iondb.rundb.admin.version_lock'),
+    (r'^admin/update/maintenance/(?P<action>[\w\.]+)', 'iondb.rundb.admin.maintenance'),
     (r'^admin/experiment/exp_redo_from_scratch/$', 'iondb.rundb.admin.exp_redo_from_scratch'),
     url(r'^admin/tsvm/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm/(?P<action>\w+)/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
@@ -60,11 +61,11 @@ urlpatterns.extend(staticfiles_urlpatterns())
 if settings.TEST_INSTALL:
     from os import path
     urlpatterns.extend(patterns(
-            '',
-            (r'^site_media/(?P<path>.*)$',
-             'django.views.static.serve',
-             {'document_root':settings.MEDIA_ROOT}),
-            (r'^testreports/(?P<path>.*)$',
-             'django.views.static.serve',
-             {'document_root':path.join(path.dirname(settings.MEDIA_ROOT),
-                                                     "testreports")})))
+        '',
+        (r'^site_media/(?P<path>.*)$',
+         'django.views.static.serve',
+         {'document_root': settings.MEDIA_ROOT}),
+        (r'^testreports/(?P<path>.*)$',
+         'django.views.static.serve',
+         {'document_root': path.join(path.dirname(settings.MEDIA_ROOT),
+                                     "testreports")})))

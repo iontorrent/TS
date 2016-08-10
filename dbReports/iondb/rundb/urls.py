@@ -9,6 +9,7 @@ except ImportError:
 from tastypie.api import Api
 
 from iondb.rundb import api
+from iondb.rundb import mesh_api
 
 v1_api = Api(api_name='v1')
 v1_api.register(api.GlobalConfigResource())
@@ -89,6 +90,7 @@ v1_api.register(api.AvailableIonChefPlannedExperimentResource())
 v1_api.register(api.AvailableIonChefPlannedExperimentSummaryResource())
 v1_api.register(api.IonChefPlanTemplateResource())
 v1_api.register(api.IonChefPlanTemplateSummaryResource())
+v1_api.register(api.GetChefScriptInfoResource())
 
 v1_api.register(api.AvailableOneTouchPlannedExperimentResource())
 v1_api.register(api.AvailableOneTouchPlannedExperimentSummaryResource())
@@ -113,11 +115,15 @@ v1_api.register(api.SampleAttributeDataTypeResource())
 v1_api.register(api.SamplePrepDataResource())
 
 v1_api.register(api.AnalysisArgsResource())
+v1_api.register(api.FlowOrderResource())
 
 v1_api.register(api.FileMonitorResource())
 v1_api.register(api.SupportUploadResource())
 
 v1_api.register(api.PrepopulatedPlanningSessionResource())
+
+v1_mesh_api = Api(api_name='v1')
+v1_mesh_api.register(mesh_api.MeshCompositeExperimentResource())
 
 urlpatterns = patterns(
     'iondb.rundb',
@@ -160,4 +166,5 @@ urlpatterns = patterns(
 urlpatterns.extend(patterns(
             '',
             (r'^api/', include(v1_api.urls)),
+            (r'^api/mesh/', include(v1_mesh_api.urls)),
 ))

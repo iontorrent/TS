@@ -20,6 +20,7 @@ def parseJsonFile(jsonFile):
         result = json.loads(content)
     return result
 
+
 def generateHTML(template, context):
         content = render_to_string(template, context)
         output = os.path.join(opt.results_dir, template)

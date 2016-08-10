@@ -1,5 +1,0 @@
-# jvm.cfg-default - default jvm configuration which is used if no jvm.cfg
-# is found. After unpacking the file jvm.cfg doesn't exist yet (config file),
-# in this case use this file instead, so that the VM can be used before
-# configuration of the runtime package.
--server KNOWN

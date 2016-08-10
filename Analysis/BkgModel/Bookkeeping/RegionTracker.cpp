@@ -71,9 +71,9 @@ void RegionTracker::InitHighRegionParams (float t_mid_nuc_start, int flow_block_
   rp_high.SetStandardHigh (t_mid_nuc_start, flow_block_size);
 }
 
-void RegionTracker::InitLowRegionParams (float t_mid_nuc_start, int flow_block_size)
+void RegionTracker::InitLowRegionParams (float t_mid_nuc_start,GlobalDefaultsForBkgModel &global_defaults, int flow_block_size)
 {
-  rp_low.SetStandardLow (t_mid_nuc_start, flow_block_size);
+  rp_low.SetStandardLow (t_mid_nuc_start, flow_block_size, global_defaults.signal_process_control.suppress_copydrift);
 }
 
 void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_start,
@@ -83,7 +83,10 @@ void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_sta
   // s is overly complex
   rp.SetStandardValue (t_mid_nuc_start,sigma_start, global_defaults.region_param_start.dntp_uM,
                        global_defaults.signal_process_control.fitting_taue,
+
                        global_defaults.signal_process_control.use_alternative_etbR_equation,
+                       global_defaults.signal_process_control.suppress_copydrift,
+                       global_defaults.signal_process_control.safe_model,
                        global_defaults.signal_process_control.hydrogenModelType, flow_block_size);
   rp.SetTshift(global_defaults.region_param_start.tshift_default);
   reg_params_setKrate (&rp,global_defaults.region_param_start.krate_default);
@@ -94,7 +97,7 @@ void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_sta
     reg_params_setBuffModel (&rp,global_defaults.region_param_start.tau_E_default);
   else
     reg_params_setBuffModel (&rp,global_defaults.region_param_start.tau_R_m_default,global_defaults.region_param_start.tau_R_o_default);
-  reg_params_setBuffRange (&rp,global_defaults.region_param_start.min_tauB_default,global_defaults.region_param_start.max_tauB_default,global_defaults.region_param_start.mid_tauB_default);
+  reg_params_setBuffRange (&rp,global_defaults.region_param_start.min_tauB_default,global_defaults.region_param_start.max_tauB_default);
 
   reg_params_setSigmaMult (&rp,global_defaults.region_param_start.sigma_mult_default);
   reg_params_setT_mid_nuc_delay (&rp,global_defaults.region_param_start.t_mid_nuc_delay_default);
@@ -106,7 +109,7 @@ void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_sta
 void RegionTracker::InitRegionParams (float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults, int flow_block_size )
 {
   InitHighRegionParams (t_mid_nuc_start, flow_block_size);
-  InitLowRegionParams (t_mid_nuc_start, flow_block_size);
+  InitLowRegionParams (t_mid_nuc_start, global_defaults, flow_block_size);
   InitModelRegionParams (t_mid_nuc_start,sigma_start,global_defaults, flow_block_size);
   // bounds check all these to be sure
   rp.ApplyLowerBound (&rp_low, flow_block_size );

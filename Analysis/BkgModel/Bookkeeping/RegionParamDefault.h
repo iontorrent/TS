@@ -23,7 +23,7 @@ struct RegionParamDefault{
   float tau_R_o_default;
   float tau_E_default;
   float min_tauB_default;
-  float mid_tauB_default;
+
   float max_tauB_default;
   float tshift_default;
 
@@ -35,7 +35,7 @@ struct RegionParamDefault{
 
   RegionParamDefault();
   void FromJson(Json::Value &gopt_params);
-  void FromCharacterLine(char *line);
+
   void BadIdeaComputeDerivedInput();
   void DumpPoorlyStructuredText();
 
@@ -52,7 +52,7 @@ private:
       & tau_R_o_default
       & tau_E_default
       & min_tauB_default
-      & mid_tauB_default
+
       & max_tauB_default
       & tshift_default
       & krate_default

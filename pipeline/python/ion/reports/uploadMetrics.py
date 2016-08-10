@@ -20,61 +20,63 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def getCurrentAnalysis(procMetrics, res):
     def get_current_version():
-        ver_map = {'analysis':'an','alignment':'al','dbreports':'db', 'tmap' : 'tm' }
+        ver_map = {'analysis': 'an', 'alignment': 'al', 'dbreports': 'db', 'tmap': 'tm'}
         a = subprocess.Popen('ion_versionCheck.py', shell=True, stdout=subprocess.PIPE)
         ret = a.stdout.readlines()
         ver = {}
         for i in ret:
-            ver[i.split('=')[0].strip()]=i.split('=')[1].strip()
+            ver[i.split('=')[0].strip()] = i.split('=')[1].strip()
         ret = []
         for name, shortname in ver_map.iteritems():
             if name in ver:
-                ret.append('%s:%s,' % (shortname,ver[name]))
+                ret.append('%s:%s,' % (shortname, ver[name]))
         return "".join(ret)
 
     res.analysisVersion = get_current_version()
     if procMetrics != None:
-        res.processedflows =  procMetrics.get('numFlows',0)
-        res.processedCycles = procMetrics.get('cyclesProcessed',0)
-        res.framesProcessed = procMetrics.get('framesProcessed',0)
+        res.processedflows = procMetrics.get('numFlows', 0)
+        res.processedCycles = procMetrics.get('cyclesProcessed', 0)
+        res.framesProcessed = procMetrics.get('framesProcessed', 0)
     res.save()
     return res
 
+
 @transaction.commit_on_success
 def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
-    ###Populate metrics for each TF###
-    
+    # Populate metrics for each TF###
+
     if tfMetrics == None:
         return
 
     for tf, metrics in tfMetrics.iteritems():
-        
-        hpAccNum = metrics.get('Per HP accuracy NUM',[0])
-        hpAccDen = metrics.get('Per HP accuracy DEN',[0])
-        
-        kwargs = {'report'                  : res,
-                  'name'                    : tf,
-                  'sequence'                : metrics.get('TF Seq','None'),
-                  'number'                  : metrics.get('Num',0.0),
-                  'keypass'                 : metrics.get('Num',0.0),   # Deprecated, populating by next best thing
-                  'aveKeyCount'             : keyPeak.get('Test Fragment','0'),
-                  'SysSNR'                  : metrics.get('System SNR',0.0),
 
-                  'Q10Histo'                : ' '.join(map(str,metrics.get('Q10',[0]))),
-                  'Q10Mean'                 : metrics.get('Q10 Mean',0.0),
-                  'Q10ReadCount'            : metrics.get('50Q10',0.0),
-                  
-                  'Q17Histo'                : ' '.join(map(str,metrics.get('Q17',[0]))),
-                  'Q17Mean'                 : metrics.get('Q17 Mean',0.0),
-                  'Q17ReadCount'            : metrics.get('50Q17',0.0),
+        hpAccNum = metrics.get('Per HP accuracy NUM', [0])
+        hpAccDen = metrics.get('Per HP accuracy DEN', [0])
 
-                  'HPAccuracy'              : ', '.join('%d : %d/%d' % (x,y[0],y[1]) for x,y in enumerate(zip(hpAccNum,hpAccDen))),
+        kwargs = {'report': res,
+                  'name': tf,
+                  'sequence': metrics.get('TF Seq', 'None'),
+                  'number': metrics.get('Num', 0.0),
+                  'keypass': metrics.get('Num', 0.0),   # Deprecated, populating by next best thing
+                  'aveKeyCount': keyPeak.get('Test Fragment', '0'),
+                  'SysSNR': metrics.get('System SNR', 0.0),
+
+                  'Q10Histo': ' '.join(map(str, metrics.get('Q10', [0]))),
+                  'Q10Mean': metrics.get('Q10 Mean', 0.0),
+                  'Q10ReadCount': metrics.get('50Q10', 0.0),
+
+                  'Q17Histo': ' '.join(map(str, metrics.get('Q17', [0]))),
+                  'Q17Mean': metrics.get('Q17 Mean', 0.0),
+                  'Q17ReadCount': metrics.get('50Q17', 0.0),
+
+                  'HPAccuracy': ', '.join('%d : %d/%d' % (x, y[0], y[1]) for x, y in enumerate(zip(hpAccNum, hpAccDen))),
                   }
-        
+
         tfm, created = models.TFMetrics.objects.get_or_create(report=res, name=tf,
-                                                                defaults=kwargs)
+                                                              defaults=kwargs)
         if not created:
             for key, value in kwargs.items():
                 setattr(tfm, key, value)
@@ -83,9 +85,9 @@ def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
 
 @transaction.commit_on_success
 def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
-    #print 'addAnalysisMetrics'
+    # print 'addAnalysisMetrics'
     kwargs = {
-        'report':res,
+        'report': res,
         'libLive': 0,
         'libKp': 0,
         'libFinal': 0,
@@ -111,13 +113,13 @@ def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
         'washout_test_fragment': 0,
         'washout_library': 0,
         'keypass_all_beads': 0,
-        'sysCF' : 0.0,
-        'sysIE' : 0.0,
-        'sysDR' : 0.0,
-        'libFinal' : 0,
-        'tfFinal' : 0,
-        'libMix':0,
-        'tfMix':0,
+        'sysCF': 0.0,
+        'sysIE': 0.0,
+        'sysDR': 0.0,
+        'libFinal': 0,
+        'tfFinal': 0,
+        'libMix': 0,
+        'tfMix': 0,
         'total': 0,
         'adjusted_addressable': 0,
         'loading': 0.0,
@@ -154,13 +156,13 @@ def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
 
     if beadMetrics:
         for dbname, key in bead_metrics_map.iteritems():
-            kwargs[dbname]=set_type(beadMetrics.get(key, 0))
+            kwargs[dbname] = set_type(beadMetrics.get(key, 0))
 
         if not kwargs['adjusted_addressable']:
             kwargs['adjusted_addressable'] = kwargs['total'] - kwargs["excluded"]
         if kwargs['adjusted_addressable']:
             kwargs['loading'] = 100 * float(kwargs['bead']) / kwargs['adjusted_addressable']
-    
+
     if BaseCallerMetrics:
         try:
             kwargs['sysCF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
@@ -168,7 +170,7 @@ def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
             kwargs['sysDR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
         except Exception as err:
             print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
-   
+
     analysismetrics = res.analysismetrics or models.AnalysisMetrics()
     for key, value in kwargs.items():
         setattr(analysismetrics, key, value)
@@ -216,20 +218,20 @@ def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPe
     print 'addlibmetrics'
 
     if keyPeak != None:
-        aveKeyCount = float(keyPeak.get('Library',0.0))
+        aveKeyCount = float(keyPeak.get('Library', 0.0))
     else:
         aveKeyCount = 0.0
-        
+
     align_sample = 0
     if ionstats_alignment == None:
         align_sample = -1
-    #check to see if this is a samled or full alignment 
-    #if libMetrics.has_key('Total number of Sampled Reads'):
+    # check to see if this is a samled or full alignment
+    # if libMetrics.has_key('Total number of Sampled Reads'):
     #    align_sample = 1
-    if res.metaData.get('thumb','0') == 1:
+    if res.metaData.get('thumb', '0') == 1:
         align_sample = 2
 
-    kwargs = {'report':res, 'aveKeyCounts':aveKeyCount, 'align_sample': align_sample }
+    kwargs = {'report': res, 'aveKeyCounts': aveKeyCount, 'align_sample': align_sample}
 
     kwargs['Genome_Version'] = genomeinfodict['genome_version']
     kwargs['Index_Version'] = genomeinfodict['index_version']
@@ -238,8 +240,8 @@ def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPe
 
     kwargs['totalNumReads'] = ionstats_basecaller['full']['num_reads']
 
-    quallist = ['7', '10', '17', '20', '47'] #TODO Q30
-    bplist = [50,100,150,200,250,300,350,400,450,500,550,600]
+    quallist = ['7', '10', '17', '20', '47']  # TODO Q30
+    bplist = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600]
     if ionstats_alignment != None:
         kwargs['total_mapped_reads'] = ionstats_alignment['aligned']['num_reads']
         kwargs['total_mapped_target_bases'] = ionstats_alignment['aligned']['num_bases']
@@ -249,13 +251,13 @@ def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPe
             kwargs['q%s_mean_alignment_length' % q] = ionstats_alignment['AQ'+q]['mean_read_length']
             kwargs['q%s_mapped_bases' % q] = ionstats_alignment['AQ'+q]['num_bases']
             kwargs['q%s_alignments' % q] = ionstats_alignment['AQ'+q]['num_reads']
-            kwargs['q%s_coverage_percentage' % q] = 0.0 #'N/A' # TODO
+            kwargs['q%s_coverage_percentage' % q] = 0.0  # 'N/A' # TODO
 #           'Filtered %s Mean Coverage Depth' % q, '%.1f' % (float(ionstats_alignment['AQ'+q]['num_bases'])/float(3095693981)) ) TODO
             for bp in bplist:
-                kwargs['i%sQ%s_reads' % (bp,q)] = sum(ionstats_alignment['AQ'+q]['read_length_histogram'][bp:])
+                kwargs['i%sQ%s_reads' % (bp, q)] = sum(ionstats_alignment['AQ'+q]['read_length_histogram'][bp:])
 
         try:
-            raw_accuracy = round( (1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 1)
+            raw_accuracy = round((1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 1)
             kwargs['raw_accuracy'] = raw_accuracy
         except:
             kwargs['raw_accuracy'] = 0.0
@@ -265,14 +267,13 @@ def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPe
 
         for q in quallist:
             for bp in bplist:
-                kwargs['i%sQ%s_reads' % (bp,q)] = 0
+                kwargs['i%sQ%s_reads' % (bp, q)] = 0
             kwargs['q%s_longest_alignment' % q] = 0
             kwargs['q%s_mean_alignment_length' % q] = 0
             kwargs['q%s_mapped_bases' % q] = 0
             kwargs['q%s_alignments' % q] = 0
             kwargs['q%s_coverage_percentage' % q] = 0.0
             kwargs['raw_accuracy'] = 0.0
-
 
     try:
         kwargs['sysSNR'] = ionstats_basecaller['system_snr']
@@ -295,6 +296,7 @@ def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPe
     res.libmetrics = libmetrics
     res.save()
 
+
 def get_some_quality_metrics(quality, ionstats, qv_histogram):
     kwargs = {}
 
@@ -306,22 +308,23 @@ def get_some_quality_metrics(quality, ionstats, qv_histogram):
             kwargs["q%d_%dbp_reads" % (quality, size)] = 0
 
     stats = ionstats_compute_stats(ionstats)
-    kwargs["q%d_bases" % quality]              = sum(qv_histogram[quality:])
-    kwargs["q%d_reads" % quality]              = ionstats["num_reads"]
-    kwargs["q%d_max_read_length" % quality]    = ionstats["max_read_length"]
-    kwargs["q%d_mean_read_length" % quality]   = stats['mean_length']
+    kwargs["q%d_bases" % quality] = sum(qv_histogram[quality:])
+    kwargs["q%d_reads" % quality] = ionstats["num_reads"]
+    kwargs["q%d_max_read_length" % quality] = ionstats["max_read_length"]
+    kwargs["q%d_mean_read_length" % quality] = stats['mean_length']
     kwargs["q%d_median_read_length" % quality] = stats['median_length']
-    kwargs["q%d_mode_read_length" % quality]   = stats['mode_length']
+    kwargs["q%d_mode_read_length" % quality] = stats['mode_length']
 
     return kwargs
 
+
 @transaction.commit_on_success
 def addQualityMetrics(ionstats_basecaller, res):
-    kwargs = {'report':res }
+    kwargs = {'report': res}
     for quality, key in [(0, 'full'), (17, 'Q17'), (20, 'Q20')]:
         try:
-            metrics = get_some_quality_metrics(quality, ionstats_basecaller["full"], 
-                ionstats_basecaller["qv_histogram"])
+            metrics = get_some_quality_metrics(quality, ionstats_basecaller["full"],
+                                               ionstats_basecaller["qv_histogram"])
             logger.debug("\n".join(str(l) for l in sorted(metrics.items())))
             kwargs.update(metrics)
         except Exception as err:
@@ -347,7 +350,7 @@ def pluginStoreInsert(pluginDict):
         parsline = line.strip().split("=")
         key = parsline[0].strip().lower()
         value = parsline[1].strip()
-        pkDict[key]=value
+        pkDict[key] = value
     f.close()
     rpk = pkDict['resultspk']
     res = models.Results.objects.get(pk=rpk)
@@ -356,7 +359,7 @@ def pluginStoreInsert(pluginDict):
 
 
 @transaction.commit_on_success
-def updateStatus(primarykeyPath, status, reportLink = False):
+def updateStatus(primarykeyPath, status, reportLink=False):
     """
     A function to update the status of reports
     """
@@ -367,29 +370,30 @@ def updateStatus(primarykeyPath, status, reportLink = False):
         parsline = line.strip().split("=")
         key = parsline[0].strip().lower()
         value = parsline[1].strip()
-        pkDict[key]=value
+        pkDict[key] = value
     f.close()
 
     rpk = pkDict['resultspk']
     res = models.Results.objects.get(pk=rpk)
 
-    #by default make this "Started"
+    # by default make this "Started"
     if status:
         res.status = status
     else:
         res.status = "Started"
-   
+
     if not reportLink:
         res.reportLink = res.log
     else:
-        #Commenting out because reportLink is already set correctly in this case
-        #I want to be able to call this function with reportLink == True
-        #res.reportLink = reportLink
+        # Commenting out because reportLink is already set correctly in this case
+        # I want to be able to call this function with reportLink == True
+        # res.reportLink = reportLink
         pass
 
     res.save()
 
-def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, ionParamsPath, status, keyPath, ionstats_basecaller_json_path, BaseCallerJsonPath, primarykeyPath, uploadStatusPath,cwd):
+
+def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, ionParamsPath, status, keyPath, ionstats_basecaller_json_path, BaseCallerJsonPath, primarykeyPath, uploadStatusPath, cwd):
 
     return_message = ""
 
@@ -488,43 +492,44 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
     except:
         return_message += traceback.format_exc()
 
-    extra_files = glob.glob(os.path.join(cwd,'BamDuplicates*.json'))
-    extra = { u'reads_with_adaptor':0, u'duplicate_reads':0, u'total_reads':0, u'fraction_with_adaptor':0, u'fraction_duplicates':0 }
+    extra_files = glob.glob(os.path.join(cwd, 'BamDuplicates*.json'))
+    extra = {u'reads_with_adaptor': 0, u'duplicate_reads': 0, u'total_reads': 0, u'fraction_with_adaptor': 0, u'fraction_duplicates': 0}
     for extra_file in extra_files:
-      if os.path.exists(extra_file):
-          try:
-              with open(extra_file, 'r') as afile:
-                val = json.load(afile)
-                for key in extra.keys():
-                    extra[key] += val.get(key,0)
-          except:
-              return_message += traceback.format_exc()
-      else:
-          return_message += 'INFO: generating extra metrics failed - file %s is missing\n' % extra_file
+        if os.path.exists(extra_file):
+            try:
+                with open(extra_file, 'r') as afile:
+                    val = json.load(afile)
+                    for key in extra.keys():
+                        extra[key] += val.get(key, 0)
+            except:
+                return_message += traceback.format_exc()
+        else:
+            return_message += 'INFO: generating extra metrics failed - file %s is missing\n' % extra_file
     else:
         # No data, send None/null instead of zeros
-        extra = { u'reads_with_adaptor':None, u'duplicate_reads':None, u'total_reads':None, u'fraction_with_adaptor':None, u'fraction_duplicates':None }
+        extra = {u'reads_with_adaptor': None, u'duplicate_reads': None, u'total_reads': None, u'fraction_with_adaptor': None, u'fraction_duplicates': None}
 
     try:
         if extra[u'total_reads']:
-            extra[u'fraction_with_adaptor'] = extra[u'reads_with_adaptor'] / float( extra[u'total_reads'] )
-            extra[u'fraction_duplicates'] = extra[u'duplicate_reads'] / float( extra[u'total_reads'] )
+            extra[u'fraction_with_adaptor'] = extra[u'reads_with_adaptor'] / float(extra[u'total_reads'])
+            extra[u'fraction_duplicates'] = extra[u'duplicate_reads'] / float(extra[u'total_reads'])
     except:
         return_message += traceback.format_exc()
-        
-    #print "BamDuplicates stats: ", extra
-    
-    writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, genomeinfodict, status, keyPeak, ionstats_basecaller, BaseCallerMetrics, primarykeyPath, uploadStatusPath,extra)
+
+    # print "BamDuplicates stats: ", extra
+
+    writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, genomeinfodict, status, keyPeak, ionstats_basecaller, BaseCallerMetrics, primarykeyPath, uploadStatusPath, extra)
 
     return return_message
 
-def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, genomeinfodict, status, keyPeak, ionstats_basecaller, BaseCallerMetrics, primarykeyPath, uploadStatusPath,extra):
+
+def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, genomeinfodict, status, keyPeak, ionstats_basecaller, BaseCallerMetrics, primarykeyPath, uploadStatusPath, extra):
     print "writeDbFromDict"
 
     # We think this will fix "DatabaseError: server closed the connection unexpectedly"
     # which happens rather randomly.
     connection.close()
-    
+
     f = open(primarykeyPath, 'r')
     pk = f.readlines()
     pkDict = {}
@@ -532,7 +537,7 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, geno
         parsline = line.strip().split("=")
         key = parsline[0].strip().lower()
         value = parsline[1].strip()
-        pkDict[key]=value
+        pkDict[key] = value
     f.close()
 
     e = open(uploadStatusPath, 'w')
@@ -541,8 +546,6 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, geno
     res = models.Results.objects.get(pk=rpk)
     if status != None:
         res.status = status
-        if not 'Completed' in status:
-           res.reportLink = res.log
     res.timeStamp = timezone.now()
     res.save()
     experiment = res.experiment
@@ -583,7 +586,7 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, geno
         e.write("Failed addLibMetrics\n")
         logger.exception("Failed addLibMetrics")
 
-    #try to add the quality metrics
+    # try to add the quality metrics
     try:
         e.write('Adding Quality Metrics\n')
         if ionstats_basecaller:
@@ -599,7 +602,7 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, geno
 
     e.close()
 
-if __name__=='__main__':
+if __name__ == '__main__':
     logger.propagate = False
     logger.setLevel(logging.DEBUG)
     fmt = logging.Formatter("[%(asctime)s] [%(levelname)s] %(name)s: %(message)s")
@@ -614,16 +617,16 @@ if __name__=='__main__':
     else:
         folderPath = sys.argv[1]
 
-    SIGPROC_RESULTS="sigproc_results"
-    BASECALLER_RESULTS="basecaller_results"
-    ALIGNMENT_RESULTS="./"
+    SIGPROC_RESULTS = "sigproc_results"
+    BASECALLER_RESULTS = "basecaller_results"
+    ALIGNMENT_RESULTS = "./"
 
     print "processing: " + folderPath
 
     status = None
 
     tfPath = os.path.join(folderPath, BASECALLER_RESULTS, 'TFStats.json')
-    procPath = os.path.join(SIGPROC_RESULTS,"processParameters.txt")
+    procPath = os.path.join(SIGPROC_RESULTS, "processParameters.txt")
     beadPath = os.path.join(folderPath, SIGPROC_RESULTS, 'analysis.bfmask.stats')
     ionstats_alignment_json_path = os.path.join(folderPath, ALIGNMENT_RESULTS, 'ionstats_alignment.json')
     ionParamsPath = os.path.join(folderPath, 'ion_params_00.json')
@@ -634,16 +637,16 @@ if __name__=='__main__':
     uploadStatusPath = os.path.join(folderPath, 'status.txt')
 
     ret_messages = writeDbFromFiles(tfPath,
-                     procPath,
-                     beadPath,
-                     ionstats_alignment_json_path,
-                     ionParamsPath,
-                     status,
-                     keyPath,
-                     ionstats_basecaller_json_path,
-                     BaseCallerJsonPath,
-                     primarykeyPath,
-                     uploadStatusPath,
-                     folderPath)
+                                    procPath,
+                                    beadPath,
+                                    ionstats_alignment_json_path,
+                                    ionParamsPath,
+                                    status,
+                                    keyPath,
+                                    ionstats_basecaller_json_path,
+                                    BaseCallerJsonPath,
+                                    primarykeyPath,
+                                    uploadStatusPath,
+                                    folderPath)
 
     print("messages: '%s'" % ret_messages)

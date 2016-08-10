@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdint.h>
 #include <x86intrin.h>
+#include <climits>
 #include "AffineSWOptimizationHash.h"
 
 using namespace std;
@@ -17,7 +18,7 @@ AffineSWOptimizationHash::AffineSWOptimizationHash()
   hash = new hash_t[size];
   for(i=0;i<size;i++) {
       hash[i].tlen = 0;
-      hash[i].hash = -1;
+      hash[i].hash = ULLONG_MAX;
       hash[i].dir = 0;
       hash[i].b.clear();
   }
@@ -85,7 +86,7 @@ bool AffineSWOptimizationHash::process(const string &b, const string &a, int _qs
       // reset the hash
       for(i=0;i<size;i++) {
           hash[i].tlen = 0;
-          hash[i].hash = -1;
+          hash[i].hash = ULLONG_MAX;
           hash[i].dir = 0;
           hash[i].b.clear();
       }

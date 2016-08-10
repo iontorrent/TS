@@ -17,8 +17,8 @@ $(function(){
         render: function () {
             console.log(this.model.changedAttributes());
             this.$('[rel="tooltip"]').tooltip('hide');
-            console.log("Rendering report");
-            console.log(this.model);
+            //console.log("Rendering report");
+            //console.log(this.model);
             var met = this.model.get("analysismetrics");
             var qc = this.model.get("qualitymetrics");
             var exp = this.model.get('experiment');
@@ -73,7 +73,7 @@ $(function(){
                 console.log("AJAX Reivew Plan Error:", data);
             }).always(function(data) {
                 $('body').css("cursor", "default");
-                $('body').remove('#myBusyDiv');
+                $('body #myBusyDiv').remove();
             });
     	},
 
@@ -104,10 +104,10 @@ $(function(){
         template: Hogan.compile($("#experiment_table_template").html()),
 
         render: function () {
-            console.log(this.model.changedAttributes());
+            //console.log(this.model.changedAttributes());
             this.$('[rel="tooltip"]').tooltip('hide');
-            console.log("Rendering report");
-            console.log(this.model);
+            //console.log("Rendering report");
+            //console.log(this.model);
             var met = this.model.get("analysismetrics");
             var qc = this.model.get("qualitymetrics");
             var exp = this.model.get('experiment');
@@ -153,7 +153,8 @@ $(function(){
         events: {
             'click #view_full': 'view_full',
             'click #view_table': 'view_table',
-            'click #live_button': 'toggle_live_update'
+            'click #live_button': 'toggle_live_update',
+            'click .sort_link': 'sort'
         },
 
         initialize: function () {
@@ -259,18 +260,15 @@ $(function(){
         },
 
         setup_table_view: function () {
-            console.log('setup');
             if(this.pager !== null) {
                 this.pager.destroy_view();
             }
-            console.log("before html");
             var template = $("#experiment_list_table_template").html();
             $("#data_panel").html(template);
             console.log('pasted html');
             this.RunView = TableRunView;
             $("#view_table").addClass('active');
             $("#view_full").removeClass('active');
-            console.log('before pager');
             this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
             this.pager.render();
             $('#pager').show();
@@ -283,6 +281,24 @@ $(function(){
                 this.setup_table_view();
                 this.render();
             }
+        },
+
+        sort: function (e) {
+            e.preventDefault();
+            $('.order_indicator').removeClass('k-icon k-i-arrow-n k-i-arrow-s')
+            var $order_span = $(e.currentTarget).children('.order_indicator');
+            var name = $(e.target).data('name');
+            if (this.sort_key == name) {
+                this.sort_key = '-' + name;
+                $order_span.addClass('k-icon k-i-arrow-s')
+            } else if ((this.sort_key == '-' + name) && (name != 'timeStamp')) {
+                this.sort_key = '-timeStamp';
+                $('.order_indicator_default').addClass('k-icon k-i-arrow-s')
+            } else {
+                this.sort_key = name;
+                $order_span.addClass('k-icon k-i-arrow-n')
+            }
+            this.collection.filtrate({'order_by': this.sort_key});
         }
     });
 });

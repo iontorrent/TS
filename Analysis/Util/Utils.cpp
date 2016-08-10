@@ -2,7 +2,6 @@
 #include "Utils.h"
 #ifndef ALIGNSTATS_IGNORE
 #include "IonVersion.h"
-#include "ChipIdDecoder.h"
 #endif
 #include <cstdio>
 #include <sys/stat.h>
@@ -761,10 +760,9 @@ char * MakeExpLogPathFromDatDir (const char *dir)
   filepath = (char *) malloc (sizeof (char) * (strlen (filename) + strlen (dir) + 2));
   sprintf (filepath, "%s/%s", dir, filename);
   if (isFile (filepath))
-  {
     return filepath;
-  }
-  free (filepath);
+  if (filepath)
+    free (filepath);
   filepath = NULL;
   //second try the parent directory
   char *parent = NULL;
@@ -794,6 +792,39 @@ char * MakeExpLogPathFromDatDir (const char *dir)
   free(filepath);
   return NULL;
 }
+
+
+//
+// Returns pointer to string containing path to explog_final.txt file
+// Can be in given raw data directory, or parent of given directory if its a gridded dataset
+//
+char * MakeExpLogFinalPathFromDatDir (const char *dir)
+{
+  //first try the given directory - default behavior for monogrid data
+  char filename[] = {"explog_final.txt"};
+  char *filepath = NULL;
+  filepath = (char *) malloc (sizeof (char) * (strlen (filename) + strlen (dir) + 2));
+  sprintf (filepath, "%s/%s", dir, filename);
+  if (isFile (filepath))
+    return filepath;
+  if (filepath)
+    free (filepath);
+  filepath = NULL;
+  //second try the parent directory
+  char *parent = NULL;
+  parent = strdup (dir);
+  char *parent2 = dirname (parent);
+  filepath = (char *) malloc (sizeof (char) * (strlen (filename) + strlen (parent2) + 2));
+  sprintf (filepath, "%s/%s", parent2, filename);
+  if (parent)
+    free (parent);
+  if (isFile (filepath))
+    return filepath;
+  if (filepath)
+    free(filepath);
+  return NULL;
+}
+
 
 std::string GetMemUsage()
 {
@@ -846,12 +877,6 @@ void TrimString (std::string &str)
     str.erase (0,found);
   else
     str.clear();
-}
-
-bool isInternalServer()
-{
-  // Check for existence file
-  return isFile ("/opt/ion/.ion-internal-server");
 }
 
 int totalMemOnTorrentServer()

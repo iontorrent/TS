@@ -34,7 +34,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/${AGENT_DIR}/status.py" DESTINATION RSM)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/${AGENT_DIR}/queryFileServers.py" DESTINATION RSM)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/${AGENT_DIR}/find_serial.py" DESTINATION RSM)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/${AGENT_DIR}/updateContactInfo.py" DESTINATION RSM)
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/${AGENT_DIR}/updateContactInfo.py" DESTINATION RSM)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/${AGENT_DIR}/get_nexenta_for_axeda.py" DESTINATION RSM)
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 set(CPACK_PACKAGE_DESCRIPTION "ion-rsmts provides remote monitoring for the Torrent Server.")

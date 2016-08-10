@@ -6,8 +6,8 @@ set -e
 #--- Include function definition file
 #--------------------------------------
 TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
-source $TSCONFIG_SRC_DIR/ts_params
-source $TSCONFIG_SRC_DIR/ts_functions
+source $TSCONFIG_SRC_DIR/ts_params||source ../ts_params||true
+source $TSCONFIG_SRC_DIR/ts_functions||source ../ts_functions||true
 #--------------------------------------
 # Functions
 #--------------------------------------
@@ -30,7 +30,6 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision$'|awk '{print $2}'`
 device=$(outbound_net_port)
 environment='/etc/environment'
 configfile=/etc/network/interfaces
@@ -47,7 +46,7 @@ while [ $# != 0 ]; do
         ;;
         
         '--version'|'-v')
-            echo "`basename $0` version $version"
+            basename $0
             if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
                 source /opt/ion/bin/ion-tsconfig.version.env
                 IonVersionGetFullVersion ion-tsconfig
@@ -87,7 +86,7 @@ if ! grep -q http_proxy $environment; then
 else
     # strip http_proxy=
     full_str=$(grep ^http_proxy $environment|awk -F= '{print $2}')
-    prefix=$(echo $full_str|awk -F: '{print $1'})
+    prefix=$(echo $full_str|awk -F: '{print $1}')
     full_str=$(echo $full_str|sed 's/.*\/\/\(.*\)/\1/')
     
     if echo $full_str|grep -q "@"; then
@@ -110,6 +109,12 @@ echo "proxy_address:$address"
 echo "proxy_port:$port"
 echo "proxy_username:$username"
 echo "proxy_password:$password"
+if ! grep -q no_proxy $environment; then
+    no_proxy=
+else
+    no_proxy=$(awk -F= '/no_proxy/ {print $2}' "$environment")
+fi
+echo "no_proxy:$no_proxy"
 
 echo -e "network_device:$device"
 if grep "^iface $device" $configfile | grep -q static; then
@@ -131,17 +136,33 @@ if grep "^iface $device" $configfile | grep -q static; then
     sed -n "/iface $device inet static/,/^iface/ s/gateway .*/&/p" $configfile|awk '{print "network_gateway:"$2}'
 fi
 
-cnt=0
-for nameserver in $(grep nameserver /etc/resolv.conf|awk '{print $2}'); do
-    if [ $cnt -gt 0 ]; then
-        nameservers="$nameservers,$nameserver"
-    else
-        nameservers=$nameserver
-    fi
-    cnt=$((cnt+1))
-done
-nameservers=$(echo $nameservers|sed 's/ /,/g')
-echo "network_nameservers:$nameservers"
+# /run/resolvconf/interface directory contains files with nameserver and dns info
+# Filename format is <network device>.[inet|dhclient] depending on mode static or dhcp
+# T7500 servers will have eth0 network device
+# T620/T630/T430 will have em1 network device
+# (Possibly, T620 will have p*p1 network device)
+# TODO: this is fragile and hardcoded interface names.
+srcfile=$(find /run/resolvconf/interface -name "em1.*" -o -name "eth0.*" -o -name "p*p1.*")
+if [[ ${#srcfile} -eq 0 ]]; then
+    # no source file found, nothing to report
+    echo "network_nameservers:"
+    echo "network_dnssearch:"
+else
+    nameservers=""
+    for entry in $(grep nameserver "$srcfile"|awk '{print $2}'); do
+        if [[ ${#nameservers} -ne 0 ]]; then
+            nameservers="$nameservers,$entry"
+        else
+            nameservers="$entry"
+        fi
+    done
+    nameservers=${nameservers// /,}
+    echo "network_nameservers:$nameservers"
+    
+    entry="$(egrep '(^search|^domain)' "$srcfile"|sed 's/search //'|sed 's/domain //')"
+    entry=${entry// /,}
+    echo "network_dnssearch:$entry"
+
+fi
 
 exit 0
-

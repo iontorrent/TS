@@ -9,4 +9,3 @@ __version__ = '3.0'
 from ion.plugin.base import IonPlugin
 from ion.plugin.constants import *
 from ion.plugin.commands import *
-

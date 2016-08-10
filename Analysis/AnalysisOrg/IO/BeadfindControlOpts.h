@@ -30,7 +30,8 @@ class BeadfindControlOpts{
     int bfOutputDebug;
     float bfMult;
     bool sdAsBf;
-    bool gainCorrection;
+    bool useBeadfindGainCorrection;
+    bool useDatacollectGainCorrectionFile;
     int useSignalReference;
     bool useSignalReferenceSet;
     std::string beadfindType;
@@ -46,9 +47,12 @@ class BeadfindControlOpts{
     std::string doubleTapFlows;
     int predictFlowStart;
     int predictFlowEnd;
+    int meshStepX;
+    int meshStepY;
     void DefaultBeadfindControl();
-	void PrintHelp();
-	void SetOpts(OptArgs &opts, Json::Value& json_params);
+    void PrintHelp();
+    void SetOpts(OptArgs &opts, Json::Value& json_params);
+    void SetThumbnail(bool tn);
     ~BeadfindControlOpts();
 };
 

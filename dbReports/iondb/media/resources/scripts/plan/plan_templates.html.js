@@ -423,8 +423,6 @@ $(function () {
  function switch_tab() {
     var selectedTab = window.location.hash.substring(1);
     
-    console.log("selectedTab=", selectedTab);
-    
     if (selectedTab == '')
     	selectedTab = 'favorites';
     $("#left_side_nav > li").removeClass("active");
@@ -434,134 +432,11 @@ $(function () {
     
     var basePlannedExperimentUrl = "/rundb/api/v1/plantemplatebasicinfo/?format=json&planExecuted=False&isSystemDefault=False";
     var orderByOptions = "&order_by=-date&order_by=planDisplayedName";
-    
-    var grid = null;
-    if (selectedTab == 'favorites') {    
-    	var isOCPEnabled = $('input[id=isOCPEnabled]').val();
-    	
-    	if (isOCPEnabled == "True") {    		
-    		var favorites = $("#favorites").kendoGrid(commonKendoGrid("#favorites",
-    	        basePlannedExperimentUrl + "&isFavorite=true&categories__in=Onconet,Oncomine,," + orderByOptions,
-    	        'No Favorites yet'));
-        	grid = favorites;
-    	}
-    	else {
-            var favorites = $("#favorites").kendoGrid(commonKendoGrid("#favorites",
-        	        basePlannedExperimentUrl + "&isFavorite=true&categories__in=Onconet,," + orderByOptions,
-        	        'No Favorites yet'));    	
-        	grid = favorites;    		
-    	} 
-    }
-    
-    if (selectedTab == 'recents') {
-    	var isOCPEnabled = $('input[id=isOCPEnabled]').val();
-    	
-    	if (isOCPEnabled == "True") {    		
-    		var recents = $("#recents").kendoGrid(commonKendoGrid("#recents",
-    	        basePlannedExperimentUrl + "&categories__in=Onconet,Oncomine,," + orderByOptions,
-    	        'No Recents yet'));
-        	grid = recents;
-    	}
-    	else {
-            var recents = $("#recents").kendoGrid(commonKendoGrid("#recents",
-        	        basePlannedExperimentUrl + "&categories__in=Onconet,," + orderByOptions,
-        	        'No Recents yet'));    	
-        	grid = recents;    		
-    	}    	
- 	}
-    
-    if (selectedTab == 'ampliseq_dna') {
-    	var isOCPEnabled = $('input[id=isOCPEnabled]').val();
-    	
-    	if (isOCPEnabled == "True") {    		
-    		var ampliSeqs = $("#ampliseq_dna").kendoGrid(commonKendoGrid("#ampliseq_dna",
-    	        basePlannedExperimentUrl + "&runType__in=AMPS,AMPS_EXOME&applicationGroup__name__iexact=DNA&categories__in=Onconet,Oncomine,," + orderByOptions,
-    	        'No Ampliseq DNA templates yet'));
-        	grid = ampliSeqs;
-    	}
-    	else {
-            var ampliSeqs = $("#ampliseq_dna").kendoGrid(commonKendoGrid("#ampliseq_dna",
-        	        basePlannedExperimentUrl + "&runType__in=AMPS,AMPS_EXOME&applicationGroup__name__iexact=DNA&categories__in=Onconet,," + orderByOptions,
-        	        'No Ampliseq DNA templates yet'));    	
-        	grid = ampliSeqs;    		
-    	}
-    }
-    
-    if (selectedTab == 'ampliseq_rna') {
-      var ampliSeqRna = $("#ampliseq_rna").kendoGrid(commonKendoGrid("#ampliseq_rna",
-            basePlannedExperimentUrl + "&runType=AMPS_RNA&applicationGroup__name__iexact=RNA" + orderByOptions,
-            'No Ampliseq RNA templates yet'));
-      grid = ampliSeqRna;
-    }
 
-    if (selectedTab == 'genericseq') {
-    	var genericSeqs = $("#genericseq").kendoGrid(commonKendoGrid("#genericseq",
-            basePlannedExperimentUrl + "&runType=GENS" + orderByOptions,
-            'No Generic Sequencing templates yet'));  
-    	grid = genericSeqs;
-    }
-
-    if (selectedTab == 'pharmacogenomics') {
-      var pharmacogenomics = $("#pharmacogenomics").kendoGrid(commonKendoGrid("#pharmacogenomics",
-    	        basePlannedExperimentUrl + "&runType=AMPS&applicationGroup__name__iexact=PGx" + orderByOptions,
-    	        'No Pharmacogenomics templates yet'));
-      grid = pharmacogenomics;
-    }
-    
-    if (selectedTab == 'rna_seq') {
-      var rnaSeqs = $("#rna_seq").kendoGrid(commonKendoGrid("#rna_seq",
-    	        basePlannedExperimentUrl + "&runType=RNA" + orderByOptions,
-    	        'No RNASeq templates yet'));
-      grid = rnaSeqs;
-    }
-
-    if (selectedTab == 'targetseq') {
-      var targetSeqs = $("#targetseq").kendoGrid(commonKendoGrid("#targetseq",
-    	        basePlannedExperimentUrl + "&runType=TARS" + orderByOptions,
-    	        'No TargetSeq templates yet'));
-      grid = targetSeqs;
-    }
-
-    if (selectedTab == 'whole_genome') {
-      var wholeGenomes = $("#whole_genome").kendoGrid(commonKendoGrid("#whole_genome",
-    	        basePlannedExperimentUrl + "&runType=WGNM" + orderByOptions,
-    	        'No Whole Genome templates yet'));
-      grid = wholeGenomes;
-    }
-
-    if (selectedTab == '16s_targetseq') {
-      var targetSeq_16s = $("#16s_targetseq").kendoGrid(commonKendoGrid("#16s_targetseq",
-    	        basePlannedExperimentUrl + "&runType=TARS_16S" + orderByOptions,
-    	        'No 16S Target Sequencing templates yet'));
-      grid = targetSeq_16s;
-    }
-
-    if (selectedTab == 'fusions') {
-    	var isOCPEnabled = $('input[id=isOCPEnabled]').val();
-    	console.log("isOCPEnabled=", isOCPEnabled);
-    	
-    	if (isOCPEnabled == "True") {    		
-    		var fusions = $("#fusions").kendoGrid(commonKendoGrid("#fusions",
-    	        basePlannedExperimentUrl + "&runType__in=AMPS,AMPS_EXOME,AMPS_RNA,AMPS_DNA_RNA&applicationGroup__uid__iexact=APPLGROUP_0005&categories__in=Onconet,Oncomine,," + orderByOptions,
-    	        'No DNA + RNA templates yet'));
-        	grid = fusions;
-    	}
-    	else {
-            var fusionss = $("#fusions").kendoGrid(commonKendoGrid("#fusions",
-        	        basePlannedExperimentUrl + "&runType__in=AMPS,AMPS_EXOME,AMPS_RNA,AMPS_DNA_RNA&applicationGroup__uid__iexact=APPLGROUP_0005&categories__in=Onconet,," + orderByOptions,
-        	        'No DNA + RNA templates yet'));    	
-        	grid = fusions;    		
-    	}
-    }
-    
-    if (grid) {
-      //grid.refresh();
-      //a is undefined
-      var a = grid.dataSource;
-      console.log("grid.dataSource=", a);
-      
-      //grid.setDataSource(a);
-    }
+    var $selectedNav = $("#"+selectedTab+"_nav")
+    var grid = $("#"+selectedTab).kendoGrid( commonKendoGrid("#"+selectedTab,
+    	        basePlannedExperimentUrl + $selectedNav.data('api_filter') + orderByOptions,
+    	        "No" + $selectedNav.text() + "Templates") );
   };
   
   window.onhashchange = function(e) { 

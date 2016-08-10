@@ -12,7 +12,6 @@ class OutputFieldNames():
     NEW_PROJECTS = 'newProjects'
 
 
-
 class OutputStepData(AbstractStepData):
 
     def __init__(self, sh_type):
@@ -24,7 +23,7 @@ class OutputStepData(AbstractStepData):
         self.savedListFieldNames.append(OutputFieldNames.PROJECTS)
 
         self.sh_type = sh_type
-        
+
     def validateField(self, field_name, new_field_value):
         if field_name == OutputFieldNames.NEW_PROJECTS:
             self.validationErrors.pop(field_name, None)
@@ -32,13 +31,12 @@ class OutputStepData(AbstractStepData):
                 errors, trimmed_projectNames = validate_projects(new_field_value)
                 if errors:
                     self.validationErrors[field_name] = '\n'.join(errors)
-            
 
     def getStepName(self):
         return StepNames.OUTPUT
-    
+
     def updateSavedObjectsFromSavedFields(self):
         pass
-    
+
     def updateFromStep(self, updated_step):
         pass

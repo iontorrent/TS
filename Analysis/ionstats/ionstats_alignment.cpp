@@ -836,28 +836,29 @@ void flowAdvanceToNextHP(
 }
 
 
-// --------------------------------------------------------------------
-// XXX parse alignment function
-
+//
+// parse alignment function - this is where the BAM record is analyzed and we
+// compute the assignment of errors to base position, flow position, HP errors, etc
+//
 int parseAlignment(
-  BamAlignment &          alignment,
-  ReadAlignmentErrors &   base_space_errors,
-  ReadAlignmentErrors &   flow_space_errors,
-  map<string, string> &   flow_orders,
-  string &                read_group,
-  const map<char,char> &  reverse_complement_map,
-  bool                    evaluate_flow,
-  unsigned int            max_flows,
-  bool                    evaluate_hp,
-  bool &                  invalid_read_bases,
-  bool &                  invalid_ref_bases,
-  bool &                  invalid_cigar,
-  vector<char> &          ref_hp_nuc,
-  vector<uint16_t> &      ref_hp_len,
-  vector<int16_t> &       ref_hp_err,
-  vector<uint16_t> &      ref_hp_flow,
-  vector<uint16_t> &      zeromer_insertion_flow,
-  vector<uint16_t> &      zeromer_insertion_len
+  BamAlignment &          alignment,               // The BAM record to be parsed
+  ReadAlignmentErrors &   base_space_errors,       // Returns the errors in base space
+  ReadAlignmentErrors &   flow_space_errors,       // If evaluate_flow is TRUE, returns the errors in flow space
+  map<string, string> &   flow_orders,             // Specifies the flow orders for each read group
+  string &                read_group,              // Used to return the read group for the BAM record
+  const map<char,char> &  reverse_complement_map,  // Defines the rev comp for every base
+  bool                    evaluate_flow,           // Specifies if flows should be analyzed & returned
+  unsigned int            max_flows,               // Max flow to analyze
+  bool                    evaluate_hp,             // Specifies if per-HP results should be analyzed & returned
+  bool &                  invalid_read_bases,      // Will return TRUE if invalid (non-IUPAC) bases encountered in the read
+  bool &                  invalid_ref_bases,       // Will return TRUE if invalid (non-IUPAC) bases encountered in the ref
+  bool &                  invalid_cigar,           // Will return TRUE if lengths implied by CIGAR and by alignment do not match
+  vector<char> &          ref_hp_nuc,              // If evaulate_hp is TRUE, specifies ref hp nucleotides
+  vector<uint16_t> &      ref_hp_len,              // If evaulate_hp is TRUE, specifies ref hp lengths
+  vector<int16_t> &       ref_hp_err,              // If evaulate_hp is TRUE, specifies the read HP length errors (positive means overcall)
+  vector<uint16_t> &      ref_hp_flow,             // If evaulate_hp and evaluate_flow are TRUE, specifies flow to which each ref hp aligns
+  vector<uint16_t> &      zeromer_insertion_flow,  // If evaluate_flow and evaluate_hp are TRUE, specifies all flows with an insertion in a reference zeromer
+  vector<uint16_t> &      zeromer_insertion_len    // If evaluate_flow and evaluate_hp are TRUE, specifies the lengths of the zeromer insertions
 ) {
 
   if(hasInvalidCigar(alignment))

@@ -2,7 +2,6 @@
 #include "ImageLoaderQueue.h"
 #include "Utils.h"
 #include "FlowBuffer.h"
-#include "SynchDatSerialize.h"
 #include "ComparatorNoiseCorrector.h"
 #include "CorrNoiseCorrector.h"
 #include "PairPixelXtalkCorrector.h"
@@ -12,6 +11,7 @@
 #include <sys/fcntl.h>
 #include <sys/prctl.h>
 #include "crop/Acq.h"
+#include "ChipIdDecoder.h"
 
 typedef struct {
   int threadNum;
@@ -70,6 +70,7 @@ void *FileLoadWorker ( void *arg )
       tmr.restart();
       if ( !img->LoadRaw ( one_img_loader->name) )
       {
+        fprintf ( stdout, "ERROR: Failed to load raw image %s\n", one_img_loader->name );
         exit ( EXIT_FAILURE );
       }
 
@@ -102,7 +103,7 @@ void *FileLoadWorker ( void *arg )
             float xtalk_fraction = one_img_loader->inception_state->img_control.pair_xtalk_fraction;
             xtalkCorrector.Correct(one_img_loader->img[one_img_loader->cur_buffer].raw, xtalk_fraction);
         }
-        {
+        if (one_img_loader->inception_state->img_control.corr_noise_correct){
       	  CorrNoiseCorrector rnc;
       	  rnc.CorrectCorrNoise(one_img_loader->img[one_img_loader->cur_buffer].raw,3,one_img_loader->inception_state->bfd_control.beadfindThumbnail );
         }
@@ -247,80 +248,19 @@ void *FileLoadWorker ( void *arg )
     fprintf ( stdout, "FileLoadWorker: ImageProcessing time for flow %d: %0.2lf(ld=%.2f pin=%.2f cnc=%.2f xt=%.2f sem=%.2lf cache=%.2lf) sec %s\n",
               one_img_loader->flow , usec / 1.0e6, T1, T2, T3, T4, img->SemaphoreWaitTime, img->CacheAccessTime, dateStr);
     fflush(stdout);
+    fprintf(stdout, "File: %s\n", one_img_loader->name);
+    fflush(stdout);
     q->DecrementDone();
   }
 
   return ( NULL );
 }
 
-void *FileSDatLoadWorker ( void *arg )
-{
-  WorkerInfoQueue *q = static_cast<WorkerInfoQueue *> ( arg );
-  assert ( q );
-
-  bool done = false;
-  TraceChunkSerializer serializer;
-  while ( !done )
-  {
-    WorkerInfoQueueItem item = q->GetItem();
-
-    if ( item.finished == true )
-    {
-      // we are no longer needed...go away!
-      done = true;
-      q->DecrementDone();
-      continue;
-    }
-    ClockTimer timer;
-    ImageLoadWorkInfo *one_img_loader = ( ImageLoadWorkInfo * ) item.private_data;
-    bool ok = serializer.Read ( one_img_loader->name, one_img_loader->sdat[one_img_loader->cur_buffer] );
-    if (!ok) {
-      ION_ABORT("Couldn't load file: " + ToStr(one_img_loader->name));
-    }
-    one_img_loader->pinnedInFlow->Update ( one_img_loader->flow, &one_img_loader->sdat[one_img_loader->cur_buffer],(ImageTransformer::gain_correction?ImageTransformer::gain_correction:0));
-    //    one_img_loader->pinnedInFlow->Update ( one_img_loader->flow, &one_img_loader->sdat[one_img_loader->cur_buffer] );
-
-    SynchDat &sdat = one_img_loader->sdat[one_img_loader->cur_buffer];
-    // if ( ImageTransformer::gain_correction != NULL )
-    //   ImageTransformer::GainCorrectImage ( &sdat );
-    //   ImageTransformer::GainCorrectImage ( &one_img_loader->sdat[one_img_loader->cur_buffer] );
-
-    //    int buffer_ix = one_img_loader->cur_buffer;
-    if ( one_img_loader->inception_state->img_control.col_flicker_correct ) {
-      ComparatorNoiseCorrector cnc;
-      Mask &mask = *(one_img_loader->mask);
-      for (size_t rIx = 0; rIx < sdat.GetNumBin(); rIx++) {
-        TraceChunk &chunk = sdat.GetChunk(rIx);
-        // Copy over temp mask for normalization
-        Mask m(chunk.mWidth, chunk.mHeight);
-        for (size_t r = 0; r < chunk.mHeight; r++) {
-          for (size_t c = 0; c < chunk.mWidth; c++) {
-            m[r*chunk.mWidth+c] = mask[(r+chunk.mRowStart) * mask.W() + (c+chunk.mColStart)];
-          }
-        }
-        cnc.CorrectComparatorNoise(&chunk.mData[0], chunk.mHeight, chunk.mWidth, chunk.mDepth,
-            &m, one_img_loader->inception_state->img_control.col_flicker_correct_verbose,
-            one_img_loader->inception_state->img_control.aggressive_cnc);
-      }
-    }
-    // @todo output trace and dc offset info
-    sdat.AdjustForDrift();
-    sdat.SubDcOffset();
-    SetReadCompleted(one_img_loader);
-    size_t usec = timer.GetMicroSec();
-    fprintf ( stdout, "FileLoadWorker: ImageProcessing time for flow %d: %0.5lf sec\n", one_img_loader->flow, usec / 1.0e6);
-
-    q->DecrementDone();
-  }
-
-  return ( NULL );
-}
-
-void ConstructNameForCurrentInfo(ImageLoadWorkInfo *cur_image_loader, const char *post_fix)
+void ConstructNameForCurrentInfo(ImageLoadWorkInfo *cur_image_loader)
 {
   int cur_flow = cur_image_loader->flow;
   int filenum = cur_flow + ( cur_flow / cur_image_loader->numFlowsPerCycle ) * cur_image_loader->hasWashFlow;
-  sprintf (cur_image_loader->name, "%s/%s%04d.%s", cur_image_loader->dat_source_directory,cur_image_loader->acqPrefix, filenum , post_fix);
+  sprintf (cur_image_loader->name, "%s/%s%04d.%s", cur_image_loader->dat_source_directory,cur_image_loader->acqPrefix, filenum , cur_image_loader->datPostfix);
 }
 
 void SetUpIndividualImageLoaders ( ImageLoadWorkInfo *my_img_loaders, ImageLoadWorkInfo *master_img_loader )
@@ -333,10 +273,7 @@ void SetUpIndividualImageLoaders ( ImageLoadWorkInfo *my_img_loaders, ImageLoadW
     my_img_loaders[i_buffer].flow = master_img_loader->startingFlow+i_buffer; //this buffer entry points to this absolute flow
     my_img_loaders[i_buffer].flow_block_sequence = master_img_loader->flow_block_sequence;
     my_img_loaders[i_buffer].cur_buffer = i_buffer; // the actual buffer
-    if (master_img_loader->doingSdat)
-      ConstructNameForCurrentInfo(&my_img_loaders[i_buffer],master_img_loader->inception_state->img_control.sdatSuffix.c_str());
-    else
-      ConstructNameForCurrentInfo(&my_img_loaders[i_buffer],"dat");
+    ConstructNameForCurrentInfo(&my_img_loaders[i_buffer]);
   }
 }
 
@@ -493,65 +430,6 @@ void *FileLoader ( void *arg )
   return NULL;
 }
 
-void *FileSDatLoader ( void *arg )
-{
-  ImageLoadWorkInfo *master_img_loader = ( ImageLoadWorkInfo * ) arg;
-
-
-  WorkerInfoQueue *loadWorkQ = new WorkerInfoQueue ( master_img_loader->flow_buffer_size );
-  ImageLoadWorkInfo *n_image_loaders = new ImageLoadWorkInfo[master_img_loader->flow_buffer_size];
-  SetUpIndividualImageLoaders ( n_image_loaders,master_img_loader );
-
-  int numWorkers = numCores() /2; // @TODO - this should be subject to inception_state options
-  numWorkers = ( numWorkers < 1 ? 1:numWorkers );
-  fprintf ( stdout, "FileLoader: numWorkers threads = %d\n", numWorkers );
-  {
-    int cworker;
-    pthread_t work_thread;
-    // spawn threads for doing background correction/fitting work
-    for ( cworker = 0; cworker < numWorkers; cworker++ )
-    {
-      int t = pthread_create ( &work_thread, NULL, FileSDatLoadWorker,
-                               loadWorkQ );
-      pthread_detach(work_thread);
-      if ( t )
-        fprintf ( stderr, "Error starting thread\n" );
-    }
-  }
-
-  WorkerInfoQueueItem item;
-  int flow_buffer_size = master_img_loader->flow_buffer_size;
-  for ( int i_buffer = 0; i_buffer < flow_buffer_size;i_buffer++ )
-  {
-    ImageLoadWorkInfo *cur_image_loader = &n_image_loaders[i_buffer];
-
-    int cur_flow = cur_image_loader->flow; // each job is an n_image_loaders item
-    DontReadAheadOfSignalProcessing (cur_image_loader, master_img_loader->lead);
-
-
-    //    cur_image_loader->sdat[cur_image_loader->cur_buffer].AdjustForDrift();
-    //    cur_image_loader->sdat[cur_image_loader->cur_buffer].SubDcOffset();
-    item.finished = false;
-    item.private_data = cur_image_loader;
-    loadWorkQ->PutItem ( item );
-
-    if (!ChipIdDecoder::IsProtonChip())  //P2 and Long compute?
-      PauseForLongCompute ( cur_flow,cur_image_loader );
-  }
-
-  // wait for all of the images to be processed
-  loadWorkQ->WaitTillDone();
-
-  KillQueue ( loadWorkQ,numWorkers );
-
-  delete loadWorkQ;
-
-  delete[] n_image_loaders;
-
-  master_img_loader->finished = true;
-
-  return NULL;
-}
 
 //@TODO: why is this not a method of info?
 void DumpStep ( ImageLoadWorkInfo *info )

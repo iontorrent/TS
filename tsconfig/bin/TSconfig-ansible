@@ -1,7 +1,7 @@
 #!/bin/bash
-# Copyright (C) 2011-2014 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2011-2016 Ion Torrent Systems, Inc. All Rights Reserved
 #
-# Purpose: Configure an ubuntu (currently 10.04 lucid distribution) server for
+# Purpose: Configure an ubuntu (currently 14.04 trusty distribution) server for
 # use as a Torrent Server.
 #
 set -e
@@ -19,33 +19,6 @@ LOCK_FILE=/var/lock/tsconfiglock
 #--------------------------------------
 trap 'error ${LINENO}' ERR
 
-#--------------------------------------
-# Call this to indicate an unimplemented option
-#--------------------------------------
-function not_implemented()
-{
-    echo
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    echo
-    echo "DRAT! This has not been implemented using Ansible yet!"
-    echo "Contact bernard.puc@thermofisher.com."
-    echo
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    exit
-}
-function in_progress()
-{
-    echo
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    echo
-    echo "So close! This is partially implemented using Ansible!"
-    echo "But there's still some troubles with the feature"
-    echo
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    exit
-}
-
-
 #---                            ---#
 #---    Variable Declarations   ---#
 #---                            ---#
@@ -59,11 +32,10 @@ CONF_POSTFIX=0          # Run postfix configuration script
 INITIAL_CONFIG=1        # Flags interactive configuration settings - only for initial configuration
 CHANGE_PASSWORD=0       # Change ionadmin password.
 PURGE_ALL_DEB=0         # Delete all deb package files in apt cache
-RECONFIGURE=0           # Re-run configuration steps only
 SECURITY_UPDATE=0       # Run apt-get unattended-upgrade
 FORCE=False             # Some cases, ignore disk space requirement
 NONINTERACTIVE=False    # Set to true to disable any user interaction operations
-version=5.0
+version=5.2
 
 
 #-------------------------------------------------------------------------------
@@ -103,8 +75,8 @@ while [ $# != 0 ]; do
         '-f'|'--force')
             FORCE=true
         ;;
-        '--configure-server')
-            if [ $EXECUTE == 1 ];then user_msg "Configure server as Head Node"; fi
+        '--configure-server'|'--reconfigure')
+            if [ $EXECUTE == 1 ];then user_msg "Configure Torrent Server"; fi
             CONF_HEAD_NODE=1
         ;;
         '--update-torrent-suite'|'-s')
@@ -114,13 +86,6 @@ while [ $# != 0 ]; do
         '--security-update')
             if [ $EXECUTE == 1 ];then user_msg "Check for and install packages with security updates"; fi
             SECURITY_UPDATE=1
-        ;;
-        '--reconfigure')
-            RECONFIGURE=1
-        ;;
-        '--skip-init')   # do not execute interactive, initialization steps
-            INITIAL_CONFIG=0
-            not_implemented
         ;;
         '--change-hostname'|'-r')
             if [ $EXECUTE == 1 ];then user_msg "Change server hostname"; fi
@@ -158,10 +123,11 @@ while [ $# != 0 ]; do
             exit 0
         ;;
         '--version'|'-v')
-            user_msg "`basename $0` version $version"
             if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
                 source /opt/ion/bin/ion-tsconfig.version.env
                 IonVersionGetFullVersion ion-tsconfig
+            else
+                user_msg "`basename $0` version $version"
             fi
 	    exit 0
         ;;
@@ -186,10 +152,17 @@ if [ $EXECUTE -eq 0 ]; then
     rotate_log
     exec 3>&2   # fd 3 opened and directed to stderr; 'stores' original stderr fd
     exec 2>$TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG    # Redirect stderr to a file
+    chmod 666 $TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG
     echo $(date) > $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
-	$0 -g $OPTARGS | tee -a $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
+    chmod 666 $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
+    $0 -g $OPTARGS | tee -a $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
     exit ${PIPESTATUS[0]}
 fi
+##----------------------------------------------------------------------------
+## Start logging all stdout/stderr
+##----------------------------------------------------------------------------
+#exec > >(tee "$TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG") 2>&1
+
 
 #---                    ---#
 #---    Main Execution  ---#
@@ -213,12 +186,63 @@ log "version "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetReleas
 
 
 #---
-#---    N.B. When a server configuration is specified, all other options are ignored
+#---    Installed software packages are upgraded
+#---    N.B. This function MUST precede the configure/reconfigure function!
+#---
+if [ $UPDATE_SOFTWARE == 1 ]; then
+
+    log "Software Package Update"
+    # Root partition space check
+    free_root=$(df -k|awk '/.*\/$/ {print $4}')
+    log "root partition free space:$free_root kb"
+    free_threshold=1048576
+    if [[ $free_root -lt $free_threshold ]]; then
+        if [ $FORCE = False ]; then
+            log "Not enough disk space to update software (/ has $free_root kb free)"
+            user_msg "=================================================================="
+            user_msg "Not enough disk space to update software"
+            user_msg "/ partition has $free_root kb free and needs $free_threshold kb"
+            user_msg "Ion Software update has been cancelled."
+            user_msg ""
+            user_msg "To override this limit, add the '--force' argument"
+            user_msg "=================================================================="
+            exit 1
+        else
+            log "Warning: Not enough disk space to install software (/ has $free_root kb free)"
+            log "User provided --force to override disk space warning"
+        fi
+    fi
+
+    # Configure apt repositories
+    config_repositories
+
+    # Install prerequisites
+    install_prerequisites
+
+    enable_maintenance_mode
+    log "Update software"
+    cd $ANSIBLE_HOME
+    ansible-playbook software_update.yml \
+        -i ${ANSIBLE_HOME}/${MY_HOSTS} \
+        --sudo
+
+    if [ $? == 0 ]; then
+        echo "=================================================================="
+        echo "Software Update Complete"
+        echo "=================================================================="
+    else
+        echo "=================================================================="
+        echo "There was an error.  Sorry.  Check the log files."
+        echo "=================================================================="
+    fi
+    disable_maintenance_mode
+fi
+
+#---
 #---    Reconfigure is the same as configure.  All the places where packages are installed are only
 #---    going to check if the package is installed, and not update if there is one available.
 #---
-
-if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
+if [ $CONF_HEAD_NODE == 1 ]; then
 
     #if ! network_tests $ETH_DEV; then
     #    log "Cannot configure node: Failed network test"
@@ -231,8 +255,8 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
     free_root=$(df -k|awk '/.*\/$/ {print $4}')
     log "root partition free space:$free_root kb"
     free_threshold=10485760
-        if [[ $free_root -lt $free_threshold ]]; then
-            if [ $FORCE = False ]; then
+    if [[ $free_root -lt $free_threshold ]]; then
+        if [ $FORCE = False ]; then
             log "Error: Not enough disk space to install software (/ has $free_root kb free)"
             user_msg "=================================================================="
             user_msg "Not enough disk space to install software"
@@ -244,7 +268,7 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
             exit 1
         else
             log "Warning: Not enough disk space to install software (/ has $free_root kb free)"
-            log "User has forced configuration"
+            log "User provided --force to override disk space warning"
         fi
     fi
 
@@ -292,6 +316,7 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
     # Rotate the ansible log file (Also specified in /etc/ansible/ansible.cfg)
     rotate /var/log/ion/ansible.log
 
+    enable_maintenance_mode
     log "Configure Head Node"
     echo "=================================================================="
     echo "Starting the site configuration"
@@ -301,71 +326,11 @@ if [ $CONF_HEAD_NODE == 1 ] || [ $RECONFIGURE == 1 ]; then
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
         --sudo
 
-
-    #Call initial configuration steps which require user input
-#    if [ $INITIAL_CONFIG == 1 ]; then
-#        exec 2>&3   # Redirect stderr (which points to a file) back to stderr (console)
-#        config_password
-#        dpkg-reconfigure tzdata
-#    fi
-
     echo "=================================================================="
     echo "TSconfig configure process completed successfully"
     echo "=================================================================="
-
+    disable_maintenance_mode
     exit 0
-fi
-
-#---
-#---    N.B. When a software update is specified, all other options are ignored
-#---
-if [ $UPDATE_SOFTWARE == 1 ]; then
-
-    log "Torrent Suite update"
-    # Root partition space check
-    free_root=$(df -k|awk '/.*\/$/ {print $4}')
-    log "root partition free space:$free_root kb"
-    free_threshold=1048576
-    if [[ $free_root -lt $free_threshold ]]; then
-        if [ $FORCE = False ]; then
-            log "Not enough disk space to update software (/ has $free_root kb free)"
-            user_msg "=================================================================="
-            user_msg "Not enough disk space to update software"
-            user_msg "/ partition has $free_root kb free and needs $free_threshold kb"
-            user_msg "Ion Software update has been cancelled."
-            user_msg ""
-            user_msg "To override this limit, add the '--force' argument"
-            user_msg "=================================================================="
-            exit 1
-        else
-            log "Warning: Not enough disk space to install software (/ has $free_root kb free)"
-            log "User has forced configuration"
-        fi
-    fi
-    
-    # Configure apt repositories
-    config_repositories
-
-    # Install prerequisites
-    install_prerequisites
-
-    log "Update software"
-    cd $ANSIBLE_HOME
-    ansible-playbook software_update.yml \
-        -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-        --sudo
-
-    if [ $? == 0 ]; then
-        echo "=================================================================="
-        echo "Software Update Complete"
-        echo "=================================================================="
-    else
-        echo "=================================================================="
-        echo "There was an error.  Sorry.  Check the log files."
-        echo "=================================================================="
-    fi
-
-    exit
 fi
 
 #---

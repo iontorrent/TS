@@ -10,7 +10,8 @@ import djangoinit
 from django.db import models
 from iondb.rundb import models
 
-siteName='collab'
+siteName = 'collab'
+
 
 def getResults(htmlFile):
     # calculate the date range to generate the report
@@ -19,16 +20,17 @@ def getResults(htmlFile):
     # but run on a Sat will generate the current report for the week just ended.
     today = datetime.date.today()
     timeStart = datetime.datetime(today.year, today.month, today.day)
-    daysFromMonday = timeStart.weekday() # Monday is 0, so if its Thursday (3), we need to go back 3 days
-    lengthOfReport = 7 # report for 7 days, with Monday being the first day included in a report
-    if daysFromMonday < lengthOfReport: # we want to go back to the start of the full week, if we are in the middle of a week, need to go back to the start of last week
+    daysFromMonday = timeStart.weekday()  # Monday is 0, so if its Thursday (3), we need to go back 3 days
+    lengthOfReport = 7  # report for 7 days, with Monday being the first day included in a report
+    if daysFromMonday < lengthOfReport:  # we want to go back to the start of the full week, if we are in the middle of a week, need to go back to the start of last week
         daysFromMonday = daysFromMonday + 7
     timeStart = timeStart - datetime.timedelta(days=daysFromMonday)
     timeEnd = timeStart + datetime.timedelta(days=lengthOfReport)
     timeEnd = timeEnd - datetime.timedelta(seconds=1)
 
-    # and now we have a date range to query on, grab all 'new' runs, sum their 100AQ17 values, and track the best weekly 100Q17 run also
-    exp = models.Experiment.objects.filter(date__range=(timeStart,timeEnd))
+    # and now we have a date range to query on, grab all 'new' runs, sum their
+    # 100AQ17 values, and track the best weekly 100Q17 run also
+    exp = models.Experiment.objects.filter(date__range=(timeStart, timeEnd))
     htmlFile.write('Found %s experiments between %s and %s\n<br>\n' % (len(exp), timeStart, timeEnd))
 
     xml_string = ''
@@ -44,7 +46,8 @@ def getResults(htmlFile):
         bestResult = None
         for r in rep:
             try:
-                libmetrics = r.libmetrics_set.all()[0] # ok, there's really only one libmetrics set per result, but we still need to get at it
+                libmetrics = r.libmetrics_set.all()[
+                                                  0]  # ok, there's really only one libmetrics set per result, but we still need to get at it
             except IndexError:
                 libmetrics = None
 
@@ -60,7 +63,8 @@ def getResults(htmlFile):
         if bestResult is not None:
             res.append(bestResult)
 
-    return res,xml_string
+    return res, xml_string
+
 
 def installAuth():
     password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
@@ -69,12 +73,14 @@ def installAuth():
     opener = urllib2.build_opener(handler)
     urllib2.install_opener(opener)
 
+
 def sendXML(xml_string):
     installAuth()
-    query_args = {'xml':xml_string}
+    query_args = {'xml': xml_string}
     encoded_args = urllib.urlencode(query_args)
     url = 'http://updates.iontorrent.com/metrics/recvxml.php'
     response = urllib2.urlopen(url, encoded_args).read()
+
 
 def generateReport():
     # get the web root path for building an html link
@@ -82,14 +88,14 @@ def generateReport():
     web_root = gc.web_root
     if len(web_root) > 0:
         if web_root[-1] == '/':
-            web_root = web_root[:len(web_root)-1]
+            web_root = web_root[:len(web_root) - 1]
 
     if gc.site_name:
         siteName = gc.site_name
     if siteName.find('Set') > 0:
         siteName = 'default'
 
-    heading =  'Weekly Report for %s\n' % siteName
+    heading = 'Weekly Report for %s\n' % siteName
 
     # generate the report name using today's date
     today = datetime.date.today()
@@ -100,9 +106,9 @@ def generateReport():
     reportStorage = reportStorages.filter(default=True)[0]
     path = '/var/www%s/%s/reports' % (reportStorage.webServerPath, location.name)
     if not os.path.isdir(path):
-        os.mkdir(path,0775)
+        os.mkdir(path, 0775)
         os.chmod(path, 0775)
-    report_path = os.path.join(path,reportName)
+    report_path = os.path.join(path, reportName)
     htmlFile = open(report_path, 'w')
     htmlFile.write('<html><body>\n')
     htmlFile.write(heading)
@@ -114,7 +120,7 @@ def generateReport():
     xml_string = xml_string + '      <Name>' + siteName + '</Name>\n'
 
     # get all analysis results from last week
-    res,local_xml_data = getResults(htmlFile)
+    res, local_xml_data = getResults(htmlFile)
     xml_string = xml_string + local_xml_data
 
     # calculate some metrics for the results
@@ -131,7 +137,8 @@ def generateReport():
 
     for r in res:
         try:
-            libmetrics = r.libmetrics_set.all()[0] # ok, there's really only one libmetrics set per result, but we still need to get at it
+            libmetrics = r.libmetrics_set.all()[
+                                              0]  # ok, there's really only one libmetrics set per result, but we still need to get at it
         except IndexError:
             libmetrics = None
 
@@ -161,10 +168,12 @@ def generateReport():
                 curBestBases = bases
                 bestRun = r
 
-    htmlFile.write('Totals  100Q17 reads: %s 100Q17 bases: %s in %s reports  314/316/318: %s/%s/%s\n' % (sum_100Q17Reads, sum_Q17Bases, sum_Runs, sum_Runs_314, sum_Runs_316, sum_Runs_318))
+    htmlFile.write('Totals  100Q17 reads: %s 100Q17 bases: %s in %s reports  314/316/318: %s/%s/%s\n' %
+                   (sum_100Q17Reads, sum_Q17Bases, sum_Runs, sum_Runs_314, sum_Runs_316, sum_Runs_318))
     htmlFile.write('<br>\n')
     if bestRun:
-        htmlFile.write('Best run: <a href="%s">%s</a>\n' % (web_root + bestRun.reportLink, bestRun.reportLink)) # need to handle bestRun = None case?
+        htmlFile.write('Best run: <a href="%s">%s</a>\n' %
+                       (web_root + bestRun.reportLink, bestRun.reportLink))  # need to handle bestRun = None case?
         htmlFile.write('<br>\n')
         htmlFile.write('Best run 100Q17 reads: %s 100Q17 bases: %s\n' % (curBestReads, curBestBases))
         htmlFile.write('<br>\n')
@@ -189,6 +198,5 @@ def generateReport():
     sendXML(xml_string)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     generateReport()
-

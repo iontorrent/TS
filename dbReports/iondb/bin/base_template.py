@@ -28,7 +28,7 @@ def make_22_legacy_report_template():
         name = "Torrent Server"
     tmpl = loader.get_template("rundb/reports/22_legacy_default_report.html")
     html = tmpl.render(template.Context({
-        "base_site_name":name
+        "base_site_name": name
     }))
     with open(generate, 'w') as outfile:
         outfile.write(html.encode('utf8'))
@@ -56,7 +56,7 @@ def make_30_report_template():
 def make_plugin():
     TEMPLATE_NAME = "rundb/ion_blank_plugin.html"
     tmpl = loader.get_template(TEMPLATE_NAME)
-    c = template.Context({'tab':"reports"})
+    c = template.Context({'tab': "reports"})
     html = tmpl.render(c)
     outfile = open('/opt/ion/iondb/templates/rundb/php_base_plugin.html', 'w')
     outfile.write(html.encode('utf8'))

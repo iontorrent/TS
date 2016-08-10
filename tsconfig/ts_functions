@@ -2847,7 +2847,7 @@ function getsubnetmask ()
 }
 function getgateway ()
 {
-    echo `/sbin/route | grep "default"|awk '{print $2}'`
+    echo `/sbin/route -n | grep "^0.0.0.0"|awk '{print $2}'`
 }
 
 function config_PGM_interface()
@@ -3381,10 +3381,23 @@ function is_master ()
 }
 
 #--------------------------------------
+# Enable/Disable apache2 maintenance webpage
+#--------------------------------------
+function enable_maintenance_mode()
+{
+    touch "$MAINTENANCE_WEB"
+}
+function disable_maintenance_mode()
+{
+    rm -f "$MAINTENANCE_WEB"
+}
+
+#--------------------------------------
 # Error handler called from trap command
 #--------------------------------------
 function error ()
 {
+    [[ -f $MAINTENANCE_WEB ]] && rm -f $MAINTENANCE_WEB
     if [ "$PID_LOCKED" == "1" ]; then rm -rf $LOCK_FILE; fi
     local PARENT_LINENO="$1"
     local MESSAGE="$2"
@@ -3714,59 +3727,6 @@ function config_apt_cache() {
 
 }
 
-#-----------------------------------------------------------------------------
-# Perl libraries
-#-----------------------------------------------------------------------------
-function install_perl_libs()
-{
-    # Perl module installation
-    # tarballs are copied to /usr/share/ion-tsconfig/perl
-
-    # To add a Perl module, do 3 steps: add the *.tar.gz file itself
-    # to external/perl directory, add *.tar.gz file name to
-    # tsconfig/debian/postinst.in (this file), and add *.tar.gz file
-    # name to tsconfig/CMakeLists.txt
-
-    staging="/usr/share/ion-tsconfig/perl"
-    cd $staging
-
-    # Find the perl module installation record file.  This file is created once a perl module is installed.
-    # If it is not defined, continue with empty variable.
-    PERLPOD=$(find /usr/local/lib/perl -type f -name perllocal.pod 2>/dev/null)||true
-
-    moduleList=( IO-All-0.44.tar.gz JSON-2.53.tar.gz  JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Readonly-1.03.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz )
-    for module in ${moduleList[@]}; do
-        # Determine if module is not installed yet and install if its not
-        # NOTE: This only checks the perllocal.pod file - it does not verify the modules files exist in the filesystem.
-        # If the files were somehow removed, but the perllocal.pod file not updated, the module would not get installed.
-        module_name=$(echo ${module%-*} |sed s/-/::/)
-        echo "$module_name"
-        if [[ -z $PERLPOD ]]; then
-            # File does not exist, continue with this module installation
-            install_me=true
-        else
-            if ! grep "$module_name" $PERLPOD -A20 | tail -21 | egrep -q '(installed|VERSION)'; then
-                install_me=true
-            else
-                install_me=false
-            fi
-        fi
-
-        if $install_me; then
-            instLog=/tmp/${module%.tar.gz}_install.log
-            echo "Installing ${module%.tar.gz}.  See $instLog"
-            tar zxf $module
-            cd ${module%.tar.gz}
-            perl Makefile.PL > $instLog 2>&1
-            make >> $instLog 2>&1
-            make install >> $instLog 2>&1
-            cd $staging
-            rm -rf ${module%.tar.gz}
-        fi
-    done
-    ldconfig
-}
-
 function install_prerequisites()
 {
     # Install ansible and customize ansible configuration
@@ -3828,6 +3788,27 @@ function outbound_net_port()
 }
 
 # =============================================================================
+# Returns device name of / partition
+# =============================================================================
+function findroot()
+{
+    # find / entry in /etc/fstab
+    # regex is: any line not starting with # containing a / surrounded by a space
+    line=$(sed -n '/^[^#].*\s\/\s.*/p' /etc/fstab)
+
+    # First element is id, by UUID, or LABEL, or plain /dev/*
+    set -- $line
+    device=$1
+
+    if echo $device|grep -q "="; then
+        searchterm=${device%=*}
+        id=${device#*=}
+        readlink -f /dev/disk/by-${searchterm,,}/$id
+    else
+        echo $device
+    fi
+}
+# =============================================================================
 # Returns release version number, ie 10.04, 12.04
 # =============================================================================
 function distrib_rel()
@@ -3843,4 +3824,28 @@ function distrib_name()
 {
     #echo $(awk -F'=' '/DISTRIB_CODENAME/{print $2}' /etc/lsb-release)
     echo $(lsb_release -s -c)
+}
+
+# =============================================================================
+# Colorize terminal output
+# =============================================================================
+red()
+{
+    echo -ne '\E[31m'
+}
+green()
+{
+    echo -ne '\E[32m'
+}
+yellow()
+{
+    echo -ne '\E[33m'
+}
+clrclr()
+{
+    echo -ne '\E[0m'
+}
+bold()
+{
+    echo -ne '\033[1m'
 }

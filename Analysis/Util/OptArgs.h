@@ -160,7 +160,53 @@ public:
    */
   std::vector<int> GetFirstIntVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
 
+  /**
+   * Get a boolean option value for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  bool GetLastBoolean(char shortOption, const std::string &longOption, bool defaultValue);
 
+  /**
+   * Get a boolean option value for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  bool GetLastBoolean(char shortOption, const std::string &longOption, const char * defaultValue);
+
+  /**
+   * Get a string option value for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  std::string GetLastString(char shortOption, const std::string &longOption, const std::string &defaultValue);
+
+  /**
+   * Get a double option value for the givent short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  double GetLastDouble(char shortOption, const std::string &longOption, double defaultDouble);
+
+  /**
+   * Get a int option value for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  int GetLastInt(char shortOption, const std::string &longOption, int defaultInt);
+
+  /**
+   * Get a vector of 'sep' separated string option values for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  std::vector<std::string> GetLastStringVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
+
+  /**
+   * Get a vector of 'sep' separated double option values for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  std::vector<double> GetLastDoubleVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
+
+  /**
+   * Get a vector of 'sep' separated int option values for the given short/long key
+   * If the option appears multiple times, use the last occurrence
+   */
+  std::vector<int> GetLastIntVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
 
   void StringToIntVector(std::vector<int> & values, const std::string & value_string, const std::string &longOption, char sep=',');
 

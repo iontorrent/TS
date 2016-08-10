@@ -11,6 +11,7 @@
 #include "Image.h"
 #include "T0Calc.h"
 #include "MaskFunctions.h"
+#include "ChipIdDecoder.h"
 
 using namespace std;
 
@@ -43,7 +44,7 @@ void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, Mask &mask, int gridMo
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mask);
-  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
+  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStepY, opts.t0MeshStepX, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
   T0Prior prior;
@@ -103,11 +104,13 @@ int main(int argc, const char *argv[]) {
   if(sId.find("900") != string::npos) {
     opts.useMeshNeighbors = 3;
     withinGrid = size;
-    opts.t0MeshStep = 10;
+    opts.t0MeshStepX = 10;
+    opts.t0MeshStepY = 10;
   }
   else {
     opts.useMeshNeighbors = 2;
-    opts.t0MeshStep = size;
+    opts.t0MeshStepX = size;
+    opts.t0MeshStepY = size;
   }
   Mask mask;
   int row = 0, col = 0;

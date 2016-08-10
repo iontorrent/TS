@@ -5,7 +5,6 @@
 #include "BFReference.h"
 #include "Image.h"
 #include "IonErr.h"
-#include "SynchDatSerialize.h"
 #include "ComparatorNoiseCorrector.h"
 #include "BkgTrace.h"
 #include "IonH5File.h"
@@ -38,7 +37,6 @@ BFReference::BFReference() {
   mRegionYSize = 50;
   mIqrOutlierMult = 2.5;
   mNumEmptiesPerRegion = 0;
-  doSdat = false;
   mIsThumbnail = false;
   mDoComparatorCorrect = false;
 }
@@ -270,16 +268,7 @@ void BFReference::CalcDualReference(const std::string &datFile1, const std::stri
 
 bool BFReference::LoadImage(Image &img, const std::string &fileName) {
   bool loaded = false;
-  if (doSdat) {
-    SynchDat sdat;
-    TraceChunkSerializer readSerializer;
-    readSerializer.Read(fileName.c_str(), sdat);
-    img.InitFromSdat(&sdat);
-    loaded = true;
-  }
-  else {
-    loaded = img.LoadRaw(fileName.c_str());
-  }
+  loaded = img.LoadRaw(fileName.c_str());
   return loaded;
 }
 
@@ -848,7 +837,7 @@ void BFReference::GetNEigenScatter(arma::Mat<float> &YY, arma::Mat<float> &E, in
     }
   }
 
-void BFReference::GetEigenProjection(arma::Mat<float> &data, arma::Col<unsigned int> &goodRows, size_t nEigen, arma::Mat<float> &proj) {
+void BFReference::GetEigenProjection(arma::Mat<float> &data, arma::Col<arma::uword> &goodRows, size_t nEigen, arma::Mat<float> &proj) {
     ION_ASSERT(nEigen > 0 && nEigen < data.n_cols, "Must specify reasonable selection of eigen values.");
     ION_ASSERT(goodRows.n_rows > 2, "Must have at least a few good columns.");
     Y = data.rows(goodRows);
@@ -873,7 +862,7 @@ void BFReference::FilterOutlierSignalWells(int rowStart, int rowEnd, int colStar
                                            arma::Mat<float> &data, std::vector<char> &wells) {
 
   // Figure out the good wells to use for our projection
-  arma::Col<unsigned int> goodRows;
+  arma::Col<arma::uword> goodRows;
   vector<unsigned int> good;
   size_t goodCount = 0;
   for (int r = rowStart; r < rowEnd; r++) {

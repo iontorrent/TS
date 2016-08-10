@@ -12,10 +12,12 @@ from ion.plugin.runtime import IonPluginRuntime
 
 LOG = logging.getLogger(__name__)
 
+
 def lazyprop(fn, name=None):
     if not name:
         name = fn.__name__
     attr_name = '_lazy_' + name
+
     @property
     def _lazyprop(x):
         if not hasattr(x, attr_name):
@@ -23,10 +25,12 @@ def lazyprop(fn, name=None):
         return getattr(x, attr_name)
     return _lazyprop
 
+
 def lazyclassprop(fn, name=None):
     if not name:
         name = fn.__name__
     attr_name = '_lazy_' + name
+
     @property
     def _lazyprop(x):
         if not hasattr(x, attr_name):
@@ -34,7 +38,9 @@ def lazyclassprop(fn, name=None):
         return getattr(x, attr_name)
     return _lazyprop
 
+
 class IonPluginMeta(type):
+
     """ Metaclass for Module Classes """
     def __new__(cls, name, bases, attrs):
         super_new = super(IonPluginMeta, cls).__new__
@@ -52,7 +58,8 @@ class IonPluginMeta(type):
         new_class = super_new(cls, name, bases, {'__module__': module})
 
         # Bail out early if we have already created this class.
-        m = cache.get_module(name, seed_cache=False, only_installed=False)
+        add_to_store = attrs.get('add_to_store', True)
+        m = cache.get_module(name, seed_cache=False, only_installed=False) if add_to_store else None
         if m is not None:
             return m
 
@@ -66,31 +73,31 @@ class IonPluginMeta(type):
         for obj_name, obj in attrs.items():
             setattr(new_class, obj_name, obj)
 
-        #module_label = sys.modules[new_class.__module__].__name__
+        # module_label = sys.modules[new_class.__module__].__name__
 
         new_class._prepare()
         cache.register_plugin(name, new_class)
 
-        #return cache.get_instance(name)
+        # return cache.get_instance(name)
         return new_class
 
     def _prepare(cls):
         # Create base methods
-        #if hasattr(cls, 'wrapable_func'):
+        # if hasattr(cls, 'wrapable_func'):
         #    cls.wrapable_func = update_wrapper(curry(wrapper_func,), cls.wrapable_func)
 
         # Set python special attributes
         py_attr = ('author', 'version')
         for name in py_attr:
             a = getattr(cls, name, None)
-            ## CAUTION - evaluates function at class define time
-            ## NOTE - all callables MUST be evaluated here - class.get does not evaluate properties
+            # CAUTION - evaluates function at class define time
+            # NOTE - all callables MUST be evaluated here - class.get does not evaluate properties
             if callable(a):
                 # MUST BE CLASS METHOD
-                #v = lazyprop(a,name)
+                # v = lazyprop(a,name)
                 v = a()
             elif isinstance(a, property):
-                #v = lazyprop(lambda: a.__get__(cls), name)
+                # v = lazyprop(lambda: a.__get__(cls), name)
                 v = a.__get__(cls)
             else:
                 v = a
@@ -103,28 +110,23 @@ class IonPluginMeta(type):
             setattr(cls, '__'+name+'__', v)
 
         # Set docstring - cls.__doc__
-        docstr = getattr(cls,'__doc__')
+        docstr = getattr(cls, '__doc__')
         if docstr is None:
             import warnings
             warnings.warn("NO DOCSTRING: Please update python class documentation to provide a short description and documentation for your plugin.")
-            #docstr = "[ Please update python class documentation to provide a short description and documentation for your plugin. ]"
+            # docstr = "[ Please update python class documentation to provide a short description and documentation for your plugin. ]"
             docstr = ""
             setattr(cls, '__doc__', docstr)
 
         # Upgrade "special" attributes - these can be callables, so attach property decorator
-        class_attr = (
-            'allow_autorun', 'major_block',
-            'runtypes', 'features', 'runlevels', 'depends',
-            'requires', 'provides',
-            # 'getUserInput',
-        )
+        class_attr = ('major_block', 'runtypes', 'features', 'runlevels', 'depends', 'requires', 'provides')
         for name in class_attr:
             if not hasattr(cls, name):
                 continue
             a = getattr(cls, name)
             if callable(a):
-                ## Auto apply lazy property decorator
-                setattr(cls, name, lazyclassprop(a,name))
+                # Auto apply lazy property decorator
+                setattr(cls, name, lazyclassprop(a, name))
 
         special_attr = (
             'output', 'results'
@@ -134,14 +136,14 @@ class IonPluginMeta(type):
                 continue
             a = getattr(cls, name)
             if callable(a):
-                ## Auto apply lazy property decorator
-                setattr(cls, name, lazyprop(a,name))
-
+                # Auto apply lazy property decorator
+                setattr(cls, name, lazyprop(a, name))
 
         return
 
 
 class IonPluginBase(object):
+
     """
     Base Class for Plugins. Applies Metaclass
     Here so we can have IonModule which extends same infrastructure, but has different interface than plugin.
@@ -153,18 +155,18 @@ class IonPluginBase(object):
 
 
 class IonPlugin(IonPluginBase, IonPluginRuntime):
+
     """ Base class for all Plugin Components """
 
-    ## Class attributes
+    # Class attributes
     name = None
     version = None
     runtypes = []
     features = []
     runlevels = []
     depends = []
-    allow_autorun = True
     major_block = False
-    requires = [ 'BAM', ]
+    requires = ['BAM', ]
     output = {}
     results = {}
 
@@ -176,21 +178,21 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
 
         # Populated from ORM
         self.plugin = None
-        self.analysis = None ## result object
+        self.analysis = None  # result object
         self.pluginresult = None
 
         self.data = {}
 
         return super(IonPlugin, self).__init__(*args, **kwargs)
 
-    #def __getattribute__(self, name):
+    # def __getattribute__(self, name):
     #    attr = super(IonPlugin, self).__getattribute__(name)
     #    if callable(attr):
     #        return attr()
     #    else:
     #        return attr
 
-    ## Introspection methods - FIXME - wrap functions instead
+    # Introspection methods - FIXME - wrap functions instead
     def _get_runtypes(self):
         rt = []
         if hasattr(self, 'runtypes'):
@@ -202,25 +204,25 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
         # If plugin reported value is empty,
         if not rt:
             # PGM runs and Thumbnails
-            rt = [ ion.plugin.constants.RunType.FULLCHIP,
-                   ion.plugin.constants.RunType.THUMB ]
+            rt = [ion.plugin.constants.RunType.FULLCHIP,
+                  ion.plugin.constants.RunType.THUMB]
             # Infer supported RunTypes from implemented methods
             if hasattr(self, 'block'):
-                rt.append(ion.plugin.constants.RunType.BLOCK )
+                rt.append(ion.plugin.constants.RunType.BLOCK)
             if hasattr(self, 'thumbnail'):
-                rt.append(ion.plugin.constants.RunType.THUMB )
+                rt.append(ion.plugin.constants.RunType.THUMB)
 
         # vars(ion.plugin.constants.RunType).keys() ## all RunTypes
         return rt
 
     @classmethod
     def _metadata(cls):
-        return { 'name': cls.__name__,
+        return {'name': cls.__name__,
                 'version': getattr(cls, 'version', None),
                 'description': cls.__doc__,
-               }
+                }
 
-    ## Wrap launch class with some initial checks, dry_run, etc.
+    # Wrap launch class with some initial checks, dry_run, etc.
     def launch_wrapper(self, data=None, dry_run=True):
         if dry_run:
             self.log.info("Plugin dry_run: '%s' v%s", self.name, self.version)
@@ -243,7 +245,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
         if not self.exit_status:
             self.exit_status = bool(not status)
 
-        self.log.info("Plugin complete: '%s' v%si -- exit_status = %d", 
+        self.log.info("Plugin complete: '%s' v%si -- exit_status = %d",
                       self.name, self.version, self.exit_status)
 
         return status
@@ -258,7 +260,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
                 json.dump(content, fh, indent=2)
         except (OSError, IOError, ValueError):
             self.log.exception("Failed to write '%s'", fname)
-        #self.log.debug("%s: '%s'", fname, json.dumps(content, indent=2))
+        # self.log.debug("%s: '%s'", fname, json.dumps(content, indent=2))
         return
 
     def generate_output(self):
@@ -286,10 +288,9 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
     def post_launch(self):
         pass
 
-    ## These must be implemented by plugins
+    # These must be implemented by plugins
     def launch(self, data=None):
         raise NotImplemented()
 
     def getUserInput(self):
         return None
-

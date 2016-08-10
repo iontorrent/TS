@@ -12,7 +12,7 @@ case "$1" in
         gtools_2.6.2.tar.gz \
         gdata_2.13.2.tar.gz \
         gplots_2.8.0.tar.gz \
-	    Rcpp_0.10.4.tar.gz \
+	    Rcpp_0.12.1.tar.gz \
 	    digest_0.6.3.tar.gz \
 	    spam_0.29-3.tar.gz \
 	    maps_2.3-3.tar.gz \

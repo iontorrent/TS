@@ -26,49 +26,6 @@ fi
 log "version "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetGitHash`")"
 
 #------------------------------------------#
-#---	check for hostname change		---#
-#------------------------------------------#
-if grep -q "hostname:" $TSCONFIG_DIR/$TSCONFIG_CONF 2>/dev/null; then
-
-    prevHostName=$(grep "hostname:" $TSCONFIG_DIR/$TSCONFIG_CONF|cut -f2 -d":")
-    currHostName=$(hostname -f)
-
-    if [ "$prevHostName" == "" -o "$currHostName" == "" ]; then
-        log "Error determining hostnames: prev:$prevHostName curr:$currHostName"
-    else
-        log "New hostname: '$currHostName'  Old hostname: '$prevHostName'"
-        if [ $(echo "$prevHostName") != $(echo "$currHostName") ]; then
-            log "Reconfigure SGE with new host name"
-
-            if is_master; then
-                # Master Node Name Change
-                invoke-rc.d apache2 stop
-                ion_daemon_ctrl stop
-
-                change_hostname_sge $prevHostName $currHostName > /var/log/ion/TSckconfig.rename 2>&1
-
-                # change_hostname_sge restarts the sge daemons
-                invoke-rc.d apache2 start
-                ion_daemon_ctrl start
-            else
-                # Compute Node Name Change
-                #change_hostname_sge $prevHostName $currHostName > /var/log/ion/TSckconfig.rename 2>&1
-                echo "Hostname changed.  You will have to run TSconfig --configure-compute" > /var/log/ion/TSckconfig.rename 2>&1
-                echo "in order to re-add this hostname to the SGE queue" >> /var/log/ion/TSckconfig.rename 2>&1
-            fi
-
-            # update conf file with new hostname
-            sed -i "s/hostname:.*/hostname:$currHostName/" $TSCONFIG_DIR/$TSCONFIG_CONF
-
-        else
-            log "Same hostname"
-        fi
-    fi
-else
-    log "Error: Could not retrieve record of previous hostname"
-fi
-
-#------------------------------------------#
 #---	Ensure /etc/hosts is correct	---#
 #------------------------------------------#
 #
@@ -119,9 +76,10 @@ if is_master; then
     fi
 
     # Check for running postgres service; re-run config if its not
-    if ! service postgresql-8.4 status >/dev/null;then
+    POSTGRES_CMD=$(basename $(find /etc/init.d -name postgres*))
+    if ! service $POSTGRES_CMD status >/dev/null;then
     	log "postgres service is not running; restarting postgresql"
-        if ! service postgresql-8.4 start; then
+        if ! service $POSTGRES_CMD start; then
             log "Could not start postgresql database"
         fi
     fi

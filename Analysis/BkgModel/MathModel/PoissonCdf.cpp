@@ -87,7 +87,7 @@ void PoissonCDFApproxMemo::GenerateValues()
       ipoiss_cdf[ei][i] = tmp_sum; // total generated hydrogens per molecule at this intensity
     }
   }
-
+#if defined( __SSE__ )
   //pack poisson values for optimized 2D interpolation in function GetStep
   for( int i=0; i<max_dim-1; ++i ){
       poissLUT[0][i] = _mm_set_ps( poiss_cdf[0][i], poiss_cdf[0][i], poiss_cdf[0][i+1], poiss_cdf[0][i+1] );
@@ -107,6 +107,9 @@ void PoissonCDFApproxMemo::GenerateValues()
   }
   poissLUT[max_events-1][max_dim-1] = _mm_set_ps( poiss_cdf[max_events-2][max_dim-1], poiss_cdf[max_events-2][max_dim-1], poiss_cdf[max_events-2][max_dim-1], poiss_cdf[max_events-2][max_dim-1] );
   poissLUT[max_events][max_dim-1] = _mm_set_ps( poiss_cdf[max_events-1][max_dim-1], poiss_cdf[max_events-1][max_dim-1], poiss_cdf[max_events-1][max_dim-1], poiss_cdf[max_events-1][max_dim-1] );
+#else
+#pragma message "missing non-sse implementation"
+#endif
 }
 
 void PoissonCDFApproxMemo::DumpValues()

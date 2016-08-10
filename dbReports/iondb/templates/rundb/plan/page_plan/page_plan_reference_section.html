@@ -1,10 +1,6 @@
 
 <input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
 <input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
-<input type="hidden" id="isTargetRegionBEDFileSupported" name="isTargetRegionBEDFileSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileSupported}}" />
-<input type="hidden" id="isHotspotRegionBEDFileSupported" name="isHotspotRegionBEDFileSupported" value="{{helper.getApplProduct.isHotspotRegionBEDFileSuppported}}" />
-<input type="hidden" id="isTargetRegionBEDFileBySampleSupported" name="isTargetRegionBEDFileBySampleSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" />
-<input type="hidden" id="isHotSpotBEDFileBySampleSupported" name="isHotSpotBEDFileBySampleSupported" value="{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" />
 
 <div class="row-fluid">    
     <div class="span12 summary-section">
@@ -52,9 +48,9 @@
                          <option value="">None</option>
                         {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
                             {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile %}
-                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                             {% else %}
-                                <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                                <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
                             {% endifequal %}
                         {%endfor%}
                
@@ -74,9 +70,9 @@
                          <option value="">None</option>
                          {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles %}
                             {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile %}
-                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                             {% else %}
-                                <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                                <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
                             {% endifequal %}                                                                              
                         {%endfor%}
                
@@ -109,7 +105,7 @@
                         <tbody>
                         <tr>                
                         <td>
-                        <b>RNA Reference Library:</b>
+                        <b>Fusions Reference Library:</b>
                         </td>
                         <td>
                             <select id="mixedTypeRNA_reference" name="mixedTypeRNA_reference" class="select-group"  style="width: 300px;">
@@ -135,7 +131,7 @@
                         
                         <tr>
                         <td>
-                        <b>RNA Target Regions:</b>
+                        <b>Fusions Target Regions:</b>
                         </td>
                         <td>
                             <select id="mixedTypeRNA_targetBedFile" name="mixedTypeRNA_targetBedFile" class="select-group"  style="width: 300px;">
@@ -143,12 +139,12 @@
 
                                 {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
                                 {% ifequal bedFile.path helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile %}
-                                    <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                                 {% else %}
                                     {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile %}
-                                        <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                        <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                                     {% else %}
-                                        <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                        <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                                     {% endifequal %}
                                 {% endifequal %}
                                 {% endfor %}
@@ -159,7 +155,7 @@
                                
                                {%comment%}
                                {% for bedFile in step.getPrePopulatedFieldDict.targetBedFiles %}
-                                    <option  value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
+                                    <option  value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {%endfor%}
                                     
                                 {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.mixedTypeRNA_targetBedFileMissing %}
@@ -199,36 +195,30 @@
         $.each($selects, function(i){        
             var $select = $($selects[i]);
             var $parent = $select.parent();
-            
-            //console.log("create_bedFileSelects() LOOP#1... $select=", $select);            
-            //console.log("create_bedFileSelects() LOOP#2... $parent=", $parent);
-                        
+
             var name = $select.attr('name');
             if ($parent.find("[name="+name+"]").length > 0) {
                 $parent.find("[name="+name+"]").remove();
             }
             var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name'), 'class' : 'select-group  input-medium  '+name, 'style' : 'width:300px;'});
-
             $new_select.append($("<option value=''>None</option>"));
 
             $new_select.on('change', function(){
                 if (isCreate == "True" || isInit == false || (isCreate == "False") ) {
                 if (name == 'default_targetBedFile'){
-                    //$("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');
-
                     var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
-                    handle_default_targetBedFile_change(selectedBedFile, true);
+                    handle_default_targetBedFile_change(selectedBedFile);
                 }
                 else {
                     //$("#selectedHotspotRegions").text($(this).val() != null ? $(this).val() : '');
 
                     var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
-                    handle_default_hotSpotBedFile_change(selectedBedFile, true);                    
+                    handle_default_hotSpotBedFile_change(selectedBedFile);                    
                 }
                 }
             });
             
-            var $options = $select.children().filter("[class="+$("#default_reference").val()+"]");
+            var $options = $select.children().filter("[data-reference='"+$("#default_reference").val()+"']");
             var $new_options = $options.clone();
             $.each($new_options, function(j){
                 //console.log("create_bedFileSelects() j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
@@ -236,14 +226,10 @@
                 if (name == 'default_targetBedFile') {
                     if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}") {
                         $($new_options[j]).attr('selected', true);
-                        
-                        console.log("create_bedFileSelects() TARGET SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));            
                     }
                 } else {
                     if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile|default_if_none:""}}") {
                         $($new_options[j]).attr('selected', true);
-                        
-                        console.log("create_bedFileSelects() HOTSPOT SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));   
                     }
 
                 }
@@ -253,13 +239,6 @@
             $new_select.change();
             $parent.append($new_select); 
         });
-
-        var isPlan = $('input[id=isPlan]').val();
-        //console.log("page_plan_reference_section.html - create_bedFileSelects - isPlan=", isPlan);
-            
-        if (isPlan == "True") {
-            updateSamplesTable();
-        }
     }
    
 
@@ -293,7 +272,7 @@
             
             //console.log("create_mixedTypeRNA_bedFileSelects() filter=", $("#mixedTypeRNA_reference").val());
             
-            var $options = $select.children().filter("[class="+$("#mixedTypeRNA_reference").val()+"]");
+            var $options = $select.children().filter("[data-reference='"+$("#mixedTypeRNA_reference").val()+"']");
             var $new_options = $options.clone();
             $.each($new_options, function(j){
                 //console.log("create_mixedTypeRNA_bedFileSelects() j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
@@ -342,14 +321,14 @@
                     //$("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');
                     
                     var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
-                    handle_default_targetBedFile_change(selectedBedFile, true);
+                    handle_default_targetBedFile_change(selectedBedFile);
 
                 }
                 else {
                     //$("#selectedHotspotRegions").text($(this).val() != null ? $(this).val() : '');
 
                     var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
-                    handle_default_hotSpotBedFile_change(selectedBedFile, true);                      
+                    handle_default_hotSpotBedFile_change(selectedBedFile);                      
                 }
                 }
             });
@@ -357,7 +336,7 @@
 
             //console.log("create_bedFileSelects2() filter=", $("#default_reference").val());
             
-            var $options = $select.children().filter("[class="+$("#default_reference").val()+"]");
+            var $options = $select.children().filter("[data-reference='"+$("#default_reference").val()+"']");
             var $new_options = $options.clone();
             
             $.each($new_options, function(j){
@@ -384,15 +363,7 @@
             $new_select.append($new_options);
             $new_select.change();
             $parent.append($new_select);
- 
         });
-
-        var isPlan = $('input[id=isPlan]').val();
-        //console.log("page_plan_reference_section.html - create_bedFileSelects2 - isPlan=", isPlan);
-            
-        if (isPlan == "True") {
-            updateSamplesTable();
-        }        
     }
     
 
@@ -428,8 +399,8 @@
                 }
                 }
             });
-                        
-            var $options = $select.children().filter("[class="+$("#mixedTypeRNA_reference").val()+"]");
+
+            var $options = $select.children().filter("[data-reference='"+$("#mixedTypeRNA_reference").val()+"']");
             var $new_options = $options.clone();
             
             $.each($new_options, function(j){
@@ -453,11 +424,9 @@
     }
     
 
-    function handle_default_targetBedFile_change(selectedBedFile, isToUpdateSamplesTable) {
+    function handle_default_targetBedFile_change(selectedBedFile) {
         var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");  
-                       
-        console.log("page_plan_reference_section.html - handle_default_targetBedFile_change() value=", selectedBedFile, "; isSameRefInfoPerSample=", isSameRefInfoPerSample, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
-                                
+
         $("#selectedTargetRegions").text(selectedBedFile.split('/').pop());
 
         if (isSameRefInfoPerSample) {
@@ -467,7 +436,7 @@
             if (isPlan == "True") {
                 //console.log("page_plan_reference_section.html - handle_default_targetBedFile_change INSIDE TRUE isPlan=", isPlan);
             
-                updateSamplesForTargetRegion(selectedBedFile, isToUpdateSamplesTable);
+                updateSamplesForTargetRegion(selectedBedFile);
             }
         }
     }
@@ -488,11 +457,9 @@
     }
         
 
-    function handle_default_hotSpotBedFile_change(selectedBedFile, isToUpdateSamplesTable) {
+    function handle_default_hotSpotBedFile_change(selectedBedFile) {
         var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");  
-                           
-        console.log("page_plan_reference_section.html - handle_default_hotSpotBedFile_change() value=", selectedBedFile, "; isSameRefInfoPerSample=", isSameRefInfoPerSample, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
-                                
+
         $("#selectedHotspotRegions").text(selectedBedFile.split('/').pop());
 
         if (isSameRefInfoPerSample) {
@@ -500,7 +467,7 @@
             //console.log("page_plan_reference_section.html - handle_default_hotSpotBedFile_change - isPlan=", isPlan);
             
             if (isPlan == "True") {
-                updateSamplesForHotSpot(selectedBedFile, isToUpdateSamplesTable);
+                updateSamplesForHotSpot(selectedBedFile);
             } 
         }
     }
@@ -536,7 +503,24 @@
          */
         $("input[name=isSameRefInfoPerSample]").click(function () {
             var isSameRefInfoPerSample = $(this).is(":checked");
-            handle_isSampleRefInfoPerBarcodeSample(isSameRefInfoPerSample, false);
+            var isPlan = $('input[id=isPlan]').val();
+       
+            if (isPlan == "True") {
+                // enable/disable Reference and BED files selectors
+                toggleSampleReferenceColumnEnablements(isSameRefInfoPerSample);
+                
+                var selectedReference = $('select[name=default_reference]').val();
+                var selectedTargetBedFile = $('select[name=default_targetBedFile]').val();
+                var selectedHotSpotBedFile = $('select[name=default_hotSpotBedFile]').val();
+                var mixedTypeRNA_selectedReference = $('select[name=mixedTypeRNA_reference]').val();
+                var mixedTypeRNA_selectedTargetBedFile = $('select[name=mixedTypeRNA_targetBedFile]').val();
+    
+                if (isSameRefInfoPerSample) {
+                    updateSampleReferenceColumnsWithDefaults();
+                } else {                
+                    showHideSampleReferenceColumns(true);
+                }
+            }
         });
         
         
@@ -563,8 +547,7 @@
             var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");                  
             if (isSameRefInfoPerSample && isPlan == "True") {
                 //console.log("page_plan_reference_section.html - default_reference.change INSIDE TRUE isPlan=", isPlan, "; selectedReference=", selectedReference);
-
-                updateSamplesForReference(selectedReference, isInit);
+                updateSamplesForReference(selectedReference);
             }
 
         });
@@ -595,7 +578,7 @@
             if (isPlan == "True") {
                 //console.log("page_plan_reference_section.html - mixedTypeRNA_reference.change INSIDE TRUE isPlan=", isPlan, "; selectedReference=", selectedReference);
 
-                updateMixedTypeRNASamplesForReference(selectedReference, true);
+                updateMixedTypeRNASamplesForReference(selectedReference);
             }
 
         });
@@ -606,9 +589,6 @@
         
         create_mixedTypeRNA_bedFileSelects($mixedTypeRNA_selects, isCreate, true);
 
-        var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");       
-        handle_isSampleRefInfoPerBarcodeSample(isSameRefInfoPerSample, true);
-        
         isInit = false;
         
     });  //end of document.ready

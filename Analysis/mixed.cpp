@@ -654,5 +654,8 @@ PolyclonalFilterOpts::PolyclonalFilterOpts()
   max_iterations = 30;
   mixed_model_option = 0;
   mixed_stringency = 0.5;
+  use_last_iter_params = true;
+  verbose = false;
+  filter_extreme_ppf_only = false;
 }
 

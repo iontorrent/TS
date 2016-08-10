@@ -6,7 +6,7 @@ import json
 from ion.utils.explogparser import getparameter, getparameter_minimal
 from ion.plugin.constants import RunLevel
 
-from iondb.rundb.models import Chip, Results
+from iondb.rundb.models import Chip, Results, RunType
 
 def get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId):
 
@@ -109,6 +109,8 @@ def get_expmeta(ion_params, report_dir):
         log = exp_json.get('log',{})
         if log and not isinstance(log, dict): log = json.loads(log)
         chipBarcode = log.get('chip_efuse')
+
+    runType = ion_params['plan']['runType']
     
     d = {
         "run_name": exp_json.get('expName'),
@@ -118,13 +120,13 @@ def get_expmeta(ion_params, report_dir):
         "chiptype": exp_json.get('chipType'),
         "chipBarcode": chipBarcode,
         "notes": exp_json.get('notes'),
-        
         "barcodeId": ion_params.get('barcodeId'),
         "results_name": ion_params.get('resultsName'),
         "flowOrder": ion_params.get('flowOrder'),
         "project": ion_params.get('project'),
         "runid": ion_params.get('runID',''),
         "sample": ion_params.get('sample'),
+        "output_file_name_stem": exp_json.get('expName') + "_" + ion_params.get('resultsName'),
         "analysis_date": str(datetime.date(datetime.fromtimestamp(os.path.getmtime(ion_params_path)))),
     }
     return d
@@ -158,7 +160,14 @@ def get_plan(ion_params):
     plan = ion_params.get('plan',{})
     if not plan:
         return {}
-    
+
+    runTypeDescription = ''
+    try:
+        runType = RunType.objects.get(runType=plan.get('runType'))
+        runTypeDescription = runType.description
+    except Exception:
+        pass
+
     eas = ion_params.get('experimentAnalysisSettings', {})
     d = {
         "barcodeId": eas.get('barcodeKitName',''),
@@ -173,6 +182,7 @@ def get_plan(ion_params):
         "reverse_primer": plan.get('reverse_primer'),
         "runMode": plan.get('runMode'),
         "runType": plan.get('runType'),
+        "runTypeDescription": runTypeDescription,
         "samplePrepKitName": plan.get('samplePrepKitName'),
         "templatingKitName": plan.get('templatingKitName',''),
         "username": plan.get('username'),
@@ -205,8 +215,7 @@ def get_datamanagement(pk, result=None):
     return retval
 
 
-def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username,
-                    runlevel=RunLevel.DEFAULT, blockId='', block_dirs=["."], instance_config={}):
+def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel=RunLevel.DEFAULT, blockId='', block_dirs=["."], instance_config={}):
     try:
         ion_params,warn = getparameter(os.path.join(report_dir,'ion_params_00.json'))
     except:

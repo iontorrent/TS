@@ -22,7 +22,7 @@ def sample_relationship_fields():
     # "column-map" key in JSON. Directly get from webservice call
     jsonfile["column-map"] = webservice_call
 
-    ##20120821-orig print json.dumps(jsonfile, sort_keys=True, indent=4)
+    # 20120821-orig print json.dumps(jsonfile, sort_keys=True, indent=4)
     return jsonfile
 
 

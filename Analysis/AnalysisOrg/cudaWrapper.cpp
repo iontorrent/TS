@@ -14,6 +14,7 @@
 #include "RawWellsWriteJob.h"
 #include "PJob.h"
 #include "PJobExit.h"
+#include "ChipIdDecoder.h"
 
 using namespace std;
 
@@ -24,364 +25,8 @@ using namespace std;
     {   \
        std::cout << "CUDAWRAPPER: WE SHOULD NOT EVEN BE HERE, THIS PART OF THE CODE SHOULD BE UNREACHABLE WITHOUT GPU: " << __FILE__ << " " << __LINE__ <<std::endl;  \
     }
-/*
-static void* cpuWorkerThread(void *arg)
-{
-  WorkerInfoQueue *wq = static_cast<WorkerInfoQueue*>(arg);
 
-  while(true) {
-    WorkerInfoQueueItem item = wq->GetItem();
 
-    PJob *job = static_cast<PJob*>(item.private_data);
-
-    if (job->IsEnd()) {
-      wq->DecrementDone();
-      break;
-    }  
-    else {
-      job->Run();
-    }
-    wq->DecrementDone();
-  }
-
-  return NULL;
-}
-*/
-
-/*
-void* BkgFitWorkerGpu(void *arg)
-{
-#ifdef ION_COMPILE_CUDA
-  // Unpack GPU worker info
-  BkgFitWorkerGpuInfo* info = static_cast<BkgFitWorkerGpuInfo*>(arg);
-
-  // Wrapper to create a GPU worker and set GPU
-  printf("GPU_INDEX %d\n", info->gpu_index);
-  cudaSetDevice( info->gpu_index );
-  cudaError_t err = cudaGetLastError();
-
-  // See if device was set OK
-  if ( err == cudaSuccess )
-  {
-    cudaDeviceProp cuda_props;
-    int dev_id;
-    cudaGetDevice( &dev_id );
-    cudaGetDeviceProperties( &cuda_props, dev_id );
-
-    printf( "CUDA %d: Created GPU BkgModel worker...  (%d:%s v%d.%d)\n",
-        dev_id, dev_id, cuda_props.name, cuda_props.major, cuda_props.minor );
-
-    SimpleFitStreamExecutionOnGpu(static_cast<WorkerInfoQueue*>(info->queue),
-        static_cast<WorkerInfoQueue*>(info->fallbackQueue) );
-
-    return NULL;
-  }
-
-  printf( "CUDA: Failed to initialize GPU worker... (%d: %s)\n",
-      info->gpu_index, cudaGetErrorString(err) );
-
-  // Note: could fall back to a CPU worker here by setting GPU flag to false,
-  //       though I'm not sure if that's always appropriate
-
-  return NULL;
-#else 
-  return NULL;
-#endif
-}
-*/
-/*
-
-bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, int use_all_gpus,
-    int &numBkgWorkers_gpu) {
-#ifdef ION_COMPILE_CUDA
-  const unsigned long long gpu_mem = 0.5 * 1024 * 1024 * 1024;
-
-  if (!use_gpu_acceleration)
-    return false;
-
-  // Get number of GPUs in system
-  int num_gpus = 0;
-  cudaError_t err = cudaGetDeviceCount( &num_gpus );
-
-  const cudaComputeVersion minRequired(2,0);
-  cudaComputeVersion maxFound(0,0);
-  cudaComputeVersion minFound(9,9);
-
-  if (err != cudaSuccess) {
-    printf("CUDA: No GPU device available. Defaulting to CPU only computation (return code %d: %s) &\n", err , cudaGetErrorString(err));
-    return false;
-  }
-
-  if (valid_devices.size() == 0) {
-
-    cudaDeviceProp dev_props;
-
-    // Iterate over GPUs to find the highest compute device
-    for ( int dev = 0; dev < num_gpus;  dev++ )
-    {
-      cudaError_t err= cudaGetDeviceProperties( &dev_props, dev );
-      if(err == cudaSuccess){
-        cudaComputeVersion found(dev_props.major,dev_props.minor);
-        if(found >= minRequired){
-          maxFound = (found>maxFound)?(found):(maxFound);
-          minFound = (found<minFound)?(found):(minFound);
-          printf( "CUDA possible compute device found with Id: %d model: %s compute version: %d.%d\n", dev, dev_props.name, dev_props.major, dev_props.minor );
-        }
-      }
-    }
-    //build actual valid device list
-    for ( int dev = 0; dev < num_gpus;  dev++ )
-    {
-
-      cudaError_t err= cudaGetDeviceProperties( &dev_props, dev );
-      if(err == cudaSuccess){
-        cudaComputeVersion found(dev_props.major,dev_props.minor);
-
-        //if device has min compute and min memory check for other constraints
-        if(found >= minRequired && dev_props.totalGlobalMem > gpu_mem){
-          if(!use_all_gpus)
-          {//use only cards with max compute
-           if(found == maxFound)
-             if(valid_devices.size() == 0)
-               printf( "CUDA only devices with the max compute version found: %d.%d will be used as compute devices\n", maxFound.getMajor(), maxFound.getMinor());
-             valid_devices.push_back(dev);
-          }
-          else
-          { //use all gpus that pass the minimum requirements
-            if(valid_devices.size() == 0)
-              printf( "CUDA all devices with compute version >= %d.%d and at least %lluMB memory will be used as compute devices\n", minRequired.getMajor(), minRequired.getMinor(), gpu_mem/(1024*1024));
-            valid_devices.push_back(dev);
-          }
-        }
-      }
-    }
-
-  }else{
-    printf("CUDA Device list provided:\n");
-    cudaDeviceProp dev_props;
-    for ( size_t i = 0; i < valid_devices.size();  i++ ){
-      cudaError_t err = cudaGetDeviceProperties( &dev_props, valid_devices[i]);
-      if(err == cudaSuccess){
-        printf( "CUDA %d: model: %s compute version: %d.%d\n", valid_devices[i], dev_props.name, dev_props.major, dev_props.minor );
-      }else{
-        printf( "CUDA ERROR: No CUDA compatible device found with id %d!\n", valid_devices[i] );
-        exit(-1);
-      }
-    }
-
-  }
-
-  // Set the number of GPU workers and tell CUDA about our list of valid devices
-  if (valid_devices.size() > 0) {
-    numBkgWorkers_gpu = int(valid_devices.size());
-    cudaSetValidDevices( &valid_devices[0], int( valid_devices.size() ) );
-  }
-  else {
-    printf("CUDA: No GPU device available. Defaulting to CPU only computation (return code %d: %s) &\n", err , cudaGetErrorString(err));
-    return false;   
-  }
-
-
-  PoissonCDFApproxMemo poiss_cache; 
-  poiss_cache.Allocate (MAX_POISSON_TABLE_COL,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
-  poiss_cache.GenerateValues(); // fill out my table
-
-
-  for(int i=valid_devices.size()-1 ; i >= 0; i--){
-    try{
-      cout << "CUDA "<< valid_devices[i] << ": Creating Context and Constant memory on device with id: "<<  valid_devices[i]<< endl;
-      InitConstantMemoryOnGpu(valid_devices[i],poiss_cache);
-    }
-    catch(cudaException &e) {
-      cout << "CUDA "<< valid_devices[i] << ": Context could not be created. removing device with id: "<<  valid_devices[i] << " from valid device list" << endl;
-      valid_devices.erase (valid_devices.begin()+i);
-      numBkgWorkers_gpu -= 1;
-      if(numBkgWorkers_gpu == 0) cout << "CUDA: no context could be created, defaulting to CPU only execution" << endl; 
-    }
-
-  }
-
-  if(numBkgWorkers_gpu == 0) return false;
-
-  return true;
-
-#else
-
-  return false;
-
-#endif
-
-}
-*/
-
-/*
-
-void InitConstantMemoryOnGpu(int device, PoissonCDFApproxMemo& poiss_cache) {
-#ifdef ION_COMPILE_CUDA
-  StreamingKernels::initPoissonTablesLUT(device, (void**) poiss_cache.poissLUT);
-
-#endif
-}
-
-void configureKernelExecution(
-    GpuControlOpts opts, 
-    int global_max_flow_key, 
-    int global_max_flow_max
-)
-{
-#ifdef ION_COMPILE_CUDA
-  if(opts.gpuMultiFlowFit)
-  {
-    SimpleMultiFitStream::setBeadsPerBlockMultiF(opts.gpuThreadsPerBlockMultiFit);
-    SimpleMultiFitStream::setL1SettingMultiF(opts.gpuL1ConfigMultiFit);
-    SimpleMultiFitStream::setBeadsPerBlockPartialD(opts.gpuThreadsPerBlockPartialD);
-    SimpleMultiFitStream::setL1SettingPartialD(opts.gpuL1ConfigPartialD);
-    SimpleMultiFitStream::requestResources(global_max_flow_key, global_max_flow_max, 1.0f);  //0.80f
-    SimpleMultiFitStream::printSettings();
-  }
-
-  // configure SingleFlowFit Execution
-  if(opts.gpuSingleFlowFit)
-  {
-    SimpleSingleFitStream::setBeadsPerBlock(opts.gpuThreadsPerBlockSingleFit);
-    SimpleSingleFitStream::setL1Setting(opts.gpuL1ConfigSingleFit);
-    SimpleSingleFitStream::setFitType(opts.gpuSingleFlowFitType);
-    SimpleSingleFitStream::requestResources(global_max_flow_key, global_max_flow_max, 1.0f); //0.74f
-    //SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations);
-    SimpleSingleFitStream::printSettings();
-  }
-
-  cudaSimpleStreamManager::setNumMaxStreams(opts.gpuNumStreams);
-  cudaSimpleStreamManager::setVerbose(opts.gpuVerbose);
-  cudaSimpleStreamExecutionUnit::setVerbose(opts.gpuVerbose);
-
-
-#endif 
-}
-*/
-
-/*
-void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q, WorkerInfoQueue * errorQueue )
-{
-#ifdef ION_COMPILE_CUDA
-  int dev_id;
-
-  cudaGetDevice( &dev_id );
-  std::cout << "CUDA " << dev_id << ": Creating GPU StreamManager" << std::endl;
-
-  cudaSimpleStreamManager  sM( q, errorQueue );
-
-  sM.DoWork();
-
-  std::cout << "CUDA " << dev_id << ": Destroying GPU StreamManager" << std::endl;
-
-#endif
-}
-
-bool ProcessProtonBlockImageOnGPU(
-    BkgModelWorkInfo* fitterInfo,
-    int flowBlockSize,
-    int deviceId)
-{
-#ifdef ION_COMPILE_CUDA
-  return blockLevelSignalProcessing(fitterInfo, flowBlockSize, deviceId);
-#endif
-  return false;
-}
-*/
-/*
-void* flowByFlowHandshakeWorker(void *arg)
-{
-#if DEBUG_RAWWELLS_THREAD
-  std::cout << "====> Started GPU-CPU handshake worker" << std::endl;
-#endif
-  GPUFlowByFlowPipelineInfo * info = static_cast<GPUFlowByFlowPipelineInfo*>(arg);
-
-
-  //create job handles for raw wells writer threads
-  size_t numFitters = (*(info->fitters)).size();
-  std::vector<RawWellsWriteJob*> writeJobs;
-  writeJobs.resize(numFitters);
-  for (size_t i=0; i<numFitters; ++i) {
-    writeJobs[i] = new RawWellsWriteJob((*(info->fitters))[i]);
-  }
-
-  // create work queue and worker threads
-  size_t numRawWellWriterBkgThreads = 6;
-  WorkerInfoQueue jobQueue(numRawWellWriterBkgThreads*numFitters);
-
-  pthread_t worker;
-  for (size_t i=0; i<numRawWellWriterBkgThreads; ++i) {
-    pthread_create(&worker, NULL, cpuWorkerThread, &jobQueue);
-    pthread_detach(worker);
-  }
-
-  int curFlow = info->startingFlow;
-  bool done = false;
-  while (!done) {
-
-#if DEBUG_RAWWELLS_THREAD
-    std::cout <<"====> Current handshake flow: " << curFlow << std::endl;
-#endif
-
-    float *ampBuf = info->ampEstimatesBuf->readOneBuffer();
-
-    WorkerInfoQueueItem item;
-    for (unsigned int i=0; i<numFitters; ++i) {
-
-      writeJobs[i]->setCurFlow(curFlow);
-      writeJobs[i]->setCurAmpBuffer(ampBuf);
-
-      item.finished = false;
-      item.private_data = writeJobs[i];       
-      jobQueue.PutItem(item);      
-    }
-    jobQueue.WaitTillDone();
-
-#if DEBUG_RAWWELLS_THREAD
-    std::cout << "====> Finished Flow: " << curFlow << std::endl;
-#endif
-
-    info->rawWells->DoneUpThroughFlow(curFlow, info->packQueue, info->writeQueue);
-
-    info->ampEstimatesBuf->updateReadPos();
-
-    if (curFlow == (info->endingFlow - 1)) {
-      done = true;  
-#if DEBUG_RAWWELLS_THREAD
-      std::cout <<"====> Last handshake flow: " << curFlow << " exiting" <<  std::endl;
-#endif
-      break;
-    }
-
-    curFlow++;    
-  }
-
-  // send kill jobs to the threads
-  PJobExit exitJob;
-  WorkerInfoQueueItem item;
-  for (size_t i=0; i<numRawWellWriterBkgThreads; ++i) {
-    //TODO: redundant..need to make work queue generic to allow exit jobs
-    item.finished = true; 
-    item.private_data = &exitJob;
-    jobQueue.PutItem(item);
-  }
-  jobQueue.WaitTillDone();
-
-#if DEBUG_RAWWELLS_THREAD
-  std::cout << "====> Cleaned up local threads in handshake worker" << std::endl;
-#endif
-
-
-  // clear memory taken up by job creation
-  for (size_t i=0; i<numFitters; ++i) {
-    delete writeJobs[i];
-  }
-
-  return NULL;
-}
-*/
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////
 //gpuDeviceConfig Class
@@ -411,7 +56,7 @@ int gpuDeviceConfig::getVersion(int devId)
   return ret;
 }
 
-/*removes devices from valid device list that do not meet minimum meory requirement*/
+/*removes devices from valid device list that do not meet minimum memory requirement*/
 void gpuDeviceConfig::applyMemoryConstraint(size_t minBytes)
 {
 #ifdef ION_COMPILE_CUDA
@@ -465,16 +110,21 @@ void gpuDeviceConfig::initDeviceContexts(){
 #ifdef ION_COMPILE_CUDA
   PoissonCDFApproxMemo poiss_cache;
   poiss_cache.Allocate (MAX_POISSON_TABLE_COL,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
-  poiss_cache.GenerateValues(); // fill out my table
+  poiss_cache.GenerateValues(); // fill out lookup table poissLUT etc...
   for(std::vector<int>::iterator it = validDevices.begin(); it != validDevices.end(); )
   {
     try{
       cout << "CUDA "<< *it << ": gpuDeviceConfig::initDeviceContexts: Creating Context and Constant memory on device with id: "<<  *it<< endl;
 
+#if defined( __SSE__ )
+      // lookup table generation above in 'poiss_cache.GenerateValues()' uses SSE, copy LUT to device only if SSE is available
+      // Analysis/BkgModel/MathModel/PoissonCdf.cpp : void PoissonCDFApproxMemo::GenerateValues()
       StreamingKernels::initPoissonTablesLUT(*it, (void**) poiss_cache.poissLUT);
+#endif
       it++;
     }
     catch(cudaException &e) {
+      throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
       cout << "CUDA "<< *it << ": gpuDeviceConfig::initDeviceContexts: Context could not be created. removing device with id: "<<  *it << " from valid device list" << endl;
       it = validDevices.erase (it);
     }
@@ -525,7 +175,7 @@ bool gpuDeviceConfig::setValidDevices(std::vector<int> &CmdlineDeviceList, bool 
   }else{
     //add all devices to vector
     for ( int dev = 0; dev < numGPUs;  dev++ ){
-      if(getVersion(dev)) //check valuid device and recors min/max compute
+      if(getVersion(dev)) //check valid device and record min/max compute
         validDevices.push_back(dev);
     }
 
@@ -540,7 +190,7 @@ bool gpuDeviceConfig::setValidDevices(std::vector<int> &CmdlineDeviceList, bool 
 
   if (validDevices.size() == 0) {
     err = cudaGetLastError();
-    printf("CUDA: gpuDeviceConfig: No GPU device available. Defaulting to CPU only computation (return code %d: %s) &\n", err , cudaGetErrorString(err));
+    printf("CUDA: gpuDeviceConfig: No GPU device available or device not valid. Defaulting to CPU only computation (return code %d: %s) &\n", err , cudaGetErrorString(err));
     return false;
   }
 
@@ -551,9 +201,6 @@ bool gpuDeviceConfig::setValidDevices(std::vector<int> &CmdlineDeviceList, bool 
   else
     cudaSetValidDevices( &validDevices[0], int( validDevices.size()));
 
-
-#else
-  CUDA_WRONG_TIME_AND_PLACE
 #endif
 
   return (validDevices.size() > 0);
@@ -689,7 +336,7 @@ void flowByFlowHandshaker::InternalThreadFunction()
     std::cout << "====> Finished Flow: " << curFlow << std::endl;
 #endif
 
-    rawWells->DoneUpThroughFlow(curFlow, packQueue, writeQueue);
+    rawWells->DoneUpThroughFlow(curFlow, *packQueue, *writeQueue);
 
     ampEstimatesBuf->updateReadPos();
 
@@ -713,7 +360,7 @@ void flowByFlowHandshaker::InternalThreadFunction()
     item.private_data = &exitJob;
     jobQueue.PutItem(item);
   }
-  //jobQueue.WaitTillDone(); 
+  //jobQueue.WaitTillDone();
   /*join all the worker threads*/
 
   //cout << "flowByFlowHandshaker: joining " << workers.size() << " worker threads." << endl;
@@ -833,9 +480,10 @@ cudaWrapper::cudaWrapper(){
   useAllGpus = false;
   workQueue = NULL;
   Handshaker = NULL;
-#ifdef ION_COMPILE_CUDA
+  configOpts = NULL;
+  #ifdef ION_COMPILE_CUDA
   GpuPipeline = NULL;
-  RegionalFitSampleHistory=NULL;
+  RegionalFitHistory=NULL;
 #endif
 }
 
@@ -853,8 +501,8 @@ cudaWrapper::~cudaWrapper(){
   if(GpuPipeline!=NULL)
     delete GpuPipeline;
   GpuPipeline = NULL;
-  if(RegionalFitSampleHistory == NULL)
-    delete RegionalFitSampleHistory;
+  if(RegionalFitHistory == NULL)
+    delete RegionalFitHistory;
 #endif
 
 }
@@ -872,8 +520,10 @@ bool cudaWrapper::checkChipSize()
 //formerly part of PlanMyComputation
 void cudaWrapper::configureGpu(BkgModelControlOpts &bkg_control)
 {
+
+  configOpts = &bkg_control.gpuControl;
   // This will override gpuWorkLoad=1 and will only use GPU for chips which are allowed in the following function
-  useGpu = (bkg_control.gpuControl.gpuWorkLoad > 0);
+  useGpu = (configOpts->gpuWorkLoad > 0);
 
   //only perform next steps if chiop is large enough and gpu compute turned on
   if( useGpu && checkChipSize())
@@ -881,9 +531,12 @@ void cudaWrapper::configureGpu(BkgModelControlOpts &bkg_control)
     useAllGpus = false; //ToDo add comandline param to overwrite
     bool useMaxComputeVersion = false; //ToDo addcommandline param to change this if needed
 
-    //configure actual GPUs
-    useGpu = deviceConfig.setValidDevices(bkg_control.gpuControl.gpuDeviceIds,useMaxComputeVersion);
+    //configure actual GPUs. if compile without CUDA this is a NoOp
+    useGpu = deviceConfig.setValidDevices(configOpts->gpuDeviceIds,useMaxComputeVersion);
   }
+
+  if (!useGpu)
+    configOpts->gpuFlowByFlowExecution = false;
 
   cout << "CUDA: useGpuAcceleration: "<< useGpuAcceleration() << endl;
 
@@ -895,6 +548,7 @@ void cudaWrapper::createQueue(int numRegions)
 {
   if(useGpuAcceleration()){ //assume that we will have one worker per valid device
     workQueue = new WorkerInfoQueue (numRegions * getNumValidDevices() + 1 );  // where the +1 comes from nobody remembers but ehre probably was a reason for it once
+    //testSerial = float((int64_t)workQueue/12345.6f);
   }
 }
 
@@ -911,6 +565,24 @@ WorkerInfoQueue * cudaWrapper::getQueue()
   return workQueue;
 }
 
+bool cudaWrapper::checkIfInitFlowByFlow(int currentFlow, bool restart){
+
+ #ifdef ION_COMPILE_CUDA
+
+  if(useFlowByFlowExecution()){
+    if(switchAtFlow() == currentFlow){
+      cout << "CUDA: cudaWrapper: flow " << switchAtFlow() << " reached, switching from old block of 20 flows to NEW flow by flow GPU pipeline!" <<endl;
+      return true;
+    }
+    if(restart && GpuPipeline == NULL){
+      cout << "CUDA: cudaWrapper: Initiating flow by flow GPU pipeline after restart!" <<endl;
+      return true;
+    }
+  }
+#endif
+
+  return false ;
+}
 
 
 bool cudaWrapper::SpinUpThreads( WorkerInfoQueue* fallbackCPUQ)
@@ -975,11 +647,12 @@ void cudaWrapper::setUpAndStartFlowByFlowHandshakeWorker( const CommandLineOpts 
                                                           std::vector<SignalProcessingMasterFitter*> * fitters,
                                                           SemQueue *packQueue,
                                                           SemQueue *writeQueue,
-                                                          ChunkyWells *rawWells)
+                                                          ChunkyWells *rawWells,
+                                                          int startFlow)
 {
 
   Handshaker = new flowByFlowHandshaker(packQueue,writeQueue,rawWells, fitters);
-  Handshaker->setStartEndFlow(inception_state.bkg_control.gpuControl.switchToFlowByFlowAt,inception_state.flow_context.endingFlow);
+  Handshaker->setStartEndFlow(startFlow,inception_state.flow_context.endingFlow);
   Handshaker->CreateRingBuffer(20, my_image_spec.rows * my_image_spec.cols);
   Handshaker->start();
 }
@@ -1005,7 +678,7 @@ bool cudaWrapper::fullBlockSignalProcessing(BkgModelWorkInfo* bkinfo)
     //initializes the poissontables
     //runs the T0average num bead meta data kernel
     if(GpuPipeline == NULL)
-      GpuPipeline = new BkgGpuPipeline(bkinfo, bkinfo->flow, deviceConfig.getFirstValidDevice(),RegionalFitSampleHistory );
+      GpuPipeline = new BkgGpuPipeline(bkinfo, deviceConfig.getFirstValidDevice(),RegionalFitHistory );
 
     //Update Host Side Buffers and Pinned status
     Timer newPtime;
@@ -1023,12 +696,15 @@ bool cudaWrapper::fullBlockSignalProcessing(BkgModelWorkInfo* bkinfo)
      GpuPipeline->PerFlowDataUpdate(bkinfo);
 
      //backup current region param state, this function only does work the very first time it gets called
-     GpuPipeline->InitRegionalParamsAtFirstFlow();
+     //GpuPipeline->InitRegionalParamsAtFirstFlow();
+
+     //GpuPipeline->DebugOutputDeviceBuffers();
 
      GpuPipeline->ExecuteGenerateBeadTrace();
 
      GpuPipeline->ExecuteCrudeEmphasisGeneration();
      GpuPipeline->ExecuteRegionalFitting();
+     GpuPipeline->HandleRegionalFittingResults();
 
      GpuPipeline->ExecuteFineEmphasisGeneration();
 
@@ -1038,8 +714,6 @@ bool cudaWrapper::fullBlockSignalProcessing(BkgModelWorkInfo* bkinfo)
      GpuPipeline->ExecutePostFitSteps();
      GpuPipeline->HandleResults(Handshaker->getRingBuffer()); // copy reg_params and single flow fit results to host
 
-
-     std::cout << "New pipeline time for flow " << bkinfo->flow << ": " << newPtime.elapsed() << std::endl;
      }
      catch(exception &e){
        std::cout << "CUDA: cudaWrapper: New pipeline encountered issue during" << bkinfo->flow << ". Exiting with error code for retry!" << std::endl;
@@ -1049,6 +723,8 @@ bool cudaWrapper::fullBlockSignalProcessing(BkgModelWorkInfo* bkinfo)
 
      }
 
+     std::cout << "New pipeline time for flow " << bkinfo->flow << ": " << newPtime.elapsed() << std::endl;
+
     return true;
 
 #else
@@ -1057,7 +733,7 @@ bool cudaWrapper::fullBlockSignalProcessing(BkgModelWorkInfo* bkinfo)
 
     return false;
 }
-void cudaWrapper::collectSampleHistroyForRegionalFitting(BkgModelWorkInfo* bkinfo, int flowBlockSize, int extractNumFlows)
+void cudaWrapper::collectHistroyForRegionalFitting(BkgModelWorkInfo* bkinfo, int flowBlockSize, int extractNumFlows)
 {
 #ifdef ION_COMPILE_CUDA
 
@@ -1072,9 +748,16 @@ void cudaWrapper::collectSampleHistroyForRegionalFitting(BkgModelWorkInfo* bkinf
     int f = bkinfo[i].bkgObj->region_data->time_c.npts();
     maxFrames = (maxFrames <f )?(f):(maxFrames);
   }
+  int uncompressedFrames= rpt->uncompFrames;
 
-  RegionalFitSampleHistory = new SampleCollection(irP, extractNumFlows, maxFrames);
-  RegionalFitSampleHistory->extractSamplesAllRegionsAndFlows(bkinfo,flowBlockSize,extractNumFlows);
+  //should come from command line:
+  int maxNumHistoryFlows = extractNumFlows;
+  int HistoryFromCPUPipeline = (flowBlockSize < extractNumFlows)?(flowBlockSize):(extractNumFlows);
+
+  RegionalFitHistory = new HistoryCollection(irP, maxNumHistoryFlows, maxFrames,uncompressedFrames);
+  RegionalFitHistory->extractHistoryAllRegionsAllFlows(bkinfo,flowBlockSize,HistoryFromCPUPipeline);
+
+
 
 #else
   CUDA_WRONG_TIME_AND_PLACE
@@ -1082,38 +765,60 @@ void cudaWrapper::collectSampleHistroyForRegionalFitting(BkgModelWorkInfo* bkinf
 
 }
 
+void cudaWrapper::mirrorDeviceBuffersToHostForSerialization()
+{
+#ifdef ION_COMPILE_CUDA
+
+  if(RegionalFitHistory != NULL){
+    RegionalFitHistory->CopySerializationDataFromDeviceToHost();
+  }
+  if(GpuPipeline != NULL){
+    GpuPipeline->CopySerializationDataFromDeviceToHost();
+  }
+
+
+#else
+  //nothing to do
+#endif
+}
+
 void cudaWrapper::configureKernelExecution(
-    GpuControlOpts opts,
     int global_max_flow_key,
     int global_max_flow_max
 )
 {
 #ifdef ION_COMPILE_CUDA
-  if(opts.gpuMultiFlowFit)
+  if(configOpts->gpuMultiFlowFit)
   {
-    SimpleMultiFitStream::setBeadsPerBlockMultiF(opts.gpuThreadsPerBlockMultiFit);
-    SimpleMultiFitStream::setL1SettingMultiF(opts.gpuL1ConfigMultiFit);
-    SimpleMultiFitStream::setBeadsPerBlockPartialD(opts.gpuThreadsPerBlockPartialD);
-    SimpleMultiFitStream::setL1SettingPartialD(opts.gpuL1ConfigPartialD);
+    SimpleMultiFitStream::setBeadsPerBlockMultiF(configOpts->gpuThreadsPerBlockMultiFit);
+    SimpleMultiFitStream::setL1SettingMultiF(configOpts->gpuL1ConfigMultiFit);
+    SimpleMultiFitStream::setBeadsPerBlockPartialD(configOpts->gpuThreadsPerBlockPartialD);
+    SimpleMultiFitStream::setL1SettingPartialD(configOpts->gpuL1ConfigPartialD);
     SimpleMultiFitStream::requestResources(global_max_flow_key, global_max_flow_max, 1.0f);  //0.80f
     SimpleMultiFitStream::printSettings();
   }
 
   // configure SingleFlowFit Execution
-  if(opts.gpuSingleFlowFit)
+  if(configOpts->gpuSingleFlowFit)
   {
-    SimpleSingleFitStream::setBeadsPerBlock(opts.gpuThreadsPerBlockSingleFit);
-    SimpleSingleFitStream::setL1Setting(opts.gpuL1ConfigSingleFit);
-    SimpleSingleFitStream::setFitType(opts.gpuSingleFlowFitType);
+    SimpleSingleFitStream::setBeadsPerBlock(configOpts->gpuThreadsPerBlockSingleFit);
+    SimpleSingleFitStream::setL1Setting(configOpts->gpuL1ConfigSingleFit);
+    SimpleSingleFitStream::setFitType(configOpts->gpuSingleFlowFitType);
     SimpleSingleFitStream::requestResources(global_max_flow_key, global_max_flow_max, 1.0f); //0.74f
-    //SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations);
+    //SimpleSingleFitStream::setHybridIter(configOpts->gpuHybridIterations);
     SimpleSingleFitStream::printSettings();
   }
 
-  cudaSimpleStreamManager::setNumMaxStreams(opts.gpuNumStreams);
-  cudaSimpleStreamManager::setVerbose(opts.gpuVerbose);
-  cudaSimpleStreamExecutionUnit::setVerbose(opts.gpuVerbose);
+  cudaSimpleStreamManager::setNumMaxStreams(configOpts->gpuNumStreams);
+  cudaSimpleStreamManager::setVerbose(configOpts->gpuVerbose);
+  cudaSimpleStreamExecutionUnit::setVerbose(configOpts->gpuVerbose);
 
+  if(configOpts->gpuDevMemoryPerProc > 0){
+    size_t memToRequest = (size_t) configOpts->gpuDevMemoryPerProc * (1024.0*1024)/configOpts->gpuNumStreams;
+    if( memToRequest < cudaResourcePool::getRequestDeviceMemory())
+      cout << "CUDA WARNING: memory provided for fixed allocation " <<  memToRequest/(1024*1024)<< "MB is less than minimum required memory determined via dynamic allocator: " << cudaResourcePool::getRequestDeviceMemory()/(1024*1024) << "MB. This might lead to memory reallocation during runtime." <<endl;
+    cudaResourcePool::setDeviceMemory(memToRequest);
+  }
 
 #else
   CUDA_WRONG_TIME_AND_PLACE

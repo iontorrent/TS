@@ -34,10 +34,10 @@ public:
       cout << "WARNING: pThreadWrapper is getting destroyed while created pthread is neither detached or joined!"<< endl;
   }
 
-   /* Returns true if the internal thread already was created or successfully started or is already, false if there was an error starting the thread */
+   /* Returns true if the internal thread already was created or successfully started, false if there was an error starting the thread */
    bool StartInternalThread()
    {
-      if(hasChildThread()) return true;
+      if(hasChildThread()) return true; //TODO: this should probably throw an exception since if we call start more than once it is a programmer error. 
       if ((pthread_create(&_thread, NULL, InternalThreadEntryFunc, this) == 0)) return true;
       else _thread = pthread_self();
       return false;

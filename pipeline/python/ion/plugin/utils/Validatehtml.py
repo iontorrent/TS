@@ -20,20 +20,22 @@ import shutil
 from distutils.sysconfig import get_python_lib
 from ion.plugin.utils.Utility import Utility
 
+
 class Validatehtml(Utility):
-        """Check for proper json format in the html section"""
-        def expandhtml(self,section):
-            self.section = section
-            self.section["id"] = self.generateID()
-            if "title" not in self.section:
-                 logging.error("title field for section type %s missing. Using default one" % self.section["type"])
-                 self.section["title"] = "HTML Section"
 
+    """Check for proper json format in the html section"""
 
-            if "content" not in self.section:
-                self.section["content"] = ""
-            logging.debug("HTML section generated %s" % self.section["content"])
-            return self.section
+    def expandhtml(self, section):
+        self.section = section
+        self.section["id"] = self.generateID()
+        if "title" not in self.section:
+            logging.error("title field for section type %s missing. Using default one" % self.section["type"])
+            self.section["title"] = "HTML Section"
+
+        if "content" not in self.section:
+            self.section["content"] = ""
+        logging.debug("HTML section generated %s" % self.section["content"])
+        return self.section
 
 if __name__ == "__main__":
     print "in main block"

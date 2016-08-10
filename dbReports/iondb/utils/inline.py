@@ -11,6 +11,7 @@ import mimetypes
 
 DEFAULT_MIME_TYPE = "text/plain"
 
+
 def urlinline(filename, mime=None):
     """
     Load the file at "filename" and convert it into a data URI with the
@@ -23,7 +24,7 @@ def urlinline(filename, mime=None):
     infile.close()
     enc = b64.standard_b64encode(text)
     if mime is None:
-        mime,_ = mimetypes.guess_type(filename)
+        mime, _ = mimetypes.guess_type(filename)
         mime = mime or DEFAULT_MIME_TYPE
-    ret = "data:%s;base64,%s" % (mime,enc)
+    ret = "data:%s;base64,%s" % (mime, enc)
     return ret

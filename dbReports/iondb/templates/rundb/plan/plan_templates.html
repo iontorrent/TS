@@ -8,8 +8,6 @@
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 
-<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
-
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 
@@ -57,300 +55,51 @@ color: #0088cc;
 
 
 {% block content %}
-<input type="hidden" id="isOCPEnabled" name="isOCPEnabled" value="{{is_OCP_supported}}" />
-
 <div class="content group">
     <div class="row-fluid">    
     <div class="span2">
     <!-- ul class="nav nav-list affix-top" id="left_side_nav" -->
-    <ul id="left_side_nav" class="nav nav-tabs nav-stacked" data-tabs="tabs">  
-       <!--20140310-wip li><h4 style="float:left;">&nbsp;Template Category</h4>
-       </li -->  
-       <li class="active" id="favorites_nav">
-         <a href="#favorites">
-           <img src="{% static "resources/img/star-blue.png"%}" class="favorite_star" border="0" width='20px;'>
-           Favorites
-         </a>
-       </li>
-       <li class="" id="recently_used_nav">
-         <a href="#recents" >
-           <img src="{% static "resources/img/recentlyused.png"%}" border="0" width='20px;'>
-           Recently Created
-         </a>
-       </li>
-       <li class="" id="ampliseq_dna_nav">
-         <a href="#ampliseq_dna">
-           <img src="{% static "resources/img/appl_ampliSeq.png"%}" border="0" width='20px;'>
-           AmpliSeq DNA
-         </a>
-       </li>
-       <li class="" id="ampliseq_rna_nav">
-         <a href="#ampliseq_rna">
-           <img src="{% static "resources/img/appl_ampliSeqRna.png"%}" border="0" width='20px;'>
-           AmpliSeq RNA
-         </a>
-       </li>
-       <li class="" id="fusions_nav">
-         <a href="#fusions">
-           <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" border="0" width='20px;'>
-           DNA and Fusions
-         </a>
-       </li>        
-       <li class="" id="genericseq_nav">
-         <a href="#genericseq">
-           <img src="{% static "resources/img/appl_wildcard.png"%}" border="0" width='20px;'>
-           Generic Sequencing
-         </a>
-       </li> 
-       <li class="" id="pharmacogenomics_nav">
-	<a href="#pharmacogenomics"><img src="{% static "resources/img/appl_pgx.png"%}" border="0" width='20px;'> Pharmacogenomics</a>
-       </li> 
-       <li class="" id="rna_seq_nav">
-         <a href="#rna_seq">
-           <img src="{% static "resources/img/appl_rnaSeq.png"%}" border="0" width='20px;'>
-           RNA Seq
-         </a>
-       </li>                      
-       <li class="" id="targetseq_nav">
-         <a href="#targetseq">
-           <img src="{% static "resources/img/appl_targetSeq.png"%}" border="0" width='20px;'>
-           TargetSeq
-         </a>
-       </li>
-       <li class="" id="whole_genome_nav">
-         <a href="#whole_genome">
-           <img src="{% static "resources/img/appl_wholeGenome.png"%}" border="0" width='20px;'>
-           Whole Genome
-         </a>
-       </li>
-       <li class="" id="16s_targetseq_nav">
-         <a href="#16s_targetseq">
-           <img src="{% static "resources/img/appl_metagenomics.png"%}" border="0" width='20px;'>
-           16S Target Sequencing
-         </a>
-       </li>
-       <!--li class="" id="all_nav">
-         <a href="#all">
-           <i class="icon-chevron-right"></i>
-           All
-         </a>
-       </li -->                                      
-     </ul>
+        <ul id="left_side_nav" class="nav nav-tabs nav-stacked" data-tabs="tabs">
+            {% for category in categories %}
+                {% if category.isActive %}
+                <li class="" id="{{category.tag}}_nav" data-api_filter="{{ category.api_filter }}">
+                    <a href="#{{category.tag}}">
+                        <img src="{% static category.img %}" border="0" width='20px;'>
+                        {{category.displayedName}}
+                    </a>
+                </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
     </div>
-    
-    
+
     <div class="span10" id="tab_contents">
-    
-      <div id="favorites_tab">
-        <h3 style="float:left;"><img src="{% static "resources/img/star-blue.png"%}" class="favorite_star" border="0" width='24px;'>&nbsp;Favorites</h3>
-        <div class="clearfix">                    
-          <!--div class="pull-left">
-              <input id="targets_search" type="text" class="search-query" placeholder="Search" data-prev="">
-          </div>
-          <div class="pull-left">
-            <select id="favorite_search_dropdown" name="reference" class="dropdown" style="width:400px;">
-              <option value=''>Show All Favorite Templates</option>
-            </select>
-          </div -->
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
-                <ul class="dropdown-menu">
-                    <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
-                    <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
-                    <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>                    
-                </ul>
-            </div>
-          </div>
-          
-        </div>
-        <div id="favorites" class="list_contents"></div>
-      </div>
-
-   
-      <div id="recents_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/recentlyused.png"%}" border="0" width='24px;'>&nbsp;Recently Created</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
-                <ul class="dropdown-menu">
-                    <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
-                    <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
-                    <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>                    
-                </ul>
-            </div>
-          </div>
-          
-        </div>
-        <div id="recents" class="list_contents"></div>
-      </div>
-
-   
-      <div id="ampliseq_dna_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_ampliSeq.png"%}" border="0" width='24px;'>&nbsp;AmpliSeq DNA</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>     
-            <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
-                <ul class="dropdown-menu">
-                    <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
-                    <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
-                    <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>                    
-                </ul>
-            </div>
-            &nbsp;|   
-            <a href="{% url "page_plan_new_template" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="ampliseq_dna" class="list_contents"></div>
-      </div> 
-
-   
-      <div id="ampliseq_rna_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_ampliSeqRna.png"%}" border="0" width='24px;'>&nbsp;AmpliSeq RNA</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>   
-            <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
-                <ul class="dropdown-menu">
-                    <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
-                    <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
-                    <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>                    
-                </ul>
-            </div>
-            &nbsp;|   
-            <a href="{% url "page_plan_new_template" 5 %}" ref="#ampliSeqRNA" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 5 %}" ref="#ampliSeqRNA" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="ampliseq_rna" class="list_contents"></div>
-      </div>     
-
-   
-      <div id="genericseq_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_wildcard.png"%}" border="0" width='24px;'>&nbsp;Generic Sequencing</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            &nbsp;|           
-            <a href="{% url "page_plan_new_template" 0 %}" ref="#genericSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 0 %}" ref="#genericSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="genericseq"></div>
-      </div>         
-
-
-      <div id="fusions_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/sequence_icon.png"%}" border="0" width='24px;'>&nbsp;DNA and Fusions</h3>
-        <div class="clearfix">
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            &nbsp;|       
-            <a href="{% url "page_plan_new_template" 8 %}" ref="#fusions" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 8 %}" ref="#fusions" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="fusions"></div>
-      </div>         
-
-      <div id="pharmacogenomics_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_pgx.png"%}" border="0" width='24px;'>&nbsp;Pharmacogenomics</h3>
-        <div class="clearfix">
-
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
-                <ul class="dropdown-menu">
-                    <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
-                    <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
-                    <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>                    
-                </ul>
-            </div>
-            &nbsp;|
-            <a href="{% url "page_plan_new_template" 9 %}" ref="#pharmoacogenomics" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;|
-            <a href="{% url "page_plan_new_plan_from_code" 9 %}" ref="#pharmacogenomics" rel="tooltip" title="Plan runs from this template">Plan New Run</a>
-          </div>
-        </div>
-        <div id="pharmacogenomics"></div>
-      </div>
-
-      <div id="rna_seq_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_rnaSeq.png"%}" border="0" width='24px;'>&nbsp;RNA Seq</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            &nbsp;|           
-            <a href="{% url "page_plan_new_template" 4 %}" ref="#rnaSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 4 %}" ref="#rnaSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="rna_seq"></div>
-      </div>             
-
-   
-      <div id="targetseq_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_targetSeq.png"%}" border="0" width='24px;'>&nbsp;Target Seq</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            &nbsp;|           
-            <a href="{% url "page_plan_new_template" 2 %}" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 2 %}" ref="#targetSeqs" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="targetseq"></div>
-      </div>         
-
-   
-      <div id="whole_genome_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_wholeGenome.png"%}" border="0" width='24px;'>&nbsp;Whole Genome</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            &nbsp;|           
-            <a href="{% url "page_plan_new_template" 3 %}" ref="#wholeGenomes" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 3 %}" ref="#wholeGenomes" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="whole_genome"></div>
-      </div>         
- 
-   
-      <div id="16s_targetseq_tab" style="display: none;">
-        <h3 style="float:left;"><img src="{% static "resources/img/appl_metagenomics.png"%}" border="0" width='24px;'>&nbsp;16S Target Sequencing</h3>
-        <div class="clearfix">
-          
-          <div class="pull-right">
-            <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
-            &nbsp;|           
-            <a href="{% url "page_plan_new_template" 7 %}" ref="#16sTargetSeq" rel="tooltip" title="Create new template for run planning">Add New Template</a>
-            &nbsp;| 
-            <a href="{% url "page_plan_new_plan_from_code" 7 %}" ref="#16sTargetSeq" rel="tooltip" title="Create new plan">Plan New Run</a>
-          </div>
-        </div>
-        <div id="16s_targetseq"></div>
-      </div>         
-          
-    
+        {% for category in categories %}
+            {% if category.isActive %}
+            <div id="{{category.tag}}_tab" style="display: none;">
+                <h3 style="float:left;"><img src="{% static category.img %}" border="0" width='24px;'>&nbsp;{{category.displayedName}}</h3>
+                <div class="clearfix">
+                    <div class="pull-right">
+                        <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
+                        {% if category.ampliSeq_upload %}
+                        <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
+                                <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
+                                <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>
+                            </ul>
+                        </div>
+                        {% endif %}
+                        &nbsp;|
+                        <a href="{% url "page_plan_new_template" category.code %}" rel="tooltip" title="Create new template for run planning">Add New Template</a>
+                        &nbsp;| 
+                        <a href="{% url "page_plan_new_plan_from_code" category.code %}" rel="tooltip" title="Create new plan">Plan New Run</a>
+                    </div>
+                </div>
+                <div id="{{category.tag}}" class="list_contents"></div>
+            </div> 
+            {% endif %}
+        {% endfor %}
       </div>
     </div>
 </div>
@@ -472,7 +221,7 @@ var username = '{{user.username}}';
     
     # if (_isSystem) { #
         <span rel="tooltip" title="System Pre-loaded">
-        <img src="{% static "resources/img/ion_24x24.png" %}" width="24px" height="24px" />
+        <img src="{% static "resources/img/ionTorrent_56x20.png" %}" width="56px" height="20px" />        
     # } else { #
         <span rel="tooltip" title="User created">   
         <i class="icon-user"></i>    

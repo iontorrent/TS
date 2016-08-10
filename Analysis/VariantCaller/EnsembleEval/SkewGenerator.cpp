@@ -13,9 +13,8 @@ void BasicSkewGenerator::GenerateSkew(CrossHypotheses &my_cross){
 
 void BasicSkewGenerator::AddOneUpdateForHypothesis(int strand_key, float responsibility, vector<int> &test_flow, vector<float> &residuals){
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
      // skew by moments = p(x>0|skew), so compute count of x>0 by responsibility
-    if (residuals[j_flow]>0.0f)
+    if (residuals[t_flow]>0.0f)
        skew_up[strand_key] += responsibility;
      else
        skew_down[strand_key] += responsibility;

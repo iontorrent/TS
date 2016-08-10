@@ -30,29 +30,31 @@ from ion.reports import wells_beadogram
 
 from ion.utils.compress import make_zip
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', dest='verbose', action='store_true')
-    parser.add_argument('-s', '--do-sigproc', dest='do_sigproc', action='store_true', help='signal processing')
-    parser.add_argument('-b', '--do-basecalling', dest='do_basecalling', action='store_true', help='base calling')
+    parser.add_argument('-s', '--do-sigproc', dest='do_sigproc',
+                        action='store_true', help='signal processing')
+    parser.add_argument('-b', '--do-basecalling',
+                        dest='do_basecalling', action='store_true', help='base calling')
     parser.add_argument('-a', '--do-alignment', dest='do_alignment', action='store_true', help='alignment')
     parser.add_argument('-z', '--do-zipping', dest='do_zipping', action='store_true', help='zipping')
 
     args = parser.parse_args()
 
     if args.verbose:
-        print "MergeTLScript:",args
+        print "MergeTLScript:", args
 
     if not args.do_sigproc and not args.do_basecalling and not args.do_zipping:
         parser.print_help()
         sys.exit(1)
 
-    #ensure we permit read/write for owner and group output files.
+    # ensure we permit read/write for owner and group output files.
     os.umask(0002)
 
     blockprocessing.printheader()
-    env,warn = explogparser.getparameter()
+    env, warn = explogparser.getparameter()
 
     blockprocessing.write_version()
     sys.stdout.flush()
@@ -62,13 +64,12 @@ if __name__=="__main__":
     # Connect to Job Server
     #-------------------------------------------------------------
     try:
-        jobserver = xmlrpclib.ServerProxy("http://%s:%d" % 
-            (cluster_settings.JOBSERVER_HOST, cluster_settings.JOBSERVER_PORT), 
-            verbose=False, allow_none=True)
-        primary_key_file = os.path.join(os.getcwd(),'primary.key')
+        jobserver = xmlrpclib.ServerProxy("http://%s:%d" %
+                                         (cluster_settings.JOBSERVER_HOST, cluster_settings.JOBSERVER_PORT),
+                                          verbose=False, allow_none=True)
+        primary_key_file = os.path.join(os.getcwd(), 'primary.key')
     except:
         traceback.print_exc()
-
 
     if env['rawdatastyle'] == 'single' or "thumbnail" in env['pathToRaw']:
         is_composite = False
@@ -76,12 +77,12 @@ if __name__=="__main__":
         is_composite = True
 
     # Speedup Flags
-    do_unfiltered_processing        = True and not is_composite
-    do_merge_all_barcodes           = True and not is_composite
-    do_ionstats_spatial_accounting  = False
+    do_unfiltered_processing = True and not is_composite
+    do_merge_all_barcodes = True and not is_composite
+    do_ionstats_spatial_accounting = False
 
     reference_selected = False
-    for barcode_name,barcode_info in sorted(env['barcodeInfo'].iteritems()):
+    for barcode_name, barcode_info in sorted(env['barcodeInfo'].iteritems()):
         if barcode_info['referenceName']:
             reference_selected = True
             pass
@@ -96,25 +97,24 @@ if __name__=="__main__":
         try:
             if os.path.exists(primary_key_file):
                 jobserver.updatestatus(primary_key_file, status, True)
-                printtime("MergeTLStatus %s\tpid %d\tpk file %s started" % 
-                    (status, os.getpid(), primary_key_file))
+                printtime("MergeTLStatus %s\tpid %d\tpk file %s started" %
+                         (status, os.getpid(), primary_key_file))
         except:
             traceback.print_exc()
 
-
     blocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
     blocks_to_process = [block for block in blocks if block['autoanalyze'] and block['analyzeearly']]
-    number_of_total_blocks      = len(blocks)
+    number_of_total_blocks = len(blocks)
     number_of_blocks_to_process = len(blocks_to_process)
     dirs = ['block_%s' % block['id_str'] for block in blocks_to_process]
     if not is_composite:
-        dirs=[]
+        dirs = []
 
     if args.do_sigproc:
 
         set_result_status('Merge Heatmaps')
-        
-        exclusionMaskFile = 'exclusionMask_%s.txt' % env.get('chipType','').lower()
+
+        exclusionMaskFile = 'exclusionMask_%s.txt' % env.get('chipType', '').lower()
 
         sigproc.mergeSigProcResults(
             dirs,
@@ -149,35 +149,35 @@ if __name__=="__main__":
             traceback.print_exc()
         '''
 
-
     if args.do_basecalling:
 
         set_result_status('Merge Basecaller Results')
 
         # write composite return code
         try:
-            composite_return_code=number_of_total_blocks
+            composite_return_code = number_of_total_blocks
             for subdir in dirs:
 
-                blockstatus_return_code_file = os.path.join(subdir,"blockstatus.txt")
+                blockstatus_return_code_file = os.path.join(subdir, "blockstatus.txt")
                 if os.path.exists(blockstatus_return_code_file):
 
                     with open(blockstatus_return_code_file, 'r') as f:
                         text = f.read()
                         if 'Basecaller=0' in text:
-                            composite_return_code-=1
+                            composite_return_code -= 1
                         else:
-                            with open(os.path.join(subdir,"sigproc_results","analysis_return_code.txt"), 'r') as g:
+                            with open(os.path.join(subdir, "sigproc_results", "analysis_return_code.txt"), 'r') as g:
                                 return_code_text = g.read()
-                                #TODO
-                                corner_P1_blocks  = ['block_X0_Y0','block_X14168_Y0','block_X0_Y9324','block_X14168_Y9324']
-                                corner_P0_blocks  = ['block_X0_Y0','block_X7040_Y0','block_X0_Y4648','block_X7040_Y4648']
-                                if return_code_text=="3" and subdir in corner_P0_blocks + corner_P1_blocks:
+                                # TODO
+                                corner_P1_blocks = [
+                                    'block_X0_Y0', 'block_X14168_Y0', 'block_X0_Y9324', 'block_X14168_Y9324']
+                                corner_P0_blocks = [
+                                    'block_X0_Y0', 'block_X7040_Y0', 'block_X0_Y4648', 'block_X7040_Y4648']
+                                if return_code_text == "3" and subdir in corner_P0_blocks + corner_P1_blocks:
                                     printtime("INFO: suppress non-critical error in %s" % subdir)
-                                    composite_return_code-=1
+                                    composite_return_code -= 1
 
-
-            composite_return_code_file = os.path.join(env['BASECALLER_RESULTS'],"composite_return_code.txt")
+            composite_return_code_file = os.path.join(env['BASECALLER_RESULTS'], "composite_return_code.txt")
             if not os.path.exists(composite_return_code_file):
                 printtime("DEBUG: create %s" % composite_return_code_file)
                 os.umask(0002)
@@ -189,13 +189,13 @@ if __name__=="__main__":
         except:
             traceback.print_exc()
 
-
         # update blocks to process
         try:
             newlist = []
             for subdir in dirs:
 
-                analysis_return_code_file = os.path.join(subdir, env['SIGPROC_RESULTS'], "analysis_return_code.txt")
+                analysis_return_code_file = os.path.join(
+                    subdir, env['SIGPROC_RESULTS'], "analysis_return_code.txt")
                 if os.path.exists(analysis_return_code_file):
                     with open(analysis_return_code_file, 'r') as f:
                         text = f.read()
@@ -204,7 +204,6 @@ if __name__=="__main__":
             dirs = newlist
         except:
             traceback.print_exc()
-
 
         try:
             sigproc.mergeAvgNukeTraces(dirs, env['SIGPROC_RESULTS'], env['libraryKey'], 'Library Beads')
@@ -238,14 +237,16 @@ if __name__=="__main__":
             traceback.print_exc()
             printtime("ERROR: Merge Basecaller Results failed")
 
-
         try:
             printtime("INFO: merging rawtf.basecaller.bam")
-            block_bam_list = [os.path.join(adir, env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam') for adir in dirs]
-            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+            block_bam_list = [os.path.join(adir, env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam')
+                              for adir in dirs]
+            block_bam_list = [
+                block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
             composite_bam_filename = os.path.join(env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam')
             if block_bam_list:
-                blockprocessing.merge_bam_files(block_bam_list,composite_bam_filename,composite_bai_filepath="",mark_duplicates=False,method='picard')
+                blockprocessing.merge_bam_files(
+                    block_bam_list, composite_bam_filename, composite_bai_filepath="", mark_duplicates=False, method='picard')
         except:
             print traceback.format_exc()
             printtime("ERROR: merging rawtf.basecaller.bam unsuccessful")
@@ -255,51 +256,49 @@ if __name__=="__main__":
             basecaller_datasets = blockprocessing.get_datasets_basecaller(env['BASECALLER_RESULTS'])
 
             try:
-                os.mkdir(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'))
+                os.mkdir(os.path.join(env['BASECALLER_RESULTS'], 'unfiltered.untrimmed'))
 
                 basecaller.merge_datasets_basecaller_json(
                     dirs,
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"))
+                    os.path.join(env['BASECALLER_RESULTS'], "unfiltered.untrimmed"))
 
                 blockprocessing.merge_bams(
                     dirs,
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
+                    os.path.join(env['BASECALLER_RESULTS'], "unfiltered.untrimmed"),
                     basecaller_datasets,
                     'picard')
             except:
                 print traceback.format_exc()
-
 
             try:
-                os.mkdir(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'))
+                os.mkdir(os.path.join(env['BASECALLER_RESULTS'], 'unfiltered.trimmed'))
 
                 basecaller.merge_datasets_basecaller_json(
                     dirs,
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"))
+                    os.path.join(env['BASECALLER_RESULTS'], "unfiltered.trimmed"))
 
                 blockprocessing.merge_bams(
                     dirs,
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
+                    os.path.join(env['BASECALLER_RESULTS'], "unfiltered.trimmed"),
                     basecaller_datasets,
                     'picard')
             except:
                 print traceback.format_exc()
-
 
     if args.do_zipping:
         # at least one barcode has a reference
         if not reference_selected:
-            printtime ("INFO: reference not selected")
+            printtime("INFO: reference not selected")
 
-        #make sure pre-conditions for alignment step are met
+        # make sure pre-conditions for alignment step are met
         if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "datasets_basecaller.json")):
-            printtime ("ERROR: alignment pre-conditions not met")
+            printtime("ERROR: alignment pre-conditions not met")
             sys.exit(1)
 
         basecaller_datasets = blockprocessing.get_datasets_basecaller(env['BASECALLER_RESULTS'])
 
         try:
-            c = open(os.path.join(env['BASECALLER_RESULTS'], "BaseCaller.json"),'r')
+            c = open(os.path.join(env['BASECALLER_RESULTS'], "BaseCaller.json"), 'r')
             basecaller_meta_information = json.load(c)
             c.close()
         except:
@@ -314,20 +313,20 @@ if __name__=="__main__":
         do_indexing = True
 
         alignment.process_datasets(
-                    dirs,
-                    env['alignmentArgs'],
-                    env['ionstatsArgs'],
-                    env['BASECALLER_RESULTS'],
-                    basecaller_meta_information,
-                    env['libraryKey'],
-                    graph_max_x,
-                    basecaller_datasets,
-                    env['ALIGNMENT_RESULTS'],
-                    env['realign'],
-                    do_ionstats,
-                    env['mark_duplicates'],
-                    do_indexing,
-                    env['barcodeInfo'])
+            dirs,
+            env['alignmentArgs'],
+            env['ionstatsArgs'],
+            env['BASECALLER_RESULTS'],
+            basecaller_meta_information,
+            env['libraryKey'],
+            graph_max_x,
+            basecaller_datasets,
+            env['ALIGNMENT_RESULTS'],
+            env['realign'],
+            do_ionstats,
+            env['mark_duplicates'],
+            do_indexing,
+            env['barcodeInfo'])
 
         '''
 
@@ -436,14 +435,14 @@ if __name__=="__main__":
 
             # Plot classic read length histogram (also used for Read Length Details view)
             ionstats_plots.old_read_length_histogram(
-                os.path.join(env['BASECALLER_RESULTS'],'ionstats_basecaller.json'),
-                os.path.join(env['BASECALLER_RESULTS'],'readLenHisto.png'),
+                os.path.join(env['BASECALLER_RESULTS'], 'ionstats_basecaller.json'),
+                os.path.join(env['BASECALLER_RESULTS'], 'readLenHisto.png'),
                 graph_max_x)
 
             # Plot new read length histogram
             ionstats_plots.read_length_histogram(
-                os.path.join(env['BASECALLER_RESULTS'],'ionstats_basecaller.json'),
-                os.path.join(env['BASECALLER_RESULTS'],'readLenHisto2.png'),
+                os.path.join(env['BASECALLER_RESULTS'], 'ionstats_basecaller.json'),
+                os.path.join(env['BASECALLER_RESULTS'], 'readLenHisto2.png'),
                 graph_max_x)
 
             for dataset in basecaller_datasets["datasets"]:
@@ -473,26 +472,30 @@ if __name__=="__main__":
                     os.path.join(env['BASECALLER_RESULTS'], dataset['file_prefix']+'.read_len_histogram.png'),
                     graph_max_x)
 
-
         except:
             traceback.print_exc()
 
         if reference_selected:
             try:
                 # Use ionstats alignment results to generate plots
-                ionstats_plots.alignment_rate_plot2('ionstats_alignment.json','alignment_rate_plot.png', graph_max_x)
-                ionstats_plots.base_error_plot('ionstats_alignment.json','base_error_plot.png', graph_max_x)
-                ionstats_plots.old_aq_length_histogram('ionstats_alignment.json','Filtered_Alignments_Q10.png', 'AQ10', 'red')
-                ionstats_plots.old_aq_length_histogram('ionstats_alignment.json','Filtered_Alignments_Q17.png', 'AQ17', 'yellow')
-                ionstats_plots.old_aq_length_histogram('ionstats_alignment.json','Filtered_Alignments_Q20.png', 'AQ20', 'green')
-                ionstats_plots.old_aq_length_histogram('ionstats_alignment.json','Filtered_Alignments_Q47.png', 'AQ47', 'purple')
+                ionstats_plots.alignment_rate_plot2(
+                    'ionstats_alignment.json', 'alignment_rate_plot.png', graph_max_x)
+                ionstats_plots.base_error_plot('ionstats_alignment.json', 'base_error_plot.png', graph_max_x)
+                ionstats_plots.old_aq_length_histogram(
+                    'ionstats_alignment.json', 'Filtered_Alignments_Q10.png', 'AQ10', 'red')
+                ionstats_plots.old_aq_length_histogram(
+                    'ionstats_alignment.json', 'Filtered_Alignments_Q17.png', 'AQ17', 'yellow')
+                ionstats_plots.old_aq_length_histogram(
+                    'ionstats_alignment.json', 'Filtered_Alignments_Q20.png', 'AQ20', 'green')
+                ionstats_plots.old_aq_length_histogram(
+                    'ionstats_alignment.json', 'Filtered_Alignments_Q47.png', 'AQ47', 'purple')
             except:
                 traceback.print_exc()
 
         try:
             wells_beadogram.generate_wells_beadogram(env['BASECALLER_RESULTS'], env['SIGPROC_RESULTS'])
         except:
-            printtime ("ERROR: Wells beadogram generation failed")
+            printtime("ERROR: Wells beadogram generation failed")
             traceback.print_exc()
 
         set_result_status('TF Processing')
@@ -503,32 +506,31 @@ if __name__=="__main__":
 
                 # input
                 tf_basecaller_bam_filename = os.path.join(env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam')
-                tf_reference_filename = os.path.join("/results/referenceLibrary/TestFragment", env['tfKey'], "DefaultTFs.fasta")
+                tf_reference_filename = os.path.join(
+                    "/results/referenceLibrary/TestFragment", env['tfKey'], "DefaultTFs.fasta")
 
                 # These files will be created
-                tfbam_filename = os.path.join(env['BASECALLER_RESULTS'],"rawtf.bam")
-                ionstats_tf_filename = os.path.join(env['BASECALLER_RESULTS'],"ionstats_tf.json")
-                tfstatsjson_path = os.path.join(env['BASECALLER_RESULTS'],"TFStats.json")
+                tfbam_filename = os.path.join(env['BASECALLER_RESULTS'], "rawtf.bam")
+                ionstats_tf_filename = os.path.join(env['BASECALLER_RESULTS'], "ionstats_tf.json")
+                tfstatsjson_path = os.path.join(env['BASECALLER_RESULTS'], "TFStats.json")
 
                 printtime("TF: Mapping '%s'" % tf_basecaller_bam_filename)
                 alignment.alignTFs(tf_basecaller_bam_filename, tfbam_filename, tf_reference_filename)
 
-                ionstats.generate_ionstats_tf(tfbam_filename,tf_reference_filename,ionstats_tf_filename)
+                ionstats.generate_ionstats_tf(tfbam_filename, tf_reference_filename, ionstats_tf_filename)
 
                 ionstats_plots.tf_length_histograms(ionstats_tf_filename, '.')
 
-                ionstats.generate_legacy_tf_files(ionstats_tf_filename,tfstatsjson_path)
+                ionstats.generate_legacy_tf_files(ionstats_tf_filename, tfstatsjson_path)
 
         except:
             traceback.print_exc()
             printtime("No data to analyze Test Fragments")
-            f = open(os.path.join(env['BASECALLER_RESULTS'],'TFStats.json'),'w')
+            f = open(os.path.join(env['BASECALLER_RESULTS'], 'TFStats.json'), 'w')
             f.write(json.dumps({}))
             f.close()
 
-
         # Process unfiltered reads
-
         if do_unfiltered_processing:
             set_result_status('Process Unfiltered BAM')
 
@@ -536,15 +538,16 @@ if __name__=="__main__":
             create_index = False
 
             for unfiltered_directory in [
-                                         os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'),
-                                         os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed')
-                                        ]:
+                os.path.join(env['BASECALLER_RESULTS'], 'unfiltered.untrimmed'),
+                os.path.join(env['BASECALLER_RESULTS'], 'unfiltered.trimmed')
+            ]:
                 try:
 
                     if os.path.exists(unfiltered_directory):
 
                         unfiltered_basecaller_meta_information = None
-                        unfiltered_basecaller_datasets = blockprocessing.get_datasets_basecaller(unfiltered_directory)
+                        unfiltered_basecaller_datasets = blockprocessing.get_datasets_basecaller(
+                            unfiltered_directory)
 
                         # TODO, don't generate this file
                         if env['barcodeId']:
@@ -612,15 +615,15 @@ if __name__=="__main__":
 
         for dataset in basecaller_datasets["datasets"]:
 
-            filtered = True # default
+            filtered = True  # default
             for rg_name in dataset["read_groups"]:
-                if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
+                if not basecaller_datasets["read_groups"][rg_name].get('filtered', False):
                     filtered = False
             if filtered and int(dataset["read_count"]) > 0:
                 try:
-                    printtime( "INFO FILTERED: %s" % dataset )
+                    printtime("INFO FILTERED: %s" % dataset)
                     for data in glob.glob(dataset['file_prefix']+".*"):
-                        shutil.move(data,"frequency_filtered_barcodes")
+                        shutil.move(data, "frequency_filtered_barcodes")
                 except:
                     printtime(traceback.format_exc())
         #'''
@@ -636,34 +639,33 @@ if __name__=="__main__":
         except:
             printtime(traceback.format_exc())
 
-        prefix_list = [dataset['file_prefix'] for dataset in basecaller_datasets.get("datasets",[])]
+        prefix_list = [dataset['file_prefix'] for dataset in basecaller_datasets.get("datasets", [])]
 
         link_task_list = [
             ('bam',             env['ALIGNMENT_RESULTS']),
             ('bam.bai',         env['ALIGNMENT_RESULTS']),
-            ('basecaller.bam',  env['BASECALLER_RESULTS']),]
+            ('basecaller.bam',  env['BASECALLER_RESULTS']), ]
 
-        for extension,base_dir in link_task_list:
+        for extension, base_dir in link_task_list:
             for prefix in prefix_list:
                 try:
-                    filename = "%s/%s%s_%s.%s" % (download_links, re.sub('rawlib$','',prefix), env['expName'], env['resultsName'], extension)
+                    filename = "%s/%s%s_%s.%s" % (download_links, re.sub(
+                        'rawlib$', '', prefix), env['expName'], env['resultsName'], extension)
                     src = os.path.join(base_dir, prefix+'.'+extension)
                     if os.path.exists(src):
-                        os.symlink(os.path.relpath(src,os.path.dirname(filename)),filename)
+                        os.symlink(os.path.relpath(src, os.path.dirname(filename)), filename)
                 except:
                     printtime("ERROR: target: %s" % filename)
                     traceback.print_exc()
-
 
         src = os.path.join(env['BASECALLER_RESULTS'], 'rawtf.bam')
         dst = os.path.join(download_links, "%s_%s.rawtf.bam" % (env['expName'], env['resultsName']))
         if os.path.exists(src) and not os.path.exists(dst):
             try:
-                os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
+                os.symlink(os.path.relpath(src, os.path.dirname(dst)), dst)
             except:
                 printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
                 printtime(traceback.format_exc())
-
 
     printtime("MergeTLScript exit")
     sys.exit(0)

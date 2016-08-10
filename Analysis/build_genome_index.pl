@@ -12,6 +12,7 @@ use Getopt::Long;
 my $opt = {
   "autoFix"           => undef,
   "fastaFile"         => undef,
+  "bedfileName"       => undef,
   "genomeNameShort"   => undef,
   "genomeNameLong"    => undef,
   "genomeVersion"     => undef,
@@ -26,6 +27,7 @@ my $opt = {
 GetOptions(
   "a|auto-fix"              => \$opt->{"autoFix"},
   "f|fasta=s"               => \$opt->{"fastaFile"},
+  "m|reference-mask=s"             => \$opt->{"bedfileName"},
   "s|genome-name-short=s"   => \$opt->{"genomeNameShort"},
   "l|genome-name-long=s"    => \$opt->{"genomeNameLong"},
   "v|genome-version=s"      => \$opt->{"genomeVersion"},
@@ -75,6 +77,7 @@ usage: $0
     -v,--genome-version hg19           : Genome version
   Optional args:
     -a,--auto-fix                      : Attempt to fix common fasta format issues
+    -m,--reference-mask                : Masking bed file for reference sequence
     -c,--compressed hg19.fasta         : Expand a compressed zip. Requires name
     									 fasta as an argument.
     -t,--tmapDir /path/to/tmap         : Location of TMAP executable
@@ -91,6 +94,11 @@ EOF
 my $outDir    = $opt->{"genomeNameShort"};
 my $shortName = $opt->{"genomeNameShort"};
 my $fastaFile = $opt->{"fastaFile"};
+my $bedfile = "";
+
+if (defined($opt->{"bedfileName"})) {
+  $bedfile = $opt->{"bedfileName"};
+}
 #$opt->{'tmapDir'} = dir($opt->{'tmapDir'})->absolute();
 
 #try to uncompress a zip file
@@ -103,10 +111,14 @@ if($opt->{"compressed"}) {
 
 die "$0: input file $fastaFile does not exist\n" if(! -e $fastaFile);
 die "$0: input file $fastaFile exists but is not readable\n" if(! -r $fastaFile);
+if ($bedfile ne "") {
+  die "$0: input file $bedfile does not exist\n" if(! -e $bedfile);
+  die "$0: input file $bedfile exists but is not readable\n" if(! -r $bedfile);
+}
 my($origFastaFile,$origFastaChecksum,$fastaChecksum) = &checkInput($fastaFile,defined($opt->{"autoFix"})?1:0);
 &prepareOutDir($outDir);
 my $indexVersion = &getIndexVersion();
-my $genomeLength = &makeIndex($outDir,$shortName,$fastaFile,$origFastaFile,$indexVersion);
+my $genomeLength = &makeIndex($outDir,$shortName,$fastaFile,$origFastaFile,$bedfile, $indexVersion);
 &makeInfoFile($outDir,$shortName,$genomeLength,$indexVersion,$origFastaChecksum,$fastaChecksum,$opt);
 `md5sum $outDir/* > $outDir/$shortName.md5sum.txt`;
 exit(0);
@@ -181,18 +193,32 @@ sub makeInfoFile {
 }
 
 sub makeIndex {
-  my($outDir,$shortName,$fastaFile,$origFastaFile,$indexVersion) = @_;
+  my($outDir,$shortName,$fastaFile,$origFastaFile,$bedfile, $indexVersion) = @_;
 
   my $genomeLength = 0;
 
   my $cwd = &Cwd::getcwd();
 
   # copy fasta file to index dir
+  
   my $fastaFileCopy = "$shortName.fasta";
-  my $command = "cp $fastaFile $outDir/$fastaFileCopy";
-  print STDOUT "Copying $fastaFile to $outDir/$fastaFileCopy...\n";
-  &copy($fastaFile,"$outDir/$fastaFileCopy") || die "$0: Problem copying $fastaFile to $outDir/$fastaFileCopy: $!\n";
-  print STDOUT "  ...copy complete\n";
+  if ($bedfile ne "") {
+    #ZZ, with bed file, generate trimmed version of fasta and a masked file.
+    #chdir $outDir || die "$0: unable to chdir to output dir $outDir\n";
+    #print STDOUT "Making masked and small reference files\n";
+    my $tmapLogFile = "tmap.log";
+    #my $command = "$opt->{'tmapDir'}/tmap mask -o $outDir/$fastaFileCopy.noMask $bedfile $fastaFile > $outDir/$fastaFileCopy 2>> $outDir/$tmapLogFile";
+    my $command = "$opt->{'tmapDir'}/tmap mask $bedfile $fastaFile > $outDir/$fastaFileCopy 2>> $outDir/$tmapLogFile";
+    die "$0: Problem encountered making tmap mask, check tmap log file $outDir/$tmapLogFile for details.\n" if(&executeSystemCall($command));
+    print STDOUT "  ...tmap mask complete\n";
+    #chdir $cwd || die "$0: unable to chdir to top-level dir $cwd\n";
+    &copy($bedfile, "$outDir/maskfile_donot_remove.bed") || die  "$0: Problem copying $bedfile to $outDir/maskfile_donot_remove.bed: $!\n";
+  } else {
+    my $command = "cp $fastaFile $outDir/$fastaFileCopy";
+    print STDOUT "Copying $fastaFile to $outDir/$fastaFileCopy...\n";
+    &copy($fastaFile,"$outDir/$fastaFileCopy") || die "$0: Problem copying $fastaFile to $outDir/$fastaFileCopy: $!\n";
+    print STDOUT "  ...copy complete\n";
+  }
 
   # copy original fasta file to index dir, if it exists
   if($origFastaFile ne "") {
@@ -207,9 +233,15 @@ sub makeIndex {
   chdir $outDir || die "$0: unable to chdir to output dir $outDir\n";
   print STDOUT "Making tmap index...\n";
   my $tmapLogFile = "tmap.log";
-  $command = "$opt->{'tmapDir'}/tmap index -f $fastaFileCopy -v 2>> $tmapLogFile";
+  my $command = "$opt->{'tmapDir'}/tmap index -f $fastaFileCopy -v 2>> $tmapLogFile";
   die "$0: Problem encountered making tmap index, check tmap log file $outDir/$tmapLogFile for details.\n" if(&executeSystemCall($command));
   print STDOUT "  ...tmap index complete\n";
+
+  #if ($bedfile ne "") {
+    #remove the masked file, replace it with the trimmed file
+    #my $command = "mv -f $fastaFileCopy.noMask $fastaFileCopy";
+    #die "can not rename file.\n" if(&executeSystemCall($command));
+  #}  
 
   # make samtools index.  For now we're putting it in the same place
   # as the tmap index, though that's not a very natural place for it

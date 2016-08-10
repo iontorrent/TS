@@ -3,9 +3,9 @@
         "name"          : "AmpliSeq Exome Panel - Proton - Germ Line - Low Stringency",
         "tooltip"       : "Parameters optimized for AmpliSeq Exome Panel and HiQ",
         "configuration" : "ampliseqexome_germline_low_stringency_p1",
-        "ts_version"    : "5.0",
+        "ts_version"    : "5.2",
         "compatibility" : {
-          "chip"        : ["540","proton_p1"],
+          "chip"        : ["proton_p1"],
           "library"     : ["ampliseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"],

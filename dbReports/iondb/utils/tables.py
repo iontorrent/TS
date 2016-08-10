@@ -3,6 +3,7 @@
 import csv
 import StringIO
 
+
 def table2csv(table):
     buf = StringIO.StringIO()
     wrtr = csv.writer(buf)

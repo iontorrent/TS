@@ -87,6 +87,7 @@ void  PerFlowRelaxKmultGaussNewtonFit(int l1type, dim3 grid, dim3 block, int sme
   int num_beads, // 4
   int num_frames, // 4
   bool useDynamicEmphasis,
+  bool useSlowKmultInit,
 //  int * pMonitor,
   int sId /*= 0*/,
   int flow_block_size
@@ -331,39 +332,6 @@ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow(
   int flow_block_size
 ); 
 
-void  PerFlowAlternatingFit(
-  dim3 grid, 
-  dim3 block, 
-  int smem, 
-  cudaStream_t stream,
-  // inputs
-  float* fg_buffers_base, // NxF
-  float* emphasis, // (MAX_HPLEN+1)xF
-  float* nucRise, 
-  // bead params
-  float* pAmpl, // N
-  float* pKmult, // N
-  float* pdmult, // N
-  float* ptauB, // N
-  float* pgain, // N
-  float* pSP, // N
-  float * pCopies, //N
-  bead_state* pState,
-
-  // scratch space in global memory
-  float* err, // NxF
-  float* fval, // NxF
-  float* tmp_fval, // NxF
-  float* meanErr,
-  // other inputs 
-  float minAmpl,
-  float maxKmult,
-  float minKmult,  
-  int realFnum,
-  int num_beads, // 4
-  int num_frames, // 4
-  int sId
-); 
 
 void TaubAdjustForExponentialTailFitting(
   dim3 grid, 
@@ -433,21 +401,6 @@ void transposeData(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *d
 
 ///////// Transpose Kernel
 void transposeDataToFloat(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, FG_BUFFER_TYPE *source, int width, int height);
-
-void RecompressRawTracesForSingleFlowFit(
-  dim3 grid, 
-  dim3 block, 
-  int smem, 
-  cudaStream_t stream,
-  float* fgbuffers, // FLxFxN
-  float* scratch,
-  int startFrame,
-  int oldFrames,
-  int newFrames,
-  int numFlows,
-  int num_beads,
-  int sId);
-
 
 } // namespace
 

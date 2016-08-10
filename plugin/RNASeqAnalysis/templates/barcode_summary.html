@@ -135,6 +135,10 @@ $(document).ready(function() {
   </table>
 </div>
 
+{% if num_barcodes_filtered > 0 %}
+<h3><span title="Reads for some barcodes were ignored as having less than {{barcode_filter}}% of the file size of the largest barcode aligned reads file. To include these barcodes in the analysis, re-run with the Filter Barcodes option unchecked." style="cursor:help;color:red">WARNING: {{num_barcodes_filtered}} barcodes were discounted from analysis as having relatively too few reads.</span></h3>
+{% endif %}
+
 <script type="text/javascript">
   $(document).ready(function() {
     $('.tabs .tab-title a').on('click', function(e)  {
@@ -238,6 +242,9 @@ $(document).ready(function() {
 <br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
 <a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
 <div style="text-align:center">Click here to refresh</div></a>
+{% endif %}
+{% if warning %}
+<br/><h3 style="text-align:left;color:red">Warning: {{warning}}</h3>
 {% endif %}
 
 </div>

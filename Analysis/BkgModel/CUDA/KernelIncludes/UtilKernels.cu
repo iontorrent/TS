@@ -575,7 +575,7 @@ void transposeDataKernel(TDest *dest, TSrc *source, int width, int height)
 // Reduces shared memory of power of 2 size (max 512 elements) and puts the sum in sm[0]
 template<typename T>
 __device__ inline
-void ReduceAndAvgAtBlockLevel(T *sm, T N, bool avg) {
+void ReduceAndAvgAtBlockLevel(T *sm, int N, bool avg) {
   if (blockDim.x >= 512) { if (threadIdx.x < 256) sm[threadIdx.x] += sm[threadIdx.x + 256]; } __syncthreads();
   if (blockDim.x >= 256) { if (threadIdx.x < 128) sm[threadIdx.x] += sm[threadIdx.x + 128]; } __syncthreads();
   if (blockDim.x >= 128) { if (threadIdx.x < 64) sm[threadIdx.x] += sm[threadIdx.x + 64]; } __syncthreads();

@@ -132,8 +132,6 @@ if [ -n "$OUTFILE" ]; then
   echo "Number of reads in ${TARGID}s: $TREADS" >> "$OUTFILE"
   echo "Percent reads in ${TARGID}s:   $PTREADS" >> "$OUTFILE"
   MREADS=`samtools depth -G 4 "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
-  echo "Total base reads in ${TARGID}s:    $MREADS" >> "$OUTFILE"
-  PTREADS="100.0%"
   if [ -n "$BEDFILE" ]; then
     TREADS=`samtools depth -G 4 -b "$BEDFILE" "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
     if [ "$TREADS" -gt 0 ]; then
@@ -141,7 +139,11 @@ if [ -n "$OUTFILE" ]; then
     else
       PTREADS="0%"
     fi
+  else
+    TREADS=$MREADS
+    PTREADS="100%"
   fi
+  echo "Total base reads in ${TARGID}s:    $TREADS" >> "$OUTFILE"
   echo "Percent base reads in ${TARGID}s: $PTREADS" >> "$OUTFILE"
   if [ -n "$BEDFILE" -a "$GENDERTRGS" -gt 0 ]; then
     GENBED="${WORKDIR}/gender.bed"

@@ -131,11 +131,7 @@ double FitDensity::findBandWidth(vector<double> const &x) {
   }
 
   for (int i=0; i<n; ++i){
-#if __cplusplus >= 201103L
     assert ( !std::isnan( x[i] ));
-#else
-    assert ( !isnan( x[i] ));
-#endif
     tmpdata[i] = x[i];
   }
 
@@ -160,21 +156,13 @@ double FitDensity::findBandWidth(vector<double> const &x) {
   double var = 0;
   double mean = 0;
   for (int i=0; i<n; ++i){
-#if __cplusplus >= 201103L
     if (std::isinf(x[i])) {
-#else
-    if (isinf(x[i])) {
-#endif
       sd = numeric_limits<double>::infinity();
       break;
     }
     mean += x[i];
   }
-#if __cplusplus >= 201103L
   if ( ! std::isinf(sd) ) {
-#else
-  if ( ! isinf(sd) ) {
-#endif
     mean = mean/n;
     for (int i=0; i<n; ++i){
       var += (x[i]-mean)*(x[i]-mean);

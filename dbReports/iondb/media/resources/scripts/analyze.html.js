@@ -86,21 +86,21 @@ change_pipetype = function () {
 };
 
 show_warning = function(){
-    var warning = "";
+    var warning = WARNINGS["all"] || "";
     var type = $('input[name=pipetype]:checked').val();
     
     if(type == "fromRaw"){
-        warning = WARNINGS["sigproc"];
+        warning += WARNINGS["sigproc"] || "";
     }else{
         if($('#id_do_thumbnail').is(':checked')){
-            warning = WARNINGS[$("#id_previousThumbReport :selected").data("pk")];
+            warning += WARNINGS[$("#id_previousThumbReport :selected").data("pk")] || "";
         }else{
-            warning = WARNINGS[$("#id_previousReport :selected").data("pk")];
+            warning += WARNINGS[$("#id_previousReport :selected").data("pk")] || "";
         }
     }
 
     if(warning){
-        $("#warning").text(warning).show();
+        $("#warning").html(warning).show();
     }else{
         $("#warning").hide();
     }

@@ -131,8 +131,10 @@ int IonstatsTestFragments(OptArgs &opts)
 
   vector<ReadLengthHistogram> called_histogram(num_tfs);
   vector<ReadLengthHistogram> aligned_histogram(num_tfs);
+  vector<ReadLengthHistogram> AQ7_histogram(num_tfs);
   vector<ReadLengthHistogram> AQ10_histogram(num_tfs);
   vector<ReadLengthHistogram> AQ17_histogram(num_tfs);
+  vector<ReadLengthHistogram> AQ20_histogram(num_tfs);
   vector<SimpleHistogram> error_by_position(num_tfs);
   vector<MetricGeneratorSNR> system_snr(num_tfs);
   vector<MetricGeneratorHPAccuracy> hp_accuracy(num_tfs);
@@ -140,8 +142,10 @@ int IonstatsTestFragments(OptArgs &opts)
   for (int tf = 0; tf < num_tfs; ++tf) {
     called_histogram[tf].Initialize(histogram_length);
     aligned_histogram[tf].Initialize(histogram_length);
+    AQ7_histogram[tf].Initialize(histogram_length);
     AQ10_histogram[tf].Initialize(histogram_length);
     AQ17_histogram[tf].Initialize(histogram_length);
+    AQ20_histogram[tf].Initialize(histogram_length);
     error_by_position[tf].Initialize(histogram_length);
   }
 
@@ -168,12 +172,24 @@ int IonstatsTestFragments(OptArgs &opts)
   while(input_bam.GetNextAlignment(alignment)) {
 
 
-    if (!alignment.IsMapped() or !alignment.GetTag("MD",MD_tag))
+    if (!alignment.GetTag("MD",MD_tag)) {
+      //fprintf(stderr, "[ionstats] DEBUG: !alignment.GetTag MD)\n");
       continue;
+    }
+    if (!alignment.IsMapped()) {
+      //fprintf(stderr, "[ionstats] DEBUG: !alignment.IsMapped\n");
+      continue;
+    }
 
     // The check below eliminates unexpected alignments
-    if (alignment.IsReverseStrand() or alignment.Position > 5)
+    if (alignment.Position > 5) {
+      //fprintf(stderr, "[ionstats] DEBUG: alignment.Position %d > 5\n", alignment.Position);
       continue;
+    }
+    if (alignment.IsReverseStrand()) {
+      //fprintf(stderr, "[ionstats] DEBUG: alignment.IsReverseStrand\n");
+      continue;
+    }
 
     int current_tf = alignment.RefID;
 
@@ -211,8 +227,10 @@ int IonstatsTestFragments(OptArgs &opts)
     int cigar_idx = alignment.IsReverseStrand() ? alignment.CigarData.size()-1 : 0;
     int increment = alignment.IsReverseStrand() ? -1 : 1;
 
+    int AQ7_bases = 0;
     int AQ10_bases = 0;
     int AQ17_bases = 0;
+    int AQ20_bases = 0;
     int num_bases = 0;
     int num_errors = 0;
 
@@ -272,8 +290,10 @@ int IonstatsTestFragments(OptArgs &opts)
         //break;
       }
 
+      if (num_errors*5 <= num_bases)    AQ7_bases = num_bases;
       if (num_errors*10 <= num_bases)   AQ10_bases = num_bases;
       if (num_errors*50 <= num_bases)   AQ17_bases = num_bases;
+      if (num_errors*100 <= num_bases)  AQ20_bases = num_bases;
     }
 
     //
@@ -282,8 +302,10 @@ int IonstatsTestFragments(OptArgs &opts)
 
     called_histogram[current_tf].Add(alignment.Length);
     aligned_histogram[current_tf].Add(num_bases);
+    AQ7_histogram[current_tf].Add(AQ7_bases);
     AQ10_histogram[current_tf].Add(AQ10_bases);
     AQ17_histogram[current_tf].Add(AQ17_bases);
+    AQ20_histogram[current_tf].Add(AQ20_bases);
 
     if(alignment.GetTag("ZM", flow_signal_zm))
       system_snr[current_tf].Add(flow_signal_zm, key.c_str(), flow_order);
@@ -336,8 +358,10 @@ int IonstatsTestFragments(OptArgs &opts)
 
     called_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["full"]);
     aligned_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["aligned"]);
+    AQ7_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["AQ7"]);
     AQ10_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["AQ10"]);
     AQ17_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["AQ17"]);
+    AQ20_histogram[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["AQ20"]);
     error_by_position[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]["error_by_position"]);
     system_snr[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]);
     hp_accuracy[tf].SaveToJson(output_json["results_by_tf"][refs[tf].RefName]);
@@ -366,8 +390,10 @@ int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector
   int num_tfs = 0;
   deque<ReadLengthHistogram>        called_histogram;
   deque<ReadLengthHistogram>        aligned_histogram;
+  deque<ReadLengthHistogram>        AQ7_histogram;
   deque<ReadLengthHistogram>        AQ10_histogram;
   deque<ReadLengthHistogram>        AQ17_histogram;
+  deque<ReadLengthHistogram>        AQ20_histogram;
   deque<SimpleHistogram>            error_by_position;
   deque<MetricGeneratorSNR>         system_snr;
   deque<MetricGeneratorHPAccuracy>  hp_accuracy;
@@ -394,8 +420,10 @@ int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector
         tf_name_lookup[tf_list[idx]] = current_tf;
         called_histogram.push_back(ReadLengthHistogram());
         aligned_histogram.push_back(ReadLengthHistogram());
+        AQ7_histogram.push_back(ReadLengthHistogram());
         AQ10_histogram.push_back(ReadLengthHistogram());
         AQ17_histogram.push_back(ReadLengthHistogram());
+        AQ20_histogram.push_back(ReadLengthHistogram());
         error_by_position.push_back(SimpleHistogram());
         system_snr.push_back(MetricGeneratorSNR());
         hp_accuracy.push_back(MetricGeneratorHPAccuracy());
@@ -413,6 +441,10 @@ int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector
       current_aligned_histogram.LoadFromJson(current_input_json["results_by_tf"][tf_list[idx]]["aligned"]);
       aligned_histogram[current_tf].MergeFrom(current_aligned_histogram);
 
+      ReadLengthHistogram current_AQ7_histogram;
+      current_AQ7_histogram.LoadFromJson(current_input_json["results_by_tf"][tf_list[idx]]["AQ7"]);
+      AQ7_histogram[current_tf].MergeFrom(current_AQ7_histogram);
+
       ReadLengthHistogram current_AQ10_histogram;
       current_AQ10_histogram.LoadFromJson(current_input_json["results_by_tf"][tf_list[idx]]["AQ10"]);
       AQ10_histogram[current_tf].MergeFrom(current_AQ10_histogram);
@@ -421,6 +453,10 @@ int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector
       current_AQ17_histogram.LoadFromJson(current_input_json["results_by_tf"][tf_list[idx]]["AQ17"]);
       AQ17_histogram[current_tf].MergeFrom(current_AQ17_histogram);
 
+      ReadLengthHistogram current_AQ20_histogram;
+      current_AQ20_histogram.LoadFromJson(current_input_json["results_by_tf"][tf_list[idx]]["AQ20"]);
+      AQ20_histogram[current_tf].MergeFrom(current_AQ20_histogram);
+	  
       MetricGeneratorSNR current_system_snr;
       current_system_snr.LoadFromJson(current_input_json["results_by_tf"][tf_list[idx]]);
       system_snr[current_tf].MergeFrom(current_system_snr);
@@ -446,8 +482,10 @@ int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector
   for (int tf = 0; tf < num_tfs; ++tf) {
     called_histogram[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["full"]);
     aligned_histogram[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["aligned"]);
+    AQ7_histogram[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["AQ7"]);
     AQ10_histogram[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["AQ10"]);
     AQ17_histogram[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["AQ17"]);
+    AQ20_histogram[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["AQ20"]);
     error_by_position[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]["error_by_position"]);
     system_snr[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]);
     hp_accuracy[tf].SaveToJson(output_json["results_by_tf"][tf_name[tf]]);

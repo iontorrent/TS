@@ -18,7 +18,6 @@
 #include "Utils.h"
 #include "SpecialDataTypes.h"
 #include "SeqList.h"
-#include "ChipIdDecoder.h"
 #include "GpuControlOpts.h"
 #include "DebugMe.h"
 #include "polyclonal_filter.h"
@@ -27,6 +26,7 @@
 
 #define REGIONAL_SAMPLING_SYSTEMATIC -1
 #define REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED 1
+#define REGIONAL_SAMPLING_PSEUDORANDOM 2
 
 class SignalProcessingBlockControl{
 public:
@@ -81,11 +81,16 @@ class BkgModelControlOpts{
 
     bool nokey; // keyless background model calling
 
+    float washout_threshold;
+    int washout_flow_detection;
+
     // Options for controlling regional double exponential smoothing.
     struct {
       float alpha;
       float gamma;
     } regional_smoothing;
+
+   std::string restartRegParamsFile;
 
     void DefaultBkgModelControl(void);
 	void PrintHelp();

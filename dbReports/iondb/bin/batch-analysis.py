@@ -21,21 +21,23 @@ from iondb.rundb import models, views
 import gc
 import httplib, urllib
 
-#get django models
+# get django models
 from iondb.rundb import models
+
 
 def get_name_from_json(exp, key):
     data = exp.log
     name = data.get(key, False)
     if not name:
-        return 'Auto_%s_%s' % (exp.pretty_print(),exp.pk,)
+        return 'Auto_%s_%s' % (exp.pretty_print(), exp.pk,)
     else:
-        return '%s_%s' % (str(name),exp.pk)
-    
+        return '%s_%s' % (str(name), exp.pk)
+
+
 def generate_http_post(exp, server):
-    params = urllib.urlencode({'report_name':get_name_from_json(exp,'autoanalysisname')+"_V7",
-                               'tf_config':'',
-                               'path':exp.expDir,
+    params = urllib.urlencode({'report_name': get_name_from_json(exp, 'autoanalysisname') + "_V7",
+                               'tf_config': '',
+                               'path': exp.expDir,
                                'qname': settings.SGEQUEUENAME,
                                'submit': ['Start Analysis']
                                })
@@ -46,17 +48,19 @@ def generate_http_post(exp, server):
         f = urllib.urlopen('http://%s/rundb/newanalysis/%s/0' % (server, exp.pk), params)
     except:
         f = urllib.urlopen('https://%s/rundb/newanalysis/%s/0' % (server, exp.pk), params)
-    return 
+    return
+
 
 def get_exp_from_report_name(report):
     """get the exp name from the report name"""
     exp = models.Experiment.objects.filter(results__resultsName__exact=report)
     return exp[0]
 
+
 def parse_input(input_file):
-    #make a list where each element is a line from the input file
+    # make a list where each element is a line from the input file
     parsed = input_file.readlines()
-    #get rid of extra characters
+    # get rid of extra characters
     parsed = [exp.strip() for exp in parsed]
 
     return parsed
@@ -77,16 +81,15 @@ if __name__ == '__main__':
         print "Fatal Error"
         sys.exit(1)
 
-    #make a set of exps
+    # make a set of exps
     exp_list = set()
 
-    #get the exp names from the report names
+    # get the exp names from the report names
     for report in reports:
         exp = get_exp_from_report_name(report)
         exp_list.add(exp)
-        
-    #now start the analysis, we are using a set of that each exp only has to be reran once.
+
+    # now start the analysis, we are using a set of that each exp only has to be reran once.
     for exp in exp_list:
         print "Starting analysis for : ", exp
-        generate_http_post(exp,"localhost")
-
+        generate_http_post(exp, "localhost")

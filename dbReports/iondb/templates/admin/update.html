@@ -29,11 +29,12 @@
     #release_memo {
       margin-top: 20px;
     }
-    #update_actions div {
+    .actions div {
       margin: 10px 0;
     }
-    #update_actions button {
+    .actions button {
       margin-right: 10px;
+      margin-bottom: 10px;
     }
   </style>
   <div id="content-main">
@@ -70,7 +71,7 @@
     <div id="update_control">
       <div id="interface">
         <h2 id="update_status">Checking status</h2>
-        <div id="update_actions">
+        <div id="update_actions" class="actions">
           <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
         {% if legacy_OS %}
         <div id="security_update_actions" title="All server packages with security updates will be installed when TS is updated">
@@ -147,6 +148,16 @@
         <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
       </div>
     </div>  <!--END update_control-->
+    </br>
+    <div id="maintenance_div" class="actions">
+      <h3>Website Maintenance</h3>
+      <div>
+        <button id="maintenance_enable_btn" class="maintenance">Activate</button>
+        <button id="maintenance_disable_btn" class="maintenance">Cancel</button>
+        </br>
+        <p>When Maintenance is activated all webpages other than this one will be disabled and display Maintenance mode message</p>
+      </div>
+    </div>
   </div>
   <script>
     var global_config_initial = {{ global_config_json|safe }};
@@ -294,6 +305,7 @@
           this.$("#update_confirmation").hide();
           this.$("#confirm_update").attr("disabled", "disabled");
           this.$("#update_running").slideDown('slow');
+          $('#maintenance_div').hide();
           this.poll(750);
         },
 
@@ -333,6 +345,27 @@
 
       window.controller = new UpdateControl;
 
+      $(".maintenance").click(function(){
+        $(this).prop('disabled', true);
+        $('#maintenance_div .error').remove();
+
+        var action = this.id.split('_')[1];
+        $.post("/admin/update/maintenance/" + action, function(data){
+          if (data.error){
+            $('#maintenance_div').append("<p class='error' style='color:red;'> Error: "+ data.error +"</p>")
+          } else {
+            handle_maintenance_mode(data.maintenance_mode);
+          }
+        });
+      });
+
+      handle_maintenance_mode("{{maintenance_mode}}");
     });
+
+    function handle_maintenance_mode(mode){
+      $('#maintenance_div h3').text("Website Maintenance is " + mode);
+      $('#maintenance_enable_btn').attr('disabled', mode=="ON");
+      $('#maintenance_disable_btn').attr('disabled', mode=="OFF");
+    }
   </script>
 {% endblock %}

@@ -10,6 +10,11 @@
         <li>
             <a data-toggle="tab" href="#ChefSummary">Chef Summary</a>
         </li>
+		{% if chip_efuseDict %}
+			<li>
+				<a data-toggle="tab" href="#S5ConsumableSummary">S5 Consumable Summary</a>
+			</li>
+		{% endif %}
         <li>
 			<a data-toggle="tab" href="#CalibrationReport">Calibration Report</a>
 		</li>
@@ -75,7 +80,7 @@ function precisionUnits(num, div) {
 										<a href="\##= data.Name #">See plugin results above</a>
 								# } #
 								<div class="pull-right">
-								# if (data.State.match("^(Completed|Error)")) { #
+								# if (data.State.match("^(Completed|Error|Timed Out)")) { #
 										<span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">#= precisionUnits(data.Size, 1024) #B</span>
 								# } else if (data.jobid && data.State.match("^(Queued|Started)") ) { #
 										<button class="pluginCancel btn btn-small btn-primary" title="Terminate SGE Job #= data.jobid #" data-id="#=data.id#" data-jobid="#=data.jobid#"><i class="icon-white icon-remove"></i> Stop</button>
@@ -289,7 +294,44 @@ function precisionUnits(num, div) {
             {% if not chef_info and not chefLibPrep_info %}
                 <h2>Ion Chef was not used for this run</h2>
             {% endif %}
-        </div>		
+        </div>
+
+		<div id="S5ConsumableSummary" data-title="S5 Consumable Summary" class="tab-pane">
+			{% if chip_efuseDict %}
+            	<h3>S5 Consumable Summary:</h3>
+				{% if chip_efuseDict.err %}
+					<p style="margin-left:2em"><font color="red">{{chip_efuseDict.err}}</font></p>
+				{% else %}
+					{% for key, value in chip_efuseDict.items %}
+						<p style="margin-left:.5em">{{key}}:
+							{%if "Missing" in value %}
+								<font color="red">{{value}}</font>
+							{% else %}
+								{{value}}
+							{% endif %}
+						</p>
+					{% endfor %}
+				{% endif %}
+			{% endif %}
+			{%if S5_InitLog_read %}
+            	{% if S5_InitLog_read.err %}
+					<p style="margin-left:2em"><font color="red">{{S5_InitLog_read.err}}</font></p>
+				{% elif S5_InitLog_read.msg %}
+					<p style="margin-left:2em">{{S5_InitLog_read.msg}}</p>
+				{% else %}
+					<table class="table table-striped">
+						<tr><th>Product Description</th><th>Part Number</th><th>Lot Number</th><th>Exp. Date</th><th>Remaining Uses</th></tr>
+						{% for initLog in S5_InitLog_read %}
+							<tr>
+							{% for key, value in initLog.items %}
+								<td>{{value}}</td>
+							{% endfor %}
+							</tr>
+						{% endfor %}
+					</table>
+			    {% endif %}
+			{% endif %}
+		</div>
 	</div>
 </section>
 

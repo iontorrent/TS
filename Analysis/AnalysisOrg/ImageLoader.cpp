@@ -1,7 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "ImageLoader.h"
 #include "Utils.h"
-#include "SynchDatSerialize.h"
+#include "ChipIdDecoder.h"
 
 void ImageTracker::WaitForFlowToLoad ( int flow ) // absolute flow value
 {
@@ -15,16 +15,7 @@ void ImageTracker::WaitForFlowToLoad ( int flow ) // absolute flow value
 
 void ImageTracker::FireUpThreads()
 {
-  if (doingSdat)
-  {
-    cout <<  "Doing sdats" << endl;
-    pthread_create (&loaderThread, NULL, FileSDatLoader, &master_img_loader);
-  }
-  else
-  {
-    cout <<  "Doing regular dats" << endl;
     pthread_create (&loaderThread, NULL, FileLoader, &master_img_loader);
-  }
 }
 
 void ImageTracker::AllocateImageBuffers(int ignoreChecksumErrors, int total_timeout)
@@ -48,33 +39,23 @@ void ImageTracker::AllocateReadAndProcessFlags()
   memset ( CurProcessed, 0, flow_buffer_size*sizeof ( unsigned int ) );
 }
 
-void ImageTracker::AllocateSdatBuffers()
-{
-    sdat = new SynchDat[flow_buffer_size];
-}
-
 void ImageTracker::NothingInit()
 {
   img = NULL;
-  sdat = NULL;
   CurRead = NULL;
   CurProcessed=NULL;
-  doingSdat = false;
 }
 
-ImageTracker::ImageTracker ( int _flow_buffer_size, int ignoreChecksumErrors, bool _doingSdat, int total_timeout )
+ImageTracker::ImageTracker ( int _flow_buffer_size, int ignoreChecksumErrors, int total_timeout )
 {
   flow_buffer_size = _flow_buffer_size;
 
   NothingInit();
-  doingSdat = _doingSdat;
   
   AllocateImageBuffers(ignoreChecksumErrors, total_timeout);
   
   AllocateReadAndProcessFlags();
 
-  if (doingSdat)
-    AllocateSdatBuffers();
 }
 
 int ImageTracker::FlowBufferFromFlow(int flow)
@@ -87,8 +68,6 @@ void ImageTracker::FinishFlow ( int flow )
   int flow_buffer_for_flow = FlowBufferFromFlow(flow);
   
   img[flow_buffer_for_flow].Close();
-  if (doingSdat)
-    sdat[flow_buffer_for_flow].Close();
    ( ( int volatile * ) CurProcessed ) [flow_buffer_for_flow] = 1;
 }
 
@@ -107,12 +86,6 @@ void ImageTracker::DeleteImageBuffers()
   img=NULL;
 }
 
-void ImageTracker::DeleteSdatBuffers()
-{
-  if ( sdat != NULL ) delete [] sdat;
-  sdat = NULL;
-}
-
 ImageTracker::~ImageTracker()
 {
   // spin down our threads when we go out of scope
@@ -121,7 +94,6 @@ ImageTracker::~ImageTracker()
   DeleteImageBuffers();
   
   DeleteFlags();
-  DeleteSdatBuffers();
 }
 
 
@@ -145,8 +117,6 @@ void ImageTracker::SetUpImageLoaderInfo (const CommandLineOpts &inception_state,
   master_img_loader.flow_block_sequence = flow_block_sequence;
   
   master_img_loader.img = img;  // just use ImageTracker object instead?
-  master_img_loader.sdat = sdat;
-  master_img_loader.doingSdat = doingSdat;
   
   master_img_loader.pinnedInFlow = a_complex_mask.pinnedInFlow;
   master_img_loader.mask = a_complex_mask.my_mask;
@@ -164,6 +134,7 @@ void ImageTracker::SetUpImageLoaderInfo (const CommandLineOpts &inception_state,
   
   master_img_loader.dat_source_directory = inception_state.sys_context.dat_source_directory;
   master_img_loader.acqPrefix = inception_state.img_control.acqPrefix;
+  master_img_loader.datPostfix = inception_state.img_control.datPostfix;
   
   master_img_loader.numFlowsPerCycle = inception_state.flow_context.numFlowsPerCycle; // @TODO: really?  is this even used correctly
   master_img_loader.hasWashFlow = inception_state.img_control.has_wash_flow;  

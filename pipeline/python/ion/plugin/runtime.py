@@ -3,6 +3,7 @@
 import logging
 import json
 
+
 def parseJsonFile(jsonFile):
     try:
         with open(jsonFile, 'r') as f:
@@ -12,8 +13,11 @@ def parseJsonFile(jsonFile):
         return None
     return result
 
-## Mixin Class for some runtime methods
+# Mixin Class for some runtime methods
+
+
 class IonPluginRuntime(object):
+
     """
     Helper functions for plugin runtime
 
@@ -42,7 +46,7 @@ class IonPluginRuntime(object):
             headers = {'content-type': 'application/json'}
 
             query_url = '/'.join(s + '/' for s in (api_url, api_version, resource))
-            return (query_url, { 'params': params, 'headers': headers, })
+            return (query_url, {'params': params, 'headers': headers, })
 
         (url, args) = get_apiurl(resource, params)
         while True:
@@ -78,4 +82,3 @@ class IonPluginRuntime(object):
         except:
             self.log.exception("Error reading start plugin json")
         return {}
-

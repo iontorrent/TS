@@ -19,6 +19,7 @@
 #include "DPTreephaser.h"
 #include "OptArgs.h"
 #include "BaseCallerUtils.h"
+#include "WellsNormalization.h"
 
 using namespace std;
 
@@ -47,7 +48,7 @@ public:
   //! @param  use_single_core     Do not use multithreading?
 //  void DoPhaseEstimation(RawWells *wells, Mask *mask, int num_flows, int region_size_x, int region_size_y,
 //      const string& flow_order, const vector<KeySequence>& keys, bool use_single_core);
-  void DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, bool use_single_core);
+  void DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, int num_workers);
 
   bool HaveEstimates() const { return have_phase_estimates_; };
 
@@ -87,6 +88,7 @@ public:
   //! @param    json                Json value object
   void ExportTrainSubsetToJson(Json::Value &json);
 
+  ion::FlowOrder const   *full_flow_order;        //!< Pointer to flow order object for run
 
 protected:
 
@@ -188,8 +190,10 @@ protected:
   float                 init_dr_;                 //!< Default dr value for starting nelder mead
 
   // Normalization algorithm selection
-  //bool           use_pid_norm_;            //!< Flag indicating if we should use regular or PID normalization
+  //bool                use_pid_norm_;            //!< Flag indicating if we should use regular or PID normalization
   string                normalization_string_;    //!< Normalization method
+  string                wells_norm_method_;       //!< Method to do wells file normalization
+  WellsNormalization    *wells_norm_;             //!< Pointer to wells file normalization class
 
   // Data needed by SpatialRefiner worker threads
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation
@@ -228,9 +232,11 @@ protected:
   int                   num_region_iterations_;   //!< Number of iterations after block division.
   unsigned int          num_reads_per_region_;    //!< Target number of reads per region that are used for phase estimation
   unsigned int          min_reads_per_region_;    //!< Minimum number of reads per region to try phase estimation
+
+  // Program flow variables
   string                phase_file_name_;         //!< Load phasing estimates from a file.
   bool                  have_phase_estimates_;    //!< Signals whether parameters have been set from the outside or if estimation is desired.
-
+  bool                  just_phase_estimation_;   //!< Flag whether BaseCaller is in phase-estimation-only mode
 };
 
 

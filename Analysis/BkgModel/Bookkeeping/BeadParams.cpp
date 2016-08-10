@@ -32,6 +32,13 @@ void BeadParams::ApplyLowerBound (bound_params *bound, int flow_block_size)
   MIN_BOUND_CHECK (dmult);
 };
 
+void BeadParams::ApplyAmplitudeDrivenKmultLimit(int flow_block_size, float min_threshold){
+  for (int i=0; i<flow_block_size; i++){
+    if (Ampl[i]*Copies<min_threshold)
+      kmult[i]= 1.0f;
+  }
+}
+
 
 void BeadParams::ApplyAmplitudeZeros (const int *zero, int flow_block_size)
 {
@@ -42,9 +49,9 @@ void BeadParams::ApplyAmplitudeZeros (const int *zero, int flow_block_size)
 void bound_params::SetBeadStandardHigh ()
 {
 
-    Ampl = LAST_POISSON_TABLE_COL; // max achievable value in the software
+    Ampl = LAST_POISSON_TABLE_COL-0.5; // max achievable value in the software minus a little
     // Ampl = MAXAMPL; // some lower value we want to restrain
-    kmult = 1.0f;
+    kmult = 1.75f; // used to be 1.0, but that's silly if we have some average value
 
   Copies = 30.0f;
   gain   = 1.1f;
@@ -56,7 +63,7 @@ void bound_params::SetBeadStandardLow (float AmplLowerLimit)
 {
 
   Ampl  = AmplLowerLimit;
-  kmult = 0.25f;
+  kmult = 0.65f;
 
   Copies = 0.05f;
   gain   = 0.9f;

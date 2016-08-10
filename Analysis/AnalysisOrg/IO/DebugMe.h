@@ -18,7 +18,6 @@
 #include "Utils.h"
 #include "SpecialDataTypes.h"
 #include "SeqList.h"
-#include "ChipIdDecoder.h"
 #include "OptBase.h"
 
 class HashTable_xyflow {

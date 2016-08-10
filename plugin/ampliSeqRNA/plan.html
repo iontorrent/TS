@@ -23,8 +23,6 @@
  <script>
   $(function() {
     // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
-    $('#ercc').attr('checked',false);
-    $('#uniquemaps').attr('checked',false);
     $("#uniquereads").hide();
   });
  </script>
@@ -46,12 +44,12 @@
      <td><span class="help"
        title="Check if this AmpliSeq-RNA library employed ERCC amplicons for performance tracking.">
        ERCC Tracking:</span></td>
-     <td><input type="checkbox" id="ercc" name="ercc" checked="checked" value="Yes"/></td> </tr>
+     <td><input type="checkbox" id="ercc" name="ercc" value="Yes"/></td> </tr>
     <tr id="uniquereads">
      <td><span class="help"
        title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
        Use Only Uniquely Mapped Reads:</span></td>
-     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes" checked="checked"/></td> </tr>
+     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes"/></td> </tr>
    </table>
    <input type="hidden" id="launch_mode" name="launch_mode" value="Autostart with plan plugin configuration"/>
    <br/>

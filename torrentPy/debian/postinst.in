@@ -1,0 +1,16 @@
+#!/bin/bash
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+
+case "$1" in
+    configure)
+        #configure dynamic linker run-time bindings after library installation under /usr/local/lib
+        ldconfig
+        python @CMAKE_INSTALL_PREFIX@/tmp/setup.py install
+        rm -r @CMAKE_INSTALL_PREFIX@/tmp
+    ;;
+esac
+
+exit 0

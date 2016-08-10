@@ -9,6 +9,7 @@ import requests
 api_url = "http://localhost/rundb/api/v1/content/register/%s/"
 headers = {"Content-type": "application/json"}
 
+
 def register(files, meta):
     print '....register files: %s' % files
     session = requests.Session()
@@ -22,7 +23,7 @@ def register(files, meta):
             'path': '/' + meta['reference'] + '/' + os.path.basename(my_file),
             'meta': meta
         }
-        r = session.post(url, data = json.dumps(payload), headers=headers)
+        r = session.post(url, data=json.dumps(payload), headers=headers)
         r.raise_for_status()
         print '....registered %s' % payload['path']
 
@@ -31,14 +32,14 @@ def main():
     try:
         with open(meta_file) as f:
             meta = json.load(f)
-            print '....meta: %s' % json.dumps(meta,indent=1)
+            print '....meta: %s' % json.dumps(meta, indent=1)
 
         files = meta.get('validate_files') or [upload_file]
         if len(files) < 1:
             raise Exception('No files to process, exiting.')
         else:
             register(files, meta)
-        
+
     except Exception as e:
         print 'Error: %s' % e
         sys.exit(1)
@@ -47,7 +48,7 @@ def main():
 if __name__ == '__main__':
 
     args = sys.argv
-        
+
     try:
         upload_id = args[1]
         path = args[2]
@@ -59,5 +60,5 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print 'Started register'
-        
+
     main()

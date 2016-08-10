@@ -30,7 +30,6 @@ from iondb.rundb.forms import EditReferenceGenome
 from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
 from iondb.rundb import tasks, publishers
 
-from iondb.rundb.tasks import build_tmap_index
 from iondb.rundb.configure.util import plupload_file_upload
 
 logger = logging.getLogger(__name__)
@@ -132,7 +131,7 @@ def _read_genome_info(info_path):
     except IOError as err:
         logger.error("Could not read genome info file '{0}': {1}".format(info_path, err))
         return None
-    
+
     return genome_dict
 
 
@@ -379,127 +378,61 @@ def search_for_genomes():
 
 
 @login_required
-def new_genome(request):
-    """This is the page to create a new genome. 
-    """
-    def is_fasta(filename):
-        ext = os.path.splitext(filename)[1]
-        return ext.lower() in ['.fasta', '.fas', '.fa', '.fna', '.seq']
-
-
+def add_custom_genome(request):
+    ''' Import custom genome via file upload or URL '''
     if request.method == "POST":
-        # parse the data sent in
-        #required
-        name = request.POST.get('name', False)
-        short_name = request.POST.get('short_name', False)
-        fasta = request.POST.get('target_file', False)
-        version = request.POST.get('version', "")
-        notes = request.POST.get('notes', "")
+        url = request.POST.get("reference_url", None)
+        target_file = request.POST.get('target_file', False)
+        reference_args = {
+            "short_name": request.POST.get("short_name"),
+            "name": request.POST.get("name"),
+            "version": request.POST.get("version", ""),
+            "notes": request.POST.get("notes", ""),
+            "index_version": ""
+        }
 
-        #optional
-        read_exclude_length = request.POST.get('read_exclude_length', False)
+        if target_file:
+            # import via file upload
+            reference_path = os.path.join(settings.TEMP_PATH, target_file)
+            reference_args["source"] = reference_path
 
-        #URL download
-        url = request.POST.get('url', False)
-        reference_path = os.path.join(settings.TEMP_PATH, fasta)
-        why_delete = ""
-
-        #if any of those were false send back a failed message
-        if not all((name, short_name, fasta)):
-            return render_to_json({"status": "Form validation failed", "error": True})
-
-        if not set(short_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-+"):
-            return render_to_json({"status": "The short name has invalid characters. Valid values are letters, numbers, and '_.-+'.", "error": True})
-
-        #TODO: check to make sure the zip file only has one fasta or fa
-        if not url:
-            #check to ensure the size on the OS the same as the reported.
+            # check expected file size
+            failed = False
             reported_file_size = request.POST.get('reported_file_size', False)
-
             try:
                 uploaded_file_size = str(os.path.getsize(reference_path))
+                if reported_file_size and (reported_file_size != uploaded_file_size):
+                    failed = "Upload error: uploaded file size is incorrect"
             except OSError:
-                return render_to_json({"status": "The FASTA temporary files was not found", "error": True})
+                failed = "Upload error: temporary file not found"
 
-            if reported_file_size != uploaded_file_size:
-                why_delete = "The file you uploaded differs from the expected size. This is due to an error uploading."
-
-            if not (is_fasta(fasta) or fasta.lower().endswith(".zip")):
-                why_delete = "The file you uploaded does not have a FASTA or ZIP extension.  It must be a plain text a Zip compressed fasta file."
-        is_zip = zipfile.is_zipfile(reference_path)
-        if is_zip:
-            zip_file = zipfile.ZipFile(reference_path, 'r')
-            files = zip_file.namelist()
-            # MAC OS zip is being compressed with __MACOSX folder Ex: '__MACOSX/', '__MACOSX/._contigs_2.fasta'.
-            # Filter out those files and Upload only FASTA file
-            files = [x for x in files if not 'MACOSX' in x]
-            zip_file.close()
-        else:
-            files = [fasta]
-        fasta_files = filter(lambda x: is_fasta(x), files)
-
-        if len(fasta_files) != 1:
-            why_delete = "Error: upload must contain exactly one fasta file"
-        else:
-            target_fasta_file = fasta_files[0]
-
-        if why_delete:
             try:
-                os.remove(reference_path)
-            except OSError:
-                why_delete += " The FASTA file could not be deleted."
-            logger.warning("User uploaded bad fasta file: " + str(why_delete))
-            return render_to_json({"status": why_delete, "error": True})
+                new_reference_genome(reference_args, None, target_file)
+            except Exception as e:
+                failed = str(e)
 
-        #Make an genome ref object
-        if ReferenceGenome.objects.filter(short_name=short_name, index_version=settings.TMAP_VERSION):
-            #check to see if the genome already exists in the database with the same version
-            return render_to_json({"status": "Failed - Genome with this short name and index version already exist.", "error": True})
-        ref_genome = ReferenceGenome()
-        ref_genome.name = name
-        ref_genome.short_name = short_name
-        ref_genome.version = version
-        ref_genome.notes = notes
-        ref_genome.status = "preprocessing"
-        ref_genome.enabled = False
-        ref_genome.index_version = settings.TMAP_VERSION
-        ref_genome.save()
-        logger.debug("Created new reference: %d/%s" % (ref_genome.pk, ref_genome))
+            if failed:
+                try:
+                    os.remove(reference_path)
+                except OSError:
+                    failed += " The FASTA file could not be deleted."
 
-        temp_dir = tempfile.mkdtemp(suffix=short_name, dir=settings.TEMP_PATH)
-        temp_upload_path = os.path.join(temp_dir, fasta)
-        os.chmod(temp_dir, 0777)
-        os.rename(reference_path, temp_upload_path)
-        monitor = FileMonitor(
-            local_dir=temp_dir,
-            name=fasta
-        )
-        monitor.save()
-        ref_genome.file_monitor = monitor
-        ref_genome.reference_path = temp_upload_path
-        ref_genome.save()
-
-
-        index_task = tasks.build_tmap_index.subtask((ref_genome.id,), immutable=True)
-        if is_zip:
-            result = tasks.unzip_reference.apply_async(
-                args=(ref_genome.id, target_fasta_file),
-                link=index_task
-            )
+                logger.error("Failed uploading genome file: " + failed)
+                return render_to_json({"status": failed, "error": True})
+            else:
+                return render_to_json({"error": False})
         else:
-            result = tasks.copy_reference.apply_async(
-                args=(ref_genome.id,), 
-                link=index_task
-            )
-        ref_genome.status = "queued"
-        ref_genome.celery_task_id = result.task_id
-        ref_genome.save()
-        return render_to_json({"status": "The genome index is being created.  This might take a while, check the status on the references tab. \
-                                You are being redirected there now.", "error": False})
+            # import via URL
+            reference_args["source"] = url
+            try:
+                new_reference_genome(reference_args, url, None)
+            except Exception as e:
+                return render_to_json({"status": str(e), "error": True})
+            else:
+                return HttpResponseRedirect(urlresolvers.reverse("configure_references"))
 
     elif request.method == "GET":
-        ctx = RequestContext(request, {})
-        return render_to_response("rundb/configure/modal_references_new_genome.html", context_instance=ctx)
+        return render_to_response("rundb/configure/modal_references_new_genome.html", context_instance=RequestContext(request, {}))
 
 
 @login_required
@@ -509,7 +442,7 @@ def start_index_rebuild(request, reference_id):
         """
         logger.info("Queuing TMAP reference index rebuild of %s" % reference.short_name)
         reference.status = "indexing"
-        result = build_tmap_index.delay(reference.id)
+        result = tasks.build_tmap_index.delay(reference.id)
         reference.celery_task_id = result.task_id
         reference.save()
     data = {"references": []}
@@ -528,6 +461,7 @@ def start_index_rebuild(request, reference_id):
                                    "short_name": reference.short_name})
     return HttpResponse(json.dumps(data), mimetype="application/json")
 
+
 def get_references():
     h = httplib2.Http()
     response, content = h.request(settings.REFERENCE_LIST_URL)
@@ -539,18 +473,11 @@ def get_references():
             ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
             ref["notes"] = ref["meta"].get("notes", '')
             ref["installed"] = installed.get(ref['meta']['identity_hash'], None)
-            ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation","")))
+            ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation", "")))
+            ref["reference_mask_encoded"] = ref.get("reference_mask", None)
         return references
     else:
         return None
-
-
-def new_reference_download(url, reference_args):
-    reference = ReferenceGenome(**reference_args)
-    reference.enabled = False
-    reference.status = "downloading"
-    reference.save()
-    return start_reference_download(url, reference)
 
 
 def download_genome_annotation(annotation_lists, reference_args):
@@ -564,17 +491,20 @@ def download_genome_annotation(annotation_lists, reference_args):
 
 @login_required
 def download_genome(request):
+    # called by "Import Preloaded Ion References"
     if request.method == "POST":
         reference_meta = request.POST.get("reference_meta", None)
         ref_annot_update = request.POST.get("ref_annot_update", None)
         reference_args = json.loads(base64.b64decode(reference_meta))
         annotation_meta = request.POST.get("missingAnnotation_meta", None)
+        reference_mask_info = request.POST.get("reference_mask", None)
+
         if annotation_meta:
-            annotation_data =  json.loads(base64.b64decode(annotation_meta))
+            annotation_data = json.loads(base64.b64decode(annotation_meta))
             annotation_lists = annotation_data
 
         # Download and register only the Ref Annotation file if Reference Genome is already Imported
-        # If not, download refAnnot file and Reference Genome asynchronously 
+        # If not, download refAnnot file and Reference Genome asynchronously
         if annotation_data and ref_annot_update:
             logger.debug("Downloading Annotation File {0} with meta {1}".format(annotation_data, reference_meta))
             if annotation_lists:
@@ -585,23 +515,28 @@ def download_genome(request):
             if url is not None:
                 if annotation_lists:
                     download_genome_annotation(annotation_lists, reference_args)
-                new_reference_download(url, reference_args)
+
+                try:
+                    new_reference_genome(reference_args, url, reference_mask_filename=reference_mask_info)
+                except Exception as e:
+                    return render_to_json({"status": str(e), "error": True})
 
         return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
 
-    references = get_references() or []
-    downloads = FileMonitor.objects.filter(tags__contains="reference").order_by('-created')
-    downloads_annot = FileMonitor.objects.filter(tags__contains="reference_annotation").order_by('-created')
+    elif request.method == "GET":
+        references = get_references() or []
+        downloads = FileMonitor.objects.filter(tags__contains="reference").order_by('-created')
+        downloads_annot = FileMonitor.objects.filter(tags__contains="reference_annotation").order_by('-created')
 
-    (references, downloads_annot) = get_annotation(references, downloads_annot)
+        (references, downloads_annot) = get_annotation(references, downloads_annot)
 
-    ctx = {
-        'downloads': downloads,
-        'downloads_annot' : downloads_annot,
-        'references': references
-    }
-    return render_to_response("rundb/configure/reference_download.html", ctx,
-        context_instance=RequestContext(request))
+        ctx = {
+            'downloads': downloads,
+            'downloads_annot': downloads_annot,
+            'references': references
+        }
+        return render_to_response("rundb/configure/reference_download.html", ctx, context_instance=RequestContext(request))
+
 
 def validate_annotation_url(remoteAnnotUrl):
     isValid = True
@@ -612,7 +547,7 @@ def validate_annotation_url(remoteAnnotUrl):
     except urllib2.HTTPError, err:
         isValid = False
         if err.code == 404:
-            logger.debug("HTTP Error: {0}. Please contact TS administrator  {1}".format(err,remoteAnnotUrl))
+            logger.debug("HTTP Error: {0}. Please contact TS administrator  {1}".format(err, remoteAnnotUrl))
             ctx['msg'] = "HTTP Error: {0}. Please contact TS administrator.".format(err.msg)
         else:
             logger.debug("Error in validate_annotation_url({0})".format(err))
@@ -629,7 +564,7 @@ def validate_annotation_url(remoteAnnotUrl):
 def get_annotation(references, downloads_annot):
     for ref in references:
         annotation_meta = ref.get('annotation_encoded', None)
-        annotation_data =  json.loads(base64.b64decode(annotation_meta))
+        annotation_data = json.loads(base64.b64decode(annotation_meta))
         missingAnnotation = []
 
         if not annotation_data:
@@ -709,36 +644,42 @@ def get_annotation(references, downloads_annot):
                         ref['isAnnotCompleted'] = None
 
         ref["missingAnnotation_meta"] = base64.b64encode(json.dumps(missingAnnotation))
-        ref["missingAnnotation_data"] =  json.loads(base64.b64decode(ref["missingAnnotation_meta"]))
+        ref["missingAnnotation_data"] = json.loads(base64.b64decode(ref["missingAnnotation_meta"]))
 
     return (references, downloads_annot)
 
 
-@login_required
-def references_custom_download(request):
-    if request.method == "POST":
-        url = request.POST.get("reference_url", None)
-        reference_args = {
-            "enabled": False,
-            "short_name": request.POST.get("short_name"),
-            "name": request.POST.get("name"),
-            "version": request.POST.get("version"),
-            "notes": request.POST.get("notes"),
-            "source": url,
-            "index_version": ""
-        }
-        new_reference_download(url, reference_args)
-    return HttpResponseRedirect(urlresolvers.reverse("configure_references"))
+def new_reference_genome(reference_args, url=None, reference_file=None, callback_task=None, reference_mask_filename=None):
+    # check if the genome already exists
+    if ReferenceGenome.objects.filter(short_name=reference_args['short_name'], index_version=settings.TMAP_VERSION):
+        raise Exception("Failed - Genome %s already exists" % reference_args['short_name'])
+
+    reference = ReferenceGenome(**reference_args)
+    reference.enabled = False
+    reference.status = "queued"
+    reference.save()
+
+    if url:
+        async_result = start_reference_download(url, reference, callback_task, reference_mask_filename=reference_mask_filename)
+    elif reference_file:
+        async_result = tasks.install_reference.apply_async(((reference_file, None), reference.id), link=callback_task)
+    else:
+        raise Exception('Failed creating new genome reference: No source file')
+
+    reference.celery_task_id = async_result.task_id
+    reference.save()
+    return reference
 
 
-def start_reference_download(url, reference, callback=None):
+def start_reference_download(url, reference, callback=None, reference_mask_filename=None):
     monitor = FileMonitor(url=url, tags="reference")
     monitor.save()
+    reference.status = "downloading"
     reference.file_monitor = monitor
     reference.save()
     try:
         download_args = (url, monitor.id, settings.TEMP_PATH)
-        install_callback = tasks.install_reference.subtask((reference.id,))
+        install_callback = tasks.install_reference.subtask((reference.id, reference_mask_filename))
         if callback:
             install_callback.link(callback)
         async_result = tasks.download_something.apply_async(download_args, link=install_callback)

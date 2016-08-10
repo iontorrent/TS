@@ -31,6 +31,7 @@
 	                                    	{% endif %}
 	                                        <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
 	                                        <input type="hidden" name="annotation_meta" value="{{ ref.annotation_encoded }}" />
+	                                        <input type="hidden" name="reference_mask" value="{{ ref.reference_mask }}" />
 	                                        {% if ref.isAnnotCompleted and not ref.isNewAnnotPosted and not ref.noLink %}
 	                                        	<a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.isAnnotCompleted }}</a>
 	                                        {% else %}
@@ -48,6 +49,7 @@
                                         <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
                                         <input type="hidden" name="reference_url" value="{{ ref.url }}" />
                                         <input type="hidden" name="missingAnnotation_meta" value="{{ ref.missingAnnotation_meta }}" />
+                                        <input type="hidden" name="reference_mask" value="{{ ref.reference_mask }}" />
                                         <input type="submit" class="btn btn-small" value="Import" />
                                     </form>
                                     <p><strong>{{ ref.name }}</strong></p>

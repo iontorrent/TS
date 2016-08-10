@@ -276,11 +276,16 @@ tmap_map_sam_copy_and_nullify(tmap_map_sam_t *dest, tmap_map_sam_t *src);
   @param  bidirectional  1 if a bidirectional SAM tag is to be added, 0 otherwise
   @param  seq_eq        1 if the SEQ field is to use '=' symbols, 0 otherwise
   @param  min_al_len    skip alignments shorter then min_al_len; do not skip anythong if min_al_len is 0
+  @param  min_al_cov    skip alignments covering less then min_al_cov fraction of read; do not filter if min_al_cov is 0
+  @param  min_identity  skip alignments with identity less then min_identity; do not filter if min_identity is 0
+  @param  match_score   match score to use in identity filtering
+  @param  filtered      pointer to the 64-bit filtering events counter
   @return  the BAM records for this read
   */
 tmap_map_bam_t*
-tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sams, int32_t end_num, 
-                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, int32_t min_al_len);
+tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sams, int32_t end_num,
+                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq,
+                    int32_t min_al_len, double min_coverage, double min_identity, int32_t match_score, uint64_t* filtered);
 
 /*!
   keep only the mappings with the given score 

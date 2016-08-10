@@ -42,10 +42,6 @@
 #  service: name=gridengine-master state=running
   shell: bash -lc '/etc/init.d/gridengine-master restart && sleep 5'
   
-## N.B.  This is non-intuitive that in our configuration, the gridengine master also is exec host.
-#- name: Make sure gridengine-exec is running by restarting it
-#  shell: bash -lc '/etc/init.d/gridengine-exec restart'
-
 # add submission host
 - name: Add server as submission host
   shell: bash -lc 'qconf -as {{ansible_hostname}}'
@@ -76,7 +72,7 @@
   register: p
   
 - include_vars: "../../../group_vars/PowerEdge T620 PGM"
-  when: "p.stat.exists == false and '{{ansible_product_name}}' == 'PowerEdge T620'"
+  when: "p.stat.exists == false and ansible_product_name == 'PowerEdge T620'"
  
 ## TS-11618.  This operation fails when there are jobs in the queue.  Running this playbook
 ## without removing the queues works as expected.  I submit removing queues is not required.
@@ -96,7 +92,7 @@
   
 # Raptor A hardware has 40GB RAM; needs modified plugin.q memory limits
 - name: S5 TSVM RAM = 40GB limit
-  when: "{{S5_virtual_guest|bool}}"
+  when: S5_virtual_guest|bool
   set_fact:
     S_VMEM_LIMIT: 40GB
     H_VMEM_LIMIT: 40GB

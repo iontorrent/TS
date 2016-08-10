@@ -12,12 +12,6 @@
 
 class BkgFitMatDat;
 
-/* #ifdef ION_USE_MKL */
-/* #include <mkl_cblas.h> */
-/* #else */
-/* #include <cblas.h> */
-/* #endif */
-
 //#define BKG_FIT_MAX_FLOWS   20
 
 // identifiers for all the partial derivatives that might be used in the fit

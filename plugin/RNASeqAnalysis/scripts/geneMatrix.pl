@@ -79,7 +79,7 @@ while(<>) {
   ++$lnum;
 }
 # add in data for last file
-if( $fnum > 1 ) {
+if( $fnum ) {
   my $rpm = ($toRPM && $nrds) ? 1000000 / $nrds : 1;
   for( my $i = 0; $i < scalar(@reads); ++$i ) {
     my $rds = $reads[$i] * $rpm;

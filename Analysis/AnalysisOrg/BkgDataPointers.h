@@ -47,6 +47,8 @@ class BkgDataPointers {
       m_beads_bestRegion_location = NULL;
       m_beads_bestRegion_predicted = NULL;
       m_beads_bestRegion_corrected = NULL;
+      m_beads_bestRegion_original = NULL;
+      m_beads_bestRegion_sbg = NULL;
       m_beads_bestRegion_amplitude = NULL;
       m_beads_bestRegion_residual = NULL;
       m_beads_bestRegion_kmult = NULL;
@@ -55,13 +57,20 @@ class BkgDataPointers {
       m_beads_bestRegion_R = NULL;
       m_beads_bestRegion_gainSens = NULL;
       m_beads_bestRegion_fittype = NULL;
+      m_beads_bestRegion_converged = NULL;
       m_beads_bestRegion_timeframe = NULL;
       m_beads_bestRegion_taub = NULL;
+      m_beads_bestRegion_etbR = NULL;
+      m_beads_bestRegion_bkg_leakage = NULL;
+      m_beads_bestRegion_initAk = NULL;
+      m_beads_bestRegion_tms = NULL;
 
       m_beads_regionSamples_location = NULL;
       m_beads_regionSamples_predicted = NULL;
       m_beads_regionSamples_corrected = NULL;
-      m_beads_regionSamples_amplitude = NULL;
+      m_beads_regionSamples_original = NULL;
+      m_beads_regionSamples_sbg = NULL;
+        m_beads_regionSamples_amplitude = NULL;
       m_beads_regionSamples_residual = NULL;
       m_beads_regionSamples_kmult = NULL;
       m_beads_regionSamples_dmult = NULL;
@@ -69,8 +78,13 @@ class BkgDataPointers {
       m_beads_regionSamples_R = NULL;
       m_beads_regionSamples_gainSens = NULL;
       m_beads_regionSamples_fittype = NULL;
+      m_beads_regionSamples_converged = NULL;
+      m_beads_regionSamples_bkg_leakage = NULL;
+      m_beads_regionSamples_initAk = NULL;
+      m_beads_regionSamples_tms = NULL;
       m_beads_regionSamples_timeframe = NULL;
       m_beads_regionSamples_taub = NULL;
+      m_beads_regionSamples_etbR = NULL;
       m_beads_regionSamples_regionParams = NULL;
 
       m_beads_xyflow_predicted = NULL;
@@ -145,7 +159,10 @@ public: // should be private eventually and use set/get to access them
   // bestRegion beads
   DataCube<int> *m_beads_bestRegion_location;
   DataCube<int> *m_beads_bestRegion_fittype;
+  DataCube<int> *m_beads_bestRegion_converged;
   DataCube<float> *m_beads_bestRegion_corrected;
+  DataCube<float> *m_beads_bestRegion_original;
+  DataCube<float> *m_beads_bestRegion_sbg;
   DataCube<float> *m_beads_bestRegion_predicted;
   DataCube<float> *m_beads_bestRegion_amplitude;
   DataCube<float> *m_beads_bestRegion_residual;
@@ -156,10 +173,17 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_beads_bestRegion_gainSens;
   DataCube<float> *m_beads_bestRegion_timeframe;
   DataCube<float> *m_beads_bestRegion_taub;
+  DataCube<float> *m_beads_bestRegion_etbR;
+  DataCube<float> *m_beads_bestRegion_bkg_leakage;
+  DataCube<float> *m_beads_bestRegion_initAk;
+  DataCube<float> *m_beads_bestRegion_tms;
 
   // regionSamples beads
   DataCube<int> *m_beads_regionSamples_location;
   DataCube<int> *m_beads_regionSamples_fittype;
+  DataCube<int> *m_beads_regionSamples_converged;
+  DataCube<float> *m_beads_regionSamples_original;
+  DataCube<float> *m_beads_regionSamples_sbg;
   DataCube<float> *m_beads_regionSamples_corrected;
   DataCube<float> *m_beads_regionSamples_predicted;
   DataCube<float> *m_beads_regionSamples_amplitude;
@@ -171,6 +195,10 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_beads_regionSamples_gainSens;
   DataCube<float> *m_beads_regionSamples_timeframe;
   DataCube<float> *m_beads_regionSamples_taub;
+  DataCube<float> *m_beads_regionSamples_etbR;
+  DataCube<float> *m_beads_regionSamples_bkg_leakage;
+  DataCube<float> *m_beads_regionSamples_initAk;
+  DataCube<float> *m_beads_regionSamples_tms;
   DataCube<float> *m_beads_regionSamples_regionParams;
 
   // traceOutput for positions specified in sse/xyf/rcf files

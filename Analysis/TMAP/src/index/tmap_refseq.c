@@ -1155,15 +1155,22 @@ tmap_refseq_get_id(tmap_refseq_t *refseq, char *chr)
     return -1;
 }
 
+static char *strsave(char *s)
+{
+    char *t = malloc(sizeof(char)*(strlen(s)+1));
+    strcpy(t, s);
+    return t;
+}
+
 // ZZ:The bed file need to be sorted by start positions.
-int
-tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
+static int
+tmap_refseq_read_bed_core(tmap_refseq_t *refseq, char *bedfile, int flag, char **chrs, int max_num_chr)
 {
     if (bedfile == NULL) {
 	refseq->bed_exist = 0;
 	return 1;
     }
-    if (refseq->num_annos == 0) {
+    if (flag == 0 && refseq->num_annos == 0) {
 	refseq->bed_exist = 0;
 	tmap_error("Refseq does not have any contigs, cannot read bed file", Warn, OutOfRange);	
 	return 0;
@@ -1176,6 +1183,7 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
     int32_t seq_id = -1;
     uint32_t num = 0, *b = NULL, *e = NULL, memsize = 0;
     uint32_t n_anno = refseq->num_annos;
+    if (flag) n_anno = max_num_chr;
     refseq->bednum =  tmap_malloc(sizeof(uint32_t) * n_anno, "refseq->bednum"); 
     refseq->bedstart = tmap_malloc(sizeof(uint32_t *) * n_anno, "refseq->bedstart");
     refseq->bedend =  tmap_malloc(sizeof(uint32_t *) * n_anno, "refseq->bedend");
@@ -1197,8 +1205,9 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 		num = 0;
 		refseq->bedstart[seq_id] = b;
 		refseq->bedend[seq_id] = e;
+		if (flag) chrs[seq_id] = strsave(last_chr);
 	    }
-	    int32_t next_id = tmap_refseq_get_id(refseq, chr);
+	    int32_t next_id = flag? seq_id+1 : tmap_refseq_get_id(refseq, chr);
 	    if (next_id < 0 || next_id <= seq_id) {
 		fprintf(stderr, "ZZ warning %s %d\t%d\n", chr, seq_id, next_id);
 		tmap_error("Bed file is not sorted by chromosome order", Warn,  OutOfRange);
@@ -1206,6 +1215,9 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 		return 0;
 	    }
 	    seq_id = next_id;
+	    if (flag && seq_id > n_anno) {
+		tmap_error("exceed the max number of chromosomes", Warn, OutOfRange);
+	    }
 	    strcpy(last_chr, chr);
 	    b = tmap_malloc(sizeof(uint32_t) *memsize, "tmpb");
 	    e = tmap_malloc(sizeof(uint32_t) *memsize, "tmpe");
@@ -1235,7 +1247,138 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 	refseq->bednum[seq_id] = num;
         refseq->bedstart[seq_id] = b;
         refseq->bedend[seq_id] = e;
+	if (flag) chrs[seq_id] = strsave(last_chr);
     }
+    if (flag) refseq->beditem = seq_id+1;
     fclose (fp);
     return 1;
+}
+
+int
+tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile) 
+{
+    return tmap_refseq_read_bed_core(refseq, bedfile, 0, NULL, 0);
+}
+
+static void
+find_next_bed(tmap_refseq_t *refseq, int cur_ind, int cur_pos, int *b, int *e, int *n)
+{
+    int i = *n;
+    *b = -1;
+    while (i < refseq->bednum[cur_ind] && refseq->bedend[cur_ind][i] < cur_pos) i++;
+    *n = i;
+    if (i < refseq->bednum[cur_ind]) {
+	*b = refseq->bedstart[cur_ind][i]-1;
+	*e = refseq->bedend[cur_ind][i]-1;
+    }
+}
+
+static int
+find_chr_ind(char **chrs, int nchr, char *cur_chr)
+{
+    int i = 0;
+    for (; i < nchr; i++) {
+	if (strcmp(cur_chr, chrs[i]) == 0) return i;
+    }
+    return -1;
+}
+
+static void all_N(char *start)
+{
+    while (*start && *start != '\n') {
+        *start = 'N';
+        start++;
+    }
+}
+
+
+int tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[])
+{
+    // load bed file in some arrayint argc, char *argv[])
+  int c, help=0;
+  char *out_nomask = NULL;
+  int max_num_chr = 1000;
+
+  while((c = getopt(argc, argv, "o:m:vh")) >= 0) {
+      switch(c) {
+        case 'v': tmap_progress_set_verbosity(1); break;
+        case 'h': help = 1; break;
+	case 'o': out_nomask = optarg; break;
+	case 'm': max_num_chr = atoi(optarg); break;
+        default: return 1;
+      }
+  }
+  if(2!= argc - optind || 1 == help) {
+      tmap_file_fprintf(tmap_file_stderr, "Usage: %s %s [-o outNomas -m maxChr -vh] <in.bed> <in.fasta>\n", PACKAGE, argv[0]);
+      return 1;
+  }
+
+  //alloc refseq
+  tmap_refseq_t *refseq =  tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
+
+  refseq->version_id = TMAP_VERSION_ID;
+  refseq->annos = NULL;
+  refseq->num_annos = 0;
+  refseq->len = 0;
+
+
+  char **chrs = tmap_malloc(sizeof(char *)*max_num_chr, "chrs"); 
+  tmap_refseq_read_bed_core(refseq, argv[optind], 1, chrs, max_num_chr);
+
+
+
+    // read in fasta file and put mask at bases 
+
+        FILE *fp = fopen(argv[optind+1], "r");
+        if (fp == NULL) {
+                tmap_file_fprintf(tmap_file_stderr, "Cannot open %s\n", argv[optind+1]);
+                return 1;
+        }
+	FILE *fo = NULL;
+	if (out_nomask) fo = fopen(out_nomask, "w");
+
+        char line[100000];
+        char cur_chr[100];
+        int b = -1, e = -1, n;
+        int cur_pos = 0;
+	int chr_ind = -1;
+        while (fgets(line, sizeof line, fp)) {
+                if (line[0] == '>') {
+                        sscanf(line+1, "%s", cur_chr);
+                        cur_pos = n = 0;
+			chr_ind = find_chr_ind(chrs, refseq->beditem, cur_chr);
+			if (chr_ind >= 0) {
+			    find_next_bed(refseq, chr_ind, cur_pos, &b, &e, &n);
+			    if(fo) fprintf(fo, "%s", line);
+			    printf("%s", line);
+			}
+                        continue;
+                }
+		if (chr_ind == -1) continue;
+		if(fo) fprintf(fo, "%s", line);
+                if (b == -1) {
+                    all_N(line);
+                    printf("%s", line);
+                    continue;
+                }
+                // now cur_chr == chr
+                char *s = line;
+                while (*s != '\n' &&  *s != 0) {
+                    if(cur_pos > e) {
+                        find_next_bed(refseq, chr_ind, cur_pos, &b, &e, &n);
+                        if (b == -1) {
+                                all_N(s);
+                                break;
+                        }
+                    }
+                    if (cur_pos < b) {
+                        *s = 'N';
+                    }
+                    s++; cur_pos++;
+                }
+                printf("%s", line);
+        }
+
+
+  return 0;
 }

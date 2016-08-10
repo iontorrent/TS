@@ -62,7 +62,6 @@ def check_plugin(cls):
     infodict = json.loads(infojson)
     assert infodict['version']
 
-    assert info.allow_autorun is not None
     logger.debug("Plugin info:\n%s ", infojson)
 
 

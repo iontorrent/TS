@@ -40,8 +40,10 @@ void ExecuteThreadBlockPerRegion2DBlocks(
     //in parameters
     const short * RawTraces, // NxF
     const float * BeadParamCube,
-    const float* emphasisVec, //(MAX_POISSON_TABLE_COL)*F
-    const int * nonZeroEmphFrames,
+    const float* crudeemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * crudenonZeroEmphFrames,
+    const float* fineemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * finenonZeroEmphFrames,
     const float* nucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
         //in out parameters
     float* ResultCube,
@@ -69,9 +71,12 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     //in parameters
     const short * RawTraces, // NxF
     const float * BeadParamCube,
-    const float* emphasisVec, //(MAX_POISSON_TABLE_COL)*F
-    const int * nonZeroEmphFrames,
-    const float* nucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+    const float* crudeemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * crudenonZeroEmphFrames,
+    const float* fineemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+    const int * finenonZeroEmphFrames,
+    const float* finenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
+    const float* coarsenucRise, // ISIG_SUB_STEPS_SINGLE_FLOW * F
     //in out parameters
     float* ResultCube,
     const size_t * numFramesRegion,  //constant memory?
@@ -81,7 +86,6 @@ void ExecuteThreadBlockPerRegion2DBlocksDense(
     const PerFlowParamsRegion * perFlowRegP,
     const PerNucParamsRegion * perNucRegP,
     const float * RegionFrameCube,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
-    const float * EmptyTraceRegion,  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
     //TraceLevelXTalk
     const float * XTalkPerBead,
     const float * genericXTalkRegion

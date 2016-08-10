@@ -106,34 +106,13 @@ void UnpackAlignmentInfo(Alignment *rai)
 
 
 // -------------------------------------------------------
+// Unpacking read meta data and filtering read if this is not possible
 
-
-void UnpackOnLoad(Alignment *rai, const InputStructures &global_context, const ExtendParameters& parameters)
+void UnpackOnLoad(Alignment *rai, const InputStructures &global_context)
 {
-  if (not rai->alignment.IsMapped()) {
-    rai->evaluator_filtered = true;
+  // No need to waste time if the read is filtered
+  if (rai->filtered)
     return;
-  }
-
-  // Mapping quality filter
-  if (rai->alignment.MapQuality < parameters.min_mapping_qv) {
-    rai->evaluator_filtered = true;
-    return;
-  }
-
-
-  // Skip reads from samples other than the primary sample
-  if (not rai->primary_sample) {
-    rai->evaluator_filtered = true;
-    return;
-  }
-
-  // Absolute number of mismatches filter
-  if (rai->snp_count > parameters.read_snp_limit) {
-    rai->evaluator_filtered = true;
-    rai->worth_saving = false;
-    return;
-  }
 
   rai->is_reverse_strand = rai->alignment.IsReverseStrand();
 
@@ -149,16 +128,14 @@ void UnpackOnLoad(Alignment *rai, const InputStructures &global_context, const E
   
   if (rai->runid.empty()){
     cerr << "WARNING: Unable to determine run id of read " << rai->alignment.Name << endl;
-    rai->evaluator_filtered = true;
-    rai->worth_saving = false;
+    rai->filtered = true;
     return;
   }
 
   std::map<string,int>::const_iterator fo_it = global_context.flow_order_index_by_run_id.find(rai->runid);
   if (fo_it == global_context.flow_order_index_by_run_id.end()){
     cerr << "WARNING: No matching flow oder found for read " << rai->alignment.Name << endl;
-    rai->evaluator_filtered = true;
-    rai->worth_saving = false;
+    rai->filtered = true;
     return;
   }
   rai->flow_order_index = fo_it->second;
@@ -206,8 +183,7 @@ void UnpackOnLoad(Alignment *rai, const InputStructures &global_context, const E
     RevComplementInPlace(rai->read_bases);
   if (rai->read_bases.empty()){
     cerr << "WARNING: Ignoring length zero read " << rai->alignment.Name << endl;
-    rai->evaluator_filtered = true;
-    rai->worth_saving = false;
+    rai->filtered = true;
     return;
   }
 
@@ -233,8 +209,7 @@ void UnpackOnLoad(Alignment *rai, const InputStructures &global_context, const E
   }
   if (rai->start_flow == 0) {
     cerr << "WARNING: Start Flow ZF:tag has zero value in read " << rai->alignment.Name << endl;
-    rai->evaluator_filtered = true;
-    rai->worth_saving = false;
+    rai->filtered = true;
     return;
   }
   CreateFlowIndex(rai, flow_order);
@@ -259,18 +234,31 @@ void UnpackOnLoad(Alignment *rai, const InputStructures &global_context, const E
     rai->read_group.clear();
   }
 
+  // Get read prefix - hard clipped start of the read: [KS][ZT][ZE]
   rai->prefix_flow = -1;
   std::map<string,string>::const_iterator key_it = global_context.key_by_read_group.find(rai->read_group);
-  if (key_it != global_context.key_by_read_group.end() and not (key_it->second).empty())
-	GetPrefixFlow(rai, key_it->second, flow_order);
+  if (key_it != global_context.key_by_read_group.end()) {
+    rai->prefix_bases = key_it->second;
 
-  // Check consistency of prefix_flow and start_flow
-  int check_start_flow = rai->prefix_flow;
-  while (check_start_flow < flow_order.num_flows() and  flow_order.nuc_at(check_start_flow) != rai->read_bases.at(0))
-	check_start_flow++;
-  if (check_start_flow != rai->start_flow) {
-    cerr << "WARNING: Start flow is inconsistent with key sequence in read " << rai->alignment.Name << endl;
-    rai->prefix_flow = -1;
+    string temp_zt, temp_ze;
+    if (rai->alignment.GetTag("ZT", temp_zt))
+      rai->prefix_bases += temp_zt;
+    if (rai->alignment.GetTag("ZE", temp_ze))
+      rai->prefix_bases += temp_ze;
+
+    if (not rai->prefix_bases.empty())
+	  GetPrefixFlow(rai, rai->prefix_bases, flow_order);
+  }
+
+  // Check consistency of prefix_flow and start_flow - maybe we don't have all info about hard clipped bases
+  if (rai->prefix_flow >= 0) {
+    int check_start_flow = rai->prefix_flow;
+    while (check_start_flow < flow_order.num_flows() and  flow_order.nuc_at(check_start_flow) != rai->read_bases.at(0))
+	  check_start_flow++;
+    if (check_start_flow != rai->start_flow) {
+      rai->prefix_flow = -1;
+      rai->prefix_bases.clear();
+    }
   }
 
 }

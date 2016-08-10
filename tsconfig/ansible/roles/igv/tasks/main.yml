@@ -6,16 +6,8 @@
 #-----------------------------------------------------------------------------
 # Install system packages for igv
 #-----------------------------------------------------------------------------
-- name: Install tomcat server - lucid
+- name: Install tomcat server
   apt: name={{ item }} state=present force=yes
-  when: ansible_distribution_release == "lucid"
-  with_items:
-    - tomcat6
-    - tomcat6-admin
-  
-- name: Install tomcat server - trusty
-  apt: name={{ item }} state=present force=yes
-  when: ansible_distribution_release == "trusty"
   with_items:
     - tomcat7
     - tomcat7-admin

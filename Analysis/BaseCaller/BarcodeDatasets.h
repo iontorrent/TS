@@ -59,6 +59,7 @@ public:
   void SetBCmaxFlows(int max_flows) { barcode_max_flows_ = max_flows; }
   bool DatasetInUse()     const     { return dataset_in_use_; }
   bool IsControlDataset() const     { return control_dataset_; }
+  bool IsLibraryDataset() const     { return (dataset_in_use_ and not(control_dataset_ or tf_dataset_)); }
 
   // map read_group_name -> dataset_idx
   // map read_group_idx -> dataset_idx
@@ -78,6 +79,7 @@ protected:
   int                       barcode_max_flows_;
   bool                      dataset_in_use_;         //!< Flag indicating whether any output is written for this dataset
   bool                      control_dataset_;        //!< Flag indicating whether this is a control dataset
+  bool                      tf_dataset_;             //!< Flag that indicates whetehr this is a TF dataset
 
   vector<string>            read_group_id_to_name_;
   map<string,int>           read_group_name_to_id_;

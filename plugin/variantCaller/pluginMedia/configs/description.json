@@ -190,7 +190,34 @@
 
         "position_bias_ref_fraction":["A filter parameter: Skip the position bias filter if (reference read count) / (reference and alt read count) <= this value",
                                       "Allowed values: Decimal numbers between 0 and 1",
-                                      "Suggested trial value 0.05"]
+                                      "Suggested trial value 0.05"],
+		"min_fam_size":[
+            "Minimum number of reads with same UID required to form a functional family",
+            "Allowed values: Integers > 0",
+            "Suggested trial value between 3 and 7",
+            "Impact: Increasing values make variant calls less sensitive but more specific"],
+
+        "min_var_fam":[
+            "Minimum number of variant supporting functional families required to make a call",
+            "Allowed values: Integers > 0",
+            "Suggested trial value between 2 and 10",
+            "Impact: Increasing values make variant calls less sensitive but more specific"],			
+			
+        "min_func_cov":[
+            "Minimum number of functional families per target required for variant calling",
+            "Allowed values: Integers > 0",
+            "Suggested trial value between 1500 and 10000",
+            "Impact: Increasing values make variant calls less sensitive but more specific"],
+
+        "min_func_maf":[
+            "Minimum frequency of the variant allele to be reported",
+            "Allowed values: Decimal numbers between 0 and 1",
+            "Suggested trial value between 0.0005 and 0.005",
+            "Impact: Increasing values make variant calls less sensitive but more specific"],
+
+        "hotspots_only":[
+			"Variant calls are reported at hotspot positions only if set to 1, and whole target if set to zero.",
+            "Allowed values: 0 and 1"]
     },
 
 

@@ -10,6 +10,8 @@ class VcfOrderedMerger;
 class PriorityQueue;
 class ComparableVcfVariant;
 
+void build_index(const string &path_to_gz);
+
 struct CoverageInfoEntry {
   string sequenceName;
   long position;
@@ -140,13 +142,14 @@ public:
 private:
 
   istream* depth_in;
-  bgzf_stream* gvcf_out;
+  ofstream* gvcf_out;
   const ReferenceReader& reference_reader;
   TargetsManager& targets_manager;
   bool left_align_enabled;
   size_t window_size, minimum_depth;
   PriorityQueue novel_queue, assembly_queue, hotspot_queue;
-  bgzf_stream bgz_out;
+  vector<vcf::Variant> hotspots_;
+  ofstream bgz_out;
   vector<MergedTarget>::iterator current_target;
   CoverageInfoEntry* current_cov_info;
 
@@ -158,13 +161,13 @@ private:
 
   void generate_novel_annotations(vcf::Variant* variant);
 
-  void merge_annotation_into_vcf(vcf::Variant* merged_entry);
+  void merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf::Variant* hotspot);
 
   void process_and_write_vcf_entry(vcf::Variant* current);
 
   void process_annotation(vcf::Variant* current);
 
-  void blacklist_check();
+  void blacklist_check(vcf::Variant* hotspot);
 
   void transfer_fields(map<string, vector<string> >& original_field,
                        map<string, vector<string> >& new_field,
@@ -207,5 +210,6 @@ void parse_parameters_from_json(string filename, vcf::VariantCallFile& vcf);
 bool validate_filename_parameter(string filename, string param_name);
 bool check_on_read(string filename, string param_name);
 bool check_on_write(string filename, string param_name);
+
 
 #endif //ION_ANALYSIS_UNIFY_VCF_H

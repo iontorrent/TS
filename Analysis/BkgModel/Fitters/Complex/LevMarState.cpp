@@ -14,6 +14,7 @@ LevMarBeadAssistant::LevMarBeadAssistant()
   residual = NULL;
   
   num_errors_logged = 0;
+  region_success_step = 0; // no successes
 
   avg_resid = 0.0f;
 
@@ -21,9 +22,9 @@ LevMarBeadAssistant::LevMarBeadAssistant()
   num_region_groups = 1;
   region_group = NULL;
   min_bead_to_fit_region = 10;
-
+  derivative_direction = 1;
   
-  bead_failure_rate_to_abort = 0.5f;
+  bead_failure_rate_to_abort = 0.85f;
   min_amplitude_change=0.001f;
   numLBeads = 0;
   reg_lambda = 0.001f;
@@ -42,6 +43,10 @@ LevMarBeadAssistant::LevMarBeadAssistant()
   
   res_state = UNINITIALIZED;
   avg_resid_state = UNINITIALIZED;
+
+  ref_span = 0;
+  ref_penalty_scale = 0.0f;
+  kmult_penalty_scale = 0.0f;
 }
 
 void LevMarBeadAssistant::AllocateBeadFitState (int _numLBeads)
@@ -76,6 +81,8 @@ void LevMarBeadAssistant::FinishCurrentBead (int ibd)
 }
 
 // set up beads
+// should these two do something other than 'even sampling'
+// i.e. pseudo-random ordering?
 void LevMarBeadAssistant::AssignBeadsToRegionGroups( )
 {
   // assign all beads to one of a few subsets of 500 beads or less.  These groups
@@ -93,6 +100,28 @@ void LevMarBeadAssistant::AssignBeadsToRegionGroups( )
       gnum = gnum % num_region_groups;
   }
 }
+
+void LevMarBeadAssistant::ReAssignBeadsToRegionGroups(BeadTracker &my_beads, int num_beads_per_group){
+  int high_quality_count = my_beads.NumHighQuality();
+  num_region_groups = (high_quality_count / num_beads_per_group) + 1;
+  // region_group already allocated
+
+  int gnum=0;
+  int bnum=0; // assign poor quality beads as well
+  for (int i=0; i<numLBeads; i++){
+    if(my_beads.high_quality[i]){
+      region_group[i] = gnum++;
+      gnum = gnum % num_region_groups;
+    } else {
+      region_group[i] = bnum++;
+      bnum = bnum % num_region_groups;
+    }
+  }
+  // good beads and bad beads are now allocated to groups containing enough good beads
+  // assign current region group number to be valid
+  current_bead_region_group = current_bead_region_group % num_region_groups;
+}
+
 
 
 
@@ -155,6 +184,8 @@ void LevMarBeadAssistant::InitializeLevMarFit (BkgFitMatrixPacker *well_fit, Bkg
   reg_mask = 0;
   well_mask = 0;
 
+  region_success_step = 0; // no successes yet
+
 // initialize regional lev mar fitt
   current_bead_region_group =0;
   reg_lambda = 0.0001f;
@@ -194,6 +225,52 @@ void LevMarBeadAssistant::SetNonIntegerPenalty (float *clonal_call_scale, float 
     non_integer_penalty[i] = clonal_call_scale[i]*clonal_call_penalty;
   }
 }
+
+// this is of course part of the same horror that is our optimizer
+void LevMarBeadAssistant::PenaltyForDeviationFromRef(float *fval, BeadParams *p, BeadParams *ref_ampl, int ref_span,  int npts, int flow_block_size)
+{
+  if (ref_span>0){
+    // for every flow affected
+
+    for (int fnum = 0; (fnum<flow_block_size) &(fnum<ref_span) ; fnum++){
+      float *vb_out;
+      vb_out = fval+fnum*npts;
+      // "cheap logarithm" - make more efficient by encode ref-ampl with pre-division?
+      float penalty_score = 1.0f-(p->Ampl[fnum]+0.5f)/(ref_ampl->Ampl[fnum]+0.5f);
+      penalty_score = penalty_score*penalty_score; // squared error term
+      float penalty_error_term = penalty_score * ref_penalty_scale;
+      // modify function evaluation because our LevMar optimizer implementation is sub-optimal
+      for (int i=0; i<MAXCLONALMODIFYPOINTSERROR; i++)
+      {
+        vb_out[i] += penalty_error_term* ( (float) (i&1) - 0.5);  // alternating error points
+      }
+    }
+  }
+}
+
+// the horror continues
+void LevMarBeadAssistant::PenaltyForDeviationFromKmult(float *fval, BeadParams *p,  int npts, int flow_block_size)
+{
+  if (ref_span>0){
+    // for every flow affected
+
+    for (int fnum = 0; (fnum<flow_block_size) ; fnum++){
+      float *vb_out;
+      vb_out = fval+fnum*npts;
+      // "cheap logarithm"
+      // "kmult for 0 ampl shouldn't move much because data doesn't demand it"
+      float penalty_score = 1.0f-p->kmult[fnum];
+      penalty_score = penalty_score*penalty_score; // squared error term
+      float penalty_error_term = penalty_score * kmult_penalty_scale;
+      // modify function evaluation because our LevMar optimizer implementation is sub-optimal
+      for (int i=0; i<MAXCLONALMODIFYPOINTSERROR; i++)
+      {
+        vb_out[i] += penalty_error_term* ( (float) (i&1) - 0.5);  // alternating error points
+      }
+    }
+  }
+}
+
 
 // global_defaults.clonal_call_scale, global_defaults.clonal_call_penalty, lm_state.clonal_restrict.level
 void LevMarBeadAssistant::ApplyClonalRestriction (float *fval, BeadParams *p, int npts, int flow_key, int flow_block_size)

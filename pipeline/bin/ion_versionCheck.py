@@ -6,7 +6,7 @@ from ion import version
 import sys
 import os
 
-#provide a way to remove ion from the front of a package string name
+# provide a way to remove ion from the front of a package string name
 from optparse import OptionParser
 
 parser = OptionParser()
@@ -30,5 +30,5 @@ print "host=" + socket.gethostname()
 
 for package, version in ret.iteritems():
     if not options.ion:
-        package = package.replace("ion-","")
-    print "%s=%s" % (package,version)
+        package = package.replace("ion-", "")
+    print "%s=%s" % (package, version)

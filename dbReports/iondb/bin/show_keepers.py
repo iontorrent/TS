@@ -10,11 +10,11 @@ from iondb.rundb import models
 from django.db.models import Q
 from iondb.rundb.data.dm_utils import slugify
 from socket import gethostname
-SIG='Signal Processing Input'
-BASE='Basecalling Input'
-OUT='Output Files'
-INTR='Intermediate Files'
-FILESET_TYPES=[SIG,BASE,OUT,INTR]
+SIG = 'Signal Processing Input'
+BASE = 'Basecalling Input'
+OUT = 'Output Files'
+INTR = 'Intermediate Files'
+FILESET_TYPES = [SIG, BASE, OUT, INTR]
 # Convert list of lists into dictionary
 storage = {}
 for item in models.Experiment.STORAGE_CHOICES:
@@ -42,7 +42,7 @@ def _write_csv(statobjs, _storename):
                 dupes_list.append(run.expName)
 
             projects = run.results_set.values_list(
-                    'projects__name', flat=True).distinct()
+                'projects__name', flat=True).distinct()
             projects = [project for project in projects if project is not None]
 
             fout.write("%s,%s,%s,%s,%s,%s,%s\n" %
@@ -113,11 +113,13 @@ def show_keepers():
         storename = "%s_%s_keepers" % (slugify(dmtype), gethostname())
 
         # All SigProc Stat objects
-        sigprocstats = models.DMFileStat.objects.filter(dmfileset__type=dmtype).order_by('created')
+        sigprocstats = models.DMFileStat.objects.filter(
+            dmfileset__type=dmtype).order_by('created')
         print "All %s objects count: %d" % (dmtype, sigprocstats.count())
 
         # Limit to objects marked keep
-        sigprocstats = sigprocstats.filter(result__experiment__storage_options = 'KI')
+        sigprocstats = sigprocstats.filter(
+            result__experiment__storage_options='KI')
         print "All %s objects marked Keep count: %d" % (dmtype, sigprocstats.count())
 
         # Limit to objects with files on filesystem

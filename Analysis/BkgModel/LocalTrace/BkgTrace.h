@@ -12,7 +12,6 @@
 #include "Mask.h"
 #include "Image.h"
 #include "BeadTracker.h"
-#include "SynchDat.h"
 
 class BkgTrace{
 public:
@@ -62,9 +61,7 @@ public:
         int nfrms, int l_coord[BKTRC_VEC_SIZE], float t0Shift, float t_start, float t_end);
 
     void  KeepEmptyScale(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer);
-    void KeepEmptyScale(Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer);
     void   FillBeadTraceFromBuffer(short *img,int iFlowBuffer, int flow_block_size);
-    void GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer, bool matchSdat, int flow_block_size);
     void   DumpEmptyTrace(FILE *my_fp, int x, int y); // collect everything
     void   DumpBeadDcOffset(FILE *my_fp, bool debug_only, int DEBUG_BEAD, int x, int y,BeadTracker &my_beads);
     void    DumpABeadOffset(int a_bead, FILE *my_fp, int offset_col, int offset_row, BeadParams *cur);
@@ -92,7 +89,6 @@ public:
       imgFrames=_uncompFrames;
       compFrames=_frames;
     };
-    bool AlreadyAdjusted();
 
  private:
     bool restart;

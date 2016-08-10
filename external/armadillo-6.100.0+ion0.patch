@@ -1,0 +1,112 @@
+--- CMakeLists.txt	2015-10-01 22:44:31.000000000 -0400
++++ CMakeLists.txt	2015-10-13 10:44:27.273499054 -0400
+@@ -25,20 +25,28 @@
+ ## You will then need to link your programs with -lblas -llapack instead of -larmadillo
+ ## If you're using OpenBLAS, link your programs with -lopenblas -llapack instead of -larmadillo
+ 
+-set(ARMA_USE_WRAPPER true)
++option(ARMA_USE_WRAPPER "Use WRAPPER libraries" OFF)
++mark_as_advanced(ARMA_USE_WRAPPER)
+ 
+ 
+ # the settings below will be automatically configured by the rest of this script
+ 
+-set(ARMA_USE_LAPACK           false)
+-set(ARMA_USE_BLAS             false)
+-set(ARMA_USE_ATLAS            false)
+-set(ARMA_USE_HDF5_ALT         false)
+-set(ARMA_USE_ARPACK           false)
+-set(ARMA_USE_EXTERN_CXX11_RNG false)
+-set(ARMA_USE_SUPERLU          false)  # Caveat: only SuperLU version 4.3 can be used!
++option(ARMA_USE_LAPACK "Use LAPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_LAPACK)
++option(ARMA_USE_BLAS "Use BLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_BLAS)
++option(ARMA_USE_ATLAS "Use ATLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_ATLAS)
++option(ARMA_USE_HDF5_ALT "Use HDF5 libraries" OFF)
++mark_as_advanced(ARMA_USE_HDF5_ALT)
++option(ARMA_USE_ARPACK "Use ARPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_ARPACK)
++option(ARMA_USE_EXTERN_CXX11_RNG "Use CXX11_RNG libraries" OFF)
++mark_as_advanced(ARMA_USE_EXTERN_CXX11_RNG)
++option(ARMA_USE_SUPERLU "Use SuperLU" OFF)
++mark_as_advanced(ARMA_USE_SUPERLU)
+ 
+-project(armadillo CXX)
++option(BUILD_SHARED_LIBS "build shared library" ON)
+ 
+ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_aux/Modules/")
+ 
+@@ -72,6 +80,13 @@
+ ## Find LAPACK and BLAS libraries, or their optimised versions
+ ##
+ 
++option(ARMA_USE_MKL "Use MKL libraries" OFF)
++mark_as_advanced(ARMA_USE_MKL)
++option(ARMA_USE_ACMLMP "Use ACMLMP libraries" OFF)
++mark_as_advanced(ARMA_USE_ACMLMP)
++option(ARMA_USE_ACML "Use ACML libraries" OFF)
++mark_as_advanced(ARMA_USE_ACML)
++
+ if(APPLE)
+   
+   set(ARMA_OS macos)
+@@ -91,22 +106,41 @@
+   
+   set(ARMA_OS unix)
+   
+-  include(ARMA_FindMKL)
+-  include(ARMA_FindACMLMP)
+-  include(ARMA_FindACML)
+-  include(ARMA_FindOpenBLAS)
+-  include(ARMA_FindATLAS)
+-  include(ARMA_FindBLAS)
+-  include(ARMA_FindLAPACK)
+-  
+-  message(STATUS "     MKL_FOUND = ${MKL_FOUND}"     )
+-  message(STATUS "  ACMLMP_FOUND = ${ACMLMP_FOUND}"  )
+-  message(STATUS "    ACML_FOUND = ${ACML_FOUND}"    )
+-  message(STATUS "OpenBLAS_FOUND = ${OpenBLAS_FOUND}")
+-  message(STATUS "   ATLAS_FOUND = ${ATLAS_FOUND}"   )
+-  message(STATUS "    BLAS_FOUND = ${BLAS_FOUND}"    )
+-  message(STATUS "  LAPACK_FOUND = ${LAPACK_FOUND}"  )
+-  
++  if(ARMA_USE_MKL)
++    include(ARMA_FindMKL)
++    message(STATUS "MKL_FOUND      = ${MKL_FOUND}"     )
++  endif()
++
++  if(ARMA_USE_ACMLMP)
++    include(ARMA_FindACMLMP)
++    message(STATUS "ACMLMP_FOUND   = ${ACMLMP_FOUND}"  )
++  endif()
++
++  if(ARMA_USE_ACML)  
++    include(ARMA_FindACML)
++    message(STATUS "ACML_FOUND     = ${ACML_FOUND}"    )
++  endif()
++
++  if(ARMA_USE_OpenBLAS)
++    include(ARMA_FindOpenBLAS)
++    message(STATUS "OpenBLAS_FOUND = ${OpenBLAS_FOUND}")
++  endif()
++
++  if(ARMA_USE_ATLAS)
++    include(ARMA_FindATLAS)
++    message(STATUS "   ATLAS_FOUND = ${ATLAS_FOUND}"   )
++  endif()
++
++  if(ARMA_USE_BLAS)
++    include(ARMA_FindBLAS)
++    message(STATUS "    BLAS_FOUND = ${BLAS_FOUND}"    )
++  endif()
++
++  if(ARMA_USE_LAPACK)
++    include(ARMA_FindLAPACK)
++    message(STATUS "  LAPACK_FOUND = ${LAPACK_FOUND}"  )
++  endif()
++
+   if(MKL_FOUND OR ACMLMP_FOUND OR ACML_FOUND)
+     
+     set(ARMA_USE_LAPACK true)

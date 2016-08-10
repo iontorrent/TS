@@ -20,6 +20,7 @@ void FitControl_t::NullWellPackers()
   FitWellAmplBuffering = NULL;
   FitWellPostKey   = NULL;
   DontFitWells = NULL;
+  FitWellAll = NULL;
 }
 
 void FitControl_t::NullRegionPackers()
@@ -38,7 +39,7 @@ void FitControl_t::DeleteWellPackers()
   if ( FitWellAmpl != NULL ) delete FitWellAmpl;
   if ( FitWellPostKey != NULL ) delete FitWellPostKey;
   if ( DontFitWells !=NULL ) delete DontFitWells;  // should never happen!!!
-
+  if ( FitWellAll!=NULL) delete FitWellAll;
   NullWellPackers();
 
 }
@@ -88,6 +89,8 @@ void FitControl_t::AllocWellPackers ( int hydrogenModelType, int npts, int flow_
         FitWellPostKey = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitWellPostKeyNoDmult" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
         break;
   }
+  FitWellAll = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitWellAll" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+
 }
 
 void FitControl_t::CombinatorialAllocationOfInit2AndFull ( bool no_rdr_fit_starting_block,bool fitting_taue, int hydrogenModelType, int npts, int flow_block_size )

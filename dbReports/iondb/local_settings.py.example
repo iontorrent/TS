@@ -88,6 +88,7 @@ TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")),
 DEBUG = True
 TEMPLATE_DEBUG = True
 TASTYPIE_FULL_DEBUG = True
+GUIDISPLAY = True
 
 # Add httpproxy to list of INSTALLED_APPS from settings.py
 INSTALLED_APPS = (

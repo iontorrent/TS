@@ -3,15 +3,8 @@
 
 set -e
 
-TFFILE=/opt/ion/config/DefaultTFs.conf
-
 case "$1" in
     configure)
-
-	if [ -e "$TFFILE" ]; then
-		echo "Removing obsolete TF file '$TFFILE'."
-		rm $TFFILE
-	fi
 
         #configure dynamic linker run-time bindings after library installation under /usr/local/lib
         ldconfig

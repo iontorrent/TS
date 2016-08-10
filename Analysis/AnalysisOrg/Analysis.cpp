@@ -38,7 +38,6 @@
 #include "OptBase.h"
 #include "ReservoirSample.h"
 #include "IonErr.h"
-#include "ChipIdDecoder.h"
 #include "SetUpForProcessing.h"
 #include "TrackProgress.h"
 #include "ImageSpecClass.h"
@@ -126,11 +125,11 @@ int TrapAndDeprecateOldArgs(int argc, char *argv[], char *argv2[])
 			  }
 		  }
 
-		  if(argc != 2) 
+		  if(argc != 2)
 		  {
 
 			  if(argc == 3) // 2 args
-			  {			  
+			  {
 				  if(argv[argc - 2][0] != '-') // not option + dat_source_directory
 				  {
 					  delete [] argv2;
@@ -172,7 +171,7 @@ int TrapAndDeprecateOldArgs(int argc, char *argv[], char *argv2[])
 
   for(int i = 0; i < argc; ++i)
   {
-	  size_t slen0 = strlen(argv[i]) + 1;	
+	  size_t slen0 = strlen(argv[i]) + 1;
 
 	  string s0 = argv[i];
 
@@ -246,7 +245,7 @@ int TrapAndDeprecateOldArgs(int argc, char *argv[], char *argv2[])
 
 			  string s3 = s0.substr(0, s0.length() - 2);
 			  s3 += "true";
-			  		
+
 			  int slen3 = s3.length() + 1;
 			  argv2[i] = new char[slen3];
 			  sprintf(argv2[i], "%s", s3.c_str());
@@ -259,7 +258,7 @@ int TrapAndDeprecateOldArgs(int argc, char *argv[], char *argv2[])
 
 			  string s4 = s0.substr(0, s0.length() - 3);
 			  s4 += "false";
-			  		
+
 			  int slen4 = s4.length() + 1;
 			  argv2[i] = new char[slen4];
 			  sprintf(argv2[i], "%s", s4.c_str());
@@ -293,6 +292,98 @@ int TrapAndDeprecateOldArgs(int argc, char *argv[], char *argv2[])
   return datind;
 }
 
+void LoadArgsJson(const string& argsJsonFile, Json::Value& json_params_cmd, Json::Value& json_params_bkg, bool thumbnail)
+{
+    Json::Value json_params0;
+
+    ifstream ifs(argsJsonFile.c_str());
+    Json::Reader reader;
+    reader.parse(ifs, json_params0, false);
+    ifs.close();
+
+    Json::Value json_tn;
+
+     Json::Value::Members groups = json_params0.getMemberNames();
+     for(Json::Value::Members::iterator it1 = groups.begin(); it1 != groups.end(); ++it1)
+     {
+         if(*it1 == "chipType")
+         {
+             json_params_cmd["chipType"] = json_params0["chipType"];
+             json_params_bkg["chipType"] = json_params0["chipType"];
+         }
+         else if(*it1 == "ThumbnailControl")
+         {
+             if(thumbnail)
+             {
+                 Json::Value::Members items = json_params0[*it1].getMemberNames();
+                 for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+                 {
+                     string sname(*it2);
+                     for(size_t i = 0; i < sname.size(); ++i)
+                     {
+                         if(sname[i] == '-')
+                         {
+                             sname[i] = '_';
+                         }
+                     }
+                     json_tn[sname] = json_params0[*it1][*it2];
+                 }
+             }
+         }
+         else if(*it1 == "GlobalDefaultsForBkgModel" || *it1 == "LocalSigProcControl")
+         {
+             Json::Value::Members items = json_params0[*it1].getMemberNames();
+             for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+             {
+                 string sname(*it2);
+                 for(size_t i = 0; i < sname.size(); ++i)
+                 {
+                     if(sname[i] == '-')
+                     {
+                         sname[i] = '_';
+                     }
+                 }
+                 json_params_bkg[sname] = json_params0[*it1][*it2];
+             }
+         }
+         else
+         {
+             Json::Value::Members items = json_params0[*it1].getMemberNames();
+             for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+             {
+                 string sname(*it2);
+                 for(size_t i = 0; i < sname.size(); ++i)
+                 {
+                     if(sname[i] == '-')
+                     {
+                         sname[i] = '_';
+                     }
+                 }
+                 json_params_cmd[sname] = json_params0[*it1][*it2];
+             }
+         }
+     }
+
+     if(thumbnail)
+     {
+         Json::Value::Members items = json_tn.getMemberNames();
+         for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+         {
+             string sname(*it2);
+
+             if(json_params_cmd.isMember(sname))
+             {
+                json_params_cmd[sname] = json_tn[*it2];
+             }
+
+             if(json_params_bkg.isMember(sname))
+             {
+                json_params_bkg[sname] = json_tn[*it2];
+             }
+         }
+     }
+}
+
 /*************************************************************************************************
  *************************************************************************************************
  *
@@ -307,7 +398,7 @@ int main (int argc, char *argv[])
   ofstream null_ostream("/dev/null"); // must stay live for entire scope, or crash when writing
   TheSilenceOfTheArmadillos(null_ostream);
 
-  TrackProgress my_progress;  
+  TrackProgress my_progress;
   DumpStartingStateOfProgram (argc,argv,my_progress);
 
   if(argc < 2)
@@ -320,7 +411,7 @@ int main (int argc, char *argv[])
 	  string s = argv[i];
 	  if(s == "-" || s == "--")
 	  {
-	      cerr << "ERROR: command line input \"-\" must be followed by a short option name (a letter) and \"--\" must be followed by a long option name." << endl; 
+	      cerr << "ERROR: command line input \"-\" must be followed by a short option name (a letter) and \"--\" must be followed by a long option name." << endl;
 		  exit ( EXIT_FAILURE );
 	  }
 	  else if(s == "-?" || s == "-h" || s == "--help")
@@ -338,15 +429,50 @@ int main (int argc, char *argv[])
   OptArgs opts;
   opts.ParseCmdLine(argc, (const char**)argv2);
 
+
   for(int k = 0; k < argc ; ++k)
   {
 	  delete [] argv2[k];
   }
   delete [] argv2;
-   
-  Json::Value json_params;
+
+  Json::Value json_params_cmd;
+  Json::Value json_params_bkg;
+  bool thumbnail = opts.GetFirstBoolean('-', "thumbnail", false);
+  string argsBeadfindJsonFile = opts.GetFirstString('-', "args-beadfind-json", "");
+  if(argsBeadfindJsonFile.length() > 0)
+  {
+      struct stat sb0;
+      if(!(stat(argsBeadfindJsonFile.c_str(), &sb0) == 0 && S_ISREG(sb0.st_mode)))
+      {
+          cerr << "ERROR: " << argsBeadfindJsonFile << " does not exist or it is not a regular file." << endl;
+          exit ( EXIT_FAILURE );
+      }
+
+      LoadArgsJson(argsBeadfindJsonFile, json_params_cmd, json_params_bkg, thumbnail);
+  }
+
+  string argsJsonFile = opts.GetFirstString('-', "args-json", "");
+  if(argsJsonFile.length() > 0)
+  {
+      struct stat sb0;
+      if(!(stat(argsJsonFile.c_str(), &sb0) == 0 && S_ISREG(sb0.st_mode)))
+      {
+          cerr << "ERROR: " << argsJsonFile << " does not exist or it is not a regular file." << endl;
+          exit ( EXIT_FAILURE );
+      }
+
+      LoadArgsJson(argsJsonFile, json_params_cmd, json_params_bkg, thumbnail);
+  }
+  else
+  {
+      cerr << "ERROR: --args-json must be provided." << endl;
+      exit ( EXIT_FAILURE );
+  }
+
   CommandLineOpts inception_state;
-  inception_state.SetOpts(opts, json_params);
+  inception_state.SetOpts(opts, json_params_cmd);
+  inception_state.bfd_control.SetThumbnail(thumbnail);
 
   if(datind < 0) // there is no "--dat-source-directory"
   {
@@ -357,26 +483,37 @@ int main (int argc, char *argv[])
   struct stat sb;
   if(!(stat(inception_state.sys_context.dat_source_directory, &sb) == 0 && S_ISDIR(sb.st_mode)))
   {
-      cerr << "ERROR: " << inception_state.sys_context.dat_source_directory << " does not exist or it is not a directory." << endl; 
+      cerr << "ERROR: " << inception_state.sys_context.dat_source_directory << " does not exist or it is not a directory." << endl;
 	  exit ( EXIT_FAILURE );
   }
 
-  inception_state.PostProcessArgs(opts);
+  string chipType = GetParamsString(json_params_cmd, "chipType", "");
+  ChipIdDecoder::SetGlobalChipId ( chipType.c_str() );
 
   SeqListClass my_keys;
   ImageSpecClass my_image_spec;
   SlicedPrequel my_prequel_setup;
 
   SetUpOrLoadInitialState(inception_state, my_keys, my_progress, my_image_spec, my_prequel_setup);
-  
+
   // Start logging process parameters & timing now that we have somewhere to log
   my_progress.InitFPLog(inception_state);
 
   // Write processParameters.parse file now that processing is about to begin
   my_progress.WriteProcessParameters(inception_state);
 
+
+  json_params_cmd["results_folder"] = inception_state.sys_context.GetResultsFolder();
+  json_params_bkg["results_folder"] = inception_state.sys_context.GetResultsFolder();
+
+
   // Do background model
-  RealImagesToWells ( opts, inception_state, my_keys, my_progress, my_image_spec, my_prequel_setup);
+  // init backgroud model and run beadfind if needed
+  ImageToWells BkgModelObj(opts,inception_state, json_params_bkg, my_keys, my_progress, my_image_spec, my_prequel_setup);
+  //run threaded background model
+  BkgModelObj.DoThreadedSignalProcessing();
+  //clean up the mess we created
+  BkgModelObj.FinalizeThreadedSignalProcessing();
 
   my_progress.ReportState ("Analysis (wells file only) Complete");
 

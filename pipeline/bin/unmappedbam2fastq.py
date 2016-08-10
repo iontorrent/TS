@@ -8,7 +8,7 @@ import pysam
 import traceback
 import os
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', dest='verbose', action='store_true')
@@ -23,11 +23,11 @@ if __name__=="__main__":
             for bam_file in args.unmapped_bam:
                 if os.path.exists(bam_file):
                     try:
-                        samfile = pysam.Samfile(bam_file, mode="rb",check_header=False,check_sq=False)
+                        samfile = pysam.Samfile(bam_file, mode="rb", check_header=False, check_sq=False)
                         for x in samfile.fetch(until_eof=True):
-                            fastq_file.write("@%s\n%s\n+\n%s\n" % (x.qname,x.seq,x.qual))
+                            fastq_file.write("@%s\n%s\n+\n%s\n" % (x.qname, x.seq, x.qual))
                         samfile.close()
                     except:
                         traceback.print_exc()
     except:
-       traceback.print_exc()
+        traceback.print_exc()

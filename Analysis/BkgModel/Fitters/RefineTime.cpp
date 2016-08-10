@@ -21,27 +21,14 @@ void RefineTime::RefinePerFlowTimeEstimate (float *t_mid_nuc_shift_per_flow, int
   }
   else
   {
-    if (bkg.region_data->my_trace.AlreadyAdjusted())
-    {
-      // estimate t0 per flow from the average 1-mer trace if possible
-      FitAverage1MerPerFlow (t_mid_nuc_shift_per_flow,false, flow_block_size, flow_block_start );
 
-      // really? does this help in the slightest?
-      RezeroUsingLocalShift(t_mid_nuc_shift_per_flow, flow_block_size);
-
-      // really?
-      // re-estimate t0 per flow from the average 1-mer trace if possible
-      FitAverage1MerPerFlow (t_mid_nuc_shift_per_flow,true, flow_block_size, flow_block_start );
-    }
-    else
-    {
       // do version that doesn't require pre-corrected background
       // @TODO: note that t_mid_nuc_shift has not been set to anything but zero yet?
       //@TODO: SIDE EFFECTS of changing the traces
       RezeroUsingLocalShift(t_mid_nuc_shift_per_flow, flow_block_size);
 
       FitAverage1MerAllFlows(t_mid_nuc_shift_per_flow,true, flow_block_size, flow_block_start);
-    }
+
   }
 }
 
@@ -226,7 +213,7 @@ void RefineTime::ConstructMultiFlowOneMers(
     if (p->FitBeadLogic())  // might be a sampling of some type
     {
       //@TODO: should be able to average un-adjusted data, then adjust the average
-      bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal(cur_bkg_corrected_signal,ibd, flow_block_size, flow_block_start);
+      bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal(cur_bkg_corrected_signal,NULL, NULL, ibd, flow_block_size, flow_block_start);
       for (int fnum=0; fnum<flow_block_size; fnum++)
       {
         if ((p->Ampl[fnum] > 0.5f) && (p->Ampl[fnum] < 1.5f))

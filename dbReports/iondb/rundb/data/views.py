@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import glob
 import time
+import traceback
 from django.views.generic import ListView
 from iondb.rundb.models import (
     Experiment,
@@ -40,13 +41,13 @@ from iondb.rundb.report import file_browse
 from iondb.rundb import forms
 from iondb.anaserve import client
 from iondb.rundb.data import dmactions_types
-from iondb.rundb.configure.archiver_utils import disk_usage_stats
 from iondb.rundb.data import tasks as dmtasks
 from iondb.rundb.data import dmactions
 from iondb.rundb.data.data_management import update_files_in_use
 from iondb.rundb.data import exceptions as DMExceptions
 from iondb.rundb.data.data_import import find_data_to_import, data_import
-from iondb.utils.files import disk_attributes, is_mounted
+from iondb.utils.files import get_disk_attributes_gb, is_mounted
+from iondb.rundb.data.dmfilestat_utils import dm_category_stats, get_keepers_diskspace
 
 from django.http import HttpResponse, HttpResponseServerError, HttpResponseNotFound
 from datetime import datetime
@@ -67,15 +68,18 @@ def get_search_parameters():
         'processedflows': [],
     }
 
-    eas_keys = [('library','reference')]
-    
+    eas_keys = [('library', 'reference')]
+
     for key in experiment_params.keys():
-        experiment_params[key] = list(Experiment.objects.values_list(key, flat=True).distinct(key).order_by(key))
+        experiment_params[key] = list(
+            Experiment.objects.values_list(key, flat=True).distinct(key).order_by(key))
 
-    experiment_params['sample'] = list(Sample.objects.filter(status = "run").values_list('name', flat= True).order_by('name'))
+    experiment_params['sample'] = list(Sample.objects.filter(
+        status="run").values_list('name', flat=True).order_by('name'))
 
-    for expkey,key in eas_keys:
-        experiment_params[expkey] = list(ExperimentAnalysisSettings.objects.values_list(key, flat=True).distinct(key).order_by(key))        
+    for expkey, key in eas_keys:
+        experiment_params[expkey] = list(
+            ExperimentAnalysisSettings.objects.values_list(key, flat=True).distinct(key).order_by(key))
     for key in report_params.keys():
         report_params[key] = list(Results.objects.values_list(key, flat=True).distinct(key).order_by(key))
     combined_params = {
@@ -92,7 +96,7 @@ def get_search_parameters():
 
 @login_required
 def rundb_redirect(request):
-    ## Old /rundb/ page redirects to /data/, keeps args
+    # Old /rundb/ page redirects to /data/, keeps args
     url = reverse('data') or '/data/'
     args = request.META.get('QUERY_STRING', '')
     if args:
@@ -141,6 +145,7 @@ def data(request):
 
 
 class ExperimentListView(ListView):
+
     """This is a class based view using the Django ListView generic view.
     It shows Experiment objects and data from their representative report.
     """
@@ -166,6 +171,7 @@ class ExperimentListView(ListView):
 
 
 class ResultsListView(ListView):
+
     """This ListView shows Results objects and is meant to be quick and light weight
     """
     queryset = Results.objects.select_related(
@@ -180,7 +186,8 @@ class ResultsListView(ListView):
         if result.experiment.has_status():
             result.experiment.in_progress = result.experiment.ftpStatus.isdigit()
             if result.experiment.in_progress:
-                result.experiment.progress_percent = 100 * float(result.experiment.ftpStatus) / float(result.experiment.flows)
+                result.experiment.progress_percent = 100 * \
+                    float(result.experiment.ftpStatus) / float(result.experiment.flows)
         return result
 
     def get_context_data(self, **kwargs):
@@ -196,6 +203,7 @@ def data_table(request):
     return render_to_response("rundb/data/completed_table.html", data,
                               context_instance=RequestContext(request))
 
+
 def _makeCSVstr(object_list):
     table = Results.to_pretty_table(object_list)
     CSVstr = cStringIO.StringIO()
@@ -203,6 +211,7 @@ def _makeCSVstr(object_list):
     writer.writerows(table)
     CSVstr.seek(0)
     return CSVstr
+
 
 def getCSV(request):
     CSVstr = ""
@@ -218,15 +227,19 @@ def getCSV(request):
         base_object_list = Results.objects.select_related('experiment').prefetch_related('libmetrics_set', 'tfmetrics_set', 'analysismetrics_set', 'pluginresult_set__plugin') \
             .exclude(experiment__expName__exact="NONE_ReportOnly_NONE")
         if qDict.get('results__projects__name', None) is not None:
-            base_object_list = base_object_list.filter(projects__name__exact=qDict.get('results__projects__name', None))
+            base_object_list = base_object_list.filter(
+                projects__name__exact=qDict.get('results__projects__name', None))
         if qDict.get('samples__name', None) is not None:
-            base_object_list = base_object_list.filter(experiment__samples__name__exact=qDict.get('samples__name', None))
+            base_object_list = base_object_list.filter(
+                experiment__samples__name__exact=qDict.get('samples__name', None))
         if qDict.get('chipType', None) is not None:
-            base_object_list = base_object_list.filter(experiment__chipType__exact=qDict.get('chipType', None))
+            base_object_list = base_object_list.filter(
+                experiment__chipType__exact=qDict.get('chipType', None))
         if qDict.get('pgmName', None) is not None:
             base_object_list = base_object_list.filter(experiment__pgmName__exact=qDict.get('pgmName', None))
         if qDict.get('results__eas__reference', None) is not None:
-            base_object_list = base_object_list.filter(eas__reference__exact=qDict.get('results__eas__reference', None))
+            base_object_list = base_object_list.filter(
+                eas__reference__exact=qDict.get('results__eas__reference', None))
         if qDict.get('flows', None) is not None:
             base_object_list = base_object_list.filter(experiment__flows__exact=qDict.get('flows', None))
         if qDict.get('star', None) is not None:
@@ -292,15 +305,19 @@ def getCSV(request):
     ret['Content-Disposition'] = 'attachment; filename=metrics_%s.csv' % now
     return ret
 
+
 def get_project_CSV(request, project_pk, result_pks):
     projectName = Project.objects.get(id=project_pk).name
     result_ids = result_pks.split(",")
-    base_object_list = Results.objects.select_related('experiment').prefetch_related('libmetrics_set', 'tfmetrics_set', 'analysismetrics_set', 'pluginresult_set__plugin')
+    base_object_list = Results.objects.select_related('experiment').prefetch_related(
+        'libmetrics_set', 'tfmetrics_set', 'analysismetrics_set', 'pluginresult_set__plugin')
     base_object_list = base_object_list.filter(id__in=result_ids).order_by('-timeStamp')
     CSVstr = _makeCSVstr(base_object_list)
     ret = http.HttpResponse(CSVstr, mimetype='text/csv')
-    ret['Content-Disposition'] = 'attachment; filename=%s_metrics_%s.csv' % (projectName, str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")))
+    ret['Content-Disposition'] = 'attachment; filename=%s_metrics_%s.csv' % (
+        projectName, str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")))
     return ret
+
 
 def projects(request):
     ctx = template.RequestContext(request)
@@ -385,6 +402,7 @@ def project_results(request, pk):
     ctx = template.RequestContext(request, {"project": selected, 'filter_thumbnails': thumbs_exist})
     return render_to_response("rundb/data/project_results.html", context_instance=ctx)
 
+
 def get_result_metrics(result):
     metrics = [
         result.timeStamp,
@@ -426,7 +444,7 @@ def project_compare_make_latex(pk):
     cmd = [
         "pdflatex", latex_path,
         "-output-directory", directory,
-        "-interaction", 
+        "-interaction",
         "nonstopmode"
     ]
     logger.debug(' '.join(cmd))
@@ -438,14 +456,15 @@ def project_compare_make_latex(pk):
         logger.error("PDF stdout: %s" % stdout)
         raise Exception("Project Comparison PDF generation failure")
 
+
 def project_compare_pdf(request, pk):
     project = get_object_or_404(Project, pk=pk)
     directory, pdf_path = project_compare_make_latex(pk)
     if not os.path.exists(pdf_path):
         return HttpResponse(open(os.path.join(directory, "comparison_report.log")).read(), "text/plain")
     response = HttpResponse(FileWrapper(open(pdf_path)),
-                           content_type="application/pdf")
-    response['Content-Length'] = os.path.getsize(pdf_path)    
+                            content_type="application/pdf")
+    response['Content-Length'] = os.path.getsize(pdf_path)
     response['Content-Disposition'] = "attachment; filename=project_compare_%s.pdf" % project.name
     return response
 
@@ -477,23 +496,23 @@ def project_compare_csv(request, pk):
     out_obj = cStringIO.StringIO()
     writer = csv.writer(out_obj)
     table = [
-        ('Result Name',     'resultsName'),
-        ('Status',          'status'),
-        ('Date',            'timeStamp'),
-        ('Chip',            'experiment.chipType'),
-        ('Total Bases',     'qualitymetrics.q0_bases'),
-        ('Total Reads',     'qualitymetrics.q0_reads'),
-        ('Key Signal',      'libmetrics.aveKeyCounts'),
-        ('Loading',         'analysismetrics.loading'),
-        ('Mean Read Len.',  'qualitymetrics.q0_mean_read_length'),
-        ('Median Read Len.','qualitymetrics.q0_median_read_length'),
-        ('Mode Read Len.',  'qualitymetrics.q0_mode_read_length'),
-        ('Q20 Bases',       'qualitymetrics.q20_bases'),
-        ('Q20 Reads',       'qualitymetrics.q20_reads'),
-        ('Q20 Read Len.',   'qualitymetrics.q20_mean_read_length'),
-        ('Reference',       'eas.reference'),
-        ('Aligned Bases',   'libmetrics.total_mapped_target_bases'),
-        ('Aligned Reads',   'libmetrics.total_mapped_reads')
+        ('Result Name', 'resultsName'),
+        ('Status', 'status'),
+        ('Date', 'timeStamp'),
+        ('Chip', 'experiment.chipType'),
+        ('Total Bases', 'qualitymetrics.q0_bases'),
+        ('Total Reads', 'qualitymetrics.q0_reads'),
+        ('Key Signal', 'libmetrics.aveKeyCounts'),
+        ('Loading', 'analysismetrics.loading'),
+        ('Mean Read Len.', 'qualitymetrics.q0_mean_read_length'),
+        ('Median Read Len.', 'qualitymetrics.q0_median_read_length'),
+        ('Mode Read Len.', 'qualitymetrics.q0_mode_read_length'),
+        ('Q20 Bases', 'qualitymetrics.q20_bases'),
+        ('Q20 Reads', 'qualitymetrics.q20_reads'),
+        ('Q20 Read Len.', 'qualitymetrics.q20_mean_read_length'),
+        ('Reference', 'eas.reference'),
+        ('Aligned Bases', 'libmetrics.total_mapped_target_bases'),
+        ('Aligned Reads', 'libmetrics.total_mapped_reads')
     ]
     # above we define the header name and column's value path toether in a tuple
     # for visual clarity and to help catch typos when making changes
@@ -567,17 +586,18 @@ def validate_results_to_combine(selected_results, override_samples=False):
     warnings = []
     ver_map = {'analysis': 'an', 'alignment': 'al', 'dbreports': 'db', 'tmap': 'tm'}
     common = {}
-    for i,r in enumerate(selected_results):
+    for i, r in enumerate(selected_results):
         version = {}
         for name, shortname in ver_map.iteritems():
-            version[name] = next((v.split(':')[1].strip() for v in r.analysisVersion.split(',') if v.split(':')[0].strip() == shortname), '')
+            version[name] = next((v.split(':')[1].strip()
+                                 for v in r.analysisVersion.split(',') if v.split(':')[0].strip() == shortname), '')
             setattr(r, name + "_version", version[name])
         # starting with TS3.6 we don't have separate alignment or tmap packages
         if not version['tmap']: r.tmap_version = version['analysis']
         if not version['alignment']: r.alignment_version = version['analysis']
-        
+
         if not common:
-            if r.resultsType != 'CombinedAlignments' or i==(len(selected_results)-1):
+            if r.resultsType != 'CombinedAlignments' or i == (len(selected_results) - 1):
                 common = {
                     'floworder': r.experiment.flowsInOrder,
                     'barcodeId': r.eas.barcodeKitName,
@@ -592,10 +612,15 @@ def validate_results_to_combine(selected_results, override_samples=False):
     if len(set([r.experiment.flowsInOrder for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
         warnings.append("Selected results have different FlowOrder Sequences.")
         common['floworder'] = ''
-    if len(set([r.eas.barcodeKitName for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+
+    barcodeSet = set(
+        [r.eas.barcodeKitName for r in selected_results if r.resultsType != 'CombinedAlignments'])
+    if len(barcodeSet) > 1:
         warnings.append("Selected results have different Barcode Sets.")
-        common['barcodeId'] = ''
-    
+        # allow merging for sub-sets of barcodes, e.g. "IonCode" and "IonCode Barcodes 1-32"
+        minstr = min(barcodeSet, key=len)
+        common['barcodeId'] = minstr if all(s.startswith(minstr) for s in barcodeSet) else ""
+
     if not override_samples:
         if common['barcodeId']:
             if len(set([json.dumps(r.eas.barcodedSamples) for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
@@ -605,7 +630,7 @@ def validate_results_to_combine(selected_results, override_samples=False):
             if len(set([r.experiment.get_sample() for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
                 warnings.append("Selected results have different Samples.")
                 common['sample'] = ''
-        
+
     return warnings, common
 
 
@@ -616,7 +641,7 @@ def results_to_combine(request, results_pks, project_pk):
         barcodes = ''
         if common['barcodeId']:
             barcodes = dnaBarcode.objects.filter(name=common['barcodeId']).order_by('name', 'index')
-            
+
         ctx = template.RequestContext(request, {
             "results_pks": results_pks, "project_pk": project_pk, "selected_results": selected_results,
             "warnings": warnings, "barcodes": barcodes,
@@ -640,34 +665,36 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     name = json_data['name']
     mark_duplicates = json_data['mark_duplicates']
     ids_to_merge = json_data['selected_pks']
-    override_samples = json_data.get('override_samples',False) == 'on'
-    
+    override_samples = json_data.get('override_samples', False) == 'on'
+
     parents = Results.objects.filter(id__in=ids_to_merge).order_by('-timeStamp')
 
     # test if reports can be combined and get common field values
     for parent in parents:
         if parent.dmfilestat_set.get(dmfileset__type=dmactions_types.OUT).action_state == 'DD':
             raise Exception("Output Files for %s are Deleted." % parent.resultsName)
-        
+
         if parent.pk == parents[0].pk:
             reference = parent.reference
         else:
             if not reference == parent.reference:
                 raise Exception("Selected results do not have the same Alignment Reference.")
-    
+
     warnings, common = validate_results_to_combine(parents, override_samples)
     floworder = common['floworder']
     barcodeId = common['barcodeId']
     if override_samples:
-        sample = json_data.get('sample','')
-        barcodedSamples = json_data.get('barcodedSamples',{})
+        sample = json_data.get('sample', '')
+        barcodedSamples = json_data.get('barcodedSamples', {})
         if barcodedSamples and common['barcodedSamples']:
             # try to update with original barcodeSampleInfo
             for sample_name, value in barcodedSamples.items():
                 for barcode in value['barcodes']:
-                    barcodeSampleInfo = [v.get('barcodeSampleInfo',{}).get(barcode) for v in common['barcodedSamples'].values() if v.get('barcodeSampleInfo',{}).get(barcode)]
+                    barcodeSampleInfo = [v.get('barcodeSampleInfo', {}).get(barcode) for v in common[
+                                         'barcodedSamples'].values() if v.get('barcodeSampleInfo', {}).get(barcode)]
                     if barcodeSampleInfo:
-                        barcodedSamples[sample_name].setdefault('barcodeSampleInfo',{})[barcode] = barcodeSampleInfo[0]
+                        barcodedSamples[sample_name].setdefault(
+                            'barcodeSampleInfo', {})[barcode] = barcodeSampleInfo[0]
         else:
             barcodedSamples = json.dumps(barcodedSamples, cls=DjangoJSONEncoder)
     else:
@@ -682,27 +709,27 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     result.parentIDs = delim + delim.join(ids_to_merge) + delim
     result.reference = reference
     result.sffLink = os.path.join(result.reportLink, "%s_%s.sff" % (filePrefix, result.resultsName))
-    
+
     result.projects.add(project)
 
     # add ExperimentAnalysisSettings
     eas_kwargs = {
-            'date' : datetime.now(),
-            'experiment' : exp,
-            'isEditable' : False,
-            'isOneTimeOverride' : True,
-            'status' : 'run',
-            'reference': reference,
-            'barcodeKitName': barcodeId,
-            'barcodedSamples': barcodedSamples,
-            'targetRegionBedFile': '',
-            'hotSpotRegionBedFile': '',
-            'isDuplicateReads': mark_duplicates
+        'date': datetime.now(),
+        'experiment': exp,
+        'isEditable': False,
+        'isOneTimeOverride': True,
+        'status': 'run',
+        'reference': reference,
+        'barcodeKitName': barcodeId,
+        'barcodedSamples': barcodedSamples,
+        'targetRegionBedFile': '',
+        'hotSpotRegionBedFile': '',
+        'isDuplicateReads': mark_duplicates
     }
     eas = ExperimentAnalysisSettings(**eas_kwargs)
-    eas.save()    
+    eas.save()
     result.eas = eas
-    
+
     result.save()
 
     # gather parameters to pass to merging script
@@ -719,17 +746,19 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         reportDir = dmfilestat.archivepath if dmfilestat.action_state == 'AD' else parent.get_report_dir()
         bams.append(os.path.join(reportDir, bamFile))
 
-    #need Plan section for plugins, use latest report's plan
+    # need Plan section for plugins, use latest report's plan
     latest_w_plan = parents.filter(experiment__plan__isnull=False)
     if not latest_w_plan:
-        grandparents = sum([v.split(delim) for v in parents.values_list('parentIDs', flat=True)],[])
+        grandparents = sum([v.split(delim) for v in parents.values_list('parentIDs', flat=True)], [])
         grandparents = [v for v in set(grandparents) if v]
-        latest_w_plan = Results.objects.filter(id__in=grandparents, experiment__plan__isnull=False).order_by('-timeStamp')
+        latest_w_plan = Results.objects.filter(
+            id__in=grandparents, experiment__plan__isnull=False).order_by('-timeStamp')
 
     plan_json = model_to_dict(latest_w_plan[0].experiment.plan) if latest_w_plan else {}
 
     try:
-        genome = ReferenceGenome.objects.all().filter(short_name=reference, index_version=settings.TMAP_VERSION, enabled=True)[0]
+        genome = ReferenceGenome.objects.all().filter(
+            short_name=reference, index_version=settings.TMAP_VERSION, enabled=True)[0]
         if os.path.exists(genome.info_text()):
             genomeinfo = genome.info_text()
         else:
@@ -738,13 +767,13 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         genomeinfo = ""
 
     eas_json = model_to_dict(eas)
-    
+
     barcodedSamples_reference_names = eas.barcoded_samples_reference_names
-    #use barcodedSamples' selected reference if NO plan default reference is specified
+    # use barcodedSamples' selected reference if NO plan default reference is specified
     reference = result.reference
     if not result.reference and barcodedSamples_reference_names:
         reference = barcodedSamples_reference_names[0]
-        
+
     params = {
         'resultsName': result.resultsName,
         'parentIDs': ids_to_merge,
@@ -760,7 +789,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'flowOrder': floworder,
         'project': projectName,
         'barcodeId': barcodeId,
-        "barcodeSamples_referenceNames" : barcodedSamples_reference_names,
+        "barcodeSamples_referenceNames": barcodedSamples_reference_names,
         'sample': sample,
         'override_samples': override_samples,
         'experimentAnalysisSettings': eas_json,
@@ -768,7 +797,6 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'runid': result.runid
     }
     params = json.dumps(params, cls=DjangoJSONEncoder)
-
 
     from distutils.sysconfig import get_python_lib
     scriptpath = os.path.join(get_python_lib(), 'ion', 'reports', 'combineReports.py')
@@ -796,13 +824,15 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     try:
         host = "127.0.0.1"
         conn = client.connect(host, settings.JOBSERVER_PORT)
-        conn.startanalysis(result.resultsName, script, params, files, webRootPath, result.pk, '', {}, 'combineAlignments')
+        conn.startanalysis(result.resultsName, script, params,
+                           files, webRootPath, result.pk, '', {}, 'combineAlignments')
     except:
         result.status = "Failed to contact job server."
         raise Exception(result.status)
 
     # log project history
-    message = 'Combine results %s into name= %s (%s), auto-assign to project name= %s (%s).' % (ids_to_merge, result.resultsName, result.pk, projectName, project_pk)
+    message = 'Combine results %s into name= %s (%s), auto-assign to project name= %s (%s).' % (
+        ids_to_merge, result.resultsName, result.pk, projectName, project_pk)
     EventLog.objects.add_entry(project, message, username)
 
     return result
@@ -858,59 +888,60 @@ def _blank_Exp(blankName):
 
 @login_required
 def experiment_edit(request, pk):
-    exp = get_object_or_404(Experiment, pk=pk)    
+    exp = get_object_or_404(Experiment, pk=pk)
     eas, eas_created = exp.get_or_create_EAS(editable=True)
     plan = exp.plan
-    
+
     barcodes = {}
-    for bc in dnaBarcode.objects.order_by('name', 'index').values('name', 'id_str','sequence'):
-        barcodes.setdefault(bc['name'],[]).append(bc)
-    
+    for bc in dnaBarcode.objects.order_by('name', 'index').values('name', 'id_str', 'sequence'):
+        barcodes.setdefault(bc['name'], []).append(bc)
+
     # get list of plugins to run
-    plugins = Plugin.objects.filter(selected=True,active=True).exclude(path='')
+    plugins = Plugin.objects.filter(selected=True, active=True).exclude(path='')
     selected_names = [pl['name'] for pl in eas.selectedPlugins.values()]
     plugins_list = list(plugins.filter(name__in=selected_names))
-    
+
     if request.method == 'GET':
         exp_form = forms.ExperimentSettingsForm(instance=exp)
         eas_form = forms.AnalysisSettingsForm(instance=eas)
-        
+
         # Application, i.e. runType
         if plan:
             exp_form.fields['runtype'].initial = plan.runType
             exp_form.fields['sampleTubeLabel'].initial = plan.sampleTubeLabel
-            
-        # Library Kit name - can get directly or from kit barcode    
+
+        # Library Kit name - can get directly or from kit barcode
         libraryKitName = ''
         if eas.libraryKitName:
-             libraryKitName = eas.libraryKitName
+            libraryKitName = eas.libraryKitName
         elif eas.libraryKitBarcode:
-             libkitset = KitInfo.objects.filter(kitType='LibraryKit',kitpart__barcode = eas.libraryKitBarcode)
-             if len(libkitset) == 1:
+            libkitset = KitInfo.objects.filter(kitType='LibraryKit', kitpart__barcode=eas.libraryKitBarcode)
+            if len(libkitset) == 1:
                 libraryKitName = libkitset[0].name
         exp_form.fields['libraryKitname'].initial = libraryKitName
-        
+
         # Sequencing Kit name - can get directly or from kit barcode
         if not exp.sequencekitname and exp.sequencekitbarcode:
-            seqkitset = KitInfo.objects.filter(kitType='SequencingKit',kitpart__barcode = exp.sequencekitbarcode)
+            seqkitset = KitInfo.objects.filter(
+                kitType='SequencingKit', kitpart__barcode=exp.sequencekitbarcode)
             if len(seqkitset) == 1:
                 exp_form.fields['sequencekitname'] = seqkitset[0].name
-        
+
         exp_form.fields['libraryKey'].initial = eas.libraryKey
         if len(exp.samples.all()) > 0:
             exp_form.fields['sample'].initial = exp.samples.all()[0].id
         exp_form.fields['barcodedSamples'].initial = eas.barcodedSamples
-        
+
         exp_form.fields['mark_duplicates'].initial = eas.isDuplicateReads
-        
+
         # plugins with optional userInput
         eas_form.fields['plugins'].initial = [plugin.id for plugin in plugins_list]
         pluginsUserInput = {}
         for plugin in plugins_list:
-            pluginsUserInput[str(plugin.id)] = eas.selectedPlugins.get(plugin.name, {}).get('userInput','')
+            pluginsUserInput[str(plugin.id)] = eas.selectedPlugins.get(plugin.name, {}).get('userInput', '')
         eas_form.fields['pluginsUserInput'].initial = json.dumps(pluginsUserInput)
-    
-    if request.method == 'POST': 
+
+    if request.method == 'POST':
         exp_form = forms.ExperimentSettingsForm(request.POST, instance=exp)
         eas_form = forms.AnalysisSettingsForm(request.POST, instance=eas)
 
@@ -921,33 +952,33 @@ def experiment_edit(request, pk):
                 plan.sampleTubeLabel = exp_form.cleaned_data['sampleTubeLabel']
 
                 plan.save()
-                
+
             # save Experiment
             exp_form.save()
-            
+
             # save ExperimentAnalysisSettings
             eas = eas_form.save(commit=False)
             eas.libraryKey = exp_form.cleaned_data['libraryKey']
             eas.libraryKitName = exp_form.cleaned_data['libraryKitname']
             eas.barcodedSamples = exp_form.cleaned_data['barcodedSamples']
             eas.isDuplicateReads = exp_form.cleaned_data['mark_duplicates']
-            
+
             # plugins
             form_plugins_list = list(eas_form.cleaned_data['plugins'])
             pluginsUserInput = json.loads(eas_form.cleaned_data['pluginsUserInput'])
             selectedPlugins = {}
             for plugin in form_plugins_list:
                 selectedPlugins[plugin.name] = {
-                     "id" : str(plugin.id),
-                     "name" : plugin.name,
-                     "version" : plugin.version,
-                     "features": plugin.pluginsettings.get('features',[]),
-                     "userInput": pluginsUserInput.get(str(plugin.id),'')
+                    "id": str(plugin.id),
+                    "name": plugin.name,
+                    "version": plugin.version,
+                    "features": plugin.pluginsettings.get('features', []),
+                    "userInput": pluginsUserInput.get(str(plugin.id), '')
                 }
             eas.selectedPlugins = selectedPlugins
-            
+
             eas.save()
-            
+
             # save single non-barcoded sample or barcoded samples
             if not eas.barcodeKitName:
                 sampleId = exp_form.cleaned_data['sample']
@@ -964,17 +995,14 @@ def experiment_edit(request, pk):
 
         else:
             return HttpResponseServerError('%s %s' % (exp_form.errors, eas_form.errors))
-        
-    ctxd = {"exp_form": exp_form, "eas_form": eas_form, "pk":pk, "name": exp.expName, "barcodes":json.dumps(barcodes)}
-    return render_to_response("rundb/data/modal_experiment_edit.html", context_instance=template.RequestContext(request, ctxd))
-    
 
+    ctxd = {"exp_form": exp_form, "eas_form": eas_form, "pk":
+            pk, "name": exp.expName, "barcodes": json.dumps(barcodes)}
+    return render_to_response("rundb/data/modal_experiment_edit.html", context_instance=template.RequestContext(request, ctxd))
 
 
 @login_required
 def datamanagement(request):
-
-    fs_stats = disk_usage_stats()
     gc = GlobalConfig.get()
 
     if os.path.exists("/opt/ion/.ion-internal-server"):
@@ -993,33 +1021,35 @@ def datamanagement(request):
 
     dm_filesets = DMFileSet.objects.filter(version=settings.RELVERSION).order_by('pk')
     for dmfileset in dm_filesets:
-        if dmfileset.backup_directory in ['None',None,'']:
+        if dmfileset.backup_directory in ['None', None, '']:
             dmfileset.mounted = False
         else:
-            dmfileset.mounted = bool( is_mounted(dmfileset.backup_directory) ) and os.path.exists(dmfileset.backup_directory)
+            dmfileset.mounted = bool(is_mounted(dmfileset.backup_directory)) and os.path.exists(
+                dmfileset.backup_directory)
 
-    # mounted paths for Disk Usage section
+    # Disk Usage section
+    fs_stats = {}
+    for path in FileServer.objects.all().order_by('pk').values_list('filesPrefix', flat=True):
+        try:
+            if os.path.exists(path):
+                fs_stats[path] = get_disk_attributes_gb(path)
+                # get space used by data marked Keep
+                keeper_used = get_keepers_diskspace(path)
+                keeper_used = float(sum(keeper_used.values())) / 1024  # gbytes
+                total_gb = fs_stats[path]['disksize']
+                fs_stats[path]['percentkeep'] = 100 * (keeper_used / total_gb) if total_gb > 0 else 0
+        except:
+            logger.error(traceback.format_exc())
+
     archive_stats = {}
     backup_dirs = get_dir_choices()[1:]
-    for bdir,name in backup_dirs:
-        mounted = is_mounted(bdir)  # This will return mountpoint path
-        if mounted and bdir not in archive_stats and bdir not in fs_stats:
-            try:
-                total, availSpace, freeSpace, bsize = disk_attributes(bdir)
-                total_gb = float(total*bsize)/(1024*1024*1024)
-                avail_gb = float(availSpace*bsize)/(1024*1024*1024)
-                #free_gb = float(freeSpace*bsize)/(1024*1024*1024)
-                percentfull = 100-(float(availSpace)/float(total)*100) if total > 0 else 0
-            except:
-                percentfull = ""
-                total_gb = ""
-                avail_gb = ""
-
-            archive_stats[bdir] = {
-                'percentfull': percentfull,
-                'disksize': total_gb,
-                'diskfree': avail_gb,
-            }
+    for bdir, name in backup_dirs:
+        try:
+            mounted = is_mounted(bdir)  # This will return mountpoint path
+            if mounted and bdir not in archive_stats and bdir not in fs_stats:
+                archive_stats[bdir] = get_disk_attributes_gb(bdir)
+        except:
+            logger.error(traceback.format_exc())
 
     ctxd = {
         "autoArchive": gc.auto_archive_ack,
@@ -1029,8 +1059,8 @@ def datamanagement(request):
         "archive_stats": archive_stats,
         "fs_stats": fs_stats,
         "dm_stats": dm_category_stats()
-    }    
-    
+    }
+
     ctx = template.RequestContext(request, ctxd)
     return render_to_response("rundb/data/data_management.html", context_instance=ctx)
 
@@ -1052,13 +1082,13 @@ def dm_actions(request, results_pks):
             dmfilestat = result.dmfilestat_set.get(dmfileset__type=category)
             if not info:
                 info = {
-                'category':dmfilestat.dmfileset.type,
-                'description':dmfilestat.dmfileset.description,
-                'action_state': dmfilestat.get_action_state_display(),
-                'keep': dmfilestat.getpreserved(),
-                'diskspace': dmfilestat.diskspace,
-                'in_process': dmfilestat.in_process()
-            }
+                    'category': dmfilestat.dmfileset.type,
+                    'description': dmfilestat.dmfileset.description,
+                    'action_state': dmfilestat.get_action_state_display(),
+                    'keep': dmfilestat.getpreserved(),
+                    'diskspace': dmfilestat.diskspace,
+                    'in_process': dmfilestat.in_process()
+                }
             else:
                 # multiple results
                 if info['action_state'] != dmfilestat.get_action_state_display():
@@ -1131,20 +1161,20 @@ def dm_action_selected(request, results_pks, action):
                     dmactions.action_validation(dmfilestat, action, data['confirmed'])
                 except DMExceptions.FilesInUse as e:
                     # warn if exporting files currently in use, allow to proceed if confirmed
-                    if action=='export':
+                    if action == 'export':
                         if not data['confirmed']:
-                            return HttpResponse(json.dumps({'warning':str(e)+'<br>Exporting now may produce incomplete data set.'}), mimetype="application/json")
+                            return HttpResponse(json.dumps({'warning': str(e) + '<br>Exporting now may produce incomplete data set.'}), mimetype="application/json")
                     else:
                         raise e
                 except DMExceptions.BaseInputLinked as e:
                     # warn if deleting basecaller files used in any other re-analysis started from BaseCalling
                     if not data['confirmed']:
-                        return HttpResponse(json.dumps({'warning':str(e)}), mimetype="application/json")
+                        return HttpResponse(json.dumps({'warning': str(e)}), mimetype="application/json")
 
                 # warn if archiving data marked Keep
-                if action=='archive' and dmfilestat.getpreserved():
+                if action == 'archive' and dmfilestat.getpreserved():
                     if not data['confirmed']:
-                        return HttpResponse(json.dumps({'warning':'%s currently marked Keep.' % dmfilestat.dmfileset.type}), mimetype="application/json")
+                        return HttpResponse(json.dumps({'warning': '%s currently marked Keep.' % dmfilestat.dmfileset.type}), mimetype="application/json")
                     else:
                         dmfilestat.setpreserved(False)
 
@@ -1152,7 +1182,8 @@ def dm_action_selected(request, results_pks, action):
                 if dmfilestat.isarchived() and not os.path.exists(dmfilestat.archivepath):
                     return HttpResponseServerError("%s archive location %s is not available." % (dmfilestat.dmfileset.type, dmfilestat.archivepath))
 
-        async_task_result = dmtasks.action_group.delay(request.user.username, data['categories'], action, dmfilestat_dict, data['comment'], backup_directory, data['confirmed'])
+        async_task_result = dmtasks.action_group.delay(request.user.username, data[
+                                                       'categories'], action, dmfilestat_dict, data['comment'], backup_directory, data['confirmed'])
 
         if async_task_result:
             logger.debug(async_task_result)
@@ -1166,15 +1197,16 @@ def dm_action_selected(request, results_pks, action):
         logger.error("dm_action_selected: error: %s" % str(e))
         return HttpResponseServerError("%s" % str(e))
 
-    test = {'pks':results_pks, 'action':action, 'data':data}
-    return HttpResponse(json.dumps(test), mimetype="application/json");
+    test = {'pks': results_pks, 'action': action, 'data': data}
+    return HttpResponse(json.dumps(test), mimetype="application/json")
+
 
 @login_required
 @staff_member_required
 def dm_configuration(request):
-    def isdiff(value1,value2):
+    def isdiff(value1, value2):
         return str(value1) != str(value2)
-    
+
     config = GlobalConfig.get()
     dm_contact, created = User.objects.get_or_create(username='dm_contact')
 
@@ -1197,28 +1229,30 @@ def dm_configuration(request):
         log = 'SAVED Data Management Configuration<br>'
         data = json.loads(request.body)
         changed = False
-        html = lambda s:'<span style="color:#3A87AD;">%s</span>' % s
+        html = lambda s: '<span style="color:#3A87AD;">%s</span>' % s
         try:
             for key, value in data.items():
                 if key == 'filesets':
                     for category, params in value.items():
-                        #log += '<b>%s:</b> %s<br>' % (category, json.dumps(params).translate(None, "{}\"\'") )
+                        # log += '<b>%s:</b> %s<br>' % (category,
+                        # json.dumps(params).translate(None, "{}\"\'") )
                         dmfileset = dm_filesets.filter(type=category)
                         current_params = dmfileset.values(*params.keys())[0]
-                        changed_params = [key for key,value in params.items() if isdiff(value,current_params.get(key))]
+                        changed_params = [
+                            key for key, value in params.items() if isdiff(value, current_params.get(key))]
                         if len(changed_params) > 0:
                             dmfileset.update(**params)
                             changed = True
                         log += '<b>%s:</b> ' % category
-                        for key,value in params.items():
-                            log_txt = ' %s: %s,' % (key,value)
+                        for key, value in params.items():
+                            log_txt = ' %s: %s,' % (key, value)
                             if key in changed_params:
                                 log_txt = html(log_txt)
                             log += log_txt
                         log = log[:-1] + '<br>'
                 elif key == 'email':
                     log_txt = '<b>Email:</b> %s' % value
-                    if isdiff(value,dm_contact.email):
+                    if isdiff(value, dm_contact.email):
                         changed = True
                         dm_contact.email = value
                         dm_contact.save()
@@ -1226,13 +1260,13 @@ def dm_configuration(request):
                     log += log_txt + '<br>'
                 elif key == 'auto_archive_ack':
                     log_txt = '<b>Auto Acknowledge Delete:</b> %s' % value
-                    if isdiff(value,config.auto_archive_ack):
+                    if isdiff(value, config.auto_archive_ack):
                         changed = True
-                        config.auto_archive_ack = True if value=='True' else False
+                        config.auto_archive_ack = True if value == 'True' else False
                         config.save()
                         log_txt = html(log_txt)
                     log += log_txt + '<br>'
-            if changed:        
+            if changed:
                 _add_dm_configuration_log(request, log)
         except Exception as e:
             logger.exception("dm_configuration: error: %s" % str(e))
@@ -1240,11 +1274,13 @@ def dm_configuration(request):
 
         return HttpResponse()
 
+
 def _add_dm_configuration_log(request, log):
     # add log entry. Want to save with the DMFileSet class, not any single object, so use fake object_pk.
     ct = ContentType.objects.get_for_model(DMFileSet)
     ev = EventLog(object_pk=0, content_type=ct, username=request.user.username, text=log)
     ev.save()
+
 
 def delete_ack(request):
     runPK = request.POST.get('runpk', False)
@@ -1262,7 +1298,8 @@ def delete_ack(request):
 
     # If multiple reports per experiment update all sigproc action_states.
     results_pks = exp.results_set.values_list('pk', flat=True)
-    ret = DMFileStat.objects.filter(result__pk__in=results_pks, dmfileset__type=dmactions_types.SIG).update(action_state=runState)
+    ret = DMFileStat.objects.filter(
+        result__pk__in=results_pks, dmfileset__type=dmactions_types.SIG).update(action_state=runState)
 
     for result in exp.results_set.all():
         msg = '%s deletion ' % dmactions_types.SIG
@@ -1271,6 +1308,7 @@ def delete_ack(request):
 
     return HttpResponse(json.dumps({"runState": runState, "count": ret, "runPK": runPK}), mimetype="application/json")
 
+
 @login_required
 def preserve_data(request):
     # Sets flag to preserve data for a single DMFileStat object
@@ -1278,7 +1316,7 @@ def preserve_data(request):
 
         reportPK = request.POST.get('reportpk', False)
         expPK = request.POST.get('exppk', False)
-        keep = True if request.POST.get('keep')=='true' else False
+        keep = True if request.POST.get('keep') == 'true' else False
         dmtype = request.POST.get('type', '')
 
         if dmtype == 'sig':
@@ -1297,7 +1335,8 @@ def preserve_data(request):
         try:
             if reportPK:
                 if dmtype == 'sig':
-                    expPKs = Results.objects.filter(pk__in=reportPK.split(',')).values_list('experiment', flat=True)
+                    expPKs = Results.objects.filter(
+                        pk__in=reportPK.split(',')).values_list('experiment', flat=True)
                     results = Results.objects.filter(experiment__in=expPKs)
                 else:
                     results = Results.objects.filter(pk__in=reportPK.split(','))
@@ -1311,29 +1350,31 @@ def preserve_data(request):
             for result in results:
                 filestat = result.get_filestat(typeStr)
                 filestat.setpreserved(keep)
-                
+
                 if dmtype == 'reanalysis':
                     # Keep BASE category data for Proton fullchip for re-analysis from on-instrument files
-                    if result.experiment.log.get('oninstranalysis','')=='yes' and not result.isThumbnail:
+                    if result.experiment.log.get('oninstranalysis', '') == 'yes' and not result.isThumbnail:
                         result.get_filestat(dmactions_types.BASE).setpreserved(keep)
 
                 EventLog.objects.add_entry(result, msg, username=request.user.username)
         except Exception as err:
             return HttpResponseServerError("error, %s" % err)
 
-        return HttpResponse(json.dumps({"reportPK": reportPK, "type":typeStr, "keep":filestat.getpreserved()}), mimetype="application/json")
+        return HttpResponse(json.dumps({"reportPK": reportPK, "type": typeStr, "keep": filestat.getpreserved()}), mimetype="application/json")
+
 
 def get_dir_choices():
     from iondb.utils import devices
     basicChoice = [(None, 'None')] + devices.to_media(devices.disk_report())
- 
+
     # add selected directories to choices
-    for choice in set(DMFileSet.objects.exclude(backup_directory__in=['','None']).values_list('backup_directory', flat=True)):
-        if choice and not (choice,choice) in basicChoice:
+    for choice in set(DMFileSet.objects.exclude(backup_directory__in=['', 'None']).values_list('backup_directory', flat=True)):
+        if choice and not (choice, choice) in basicChoice:
             choice_str = choice if bool(is_mounted(choice)) else '%s (not mounted)' % choice
-            basicChoice.append( (choice,choice_str) )
+            basicChoice.append((choice, choice_str))
 
     return tuple(basicChoice)
+
 
 def dm_log(request, pk=None):
     if request.method == 'GET':
@@ -1342,6 +1383,7 @@ def dm_log(request, pk=None):
         title = "Data Management Actions for %s (%s):" % (selected.resultsName, pk)
         ctx = RequestContext(request, {"title": title, "pk": pk, "cttype": ct.id})
         return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
+
 
 def dm_configuration_log(request):
     if request.method == 'GET':
@@ -1354,17 +1396,19 @@ def dm_configuration_log(request):
         _add_dm_configuration_log(request, log)
         return HttpResponse()
 
+
 def dm_history(request):
     logs = EventLog.objects.for_model(Results)
     usernames = set(logs.values_list('username', flat=True))
-    ctx = RequestContext(request, {'usernames':usernames})
+    ctx = RequestContext(request, {'usernames': usernames})
     return render_to_response("rundb/data/dm_history.html", context_instance=ctx)
+
 
 def dm_list_files(request, resultPK, action):
     """Returns the list of files that are selected for the given file categories for the given Report"""
     data = json.loads(request.body)
     dmfilestat = DMFileStat.objects.select_related() \
-                .filter(dmfileset__type__in=data['categories'], result__id=int(resultPK))
+        .filter(dmfileset__type__in=data['categories'], result__id=int(resultPK))
     dmfilestat = dmfilestat[0]
 
     # Hack - generate serialized json file for the DataXfer plugin
@@ -1375,11 +1419,13 @@ def dm_list_files(request, resultPK, action):
         'files_to_transfer': to_process,
         'start_dirs': [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir],
     }
-    return HttpResponse(json.dumps(payload), mimetype="application/json");
+    return HttpResponse(json.dumps(payload), mimetype="application/json")
+
 
 @login_required
 def browse_backup_dirs(request, path):
     from iondb.utils import devices
+
     def bread_crumbs(path):
         crumbs = []
         while path != '/':
@@ -1397,13 +1443,13 @@ def browse_backup_dirs(request, path):
     file_info = []
     path_allowed = True
     if path:
-        if not os.path.isabs(path): path = os.path.join('/',path)
+        if not os.path.isabs(path): path = os.path.join('/', path)
         # only allow directories inside mount points
-        path_allowed = any([path.startswith(d) for d,n in backup_dirs])
+        path_allowed = any([path.startswith(d) for d, n in backup_dirs])
         if not path_allowed:
             return HttpResponseServerError("Directory not allowed: %s" % path)
 
-    exclude_archived = request.GET.get('exclude_archived','false')
+    exclude_archived = request.GET.get('exclude_archived', 'false')
 
     if path and path_allowed:
         breadcrumbs = bread_crumbs(path)
@@ -1434,25 +1480,28 @@ def browse_backup_dirs(request, path):
                 size = ''
             file_info.append((name, file_path, date, size))
 
-    ctxd = {"backup_dirs": backup_dirs, "selected_path": path, "breadcrumbs": breadcrumbs, "dirs": dir_info, "files": file_info, "exclude_archived": exclude_archived }
+    ctxd = {"backup_dirs": backup_dirs, "selected_path": path, "breadcrumbs": breadcrumbs,
+            "dirs": dir_info, "files": file_info, "exclude_archived": exclude_archived}
     return render_to_response("rundb/data/modal_browse_dirs.html", ctxd)
+
 
 def import_data(request):
     if request.method == "GET":
         backup_dirs = get_dir_choices()
-        return render_to_response("rundb/data/modal_import_data.html", context_instance=RequestContext(request, {"backup_dirs": backup_dirs}) )
+        return render_to_response("rundb/data/modal_import_data.html", context_instance=RequestContext(request, {"backup_dirs": backup_dirs}))
     elif request.method == "POST":
         postData = json.loads(request.body)
         for result in postData:
             name = result.pop('name')
-            copy_data = bool(result.pop('copy_data',False))
-            copy_report = bool(result.pop('copy_report',False))
+            copy_data = bool(result.pop('copy_data', False))
+            copy_report = bool(result.pop('copy_report', False))
             async_result = data_import.delay(name, result, request.user.username, copy_data, copy_report)
         return HttpResponse()
 
+
 def import_data_find(request, path):
     # search directory tree for importable data
-    if not os.path.isabs(path): path = os.path.join('/',path.strip())
+    if not os.path.isabs(path): path = os.path.join('/', path.strip())
     if path and os.path.exists(path):
         found_results = find_data_to_import(path)
         if len(found_results) == 0:
@@ -1468,15 +1517,16 @@ def import_data_find(request, path):
                 })
             ctxd = {
                 "dm_types": [dmactions_types.OUT, dmactions_types.BASE, dmactions_types.SIG],
-                'results_list':results_list
+                'results_list': results_list
             }
             return render_to_response("rundb/data/modal_import_data.html", ctxd)
     else:
         return HttpResponseNotFound('Cannot access path: %s.' % path)
 
+
 def import_data_log(request, path):
     # display log file
-    if not os.path.isabs(path): path = os.path.join('/',path)
+    if not os.path.isabs(path): path = os.path.join('/', path)
     contents = ''
     with open(path, 'rb') as f:
         contents = f.read()
@@ -1486,9 +1536,12 @@ def import_data_log(request, path):
     response += '<script type="text/javascript">$(function() { $("#modal_report_log .modal-header").find("h2").text("Data Import Log");});</script>'
     return HttpResponse(response, mimetype='text/plain')
 
+
 def dmactions_jobs(request):
-    active_dmfilestats = DMFileStat.objects.filter(action_state__in=['AG','DG','EG','SA','SE','SD','IG']).select_related('result','dmfileset')
-    active_logs = EventLog.objects.filter(object_pk__in=active_dmfilestats.values_list('result__pk',flat=True))
+    active_dmfilestats = DMFileStat.objects.filter(
+        action_state__in=['AG', 'DG', 'EG', 'SA', 'SE', 'SD', 'IG']).select_related('result', 'dmfileset')
+    active_logs = EventLog.objects.filter(
+        object_pk__in=active_dmfilestats.values_list('result__pk', flat=True))
     dmactions_jobs = []
     for dmfilestat in active_dmfilestats:
         d = {
@@ -1509,11 +1562,12 @@ def dmactions_jobs(request):
                     d['comment'] = log.text.split('User Comment:')[1].strip()
                 except:
                     d['comment'] = log.text
-        
+
         dmactions_jobs.append(d)
-    
-    ctx = json.dumps({'objects': dmactions_jobs, 'total':len(dmactions_jobs)}, cls=DjangoJSONEncoder)
+
+    ctx = json.dumps({'objects': dmactions_jobs, 'total': len(dmactions_jobs)}, cls=DjangoJSONEncoder)
     return HttpResponse(ctx, content_type="application/json")
+
 
 def cancel_pending_dmaction(request, pk):
     dmfilestat = DMFileStat.objects.get(pk=pk)
@@ -1522,23 +1576,3 @@ def cancel_pending_dmaction(request, pk):
         dmfilestat.setactionstate('L')
         EventLog.objects.add_entry(dmfilestat.result, msg, username=request.user.username)
     return HttpResponse()
-
-def dm_category_stats():
-    stats = []
-    dmfilestats = DMFileStat.objects.exclude(result__experiment__expDir="")
-    for dmtype in dmactions_types.FILESET_TYPES:
-        by_type = dmfilestats.filter(dmfileset__type=dmtype)
-        keepers = by_type.filter(preserve_data=True) if dmtype!=dmactions_types.SIG else by_type.filter(result__experiment__storage_options="KI")
-        dmtype_stats = {
-            'Total': by_type.count(),
-            'Keep': keepers.filter(action_state__in=['L','S','N','A','SE','EG','E']).count(),
-            'Local': by_type.filter(action_state__in=['L','S','N']).count(),
-            'Archived': by_type.filter(action_state='AD').count(),
-            'Deleted': by_type.filter(action_state='DD').count(),
-            'In_process': by_type.filter(action_state__in=['AG','DG','EG','SA','SE','SD','IG']).count(),
-            'Error': by_type.filter(action_state='E').count(),
-        }
-        stats.append((dmtype, dmtype_stats))
-
-    return stats
-    

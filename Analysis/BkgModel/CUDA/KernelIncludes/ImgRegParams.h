@@ -8,7 +8,7 @@
 #ifndef IMGREGPARAMS_H_
 #define IMGREGPARAMS_H_
 
-#include <fstream>
+#include <iostream>
 
 /* ////////////////////////////////
  * class ImRegParams
@@ -41,7 +41,7 @@ public:
   __host__ __device__
   void print() const
   {
-    printf( "img %lu, %lu  reg %lu ,%lu numregs: %lu\n", imgW, imgH, regW, regH, getNumRegions());
+    printf( "img %zu, %zu  reg %zu ,%zu numregs: %zu\n", imgW, imgH, regW, regH, getNumRegions());
   }
 
 
@@ -263,10 +263,11 @@ public:
   }
 
   __host__ __device__
-  void print()
+  void print() const
   {
-    printf( "img %lu, %lu  reg %lu ,%lu numregs: %lu\n", imgW, imgH, regW, regH, getNumRegions());
+    printf( "img %zu, %zu  reg %zu ,%zu numregs: %zu\n", imgW, imgH, regW, regH, getNumRegions());
   }
+
 
   __host__
   static ImgRegParams readImgRegParamsFromFile(const char * filename)
@@ -327,9 +328,17 @@ public:
    }
 
 
+private:
 
-
-
+  friend class boost::serialization::access;
+   template<typename Archive>
+   void serialize(Archive& ar, const unsigned int version) {
+     ar &
+     imgW &
+     imgH &
+     regW &
+     regH ;
+   }
 };
 
 

@@ -3,7 +3,7 @@
 #define BYTESWAPUTILS_H
 
 #ifdef GNUC
-#include <inttypes.h>
+#include <cinttypes>
 #endif
 
 #define BYTE_SWAP_2(n) (uint16_t)((((n)>>8) | ((n)<<8)))

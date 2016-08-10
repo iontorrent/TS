@@ -27,6 +27,7 @@
 <style type="text/css">
   body {background:white}
   .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+  .unscaled_image_window {background:white}
 </style>
 
 {% load humanize %}
@@ -153,24 +154,6 @@ $(document).ready(function() {
 });
 </script>
 
-<script type="text/javascript">
-  var img_width = 0, img_height = 0 ;
-  var img = new Image();
-  img.onload = function() {
-    img_width = this.width;
-    img_height = this.height;
-    var maxWidth = screen.availWidth-10;
-    var maxHeight = screen.availHeight-10;
-    if( img_width > maxWidth ) img_width = maxWidth;
-    if( img_height > maxHeight ) img_height = maxHeight;
-  }
-  img.src = $("#paircor_img").attr("src");
-  $(".unscaled_image_window").click(function() {
-    window.open(this.href,"_blank",'height='+img_height+',width='+img_width+',titlebar=0,toolbar=0,location=0,status=0'); 
-    return false;
-  });
-</script>
-
 {% if bctable %}
 <ul class="tabs" data-tab>
   <li class="tab-title active"><a href="#QAPlots">Distribution Plots</a></li>
@@ -240,6 +223,26 @@ $(document).ready(function() {
 {% endif %}
 
 </div>
+
+<script type="text/javascript">
+  var img_width = 0, img_height = 0 ;
+  var img = new Image();
+  img.onload = function() {
+    img_width = this.width;
+    img_height = this.height;
+    var maxWidth = screen.availWidth-10;
+    var maxHeight = screen.availHeight-10;
+    if( img_width > maxWidth ) img_width = maxWidth;
+     if( img_height > maxHeight ) img_height = maxHeight;
+  }
+  var srcImgSrc = $("#paircor_img").attr("src");
+  if( srcImgSrc !== undefined )
+    img.src = srcImgSrc;
+  $(".unscaled_image_window").click(function() {
+    window.open(this.href,"_blank",'height='+img_height+',width='+img_width+',titlebar=0,toolbar=0,location=0,status=0'); 
+    return false;
+  });
+</script>
 
 <br/>
 <h4 style="padding:10px">

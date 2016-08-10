@@ -42,12 +42,11 @@ class SimpleSingleFitStream : public cudaSimpleStreamExecutionUnit
   TMemSegPair<bead_state> _hdBeadState;  //bead_state*
 
   TMemSegPair<float> _hdDarkMatter; //float*
-  TMemSegPair<float> _hdDarkEmphVector; //float*
   TMemSegPair<float> _hdShiftedBkg; //float*
-  TMemSegPair<float> _hdEmphVector; //float*
-  TMemSegPair<float> _hdNucRise; //float*
-  TMemSegPair<float> _hdStdTimeCompEmphVec; //float*
-  TMemSegPair<float> _hdStdTimeCompNucRise; //float*
+  TMemSegPair<float> _hdCrudeEmphVector; //float*
+  TMemSegPair<float> _hdFineEmphVector; //float*
+  TMemSegPair<float> _hdCoarseNucRise; //float*
+  TMemSegPair<float> _hdFineNucRise; //float*
 
   //MemorySegmentPairGroups to wrap copy into single call
   MemSegPair _hdCopyOutGroup;

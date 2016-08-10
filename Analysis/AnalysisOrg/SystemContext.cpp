@@ -32,6 +32,12 @@ void SystemContext::DefaultSystemContext()
   NO_SUBDIR = false;  // when set to true, no experiment subdirectory is created for output files.
 
   explog_path = "";
+  well_convert = true;
+  well_lower = -5.0f;
+  well_upper=28.0f;
+  wells_save_queue_size = 0;
+  wells_save_number_copies = true;
+  wells_convert_with_copies = true;
 }
 
 //const char *SystemContext::GetResultsFolder()
@@ -306,6 +312,51 @@ void SystemContext::FindExpLogPath()
   }
 }
 
+// make sure we have explog file if not set cmd-line
+void SystemContext::WaitForExpLogFinalPath()
+{
+  // @2DO move this wait somewhere? it would be more natural in Image/Image.cpp
+  uint32_t waitTime = 15; // 15 seconds retry interval
+  int32_t timeOut = 7200; // 2 hours before giving up
+
+  fprintf (stdout, "Waiting for explog_final.txt... \n");
+
+  if (explog_final_path.length() == 0){
+    while ( timeOut > 0 ) {
+
+      char *path =  MakeExpLogFinalPathFromDatDir(dat_source_directory);
+      if (path){ // if not NULL 
+	explog_final_path = path; 
+	free(path);
+	break;
+      }
+
+      uint32_t timeWaited = 0;
+      uint32_t timeLeft = sleep ( waitTime );
+      timeWaited = waitTime - timeLeft;
+      fprintf (stdout, "DEBUG waited %u sec. for explog_final.txt\n", timeWaited );
+      fflush(stdout);
+      timeOut -= timeWaited;
+
+    }
+  }
+
+  if (explog_final_path.length() == 0)
+    {
+      fprintf (stderr, "Unable to find explog_final.txt file.  Exiting.\n");
+      exit (EXIT_FAILURE);
+    }
+
+  fprintf (stdout, "Found %s\n", explog_final_path.c_str());
+}
+
+bool SystemContext::CheckDatacollectExcludeRegions(int beginX, int endX, int chipSizeX, int beginY, int endY, int chipSizeY)
+{
+  printf("# DEBUG testing for DataCollect exclude regions X:%d-%d/0-%d Y:%d-%d/0-%d\n", 
+	 beginX, endX, chipSizeX, beginY, endY, chipSizeY);
+  return ifDatacollectExcludeRegion(explog_final_path.c_str(), beginX, endX, chipSizeX, beginY, endY, chipSizeY);
+}
+
 void SystemContext::CleanupTmpWellsFile ()
 {
   //Cleanup
@@ -404,4 +455,12 @@ void SystemContext::SetOpts(OptArgs &opts, Json::Value& json_params)
 		dat_source_directory = (char *) malloc (s.length() + 1);
 		sprintf (dat_source_directory, "%s", s.c_str());  
 	}
+
+    well_convert = RetrieveParameterBool(opts, json_params, '-', "wells-save-as-ushort", true);
+    well_lower = RetrieveParameterFloat(opts, json_params, '-', "wells-convert-low", -5.0);
+    well_upper = RetrieveParameterFloat(opts, json_params, '-', "wells-convert-high", 28.0);
+    wells_save_queue_size = RetrieveParameterInt(opts, json_params, '-', "wells-save-queue-size", 0);
+    wells_save_number_copies = RetrieveParameterBool(opts, json_params, '-', "wells-save-number-copies", true);
+    wells_convert_with_copies = RetrieveParameterBool(opts, json_params, '-', "wells-convert-with-copies", true);
+    RetrieveParameterVectorInt(opts, json_params, '-', "region-list", "", region_list);
 }

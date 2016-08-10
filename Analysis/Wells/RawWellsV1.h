@@ -7,7 +7,6 @@
 #include <windows.h>
 #endif /* WIN32 */
 #include "Mask.h"
-#include "Separator.h"
 #include <stdio.h>
 #include "RawWells.h"
 	
@@ -28,7 +27,6 @@ class RawWellsV1 {
   const WellData *ReadXY(int x, int y);
   unsigned int NumWells() {return hdr.numWells;}
   unsigned int NumFlows() {return hdr.numFlows;}
-  void AddRank (Mask *mask, Separator *sep);
   void WriteRank (int rank, int x, int y);
   unsigned int NumRows() { return rows; }
   unsigned int NumCols() { return cols; }

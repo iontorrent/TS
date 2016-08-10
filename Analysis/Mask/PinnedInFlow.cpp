@@ -4,6 +4,7 @@
 #include "PinnedInFlow.h"
 #include "Utils.h"
 #include "IonErr.h"
+#include "ChipIdDecoder.h"
 #include "Vecs.h"
 #include <malloc.h>
 #ifdef __AVX__
@@ -243,8 +244,8 @@ int PinnedInFlow::Update (int flow, Image *img, float *gainPtr)
 		v8f_u pinnedV;
 		short int *sptr;
 
-		highV.V = LD_VEC8F(pinHigh);
-		lowV.V = LD_VEC8F(pinLow);
+		highV.V = LD_VEC8F((const float) pinHigh);
+		lowV.V = LD_VEC8F((const float)pinLow);
 
 		src = (short int *) (raw->image);
 		gainPtrV=(v8f *)gainPtr;
@@ -335,154 +336,6 @@ int PinnedInFlow::Update (int flow, Image *img, float *gainPtr)
   return (mPinsPerFlow[flow]);
 }
 
-int PinnedInFlow::Update (int flow, class SynchDat *img, float *gainPtr) {
-  // if any well at (x,y) is first pinned in this flow & this flow's img,
-  // set the value in mPinnedInFlow[x,y] to that flow
-  // const RawImage *raw = img->GetImage();
-  // int rows = raw->rows;
-  // int cols = raw->cols;
-  int rows = img->GetRows();
-  int cols = img->GetCols();
-  const short pinHigh = GetPinHigh();
-  const short pinLow = GetPinLow();
-  int pinned = 0;
-  float gainFactor =1.0f;
-  if (rows <= 0 || cols <= 0 ) {
-      cout << "Why bad row/cols for flow: " << flow << " rows: " << rows << " cols: " << cols << endl;
-      exit (EXIT_FAILURE);
-  }
-  for (size_t rIx = 0; rIx < img->GetNumBin(); rIx++) {
-    TraceChunk &chunk = img->GetChunk(rIx);
-    if (chunk.mWidth % VEC8_SIZE != 0) {
-      for (size_t r = 0; r < chunk.mHeight; r++) {
-	for (size_t c = 0; c < chunk.mWidth; c++) {
-	  size_t chipIdx = (r + chunk.mRowStart) * cols + (c + chunk.mColStart);
-	  int16_t *p = &chunk.mData[0] + r * chunk.mWidth + c;
-	  if (gainPtr) {
-	    gainFactor = gainPtr[chipIdx];
-	  }
-	  else {
-	    gainFactor = 1.0f;
-	  }
-	  pinned = 0;
-	  for (size_t frame = 0; frame < chunk.mDepth; frame++) {
-	    //	    int val = min(MAX_GAIN_CORRECT, (int)(*p * gainFactor));
-	    int val = (int)(*p * gainFactor);
-	    if (val > MAX_GAIN_CORRECT)
-	      val = MAX_GAIN_CORRECT;
-	    *p = (int16_t)val;
-	    bool isLow = val <= pinLow;
-	    bool isHigh = val >= pinHigh;
-	    if (!pinned && (isLow || isHigh)) {
-	      pinned = 1;
-	      SetPinned(chipIdx, flow);
-	    }
-	    p += chunk.mFrameStep;
-	  }
-	}
-      }
-    }
-    else {
-      int j;
-      v8f_u gainFactorV;
-      v8f_u fvalV;
-      int32_t val;
-      uint32_t pinnedA[VEC8_SIZE];
-      for (size_t r = 0; r < chunk.mHeight; r++) {
-	for (size_t c = 0; c < chunk.mWidth; c+=VEC8_SIZE) {
-	  size_t chipIdx = (r + chunk.mRowStart) * cols + (c + chunk.mColStart);
-	  int16_t *p = &chunk.mData[0] + r * chunk.mWidth + c;
-	  for(j=0;j<VEC8_SIZE;j++){
-	    pinnedA[j]=0;
-	    if (gainPtr)
-	      gainFactorV.A[j] = gainPtr[chipIdx+j];
-	    else
-	      gainFactorV.A[j] = 1.0f;
-	  }
-	  for (size_t frame = 0; frame < chunk.mDepth; frame++) {      
-	    int16_t *t = p;
-	    for (j = 0; j < VEC8_SIZE; j++) {
-	      fvalV.A[j] = (float) *t;
-	      t++;
-	    }
-	    t = p;
-	    fvalV.V *= gainFactorV.V;
-	    for(j=0; j < VEC8_SIZE; j++) {
-	      val = (int32_t)fvalV.A[j];
-	      if (val > MAX_GAIN_CORRECT)
-		val = MAX_GAIN_CORRECT;
-	      *t = (int16_t)val;
-	      t++;
-	      if(!pinnedA[j] && (val >= pinHigh || val <= pinLow)) {
-		  pinnedA[j]=1;
-		  SetPinned(chipIdx+j, flow);
-	      }
-	    }
-	    p += chunk.mFrameStep;
-	  }
-	}
-      }
-    }
-  }
-  return mPinsPerFlow[flow];
-}
-
-// int PinnedInFlow::Update (int flow, class SynchDat *img, float *gainPtr)
-// {
-//   // if any well at (x,y) is first pinned in this flow & this flow's img,
-//   // set the value in mPinnedInFlow[x,y] to that flow
-//   // const RawImage *raw = img->GetImage();
-//   // int rows = raw->rows;
-//   // int cols = raw->cols;
-//   int rows = img->GetRows();
-//   int cols = img->GetCols();
-//   int pinnedLowCount = 0;
-//   int pinnedHighCount = 0;
-//   const short pinHigh = GetPinHigh();
-//   const short pinLow = GetPinLow();
-
-//   if (rows <= 0 || cols <= 0)
-//   {
-//     cout << "Why bad row/cols for flow: " << flow << " rows: " << rows << " cols: " << cols << endl;
-//     exit (EXIT_FAILURE);
-//   }
-//   for (size_t rIx = 0; rIx < img->GetNumBin(); rIx++) {
-//     TraceChunk &chunk = img->GetChunk(rIx);
-//     for (size_t r = 0; r < chunk.mHeight; r++) {
-//       for (size_t c = 0; c < chunk.mWidth; c++) {
-// 	size_t chipIdx = (r + chunk.mRowStart) * cols + (c + chunk.mColStart);
-// 	short currFlow = mPinnedInFlow[chipIdx];
-// 	size_t idx = r * chunk.mWidth + c;
-// 	  for (size_t frame = 0; frame < chunk.mDepth; frame++) {
-// 	    short val = chunk.mData[idx];
-// 	    bool isLow = val <= pinLow;
-// 	    bool isHigh = val >= pinHigh;
-// 	    if (isLow || isHigh) {
-// 	      // pixel is pinned high or low
-// 	      if ( (currFlow < 0) | (currFlow > flow))   // new pins per flow
-// 		{
-// 		  currFlow = flow;
-// 		  mPinnedInFlow[chipIdx] = flow;
-// 		}
-// 	      if (isLow)
-// 		pinnedLowCount++;
-// 	      else
-// 		pinnedHighCount++;
-// 	      break;
-// 	    }
-// 	    idx += chunk.mFrameStep;
-// 	  }
-// 	// Should this really just be spinning???
-// 	while ( ( (short volatile *) &mPinnedInFlow[0]) [chipIdx] > currFlow) {
-// 	  // race condition, a later flow already updated this well, keep trying
-// 	  ( (short volatile *) &mPinnedInFlow[0]) [chipIdx] = currFlow;
-// 	}
-//       }
-//     }
-//   }
-//   mPinsPerFlow[flow] = pinnedLowCount+pinnedHighCount;
-//   return (pinnedLowCount+pinnedHighCount);
-// }
 
 int PinnedInFlow::QuickUpdate(int flow, Image *img)
 {

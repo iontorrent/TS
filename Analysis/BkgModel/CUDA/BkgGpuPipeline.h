@@ -13,6 +13,8 @@
 #include "HostParamDefines.h"
 #include "SignalProcessingFitterQueue.h"
 #include "GpuPipelineDefines.h"
+
+#include "PerBeadDataCubes.h"
 #include "SampleHistory.h"
 
 class cudaComputeVersion{
@@ -62,10 +64,10 @@ class DeviceData
   vector<size_t> bufferSizes;
 
 public:
-  LayoutCubeWithRegions<float> T0; //(ImgP,1, DeviceGlobal);
+  perBeadT0CubeClass T0; //(ImgP,1, DeviceGlobal);
+  perBeadParamCubeClass BeadParamCube; //(ImgP, DeviceGlobal);
+  perBeadPolyClonalCubeClass PolyClonalCube; //(ImgP, Bs_NUM_PARAMS ,DeviceGlobal);
   LayoutCubeWithRegions<float> RegionFrameCube; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), Rf_NUM_PARAMS, DeviceGlobal);
-  LayoutCubeWithRegions<float> BeadParamCube; //(ImgP, Bp_NUM_PARAMS, DeviceGlobal);
-  LayoutCubeWithRegions<float> PolyClonalCube; //(ImgP, Bs_NUM_PARAMS ,DeviceGlobal);
   LayoutCubeWithRegions<float> AverageSignalRegion; //  1 per region
   LayoutCubeWithRegions<int> RegionFramesPerPoint; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), 1, DeviceGlobal);
   LayoutCubeWithRegions<size_t> NumFrames; //(ImgP.getGridParam(),1, DeviceGlobal);
@@ -73,21 +75,24 @@ public:
   LayoutCubeWithRegions<PerNucParamsRegion> PerNucRegP; //(ImgP.getGridParam(),NUMNUC,DeviceGlobal);
 
   //DeviceBuffer updated more than once
-  LayoutCubeWithRegions<unsigned short> BeadStateMask; //(ImgP,1, DeviceGlobal);
+  perBeadStateMaskClass BeadStateMask; //(ImgP,1, DeviceGlobal);
   LayoutCubeWithRegions<unsigned short> RegionStateMask; //(ImgP,1, DeviceGlobal);
 
   //DeviceBuffer updated per flow
-  LayoutCubeWithRegions<PerFlowParamsRegion> PerFlowRegionParams; //(ImgP.getGridParam(),1,DeviceGlobal);
+  //LayoutCubeWithRegions<PerFlowParamsRegion> PerFlowRegionParams; //(ImgP.getGridParam(),1,DeviceGlobal);
 
 
-  LayoutCubeWithRegions<unsigned short> BfMask; //(ImgP,1,DeviceGlobal);
-  LayoutCubeWithRegions<short> RawTraces; //(ImgP,ConstFrmP.getRawFrames(), DeviceGlobal);
-  LayoutCubeWithRegions<float> EmphasisVec; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, DeviceGlobal);
-  LayoutCubeWithRegions<int> NonZeroEmphasisFrames; //(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, DeviceGlobal);
-  LayoutCubeWithRegions<float> NucRise; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_SINGLE_FLOW),1, DeviceGlobal);
+  perBeadBfMaskClass BfMask; //(ImgP,1,DeviceGlobal);
+  perBeadTraceCubeClass RawTraces; //(ImgP,ConstFrmP.getRawFrames(), DeviceGlobal);
+  LayoutCubeWithRegions<float> fineEmphasisVec; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, DeviceGlobal);
+  LayoutCubeWithRegions<float> crudeEmphasisVec; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, DeviceGlobal);
+  LayoutCubeWithRegions<int> fineNonZeroEmphasisFrames; //(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, DeviceGlobal);
+  LayoutCubeWithRegions<int> crudeNonZeroEmphasisFrames; //(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, DeviceGlobal);
+  LayoutCubeWithRegions<float> fineNucRise; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_SINGLE_FLOW),1, DeviceGlobal);
+  LayoutCubeWithRegions<float> coarseNucRise; //(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_SINGLE_FLOW),1, DeviceGlobal);
 
   //Buffers that are written to only by the kernels, scratch
-  LayoutCubeWithRegions<float> EmptyTraceAvg; //(ImgP.getGridParam(ConstFrmP.getUncompFrames()),1,DeviceGlobal);
+  //LayoutCubeWithRegions<float> EmptyTraceAvg; //(ImgP.getGridParam(ConstFrmP.getUncompFrames()),1,DeviceGlobal);
   LayoutCubeWithRegions<int> NumLBeads; //(ImgP.getGridParam(),1,DeviceGlobal);
   LayoutCubeWithRegions<float> T0Avg; //(ImgP.getGridParam(),1,DeviceGlobal);
   LayoutCubeWithRegions<int> EmptyTraceComplete; //(ImgP.getGridParam(),1,DeviceGlobal);
@@ -106,27 +111,30 @@ public:
   DeviceData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP):
     accumBytes(0),
     bufferSizes(),
-    T0(ImgP,1, DeviceGlobal, bufferSizes),
+    T0(ImgP,DeviceGlobal, bufferSizes),
+    BeadParamCube(ImgP, DeviceGlobal, bufferSizes),
+    PolyClonalCube(ImgP, DeviceGlobal, bufferSizes),
     RegionFrameCube(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), Rf_NUM_PARAMS, DeviceGlobal, bufferSizes),
-    BeadParamCube(ImgP, Bp_NUM_PARAMS, DeviceGlobal, bufferSizes),
-    PolyClonalCube(ImgP, Poly_NUM_PARAMS ,DeviceGlobal, bufferSizes),
     AverageSignalRegion(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
     RegionFramesPerPoint(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), 1, DeviceGlobal, bufferSizes),
     NumFrames(ImgP.getGridParam(),1, DeviceGlobal, bufferSizes),
     ConstRegP(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
     PerNucRegP(ImgP.getGridParam(),NUMNUC,DeviceGlobal, bufferSizes),
     //DeviceBuffer updated more than once
-    BeadStateMask(ImgP,1, DeviceGlobal, bufferSizes),
+    BeadStateMask(ImgP,DeviceGlobal, bufferSizes),
     RegionStateMask(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
     //DeviceBuffer updated per flow
-    PerFlowRegionParams(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
-    BfMask(ImgP,1,DeviceGlobal, bufferSizes),
+    //PerFlowRegionParams(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
+    BfMask(ImgP,DeviceGlobal, bufferSizes),
     RawTraces(ImgP,ConstFrmP.getImageAllocFrames(), DeviceGlobal, bufferSizes),
-    EmphasisVec(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, DeviceGlobal, bufferSizes),
-    NonZeroEmphasisFrames(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, DeviceGlobal, bufferSizes),
-    NucRise(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_SINGLE_FLOW),1, DeviceGlobal, bufferSizes),
+    fineEmphasisVec(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, DeviceGlobal, bufferSizes),
+    crudeEmphasisVec(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, DeviceGlobal, bufferSizes),
+    fineNonZeroEmphasisFrames(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, DeviceGlobal, bufferSizes),
+    crudeNonZeroEmphasisFrames(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, DeviceGlobal, bufferSizes),
+    fineNucRise(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_SINGLE_FLOW),1, DeviceGlobal, bufferSizes),
+    coarseNucRise(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_MULTI_FLOW),1, DeviceGlobal, bufferSizes),
     //Buffers that are written to only by the kernels, scratch
-    EmptyTraceAvg(ImgP.getGridParam(ConstFrmP.getUncompFrames()),1,DeviceGlobal, bufferSizes),
+    //EmptyTraceAvg(ImgP.getGridParam(ConstFrmP.getUncompFrames()),1,DeviceGlobal, bufferSizes),
     NumLBeads(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
     T0Avg(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
     EmptyTraceComplete(ImgP.getGridParam(),1,DeviceGlobal, bufferSizes),
@@ -298,13 +306,13 @@ public:
   //Host Buffer
 
   //wrapper for actual host buffer
-  LayoutCubeWithRegions<unsigned short> BfMask;
-  LayoutCubeWithRegions<short> RawTraces;
+  perBeadBfMaskClass BfMask;
+  //LayoutCubeWithRegions<short> RawTraces;
 
   //actually allocated buffers
-  LayoutCubeWithRegions<unsigned short> BeadStateMask;
+  perBeadStateMaskClass BeadStateMask;
   LayoutCubeWithRegions<float> ResultCube;
-  LayoutCubeWithRegions<PerFlowParamsRegion> PerFlowRegionParams;
+ // LayoutCubeWithRegions<PerFlowParamsRegion> PerFlowRegionParams;
   //LayoutCubeWithRegions<PerFlowParamsRegion> NewPerFlowRegionParams;
   LayoutCubeWithRegions<float> EmphasisVec;
   LayoutCubeWithRegions<float> NucRise;
@@ -316,12 +324,12 @@ public:
   HostData(const ImgRegParams & ImgP, const ConstantFrameParams & ConstFrmP):
     accumBytes(0),
     bufferSizes(),
-    BfMask(NULL,ImgP,1,HostMem),
-    RawTraces(NULL,ImgP,ConstFrmP.getRawFrames(), HostMem),
+    BfMask(NULL,ImgP,HostMem),
+    //RawTraces(NULL,ImgP,ConstFrmP.getRawFrames(), HostMem),
 
-    BeadStateMask(ImgP,1, HostMem, bufferSizes),
+    BeadStateMask(ImgP,HostMem, bufferSizes),
     ResultCube(ImgP,Result_NUM_PARAMS,HostMem, bufferSizes),
-    PerFlowRegionParams(ImgP.getGridParam(),1,HostMem, bufferSizes),
+    //PerFlowRegionParams(ImgP.getGridParam(),1,HostMem, bufferSizes),
     EmphasisVec(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*MAX_POISSON_TABLE_COL),1, HostMem, bufferSizes),
     NucRise( ImgP.getGridParam(ConstFrmP.getMaxCompFrames()*ISIG_SUB_STEPS_SINGLE_FLOW),1,HostMem, bufferSizes),
     NumFrames(ImgP.getGridParam(),1, HostMem, bufferSizes),
@@ -375,7 +383,7 @@ class BkgGpuPipeline
   DeviceTracelevelXTalkData * DevTLXTalkData;
   XTalkNeighbourStatsHost * pTLXTalkConstP;
 
-  SampleCollection * pSmplCol;
+  HistoryCollection * pHistCol;
 
   int startFlowNum;
   int devId;
@@ -393,7 +401,7 @@ protected:
 
 public:
 
-  BkgGpuPipeline(BkgModelWorkInfo* bkinfo, int startingFlow, int deviceId, SampleCollection * smpCol = NULL);  //ToDO: add stream and device info
+  BkgGpuPipeline(BkgModelWorkInfo* bkinfo, int deviceId, HistoryCollection * histCol = NULL);  //ToDO: add stream and device info
   ~BkgGpuPipeline();
 
 
@@ -425,7 +433,10 @@ public:
   const ConstantFrameParams getFrameP() const { return ConstFrmP; }
   bool firstFlow();
 
-  void InitRegionalParamsAtFirstFlow();
+  void DebugOutputDeviceBuffers();
+
+  //void InitRegionalParamsAtFirstFlow();
+
   //////////////////////////////////////////////////
   //TODO: remove when no longer needed (also remove buffers from collections
   //Functions to be used until REgional Fitting available on Device/per FLow
@@ -434,7 +445,7 @@ public:
   void ReadRegionDataFromFileForBlockOf20();
   void UpdateRegionParamsAndCopyPerFlow();
   void CopyNewToOldRegParams();
-
+  void CopySerializationDataFromDeviceToHost();
 
 
   void printBkgModelMaskEnum();

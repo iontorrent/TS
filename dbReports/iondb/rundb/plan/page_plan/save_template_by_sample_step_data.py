@@ -21,7 +21,7 @@ class SaveTemplateBySampleStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(SaveTemplateBySampleStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_save_plan.html'
-        self.savedFields = OrderedDict()        
+        self.savedFields = OrderedDict()
 
         self.savedFields[SaveTemplateStepDataFieldNames.TEMPLATE_NAME] = None
         self.savedFields[SaveTemplateStepDataFieldNames.SET_AS_FAVORITE] = None
@@ -29,7 +29,7 @@ class SaveTemplateBySampleStepData(AbstractStepData):
 
         self.savedFields[SaveTemplateStepDataFieldNames.LIMS_META] = None
         self.savedFields[SaveTemplateStepDataFieldNames.META] = {}
-        
+
         self.sh_type = sh_type
 
         # Monitoring
@@ -39,14 +39,13 @@ class SaveTemplateBySampleStepData(AbstractStepData):
         for qc_type in all_qc_types:
             self.savedFields[qc_type.qcName] = qc_type.defaultThreshold
             self.qcNames.append(qc_type.qcName)
-                
+
     def getStepName(self):
         return StepNames.SAVE_TEMPLATE_BY_SAMPLE
 
-        
     def validateField(self, field_name, new_field_value):
         self.validationErrors.pop(field_name, None)
-        
+
         if field_name == SaveTemplateStepDataFieldNames.TEMPLATE_NAME:
             errors = validate_plan_name(new_field_value, 'Template Name')
             if errors:
@@ -55,14 +54,13 @@ class SaveTemplateBySampleStepData(AbstractStepData):
         elif field_name == SaveTemplateStepDataFieldNames.NOTE:
             errors = validate_notes(new_field_value)
             if errors:
-                self.validationErrors[field_name] = '\n'.join(errors)    
+                self.validationErrors[field_name] = '\n'.join(errors)
 
         # validate all qc thresholds must be positive integers
         elif field_name in self.qcNames:
             errors = validate_QC(new_field_value, field_name)
             if errors:
                 self.validationErrors[field_name] = errors[0]
-
 
     def updateSavedObjectsFromSavedFields(self):
         pass

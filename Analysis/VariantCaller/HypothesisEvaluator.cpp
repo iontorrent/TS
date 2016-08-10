@@ -14,7 +14,7 @@ int CalculateHypPredictions(
     const vector<string>     &Hypotheses,
     const vector<bool>       &same_as_null_hypothesis,
     vector<vector<float> >   &predictions,
-    vector<vector<float> >   &normalizedMeasurements,
+    vector<float>   &normalizedMeasurements,
     int flow_upper_bound) {
 
     // --- Step 1: Initialize Objects
@@ -23,7 +23,6 @@ int CalculateHypPredictions(
 	  cout << "Prediction Generation for read " << my_read.alignment.Name << endl;
 
     predictions.resize(Hypotheses.size());
-    normalizedMeasurements.resize(Hypotheses.size());
     // Careful: num_flows may be smaller than flow_order.num_flows()
     const ion::FlowOrder & flow_order = global_context.flow_order_vector.at(my_read.flow_order_index);
     const int & num_flows = global_context.num_flows_by_run_id.at(my_read.runid);
@@ -40,11 +39,10 @@ int CalculateHypPredictions(
       prefix_size = master_read.sequence.size();
     }
     else {
-      const string & read_prefix = global_context.key_by_read_group.at(my_read.read_group);
-      prefix_size = read_prefix.length();
-      for (unsigned int i_base=0; i_base < read_prefix.length(); i_base++)
-        master_read.sequence.push_back(read_prefix.at(i_base));
       prefix_flow = my_read.prefix_flow;
+      prefix_size = my_read.prefix_bases.length();
+      for (unsigned int i_base=0; i_base < prefix_size; i_base++)
+        master_read.sequence.push_back(my_read.prefix_bases.at(i_base));
     }
 
     // --- Step 3: creating predictions for the individual hypotheses
@@ -67,8 +65,6 @@ int CalculateHypPredictions(
     	if (same_as_null_hypothesis.at(i_hyp)) {
             predictions[i_hyp] = predictions[0];
             predictions[i_hyp].resize(flow_order.num_flows());
-            normalizedMeasurements[i_hyp] = normalizedMeasurements[0];
-            normalizedMeasurements[i_hyp].resize(flow_order.num_flows());
         } else {
 
             hypothesesReads[i_hyp] = master_read;
@@ -100,8 +96,10 @@ int CalculateHypPredictions(
             // Store predictions and adaptively normalized measurements
             predictions[i_hyp].swap(hypothesesReads[i_hyp].prediction);
             predictions[i_hyp].resize(flow_order.num_flows(), 0);
-            normalizedMeasurements[i_hyp].swap(hypothesesReads[i_hyp].normalized_measurements);
-            normalizedMeasurements[i_hyp].resize(flow_order.num_flows(), 0);
+            if(i_hyp == 0){
+            	normalizedMeasurements.swap(hypothesesReads[i_hyp].normalized_measurements);
+            	normalizedMeasurements.resize(flow_order.num_flows(), 0);
+            }
         }
     }
 

@@ -50,33 +50,49 @@ $(function(){
             typeof(this.sort_field) != 'undefined' || (this.sort_field = '');
         },
 
-        fetch: function(options) {
+        fetch: function (options) {
+            $(".mesh-warning").remove();
             typeof(options) != 'undefined' || (options = {});
             this.trigger("fetchStart");
             var self = this;
             var success = options.success;
-            options.success = function(resp) {
+            options.success = function (resp) {
                 self.trigger("fetchDone fetchAlways");
-                if(success) { success(self, resp); }
+                if (success) {
+                    success(self, resp);
+                }
             };
             var error = options.error;
-            options.error = function(resp) {
+            options.error = function (resp) {
                 self.trigger("fetchFail fetchAlways");
-                if(error) { error(self, resp); }
+                if (error) {
+                    error(self, resp);
+                }
             };
             return Backbone.Collection.prototype.fetch.call(this, options);
         },
 
-        parse: function(resp) {
+        parse: function (resp) {
             this.offset = resp.meta.offset;
             this.limit = resp.meta.limit;
             this.total = resp.meta.total_count;
+
+            //Side effect to show error message
+            if (resp.warnings && resp.warnings.length > 0) {
+                resp.warnings.map(function (warningText) {
+                    $("<div/>", {
+                        class: "alert mesh-warning",
+                        html: "<strong>Warning!</strong> " + warningText
+                    }).insertAfter("#search_bar");
+                });
+            }
+
             return resp.objects;
         },
 
         // Add a model, or list of models to the set. Pass **silent** to avoid
         // firing the `add` event for every new model.
-        update: function(models, options) {
+        update: function (models, options) {
             var i, index, length, model, cid, id, cids = {}, ids = {}, dups = [];
             options || (options = {});
             models = _.isArray(models) ? models.slice() : [models];
@@ -236,9 +252,14 @@ $(function(){
             return this.fetch();
         },
 
-        filtrate: function (options) {
+        filtrate: function (options, isLocalDataSource) {
             this.filter_options = options || {};
             this.offset = 0;
+            if (isLocalDataSource) {
+                this.baseUrl = "/rundb/api/v1/compositeexperiment/";
+            } else {
+                this.baseUrl = "/rundb/api/mesh/v1/compositeexperiment/";
+            }
             return this.fetch();
         },
 
@@ -340,8 +361,12 @@ $(function(){
 
         patch: function (attributes) {
             this.set(attributes);
+            var url = this.url();
+            if(this.get("_host")){
+                url = "http://" + this.get("_host") + this.url()
+            }
             $.ajax({
-                url: this.url(),
+                url: url,
                 type: 'PATCH',
                 data: JSON.stringify(attributes),
                 contentType: 'application/json'
@@ -355,8 +380,8 @@ $(function(){
                 timeStamp: new Date(Date._parse(response.timeStamp))
             });
             if (response.experiment) {
-                    console.log("Experiment is not undefined " + response.experiment);
-                    console.log(this);
+                    //console.log("Experiment is not undefined " + response.experiment);
+                    //console.log(this);
                 response.experiment = _.extend(response.experiment, {
                     date: new Date(Date._parse(response.experiment.date)),
                     resultDate: new Date(Date._parse(response.experiment.resultDate))
@@ -381,8 +406,6 @@ $(function(){
     Run = TastyModel.extend({
         initialize: function () {
             if (this.get('results')) {
-                    console.log("Results are not undefined " + this.get('results'));
-                    console.log(this);
                     this.reports = new ReportList(this.get('results'), {
                     parse: true
                 });

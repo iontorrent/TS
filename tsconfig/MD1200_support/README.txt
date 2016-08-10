@@ -30,5 +30,5 @@ Installation instructions:
 
 ===============================================================================
 Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
-Contact: bernard.puc@lifetech.com
+Contact: bernard.puc@thermofisher.com
 ===============================================================================

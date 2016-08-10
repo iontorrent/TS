@@ -1,7 +1,12 @@
 /* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#ifndef ALIGN_BATCH_H
-#define ALIGN_BATCH_H
+//////////////////////////////////////////////////////////////////////////////
+// Derived from QSimScan project, released under MIT license
+// (https://github.com/abadona/qsimscan)
+//////////////////////////////////////////////////////////////////////////////
+
+#ifndef __align_batch_h__
+#define __align_batch_h__
 
 #include <ostream>
 #include <iomanip>
@@ -34,7 +39,6 @@ inline void batch_dbgout (std::ostream& o, const BATCH* b, int bno, const char d
     }
 }
 
-
 int align_score (const BATCH* bm, unsigned bno, const char* xseq, const char* yseq, int gip, int gep, int mat, int mis);
 
-#endif // ALIGN_BATCH_H
+#endif // __align_batch_h__

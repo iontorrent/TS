@@ -86,7 +86,7 @@
         </div>
     </div>
 
-    <div class="content">
+     <div class="content">
         <h1>Customize Site Name</h1>
         <br>
         <form action="{% url "configure_configure" %}" method="POST" class="form-inline" id="sitename">
@@ -94,6 +94,24 @@
             <input class="btn btn-primary" type="submit" value="Save Name">
         </form>
     </div>
+
+<div class="content">
+        <h1>Change Timezone</h1>
+        <br>
+        <form action="{% url "configure_configure" %}" method="POST" class="form-inline" id="timezone">
+            {%if all_TZ %}<select id="zone_select" name="zone_select" class="dropdown">
+            {%for zone in all_TZ.zones %}<option value={{zone}} {%if current_TZ.zones == zone %}selected{%endif %}>{{zone}}</option>{% endfor %}</select>
+                
+            <select id="city_select" name="city_select" class="dropdown">
+                {%for city in all_TZ.cities %}<option value={{city}} {%if current_TZ.cities == city %}selected{%endif %}>{{city}}</option>{% endfor %}
+            </select>{%endif %}
+            <input id="submit_button" class="btn btn-primary" type="submit" value="Save Time Zone">
+            <br><br>
+            <a id="auto_detect" href="{% url "auto_detect_timezone" %}" class="btn btn-primary">Auto Detect Timezone</a>
+            <div id="timezone_saved"></div>
+        </form>
+    </div>
+
 <!--
     <div class="content">
         <h1>Report Data Management</h1>
@@ -120,17 +138,85 @@
             <p>The <a href="/admin" target="_blank">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
         </div>
     </div>
-    <div class="content">
-        <div class="clearfix">
-            <h1>Update Products</h1>
-            <br>
-            <p>The <a href="{% url "update_product" %}">Update Products Interface</a> provides direct access to update your Torrent Suite server with the latest Products</p>
+    <div class="content clearfix" id="nas_content">
+        <div class="row-fluid">
+            <h1 class="span3">Torrent Storage</h1>
+            <h1 class="span9" id="insufficient_priv"></h1>
+        </div>
+        <div class="row-fluid">
+            <div class="span5">
+                <div title="Click a device to show its shared volumes">
+                    <h3>1. Select a TorrentNAS Device...
+                    <input type="button" class="btn pull-right" id="btn_refresh_devices" value="Refresh List"
+                           title="Updates list of NAS devices" />
+                    </h3>
+                    <select id="nfs_servers" size="4" style="width:100%; overflow:auto;"></select>
+                    <div id="nfs_servers_error"></div>
+                </div>
+                <div title="Enter a hostname or IP address and press 'Enter' to see its shared volumes">
+                    <h3>...or enter an IP or hostname here</h3>
+                    <input type="text" id="txtServer" />
+                    <div id="hostname_error"></div>
+                </div>
+                <div title="Select a share volume to attach">
+                    <h3>2. Select a Share Volume</h3>
+                    <select id="shares_available" size="4" style="width:100%; overflow:auto;"></select>
+                </div>
+                <div title="Click Add Volume to mount share volume to filesystem">
+                    <h3>3. Review mountpoint and click Add Volume</h3>
+                    <input type="text" id="txt_localmntpoint" class="textInput required validateFilenameRegex" style="width:96%" />
+                    <div id="mntpt_error"></div>
+                    <input type="text" id="txt_remotemntpoint" readonly style="display: none;"/>
+                </div>
+                <div title="Attaches share volume to filesystem">
+                    <input type="button" class="btn btn-primary" id="btn_mnt_share" value="Add Volume" disabled/>
+                </div>
+            </div>
+            <div class="span7" title="Select a share volume to detach">
+                <h3>Currently Mounted Volumes
+                <input type="button" class="btn pull-right" id="btn_refresh_mnts" value="Refresh List"
+                       title="Updates list of attached share volumes" />
+                </h3>
+                <select id="shares_mounted" size="4" style="width:100%; overflow:auto;"></select>
+                <div id="shares_mounted_error"></div>
+                <input type="button" class="btn btn-warning pull-right" id="btn_remove_mnt" value="Remove Volume"
+                       title="Detaches share volume from filesystem" disabled/>
+            </div>
         </div>
     </div>
+    <div class="content">
+        <div class="clearfix">
+            <h1>TS Mesh</h1>
+            <br>
+            <div class="row">
+                <div class="span4">
+                    <p>Available Torrent Servers</p>
+                    <select id="mesh_servers" size="7" class="input input-xlarge">
+                    {% for item in ionMesh %}
+                        <option>{{ item }}</option>
+                    {% endfor %}
+                    </select>
+            </div>
+                <div class="span4">
+                    <p>Shared Servers</p>
+                    <select id="shared_servers" size="7" class="input input-xlarge">
+                    {% for item in sharedServers %}
+                        <option>{{item.address}} ({{item.name}})</option>
+                    {% endfor %}
+                    </select>
+            </div>
+        </div>
+        </div> 
+    </div>
+    
     </div>
     </div>
 
 <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script>
+<script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/configure/contacts.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/configure/emails.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/configure/timezones.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/configure/nasunits.js"%}"></script>
+
 {% endblock content %}

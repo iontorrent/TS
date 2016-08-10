@@ -8,6 +8,7 @@
 #include "BkgFitMatrixPacker.h"
 #include "BeadParams.h"
 #include "RegionParams.h"
+#include "FlowDefaults.h"
 
 
 typedef enum
@@ -157,14 +158,14 @@ public:
 
   // TODO: PartialDeriv 'affected flows' has to be munged for tango flow order!!! */
   // Make me a new one! (Used to be InitializeLevMarSparseMatrices())
-  master_fit_type_table( const class FlowMyTears & tears, 
+  master_fit_type_table( const FlowMyTears & tears, 
                          int flow_start, int flow_key, int flow_block_size );
 
   // Cleanup! (Used to be CleanupLevMarSparseMatrices()).
   ~master_fit_type_table();
 
-  fit_instructions *GetFitInstructionsByName(const char *name);
-  fit_descriptor *GetFitDescriptorByName(const char* name);
+  fit_instructions *GetFitInstructionsByName(const char *name) const;
+  fit_descriptor *GetFitDescriptorByName(const char* name) const;
 };
 
 

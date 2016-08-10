@@ -14,7 +14,7 @@
 #include "VectorMacros.h"
 #include "Image.h"
 
-#ifndef __CUDACC__   //cuda compiler is allergic to xmmintrin.h
+#if defined( __SSE__ ) && !defined( __CUDACC__ )
     #include <x86intrin.h>
 #endif
 
@@ -242,7 +242,7 @@ class TimeCompression
       for (size_t col = 0; col < numCols; col++) {
         aligned_acc[wellsSeen] += source[wellOffset + col] * mWeight[frame];
         if (mVFCFlush[frame]) {
-          output[wellsSeen] = round(aligned_acc[wellsSeen]/mTotalWeight[frame]);
+          output[wellsSeen] = ::round(aligned_acc[wellsSeen]/mTotalWeight[frame]);
           aligned_acc[wellsSeen] = source[wellOffset + col] * (1 - mWeight[frame]);
         }
         wellsSeen++;
@@ -338,12 +338,12 @@ template<typename T>
 inline void TimeCompression::Interpolate(float *t1_end, T *v1, int n1, float *t2_end, float *v2, int n2){
 
   // set time to midpoints
-  std::vector<float> t1(n1, 0);
+  std::vector<float> t1((float)n1, 0);
   t1[0] = t1_end[0] * 0.5f;
   for (int i=1; i<n1; i++)
     t1[i] = (t1_end[i-1] + t1_end[i]) * 0.5f;
 
-  std::vector<float> t2(n2, 0);
+  std::vector<float> t2((float)n2, 0);
   t2[0] = t2_end[0] * 0.5f;
   for (int i=1; i<n2; i++)
     t2[i] = (t2_end[i-1] + t2_end[i]) * 0.5f;

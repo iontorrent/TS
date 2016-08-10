@@ -16,9 +16,10 @@ COMMIT
 -A INPUT -i lo -j ACCEPT
 -A INPUT -p icmp -j ACCEPT
 
-#Allow SSH and Torrent Browser access
+#Allow SSH and HTML access (8080 is for IGV via tomcat)
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 8080 -j ACCEPT
 
 #Uncomment the line below to allow connections on port 443/HTTPS
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
@@ -45,5 +46,11 @@ COMMIT
 {% if compute_subnet is defined and compute_subnet is not none %}
 #Allow all traffic on cluster subnet
 -A INPUT -s {{compute_subnet}} -j ACCEPT
+{% endif %}
+
+{% if export_results|bool %}
+#Allow all traffic on the default port to allow NFS export of /results
+#Need to specify exact ports instead!
+-A INPUT -s {{ansible_default_ipv4.network}}/{{CIDR}} -j ACCEPT
 {% endif %}
 COMMIT

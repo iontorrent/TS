@@ -1,0 +1,25 @@
+---
+#file: ansible/deconfigure_compute.yml
+# purpose: Undo all the Ion specific configurations
+- hosts: computes
+  vars:
+    - startline: "#start TSconfig added mountpoints"
+    - endline: "#end TSconfig added mountpoints"
+  tasks:
+    - name: Uninstall Ion Packages
+      apt: name={{ item }} state=absent force=yes
+      with_items: ioncompute_ionpkg_list
+    - name: Stop gridengine-exec
+      service: name=gridengine-exec state=stopped
+    - name: Uninstall gridengine pkgs (forces deconfiguration)
+      apt: name={{ item }} state=absent force=yes
+      with_items:
+        - gridengine-exec
+        - gridengine-client
+        - gridengine-common
+    - name: Remove /var/lib/gridengine/iontorrent/common/act_qmaster
+      file: state=absent path=/var/lib/gridengine/iontorrent/common/act_qmaster
+    - name: "Unmounting all ansible-added mountpoints"
+      script: "files/unmount_ansible_mounts.sh"
+    - name: "Remove mountpoints from /etc/fstab"
+      shell: sed -i '/^{{startline}}/,/{{endline}}$/d' /etc/fstab

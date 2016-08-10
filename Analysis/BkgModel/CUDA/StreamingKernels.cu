@@ -263,8 +263,8 @@ Keplar_ModelFuncEvaluationForSingleFlowFit(
 
   float c_dntp_bot_plus_kmax = 1.0f/cp_sid_kmax_nucid; //CP_SINGLEFLOWFIT
 
-  //for (i=CP[sId].start[flow_ndx];i < num_frames;i++) //CP_SINGLEFLOWFIT
-  for (i=CP[sId].start[flow_ndx];i < endFrames; i++) //CP_SINGLEFLOWFIT
+  //for (i=CP[sId].fine_nuc_start[flow_ndx];i < num_frames;i++) //CP_SINGLEFLOWFIT
+  for (i=CP[sId].fine_nuc_start[flow_ndx];i < endFrames; i++) //CP_SINGLEFLOWFIT
   {
     if (totgen > 0.0f)
     {
@@ -309,7 +309,7 @@ Keplar_ModelFuncEvaluationForSingleFlowFit(
     aval = ConstP_deltaFrame[i]*one_over_two_tauB; //CP_SINGLEFLOWFIT
     one_over_one_plus_aval = 1.0f/ (1.0f+aval);
     
-    if(i==CP[sId].start[flow_ndx]) //CP_SINGLEFLOWFIT
+    if(i==CP[sId].fine_nuc_start[flow_ndx]) //CP_SINGLEFLOWFIT
       fval_local  = red_hydro; // *one_over_one_plus_aval;
     else
       fval_local = red_hydro - red_hydro_prev + (1.0f-aval)*fval_local; // *one_over_one_plus_aval;
@@ -378,7 +378,8 @@ Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(
   const float SP,
   const float d,
   float sens,
-  int c_dntp_top_ndx,
+  int nucStart,
+  int nucRiseSubSteps,
   const int num_frames,
   const int num_beads,
   float * fval,
@@ -467,18 +468,17 @@ Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(
 
   float red_hydro;
 
-  c_dntp_top_ndx += flow_ndx*num_frames*ISIG_SUB_STEPS_SINGLE_FLOW;
+  int c_dntp_top_ndx = nucRiseSubSteps * (flow_ndx*num_frames + nucStart);
 
   float c_dntp_bot_plus_kmax = 1.0f/cp_sid_kmax_nucid; //CP_SINGLEFLOWFIT
 
   bool start_frame = true;
-  //for (int i=pCP->start[flow_ndx];i < num_frames;i++) //CP_SINGLEFLOWFIT
-  for (int i=pCP->start[flow_ndx];i < endFrames;i++) //CP_SINGLEFLOWFIT
+  for (int i=nucStart; i < endFrames;i++) //CP_SINGLEFLOWFIT
   {
     if (totgen > 0.0f)
     {
-      float ldt = (ConstP_deltaFrame[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr; //CP_SINGLEFLOWFIT
-      for (int st=1; (st <= ISIG_SUB_STEPS_SINGLE_FLOW) && (totgen > 0.0f);st++)
+      float ldt = (ConstP_deltaFrame[i]/( nucRiseSubSteps * FRAMESPERSEC)) * half_kr; //CP_SINGLEFLOWFIT
+      for (int st=1; (st <= nucRiseSubSteps) && (totgen > 0.0f);st++)
       {
         // assume instantaneous equilibrium
         c_dntp_old_rate = c_dntp_new_rate;
@@ -725,7 +725,7 @@ Fermi_ModelFuncEvaluationForSingleFlowFit(
 
   float c_dntp_bot_plus_kmax2 = 1.0f/cp_sid_kmax_nucid; //CP_SINGLEFLOWFIT
 
-  int starting_frame = CP[sId].start[flow_ndx];
+  int starting_frame = CP[sId].fine_nuc_start[flow_ndx];
   //for (int i=starting_frame;i < num_frames;i++) //CP_SINGLEFLOWFIT
   for (int i=starting_frame;i < endFrames; i++) //CP_SINGLEFLOWFIT
   {
@@ -869,183 +869,6 @@ Fermi_ModelFuncEvaluationForSingleFlowFit(
   } // loop over i
 }
 
-#if 0
-__device__ void
-ModelFuncEvaluationAndProjectiontForSingleFlowFit(
-  int sId,
-  int flow_ndx,
-  int nucid,
-  float * nucRise,
-  float A, 
-  float Krate,
-  float tau,
-  float gain,
-  float SP,
-  float d,
-  float sens,
-  int c_dntp_top_ndx,
-  int num_frames,
-  int num_beads,
-  float epsilon,
-  float* fval,
-  float* emLeft,
-  float* emRight,
-  float frac,
-  float* err,
-  float &delta
-)
-{
-  if (A < 0.0f) {
-    A = -A;
-    sens = -sens;
-  }
-  else if (A > LAST_POISSON_TABLE_COL)
-    A = LAST_POISSON_TABLE_COL;
-
-
-  int ileft, iright;
-  float ifrac;
-
-  // step 2
-  float occ_l,occ_r;
-  float totocc;
-  float totgen;
-  float pact;
-  int i, st;
-
-  // step 3
-  float ldt;
-
-  // step 4
-  float c_dntp_int;
-  float pact_new;
-
-  // initialize diffusion/reaction simulation for this flow
-  ileft = (int) A;
-  iright = ileft + 1;
-  ifrac = iright - A;
-  occ_l = ifrac;
-  occ_r = A - ileft;
-
-  ileft--;
-  iright--;
-
-  if (ileft < 0)
-  {
-    occ_l = 0.0;
-  }
-
-  if (iright == LAST_POISSON_TABLE_COL)
-  {
-    iright = ileft;
-    occ_r = occ_l;
-    occ_l = 0;
-  }
-
-  occ_l *= SP;
-  occ_r *= SP;
-  pact = occ_l + occ_r;
-  totocc = SP*A;
-  totgen = totocc;
-
-#ifndef POISS_FLOAT4
-  const float* rptr = precompute_pois_params_streaming (iright);
-  const float* lptr = precompute_pois_params_streaming (ileft);
-#else
-  const float4* LUTptr = precompute_pois_LUT_params_streaming (ileft, iright);
-#endif
-
-  float c_dntp_bot = 0.0; // concentration of dNTP in the well
-  float c_dntp_sum = 0.0;
-  float c_dntp_old_rate = 0;
-  float c_dntp_new_rate = 0;
-
-  float c_dntp_bot_plus_kmax = 1.0f/CP[sId].kmax[nucid]; //CP_SINGLEFLOWFIT
-
-  float scaled_kr = Krate*CP[sId].molecules_to_micromolar_conversion/d; //CP_SINGLEFLOWFIT
-  float half_kr = Krate*0.5f;
-
-  // variables used for solving background signal shape
-  float aval = 0.0f;
-
-  //new Solve HydrogenFlowInWell
-
-  float one_over_two_tauB = 1.0f;
-  float one_over_one_plus_aval = 1.0f/ (1.0f+aval);
-  float red_hydro_prev; 
-  float fval_local  = 0.0f;
-
-  float red_hydro;
-
-  c_dntp_top_ndx += flow_ndx*num_frames*ISIG_SUB_STEPS_SINGLE_FLOW;
-
-  float num = 0;
-  float den = 0.0001f;
-  for (i=CP[sId].start[flow_ndx];i < num_frames;i++) //CP_SINGLEFLOWFIT
-  {
-    if (totgen > 0.0f)
-    {
-      ldt = (CP[sId].deltaFrames[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr; //CP_SINGLEFLOWFIT
-      for (st=1; (st <= ISIG_SUB_STEPS_SINGLE_FLOW) && (totgen > 0.0f);st++)
-      {
-        // assume instantaneous equilibrium
-        c_dntp_old_rate = c_dntp_new_rate;
-        c_dntp_bot = nucRise[c_dntp_top_ndx++]/ (1.0f + scaled_kr*pact*c_dntp_bot_plus_kmax);
-        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP[sId].kmax[nucid]); //CP_SINGLEFLOWFIT
-
-        c_dntp_new_rate = c_dntp_bot*c_dntp_bot_plus_kmax;
-        c_dntp_int = ldt* (c_dntp_new_rate+c_dntp_old_rate);
-        c_dntp_sum += c_dntp_int;
-
-        // calculate new number of active polymerase
-#ifndef POISS_FLOAT4
-        pact_new = poiss_cdf_approx_streaming (c_dntp_sum,rptr) * occ_r;
- //       if (occ_l > 0.0f)
-         pact_new += poiss_cdf_approx_streaming (c_dntp_sum,lptr) * occ_l;
-#else       
-          pact_new = poiss_cdf_approx_float4(c_dntp_sum, LUTptr, occ_l, occ_r);
-#endif
-        
-        totgen -= ( (pact+pact_new) * 0.5f) * c_dntp_int;
-        pact = pact_new;
-      }
-
-      if (totgen < 0.0f) totgen = 0.0f;
-      red_hydro = (totocc-totgen);
-    }else{
-      red_hydro = totocc;
-    }
-    
-    // calculate the 'background' part (the accumulation/decay of the protons in the well
-    // normally accounted for by the background calc)
-    
-    red_hydro *= sens;  
- 
-   
-    one_over_two_tauB = 1.0f/ (2.0f*tau);
-    aval = CP[sId].deltaFrames[i]*one_over_two_tauB; //CP_SINGLEFLOWFIT
-    one_over_one_plus_aval = 1.0f/ (1.0f+aval);
-    
-    if(i==CP[sId].start[flow_ndx]) //CP_SINGLEFLOWFIT
-      fval_local  = red_hydro; // *one_over_one_plus_aval;
-    else
-      fval_local = red_hydro - red_hydro_prev + (1.0f-aval)*fval_local; // *one_over_one_plus_aval;
-
-    red_hydro_prev = red_hydro;
- 
-    fval_local *=  one_over_one_plus_aval;
-
-      float weight = (emRight != NULL )?( frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)]) :( emLeft[i*(MAX_POISSON_TABLE_COL)]);
-
-     delta = (fval_local*gain) - fval[i*num_beads];
-     num += epsilon*delta*err[i*num_beads]*weight*weight; 
-     den += delta*delta*weight*weight;  
-  }
-  delta = num/den;
-}
-#endif
-
-
 __device__ void
 ComputeHydrogenForMultiFlowFit_dev(
   int sId,
@@ -1138,12 +961,12 @@ ComputeHydrogenForMultiFlowFit_dev(
 
   c_dntp_top_ndx += flow_ndx*num_frames*ISIG_SUB_STEPS_MULTI_FLOW;
 
-  for(i=0;i<CP[sId].start[flow_ndx]; i++) { //CP_MULTIFLOWFIT
+  for(i=0;i<CP[sId].coarse_nuc_start[flow_ndx]; i++) { //CP_MULTIFLOWFIT
     *ival = 0;
     ival += num_beads;
   }
 
-  for (i=CP[sId].start[flow_ndx];i < nonZeroEmpFrames;i++) //CP_MULTIFLOWFIT
+  for (i=CP[sId].coarse_nuc_start[flow_ndx];i < nonZeroEmpFrames;i++) //CP_MULTIFLOWFIT
   {
     if (totgen > 0.0f)
     {
@@ -1337,34 +1160,6 @@ ResidualCalculationPerFlow(
   return residual;
 }
 
-__device__ void 
-ResidualForAlternatingFit(
-  float* fg_buffers, 
-  float* fval, 
-  float* emLeft,
-  float* emRight,
-  float frac, 
-  float* err, 
-  float& residual,
-  int num_beads,
-  int num_frames) {
-  int i;
-  float e;
-  
-  residual = 0;
-
-  float weight;
-  float wtScale = 0;
-  for (i=0; i<num_frames; ++i) {
-    weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
-    e = fg_buffers[num_beads*i] - fval[num_beads*i];
-    err[num_beads*i] = e;
-    residual += e*e*weight*weight;
-    wtScale += weight*weight;
-  }
-  residual = residual/wtScale;
-}
-
 
 __device__ float 
 CalculateMeanResidualErrorPerFlow(
@@ -1402,30 +1197,6 @@ CalculateMeanResidualErrorPerFlow(
 
   return residual;
 }
-
-__device__ void 
-CalculateMeanResidualErrorPerFlowForAlternatingFit(
-  float* err, 
-  float* weight, // highest hp weighting emphasis vector
-  float& residual,
-  int num_beads,
-  int num_frames) 
-{
-  int i;
-  float e;
-  float wtScale = 0.0f;
-
-  residual = 0;
-  
-  for (i=0; i<num_frames; ++i) {
-    wtScale += weight[i]*weight[i];
-    e = weight[i] * err[i*num_beads];
-    residual += e*e;
-  }
-  residual = sqrtf(residual/wtScale);
-}
-
-
 
 __device__ float dotProduct(float *ptr1, float * ptr2, int length, int stride)
 {
@@ -2125,10 +1896,8 @@ PerFlowGaussNewtonFit_k(
 
   float avg_err;
     
-  float* deltaFrames = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].deltaFrames_std : CP[sId].deltaFrames;
-  int* nonZeroEmpFramesVec = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].std_non_zero_emphasis_frames : CP[sId].non_zero_emphasis_frames;
+  float* deltaFrames = CP[sId].deltaFrames;
+  int* nonZeroEmpFramesVec = CP[sId].non_zero_fine_emphasis_frames;
   for(int flow_ndx=0; flow_ndx<flow_block_size; flow_ndx++){
 
     int nucid = CP[sId].flowIdxMap[flow_ndx]; //CP_SINGLEFLOWFIT
@@ -2164,7 +1933,7 @@ PerFlowGaussNewtonFit_k(
     // These values before start are always zero since there is no nucrise yet. Don't need to
     // zero it out. Have to change the residual calculation accordingly for the frames before the
     // start.
-    for (i =0; i < CP[sId].start[flow_ndx]; i++) { //CP_SINGLEFLOWFIT
+    for (i =0; i < CP[sId].fine_nuc_start[flow_ndx]; i++) { //CP_SINGLEFLOWFIT
 
 #ifdef FVAL_L1
       //fval[i] = 0;
@@ -2180,7 +1949,7 @@ PerFlowGaussNewtonFit_k(
     // Evaluate model function using input Ampl and Krate and get starting residual
     Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
         Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[flow_ndx], //CP_SINGLEFLOWFIT
+        sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval, deltaFrames, num_frames);
 
     const float *emLeft, *emRight;
@@ -2189,7 +1958,7 @@ PerFlowGaussNewtonFit_k(
     // calculating weighted sum of square residuals for the convergence test
     int nonZeroEmpFrames = 0;
     frac = DecideOnEmphasisVectorsForInterpolation(nonZeroEmpFramesVec, &emLeft,&emRight,Ampl,emphasis, num_frames, nonZeroEmpFrames);
-    residual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
+    residual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
       num_beads, nonZeroEmpFrames);
   
     // new Ampl and Krate generated from the Lev mar Fit
@@ -2204,7 +1973,7 @@ PerFlowGaussNewtonFit_k(
     int iter;
     for (iter = 0; iter < ITER; ++iter) {
 
-      // new Ampl and krate by adding delta to existing values
+      // new Ampl and kmult by adding delta to existing values
       newAmpl = Ampl + 0.001f;
       newKrate = (twoParamFit)?(krate + 0.001f):(krate);
  
@@ -2214,7 +1983,7 @@ PerFlowGaussNewtonFit_k(
       Fermi_ModelFuncEvaluationForSingleFlowFit(sId, flow_ndx, nucid, nucRise,
           newAmpl, Ampl, krate*CP[sId].krate[nucid], newKrate*CP[sId].krate[nucid],
           tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-          sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+          sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
           num_frames, num_beads, twoParamFit ? TwoParams : OneParam,
           emLeft, emRight, frac, fval, 
           err, &aa, &rhs0, &krkr, &rhs1, &akr, deltaFrames, nonZeroEmpFrames);
@@ -2227,7 +1996,7 @@ PerFlowGaussNewtonFit_k(
       }else
         delta0 = rhs0 / aa;
 
-      if( !isnan(delta0) && !isnan(delta1)){
+      if( !::isnan(delta0) && !::isnan(delta1)){
         // add delta to params to obtain new params
         newAmpl = Ampl + delta0;
         if(twoParamFit)newKrate = krate + delta1;
@@ -2238,7 +2007,7 @@ PerFlowGaussNewtonFit_k(
         // Evaluate using new params
         Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
             newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
-            d, sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
             num_frames, num_beads, tmp_fval, deltaFrames, num_frames);
 
         // residual calculation using new parameters
@@ -2248,13 +2017,13 @@ PerFlowGaussNewtonFit_k(
                       newNonZeroEmpFrames);
           nonZeroEmpFrames = max(nonZeroEmpFrames, newNonZeroEmpFrames);
         }
-        newresidual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err, num_beads, nonZeroEmpFrames);
+        newresidual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err, num_beads, nonZeroEmpFrames);
         
         if (newresidual < residual) {
           Ampl = newAmpl;
           if(twoParamFit)krate = newKrate;
           // copy new function val to fval
-          for (i=CP[sId].start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+          for (i=CP[sId].fine_nuc_start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
 #ifdef FVAL_L1
             fval[i] = tmp_fval[i];
 #else
@@ -2284,7 +2053,7 @@ PerFlowGaussNewtonFit_k(
     *pAmpl= Ampl;
 
  
-    residual = CalculateMeanResidualErrorPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
+    residual = CalculateMeanResidualErrorPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
       num_beads, num_frames); 
   
     avg_err += residual;
@@ -2390,10 +2159,8 @@ PerFlowHybridFit_k(
 
   float avg_err;
     
-  float* deltaFrames = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].deltaFrames_std : CP[sId].deltaFrames;
-  int* nonZeroEmpFramesVec = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].std_non_zero_emphasis_frames : CP[sId].non_zero_emphasis_frames;
+  float* deltaFrames = CP[sId].deltaFrames;
+  int* nonZeroEmpFramesVec = CP[sId].non_zero_fine_emphasis_frames;
   for(int flow_ndx=0; flow_ndx<flow_block_size; flow_ndx++){
 
     
@@ -2430,7 +2197,7 @@ PerFlowHybridFit_k(
     // These values before start are always zero since there is no nucrise yet. Don't need to
     // zero it out. Have to change the residual calculation accordingly for the frames before the
     // start.
-    for (i =0; i < CP[sId].start[flow_ndx]; i++) { //CP_SINGLEFLOWFIT
+    for (i =0; i < CP[sId].fine_nuc_start[flow_ndx]; i++) { //CP_SINGLEFLOWFIT
 
 #ifdef FVAL_L1
       //fval[i] = 0;
@@ -2446,7 +2213,7 @@ PerFlowHybridFit_k(
     // Evaluate model function using input Ampl and Krate and get starting residual
     Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
         Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[flow_ndx], //CP_SINGLEFLOWFIT
+        sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval, deltaFrames, num_frames);
 
     const float *emLeft, *emRight;
@@ -2455,7 +2222,7 @@ PerFlowHybridFit_k(
     // calculating weighted sum of square residuals for the convergence test
     int nonZeroEmpFrames = 0;
     frac = DecideOnEmphasisVectorsForInterpolation(nonZeroEmpFramesVec, &emLeft,&emRight,Ampl,emphasis, num_frames, nonZeroEmpFrames);
-    residual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
+    residual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
       num_beads, nonZeroEmpFrames);
   
     // new Ampl and Krate generated from the Lev mar Fit
@@ -2485,7 +2252,7 @@ PerFlowHybridFit_k(
       Fermi_ModelFuncEvaluationForSingleFlowFit(sId, flow_ndx, nucid, nucRise,
           newAmpl, Ampl, krate*CP[sId].krate[nucid], newKrate*CP[sId].krate[nucid],
           tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-          sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+          sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
           num_frames, num_beads, twoParamFit ? TwoParams : OneParam,
           emLeft, emRight, frac, fval, 
           err, &aa, &rhs0, &krkr, &rhs1, &akr, deltaFrames, nonZeroEmpFrames);
@@ -2501,7 +2268,7 @@ PerFlowHybridFit_k(
       }else
         delta0 = rhs0 / aa;
 
-      if( !isnan(delta0) && !isnan(delta1)){
+      if( !::isnan(delta0) && !::isnan(delta1)){
         // add delta to params to obtain new params
         newAmpl = Ampl + delta0;
         if(twoParamFit)newKrate = krate + delta1;
@@ -2512,7 +2279,7 @@ PerFlowHybridFit_k(
         // Evaluate using new params
         Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
             newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
-            d, sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
             num_frames, num_beads, tmp_fval, deltaFrames, num_frames);
 
         // residual calculation using new parameters
@@ -2522,14 +2289,14 @@ PerFlowHybridFit_k(
                       newNonZeroEmpFrames);
           nonZeroEmpFrames = max(nonZeroEmpFrames, newNonZeroEmpFrames);
         }
-        newresidual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
+        newresidual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
            num_beads, nonZeroEmpFrames);
         
         if (newresidual < residual) {
           Ampl = newAmpl;
           if(twoParamFit)krate = newKrate;
           // copy new function val to fval
-          for (i=CP[sId].start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+          for (i=CP[sId].fine_nuc_start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
 #ifdef FVAL_L1
             fval[i] = tmp_fval[i];
 #else
@@ -2561,7 +2328,7 @@ PerFlowHybridFit_k(
 
        // NAN check
       bool nan_detected = false;
-      if( !isnan(delta0) && !isnan(delta1)){
+      if( !::isnan(delta0) && !::isnan(delta1)){
         // add delta to params to obtain new params
         newAmpl = Ampl + delta0;
         if(twoParamFit)newKrate = krate + delta1;
@@ -2572,7 +2339,7 @@ PerFlowHybridFit_k(
         // Evaluate using new params
         Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
             newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
-            d, sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
             num_frames, num_beads, tmp_fval, deltaFrames, num_frames);
 
         // residual calculation using new parameters
@@ -2582,7 +2349,7 @@ PerFlowHybridFit_k(
                       newNonZeroEmpFrames);
           nonZeroEmpFrames = max(nonZeroEmpFrames, newNonZeroEmpFrames);
         }
-        newresidual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
+        newresidual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
            num_beads, nonZeroEmpFrames);
       }
       else 
@@ -2599,7 +2366,7 @@ PerFlowHybridFit_k(
         Ampl = newAmpl;
         if(twoParamFit)krate = newKrate;
         // copy new function val to fval
-        for (i=CP[sId].start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+        for (i=CP[sId].fine_nuc_start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
 #ifdef FVAL_L1
             fval[i] = tmp_fval[i];
 #else
@@ -2640,7 +2407,7 @@ PerFlowHybridFit_k(
     *pAmpl= Ampl;
 
  
-    residual = CalculateMeanResidualErrorPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
+    residual = CalculateMeanResidualErrorPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
       num_beads, num_frames); 
   
     avg_err += residual;
@@ -2744,10 +2511,8 @@ PerFlowLevMarFit_k(
 
   float avg_err;
     
-  float* deltaFrames = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].deltaFrames_std : CP[sId].deltaFrames;
-  int* nonZeroEmpFramesVec = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].std_non_zero_emphasis_frames : CP[sId].non_zero_emphasis_frames;
+  float* deltaFrames = CP[sId].deltaFrames;
+  int* nonZeroEmpFramesVec = CP[sId].non_zero_fine_emphasis_frames;
   for(int flow_ndx=0; flow_ndx<flow_block_size; flow_ndx++){
     int nucid = CP[sId].flowIdxMap[flow_ndx]; //CP_SINGLEFLOWFIT
     float sens = CP[sId].sens*SENSMULTIPLIER;  //CP_SINGLEFLOWFIT
@@ -2782,7 +2547,7 @@ PerFlowLevMarFit_k(
     // These values before start are always zero since there is no nucrise yet. Don't need to
     // zero it out. Have to change the residual calculation accordingly for the frames before the
     // start.
-    for (i=0; i < CP[sId].start[flow_ndx]; i++) { //CP_SINGLEFLOWFIT
+    for (i=0; i < CP[sId].fine_nuc_start[flow_ndx]; i++) { //CP_SINGLEFLOWFIT
 #ifdef FVAL_L1
       //fval[i] = 0;
       //tmp_fval[i] = 0;
@@ -2796,7 +2561,7 @@ PerFlowLevMarFit_k(
     // Evaluate model function using input Ampl and Krate and get starting residual
     Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
         Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[flow_ndx], //CP_SINGLEFLOWFIT
+        sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval, deltaFrames, num_frames);
 
     const float *emLeft, *emRight;
@@ -2805,7 +2570,7 @@ PerFlowLevMarFit_k(
     // calculating weighted sum of square residuals for the convergence test
     int nonZeroEmpFrames = 0;
     frac = DecideOnEmphasisVectorsForInterpolation(nonZeroEmpFramesVec, &emLeft,&emRight,Ampl,emphasis, num_frames, nonZeroEmpFrames);
-    residual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
+    residual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
       num_beads, nonZeroEmpFrames);
  
     // new Ampl and Krate generated from the Lev mar Fit
@@ -2846,7 +2611,7 @@ PerFlowLevMarFit_k(
       Fermi_ModelFuncEvaluationForSingleFlowFit(sId, flow_ndx, nucid, nucRise,
           newAmpl, Ampl, krate*CP[sId].krate[nucid], newKrate*CP[sId].krate[nucid],
           tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-          sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+          sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
           num_frames, num_beads, twoParamFit ? TwoParams : OneParam,
           emLeft, emRight, frac, fval, 
           err, &aa, &rhs0, &krkr, &rhs1, &akr, deltaFrames, nonZeroEmpFrames);
@@ -2864,7 +2629,7 @@ PerFlowLevMarFit_k(
 
        // NAN check
       bool nan_detected = false;
-      if( !isnan(delta0) && !isnan(delta1)){
+      if( !::isnan(delta0) && !::isnan(delta1)){
         // add delta to params to obtain new params
         newAmpl = Ampl + delta0;
         if(twoParamFit)newKrate = krate + delta1;
@@ -2875,7 +2640,7 @@ PerFlowLevMarFit_k(
         // Evaluate using new params
         Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
             newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
-            d, sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
             num_frames, num_beads, tmp_fval, deltaFrames, num_frames);
 
         // residual calculation using new parameters
@@ -2885,7 +2650,7 @@ PerFlowLevMarFit_k(
                       newNonZeroEmpFrames);
           nonZeroEmpFrames = max(nonZeroEmpFrames, newNonZeroEmpFrames);
         }
-        newresidual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
+        newresidual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
            num_beads, nonZeroEmpFrames);
       }
       else 
@@ -2902,7 +2667,7 @@ PerFlowLevMarFit_k(
         Ampl = newAmpl;
         if(twoParamFit)krate = newKrate;
         // copy new function val to fval
-        for (i=CP[sId].start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+        for (i=CP[sId].fine_nuc_start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
 #ifdef FVAL_L1
             fval[i] = tmp_fval[i];
 #else
@@ -2933,7 +2698,7 @@ PerFlowLevMarFit_k(
     if(twoParamFit) *pKmult = krate;
     *pAmpl= Ampl;
  
-    residual = CalculateMeanResidualErrorPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
+    residual = CalculateMeanResidualErrorPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
       num_beads, num_frames); 
   
     avg_err += residual;
@@ -2986,6 +2751,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
   int num_beads, // 4
   const int num_frames, // 4
   const bool useDynamicEmphasis,
+  const bool useSlowKmultInit,
 //  int * pMonitor,
   const int sId,
   const int flow_block_size
@@ -3040,11 +2806,10 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
 
   float avg_err;
     
-  float* deltaFrames = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].deltaFrames_std : CP[sId].deltaFrames;
-  int* nonZeroEmpFramesVec = CP[sId].useRecompressTailRawTrace ? 
-        CP[sId].std_non_zero_emphasis_frames : CP[sId].non_zero_emphasis_frames;
+  float* deltaFrames = CP[sId].deltaFrames;
+  int* nonZeroEmpFramesVec = CP[sId].non_zero_fine_emphasis_frames;
 
+  const float defKmult = 1.0f;
   for(int flow_ndx=0; flow_ndx<flow_block_size; flow_ndx++) {
 
     const int nucid = CP[sId].flowIdxMap[flow_ndx]; //CP_SINGLEFLOWFIT
@@ -3057,14 +2822,33 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
     
     d *= CP[sId].d[nucid]; //CP_SINGLEFLOWFIT
 
-
-    //offset for next value gets added to address at end of flow_ndx loop
-    
-    float krate = *pKmult;
+    // force kmult to be 1 here
+    float krate = defKmult;
     float localMinKmult = minKmult;
     float localMaxKmult= maxKmult;
 
     float Ampl = *pAmpl;
+    /*if (bead_ndx == 0 && realFnum == 20) {
+      printf("%f %d\n",Ampl, num_frames);
+      const float* out = fg_buffers;
+      printf("Corrected Trace:\n");
+      for (int fr=0; fr < num_frames; ++fr) {
+        printf("%f ",*out);
+        out += num_beads;
+      }
+      printf("\n");
+      printf("DeltaFrames:\n");
+      for (int fr=0; fr < num_frames; ++fr) {
+        printf("%f ",deltaFrames[fr]);
+      }
+      printf("\n");
+      printf("FrameNum:\n");
+      for (int fr=0; fr < num_frames; ++fr) {
+        printf("%f ",CP[sId].frameNumber[fr]);
+      }
+      printf("\n");
+    }*/
+
     float etbR;
     float tauB; 
     float SP;  
@@ -3076,15 +2860,54 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
     ComputeSP_dev(SP, &CP[sId], copies, realFnum+flow_ndx, sId); //CP_SINGLEFLOWFIT
  
     const bool twoParamFit = fitKmult || ( copies * Ampl > adjKmult );
-  
-    if (twoParamFit)
+
+    const float *emLeft, *emRight;
+    int nonZeroEmpFrames;
+    // Decide on kmult start
+    if (twoParamFit) {
+      
+      float frac = DecideOnEmphasisVectorsForInterpolation(nonZeroEmpFramesVec, &emLeft,
+        &emRight,Ampl,emphasis, num_frames, nonZeroEmpFrames);
+
+      // default kmult
+#if __CUDA_ARCH__ >= 350
+      Keplar_ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, flow_ndx, nucid, nucRise, 
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].fine_nuc_start[flow_ndx], //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval, deltaFrames, nonZeroEmpFrames, NoOutput );
+#else
+      Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval, deltaFrames, nonZeroEmpFrames);
+#endif
+      float residual_default_kmult = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], 
+        fg_buffers, fval, emLeft, emRight, frac, err, num_beads, nonZeroEmpFrames);
+
+      // min kmult
       krate = minKmult;
+#if __CUDA_ARCH__ >= 350
+      Keplar_ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, flow_ndx, nucid, nucRise, 
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].fine_nuc_start[flow_ndx], //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval, deltaFrames, nonZeroEmpFrames, NoOutput );
+#else
+      Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval, deltaFrames, nonZeroEmpFrames);
+#endif
+
+      float residual_min_kmult = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], 
+          fg_buffers, fval, emLeft, emRight, frac, err, num_beads, nonZeroEmpFrames);
+
+      if (residual_min_kmult < residual_default_kmult)
+        krate = minKmult;
+      else
+        krate = useSlowKmultInit ? minKmult : defKmult;
+    }
  
     float residual, newresidual;
-    // These values before start are always zero since there is no nucrise yet. Don't need to
-    // zero it out. Have to change the residual calculation accordingly for the frames before the
-    // start.
-
     int relax_kmult_pass = 0;
     while (relax_kmult_pass < 2)
     {
@@ -3093,12 +2916,12 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
 #if __CUDA_ARCH__ >= 350
       Keplar_ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, flow_ndx, nucid, nucRise, 
         Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[flow_ndx], //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].fine_nuc_start[flow_ndx], //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval, deltaFrames, num_frames, NoOutput );
 #else
       Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
         Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[flow_ndx], //CP_SINGLEFLOWFIT
+        sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval, deltaFrames, num_frames);
 #endif
       const float *emLeft, *emRight;
@@ -3108,7 +2931,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
       const float EmphSel = Ampl;
       int nonZeroEmpFrames;
       float frac = DecideOnEmphasisVectorsForInterpolation(nonZeroEmpFramesVec, &emLeft,&emRight,EmphSel,emphasis, num_frames, nonZeroEmpFrames);
-      residual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
+      residual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emLeft, emRight, frac, err,
                       num_beads, nonZeroEmpFrames);
 
       // new Ampl and Krate generated from the Lev mar Fit
@@ -3137,7 +2960,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
 #if __CUDA_ARCH__ >= 350
         Keplar_ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, flow_ndx, nucid, nucRise,
             newAmpl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-	    sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+	    sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
 	    num_frames, num_beads, tmp_fval, deltaFrames, nonZeroEmpFrames, OneParam, jac, emLeft, emRight, frac, fval, 
 	    err, &aa, &rhs0, &krkr, &rhs1, &akr);
 
@@ -3145,14 +2968,14 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
 	if (twoParamFit) 
 	  Keplar_ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, flow_ndx, nucid, nucRise, 
 	      Ampl, newKrate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-	      sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+	      sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
 	      num_frames, num_beads, tmp_fval, deltaFrames, nonZeroEmpFrames, TwoParams, jac, emLeft, emRight, frac, fval, 
 	      err, &aa, &rhs0, &krkr, &rhs1, &akr);
 #else
         Fermi_ModelFuncEvaluationForSingleFlowFit(sId, flow_ndx, nucid, nucRise,
             newAmpl, Ampl, krate*CP[sId].krate[nucid], newKrate*CP[sId].krate[nucid],
             tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
-            sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+            sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
             num_frames, num_beads, twoParamFit ? TwoParams : OneParam,
             emLeft, emRight, frac, fval, 
             err, &aa, &rhs0, &krkr, &rhs1, &akr, deltaFrames, nonZeroEmpFrames);
@@ -3165,7 +2988,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
         }else
           delta0 = rhs0 / aa;
 
-        if( !isnan(delta0) && !isnan(delta1)){
+        if( !::isnan(delta0) && !::isnan(delta1)){
           // add delta to params to obtain new params
           newAmpl = Ampl + delta0;
           if(twoParamFit)newKrate = krate + delta1;
@@ -3184,23 +3007,23 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
 #if __CUDA_ARCH__ >= 350
 	    Keplar_ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, flow_ndx, nucid, nucRise, 
 	        newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
-		d, sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+		d, sens, CP[sId].fine_nuc_start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
 		num_frames, num_beads, tmp_fval, deltaFrames, num_frames, NoOutput );
 #else
             Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
                 newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
-                d, sens, CP[sId].start[flow_ndx]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+                d, sens, CP[sId].fine_nuc_start[flow_ndx], ISIG_SUB_STEPS_SINGLE_FLOW, 
                 num_frames, num_beads, tmp_fval, deltaFrames, num_frames);
 #endif
             // residual calculation using new parameters
-            newresidual = ResidualCalculationPerFlow(CP[sId].start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
+            newresidual = ResidualCalculationPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, tmp_fval, emLeft, emRight, frac, err,
                   num_beads, nonZeroEmpFrames);
 
             if (newresidual < residual) {
               Ampl = newAmpl;
               if(twoParamFit)krate = newKrate;
                 // copy new function val to fval
-                for (int i=CP[sId].start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+                for (int i=CP[sId].fine_nuc_start[flow_ndx]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
 #ifdef FVAL_L1
                   fval[i] = tmp_fval[i];
 #else
@@ -3241,7 +3064,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
     *pAmpl= Ampl;
 
  
-    residual = CalculateMeanResidualErrorPerFlow(CP[sId].start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
+    residual = CalculateMeanResidualErrorPerFlow(CP[sId].fine_nuc_start[flow_ndx], fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL,
       num_beads, num_frames); 
   
     avg_err += residual;
@@ -3344,61 +3167,6 @@ __global__ void PreSingleFitProcessing_k(// Here FL stands for flows
   }
 }
 
-__global__ void RecompressRawTracesForSingleFlowFit_k(
-  float* fgbuffers, // FLxFxN
-  float* scratch,
-  int startFrame,
-  int oldFrames,
-  int newFrames,
-  int numFlows,
-  int num_beads,
-  int sId)
-{
-  int bead_ndx = blockIdx.x * blockDim.x + threadIdx.x;
-  
-  if(bead_ndx >= num_beads) return;
-
-  num_beads = ((num_beads+32-1)/32) * 32;
-
-  float* newfgbuffers = fgbuffers;
-  newfgbuffers += bead_ndx;
-  fgbuffers += bead_ndx;
-  scratch += bead_ndx;
-
-  int uncompFrame = 0;
-  for (int i=0; i<startFrame; ++i) {
-    uncompFrame += CP[sId].std_frames_per_point[i];
-  }
-
-  float accumVal = 0;
-  float prevVal = 0;
-  float curVal = 0;
-  int uncomp_start_frame = uncompFrame;
-  int interpolFrameNum = 0;
-  for (int fnum=0; fnum < numFlows; ++fnum) {
-    uncompFrame = uncomp_start_frame;
-    for (int i=0; i<startFrame; ++i) {
-      scratch[num_beads*i] = fgbuffers[num_beads*i];
-    }
-    for (int i=startFrame; i<newFrames; ++i) {
-      accumVal = 0;
-      for (int addedFrame=1; addedFrame<=CP[sId].std_frames_per_point[i]; ++addedFrame) {
-        interpolFrameNum = CP[sId].etf_interpolate_frame[uncompFrame];
-        prevVal = fgbuffers[num_beads*(interpolFrameNum - 1)];
-        curVal = fgbuffers[num_beads*interpolFrameNum];
-        accumVal += ((prevVal - curVal) * CP[sId].etf_interpolateMul[uncompFrame]) + curVal;     
-        uncompFrame++;
-      }
-      scratch[num_beads*i] = accumVal/CP[sId].std_frames_per_point[i];
-    }
-    for (int i=0; i<newFrames; ++i) {
-      newfgbuffers[num_beads*i] = scratch[num_beads*i];
-    } 
-    fgbuffers += num_beads*oldFrames;
-    newfgbuffers += num_beads*newFrames;
-  }
-}
-
 
 // xtalk calculation from excess hydrogen by neighbours
 __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
@@ -3467,7 +3235,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
       bool changed = false;
       // Calculate lost hydrogen using tau_top
       if (old_tautop != CP_XTALKPARAMS[sId].tau_top[i]) {
-        f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+        f = CP[sId].coarse_nuc_start[currentFlowIteration]; //CP_SINGLEFLOWFIT
 	one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_top[i]);
 	xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
 	lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads]*xt;
@@ -3478,7 +3246,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
 				(1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
 	}
 
-	for (f = CP[sId].start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
+	for (f = CP[sId].coarse_nuc_start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
 	  lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads] - lost_hydrogen[f*num_beads];
 	}
 	changed = true;
@@ -3486,7 +3254,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
 
       // Calculate ions from bulk
       if (changed || ( !changed && (old_taufluid != CP_XTALKPARAMS[sId].tau_fluid[i]))) {
-        f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+        f = CP[sId].coarse_nuc_start[currentFlowIteration]; //CP_SINGLEFLOWFIT
 	one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_fluid[i]);
 	xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
 	bulk_signal[f*num_beads] = lost_hydrogen[f*num_beads]*xt;
@@ -3499,7 +3267,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
       }
 
       // Scale down the ion by neighbour multiplier
-      for (f=0; f<CP[sId].start[currentFlowIteration]; ++f) { //CP_SINGLEFLOWFIT
+      for (f=0; f<CP[sId].coarse_nuc_start[currentFlowIteration]; ++f) { //CP_SINGLEFLOWFIT
         *nei_xtalk = 0; 
 	nei_xtalk += num_beads;
       } 
@@ -3513,7 +3281,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
   }
   else {
     // Calculate lost hydrogen
-    f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+    f = CP[sId].coarse_nuc_start[currentFlowIteration]; //CP_SINGLEFLOWFIT
     xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
     lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads]*xt;
     f++;
@@ -3523,13 +3291,13 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
       		(1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
     }
 
-    for (f = CP[sId].start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
+    for (f = CP[sId].coarse_nuc_start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
       lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads] - lost_hydrogen[f*num_beads];
     }
 
     // Calculate ions from bulk
     float taue = Rval * tau;
-    f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+    f = CP[sId].coarse_nuc_start[currentFlowIteration]; //CP_SINGLEFLOWFIT
     one_over_two_taub = 1.0f / (2.0f*taue);
     xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
     bulk_signal[f*num_beads] = lost_hydrogen[f*num_beads]*xt;
@@ -3543,7 +3311,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
     // Scale down the ion by neighbour multiplier
     for (int i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
       for (f=0; f<num_frames; ++f) {
-        if (f < CP[sId].start[currentFlowIteration])
+        if (f < CP[sId].coarse_nuc_start[currentFlowIteration])
           *nei_xtalk = 0;
         else 
           *nei_xtalk = bulk_signal[f*num_beads] * CP_XTALKPARAMS[sId].multiplier[i]; 
@@ -4043,7 +3811,7 @@ void TaubAdjustForExponentialTailFitting_k(
         //if (bead_ndx == 0)
         //  printf("delta0: %.2f delta1: %.2f delta2: %.2f\n", delta0, delta1, delta2);
 
-        if (!isnan(delta0) && !isnan(delta1) && !isnan(delta2)) {
+        if (!::isnan(delta0) && !::isnan(delta1) && !::isnan(delta2)) {
           newA = A + delta0;
           newtaub = taub + delta1;
           newdc = dc_offset + delta2;
@@ -4174,7 +3942,7 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
     kmult = pbeadParamsTranspose[(BEAD_OFFSET(kmult[0]) + flow_ndx)*num_beads + bead_ndx];
 
     int emphasisIdx = (int)(Ampl) > maxEmphasis ? maxEmphasis : (int)Ampl;
-    int nonZeroEmpFrames = CP[sId].non_zero_emphasis_frames[emphasisIdx];
+    int nonZeroEmpFrames = CP[sId].non_zero_crude_emphasis_frames[emphasisIdx];
     int nucid = CP[sId].flowIdxMap[flow_ndx]; //CP_MULTIFLOWFIT
     float * et;    
     // if PCA use basebointer to dark Matter otherwise bend pointer to current nuc average
@@ -4187,6 +3955,7 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
     for (i=0; i<num_steps; ++i) {
       ptemp = poutput + i*stepOffset + bead_ndx;
 
+      float step = psteps[i].diff;
       for (int k=nonZeroEmpFrames; k<num_frames; ++k) {
         ptemp[k*num_beads] = 0;
       }
@@ -4213,7 +3982,7 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
           ComputeHydrogenForMultiFlowFit_dev(sId, flow_ndx, nucid, pnucRise, Ampl, 
                           kmult*CP[sId].krate[nucid], gain, SP,  //CP_MULTIFLOWFIT
                           dmult*CP[sId].d[nucid],  //CP_MULTIFLOWFIT
-                          ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].start[flow_ndx],  //CP_MULTIFLOWFIT
+                          ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].coarse_nuc_start[flow_ndx],
                           num_frames, num_beads, pival, num_frames);
           ComputeSignalForMultiFlowFit_dev(false, num_frames, restrict_clonal, sId, flow_ndx, Ampl, tauB,
                           etbR, gain, num_frames, num_beads, pnon_integer_penalty,
@@ -4224,19 +3993,19 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
         {
           // perturb the parameters 
           if (psteps[i].PartialDerivMask == DFDA) {
-              Ampl += psteps[i].diff;
+              Ampl += step;
           } 
           else if (psteps[i].PartialDerivMask == DFDDKR) {
-            kmult += psteps[i].diff;
+            kmult += step;
           }
           else if (psteps[i].PartialDerivMask == DFDR) {
-            R += psteps[i].diff;
+            R += step;
           }
           else if (psteps[i].PartialDerivMask == DFDP) {
-            Copies += psteps[i].diff;
+            Copies += step;
           }
           else if (psteps[i].PartialDerivMask == DFDPDM) {
-            dmult += psteps[i].diff;
+            dmult += step;
           }
 
           float* pivtemp = pival;
@@ -4246,31 +4015,31 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
             ComputeHydrogenForMultiFlowFit_dev(sId, flow_ndx, nucid, pnucRise, Ampl, 
                 kmult*CP[sId].krate[nucid], gain, SP,  //CP_MULTIFLOWFIT
                 dmult*CP[sId].d[nucid],  //CP_MULTIFLOWFIT
-                ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].start[flow_ndx],  //CP_MULTIFLOWFIT
+                ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].coarse_nuc_start[flow_ndx],  //CP_MULTIFLOWFIT
                 num_frames, num_beads, pivtemp, nonZeroEmpFrames);
           }
-          ComputeEtbR_dev(etbR, &CP[sId], R, Copies, Phi, sId, nucid, 0+flow_ndx); //CP_MULTIFLOWFIT
+          ComputeEtbR_dev(etbR, &CP[sId], R, Copies, Phi, sId, nucid, flow_ndx); //CP_MULTIFLOWFIT
           ComputeTauB_dev(tauB, &CP[sId], etbR, sId); //CP_MULTIFLOWFIT
           ComputeSignalForMultiFlowFit_dev(true, nonZeroEmpFrames, restrict_clonal, sId, flow_ndx, Ampl, tauB,
                 etbR, gain, num_frames, num_beads, pnon_integer_penalty,
                 et,pPCA_vals, psbg, pivtemp, ptemp, true, 
-                psteps[i].diff, emphasisVec + emphasisIdx*num_frames, pfval);
+                step, emphasisVec + emphasisIdx*num_frames, pfval);
 
           // restore the params back
           if (psteps[i].PartialDerivMask == DFDA) {
-            Ampl -= psteps[i].diff;
+            Ampl -= step;
           } 
           else if (psteps[i].PartialDerivMask == DFDDKR) {
-            kmult -= psteps[i].diff;
+            kmult -= step;
           }
           else if (psteps[i].PartialDerivMask == DFDR) {
-            R -= psteps[i].diff;
+            R -= step;
           }
           else if (psteps[i].PartialDerivMask == DFDP) {
-            Copies -= psteps[i].diff;
+            Copies -= step;
           }
           else if (psteps[i].PartialDerivMask == DFDPDM) {
-            dmult -= psteps[i].diff;
+            dmult -= step;
           }
         }
       }
@@ -4388,7 +4157,7 @@ __global__ void MultiFlowLevMarFit_k(
       kmult = pevalBeadParams[(BEAD_OFFSET(kmult[0]) + flow_ndx)*num_beads + bead_ndx];
 
       int emphasisIdx = (int)(Ampl) > maxEmphasis ? maxEmphasis : (int)Ampl;
-      int nonZeroEmpFrames = CP[sId].non_zero_emphasis_frames[emphasisIdx];
+      int nonZeroEmpFrames = CP[sId].non_zero_crude_emphasis_frames[emphasisIdx];
       int nucid = CP[sId].flowIdxMap[flow_ndx]; //CP_MULTIFLOWFIT
  
       if(!CP[sId].useDarkMatterPCA)
@@ -4400,7 +4169,7 @@ __global__ void MultiFlowLevMarFit_k(
       ComputeHydrogenForMultiFlowFit_dev(sId, flow_ndx, nucid, pnucRise, Ampl, 
         kmult*CP[sId].krate[nucid], gain, SP,  //CP_MULTIFLOWFIT
         dmult*CP[sId].d[nucid],  //CP_MULTIFLOWFIT
-        ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].start[flow_ndx],  //CP_MULTIFLOWFIT
+        ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].coarse_nuc_start[flow_ndx],  //CP_MULTIFLOWFIT
         num_frames, num_beads, pival, nonZeroEmpFrames);
       ComputeSignalForMultiFlowFit_dev(true, nonZeroEmpFrames, restrict_clonal, sId, flow_ndx, Ampl, tauB,
         etbR, gain, num_frames, num_beads, pnon_integer_penalty,
@@ -4655,11 +4424,11 @@ __global__ void ProjectionSearch_k(
     for (int i=0; i<2; ++i) {
       Fermi_ModelFuncEvaluationForSingleFlowFitNoOutput(&CP[sId], flow_ndx, nucid, nucRise, 
         Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, dmult,  //CP_SINGLEFLOWFIT
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW * CP[sId].start[flow_ndx], //CP_SINGLEFLOWFIT
-        num_frames, num_beads, fval, CP[sId].deltaFrames, CP[sId].non_zero_emphasis_frames[0]);
+        sens, CP[sId].coarse_nuc_start[flow_ndx], ISIG_SUB_STEPS_MULTI_FLOW, //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval, CP[sId].deltaFrames, CP[sId].non_zero_crude_emphasis_frames[0]);
 
       float num = 0, den = 0.0001f;
-      for (int j=CP[sId].start[flow_ndx]; j<CP[sId].non_zero_emphasis_frames[0]; ++j) {
+      for (int j=CP[sId].coarse_nuc_start[flow_ndx]; j<CP[sId].non_zero_crude_emphasis_frames[0]; ++j) {
 #ifdef FVAL_L1
         num += fval[j]*fg_buffers[j*num_beads]*emphasisVec[j]*emphasisVec[j]; // multiply by emphasis vectors
         den += fval[j]*fval[j]*emphasisVec[j]*emphasisVec[j]; 
@@ -4669,7 +4438,7 @@ __global__ void ProjectionSearch_k(
 #endif
       }
       Ampl *= (num/den);
-      if (isnan(Ampl))
+      if (::isnan(Ampl))
         Ampl = 1.0f;
       else 
         clamp_streaming(Ampl, 0.001f, (float)LAST_POISSON_TABLE_COL);
@@ -5008,6 +4777,7 @@ void  StreamingKernels::PerFlowRelaxKmultGaussNewtonFit(int l1type, dim3 grid, d
   int num_beads, // 4
   int num_frames, // 4
   bool useDynamicEmphasis,
+  bool useSlowKmultInit,
 //  int * pMonitor,
   int sId,
   int flow_block_size
@@ -5046,6 +4816,7 @@ void  StreamingKernels::PerFlowRelaxKmultGaussNewtonFit(int l1type, dim3 grid, d
     num_beads, // 4
     num_frames, // 4
     useDynamicEmphasis,
+    useSlowKmultInit,
     sId,
     flow_block_size);
 }
@@ -5596,35 +5367,6 @@ void StreamingKernels::ProjectionSearch(
       flow_block_size);
 }
 
-void StreamingKernels::RecompressRawTracesForSingleFlowFit(
-  dim3 grid, 
-  dim3 block, 
-  int smem, 
-  cudaStream_t stream,
-  float* fgbuffers, // FLxFxN
-  float* scratch,
-  int startFrame,
-  int oldFrames,
-  int newFrames,
-  int numFlows,
-  int num_beads,
-  int sId)
-{
-  RecompressRawTracesForSingleFlowFit_k<<<
-      grid, 
-      block, 
-      smem, 
-      stream>>>(
-      fgbuffers,
-      scratch,
-      startFrame,
-      oldFrames,
-      newFrames,
-      numFlows,
-      num_beads,
-      sId);
-}
-
 
 
 void StreamingKernels::transposeData(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, float *source, int width, int height)
@@ -5638,8 +5380,6 @@ void StreamingKernels::transposeDataToFloat(dim3 grid, dim3 block, int smem, cud
 {
   transposeDataToFloat_k<<< grid, block, smem, stream >>>( dest,source,width,height);
 }
-
-
 
 
 void StreamingKernels::initPoissonTables(int device, float ** poiss_cdf)

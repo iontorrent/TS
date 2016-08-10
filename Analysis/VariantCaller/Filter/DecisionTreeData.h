@@ -51,6 +51,8 @@ class DecisionTreeData {
     vector<VariantOutputInfo> summary_info_vector;
 
     vector<int> filteredAllelesIndex;
+	
+	map<string, float> variant_quality;
 
 
     bool best_variant_filtered;
@@ -78,7 +80,7 @@ class DecisionTreeData {
       tune_sbias = 0.5f; // safety factor for small allele counts for transformed strand bias
     };
 
-    void OverrideFilter(string & _filter_reason, int _allele);
+    void OverrideFilter(vcf::Variant &candidate_variant, string & _filter_reason, int _allele, const string &sample_name);
     void FilterOneAllele(int i_alt,VariantOutputInfo &l_summary_info,
                          AlleleIdentity &l_variant_identity, const ControlCallAndFilters &my_filters,
                          const VariantSpecificParams& variant_specific_params);
@@ -91,47 +93,49 @@ class DecisionTreeData {
     void FindBestAlleleByScore();
 
     void GenotypeFromBestAlleleIndex(vcf::Variant &candidate_variant, const ExtendParameters &parameters);
-    void GenotypeFromEvaluator(vcf::Variant &candidate_variant, const ExtendParameters &parameters);
+    void GenotypeFromEvaluator(vcf::Variant &candidate_variant, const ExtendParameters &parameters, const string &sample_name);
 
-    void FilterMyCandidate(vcf::Variant &candidate_variant, const ExtendParameters &parameters);
+    void FilterMyCandidate(vcf::Variant &candidate_variant, const ExtendParameters &parameters, const string &sample_name);
     void BestAlleleFilterMyCandidate(vcf::Variant &candidate_variant, const ExtendParameters &parameters);
-    void GenotypeAlleleFilterMyCandidate(vcf::Variant &candidate_variant, const ExtendParameters &parameters);
+    void GenotypeAlleleFilterMyCandidate(vcf::Variant &candidate_variant, const ExtendParameters &parameters, const string &sample_name);
 
-    void SimplifySNPsIfNeeded(VariantCandidate &candidate_variant, const ExtendParameters &parameters);
+    void SimplifySNPsIfNeeded(VariantCandidate &candidate_variant, const ExtendParameters &parameters, const string &sample_name);
 
 
     bool SetGenotype(vcf::Variant &candidate_variant, const ExtendParameters &parameters, float gt_quality);
-    void DecisionTreeOutputToVariant(VariantCandidate &candidate_variant, const ExtendParameters &parameters);
+    void DecisionTreeOutputToVariant(VariantCandidate &candidate_variant, const ExtendParameters &parameters, int sample_index);
 
-    void AggregateFilterInformation(vcf::Variant &candidate_variant, const vector<VariantSpecificParams>& variant_specific_params, const ExtendParameters &parameters);
-    void FillInFiltersAtEnd(VariantCandidate &candidate_variant,const ExtendParameters &parameters);
+    void AggregateFilterInformation(vcf::Variant &candidate_variant, const vector<VariantSpecificParams>& variant_specific_params, const ExtendParameters &parameters, const string &sample_name);
+    void FillInFiltersAtEnd(VariantCandidate &candidate_variant,const ExtendParameters &parameters, const string &sample_name);
 
 
 
     void SetupFromMultiAllele(const EnsembleEval &my_ensemble);
-    void AddStrandBiasTags(vcf::Variant &candidate_variant);
-    void AddPositionBiasTags(vcf::Variant &candidate_variant);
-    void  AddCountInformationTags(vcf::Variant &candidate_variant, const string &sampleName);
-
+    void AddStrandBiasTags(vcf::Variant &candidate_variant, const string &sample_name);
+    void AddPositionBiasTags(vcf::Variant &candidate_variant, const string &sample_name);
+    void AddLodTags(vcf::Variant &candidate_variant, const string &sample_name, const ExtendParameters &parameters);
+    void AddCountInformationTags(vcf::Variant &candidate_variant, const string &sampleName, const ExtendParameters &parameters);
     string GenotypeStringFromAlleles(std::vector<int> &allowedGenotypes, bool refAlleleFound);
     bool AllowedGenotypesFromSummary(std::vector<int> &allowedGenotypes);
     string GenotypeFromStatus(vcf::Variant &candidate_variant, const ExtendParameters &parameters);
-    void SpecializedFilterFromLatentVariables(vcf::Variant &candidate_variant, const float bias_radius, int _allele);
-    void SpecializedFilterFromHypothesisBias(vcf::Variant &candidate_variant, AlleleIdentity allele_identity, const float deletion_bias, const float insertion_bias, int _allele);
-    void FilterAlleleHypothesisBias(float ref_bias, float var_bias, float threshold_bias, int _allele);
-    void FilterOnSpecialTags(vcf::Variant &candidate_variant, const ExtendParameters &parameters, const vector<VariantSpecificParams>& variant_specific_params);
-    void FilterOnStringency(vcf::Variant &candidate_variant, const float data_quality_stringency,  int _check_allele_index);
-    void FilterOnPositionBias(int i_alt, MultiBook &m_summary_stats, VariantOutputInfo &l_summary_info, const ControlCallAndFilters &my_filters, const VariantSpecificParams& variant_specific_params);
+    void SpecializedFilterFromLatentVariables(vcf::Variant &candidate_variant, const float bias_radius, int _allele, const string &sample_name);
+    void SpecializedFilterFromHypothesisBias(vcf::Variant &candidate_variant, AlleleIdentity allele_identity, const float deletion_bias, const float insertion_bias, int _allele, const string &sample_name);
+    void FilterAlleleHypothesisBias(vcf::Variant &candidate_variant, float ref_bias, float var_bias, float threshold_bias, int _allele, const string &sample_name);
+    void FilterOnSpecialTags(vcf::Variant &candidate_variant, const ExtendParameters &parameters, const vector<VariantSpecificParams>& variant_specific_params, const string &sample_name);
+    void FilterOnStringency(vcf::Variant &candidate_variant, const float data_quality_stringency,  int _check_allele_index, const string &sample_name);
+    void FilterOnPositionBias(const string& allele, int i_alt, MultiBook &m_summary_stats, VariantOutputInfo &l_summary_info, const ControlCallAndFilters &my_filters, const VariantSpecificParams& variant_specific_params);
+    void FilterOnLod(const string& allele, int i_alt, MultiBook &m_summary_stats, VariantOutputInfo &l_summary_info, const ControlCallAndFilters &my_filters, const BasicFilters &basic_filter, bool is_reference_call);
     void FilterBlackList(const vector<VariantSpecificParams>& variant_specific_params);
-    void FilterSSE(vcf::Variant &candidate_variant, const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params);
+    void FilterSSE(vcf::Variant &candidate_variant, const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params, const string &sample_name);
 };
 void FilterByBasicThresholds(stringstream &s, int i_alt, MultiBook &m_summary_stats,
                              VariantOutputInfo &l_summary_info,
-                             const BasicFilters &basic_filter, float tune_xbias, float tune_bias);
+                             const BasicFilters &basic_filter, float tune_xbias, float tune_bias, bool is_reference_call);
 
-void AutoFailTheCandidate(vcf::Variant &candidate_variant, bool use_position_bias);
+void AutoFailTheCandidate(vcf::Variant &candidate_variant, bool use_position_bias, const string &sample_name, bool use_molecular_tag);
 float FreqThresholdByType(AlleleIdentity &variant_identity, const ControlCallAndFilters &my_controls, const VariantSpecificParams& variant_specific_params);
 void DetectSSEForNoCall(AlleleIdentity &var_identity, float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float relative_safety_level, vcf::Variant &candidate_variant, unsigned _altAlleIndex);
-void SetQualityByDepth(vcf::Variant &candidate_variant);
+void SetQualityByDepth(vcf::Variant &candidate_variant, map<string, float>& variant_quality, const string &sample_name);
+void RemoveVcfInfo(vcf::Variant &variant, const vector<string> &info_fields, const string &sample_name, int sample_index);
 
 #endif // DECISIONTREEDATA_H

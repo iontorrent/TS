@@ -11,9 +11,12 @@ from tastypie.http import *
 
 from iondb.rundb.models import PluginResult
 
+
 class PluginApiKeyAuthentication(Authentication):
+
     def _unauthorized(self):
         return HttpUnauthorized()
+
     def is_authenticated(self, request, **kwargs):
         unauthorized = True
 
@@ -62,10 +65,14 @@ class PluginApiKeyAuthentication(Authentication):
         return True
 
 # Custom Authorization Class
+
+
 class IonAuthentication(MultiAuthentication):
+
     """
         Derived from MultiAuthentication, but with Auth Schemes hardcoded
     """
+
     def __init__(self, allow_get=None, **kwargs):
         backends = [
             # Basic must be first, so it sets WWW-Authenticate header in 401.

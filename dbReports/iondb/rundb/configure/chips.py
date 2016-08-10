@@ -126,7 +126,7 @@ def getChipPdf(request, path):
         p1 = subprocess.Popen(cmd1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         return p1
-    
+
     path = os.path.join("/", path)
 
     # File I/O setup
@@ -298,7 +298,7 @@ def findProtonDiags(filesvrs):
 
         except OSError:
             pass
- 
+
     protonDiags.sort()
     return protonDiags
 

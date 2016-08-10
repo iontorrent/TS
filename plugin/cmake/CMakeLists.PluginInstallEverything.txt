@@ -1,0 +1,12 @@
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
+# INPUT: CMAKE_CURRENT_SOURCE_DIR
+#        CPACK_PACKAGE_INSTALL_DIRECTORY
+# DESCRIPTION: This will setup all of the standard plugin package attributes and install scripts
+
+INSTALL(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}"
+        USE_SOURCE_PERMISSIONS
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/build" EXCLUDE
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt" EXCLUDE
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/debian" EXCLUDE
+       )

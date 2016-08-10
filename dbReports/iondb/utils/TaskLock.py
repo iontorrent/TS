@@ -3,10 +3,9 @@
 
 from iondb.bin import djangoinit
 from django.core.cache import get_cache
-#from django.core.cache import cache
 
 
-class TaskLock:
+class TaskLock(object):
 
     def __init__(self, lock_id, timeout=None):
         self.lock_id = lock_id
@@ -41,14 +40,14 @@ class TaskLock:
 if __name__ == '__main__':
     import time
     applock = TaskLock('Test.lock')
-    if (applock.lock()):
+    if applock.lock():
         # Hint: try running 2nd program instance while this instance sleeps
-        print ("Obtained lock, sleeping 10 seconds")
+        print "Obtained lock, sleeping 10 seconds"
         time.sleep(10)
-        print ("Unlocking")
+        print "Unlocking"
         applock.unlock()
     else:
-        print ("Unable to obtain lock, exiting")
+        print "Unable to obtain lock, exiting"
 
 '''
 To clear a specific lock manually:

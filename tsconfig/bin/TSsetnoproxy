@@ -1,0 +1,119 @@
+#!/bin/bash
+# Copyright (C) 2016 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+
+#--------------------------------------
+#--- Include function definition file
+#--------------------------------------
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params||source ../ts_params||true
+source $TSCONFIG_SRC_DIR/ts_functions||source ../ts_functions||true
+
+#--------------------------------------
+# Functions
+#--------------------------------------
+function print_help ()
+{
+    echo
+    echo "Usage: $0 [option]..."
+    echo -e "\t--no_proxy                Proxy string for the no_proxy variable"
+    echo -e "\t--remove                  Removes proxy setting"
+    echo -e "\t--debug, -d               Prints script commands when executing (set -x)"
+    echo -e "\t--help, -h                Prints command line args"
+    echo -e "\t--version, -v             Prints version"
+    echo
+    echo
+}
+
+#--------------------------------------
+# Trap exit
+#--------------------------------------
+trap 'error ${LINENO}' ERR
+
+#--------------------------------------
+# Default settings
+#--------------------------------------
+version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@"
+REMOVE=false
+RESTART_APACHE=true
+environment="/etc/environment"
+
+# Log command line arguments
+cmdline=${@}
+
+#--------------------------------------
+# command line argument parsing
+#--------------------------------------
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+        '--help'|'-h')
+            print_help
+            exit 0
+        ;;
+
+        '--version'|'-v')
+            echo "`basename $0` version $version"
+            if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+                source /opt/ion/bin/ion-tsconfig.version.env
+                IonVersionGetFullVersion ion-tsconfig
+            fi
+            exit 0
+        ;;
+
+        '--debug'|'-d')
+        set -x
+        ;;
+        
+        '--remove')
+        REMOVE=true
+        ;;
+        
+        '--no_proxy')
+        shift
+        no_proxy_str=$1
+        ;;
+
+        *)
+        log "Unknown option: $1"
+        echo "Unknown option: $1.  Exiting"
+        echo "Use TSsetproxy --help for options."
+        exit 1
+        ;;
+
+    esac
+    shift
+done
+
+needs_root
+# Log command line arguments
+log "$cmdline"
+#-----------------------------------------------------------------------------
+# Handle the --remove option
+#-----------------------------------------------------------------------------
+if [[ $REMOVE -eq true ]]; then
+    if [ -e $environment ]; then
+        for _proxy in no_proxy NO_PROXY; do
+            sed -i "/^$_proxy/d" $environment
+            unset $_proxy
+        done
+    else
+        echo $environment does not exist
+    fi
+fi
+#-----------------------------------------------------------------------------
+# Handle the --no_proxy option
+#-----------------------------------------------------------------------------
+if [[ ! -z $no_proxy_str ]]; then
+    if [ -e $environment ]; then
+        for _proxy in no_proxy NO_PROXY; do
+            sed -i "/^$_proxy/d" $environment
+            echo "$_proxy=$no_proxy_str" >> $environment
+        done
+        source $environment
+    else
+        echo $environment does not exist
+    fi
+fi
+
+exit

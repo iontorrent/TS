@@ -55,7 +55,8 @@ class TraceCurry
     void SetWellRegionParams (struct BeadParams *_p,struct reg_params *_rp,int _fnum,
                               int _nnum,int _flow,
                               int _i_start,float *_c_dntp_top);
-     void  SetContextParams(int _i_start, float *c_dntp_top, int _sub_steps, float _C,
+
+    void  SetContextParams(int _i_start, float *c_dntp_top, int _sub_steps, float _C,
                            float _SP, float _region_kr, float _kmax, float _d, float _sens, float _gain, float _tauB);
     float GetStartAmplitude(){ return(p->Ampl[fnum]);};
     float GuessAmplitude(float *red_obs);
@@ -69,8 +70,6 @@ class TraceCurry
     // don't assume constant, can have side effects
     float *ivalPtr;   
     //data to be passed to trace.h5
-
-    float ymin;
 
 };
 

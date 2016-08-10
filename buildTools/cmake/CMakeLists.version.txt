@@ -1,5 +1,10 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
+# get the torrent suite version numbers
+execute_process(COMMAND "grep" "TS_MAJOR"   "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_MAJOR=//"   OUTPUT_VARIABLE TS_MAJOR   OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "TS_MINOR"   "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_MINOR=//"   OUTPUT_VARIABLE TS_MINOR   OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "TS_RELEASE" "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_RELEASE=//" OUTPUT_VARIABLE TS_RELEASE OUTPUT_STRIP_TRAILING_WHITESPACE)
+
 # Figure out state of current build
 execute_process(COMMAND "hostname" "-f" 
                 OUTPUT_VARIABLE BUILDHOST

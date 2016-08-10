@@ -11,19 +11,17 @@
             <li class="active"><a href="#" id="nav_file" data-toggle="tab">Upload File</a></li>
             <li><a href="#" id="nav_url" data-toggle="tab">Install via URL</a></li>
         </ul>
-        <form class="form-horizontal" id="modal_references_new_genome_form" method="POST" action="{% url "references_custom_download" %}">
+        <form class="form-horizontal" id="modal_references_new_genome_form" method="POST" action="{% url "add_custom_genome" %}">
             <fieldset>
                 <div id="upload-fasta" class="control-group">
                     <label for="pickfile" class="control-label">Upload a FASTA file (required)</label>
                     <div class="controls">
                         <div id="filelist"><a id="pickfile" name="pickfile" class="btn">Select File</a></div>
                         <div id="upload-help" class="help-block" >
-                            In order to provide a better uploading experience either
-                            Adobe Flash or Microsoft Silverlight plugins are required
+                            In order to provide a better uploading experience Microsoft Silverlight plugin is required
                             for file uploading.
                             <ul>
                                 <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/">microsoft.com</a></li>
-                                <li>Adobe Flash can be found at <a href="http://get.adobe.com/flashplayer/">adobe.com</a></li>
                             </ul>
                             You may need to contact your local system administrator for assistance.
                         </div>
@@ -101,11 +99,6 @@ $(function(){
           
     var firstFinish = false;
     function finish() {
-        // Post to a this Django view
-        // create a genome ref object
-        // then call the xmlrpc server
-        //have it make a http call back to the django server to let it know things are done.
-        
         //plupload calls this twice, we don't want that.
         if (firstFinish) return false;
         
@@ -114,20 +107,16 @@ $(function(){
         var file_name = uploader.files[0].target_name
         $("#target_file").val(file_name.split(' ').join(''));
         
-        $("#update").addClass('alert alert-info').html("Attempting to create genome index");
-        
-        $.post("{% url "references_genome_add" %}", $("#modal_references_new_genome_form").serialize(), function (data) {
-            //in this call back, if it worked, do a fancy fade
-            if (data.error == false) {
-                $("#update").removeClass('alert-info').addClass('alert-success').html(data.status);
+        $.post("{% url "add_custom_genome" %}", $("#modal_references_new_genome_form").serialize(), function (data) {
+            if (data.error == true) {
+                $("#update").addClass('alert alert-error').html(data.status);
+            } else {
+                $("#update").removeClass('alert-error').addClass('alert alert-success');
+                $("#update").html("Started genome reference creation");
                 setTimeout(function () {
                     $('#modal_references_new_genome').trigger('modal_references_new_genome_done', {});
                     $('#modal_references_new_genome').modal('hide'); 
                 }, 2000);
-            } else {
-                $("#update").removeClass('alert-info').addClass('alert-error')            
-                $("#update").html(data.status);
-                $("#update").effect("highlight", {"color": "#F20C18"}, 2000);
             }
         });
     }  

@@ -1,0 +1,9 @@
+---
+# file: instrument_update.yml
+- hosts: instrument_update
+  roles:
+    - instrument_update
+  tags:
+    - instrument_update
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]

@@ -1,6 +1,6 @@
 // html for picture container - note these are invisible and moved into position later
 document.write('\
-<div id="PF-frame" class="unselectable" style="display:none">\
+<div id="PF-frame" class="unselectable" style="page-break-inside:avoid;display:none">\
   <div id="PF-titlebar" class="grid-header">\
     <span id="PF-collapseDisplay" style="float:left" class="ui-icon ui-icon ui-icon-triangle-1-n" title="Collapse view"></span>\
     <span class="table-title">Representation Plots</span>\

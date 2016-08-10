@@ -291,8 +291,8 @@ public:
   void Close();
   void CloseWithoutCleanupHdf5();
 
-  size_t GetStepSize() { return mStepSize; }
-  std::string GetHdf5FilePath() { return mFilePath; }
+  size_t GetStepSize() const { return mStepSize; }
+  std::string GetHdf5FilePath() const { return mFilePath; }
 
   /* Accessors */
   size_t NumRows() const { return mRows; }
@@ -324,7 +324,7 @@ public:
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies);
 
   void ResetCurrentWell() { mCurrentWell = 0; }
-  void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = (size_t)(-1), mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
+  void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = 0, mFirsttimeGetRegionData = true,  mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
 
   /* Metadata accessors. */
   /** Get the value associated with a particular key, return false if key not present. */
@@ -454,6 +454,7 @@ private:
   size_t mCurrentRegionCol;
   size_t mCurrentRow;
   size_t mCurrentCol;
+  bool mFirsttimeGetRegionData;
   bool mIsLegacy;
   bool mSaveAsUShort;
   float mLower;
@@ -503,7 +504,7 @@ public:
   // Because of parallel stuff, we don't always know when an individual flow is done.
   // We only know about the end of a flow block.
   void DoneUpThroughFlow( int flow );
-  void DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* writeQueue );
+  void DoneUpThroughFlow( int flow, SemQueue & packQueue, SemQueue & writeQueue );
 };
 
 #endif // RAWWELLS_H

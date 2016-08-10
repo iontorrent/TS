@@ -10,11 +10,11 @@
   <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
   <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
   <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
-  
+
   <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
   <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
   <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
-  
+
   <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
   <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
 
@@ -22,7 +22,7 @@
   <link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
 
 <!--
-  Ignoring fileinput because it doesn't seem to work properly. 
+  Ignoring fileinput because it doesn't seem to work properly.
   <script type="text/javascript" src="{% static "jquery/js/fileinput/jquery.fileinput.min.js"%}"></script>
   <link type="text/css" href="{% static "jquery/js/fileinput/fileinput.css"%}" rel="stylesheet"/>
   -->
@@ -32,7 +32,7 @@
 <div id="sys_messages"></div>
 
 <div class="content clearfix">
-  
+
   <div class="row-fluid">
     <div class="span3">
     <ul class="nav nav-list affix-top" id="my-side-nav">
@@ -80,24 +80,24 @@
        </li>
      </ul>
     </div>
-    
+
     <div class="span9" id="my-tabs">
       <div id="references-tab">
         <div class="clearfix">
           <h1 style="float:left;">Reference Sequences</h1>
           <div class="pull-right">
             <a href="{% url "references_genome_download" %}" class="btn btn-primary">Import Preloaded Ion References</a>
-            <a href="{% url "references_genome_add" %}" class="btn btn-primary" id="add_genome">Import Custom Reference</a>
+            <a href="{% url "add_custom_genome" %}" class="btn btn-primary" id="add_genome">Import Custom Reference</a>
           </div>
         </div>
         <div id="referenceSequences"></div>
       </div>
-      
+
       <div id="obsolete-references-tab" style="display: none;">
         <h1>Obsolete Reference Sequences</h1>
         <div id="obsoleteReferenceSequences"></div>
       </div>
-      
+
       <div id="target-regions-tab" style="display: none;"">
         <form action="/rundb/content/targetregions/add" method="get">
         <h1>Target Regions</h1>
@@ -117,7 +117,7 @@
         </form>
         <div id="targetRegions"></div>
       </div>
-      
+
       <div id="hotspots-tab" style="display: none;">
         <form action="/rundb/content/hotspots/add" method="get">
         <h1>Hotspots</h1>
@@ -137,7 +137,7 @@
         </form>
         <div id="hotspots"></div>
       </div>
-      
+
       <div id="test-fragments-tab" style="display: none;">
         <div class="clearfix">
           <h1 style="float:left;">Test Fragments</h1>
@@ -145,7 +145,7 @@
         </div>
         <div id="testFragments"></div>
       </div>
-      
+
       <div id="barcodes-tab" style="display: none;">
         <div class="clearfix">
           <h1 style="float:left;" id="DNABarcodes">DNA Barcodes</h1>
@@ -153,10 +153,10 @@
         </div>
         <div id="barcodes"></div>
       </div>
-      
+
       <div id="uploads-tab" style="display: none;">
         <div class="clearfix">
-          <h1>Upload History</h1> 
+          <h1>Upload History</h1>
         </div>
         <div id="uploads"></div>
       </div>
@@ -174,11 +174,11 @@ $(function () {
     $("#"+newhash+"-nav").addClass("active");
     $("#my-tabs > div").hide();
     $("#"+newhash+"-tab").show();
-    
+
     var grid = null;
     if (newhash == 'references')
       grid = $("#referenceSequences").data("kendoGrid");
-      
+
     if (newhash == 'obsolete-references')
       grid = $("#obsoleteReferenceSequences").data("kendoGrid");
 
@@ -203,16 +203,16 @@ $(function () {
       grid.setDataSource(a);
     }
   };
-  
+
   window.onhashchange = function(e) { navigate_to_hash(); };
-  
+
   navigate_to_hash();
 });
 
 $(document).ready(function() {
 
   // Populate Upload History table
-  
+
   $.get('/rundb/api/v1/contentupload/?format=json&limit=0', function (data) {
 
     var uploads_data = new kendo.data.DataSource({
@@ -232,7 +232,7 @@ $(document).ready(function() {
       sort: { field: "upload_date", dir: "desc" },
       pageSize: 5000
     });
-    
+
     $.each(data.objects, function (int_index, result) {
 
       label = '#5bb75b';
@@ -246,7 +246,7 @@ $(document).ready(function() {
       if (result.meta.upload_date) {
         upload_date = new Date(Date.parse(result.meta.upload_date));
       }
-            
+
       uploads_data.add({
         id: result.id,
         file: result.name,
@@ -256,7 +256,7 @@ $(document).ready(function() {
         label: label
       });
     });
-    
+
     $("#uploads").kendoGrid({
       dataSource: uploads_data,
       height: '600',
@@ -268,15 +268,15 @@ $(document).ready(function() {
       columns: [
         { field: "file", title: "Uploaded File", width: '40%', template: "<a href='/rundb/uploadstatus/${id}/'>${file}</a>"},
         { field: "upload_type", title: "Type", width: '20%'},
-        { field: "upload_date", title: "Date", width: '20%', template: '#= upload_date?kendo.toString(upload_date,"yyyy/MM/dd"):""  #' },
+        { field: "upload_date", title: "Date", width: '20%', template: '#= upload_date?kendo.toString(upload_date,"yyyy/MM/dd H:mm:ss"):""  #' },
         { field: "status", title: "Status", width: '20%', template: "<span style='font-weight:bold;color:${label};'>${status}</span>"}
       ]
     });
-    
+
   });
 
-  
-  
+
+
   $.get('/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED', function (data) {
 
     var targets_data = new kendo.data.DataSource({
@@ -299,7 +299,7 @@ $(document).ready(function() {
       sort: { field: "upload_date", dir: "desc" },
       pageSize: 5000
     });
-    
+
     var hotspots_data = new kendo.data.DataSource({
       data: [],
       schema: {
@@ -320,8 +320,8 @@ $(document).ready(function() {
       sort: { field: "upload_date", dir: "desc" },
       pageSize: 5000
     });
-    
-    
+
+
     $.each(data.objects, function (int_index, result) {
       var targfile = result.file;
       var i = targfile.lastIndexOf('/unmerged/detail/');
@@ -368,8 +368,8 @@ $(document).ready(function() {
         });
       }
     });
-    
-    
+
+
     $("#targetRegions").kendoGrid({
       dataSource: targets_data,
       height: '600',
@@ -405,8 +405,8 @@ $(document).ready(function() {
         { field: "upload_date", title: "Upload Date", width: '10%', template: '#= upload_date?kendo.toString(upload_date,"yyyy/MM/dd"):""  #'}
       ]
     });
-    
-    
+
+
     function update_targets_filter() {
       if ($("#targets-ref-dropdown").val() == "") {
         targets_data.filter([
@@ -420,7 +420,7 @@ $(document).ready(function() {
       }
       $("#targets-search").data("prev", $("#targets-search").val());
     }
-    
+
     function update_hotspots_filter() {
       console.log("Applying hotspots filter " + $("#hotspots-ref-dropdown").val() + " and " + $("#hotspots-search").val());
       if ($("#hotspots-ref-dropdown").val() == "") {
@@ -435,13 +435,13 @@ $(document).ready(function() {
       }
       $("#hotspots-search").data("prev", $("#hotspots-search").val());
     }
-    
-    
-    
+
+
+
     // Step 1. Fetch list of references and populate the dropdown.
-    
+
     $.get('/rundb/api/v1/referencegenome/?format=json&limit=0&enabled=true&index_version=tmap-f3&order_by=short_name', function (data) {
-      
+
       if (data.meta.total_count == 0) {
         $("#targets-ref-dropdown").append("<option value=''>None</option>");
         $("#hotspots-ref-dropdown").append("<option value=''>None</option>");
@@ -461,7 +461,7 @@ $(document).ready(function() {
 
       update_targets_filter();
       update_hotspots_filter();
-      
+
       setInterval(function() {
         if ($("#targets-search").data("prev") != $("#targets-search").val()) {
           update_targets_filter();
@@ -470,11 +470,11 @@ $(document).ready(function() {
           update_hotspots_filter();
         }
       }, 250);
-      
+
     });
-    
+
   });
-  
+
 });
 
 </script>
@@ -488,8 +488,8 @@ $(document).ready(function() {
 
 <script id="barcodesActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
-  # var _id = id;# 
-  # var _name = name;# 
+  # var _id = id;#
+  # var _name = name;#
   <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
   <ul class="dropdown-menu pull-right">
     <li>
@@ -499,10 +499,10 @@ $(document).ready(function() {
       <a href="#= '{% url "references_barcodeset_delete" '999999' %}'.replace('999999',id)#" class="delete_barcodeset">Delete</a>
     </li>
   </ul>
-</div>  
-</script>   
+</div>
+</script>
 <script id="barcodeNameCellTemplate" type="text/x-kendo-template">
-  # var _id = id;# 
+  # var _id = id;#
   <a href="#= '{% url "references_barcodeset" '999999' %}'.replace('999999', _id)#">#= name#</a>
 </script>
 <script type="text/javascript">
@@ -539,7 +539,7 @@ $(document).ready(function(){
             }
             , serverSorting: true
             , sort: { field: "date", dir: "desc" }
-            , serverPaging: true                          
+            , serverPaging: true
           , pageSize: 5000
         }
         , height: '600'
@@ -577,10 +577,10 @@ $(document).ready(function(){
             } , {
                 field: "enabled"
                 , title: "Enabled"
-                , sortable: true    
+                , sortable: true
             }
         ]
-    }); 
+    });
   var obsoleteReferenceSequences = $("#obsoleteReferenceSequences").kendoGrid({
         dataSource: {
           type: "json"
@@ -612,7 +612,7 @@ $(document).ready(function(){
             }
             , serverSorting: true
             , sort: { field: "date", dir: "desc" }
-            , serverPaging: true                          
+            , serverPaging: true
           , pageSize: 5000
         }
         , height: '600'
@@ -680,7 +680,7 @@ $(document).ready(function(){
             }
             , serverSorting: true
             , sort: { field: "name", dir: "desc" }
-            , serverPaging: true                          
+            , serverPaging: true
           , pageSize: 5000
         }
         , height: '600'
@@ -726,7 +726,7 @@ $(document).ready(function(){
         $.get($(this).attr('href'), function(data) {
           $('body').append(data);
           $( '#modal_references_edit_TF' ).modal("show");
-          
+
           return false;
         });
       });
@@ -737,7 +737,7 @@ $(document).ready(function(){
           type: "json"
       , transport: {
                 read: {
-                  url: "/rundb/api/v1/dnabarcode/?distinct=true"
+                  url: "/rundb/api/v1/dnabarcode/?distinct=true&active=true"
                   , contentType: 'application/json; charset=utf-8'
             , type: 'GET'
             , dataType: 'json'
@@ -758,7 +758,7 @@ $(document).ready(function(){
             }
             , serverSorting: true
             , sort: { field: "name", dir: "desc" }
-            , serverPaging: true                          
+            , serverPaging: true
           , pageSize: 5000
         }
         , height: '600'
@@ -772,7 +772,7 @@ $(document).ready(function(){
                 field: "name"
                 , title: "Name"
                 , template: kendo.template($("#barcodeNameCellTemplate").html())
-            } 
+            }
             , {
                 title: "Action",
                 sortable: false,
@@ -793,18 +793,18 @@ $(document).ready(function(){
             $( "#modal_confirm_delete" ).data('customevents', jQuery.makeArray(['delete_barcodeset_done']));
             $( "#modal_confirm_delete" ).modal("show");
             return false;
-        }).done(function(data) { 
+        }).done(function(data) {
             console.log("success:",  url);
           })
           .fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
           });
       });
         }
     });
-    
+
   $('#add_genome').click(function (e) {
     e.preventDefault();
     $('#error-messages').hide().empty();
@@ -817,24 +817,24 @@ $(document).ready(function(){
         $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
         console.log("error:", data);
     });
-  });    
+  });
   $(document).bind('modal_references_new_genome_done', function () {
     refreshKendoGrid("#referenceSequences");
   });
-        
+
     $('.add_barcodeset').click(function (e) {
       var source = '#barcodes';
     e.preventDefault();
     e.stopPropagation();
         $('#error-messages').hide().empty();
-    
+
     url = $(this).attr('href');
     // alert(url);
     $('body #modal_references_add_barcodeset').remove();
     $.get(url, function(data) {
       // console.log(data);
         return false;
-    }).done(function(data) { 
+    }).done(function(data) {
         $('body').append(data);
         $('#modal_references_add_barcodeset').data('source', source);
         $('#modal_references_add_barcodeset').modal("show");
@@ -842,21 +842,21 @@ $(document).ready(function(){
       })
       .fail(function(data) {
         $('#error-messages').empty().show();
-        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
         console.log("error:", data);
-         
+
       })
-      .always(function(data) { /*console.log("complete:", data);*/ }); 
-    
+      .always(function(data) { /*console.log("complete:", data);*/ });
+
   });
-      
+
   $(document).bind('modal_references_add_barcodeset_done delete_barcodeset_done', function(e) {
       console.log(e.target, e.relatedTarget);
       refreshKendoGrid($(e.target).data('source'));
     });
     $(document).bind('modal_references_edit_TF_done', function () {
     refreshKendoGrid("#testFragments");
-  });   
+  });
 });
 </script>
-{% endblock content %}  
+{% endblock content %}

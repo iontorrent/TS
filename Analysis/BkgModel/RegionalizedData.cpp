@@ -9,14 +9,14 @@ void RegionalizedData::DumpRegionParameters (float cur_avg_resid)
     printf ("r(x,y) d(T,A,C,G) k(T,A,C,G)=(%d,%d) (%5.3f, %5.3f, %5.3f, %5.3f) (%5.3f, %5.3f, %5.3f, %5.3f) (%5.3f, %5.3f, %5.3f, %5.3f) %5.3f %5.3f %5.3f %5.3f %5.3f %5.3f\n",
             region->col,region->row,
             my_regions.rp.d[0],my_regions.rp.d[1],my_regions.rp.d[2],my_regions.rp.d[3],
-            my_regions.rp.krate[0],my_regions.rp.krate[1],my_regions.rp.krate[2],my_regions.rp.krate[3],
-            my_regions.rp.kmax[0],my_regions.rp.kmax[1],my_regions.rp.kmax[2],my_regions.rp.kmax[3],
-            cur_avg_resid,my_regions.rp.tshift,my_regions.rp.tau_R_m,my_regions.rp.tau_R_o,my_regions.rp.nuc_shape.sigma,GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)));
+        my_regions.rp.krate[0],my_regions.rp.krate[1],my_regions.rp.krate[2],my_regions.rp.krate[3],
+        my_regions.rp.kmax[0],my_regions.rp.kmax[1],my_regions.rp.kmax[2],my_regions.rp.kmax[3],
+        cur_avg_resid,my_regions.rp.tshift,my_regions.rp.tau_R_m,my_regions.rp.tau_R_o,my_regions.rp.nuc_shape.sigma,GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)));
   if (region != NULL)
     printf ("---(%d,%d) (%5.3f, %5.3f, %5.3f, %5.3f) (%5.3f, %5.3f, %5.3f, %5.3f)\n",
             region->col,region->row,
             my_regions.rp.nuc_shape.t_mid_nuc_delay[0],my_regions.rp.nuc_shape.t_mid_nuc_delay[1],my_regions.rp.nuc_shape.t_mid_nuc_delay[2],my_regions.rp.nuc_shape.t_mid_nuc_delay[3],
-            my_regions.rp.nuc_shape.sigma_mult[0],my_regions.rp.nuc_shape.sigma_mult[1],my_regions.rp.nuc_shape.sigma_mult[2],my_regions.rp.nuc_shape.sigma_mult[3]);
+        my_regions.rp.nuc_shape.sigma_mult[0],my_regions.rp.nuc_shape.sigma_mult[1],my_regions.rp.nuc_shape.sigma_mult[2],my_regions.rp.nuc_shape.sigma_mult[3]);
 }
 
 
@@ -56,7 +56,7 @@ void RegionalizedData::DumpTimeAndEmphasisByRegion (FILE *my_fp)
 
 void RegionalizedData::LimitedEmphasis( )
 {
-    my_beads.AssignEmphasisForAllBeads (0);
+  my_beads.AssignEmphasisForAllBeads (0);
 }
 
 void RegionalizedData::AdaptiveEmphasis()
@@ -75,8 +75,6 @@ void RegionalizedData::NoData()
   emptyTraceTracker = NULL;
   emptytrace = NULL;
 
-  doDcOffset = true;
-  regionAndTimingMatchSdat = false;
   // timing start
   sigma_start = 0.0f;
   t_mid_nuc_start = 0.0f;
@@ -96,60 +94,68 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
   // need to keep more data points.
   if (global_defaults.signal_process_control.exp_tail_fit)
   {
-     // primarily for thumbnail processing...we might need to ignore some of the long-time-history data points in the file
-     // This is an annoying consequence of the software-derived thumbnail..where independent VFC data from each region
-     // is combined into a single unified image all with a common time-domain.  As a result...most tiles in the thumbnail
-     // have invalid data points, and it is harmful to include these in the processing.  Unfortunately...there is no simple
-     // way to know from the image data which data points are valid, and which are not.
-     // we make a blanket assumption here that data points beyond t0+60 frames are not useful.....this is probably 
-     // mostly accurate.
-     // The FPGA-based thumbnail does not have this issue
-     float tend = t0_offset + 60.0f;
-     int iend = 0;
-     for (int i=0;i < time_c.npts();i++)
-     {
-        iend = i;
-        if (time_c.frameNumber[i] >= tend)
-           break;
-     }
+    // primarily for thumbnail processing...we might need to ignore some of the long-time-history data points in the file
+    // This is an annoying consequence of the software-derived thumbnail..where independent VFC data from each region
+    // is combined into a single unified image all with a common time-domain.  As a result...most tiles in the thumbnail
+    // have invalid data points, and it is harmful to include these in the processing.  Unfortunately...there is no simple
+    // way to know from the image data which data points are valid, and which are not.
+    // we make a blanket assumption here that data points beyond t0+60 frames are not useful.....this is probably
+    // mostly accurate.
+    // The FPGA-based thumbnail does not have this issue
+    float tend = t0_offset + 60.0f;
+    int iend = 0;
+    for (int i=0;i < time_c.npts();i++)
+    {
+      iend = i;
+      if (time_c.frameNumber[i] >= tend)
+        break;
+    }
 
-     if (iend < time_c.npts()) { 
-        time_c.SetETFFrames(iend);
-        time_c.UseETFCompression();
-     }
+    if (iend < time_c.npts()) {
+      time_c.SetETFFrames(iend);
+      time_c.UseETFCompression();
+    }
 
-     if (global_defaults.signal_process_control.recompress_tail_raw_trace)
-       // Generate emphasis vector object for standard time compression
-       SetUpEmphasisForStandardCompression(global_defaults);
+    if (global_defaults.signal_process_control.recompress_tail_raw_trace)
+      // Generate emphasis vector object for standard time compression
+      SetUpEmphasisForStandardCompression(global_defaults);
   }
   else
-     // check the points that we need
-     if (CENSOR_ZERO_EMPHASIS>0)
-     {
-       EmphasisClass trial_emphasis;
+    // check the points that we need
+    if (CENSOR_ZERO_EMPHASIS>0)
+    {
+      EmphasisClass trial_emphasis;
 
-       // assuming that our t_mid_nuc estimation is decent
-       // see what the emphasis functions needed for "detailed" results are
-       // and assume the "coarse" blank emphasis function will work out fine.
-       trial_emphasis.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
-       trial_emphasis.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
-       trial_emphasis.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
-       //    trial_emphasis.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
-       trial_emphasis.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
-       //time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
-       time_c.SetStandardFrames(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR));
-       time_c.UseStandardCompression();
+      // assuming that our t_mid_nuc estimation is decent
+      // see what the emphasis functions needed for "detailed" results are
+      // and assume the "coarse" blank emphasis function will work out fine.
+      trial_emphasis.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
+      trial_emphasis.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
+      trial_emphasis.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
+      //    trial_emphasis.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
+      trial_emphasis.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
+      //time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
+      time_c.SetStandardFrames(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR));
+      time_c.UseStandardCompression();
 
-       // don't bother monitoring this now
-       //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
-       // now give the emphasis data structure (and everything else) using the "used" number of points
-     }
+      // don't bother monitoring this now
+      //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
+      // now give the emphasis data structure (and everything else) using the "used" number of points
+    }
 
   emphasis_data.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
   emphasis_data.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
   emphasis_data.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
   //  emphasis_data.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
   emphasis_data.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
+
+#if 0
+  static int doneOnce=0;
+  if(!doneOnce){
+    doneOnce=1;
+    emphasis_data.SaveEmphasisVector();
+  }
+#endif
 }
 
 
@@ -158,7 +164,7 @@ void RegionalizedData::SetupTimeAndBuffers (
     float t_mid_nuc_guess,
     float t0_offset, int flow_block_size,
     int global_flow_max
-  )
+    )
 {
   sigma_start = sigma_guess;
   t_mid_nuc_start = t_mid_nuc_guess;
@@ -172,17 +178,6 @@ void RegionalizedData::SetupTimeAndBuffers (
   AllocFitBuffers( global_flow_max );
 }
 
-void RegionalizedData::SetTshiftLimitsForSynchDat()
-{
-    // Reset the global parameters here. @todo - put this in with the rest of the parameters?
-    // Need a configure() hook for first image if we're going to stick with the SignalProcessingMasterFitter doing
-    // things implicitly.
-    my_regions.rp_low.tshift    = -1.5f;
-    my_regions.rp_high.tshift    = 3.5f;
-    //    my_regions.rp.tshift    = 1.1f;
-    my_regions.rp.tshift    = .4f;
-    
-}
 
 void RegionalizedData::AllocFitBuffers( int flow_block_size )
 {
@@ -200,32 +195,21 @@ void RegionalizedData::AllocTraceBuffers( int flow_block_size )
 }
 
 void RegionalizedData::AddOneFlowToBuffer (GlobalDefaultsForBkgModel &global_defaults, 
-                  FlowBufferInfo & my_flow, int flow)
+                                           FlowBufferInfo & my_flow, int flow)
 {
   // keep track of which flow # is in which buffer
   // also keep track of which nucleotide is associated with each flow
   my_flow.SetFlowNdxMap (global_defaults.flow_global.GetNucNdx (flow));
-  my_flow.SetDblTapMap (global_defaults.flow_global.IsDoubleTap (flow));
+  if (global_defaults.signal_process_control.double_tap_means_zero)
+    my_flow.SetDblTapMap (global_defaults.flow_global.IsDoubleTap (flow));
+  else
+    my_flow.SetDblTapMap(1);  // double-tap is a zero multiplier on amplitude
 
   // reset parameters for beads when we actually start fitting the beads
 }
 
-bool RegionalizedData::LoadOneFlow (SynchDat &data, GlobalDefaultsForBkgModel &global_defaults, 
-                  FlowBufferInfo & my_flow, int flow, int flow_block_size)
-{
-  doDcOffset = false;
-  //  TraceChunk &chunk = data.GetItemByRowCol (get_region_row(), get_region_col());
-  //  ION_ASSERT(chunk.mHeight == (size_t)region->h && chunk.mWidth == (size_t)region->w, "Wrong Region size.");
-  AddOneFlowToBuffer (global_defaults,my_flow, flow);
-  UpdateTracesFromImage (data, my_flow, flow, flow_block_size);
-  my_flow.Increment();
-  //return (false);
-  return (true);
-}
-
 bool RegionalizedData::LoadOneFlow (Image *img, GlobalDefaultsForBkgModel &global_defaults,  FlowBufferInfo & my_flow, int flow, int flow_block_size)
 {
-  doDcOffset = true;
   const RawImage *raw = img->GetImage();
   if (!raw)
   {
@@ -245,9 +229,8 @@ bool RegionalizedData::LoadOneFlow (Image *img, GlobalDefaultsForBkgModel &globa
 //prototype GPU execution functions
 // UpdateTracesFromImage had to be broken into two function, before and after GPUGenerateBeadTraces.
 bool RegionalizedData::PrepareLoadOneFlowGPU (Image *img, 
-  GlobalDefaultsForBkgModel &global_defaults, FlowBufferInfo & my_flow, int flow)
+                                              GlobalDefaultsForBkgModel &global_defaults, FlowBufferInfo & my_flow, int flow)
 {
-  doDcOffset = true;
   const RawImage *raw = img->GetImage();
   if (!raw)
   {
@@ -272,7 +255,7 @@ bool RegionalizedData::FinalizeLoadOneFlowGPU ( FlowBufferInfo & my_flow, int fl
   float t_mid_nuc =  GetTypicalMidNucTime (&my_regions.rp.nuc_shape);
   float t_offset_beads = my_regions.rp.nuc_shape.sigma;
   my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
-      my_flow.flowBufferWritePos, flow_block_size);
+                        my_flow.flowBufferWritePos, flow_block_size);
   // calculate average trace across all empty wells in a region for a flow
   // to FileLoadWorker at Image load time, should be able to go here
   // emptyTraceTracker->SetEmptyTracesFromImageForRegion(*img, global_state.pinnedInFlow, flow, global_state.bfmask, *region, t_mid_nuc);
@@ -300,10 +283,29 @@ void RegionalizedData::UpdateTracesFromImage (Image *img, FlowBufferInfo &my_flo
   // subtract mean signal in time before flow starts from traces in flows buffer
   my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
                         my_flow.flowBufferWritePos, flow_block_size);
+                        
+#if 0
+  if(flow > 19){
+  std::cout << "Sampled for Flow " << flow << std::endl;
+  int nPts = my_trace.time_cp->npts();
+  FG_BUFFER_TYPE *fgPtr = &my_trace.fg_buffers[my_flow.flowBufferWritePos*nPts];
+  for(int n = 0; n < my_beads.numLBeads; n++){
+    if(my_beads.Sampled(n)){
+      std::cout << "regId," << 0 <<",x,"<< my_beads.params_nn[n].x << ",y,"<< my_beads.params_nn[n].y;
+      for (int pt = 0;pt < nPts;pt++){   // over real data
+              std::cout << "," << fgPtr[pt];
+            }
+            std::cout << std::endl;
+          }
+    fgPtr += my_trace.npts * flow_block_size;
+    }
+
+  }
+#endif
 #else
   //Do it all at once.. generate bead trace and rezero like it is done in the new GPU pipeline
   my_trace.GenerateAllBeadTraceAnRezero(region,my_beads,img, my_flow.flowBufferWritePos, flow_block_size,
-                                time_c.time_start, t_mid_nuc-t_offset_beads);
+                                        time_c.time_start, t_mid_nuc-t_offset_beads);
 #endif
 
   // calculate average trace across all empty wells in a region for a flow
@@ -315,19 +317,6 @@ void RegionalizedData::UpdateTracesFromImage (Image *img, FlowBufferInfo &my_flo
   assert (emptytrace->imgFrames == my_trace.imgFrames);
 }
 
-void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, FlowBufferInfo &my_flow, int flow, int flow_block_size)
-{
-  ION_ASSERT(my_trace.time_cp->npts() <= (int)chunk.NumFrames(region->row, region->col), "Wrong number of frames.")
-  my_trace.SetRawTrace(); // buffers treated as raw traces
-  // populate bead traces from image file, just filling in data already saved
-  my_trace.GenerateAllBeadTrace (region,my_beads,chunk, my_flow.flowBufferWritePos, regionAndTimingMatchSdat, flow_block_size);
-  float t_mid_nuc =  GetTypicalMidNucTime (&my_regions.rp.nuc_shape);
-  float t_offset_beads = my_regions.rp.nuc_shape.sigma;
-  my_trace.RezeroBeads(time_c.time_start, t_mid_nuc-t_offset_beads, my_flow.flowBufferWritePos, flow_block_size);
-  // calculate average trace across all empty wells in a region for a flow
-  // to FileLoadWorker at Image load time, should be able to go here
-  emptytrace = emptyTraceTracker->GetEmptyTrace (*region);
-}
 
 // Trivial fitters
 
@@ -350,15 +339,67 @@ void RegionalizedData::RezeroByCurrentTiming(int flow_block_size)
   RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE, flow_block_size);
 }
 
-void RegionalizedData::PickRepresentativeHighQualityWells (float ssq_filter, int flow_block_size)
+void RegionalizedData::PickRepresentativeHighQualityWells (float copy_stringency, int min_beads, int max_rank, bool revert_regional_sampling, int flow_block_size)
 {
-  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (false, false, flow_block_size); // retain fitted key values for snr purposes
-  // use only high quality beads from now on when regional fitting
-  if (ssq_filter>0.0f)
-    my_beads.LowSSQRatioBeadsAreLowQuality (ssq_filter, flow_block_size);
-  my_beads.LowCopyBeadsAreLowQuality (my_beads.my_mean_copy_count);
-  my_beads.KeyNormalizeReads (true, false, flow_block_size); // force all beads to read the "true key" in the key flows
+  if (my_beads.isSampled & !revert_regional_sampling){
+    my_beads.my_mean_copy_count = my_beads.KeyNormalizeSampledReads ( true, flow_block_size );
+    float stringent_filter = my_beads.my_mean_copy_count;
+    int num_sampled = my_beads.NumberSampled(); // weird that I need to know this
+   if (copy_stringency>0.0f){
+
+      // make filter >stringent< as though the average bead were a certain copy count
+      // this replicates a 'bug' that led to stringent filtering and slight performance changes
+      stringent_filter = (num_sampled*my_beads.my_mean_copy_count + (my_beads.numLBeads-num_sampled)*copy_stringency)/my_beads.numLBeads;
+    }
+
+    // but if we wet the filter to be too stringent, we can lose all beads in a region
+    // set a minimum number of beads to succeed with and we can move on
+   // technically, I'm setting the minimum >rank< here
+    float min_percentage = min_beads;
+    min_percentage /= num_sampled;
+    min_percentage = 1.0f-min_percentage;
+    if (min_percentage<0.0f) min_percentage = 0.0f;
+
+    float max_percentage = max_rank;
+    max_percentage /= num_sampled;
+    //max_percentage = 1.0f-max_percentage;
+    if (max_percentage>1.0f) max_percentage = 1.0f; // maximum can't be more than final point
+    if (max_percentage<min_percentage) max_percentage = min_percentage; // really ranks have to be in order to avoid trouble
+
+    float robust_filter = my_beads.FindPercentageCopyCount(min_percentage); // sort is increasing, therefore our percentage must be "out of 1-f"
+    float top_filter = my_beads.FindPercentageCopyCount(max_percentage); // increasing
+
+    float low_filter = my_beads.FindPercentageCopyCount(0.25); // make sure
+    float high_filter = my_beads.FindPercentageCopyCount(0.75); // make sure
+    float final_filter = stringent_filter;
+    if(stringent_filter>robust_filter)
+      final_filter = robust_filter; // otherwise as long as we have the minimum number we're happy
+
+    // filter: beads within a set of copy counts
+
+    my_beads.LowCopyBeadsAreLowQuality (final_filter, top_filter);
+
+    int test_sampled = my_beads.NumberSampled();
+    printf("DEBUGFILTER: %d %d %d %d %f %f %f %f %f %f %f %f\n", region->index, test_sampled, num_sampled, my_beads.numLBeads,
+           min_percentage, max_percentage, robust_filter, stringent_filter, final_filter, top_filter,
+           low_filter, high_filter);
+
+    // should check if not enough beads and rebuild filter if we fail
+
+    my_beads.KeyNormalizeSampledReads (true, flow_block_size); // force all beads to read the "true key" in the key flows
+  } else {
+    my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (false, false, flow_block_size); // retain fitted key values for snr purposes
+    float stringent_filter = my_beads.my_mean_copy_count;
+    // if we have few enough beads in total that the average isn't going to give us min-beads, we're in trouble anyway so skip.
+    // note that this diverges from the >sampled< path
+    // because we are using 'above average' only instead of 'good enough' to yield enough beads when sampling
+    float top_filter = my_beads.FindPercentageCopyCount(1.0f);
+    my_beads.LowCopyBeadsAreLowQuality (stringent_filter, top_filter);
+    my_beads.KeyNormalizeReads (true, false, flow_block_size); // force all beads to read the "true key" in the key flows
+  }
 }
+
+
 
 /** Given uninitialized vectors key_zeromer, key_onemer, keyLen
  *  inputs to compute per bead signal: sc, t0_ix, t_end_ix
@@ -368,8 +409,8 @@ void RegionalizedData::PickRepresentativeHighQualityWells (float ssq_filter, int
  *  (both of length numLBeads).
  */
 void RegionalizedData::ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_ix, 
-    size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer, 
-    std::vector<int>& keyLen, int flow_block_size)
+                                                size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer,
+                                                std::vector<int>& keyLen, int flow_block_size)
 {
   for (int ibd=0; ibd < my_beads.numLBeads; ibd++) {
 
@@ -536,13 +577,13 @@ void RegionalizedData::SetCrudeEmphasisVectors()
 
 void RegionalizedData::SetFineEmphasisVectors()
 {
-    emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), FINEXEMPHASIS);
+  emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), FINEXEMPHASIS);
 }
 
 void RegionalizedData::GenerateFineEmphasisForStdTimeCompression()
 {
-    std_time_comp_emphasis.BuildCurrentEmphasisTable (
-        GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), 
+  std_time_comp_emphasis.BuildCurrentEmphasisTable (
+        GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)),
         FINEXEMPHASIS);
 }
 
@@ -554,250 +595,269 @@ void RegionalizedData::DumpEmptyTrace (FILE *my_fp, int flow_block_size)
   if (region!=NULL)
   {
     (emptyTraceTracker->GetEmptyTrace (*region))->
-      DumpEmptyTrace (my_fp,region->col,region->row, flow_block_size);
+        DumpEmptyTrace (my_fp,region->col,region->row, flow_block_size);
   }
 }
 
 void RegionalizedData::SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgModel &global_defaults)
 {
-   std_time_comp_emphasis.SetDefaultValues (
-       global_defaults.data_control.emp,
-       global_defaults.data_control.emphasis_ampl_default, 
-       global_defaults.data_control.emphasis_width_default);
-   std_time_comp_emphasis.SetupEmphasisTiming (
-       time_c.GetStdFrames(), 
-       &((time_c.GetStdFramesPerPoint())[0]),
-       &((time_c.GetStdFrameNumber())[0]));
-   std_time_comp_emphasis.point_emphasis_by_compression = 
-       global_defaults.data_control.point_emphasis_by_compression;
+  std_time_comp_emphasis.SetDefaultValues (
+        global_defaults.data_control.emp,
+        global_defaults.data_control.emphasis_ampl_default,
+        global_defaults.data_control.emphasis_width_default);
+  std_time_comp_emphasis.SetupEmphasisTiming (
+        time_c.GetStdFrames(),
+        &((time_c.GetStdFramesPerPoint())[0]),
+      &((time_c.GetStdFrameNumber())[0]));
+  std_time_comp_emphasis.point_emphasis_by_compression =
+      global_defaults.data_control.point_emphasis_by_compression;
 
 }
 
 
 bool RegionalizedData::isRegionCenter(int ibd)
 {
-    //BeadParams *p= &my_beads.params_nn[ibd];
-    //bool isCenter = (p->x == (region->w/2) && p->y==(region->h/2)) ? true: false;
-    //if (isCenter) cout << "outputCount=" << ++outputCount << " ibd=" << ibd << " x=" << p->x << " y=" << p->y << " isCenter=" << isCenter<< " w=" << region->w << " h=" << region->h<< endl << flush;
-    int nLiveBeads = GetNumLiveBeads();
-    bool isCenter = (ibd == (nLiveBeads/2)) ? true:false;
-    return (isCenter);
+  //BeadParams *p= &my_beads.params_nn[ibd];
+  //bool isCenter = (p->x == (region->w/2) && p->y==(region->h/2)) ? true: false;
+  //if (isCenter) cout << "outputCount=" << ++outputCount << " ibd=" << ibd << " x=" << p->x << " y=" << p->y << " isCenter=" << isCenter<< " w=" << region->w << " h=" << region->h<< endl << flush;
+  int nLiveBeads = GetNumLiveBeads();
+  bool isCenter = (ibd == (nLiveBeads/2)) ? true:false;
+  return (isCenter);
 }
 
 
 bool RegionalizedData::isLinePoint(int ibd, int nSamples)
 {
-    int nLiveBeads = GetNumLiveBeads();
-    if (nSamples>0 && nLiveBeads>=nSamples) {
-        int dx = nLiveBeads / (nSamples+1);
-        if (dx<1)
-            dx = 1;
-        bool isSample = ((ibd+1)%dx==0) ? true:false;
-        return (isSample);
-    }
-    else
-        return (false);
+  int nLiveBeads = GetNumLiveBeads();
+  if (nSamples>0 && nLiveBeads>=nSamples) {
+    int dx = nLiveBeads / (nSamples+1);
+    if (dx<1)
+      dx = 1;
+    bool isSample = ((ibd+1)%dx==0) ? true:false;
+    return (isSample);
+  }
+  else
+    return (false);
 }
 
 
 bool RegionalizedData::isGridPoint(int ibd, int nSamples)
 {
-    int nLiveBeads = GetNumLiveBeads();
-    if (nSamples>0 && nLiveBeads>=nSamples) {
-        float bx = sqrt(nLiveBeads);
-        float sx = sqrt(nSamples);
-        int iy = ibd/bx;
-        int ix = ibd - iy*bx;
-        int dy = bx>=(sx+1) ? bx/(sx+1) : 1;
-        return ((++iy%dy==0 && ++ix%dy==0) ? true:false) ;
-    }
-    else
-        return (false);
+  int nLiveBeads = GetNumLiveBeads();
+  if (nSamples>0 && nLiveBeads>=nSamples) {
+    float bx = sqrt(nLiveBeads);
+    float sx = sqrt(nSamples);
+    int iy = ibd/bx;
+    int ix = ibd - iy*bx;
+    int dy = bx>=(sx+1) ? bx/(sx+1) : 1;
+    return ((++iy%dy==0 && ++ix%dy==0) ? true:false) ;
+  }
+  else
+    return (false);
 }
 
 
 int RegionalizedData::get_sampleIndex(int ibd) {
-    try {
-        return(regionSampleIndex[ibd]);
-    }
-    catch (...) {
-        return (-1);
-    }
+  try {
+    return(regionSampleIndex[ibd]);
+  }
+  catch (...) {
+    return (-1);
+  }
 }
 
 
 int RegionalizedData::assign_sampleIndex(void)
 {
-    if (sampleIndex_assigned)
-        return (nAssigned);
-	if (betterUseEvenSamples()) 
-		nAssigned = assign_sampleIndex_even();
-	else 
-		nAssigned = assign_sampleIndex_even_random();
-		//nAssigned = assign_sampleIndex_random(); // slower than assign_sampleIndex_even_random(), and may fall into infinite loop?
-		//nAssigned = assign_sampleIndex_random_shuffle(); // slower than assign_sampleIndex_even_random(), and may not be reproducible
-   return (nAssigned);
+  if (sampleIndex_assigned)
+    return (nAssigned);
+  if (betterUseEvenSamples())
+    nAssigned = assign_sampleIndex_even();
+  else
+    nAssigned = assign_sampleIndex_even_random();
+  //nAssigned = assign_sampleIndex_random(); // slower than assign_sampleIndex_even_random(), and may fall into infinite loop?
+  //nAssigned = assign_sampleIndex_random_shuffle(); // slower than assign_sampleIndex_even_random(), and may not be reproducible
+  return (nAssigned);
 }
 
 
 int RegionalizedData::assign_sampleIndex_even(void)
 {
-	nAssigned = 0;
-	if (sampleIndex_assigned) { 
-		cout << "assign_sampleIndex_even...resetting regionSampleIndex" << endl << flush;
-		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
-		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
-		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
-		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
-		regionSampleIndex = tmpSampleIndex;
-	}
-    int nLiveBeads = GetNumLiveBeads();
-    if (region_nSamples>nLiveBeads)
-        region_nSamples = nLiveBeads;
-	if (region_nSamples>0) {
-		float scale = float(nLiveBeads) / region_nSamples;
-		for (int n=0; n<region_nSamples; n++) {
-			int ibd = n*scale;
-			regionSampleIndex[ibd] = nAssigned++;
-		}
-	}
-   sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
-   return (nAssigned);
+  nAssigned = 0;
+  if (sampleIndex_assigned) {
+    cout << "assign_sampleIndex_even...resetting regionSampleIndex" << endl << flush;
+    //regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+    //regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+    // what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+    std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+    regionSampleIndex = tmpSampleIndex;
+  }
+  int nLiveBeads = GetNumLiveBeads();
+  if (region_nSamples>nLiveBeads)
+    region_nSamples = nLiveBeads;
+  if (region_nSamples>0) {
+    float scale = float(nLiveBeads) / region_nSamples;
+    for (int n=0; n<region_nSamples; n++) {
+      int ibd = n*scale;
+      regionSampleIndex[ibd] = nAssigned++;
+    }
+  }
+  sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+  return (nAssigned);
 }
 
 
 int RegionalizedData::assign_sampleIndex_even_random(void)
 {
-	if (betterUseEvenSamples()) return (assign_sampleIndex_even()); // even() is good enough if region_nSamples>nBeads*fraction
-	
-	nAssigned = 0;
-	if (sampleIndex_assigned) { 
-		cout << "assign_sampleIndex_even_random...resetting regionSampleIndex" << endl << flush;
-		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
-		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
-		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
-		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
-		regionSampleIndex = tmpSampleIndex;
-	}
-    int nLiveBeads = GetNumLiveBeads();
-    if (region_nSamples>nLiveBeads)
-        region_nSamples = nLiveBeads;
-	if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
-		float scale = float(nLiveBeads) / region_nSamples;
-		int range = int(scale);
-		if (range>1) srand(42); //seed so that it is reproducible, same as in in Separator.cpp
-		for (int n=0; n<region_nSamples; n++) {
-			int ibd = n*scale;
-			ibd += random_in_range(range); // 0 to range-1
-			regionSampleIndex[ibd] = nAssigned++;
-		}
-	}
-	sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
-    return (nAssigned);
+  if (betterUseEvenSamples()) return (assign_sampleIndex_even()); // even() is good enough if region_nSamples>nBeads*fraction
+
+  nAssigned = 0;
+  if (sampleIndex_assigned) {
+    cout << "assign_sampleIndex_even_random...resetting regionSampleIndex" << endl << flush;
+    //regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+    //regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+    // what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+    std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+    regionSampleIndex = tmpSampleIndex;
+  }
+  int nLiveBeads = GetNumLiveBeads();
+  if (region_nSamples>nLiveBeads)
+    region_nSamples = nLiveBeads;
+  if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
+    float scale = float(nLiveBeads) / region_nSamples;
+    int range = int(scale);
+    if (range>1) srand(42); //seed so that it is reproducible, same as in in Separator.cpp
+    for (int n=0; n<region_nSamples; n++) {
+      int ibd = n*scale;
+      ibd += random_in_range(range); // 0 to range-1
+      regionSampleIndex[ibd] = nAssigned++;
+    }
+  }
+  sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+  return (nAssigned);
 }
 
 
 int RegionalizedData::assign_sampleIndex_random(void)
 {
-	// please make assign_sampleIndex_random more robust in finding unique numbers before removing the following line
-	if (betterUseEvenSamples()) return (assign_sampleIndex_even()); // avoid spending too much time in the while loop for unique random numbers
-	
-	nAssigned = 0;
-	if (sampleIndex_assigned) { 
-		cout << "assign_sampleIndex_random...resetting regionSampleIndex" << endl << flush;
-		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
-		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
-		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
-		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
-		regionSampleIndex = tmpSampleIndex;
-	}
-    int nLiveBeads = GetNumLiveBeads();
-    if (region_nSamples>nLiveBeads)
-        region_nSamples = nLiveBeads;
-	if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
-		srand(42); //seed so that it is reproducible, same as in in Separator.cpp
-		while (nAssigned<region_nSamples) {
-			int ibd = random_in_range(nLiveBeads);
-			try {
-				if (regionSampleIndex[ibd]<=0) // always 0?? 
-					regionSampleIndex[ibd] = nAssigned++; // in case a negative (invalid) number is assigned, which shouldn't happen
-          //cout << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
-				}
-			catch (...) { // not assigned yet
-				regionSampleIndex[ibd] = nAssigned++;
+  // please make assign_sampleIndex_random more robust in finding unique numbers before removing the following line
+  if (betterUseEvenSamples()) return (assign_sampleIndex_even()); // avoid spending too much time in the while loop for unique random numbers
+
+  nAssigned = 0;
+  if (sampleIndex_assigned) {
+    cout << "assign_sampleIndex_random...resetting regionSampleIndex" << endl << flush;
+    //regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+    //regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+    // what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+    std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+    regionSampleIndex = tmpSampleIndex;
+  }
+  int nLiveBeads = GetNumLiveBeads();
+  if (region_nSamples>nLiveBeads)
+    region_nSamples = nLiveBeads;
+  if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
+    srand(42); //seed so that it is reproducible, same as in in Separator.cpp
+    while (nAssigned<region_nSamples) {
+      int ibd = random_in_range(nLiveBeads);
+      try {
+        if (regionSampleIndex[ibd]<=0) // always 0??
+          regionSampleIndex[ibd] = nAssigned++; // in case a negative (invalid) number is assigned, which shouldn't happen
         //cout << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
-			}
-		}
-	}
-	sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
-    return (nAssigned);
+      }
+      catch (...) { // not assigned yet
+        regionSampleIndex[ibd] = nAssigned++;
+        //cout << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
+      }
+    }
+  }
+  sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+  return (nAssigned);
 }
 
 
 int RegionalizedData::assign_sampleIndex_random_shuffle(void) 
 {
-	nAssigned = 0;
-	if (sampleIndex_assigned) { 
-		cout << "assign_sampleIndex_random_shuffle...resetting regionSampleIndex" << endl << flush;
-		//regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
-		//regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
-		// what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
-		std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
-		regionSampleIndex = tmpSampleIndex;
-	}
-    int nLiveBeads = GetNumLiveBeads();
-    if (region_nSamples>nLiveBeads)
-        region_nSamples = nLiveBeads;
-	if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
-		srand(42); //try but not sure this makes it reproducible, due to the std::random_shuffle() used in my_random_shuffle
-		vector<int> beads;
-		my_random_shuffle(beads, nLiveBeads); // shuffle to make the samples unique
-		//cout << "beads.size()=" << beads.size() << " for nLiveBeads=" << nLiveBeads << endl << flush;
-		assert((int)beads.size()==nLiveBeads);
-		for (int n=0; n<region_nSamples; n++) {
-			try {
-				int ibd = beads[n];
-				assert(ibd<nLiveBeads);
-				regionSampleIndex[ibd] = nAssigned++;
-				//cout << "n=" << n << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
-			}
-			catch (...) {
-				cerr << "error at n=" << n << endl << flush;
-				throw 20;
-			}
-		}
-	}
-	sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
-    return (nAssigned);
+  nAssigned = 0;
+  if (sampleIndex_assigned) {
+    cout << "assign_sampleIndex_random_shuffle...resetting regionSampleIndex" << endl << flush;
+    //regionSampleIndex.erase ( regionSampleIndex.begin(), regionSampleIndex.end() );
+    //regionSampleIndex.clear(); // onlcy changes contents to 0, not good??
+    // what's the easiest way to clear the map? clear() still leaves it accessible, and won't work for us
+    std::map<int,int> tmpSampleIndex; // does this work?? perhaps it never reaches here
+    regionSampleIndex = tmpSampleIndex;
+  }
+  int nLiveBeads = GetNumLiveBeads();
+  if (region_nSamples>nLiveBeads)
+    region_nSamples = nLiveBeads;
+  if (region_nSamples>0 && nLiveBeads>=region_nSamples) {
+    srand(42); //try but not sure this makes it reproducible, due to the std::random_shuffle() used in my_random_shuffle
+    vector<int> beads;
+    my_random_shuffle(beads, nLiveBeads); // shuffle to make the samples unique
+    //cout << "beads.size()=" << beads.size() << " for nLiveBeads=" << nLiveBeads << endl << flush;
+    assert((int)beads.size()==nLiveBeads);
+    for (int n=0; n<region_nSamples; n++) {
+      try {
+        int ibd = beads[n];
+        assert(ibd<nLiveBeads);
+        regionSampleIndex[ibd] = nAssigned++;
+        //cout << "n=" << n << " ibd=" << ibd << " nAssigned=" << nAssigned << endl << flush;
+      }
+      catch (...) {
+        cerr << "error at n=" << n << endl << flush;
+        throw 20;
+      }
+    }
+  }
+  sampleIndex_assigned = true; // must be true, otherwise this function could be called again and again in an infinite loop
+  return (nAssigned);
 }
 
 
 void RegionalizedData::my_random_shuffle(vector<int>&cards, unsigned int nCards)
 {
-	if (nCards>0)
-	{
-		if (cards.size() != nCards)
-		{
-			cards.resize(nCards);
-			for (unsigned int i=0; i<nCards; i++)
-				cards[i] = i;
-		}
-		std::random_shuffle ( cards.begin(), cards.end());
-	}
+  if (nCards>0)
+  {
+    if (cards.size() != nCards)
+    {
+      cards.resize(nCards);
+      for (unsigned int i=0; i<nCards; i++)
+        cards[i] = i;
+    }
+    std::random_shuffle ( cards.begin(), cards.end());
+  }
 }
 
 
 bool RegionalizedData::isRegionSample(int ibd)
 {
-   try {
-        if (regionSampleIndex[ibd]>=0)
-            return (true);
-        else
-            return (false);
-    }
-    catch (...) {
-        return (false);
-    }
+  try {
+    if (regionSampleIndex[ibd]>=0)
+      return (true);
+    else
+      return (false);
+  }
+  catch (...) {
+    return (false);
+  }
 }
 
+void RegionalizedData::regParamsToJson(Json::Value &regparams_json)
+{
+  stringstream regId;
+  regId << "row_" << region->row << "_col_" << region->col;
+  Json::Value regP(Json::objectValue);
+  my_regions.rp.ToJson(regP);
+  regparams_json[regId.str()] = regP;
+}
 
+void RegionalizedData::LoadRestartRegParamsFromJson(const Json::Value &regparams_json) {
+  stringstream regId;
+  regId << "row_" << region->row << "_col_" << region->col;
+  
+  Json::Value::iterator it = regparams_json.begin();
+  while(it != regparams_json.end()) {
+    Json::Value p = (*it++);
+    if (p.isMember(regId.str()))
+      my_regions.rp.FromJson(p[regId.str()]);
+  }
+}

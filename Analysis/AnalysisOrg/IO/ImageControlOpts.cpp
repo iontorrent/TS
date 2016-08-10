@@ -29,16 +29,18 @@ void ImageControlOpts::DefaultImageOpts()
   aggressive_cnc = false;
   gain_correct_images = false;
   gain_debug_output = false;
+  corr_noise_correct = true;
+  mask_datacollect_exclude_regions = false;
+
   has_wash_flow = 0;
   // image diagnostics
   outputPinnedWells = false;
   tikSmoothingFile[0] = '\000';   // (APB)
   tikSmoothingInternal[0] = '\000'; // (APB)
-  doSdat = false; // Look for synchronized dat (sdat) files instead of usual dats.
   total_timeout = 0; // 0 means use whatever the image class has set as default
-  sdatSuffix = "sdat";
   //if (acqPrefix != NULL) free (acqPrefix);
   acqPrefix = strdup("acq_");
+  datPostfix = strdup("dat"); // standard value
   threaded_file_access = true;
   PCATest[0]=0;
   readaheadDat = 0;
@@ -50,6 +52,11 @@ ImageControlOpts::~ImageControlOpts()
     free( acqPrefix);
     acqPrefix = NULL;
   }
+  if (datPostfix!=NULL) {
+    free(datPostfix);
+    datPostfix = NULL;
+  }
+
 }
 
 void ImageControlOpts::ImageControlForProton(bool default_aggressive){
@@ -61,7 +68,6 @@ void ImageControlOpts::PrintHelp()
 {
 	printf ("     ImageControlOpts\n");
     printf ("  -f,--frames                INT               max frames []\n");
-    printf ("     --do-sdat               BOOL              enable do sdat [false]\n");
     printf ("     --pca-test              STRING            setup PCA test []\n");
     printf ("     --PCA-test              STRING            same as --pca-test []\n");
 	printf ("     --smoothing-file        FILE              tik smoothing file name []\n");
@@ -86,12 +92,12 @@ void ImageControlOpts::PrintHelp()
     printf ("     --nnMask                INT VECTOR OF 2   same as --nnmask [1,3]\n");
     printf ("     --nnmaskwh              INT VECTOR OF 4   setup NN inner and outer [1,1,12,8]\n");
     printf ("     --nnMaskWH              INT VECTOR OF 4   same as --nnmaskwh [1,1,12,8]\n");
+    printf ("     --mask-datacollect-exclude-regions  BOOL  mask as ignore chip regions indicated by DataCollect as problematic [false]\n");
     printf ("\n");
 }
 
 void ImageControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-	doSdat = RetrieveParameterBool(opts, json_params, '-', "do-sdat", false);
 	string s1 = RetrieveParameterString(opts, json_params, '-', "pca-test", "");
 	if(s1.length() > 0)
 	{
@@ -167,7 +173,19 @@ void ImageControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	}
 	col_pair_pixel_xtalk_correct = RetrieveParameterBool(opts, json_params, '-', "col-doubles-xtalk-correct", false);
 	pair_xtalk_fraction = RetrieveParameterFloat(opts, json_params, '-', "pair-xtalk-coeff", 0.0f);
+  corr_noise_correct = RetrieveParameterBool(opts, json_params, '-', "corr-noise-correct", corr_noise_correct);
+
     fluid_potential_correct = RetrieveParameterBool(opts, json_params, '-', "fluid-potential-correct", false);
     fluid_potential_threshold = RetrieveParameterFloat(opts, json_params, '-', "fluid-potential-threshold", 1.0f);
+
+    mask_datacollect_exclude_regions = RetrieveParameterBool(opts, json_params, '-', "mask-datacollect-exclude-regions", false);
+
+    // legacy issues
+    string s_prefix = RetrieveParameterString(opts, json_params, '-', "acq-prefix", acqPrefix);
+    free(acqPrefix);
+    acqPrefix = strdup(s_prefix.c_str());
+    string s_postfix = RetrieveParameterString(opts, json_params, '-', "dat-postfix", datPostfix);
+    free(datPostfix);
+    datPostfix = strdup(s_postfix.c_str());
 
 }

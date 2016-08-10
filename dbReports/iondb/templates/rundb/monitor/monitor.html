@@ -16,9 +16,6 @@
     	clear:both;
     	margin:0;
     }
-    .k-grid tr td:first-child  {
-    	text-align: center;
-	}
 	.metrics-row  [class*="span"] {
 	}
     .run-details {
@@ -209,11 +206,11 @@
             </colgroup>
             <thead class="k-grid-header">
                 <tr>
-                    <th class="k-header">Instrument</th>
-                    <th class="k-header"><a class="sort_link" data-name="expName" href="#">Run Name<span class="order_indicator"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="experiment__pgmName" href="#">Instrument<span class="order_indicator"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="resultsName" href="#">Report Name<span class="order_indicator"></span></a></th>
                     <th class="k-header">Status</th>
-                    <th class="k-header"><a class="sort_link" data-name="timeStamp" href="#">Date<span class="order_indicator"></span></a></th>
-                    <th class="k-header"><a class="sort_link" data-name="chipType" href="#">Chip<span class="order_indicator"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="timeStamp" href="#">Date<span class="order_indicator order_indicator_default k-icon k-i-arrow-s"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="experiment__chipType" href="#">Chip<span class="order_indicator"></span></a></th>
                     <th class="k-header">Reference</th>
                     <th class="k-header">Barcode</th>
                     <th class="k-header">Loading</th>

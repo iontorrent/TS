@@ -6,39 +6,41 @@ import subprocess
 import sys
 import os
 from django.utils.datastructures import SortedDict
+
+# Note this list is duplicated in TSconfig.py
+packages = [
+    'ion-analysis',
+    'ion-chefupdates',
+    'ion-dbreports',
+    'ion-docs',
+    'ion-gpu',
+    'ion-onetouchupdater',
+    'ion-pgmupdates',
+    'ion-pipeline',
+    'ion-plugins',
+    'ion-protonupdates',
+    'ion-publishers',
+    'ion-referencelibrary',
+    'ion-rsmts',
+    'ion-s5updates',
+    'ion-sampledata',
+    'ion-torrentpy',
+    'ion-torrentr',
+    'ion-tsconfig',
+    ]
+
+
 def findVersions():
     """
     find the version of the packages
     """
-    packages = [
-        'ion-analysis',
-        'ion-chefupdates',
-        'ion-dbreports',
-        'ion-docs',
-        'ion-gpu',
-        'ion-onetouchupdater',
-        'ion-pgmupdates',
-        'ion-pipeline',
-        'ion-plugins',
-        'ion-protonupdates',
-        'ion-publishers',
-        'ion-referencelibrary',
-        'ion-rsmts',
-        'ion-s5updates',
-        'ion-sampledata',
-        'ion-torrentr',
-        'ion-tsconfig',
-        'ion-tsups',
-        'ion-usbmount',
-        ]
-
     ret = SortedDict()
     for package in packages:
-        #command for version checking
+        # command for version checking
         com = "dpkg -l %s | grep ^ii | awk '{print $3}'" % package
         try:
             a = subprocess.Popen(com, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            #just get the version number
+            # just get the version number
             tolist = a.stdout.readlines()[0].strip()
             ret[package] = tolist
         except:
@@ -51,33 +53,12 @@ def findVersions():
 #    print meta_version
 
     return ret, meta_version
-    
+
+
 def findUpdates():
     """
     find package versions installed and candidate for updates webpage
     """
-    packages = [
-        'ion-analysis',
-        'ion-chefupdates',
-        'ion-dbreports',
-        'ion-docs',
-        'ion-gpu',
-        'ion-onetouchupdater',
-        'ion-pgmupdates',
-        'ion-pipeline',
-        'ion-plugins',
-        'ion-protonupdates',
-        'ion-publishers',
-        'ion-referencelibrary',
-        'ion-rsmts',
-        'ion-s5updates',
-        'ion-sampledata',
-        'ion-torrentr',
-        'ion-tsconfig',
-        'ion-tsups',
-        'ion-usbmount',
-        ]
-
     ret = SortedDict()
     for package in packages:
         com = "apt-cache policy %s | grep 'Installed\|Candidate'" % package
@@ -86,7 +67,7 @@ def findUpdates():
             stdout = a.stdout.readlines()
             installed = stdout[0].split()[1]
             if installed != '(none)':
-              ret[package] = (installed, stdout[1].split()[1])
+                ret[package] = (installed, stdout[1].split()[1])
         except:
             pass
 
@@ -94,6 +75,7 @@ def findUpdates():
     meta_version = version
 
     return ret, meta_version
+
 
 def findOSversion():
     """

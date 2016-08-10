@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "DCT0Finder.h"
 
 static int GetSlopeAndOffset(double *trace, uint32_t startIdx, uint32_t endIdx, double *slope, double *offset, FILE *logfp);
@@ -46,9 +47,9 @@ uint32_t DCT0Finder(double *trace, uint32_t trace_length, FILE *logfp)
 	// now, find t0Estimate
 	for(lidx2=1;lidx2<(trace_length-4);lidx2++)
 	{
-		if ((abs(traceDv[lidx2]) > 10) &&
-			(abs(traceDv[lidx2+1]) > 10) &&
-			(abs(traceDv[lidx2+2]) > 10))
+		if ((fabs(traceDv[lidx2]) > 10) &&
+			(fabs(traceDv[lidx2+1]) > 10) &&
+			(fabs(traceDv[lidx2+2]) > 10))
 		{
 			// this is the spot..
 			T0Initial = lidx2;

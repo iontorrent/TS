@@ -22,7 +22,6 @@ BAM = 'bam_file'
 BAM_FULL_PATH = 'bam_filepath'
 NON_BARCODED = 'nonbarcoded'
 NO_MATCH = 'nomatch'
-BARCODE_SEQUENCE = 'barcode_sequence'
 SAMPLE = 'sample'
 SAMPLE_ID = 'sample_id'
 FILTERED = 'filtered'
@@ -40,11 +39,15 @@ BARCODE_TYPE = 'barcode_type'
 NUCLEOTIDE_TYPE = 'nucleotide_type'
 CONTROL_SEQUENCE_TYPE = 'control_sequence_type'
 GENOME_URL = 'genome_urlpath'
+SAMPLE_NUCLEOTIDE_TYPE = 'nucleotideType'
+SAMPLE_CONTROL_SEQEUENCE_TYPE = 'controlSequenceType'
 
 # TODO: for later release
 #ANALYSIS_PARAMETERS = 'analysis_parameters'
 
+
 class BarcodeSampleInfo(object):
+
     """
     Aggregate data from plan/eas barcodesample info
     and from pipeline datasets_basecaller
@@ -88,15 +91,15 @@ class BarcodeSampleInfo(object):
         :return:
         """
         data = dict()
-        reportFullPath     = self.result.get_report_path()
+        reportFullPath = self.result.get_report_path()
         # the data structure in this dictionary should be that both the datasets and read_groups for
         # unbarcoded samples should have one and only one instance contained within
-        singleDataset   = self.datasetsBaseCaller.get('datasets')[0]
+        singleDataset = self.datasetsBaseCaller.get('datasets')[0]
         singleReadGroup = self.datasetsBaseCaller.get('read_groups').itervalues().next()
         unbarcodedEntry = dict()
 
         # generate the reference genome information
-        referenceGenome = singleReadGroup[REFERENCE]
+        referenceGenome = self.eas.reference
         tmap_version = iondb.bin.dj_config.get_tmap_version()
         samples = self.result.experiment.samples.all()
 
@@ -108,7 +111,7 @@ class BarcodeSampleInfo(object):
         unbarcodedEntry[BAM_FULL_PATH] = BarcodeSampleInfo.getFullBamPath(reportFullPath, unbarcodedEntry[REFERENCE], unbarcodedEntry[BAM], unbarcodedEntry[FILTERED])
         unbarcodedEntry[HOT_SPOT_FILE_PATH] = singleDataset[HOT_SPOT_BED] if HOT_SPOT_BED in singleDataset else self.eas.hotSpotRegionBedFile
         unbarcodedEntry[READ_COUNT] = singleReadGroup[READ_COUNT]
-        unbarcodedEntry[TARGET_REGION_FILEPATH] = singleDataset[TARGET_REGION_BED] if TARGET_REGION_BED in singleDataset else self.eas.targetRegionBedFile
+        unbarcodedEntry[TARGET_REGION_FILEPATH] = self.eas.targetRegionBedFile
         unbarcodedEntry[NUCLEOTIDE_TYPE] = ''
         unbarcodedEntry[CONTROL_SEQUENCE_TYPE] = ''
         unbarcodedEntry[SAMPLE] = singleReadGroup[SAMPLE]
@@ -142,11 +145,13 @@ class BarcodeSampleInfo(object):
             raise Exception('Cannot find the barcode data from EAS barcodeSamples json structure.')
 
         data = dict()
-        reportFullPath     = self.result.get_report_path()
+        reportFullPath = self.result.get_report_path()
         # now we are going to handle barcode data and get all of the primary sources of information
-        basecallerResults  = self.datasetsBaseCaller
+        basecallerResults = self.datasetsBaseCaller
         EASbarcodedSamples = self.barcodedSamples
         tmap_version = iondb.bin.dj_config.get_tmap_version()
+
+        include_filtered = getattr(settings, 'PLUGINS_INCLUDE_FILTERED_BARCODES', False)
 
         for dataset in basecallerResults.get('datasets'):
             barcodeEntry = dict()
@@ -174,26 +179,28 @@ class BarcodeSampleInfo(object):
 
             # since there should be one and only one read group, we can hard code the first element of the read groups
             singleReadGroup = basecallerResults.get('read_groups')[readGroupId]
-            referenceGenome = singleReadGroup[REFERENCE] if REFERENCE in singleReadGroup else self.eas.reference
+
+            referenceGenome = self.eas.reference
             barcodeEntry[REFERENCE] = referenceGenome
             barcodeEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, referenceGenome, "%s.fasta" % referenceGenome) if barcodeEntry[REFERENCE] else ''
             barcodeEntry[FILTERED] = singleReadGroup.get(FILTERED, False)
-
             # if this is a "filtered" barcode, then we will skip including it.
-            if barcodeEntry[FILTERED]:
+            if barcodeEntry[FILTERED] and not include_filtered:
                 continue
 
             barcodeEntry[ALIGNED] = (REFERENCE in barcodeEntry) and bool(barcodeEntry[REFERENCE]) and not barcodeEntry[FILTERED]
             barcodeEntry[BAM] = dataset['file_prefix'] + (".bam" if barcodeEntry[ALIGNED] else ".basecaller.bam")
             barcodeEntry[BAM_FULL_PATH] = BarcodeSampleInfo.getFullBamPath(reportFullPath, barcodeEntry[REFERENCE], barcodeEntry[BAM], barcodeEntry[FILTERED])
-            barcodeEntry[HOT_SPOT_FILE_PATH] = dataset[HOT_SPOT_BED] if HOT_SPOT_BED in dataset else self.eas.hotSpotRegionBedFile
             barcodeEntry[READ_COUNT] = singleReadGroup[READ_COUNT]
-            barcodeEntry[TARGET_REGION_FILEPATH] = dataset[TARGET_REGION_BED] if TARGET_REGION_BED in dataset else self.eas.targetRegionBedFile
             barcodeEntry[BARCODE_SEQUENCE] = singleReadGroup[BARCODE_SEQUENCE] if BARCODE_SEQUENCE is singleReadGroup else ''
             barcodeEntry[BARCODE_ADAPTER] = singleReadGroup.get(BARCODE_ADAPTER, '')
             barcodeEntry[BARCODE_NAME] = barcodeName
             barcodeEntry[BARCODE_SEQUENCE] = singleReadGroup.get(BARCODE_SEQUENCE, '')
             barcodeEntry[BARCODE_INDEX] = singleReadGroup.get(INDEX, 0)
+
+            # these can be overridden by the sample barcode data
+            barcodeEntry[TARGET_REGION_FILEPATH] = self.eas.targetRegionBedFile
+            barcodeEntry[HOT_SPOT_FILE_PATH] = self.eas.hotSpotRegionBedFile
 
             # in order to get information out of the EAS.barcodedSamples data structure there needs to be
             # a reverse lookup since the barcode name is a child of the sample id
@@ -206,13 +213,15 @@ class BarcodeSampleInfo(object):
                 try:
                     sample, barcodedSample = getBarcodeSampleFromEAS(EASbarcodedSamples, barcodeName)
                     barcodeEntry[SAMPLE] = sample
-                    barcodeEntry[NUCLEOTIDE_TYPE] = barcodedSample['nucleotideType']
-                    barcodeEntry[CONTROL_SEQUENCE_TYPE] = barcodedSample['controlSequenceType']
-                    barcodeEntry[BARCODE_DESCRIPTION] = barcodedSample[DESCRIPTION]
+                    barcodeEntry[NUCLEOTIDE_TYPE] = barcodedSample.get(SAMPLE_NUCLEOTIDE_TYPE, barcodeEntry[NUCLEOTIDE_TYPE])
+                    barcodeEntry[CONTROL_SEQUENCE_TYPE] = barcodedSample.get(SAMPLE_CONTROL_SEQEUENCE_TYPE, barcodeEntry[CONTROL_SEQUENCE_TYPE])
+                    barcodeEntry[BARCODE_DESCRIPTION] = barcodedSample.get(DESCRIPTION, barcodeEntry[BARCODE_DESCRIPTION])
+                    barcodeEntry[TARGET_REGION_FILEPATH] = barcodedSample.get(TARGET_REGION_BED, barcodeEntry[TARGET_REGION_FILEPATH])
+                    barcodeEntry[HOT_SPOT_FILE_PATH] = barcodedSample.get(HOT_SPOT_BED, barcodeEntry[HOT_SPOT_FILE_PATH])
+                    barcodeEntry[REFERENCE] = barcodedSample.get(REFERENCE, barcodeEntry[REFERENCE])
                 except:
                     # intentionally do nothing....
                     pass
-
 
             # if a sample has been defined the sample id should be the primary key to look up the sample by
             if barcodeEntry[SAMPLE] != '':
@@ -254,13 +263,13 @@ class BarcodeSampleInfo(object):
                 except Exception as e:
                     logger.fatal("Unable to parse inputs as json [%s] or python [%s]", j, e)
         try:
-            for k,v in barcodedSamples.items():
-                if isinstance(v['barcodes'],list):
+            for k, v in barcodedSamples.items():
+                if isinstance(v['barcodes'], list):
                     for bc in v['barcodes']:
-                        if not isinstance(bc,str):
-                            logger.error("INVALID bc - NOT an str - bc=%s" %(bc))
+                        if not isinstance(bc, str):
+                            logger.error("INVALID bc - NOT an str - bc=%s" % (bc))
                 else:
-                    logger.error("INVALID v[barcodes] - NOT a list!!! v[barcodes]=%s" %(v['barcodes']))
+                    logger.error("INVALID v[barcodes] - NOT a list!!! v[barcodes]=%s" % (v['barcodes']))
         except:
             logger.exception("Invalid barcodedSampleInfo value")
         return barcodedSamples
@@ -272,12 +281,7 @@ class BarcodeSampleInfo(object):
             datasetsBaseCaller = json.load(f, encoding=settings.DEFAULT_CHARSET)
 
         # File is tagged with a version number (yay!). Best check it.
-        ver = datasetsBaseCaller.get('meta',{}).get('format_version', "0")
+        ver = datasetsBaseCaller.get('meta', {}).get('format_version', "0")
         if ver != "1.0":
             logger.warn("Basecaller JSON file syntax has unrecognized version: %s", ver)
         return datasetsBaseCaller
-
-
-
-
-

@@ -41,6 +41,7 @@ def events_from_settings():
     except Exception as err:
         logger.exception("Error during event consumer registration")
 
+
 class StartupHousekeeping(object):
 
     def __init__(self):

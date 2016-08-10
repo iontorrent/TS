@@ -80,16 +80,8 @@ void DoMultiFlowRegionalFit (WorkerInfoQueueItem &item) {
 
   info->bkgObj->InitializeFlowBlock( flowBlock->size() );
 
-  if (info->doingSdat)
-  {
-    info->bkgObj->ProcessImage (* (info->sdat), info->flow, info->flow - flowBlock->begin(),
-                                 flowBlock->size() );
-  }
-  else
-  {
-    info->bkgObj->ProcessImage (info->img, info->flow, info->flow - flowBlock->begin(),
+  info->bkgObj->ProcessImage (info->img, info->flow, info->flow - flowBlock->begin(),
                                 flowBlock->size() );
-  }
   // execute block if necessary
   if (info->bkgObj->TestAndTriggerComputation (info->last)) 
   {
@@ -505,6 +497,10 @@ void ProcessorQueue::configureQueue(BkgModelControlOpts &bkg_control)
     //                                      : std::max (4, 3 * numCores() / 2);
     setNumWorkers(std::max (4, 3 * numCores() / 2) );
   }
+
+  // queue control with regards to gpu jobs
+  gpuMultiFlowFitting = bkg_control.gpuControl.gpuMultiFlowFit;  
+  gpuSingleFlowFitting = bkg_control.gpuControl.gpuSingleFlowFit;
 }
 
 

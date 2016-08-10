@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <algorithm>
 
 #include "Utils.h"
 
@@ -31,6 +32,7 @@ void BarcodeClassifier::PrintHelp()
   printf ("     --barcode-compute-dmin        BOOL       If true, computes minimum Hamming distance of barcode set [false]\n");
   printf ("     --barcode-auto-config         BOOL       If true, automatically selects barcode cutoff and separation parameters. [false]\n");
   printf ("     --barcode-check-limits        BOOL       If true, performs a basic sanity check on input options. [true]\n");
+  printf ("     --barcode-adapter-check       FLOAT      Maximum allowed squared residual per adapter flow (off=0) [0.15]\n");
   printf ("\n");
 }
 
@@ -89,6 +91,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   check_limits_                   = opts.GetFirstBoolean('-', "barcode-check-limits", true);
   score_auto_config_              = opts.GetFirstBoolean('-', "barcode-auto-config", false);
   bool compute_dmin               = opts.GetFirstBoolean('-', "barcode-compute-dmin", false);
+  adapter_cutoff_                 = opts.GetFirstDouble ('-', "barcode-adapter-check", 0.15);
 
   trim_barcodes_                  = opts.GetFirstBoolean('-', "trim-barcodes", true);
   int calibration_training        = opts.GetFirstInt    ('-', "calibration-training", -1);
@@ -123,7 +126,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
     ComputeHammingDistance();
 
   // Set options with limits that potentially depend on barcode set Hamming distance
-  SetClassifiactionParams(opts.GetFirstInt    ('-', "barcode-mode", 2),
+  SetClassificationParams(opts.GetFirstInt    ('-', "barcode-mode", 2),
                           opts.GetFirstDouble ('-', "barcode-cutoff", 1.0),
                           opts.GetFirstDouble ('-', "barcode-separation", 2.0));
 
@@ -255,7 +258,7 @@ void BarcodeClassifier::LoadBarcodesFromDataset(BarcodeDatasets& datasets, const
 
 // ------------------------------------------------------------------------
 
-void BarcodeClassifier::SetClassifiactionParams(int mode, double cutoff, double separation)
+void BarcodeClassifier::SetClassificationParams(int mode, double cutoff, double separation)
 {
   score_mode_                     = mode;
   score_cutoff_                   = cutoff;
@@ -535,12 +538,52 @@ int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& b
 
     if (second_best_distance - best_distance  < score_separation_) {
       if (best_errors == 0)
-        filtered_zero_errors = best_barcode;
+        filtered_zero_errors = barcode_[best_barcode].read_group_index;
       best_barcode = -1;
     }
     return best_barcode;
 };
 
+// ------------------------------------------------------------------------
+
+
+bool BarcodeClassifier::AdapterValidation(const BasecallerRead& basecaller_read, int& best_barcode, int& filtered_read_group)
+{
+  filtered_read_group = -1;
+
+  // zero means disabled
+  if (adapter_cutoff_ == 0)
+    return true;
+
+  if (best_barcode < 0)
+    return false;
+
+  int num_adapter_flows = barcode_[best_barcode].num_flows - barcode_[best_barcode].adapter_start_flow;
+  if (num_adapter_flows == 0)
+    return true;
+
+  // Sum up barcode adapter residual
+  float residual, residual_2 = 0.0;
+
+  int flow = barcode_[best_barcode].adapter_start_flow;
+  for (; flow < barcode_[best_barcode].num_flows-1; ++flow) {
+    residual = basecaller_read.normalized_measurements.at(flow) - barcode_[best_barcode].predicted_signal.at(flow);
+    residual_2 += residual * residual;
+  }
+  // There might be additional template bases in the last adapter flow
+  if (barcode_[best_barcode].num_flows > barcode_[best_barcode].adapter_start_flow){
+    residual = std::min(0.0f, (basecaller_read.normalized_measurements.at(flow) - barcode_[best_barcode].predicted_signal.at(flow)));
+    residual_2 += residual * residual;
+  }
+
+  if (residual_2 > num_adapter_flows * adapter_cutoff_) {
+    filtered_read_group = barcode_[best_barcode].read_group_index;
+    best_barcode = -1;
+    return false;
+  }
+  else
+    return true;
+}
 
 
 // ------------------------------------------------------------------------
@@ -573,6 +616,10 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
                                                processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
   }
 
+  // Optionally verify barcode adapter
+  AdapterValidation(basecaller_read, best_barcode, processed_read.barcode_adapter_filtered);
+
+
   // -------- Classification done, now accounting ----------
 
   if (best_barcode == -1) {
@@ -597,15 +644,20 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
   if (not trim_barcodes_)
     return;
 
-  processed_read.filter.n_bases_prefix = 0;
-  while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows-1)
-    processed_read.filter.n_bases_prefix++;
+  // Account for barcode + barcode adapter bases
+  processed_read.filter.n_bases_barcode = 0;
+  while (processed_read.filter.n_bases_barcode < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_barcode] < bce.num_flows-1)
+    processed_read.filter.n_bases_barcode++;
 
   int last_homopolymer = bce.last_homopolymer;
-  while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows and last_homopolymer > 0) {
-    processed_read.filter.n_bases_prefix++;
+  while (processed_read.filter.n_bases_barcode < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_barcode] < bce.num_flows and last_homopolymer > 0) {
+    processed_read.filter.n_bases_barcode++;
     last_homopolymer--;
   }
+
+  // Propagate current 5' trimming point
+  processed_read.filter.n_bases_prefix = processed_read.filter.n_bases_tag = processed_read.filter.n_bases_barcode;
+
 }
 
 // ------------------------------------------------------------------------

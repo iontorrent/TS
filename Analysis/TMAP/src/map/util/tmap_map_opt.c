@@ -183,7 +183,9 @@ __tmap_map_opt_option_print_func_compr_init(input_compr_gz, input_compr, TMAP_FI
 __tmap_map_opt_option_print_func_compr_init(input_compr_bz2, input_compr, TMAP_FILE_BZ2_COMPRESSION)
 __tmap_map_opt_option_print_func_int_init(output_type)
 __tmap_map_opt_option_print_func_int_init(end_repair)
-__tmap_map_opt_option_print_func_int_init(min_indel_end_repair)
+__tmap_map_opt_option_print_func_int_init(max_one_large_indel_rescue)
+__tmap_map_opt_option_print_func_int_init(min_anchor_large_indel_rescue)
+__tmap_map_opt_option_print_func_int_init(amplicon_overrun)
 __tmap_map_opt_option_print_func_int_init(max_adapter_bases_for_soft_clipping)
 
 __tmap_map_opt_option_print_func_int_init(shm_key)
@@ -223,6 +225,8 @@ __tmap_map_opt_option_print_func_int_init(context_debug_log)
 
 // alignment length filtering
 __tmap_map_opt_option_print_func_int_init(min_al_len)
+__tmap_map_opt_option_print_func_double_init(min_al_cov)
+__tmap_map_opt_option_print_func_double_init(min_identity)
 
 // flowspace
 __tmap_map_opt_option_print_func_int_init(fscore)
@@ -704,11 +708,23 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            end_repair,
                            tmap_map_opt_option_print_func_end_repair,
                            TMAP_MAP_ALGO_GLOBAL);
-  tmap_map_opt_options_add(opt->options, "min-indel-end-repair", required_argument, 0, 0 /* no short flag */,
+  tmap_map_opt_options_add(opt->options, "max-one-large-indel-rescue", required_argument, 0, 0 /* no short flag */,
                            TMAP_MAP_OPT_TYPE_INT,
-                           "minimum indel size to try to save from end repair",
+                           "the maximum indel size to rescue with one large indel algorithm",
                            NULL, 
-                           tmap_map_opt_option_print_func_min_indel_end_repair,
+                           tmap_map_opt_option_print_func_max_one_large_indel_rescue,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "min-anchor-large-indel-rescue", required_argument, 0, 0 /* no short flag */,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "the minimum anchor  size to rescue with one large indel algorithm",
+                           NULL,
+                           tmap_map_opt_option_print_func_min_anchor_large_indel_rescue,
+                           TMAP_MAP_ALGO_GLOBAL);
+   tmap_map_opt_options_add(opt->options, "max-amplicon-overrun-large-indel-rescue", required_argument, 0, 0 /* no short flag */,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "the minimum anchor  size to rescue with one large indel algorithm",
+                           NULL,
+                           tmap_map_opt_option_print_func_amplicon_overrun,
                            TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "max-adapter-bases-for-soft-clipping", required_argument, 0, 'J',
                            TMAP_MAP_OPT_TYPE_INT,
@@ -894,6 +910,21 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_min_al_len,
                            TMAP_MAP_ALGO_GLOBAL);
+  // filtering by alignment coverage
+  tmap_map_opt_options_add(opt->options, "min-cov", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
+                           "Filter out alignments which cover less then given fraction of total read length",
+                           NULL,
+                           tmap_map_opt_option_print_func_min_al_cov,
+                           TMAP_MAP_ALGO_GLOBAL);
+  // filtering by alignment identity
+  tmap_map_opt_options_add(opt->options, "min-iden", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
+                           "Filter out alignments whith identity fraction below given one",
+                           NULL,
+                           tmap_map_opt_option_print_func_min_identity,
+                           TMAP_MAP_ALGO_GLOBAL);
+  
   // flowspace options
   tmap_map_opt_options_add(opt->options, "pen-flow-error", required_argument, 0, 'X', 
                            TMAP_MAP_OPT_TYPE_INT,
@@ -1341,7 +1372,9 @@ tmap_map_opt_init(int32_t algo_id)
   opt->input_compr = TMAP_FILE_NO_COMPRESSION;
   opt->output_type = 0;
   opt->end_repair = 0;
-  opt->min_indel_end_repair = 3;
+  opt->max_one_large_indel_rescue = 30;
+  opt->min_anchor_large_indel_rescue = 6;
+  opt->amplicon_overrun = 6;
   opt->max_adapter_bases_for_soft_clipping = INT32_MAX;
   opt->shm_key = 0;
   opt->min_seq_len = -1;
@@ -1360,7 +1393,6 @@ tmap_map_opt_init(int32_t algo_id)
   opt->realign_cliptype = 2;
   opt->report_stats = 0;
   opt->realign_log = NULL;
-  opt->log_text_als = 0;
   // tail repeat clipping
   opt->do_repeat_clip = 0;
   opt->repclip_continuation = 0;
@@ -1375,6 +1407,8 @@ tmap_map_opt_init(int32_t algo_id)
   opt->context_debug_log = 0;
   // alignment length filtering
   opt->min_al_len = 0;
+  opt->min_al_cov = 0.0;
+  opt->min_identity = 0.0;
 
   // flowspace options
   opt->fscore = TMAP_MAP_OPT_FSCORE;
@@ -1863,8 +1897,12 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if(0 == c && 0 == strcmp("end-repair", options[option_index].name)) {
           opt->end_repair = atoi(optarg);
       }
-      else if(0 == c && 0 == strcmp("min-indel-end-repair", options[option_index].name)) {
-          opt->min_indel_end_repair = atoi(optarg);
+      else if(0 == c && 0 == strcmp("max-one-large-indel-rescue", options[option_index].name)) {
+          opt->max_one_large_indel_rescue = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("min-anchor-large-indel-rescue", options[option_index].name)) {
+          opt->min_anchor_large_indel_rescue = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("max-amplicon-overrun-large-indel-rescue", options[option_index].name)) {
+          opt->amplicon_overrun = atoi(optarg);
       }
 
 
@@ -1937,6 +1975,14 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       // filtering by alignment length
       else if (0 == c && 0 == strcmp ("min-al-len", options [option_index].name)) {
           opt->min_al_len = atoi (optarg);
+      }
+      // filtering by alignemnt coverage
+      else if (0 == c && 0 == strcmp ("min-cov", options [option_index].name)) {
+          opt->min_al_cov = atof (optarg);
+      }
+      // filtering by match identity
+      else if (0 == c && 0 == strcmp ("min-iden", options [option_index].name)) {
+          opt->min_identity = atof (optarg);
       }
       // Flowspace options
       else if(c == 'F' || (0 == c && 0 == strcmp("final-flowspace", options[option_index].name))) {       
@@ -2297,8 +2343,14 @@ tmap_map_opt_check_global(tmap_map_opt_t *opt_a, tmap_map_opt_t *opt_b)
     if(opt_a->end_repair != opt_b->end_repair) {
         tmap_error("option --end-repair was specified outside of the common options", Exit, CommandLineArgument);
     }
-    if(opt_a->min_indel_end_repair != opt_b->min_indel_end_repair) {
-        tmap_error("option --min-indel-end-repair was specified outside of the common options", Exit, CommandLineArgument);
+    if(opt_a->max_one_large_indel_rescue != opt_b->max_one_large_indel_rescue) {
+        tmap_error("option --max-one-large-indel-rescue was specified outside of the common options", Exit, CommandLineArgument);
+    }
+    if(opt_a->min_anchor_large_indel_rescue != opt_b->min_anchor_large_indel_rescue) {
+        tmap_error("option --min-anchor-large-indel-rescue was specified outside of the common options", Exit, CommandLineArgument);
+    }
+    if(opt_a->amplicon_overrun != opt_b->amplicon_overrun) {
+        tmap_error("option --min-anchor-large-indel-rescue was specified outside of the common options", Exit, CommandLineArgument);
     }
     if(opt_a->max_adapter_bases_for_soft_clipping != opt_b->max_adapter_bases_for_soft_clipping) {
         tmap_error("option --max-adapter-bases-for-soft-clipping was specified outside of the common options", Exit, CommandLineArgument);
@@ -2520,10 +2572,10 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   if (opt->num_threads > 1 && opt->context_debug_log)
       tmap_error ("Context logging is available only in single-threaded mode", Exit, CommandLineArgument);
 
-  tmap_error_cmd_check_int (opt->log_text_als, 0, 1, "--text-als");
-
   // alignment length filtering
   tmap_error_cmd_check_int (opt->min_al_len, 0, INT32_MAX, "--min-al-len");
+  tmap_error_cmd_check_int (opt->min_al_cov, 0.0, 1.0, "--min-cov");
+  tmap_error_cmd_check_int (opt->min_identity, 0.0, 1.0, "--min-iden");
 
 
   // stage/algorithm options
@@ -2671,7 +2723,9 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->input_compr = opt_src->input_compr;
     opt_dest->output_type = opt_src->output_type;
     opt_dest->end_repair = opt_src->end_repair;
-    opt_dest->min_indel_end_repair = opt_src->min_indel_end_repair;
+    opt_dest->max_one_large_indel_rescue = opt_src->max_one_large_indel_rescue;
+    opt_dest->min_anchor_large_indel_rescue = opt_src->min_anchor_large_indel_rescue;
+    opt_dest->amplicon_overrun = opt_src->amplicon_overrun;
     opt_dest->max_adapter_bases_for_soft_clipping = opt_src->max_adapter_bases_for_soft_clipping;
     opt_dest->shm_key = opt_src->shm_key;
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
@@ -2760,7 +2814,9 @@ tmap_map_opt_print(tmap_map_opt_t *opt)
   fprintf(stderr, "input_compr=%d\n", opt->input_compr);
   fprintf(stderr, "output_type=%d\n", opt->output_type);
   fprintf(stderr, "end_repair=%d\n", opt->end_repair);
-  fprintf(stderr, "min_indel_end_repair=%d\n", opt->min_indel_end_repair);
+  fprintf(stderr, "max-one-large-indel-rescue=%d\n", opt->max_one_large_indel_rescue);
+  fprintf(stderr, "min-anchor-large-indel-rescue=%d\n",opt->min_anchor_large_indel_rescue);
+  fprintf(stderr, "max-amplicon-overrun-indel-rescue=%d", opt->amplicon_overrun);
   fprintf(stderr, "max_adapter_bases_for_soft_clipping=%d\n", opt->max_adapter_bases_for_soft_clipping);
   fprintf(stderr, "shm_key=%d\n", (int)opt->shm_key);
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS

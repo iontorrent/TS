@@ -12,6 +12,8 @@ void LatentSlate::PropagateTuningParameters(EnsembleEvalTuningParameters &my_par
   // prior reliability for outlier read frequency
   cur_posterior.clustering.data_reliability = my_params.DataReliability();
   cur_posterior.clustering.germline_prior_strength = my_params.germline_prior_strength;
+  cur_posterior.gq_pair.min_detail_level_for_fast_scan = (unsigned int) my_params.min_detail_level_for_fast_scan;
+  cur_posterior.ref_vs_all.min_detail_level_for_fast_scan = (unsigned int) my_params.min_detail_level_for_fast_scan;
   //rev_posterior.data_reliability = my_params.DataReliability();
   //fwd_posterior.data_reliability = my_params.DataReliability();
 
@@ -113,11 +115,9 @@ void LatentSlate::FastExecuteInference(ShortStack &total_theory, bool update_fre
 void LatentSlate::ScanStrandPosterior(ShortStack &total_theory,bool vs_ref, int max_detail_level) {
   // keep information on distribution by strand
   if (!cur_posterior.ref_vs_all.scan_done){
-
     cur_posterior.ref_vs_all.DoPosteriorFrequencyScan(total_theory, cur_posterior.clustering, true, ALL_STRAND_KEY, vs_ref, max_detail_level);
     cur_posterior.gq_pair = cur_posterior.ref_vs_all; // pairwise analysis identical
   }
-
 }
 
 void LatentSlate::ResetToOrigin(){
@@ -131,49 +131,82 @@ void HypothesisStack::DefaultValues()
   try_alternatives = true;
 }
 
-void HypothesisStack::AllocateFrequencyStarts(int num_hyp_no_null){
- // int num_hyp = 2; // ref + alt, called doesn't count as a "start"
-  int num_start = num_hyp_no_null+1;
-  if (!try_alternatives)
-    num_start = 1;
-  ll_record.assign(num_start,0);
-  try_hyp_freq.resize(num_start);
-  // reset whole matrix
-  for (unsigned int i_try=0; i_try<try_hyp_freq.size(); i_try++){
-    try_hyp_freq[i_try].assign(num_hyp_no_null,0.0f);
-  }
-  // try first at uniform distribution
-    try_hyp_freq[0].assign(num_hyp_no_null,1.0f/num_hyp_no_null);
-  // try pure frequencies
-    if (try_alternatives){
-  for (unsigned int i_hyp=0; i_hyp<(unsigned int)num_hyp_no_null; i_hyp++){
-    try_hyp_freq[i_hyp+1][i_hyp]=1.0f;
-  }
+// if try_alternatives and my_params.try_few_restart_freq, then I
+// skip the pure frequencies of snp or mnp alt alleles,
+// also skip the pure frequency of ref allele if "all" alt alleles are snp or mnp
+void HypothesisStack::AllocateFrequencyStarts(int num_hyp_no_null, vector<AlleleIdentity> &allele_identity_vector){
+   // int num_hyp = 2; // ref + alt, called doesn't count as a "start"
+    //int num_start = num_hyp_no_null + 1;
+    vector<float> try_me(num_hyp_no_null);
+    float safety_zero = 0.0f;
+
+    // we need safety_zero for mol_tag because we use it to call cfDNA.
+    if(total_theory.GetIsMolecularTag()){
+    	safety_zero = 0.01f;
     }
+
+    // I try at most (1 + num_hyp_no_null) frequencies: one uniform allele freq and num_hyp_no_null pure freq
+    try_hyp_freq.reserve(1 + num_hyp_no_null);
+
+    // Always try uniform hyp_freq
+    try_me.assign(num_hyp_no_null, 1.0f / (float) num_hyp_no_null);
+    try_hyp_freq.push_back(try_me);
+
+// -----------------------------------
+// For now, try_few_restart_freq means don't try alternative
+    if(my_params.try_few_restart_freq){
+    	try_alternatives = false;
+    }
+// -----------------------------------
+
+    // try pure frequencies for the alleles
+    if(try_alternatives){
+    	// try pure frequencies for alt alleles
+    	for(int i_hyp = 1; i_hyp < num_hyp_no_null; ++i_hyp){
+    		int i_alt = i_hyp - 1;
+   			if(my_params.try_few_restart_freq and (allele_identity_vector[i_alt].ActAsSNP() or allele_identity_vector[i_alt].ActAsMNP())){
+   				// skip the pure frequency of a snp or mnp alt allele.
+   				continue;
+    		}
+   			try_me.assign(num_hyp_no_null, safety_zero / float(num_hyp_no_null - 1));
+   		    try_me[i_hyp] = 1.0f - safety_zero;
+   		    try_hyp_freq.push_back(try_me);
+    	}
+    	// try the pure frequency of the ref allele if we try at least one pure frequency of alt allele
+    	if(try_hyp_freq.size() > 1){
+   			try_me.assign(num_hyp_no_null, safety_zero / float(num_hyp_no_null - 1));
+   		    try_me[0] = 1.0f - safety_zero;
+   		    try_hyp_freq.push_back(try_me);
+    	}
+    }
+
+    ll_record.assign(try_hyp_freq.size(), 0.0f);
 }
 
 float HypothesisStack::ReturnMaxLL() {
-  return(cur_state.cur_posterior.ReturnMaxLL());
+  return cur_state.cur_posterior.ReturnMaxLL();
 }
 
-void HypothesisStack::InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, int num_hyp_no_null) {
+void HypothesisStack::InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, int num_hyp_no_null, vector<AlleleIdentity> &allele_identity_vector) {
   PropagateTuningParameters(num_hyp_no_null); // sub-objects need to know
-
+  cur_state.cur_posterior.SetDebug(global_context.DEBUG > 1); // debug information for fast scan
   // predict given hypotheses per read
-  total_theory.FillInPredictions(thread_objects, read_stack, global_context);
-  total_theory.InitTestFlow();
+  total_theory.FillInPredictionsAndTestFlows(thread_objects, read_stack, global_context);
   total_theory.FindValidIndexes();
   // how many alleles?
-  AllocateFrequencyStarts(num_hyp_no_null);
+  AllocateFrequencyStarts(num_hyp_no_null, allele_identity_vector);
 }
 
 
-void HypothesisStack::ExecuteInference(int max_detail_level) {
+void HypothesisStack::ExecuteInference() {
   // now with unrestrained inference
-  ExecuteExtremeInferences(max_detail_level);
+  ExecuteExtremeInferences();
   // set up our filter
   cur_state.bias_checker.UpdateBiasChecker(total_theory);
-  if(max_detail_level>0) cur_state.ScanStrandPosterior(total_theory,true, max_detail_level);
+  // @TODO: Now with fast scan, we can always do it
+  if(my_params.max_detail_level > 0){
+	  cur_state.ScanStrandPosterior(total_theory, true, my_params.max_detail_level);
+  }
 }
 
 void HypothesisStack::SetAlternateFromMain() {
@@ -187,22 +220,23 @@ void HypothesisStack::SetAlternateFromMain() {
 
 float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp, int max_detail_level){
   LatentSlate tmp_state;
-
   tmp_state = cur_state;
   tmp_state.detailed_integral = false;
   tmp_state.start_freq_of_winner =restart_hyp;
-
   total_theory.ResetQualities();  // clean slate to begin again
   tmp_state.ResetToOrigin(); // everyone back to starting places
 
+
   tmp_state.LocalExecuteInference(total_theory, true, true, restart_hyp); // start at reference
-  if(max_detail_level<1) tmp_state.ScanStrandPosterior(total_theory,true);
+  if(max_detail_level < 1){
+	  tmp_state.ScanStrandPosterior(total_theory, true, 0);
+  }
   float restart_LL=tmp_state.cur_posterior.ReturnMaxLL();
 
   if (cur_state.cur_posterior.ReturnMaxLL() <restart_LL) {
     cur_state = tmp_state; // update to the better solution, hypothetically
   }
-  return(restart_LL);
+  return restart_LL;
 }
 
 void HypothesisStack::TriangulateRestart(){
@@ -235,9 +269,9 @@ void HypothesisStack::TriangulateRestart(){
 }
 
 // try altenatives to the main function to see if we have a better fit somewhere else
-void HypothesisStack::ExecuteExtremeInferences(int max_detail_level) {
+void HypothesisStack::ExecuteExtremeInferences() {
   for (unsigned int i_start=0; i_start<try_hyp_freq.size(); i_start++){
-    ll_record[i_start] = ExecuteOneRestart(try_hyp_freq[i_start], max_detail_level);
+    ll_record[i_start] = ExecuteOneRestart(try_hyp_freq[i_start], my_params.max_detail_level);
   }
   //TriangulateRestart();
   RestoreFullInference(); // put total_theory to be consistent with whoever won
@@ -267,7 +301,7 @@ void HypothesisStack::PropagateTuningParameters(int num_hyp_no_null) {
 float log_sum(float a, float b) {
   float max_ab = max(a, b);
   float log_sum_val = max_ab + log(exp(a - max_ab) + exp(b - max_ab));
-  return(log_sum_val);
+  return log_sum_val;
 }
 
 void update_genotype_interval(vector<float> &genotype_interval, vector<float> &interval_cuts, PosteriorInference &local_posterior) {
@@ -358,7 +392,7 @@ bool RejectionByIntegral(vector<float> dual_interval, float &reject_status_quali
     cout << "Warning: reject ref score NAN " << endl;
     reject_status_quality_score = 0.0f;
   }
-  return(is_ref);
+  return is_ref;
 }
 
 bool DoRejectionByIntegral(PosteriorInference &cur_posterior, float real_safety, float &reject_status_quality_score){
@@ -372,7 +406,7 @@ bool DoRejectionByIntegral(PosteriorInference &cur_posterior, float real_safety,
     dual_interval[i_cut] = cur_posterior.ref_vs_all.LogDefiniteIntegral(variant_cuts[i_cut+1], variant_cuts[i_cut]);
   }
 
-  return( RejectionByIntegral(dual_interval, reject_status_quality_score));
+  return RejectionByIntegral(dual_interval, reject_status_quality_score);
 }
 
 // must have scan done to be workable
@@ -403,12 +437,12 @@ bool CallByIntegral(PosteriorInference &cur_posterior, float hom_safety, int &ge
 
   //cout << genotype_call << "\t" << reject_status_quality_score << "\t" << quasi_phred_quality_score << endl;
 
-  return(safety_active_flag);
+  return safety_active_flag;
 }
 
 bool HypothesisStack::CallGermline(float hom_safety, int &genotype_call, float &quasi_phred_quality_score, float &reject_status_quality_score){
-  bool retval = CallByIntegral(cur_state.cur_posterior, hom_safety, genotype_call, quasi_phred_quality_score, reject_status_quality_score);
-  return(retval);
+    bool retval = CallByIntegral(cur_state.cur_posterior, hom_safety, genotype_call, quasi_phred_quality_score, reject_status_quality_score);
+    return retval;
 }
 
 
@@ -433,129 +467,191 @@ void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta,  int i_allele) {
   mean_ll_delta = 10.0f * mean_ll_delta / log(10.0f); // phred-scaled
 }
 
-void EnsembleEval::ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id, vector<int> &dist_to_left, vector<int> &dist_to_right){
-  // in fact this is a lot easier
-  read_allele_id.assign(read_stack.size(), -1);
-  for (unsigned int i_read = 0; i_read < read_allele_id.size(); i_read++) {
-    read_allele_id[i_read]=allele_eval.total_theory.my_hypotheses[i_read].MostResponsible()-1; // -1 = null, 0 = ref , ...
-    if (!allele_eval.total_theory.my_hypotheses[i_read].success) {
-      read_allele_id[i_read] = -1; // failure = outlier
-    }
-  }
-  strand_id.assign(read_stack.size(), false);
-  for (unsigned int i_read = 0; i_read < strand_id.size(); i_read++) {
-    strand_id[i_read] = not read_stack[i_read]->is_reverse_strand;
-  }
+// Hard classify each read using its responsibility
+// read_id_[i] = -1 means the i-th read is classified as an outlier.
+// read_id_[i] = 0 means the i-th read is classified as ref.
+// read_id_[i] = 1 means the i-th read is classified as the variant allele 1, and so on.
+void EnsembleEval::ApproximateHardClassifierForReads(){
+	read_id_.clear();
+	strand_id_.clear();
+	dist_to_left_.clear();
+	dist_to_right_.clear();
 
-  // for each variant, calculate its' position within the soft clipped read
-  // distance to left and distance to right
-  dist_to_left.assign(read_stack.size(), -1);
-  dist_to_right.assign(read_stack.size(), -1);
+    read_id_.assign(read_stack.size(), -1);
+	strand_id_.assign(read_stack.size(), false);
+	dist_to_left_.assign(read_stack.size(), -1);
+	dist_to_right_.assign(read_stack.size(), -1);
 
-  int position0 = variant->position -1; // variant->position 1-base: vcflib/Variant.h
-  for (unsigned int i_read = 0; i_read < strand_id.size(); i_read++) {
-    if (read_allele_id[i_read] > -1){
-      //fprintf(stdout, "position0 =%d, read_stack[i_read]->align_start = %d, read_stack[i_read]->align_end = %d, read_stack[i_read]->left_sc = %d, read_stack[i_read]->right_sc = %d\n", (int)position0, (int)read_stack[i_read]->align_start, (int)read_stack[i_read]->align_end, (int)read_stack[i_read]->left_sc, (int)read_stack[i_read]->right_sc);
-      //fprintf(stdout, "dist_to_left[%d] = =%d, dist_to_right[%d] = %d\n", (int)i_read, (int)(position0 - read_stack[i_read]->align_start), (int)i_read, (int)(read_stack[i_read]->align_end - position0));
+	int position0 = variant->position -1; // variant->position 1-base: vcflib/Variant.h
 
-      dist_to_left[i_read] = position0 - read_stack[i_read]->align_start;
-      assert ( dist_to_left[i_read] >=0 );
-      dist_to_right[i_read] = read_stack[i_read]->align_end - position0;
-      assert ( dist_to_right[i_read] >=0 );
-    }
-  }
+	for (unsigned int i_read = 0; i_read < read_stack.size(); ++i_read) {
+		// compute read_id_
+		if(allele_eval.total_theory.my_hypotheses[i_read].success){
+	        read_id_[i_read] = allele_eval.total_theory.my_hypotheses[i_read].MostResponsible() - 1; // -1 = null, 0 = ref , ...
+		}
+		else{
+	        read_id_[i_read] = -1; // failure = outlier
+	    }
+
+		// not an outlier
+		if(read_id_[i_read] > -1){
+		    //fprintf(stdout, "position0 =%d, read_stack[i_read]->align_start = %d, read_stack[i_read]->align_end = %d, read_stack[i_read]->left_sc = %d, read_stack[i_read]->right_sc = %d\n", (int)position0, (int)read_stack[i_read]->align_start, (int)read_stack[i_read]->align_end, (int)read_stack[i_read]->left_sc, (int)read_stack[i_read]->right_sc);
+		    //fprintf(stdout, "dist_to_left[%d] = =%d, dist_to_right[%d] = %d\n", (int)i_read, (int)(position0 - read_stack[i_read]->align_start), (int)i_read, (int)(read_stack[i_read]->align_end - position0));
+	        dist_to_left_[i_read] = position0 - read_stack[i_read]->align_start;
+		    assert ( dist_to_left_[i_read] >=0 );
+		    dist_to_right_[i_read] = read_stack[i_read]->align_end - position0;
+		    assert ( dist_to_right_[i_read] >=0 );
+	    }
+	    //compute strand_id_
+	    strand_id_[i_read] = not (read_stack[i_read]->is_reverse_strand);
+	}
+
+	is_hard_classification_for_reads_done_ = true;
 }
 
-void EnsembleEval::ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id, vector<int> &dist_to_left, vector<int> &dist_to_right)
-{
-  ApproximateHardClassifierForReadsFromMultiAlleles(read_allele_id, strand_id, dist_to_left, dist_to_right);
+// Hard classify each family using its family responsibility
+// Compute family_id_ and family_strand_id_, which are similar to read_id_, strand_id_ for MuitiBook
+// family_id_ is obtained from the most responsible hypothesis of the family
+// family_id_ stores the hard classification results for "families" (can be non-functional)
+// family_id_[i] = -1 means the i-th family is classified as an outlier.
+// family_id_[i] = 0 means the i-th family is classified as ref.
+// family_id_[i] = 1 means the i-th family is classified as the variant allele 1, and so on.
+void EnsembleEval::ApproximateHardClassifierForFamilies(){
+	if(not allele_eval.total_theory.GetIsMolecularTag()){
+		cout<<"Warning: Skip EnsembleEval::ApproximateHardClassifierForFamilies() because use_mol_tag is off!"<< endl;
+		return;
+	}
+
+	unsigned int num_families = allele_eval.total_theory.my_eval_families.size();
+	int fam_count = 0;
+	family_id_.assign(num_families, -1); // every family starts with outlier
+	family_strand_id_.assign(num_families, false);
+	max_family_responsibility_.assign(num_families, 0.0f);
+
+	for(vector<EvalFamily>::iterator fam_it = allele_eval.total_theory.my_eval_families.begin(); fam_it != allele_eval.total_theory.my_eval_families.end(); ++fam_it){
+		// don't count the non-functional families
+		if(fam_it->GetFunctionality()){
+			family_id_[fam_count] = fam_it->MostResponsible() - 1;
+		}
+		max_family_responsibility_[fam_count] = fam_it->family_responsibility[family_id_[fam_count] + 1];
+		family_strand_id_[fam_count] = (fam_it->strand_key == 0);
+		++fam_count;
+	}
+	is_hard_classification_for_families_done_ = true;
 }
 
+int EnsembleEval::DetectBestMultiAllelePair(){
+    int best_alt_ndx = 0; // forced choice with ref
+    //@TODO: just get the plane off the ground
+    //@TODO: do the top pair by responsibility
+    vector< pair<int,float> > best_allele_test;
+    int num_hyp_no_null = allele_eval.total_theory.my_hypotheses[0].responsibility.size()-1;
+    best_allele_test.resize(num_hyp_no_null); // null can never be a winner in "best allele" sweepstakes
 
+    for (unsigned int i_alt=0; i_alt<best_allele_test.size(); i_alt++){
+        best_allele_test[i_alt].first = i_alt;
+        best_allele_test[i_alt].second = 0.0f;
+    }
 
-int EnsembleEval::DetectBestMultiAllelePair()
-{
-  vector<int> read_id;        // vector of allele ids per read, -1 = outlier, 0 = ref, >0 real allele
-  vector<bool> strand_id;     // vector of forward (true) or reverse (false) per read
-  vector<int> dist_to_left;   // vector of distances from allele position to left scoft clip per read
-  vector<int> dist_to_right;  // vector of distances from allele position to left scoft clip per read
+    // using molecular tagging
+    // This does the similar things as the no tagging case
+    if(allele_eval.total_theory.GetIsMolecularTag()){
+	    if(not is_hard_classification_for_families_done_){
+	        // similar to getting read_id and strand_id by ApproximateHardClassifierForReads()
+	        ApproximateHardClassifierForFamilies();
+	    }
 
-  int best_alt_ndx = 0; // forced choice with ref
+	    // take family responsibility
+	    for(unsigned int i_family = 0; i_family < family_id_.size(); ++i_family){
+	        int my_alt = family_id_[i_family];
+		    if(my_alt > -1){
+		        best_allele_test[my_alt].second += max_family_responsibility_[i_family];
+		    } // otherwise count for nothing
+	    }
+    }
+    // not using molecular tagging
+    else{
+	    if(not is_hard_classification_for_reads_done_){
+    	    ApproximateHardClassifierForReads();
+	    }
+	    // take responsibility
+	    for(unsigned int i_read = 0; i_read < read_id_.size(); ++i_read){
+	        int my_alt = read_id_[i_read];
+		    if (my_alt > -1){
+		        best_allele_test[my_alt].second += allele_eval.total_theory.my_hypotheses[i_read].responsibility[my_alt + 1];
+		    } // otherwise count for nothing
+	    }
+    }
 
-  ApproximateHardClassifierForReads(read_id, strand_id, dist_to_left, dist_to_right);
+    // pick my pair of best alleles
+    sort(best_allele_test.begin(), best_allele_test.end(), compare_best_response);
+    // not-null choices
+    diploid_choice[0] = best_allele_test[0].first; // index of biggest weight
+    diploid_choice[1] = best_allele_test[1].first; // index of second-biggest weight
+    // problematic cases:
+    // 2 alleles & ref, ref + 1 allele zero, want ref as the comparison
+    // all ref, don't care about the second allele for genotype?
+    // all zero implies what?
+    //cout << best_allele_test.at(0).first << "\t" << best_allele_test.at(0).second << "\t" << best_allele_test.at(1).first << "\t" << best_allele_test.at(1).second << endl;
+    if(diploid_choice[0]==0)
+        best_alt_ndx = diploid_choice[1]-1;
+    else
+        best_alt_ndx = diploid_choice[0]-1;
 
-  //@TODO: just get the plane off the ground
-  //@TODO: do the top pair by responsibility
-  vector< pair<int,float> > best_allele_test;
-  int num_hyp_no_null = allele_eval.total_theory.my_hypotheses[0].responsibility.size()-1;
-  best_allele_test.resize(num_hyp_no_null); // null can never be a winner in "best allele" sweepstakes
-  for (unsigned int i_alt=0; i_alt<best_allele_test.size(); i_alt++){
-    best_allele_test[i_alt].first = i_alt;
-    best_allele_test[i_alt].second = 0.0f;
-  }
-  // take responsibility
-  for (unsigned int i_read=0; i_read<read_id.size(); i_read++){
-    int my_alt = read_id[i_read];
-    if (my_alt> -1){
-      best_allele_test[my_alt].second += allele_eval.total_theory.my_hypotheses[i_read].responsibility[my_alt+1];
-    } // otherwise count for nothing
-  }
-  // pick my pair of best alleles
-  sort(best_allele_test.begin(), best_allele_test.end(), compare_best_response);
-  // // not-null choices
-  diploid_choice[0]= best_allele_test[0].first; // index of biggest weight
-  diploid_choice[1]= best_allele_test[1].first; // index of second-biggest weight
-  // problematic cases:
-  // 2 alleles & ref, ref + 1 allele zero, want ref as the comparison
-  // all ref, don't care about the second allele for genotype?
-  // all zero implies what?
-  //cout << best_allele_test.at(0).first << "\t" << best_allele_test.at(0).second << "\t" << best_allele_test.at(1).first << "\t" << best_allele_test.at(1).second << endl;
-  if (diploid_choice[0]==0)
-    best_alt_ndx = diploid_choice[1]-1;
-  else
-    best_alt_ndx = diploid_choice[0]-1;
+    // sort as final step to avoid best_alt_ndx reflecting a worse allele
+    sort(diploid_choice.begin(),diploid_choice.end()); // now in increasing allele order as needed
 
-  // sort as final step to avoid best_alt_ndx reflecting a worse allele
-  sort(diploid_choice.begin(),diploid_choice.end()); // now in increasing allele order as needed
-
-  return(best_alt_ndx);
+    is_detect_best_multi_allele_pair_done_ = true;
+    return best_alt_ndx;
 }
 
 
 
 void EnsembleEval::ComputePosteriorGenotype(int _alt_allele_index,float local_min_allele_freq,
-                                            int &genotype_call, float &gt_quality_score, float &reject_status_quality_score)
-{
-  allele_eval.CallGermline(local_min_allele_freq,
-     genotype_call,
-     gt_quality_score,
-     reject_status_quality_score);
+                                            int &genotype_call, float &gt_quality_score, float &reject_status_quality_score){
+    allele_eval.CallGermline(local_min_allele_freq, genotype_call, gt_quality_score, reject_status_quality_score);
 }
 
-void EnsembleEval::MultiAlleleGenotype(float local_min_allele_freq, vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score, int max_detail_level)
-{
-  // detect best allele hard classify
- // DetectBestAlleleHardClassify(); //diploid choice set
-  DetectBestMultiAllelePair(); // diploid_choice set by posterior responsibility
+void EnsembleEval::MultiAlleleGenotype(float local_min_allele_freq, vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score, int max_detail_level){
+    // detect best allele hard classify
+    if(not is_detect_best_multi_allele_pair_done_){ // don't need to do it again if we've already done
+        DetectBestMultiAllelePair(); // diploid_choice set by posterior responsibility
+    }
+    // set diploid in gq_pair
+    allele_eval.cur_state.cur_posterior.gq_pair.freq_pair = diploid_choice;
+    // scan gq_pair
+    allele_eval.cur_state.cur_posterior.gq_pair.DoPosteriorFrequencyScan(allele_eval.total_theory,
+                                                                         allele_eval.cur_state.cur_posterior.clustering,
+                                                                         true, ALL_STRAND_KEY, false, max_detail_level);
 
-  // set diploid in gq_pair
-  allele_eval.cur_state.cur_posterior.gq_pair.freq_pair = diploid_choice;
-
-  // scan gq_pair
-  allele_eval.cur_state.cur_posterior.gq_pair.DoPosteriorFrequencyScan(allele_eval.total_theory,
-                                                                             allele_eval.cur_state.cur_posterior.clustering,
-                                                                             true, ALL_STRAND_KEY, false, max_detail_level);
-
-  //call-germline
-  int genotype_call;
-  allele_eval.CallGermline(local_min_allele_freq, genotype_call, gt_quality_score, reject_status_quality_score);
-  // set the outputs
-
-  // start at "het" by choice
-  genotype_component[0]=diploid_choice[0];
-  genotype_component[1]=diploid_choice[1];
-  if (genotype_call==2)
-    genotype_component[0] = diploid_choice[1];  //hom var
-  if (genotype_call==0)
-    genotype_component[1] = diploid_choice[0];  //hom ref
+    //call-germline
+    int genotype_call;
+    allele_eval.CallGermline(local_min_allele_freq, genotype_call, gt_quality_score, reject_status_quality_score);
+    // set the outputs
+    // start at "het" by choice
+    genotype_component[0] = diploid_choice[0];
+    genotype_component[1] = diploid_choice[1];
+    if(genotype_call == 2){ // hom var
+        genotype_component[0] = diploid_choice[1];
+    }
+    else if(genotype_call == 0){ // hom ref
+        genotype_component[1] = diploid_choice[0];
+    }
 }
+
+
+/*
+// do molecular barcode classification
+void HypothesisStack::DoMolecularTagClassification(MolecularTag &mol_tag){
+	if(not total_theory.GetIsMolecularTag()){
+		cout<<"Warning: Skip molecular tag classification since is_molecular_tag == false."<< endl;
+		return;
+	}
+	// Do outlier pre-filtering because we will assume no functional family is an outlier.
+	float data_reliability = my_params.DataReliability();
+	total_theory.OutlierFiltering(data_reliability);
+
+	// Do classification
+	total_theory.MolecularTagClassifier(mol_tag);
+}
+*/

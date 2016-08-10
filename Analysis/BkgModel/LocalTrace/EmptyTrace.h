@@ -7,7 +7,6 @@
 #include "PinnedInFlow.h"
 #include "Mask.h"
 #include "CommandLineOpts.h"
-#include "SynchDat.h"
 #include "Serialization.h"
 
 class EmptyTrace
@@ -17,11 +16,6 @@ class EmptyTrace
     virtual ~EmptyTrace();
     virtual void GenerateAverageEmptyTrace ( Region *region, const PinnedInFlow &pinnedInFlow, 
         const Mask *bfmask, Image *img, int flow_buffer_index, int raw_flow );
-    virtual void GenerateAverageEmptyTrace ( Region *region, const PinnedInFlow& pinnedInFlow, 
-        const Mask *bfmask, SynchDat &sdat, int flow_buffer_index, int raw_flow );
-    virtual void GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Region *region, 
-        PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow_buffer_index,
-        int raw_flow );
     virtual void  Allocate ( int global_flow_max, int _imgFrames );
     void  PrecomputeBackgroundSlopeForDeriv ( int flow_buffer_index );
     void  FillEmptyTraceFromBuffer ( short *bkg, int flow_buffer_index );
@@ -53,7 +47,6 @@ class EmptyTrace
                                    float _nuc_flow_frame_width );
 
     void SetTime(float frames_per_second);
-    void SetTimeFromSdatChunk(Region& region, SynchDat &sdat);
 
     // track whether this emptytrace object is used, if it is not then
     // the buffers may be allocated but not contain valid data
@@ -96,7 +89,7 @@ class EmptyTrace
     float TrimWildTraces ( Region *region, float *bPtr, std::vector<float>& valsAtT0,
                            std::vector<float>& valsAtT1,
                            std::vector<float>& valsAtT2, float total_weight,
-                           const Mask *bfmask, Image *img, SynchDat *sdat );
+                           const Mask *bfmask, Image *img );
     int SecondsToIndex ( float seconds, std::vector<float>& delta );
 
   private:

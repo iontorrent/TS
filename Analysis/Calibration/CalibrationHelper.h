@@ -43,11 +43,11 @@ public:
   MultiBamHandler();
 
   bool    Open(vector<string> bam_names);
-
   void    Close();
 
   bool    GetNextAlignment(BamAlignment & alignment);
-
+  int     NumPasses() const { return num_bam_passes_; };
+  bool    Rewind(void);
   const   BamTools::SamReadGroupDictionary &  GetReadGroups() const { return merged_read_groups_; };
 
 private:
@@ -55,8 +55,10 @@ private:
   // @brief
   void MergeSamHeaders();
 
-  bool                               have_bam_files_;
-  unsigned int                       current_bam_idx_;
+  bool                               have_bam_files_;      //!< Did we load anything?
+  bool                               no_more_data_;        //!< Did we finish reading all files?
+  unsigned int                       current_bam_idx_;     //!< Index pointing to currently processed BAM
+  int                                num_bam_passes_;      //!<  How often has this reader been rewound?
   vector<BamTools::BamReader *>      bam_readers_;
   vector<BamTools::SamHeader>        sam_headers_;
   BamTools::SamReadGroupDictionary   merged_read_groups_;
@@ -78,9 +80,19 @@ struct CalibrationContext
   int                        verbose_level;              //!< Adjustment for the amount of feedback printout
   bool                       debug;
 
+  bool                       successive_fit;             //!< Successively fit models in the order they are applied
+  bool                       local_fit_linear_model;     //!< control training of linear model
+  bool                       local_fit_polish_model;     //!< control training of polish model
+  //bool                       update_sim_model;           //!< control live updates of fits // XXX
+  bool                       blind_fit;                  //!< treat fitting as 'blind' to reference
+  int                        num_train_iterations;       //!< Blind calibration: how many loops through the data for blind calibration
+
   bool                       load_unmapped;              //!< Switch whether to load unmapped reads or not
   bool                       skip_droop;                 //!< Ignore droop term when generating predictions
   bool                       do_flow_alignment;          //!< Determines whether we attempt a flow alignment
+  bool                       match_zero_flows;           //!< Determines if we need to exactly match incorporating flows
+  float                      fill_strange_gaps;          //!< Threshold to fill in badly behaved gaps between impossible flows
+  bool                       resolve_clipped_bases;      //!< Solve for hard clipped read prefix?
 
   // Read filtering
   unsigned int               min_mapping_qv;             //!< Minimum mapping quality for the read to be considered useful
@@ -108,10 +120,12 @@ struct CalibrationContext
   LinearCalibrationModel *   linear_model_master;
 
 
+
   bool InitializeFromOpts(OptArgs &opts);
   void DetectFlowOrderzAndKeyFromBam(const BamTools::SamReadGroupDictionary & read_groups);
   void Verbose();
   void Close(Json::Value &json);
+  void LastJsonInfo(Json::Value &json);
 
 };
 
@@ -124,9 +138,13 @@ public:
 
   ReadAlignmentInfo();
 
-  bool UnpackReadInfo  (BamAlignment* new_alignment, const CalibrationContext& calib_context);
-  bool UnpackAlignmentInfo (const CalibrationContext& calib_context, bool debug);
-  void GeneratePredictions (vector<DPTreephaser>& treephaser_vector, const CalibrationContext& calib_context);
+  bool UnpackReadInfo  (BamAlignment* new_alignment, vector<DPTreephaser>& treephaser_vector, const CalibrationContext& calib_context);
+  bool UnpackAlignmentInfo (const CalibrationContext& calib_context);
+
+  void GeneratePredictions (vector<DPTreephaser>& treephaser_vector,  LinearCalibrationModel& linear_model_local);
+
+  int GetStartOfMasterRead(DPTreephaser & treephaser, BasecallerRead &master_read, const CalibrationContext& calib_context);
+
   void SetSize         (int flow_size);
   void Reset();
 
@@ -143,6 +161,7 @@ public:
   string          run_id;                  //!< run id
   string          read_group;              //!< read group name
   string          read_bases;              //!< called bases in read direction including soft clipping
+  string          prefix_bases;            //!< Hard clipped read prefix
   vector<int>     well_xy;                 //!< 2 element int vector 0-based x,y coordinate (in that order) of well on chip
   int             start_flow;              //!< Flow incorporating the first read (template) base
   int             flow_order_index;        //!< index for the flow order for this read
@@ -155,6 +174,9 @@ public:
   unsigned int    right_sc;                //!< Number of soft clipped bases on the right side of the read (in reference direction)
   unsigned int    start_sc;                //!< Number of soft clipped bases at the start of the read (in read direction)
   int             prefix_flow;             //!< Flow incorporating the last 5' clipped base (hard or soft)
+
+  string          full_query_bases;         //!< Read bases including key, barcode, and 5' soft clipped bases
+  string          full_target_bases;        //!< Target bases, expanded by key, barcode, and 5' clipped bases
 
 
   // Flow alignment variables

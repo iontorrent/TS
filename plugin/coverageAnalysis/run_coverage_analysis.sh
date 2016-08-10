@@ -43,9 +43,9 @@ OPTIONS="OPTIONS:
   -r Customize output for targeted reads. (AmpliSeq-RNA option.) (Overrides -a and -t.)
   -t Add Target Coverage statistics by mean base read depth. (TargetSeq option.) See notes on -c option.
   -u Filter to Uniquely mapped reads. (By SAM MAPQ>0.)
-  -A <file> Annotate coverage for (GC annotated) targets specified in this BED file. See -F option.
-  -B <file> Limit coverage to targets specified in this BED file
-  -C <file> Original name for BED targets selected for reporting and linking (pre-padding, etc.)
+  -A <file> Annotate coverage for (GC annotated) targets specified in this BED file. See -g option.
+  -B <file> Limit coverage to targets specified in this BED file. Defaults to -A file if not provided.
+  -C <file> Original name for BED targets selected for reporting and linking. Defaults to -B file if not provided.
   -D <dirpath> Path to root Directory where results are written. Default: ./
   -E <name> File name stem for auxilary output files. Default: 'tca_auxiliary'.
   -F <name> File name stem for analysis output files. Default: Use BAM file name provided (w/o extension).
@@ -53,7 +53,9 @@ OPTIONS="OPTIONS:
   -L <name> Reference Library name, e.g. hg19. Defaults to <reference> if not supplied.
   -N <name> Sample name for use in summary output. Default: 'None'
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMNAME>.stats.cov.txt.
-  -P <int>  Padding value for BED file padding. For reporting only. Default: 0.
+  -P <int>  Padding value used for BED file padding. Assumes -B targets file is padded if the pad value is > 0 and
+     base coverage stats will be generated using this file BUT read stats will use the annotated -A targets file,
+     which is required for this option. The padding value itself is only used for reporting. Default: 0.
   -R <file> Name for local HTML Results file (in output directory). Default: '' (=> no HTML report created)
   -S <file> SampleID tracking regions file. Default: '' (=> no tracking reads statistics reported)
   -l Log progress to STDERR. (A few primary progress messages will always be output.)
@@ -163,10 +165,18 @@ REFERENCE=`readlink -n -f "$REFERENCE"`
 GENOME=`readlink -n -f "$GENOME"`
 
 RUNDIR=`dirname $RUNPTH`
+BINDIR="${RUNDIR}/bin"
 RUNDIR="${RUNDIR}/scripts"
 BAMBAI="${BAMFILE}.bai"
 BAMNAME=`echo $BAMFILE | sed -e 's/^.*\///'`
 BAMSTEM=`echo $BAMNAME | sed -e 's/\.[^.]*$//'`
+
+# if local (override) version of bbctools not present default to system version
+BBCTOOLS="$BINDIR/bbctools"
+if [ ! -f "$BBCTOOLS" ]; then
+  BBCTOOLS="bbctools"
+  command -v bbctools || { echo "ERROR: 'bbctools' is not available as a command on this system!" >&2; exit 1; }
+fi
 
 if [ "$FILESTEM" = "" -o "$FILESTEM" = "-" ];then
   FILESTEM="$BAMSTEM"
@@ -242,11 +252,13 @@ RNA_CONTIGS=0
 if [ $CONTIGS -ne 0 ];then
   PROPPLOTS=0
   if [ -z "$BEDFILE" ];then
-    BASECOVERAGE=0
+    # whole genome base coverage and rad coverage now available w/o target file for bbctools
+    BASECOVERAGE=1
   elif [ $TRGCOVBYBASES -ne 0 ];then
     WGN_CONTIGS=1
   elif [ $RNABED -ne 0 ];then
     RNA_CONTIGS=1
+    BASECOVERAGE=0
   fi
 fi
 
@@ -277,13 +289,13 @@ REPLENPLOT=$AMPLICONS
 
 ANNOBEDOPT=''
 if [ -n "$ANNOBED" ]; then
-  ANNOBEDOPT="-B '$ANNOBED'"
+  ANNOBEDOPT="-R '$ANNOBED'"
 else
   TRGCOVBYBASES=0
 fi
 BEDOPT=''
 if [ -n "$BEDFILE" ]; then
-  BEDOPT="-B '$BEDFILE'"
+  BEDOPT="-R '$BEDFILE'"
 else
   TRGCOVDEPTH=0
   AMPE2EREADS=0
@@ -354,7 +366,7 @@ if [ "$ANNOBEDFORMAT" -ne 0 -a $NOTARGETANAL -eq 0 ];then
     ANNOBED="${AUXFILEROOT}.gc.bed"
     ${RUNDIR}/../bed/gcAnnoBed.pl -a -s -w -t "$WORKDIR" "$BEDFILE" "$REFERENCE" > "$ANNOBED"
     LINKANNOBED=0
-    ANNOBEDOPT="-B '$ANNOBED'"
+    ANNOBEDOPT="-R '$ANNOBED'"
     if [ $SHOWLOG -eq 1 ]; then
       echo "> $ANNOBED" >&2
     fi
@@ -382,136 +394,110 @@ if [ -n "$RFTITLE" ];then
 fi
 echo "" >> "$STATSFILE"
 
-########### Create BBC files ###########
+########### Create BBC and target (read) coverage result files ###########
 
-if [ $BASECOVERAGE -eq 1 ]; then
+# Set up for output of base coverage
 
-if [ $TRACK -eq 1 ]; then
-  echo "(`date`) Creating base coverage files..." >&2
-fi
-BASEREADS="${AUXFILEROOT}.rds"
 BBCFILE="${AUXFILEROOT}.bbc"
-BBCMD="$RUNDIR/bbcCreate.pl $FILTOPTS $BEDOPT -p -O '$BBCFILE' '$GENOME' '$BAMFILE' > '$BASEREADS'"
-eval "$BBCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: bbcCreate.pl failed." >&2
-  echo "\$ $BBCMD" >&2
-  exit 1;
-elif [ "$SHOWLOG" -eq 1 ]; then
-  echo "> $BBCFILE" >&2
-  echo ">" `cat $BASEREADS` "base reads" >&2
-fi
+BCIFILE="${AUXFILEROOT}.bci"
+CBCFILE="${AUXFILEROOT}.cbc"
 
-BBCMD="$RUNDIR/bbcIndex.pl '$BBCFILE'"
-eval "$BBCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: bbcIndex.pl failed." >&2
-  echo "\$ $BBCMD" >&2
-  exit 1;
-elif [ "$SHOWLOG" -eq 1 ]; then
-  echo "> ${AUXFILEROOT}.bci" >&2
-fi
-
-########### Generate the Coverage Overview Plot #########
-
-if [ $NOTARGETANAL -ne 0 ];then
-  echo "(`date`) Skipping coverage overview analysis..." >&2
-elif [ $RNABED -eq 0 ];then
-  if [ $TRACK -eq 1 ]; then
-    echo "(`date`) Calculating effective reference coverage overview plot..." >&2
-  fi
-  COVOVR_XLS="${OUTFILEROOT}.covoverview.xls"
-  COVCMD="$RUNDIR/bbcOverview.pl $BEDOPT '$BBCFILE' > '$COVOVR_XLS'"
-  eval "$COVCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: bbcOverview.pl failed." >&2
-    echo "\$ $COVCMD" >&2
-    exit 1;
-  elif [ $SHOWLOG -eq 1 ]; then
-    echo "> $COVOVR_XLS" >&2
-  fi
-  COVOVR_PNG="${OUTFILEROOT}.covoverview.png"
-  PLOTCMD="R --no-save --slave --vanilla --args '$COVOVR_XLS' '$COVOVR_PNG' < $RUNDIR/plot_overview.R"
-  eval "$PLOTCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: plot_overview.R failed." >&2
-    PLOTERROR=1
-  elif [ $SHOWLOG -eq 1 ]; then
-    echo "> $COVOVR_PNG" >&2
+BASECOVOPTS=""
+if [ $BASECOVERAGE -eq 1 ]; then
+  BASECOVOPTS="-ciB '$AUXFILEROOT'"
+  # Using padded targes is a special case where bbctools has to be used twice...
+  if [ $PADVAL -gt 0 ];then
+    if [ $TRACK -eq 1 ]; then
+      echo "(`date`) Creating base coverage files for padded targets..." >&2
+    fi
+    # Here the sumStats will have on-target counts using the padded targets.
+    # On-target reads could be gathered here vs. padded targets but was not done in original version
+    BBCMD="$BBCTOOLS create $FILTOPTS $BEDOPT $BASECOVOPTS '$BAMFILE'"
+    eval "$BBCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: bbctools create failed." >&2
+      echo "\$ $BBCMD" >&2
+      exit 1;
+    elif [ "$SHOWLOG" -eq 1 ]; then
+      if [ -n "$BASECOVOPTS" ]; then
+        echo "> $BBCFILE" >&2
+        echo "> $BCIFILE" >&2
+        echo "> $CBCFILE" >&2
+      fi
+    fi
+    BASECOVOPTS=""
+    SSTOPT=""
   fi
 fi
 
-fi;  # if BASECOVERAGE
+# Set up for output of on-target reads tracking
 
-########### Read Coverage Analysis #########
-
-if [ $TRACK -eq 1 ]; then
-  echo "(`date`) Generating basic reads stats..." >&2
+DEPTHS=""
+if [ $RNABED -ne 0 ];then
+  # disable depth of base coverage report for RNA applications
+  DEPTH="-D ''"
 fi
-MAPPED_READS=`samtools view -c $SAMVIEWOPT "$BAMFILE"`
-echo -e "Number of mapped reads:         $MAPPED_READS" >> "$STATSFILE"
-
-if [ -n "$TRACKINGBED" ]; then
-  TRACKING_READS=`samtools view -c $SAMVIEWOPT -L "$TRACKINGBED" "$BAMFILE"`
-  TRACKING_READS=`echo "$TRACKING_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
-fi
-
-if [ -n "$BEDOPT" ]; then
-  # switch to flagstat if total #reads wanted (has exact same performance as view -c)
-  TREADS=`samtools view -c $SAMVIEWOPT -L "$BEDFILE" "$BAMFILE"`
-  PCTREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
-  #echo "Number of reads on target:      $TREADS" >> "$STATSFILE"
-  echo "Percent reads on target:        $PCTREADS%" >> "$STATSFILE"
-  if [ -n "$TRACKINGBED" ]; then
-    echo "Percent sample tracking reads:  $TRACKING_READS%" >> "$STATSFILE"
-  fi
-elif [ -n "$TRACKINGBED" ]; then
-  echo "Percent sample tracking reads:  $TRACKING_READS%" >> "$STATSFILE"
-fi
-echo "" >> "$STATSFILE"
-
-if [ $NOTARGETANAL -ne 0 ]; then
-  echo "(`date`) Skipping fine coverage analysis..." >&2
-elif [ -n "$ANNOBEDOPT" ]; then
+TARGETCOVFILE=""
+TARGETCOVOPTS=""
+DOSORT=0
+if [ -n "$ANNOBEDOPT" -a $NOTARGETANAL -eq 0 ]; then
+  XTRAFIELDS="3:region_id,-2:attributes,-1:gc_count"
   if [ $AMPLICONS -eq 0 ]; then
     TARGETCOVFILE="${OUTFILEROOT}.target.cov.xls"
-    COVCMD="$RUNDIR/bbcTargetAnno.pl '$BBCFILE' '$ANNOBED' > '$TARGETCOVFILE'"
+    TARGETCOVOPTS="-C '$TARGETCOVFILE' -T trgbases -A '$XTRAFIELDS'"
   else
     TRGCOVBYBASES=0
     if [ $RNA_CONTIGS -ne 0 ];then
       TARGETCOVFILE="${OUTFILEROOT}.contig.cov.xls"
+      TARGETCOVOPTS="-C '$TARGETCOVFILE' $DEPTH -T trgreads -A '$XTRAFIELDS'"
     else
       TARGETCOVFILE="${OUTFILEROOT}.amplicon.cov.xls"
+      TARGETCOVOPTS="-C '$TARGETCOVFILE' $DEPTH -T AmpliSeq -A '$XTRAFIELDS'"
     fi
-    COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS $AMPCOVOPTS '$BAMFILE' '$ANNOBED' > '$TARGETCOVFILE'"
   fi
-  if [ $TRACK -eq 1 ]; then
+  DOSORT=1
+elif [ $CONTIGS -ne 0 -a -z "$BEDFILE" ];then
+  # -c option with no targets provided
+  TARGETCOVFILE="${OUTFILEROOT}.ctg.cov.xls"
+  TARGETCOVOPTS="-C '$TARGETCOVFILE' -T trgreads -D ''"
+fi
+
+if [ $TRACK -eq 1 ]; then
+  if [ -n "$BASECOVOPTS" ]; then
+    if [ -n "$TARGETCOVOPTS" ]; then
+      echo "(`date`) Creating base coverage files and analyzing $TARGETTYPE coverage..." >&2
+    else
+      echo "(`date`) Creating base coverage files..." >&2
+    fi
+  elif [ -n "$TARGETCOVOPTS" ]; then
     echo "(`date`) Analyzing $TARGETTYPE coverage..." >&2
   fi
-  eval "$COVCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: $TARGETTYPE analysis failed." >&2
-    echo "\$ $COVCMD" >&2
-    exit 1;
-  elif [ $SHOWLOG -eq 1 ]; then
+ 
+fi
+
+SSTFILE="${OUTFILEROOT}.chr.reads.xls"
+SSTOPT="-S '$SSTFILE'"
+
+BBCMD="$BBCTOOLS create $FILTOPTS $ANNOBEDOPT $BASECOVOPTS $SSTOPT $TARGETCOVOPTS '$BAMFILE'"
+eval "$BBCMD" >&2
+if [ $? -ne 0 ]; then
+  echo -e "\nERROR: bbctools create failed." >&2
+  echo "\$ $BBCMD" >&2
+  exit 1;
+elif [ "$SHOWLOG" -eq 1 ]; then
+  if [ -n "$BASECOVOPTS" ]; then
+    echo "> $BBCFILE" >&2
+    echo "> $BCIFILE" >&2
+    echo "> $CBCFILE" >&2
+    echo "> $SSTFILE" >&2
+  fi
+  if [ -n "$TARGETCOVOPTS" ]; then
     echo "> $TARGETCOVFILE" >&2
   fi
-  if [ $TRGCOVDEPTH -eq 1 ]; then
-    if [ $TRACK -eq 1 ]; then
-      echo "(`date`) Adding base depth stats to $TARGETTYPE coverage summary..." >&2
-    fi
-    TMPFILE="${AUXFILEROOT}.tmp"
-    COVCMD="$RUNDIR/bbcTargetAddCovDepth.pl '$BBCFILE' '$TARGETCOVFILE' > '$TMPFILE'"
-    eval "$COVCMD" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nERROR: bbcTargetAddCovDepth.pl." >&2
-      echo "\$ $COVCMD" >&2
-      exit 1;
-    fi
-    mv "$TMPFILE" "$TARGETCOVFILE"
-  fi
+fi
 
-  if [ $SHOWLOG -eq 1 ]; then
+if [ $DOSORT -ne 0 ]; then
+  if [ $TRACK -eq 1 ]; then
     echo "(`date`) Sorting $TARGETTYPE coverage results to increasing read depth order..." >&2
   fi
   TMPFILE="${AUXFILEROOT}.sort.tmp"
@@ -526,7 +512,174 @@ elif [ -n "$ANNOBEDOPT" ]; then
   if [ $SHOWLOG -eq 1 ]; then
     echo "> $TARGETCOVFILE (sorted)" >&2
   fi
+fi
 
+########### Chromosome Coverage Analysis #########
+
+if [ $BASECOVERAGE -eq 1 ]; then
+  if [ $NOTARGETANAL -ne 0 ];then
+    echo "(`date`) Skipping generating contig coverage files..." >&2
+  elif [ $RNABED -eq 0 ];then
+    if [ $TRACK -eq 1 ]; then
+      echo "(`date`) Generating contig coverage files..." >&2
+    fi
+    TRGOPTS=""
+    FTITLES="chrom,start,end,fwd_basereads,rev_basereads"
+    if [ -n "$BEDFILE" -a $WGN_CONTIGS -eq 0 ]; then
+      FTITLES="$FTITLES,fwd_trg_basereads,rev_trg_basereads"
+    else
+      TRGOPTS="-t"
+    fi
+    CHRCOVFILE="${OUTFILEROOT}.chr.cov.xls"
+    COVCMD="$BBCTOOLS view -i $TRGOPTS -H $FTITLES '$BBCFILE' > '$CHRCOVFILE'"
+    eval "$COVCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: bbctools view failed." >&2
+      echo "\$ $COVCMD" >&2
+      exit 1;
+    elif [ $SHOWLOG -eq 1 ]; then
+      echo "> $CHRCOVFILE" >&2
+    fi
+    # add target annotation fields to whole reference histogram
+    if [ -n "$ANNOBEDOPT" -a $NOTARGETANAL -eq 0 ]; then
+      ANNOTRG="$ANNOBEDOPT -A 3"
+      FTITLES="$FTITLES,targets"
+    fi
+    WGNCOVFILE="${OUTFILEROOT}.wgn.cov.xls"
+    COVCMD="$BBCTOOLS view -i -N 200 $TRGOPTS $ANNOTRG -H $FTITLES '$BBCFILE' > '$WGNCOVFILE'"
+    eval "$COVCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: bbctools view failed." >&2
+      echo "\$ $COVCMD" >&2
+      exit 1;
+    elif [ $SHOWLOG -eq 1 ]; then
+      echo "> $WGNCOVFILE" >&2
+    fi
+    # take total reads per contig and add to the base cunts per target
+    TMPFILE="${AUXFILEROOT}.chrcov.tmp"
+    COVCMD="$RUNDIR/addContigReads.pl '$CHRCOVFILE' '$SSTFILE' > '$TMPFILE'"
+    eval "$COVCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nWARNING: addContigReads.pl failed - read counts not added to $CHRCOVFILE.\n" >&2
+    else
+      mv "$TMPFILE" "$CHRCOVFILE"
+    fi
+  fi
+fi
+
+########### Generate the Coverage Overview Plot #########
+
+if [ $BASECOVERAGE -eq 1 ]; then
+  if [ $NOTARGETANAL -ne 0 ];then
+    echo "(`date`) Skipping coverage overview analysis..." >&2
+  elif [ $RNABED -eq 0 ];then
+    if [ $TRACK -eq 1 ]; then
+      echo "(`date`) Calculating effective reference coverage overview plot..." >&2
+    fi
+    COVOVR_XLS="${OUTFILEROOT}.covoverview.xls"
+    COVCMD="$BBCTOOLS view $BEDOPT -N 600 -pst -H contigs,reads '$BBCFILE' > '$COVOVR_XLS'"
+    eval "$COVCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: bbctools view failed." >&2
+      echo "\$ $COVCMD" >&2
+      exit 1;
+    elif [ $SHOWLOG -eq 1 ]; then
+      echo "> $COVOVR_XLS" >&2
+    fi
+    COVOVR_PNG="${OUTFILEROOT}.covoverview.png"
+    PLOTCMD="R --no-save --slave --vanilla --args '$COVOVR_XLS' '$COVOVR_PNG' < $RUNDIR/plot_overview.R"
+    eval "$PLOTCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: plot_overview.R failed." >&2
+      PLOTERROR=1
+    elif [ $SHOWLOG -eq 1 ]; then
+      echo "> $COVOVR_PNG" >&2
+    fi
+  fi
+fi
+
+########### Sample Tracking Coverage Analysis #########
+
+if [ -n "$TRACKINGBED" ]; then
+  if [ $TRACK -eq 1 ]; then
+    echo "(`date`) Analyzing sample tracking reads..." >&2
+  fi
+  # Assume sampleID tracking must be for AmpliSeq type analysis
+  TRACKING_READS=`$BBCTOOLS create -R "$TRACKINGBED" -C - -T amplicon -P 30 -E 2 -D "" "$BAMFILE" | awk 'NR>1 {c+=$7} END {print c}'`
+fi
+
+########### Basic Coverage Statistics and Depth of Coverage ###########
+
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Analyzing depth of coverage..." >&2
+fi
+
+read MAPPED_READS TARGET_READS <<< `awk 'NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
+echo -e "Number of mapped reads:         $MAPPED_READS" >> "$STATSFILE"
+
+if [ -n "$BEDOPT" ]; then
+  PC_TARGET_READS=`echo "$TARGET_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+# echo "Number of reads on target:      $TARGET_READS" >> "$STATSFILE"
+  echo "Percent reads on target:        $PC_TARGET_READS%" >> "$STATSFILE"
+fi
+if [ -n "$TRACKINGBED" ]; then
+# echo "Number of tracking reads:       $TRACKING_READS" >> "$STATSFILE"
+  PC_TRACK_READS=`echo "$TRACKING_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+  echo "Percent sample tracking reads:  $PC_TRACK_READS%" >> "$STATSFILE"
+fi
+echo "" >> "$STATSFILE"
+
+if [ $CONTIGS -ne 0 ];then
+  # AMPOPT to distinuish RNA-Seq
+  STATCMD="$RUNDIR/targetReadStats.pl -c $AMPOPT -M $MAPPED_READS '$SSTFILE'"
+elif [ $AMPLICONS -ne 0 ]; then
+  STATCMD="$RUNDIR/targetReadStats.pl $AMPOPT -M $MAPPED_READS '$TARGETCOVFILE'"
+else
+  STATCMD="$RUNDIR/targetReadStats.pl -b -P $PC_TARGET_READS '$TARGETCOVFILE'"
+fi
+eval "$STATCMD >> '$STATSFILE'" >&2
+if [ $? -ne 0 ]; then
+  echo -e "\nERROR: targetReadStats.pl failed." >&2
+  echo "\$ $STATCMD >> '$STATSFILE'" >&2
+  exit 1;
+fi
+
+########### Base depth of coverage and summary report ###########
+
+if [ $BASECOVERAGE -eq 1 ]; then
+  echo "" >> "$STATSFILE"
+  # new command needs lack of BED file to indicate genome coverage
+  if [ $CONTIGS -eq 0 ];then
+    TBEDOPT=$BEDOPT
+  fi
+  DOCFILE="${OUTFILEROOT}.base.cov.xls"
+  DOCCMD="$BBCTOOLS report -g $TBEDOPT -C '$DOCFILE' '$BBCFILE' >> '$STATSFILE'"
+  eval "$DOCCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: bbctools view failed." >&2
+    echo "\$ $DOCCMD" >&2
+    exit 1;
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> $DOCFILE" >&2
+  fi
+fi
+
+########### AmpliSeq option for end-to-end reads ###########
+
+if [ $AMPE2EREADS -eq 1 -a $CONTIGS -eq 0 ]; then
+  # for RNA AmpliSeq this is a bonus stat added (only) to summary file in 5.2
+  if [ $RNABED -ne 0 ];then
+    echo "" >> "$STATSFILE"
+  fi
+  pce2erds=`awk 'NR>1 {e2e+=$8+$9;tr+=$10} END {if(tr>0){printf "%.2f",100*e2e/tr}else{print "0.00"}}' $TARGETCOVFILE`
+  echo "Percent end-to-end reads:          ${pce2erds}%" >> "$STATSFILE"
+fi
+
+######### Create static target representation plots and initial chart view #########
+
+if [ $NOTARGETANAL -ne 0 ]; then
+  echo "(`date`) Skipping fine coverage analysis..." >&2
+elif [ -n "$ANNOBEDOPT" ]; then
   if [ $TRACK -eq 1 ]; then
     echo "(`date`) Generating start-up $TARGETTYPE coverage chart data..." >&2
   fi
@@ -597,139 +750,6 @@ elif [ -n "$ANNOBEDOPT" ]; then
       PLOTERROR=1
     elif [ $SHOWLOG -eq 1 ]; then
       echo "> $REPOVR_PNG" >&2
-    fi
-  fi
-fi
-
-########### Depth of Read Coverage Analysis #########
-
-if [ $NOTARGETANAL -ne 0 ]; then
-  echo "(`date`) Skipping analysis of depth of $TARGETTYPE coverage..." >&2
-elif [ $AMPLICONS -ne 0 -o $TRGCOVBYBASES -eq 1 ]; then
-  if [ $TRACK -eq 1 ]; then
-    echo "(`date`) Analyzing depth of $TARGETTYPE coverage..." >&2
-  fi
-  TRGOPT=''
-  if [ $CONTIGS -ne 0 ]; then
-    TRGOPT='-c'
-  fi
-  if [ $AMPLICONS -ne 0 ]; then
-    COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl $AMPOPT $TRGOPT -M $MAPPED_READS '$TARGETCOVFILE'"
-  else
-    if [ "$PADVAL" -gt 0 -a -n "$ANNOBED" ]; then
-      # use ANNOBED to get on-target reads for Target Coverage (since padded targets not used here)
-      TREADS=`samtools view -c $SAMVIEWOPT -L "$ANNOBED" "$BAMFILE"`
-      PCTREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
-    fi
-    COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -b $TRGOPT -P $PCTREADS '$TARGETCOVFILE'"
-  fi
-  eval "$COVERAGE_ANALYSIS >> '$STATSFILE'" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: targetReadStats.pl failed." >&2
-    echo "\$ $COVERAGE_ANALYSIS >> '$STATSFILE'" >&2
-    exit 1;
-  fi
-  if [ $BASECOVERAGE -eq 1 ]; then
-    echo "" >> "$STATSFILE"
-  fi
-fi
-
-########### Depth of Base Coverage Analysis #########
-
-if [ $BASECOVERAGE -eq 1 ]; then
-
-if [ $TRACK -eq 1 ]; then
-  echo "(`date`) Analyzing depth of base coverage..." >&2
-fi
-DOCFILE="${OUTFILEROOT}.base.cov.xls"
-TRGOPTS="-g"
-if [ -n "$BEDFILE" -a $CONTIGS -eq 0 ]; then
-  trgsize=`awk -F \$'\t' 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
-  basereads=`cat $BASEREADS`
-  TRGOPTS="-C $basereads -T $trgsize"
-fi
-COVERAGE_ANALYSIS="$RUNDIR/bbcStats.pl $TRGOPTS -D '$DOCFILE' '$BBCFILE'"
-eval "$COVERAGE_ANALYSIS >> '$STATSFILE'" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: bbcStats.pl failed." >&2
-  echo "\$ $COVERAGE_ANALYSIS >> '$STATSFILE'" >&2
-  exit 1;
-elif [ $SHOWLOG -eq 1 ]; then
-  echo ">" $DOCFILE >&2
-fi
-
-########### AmpliSeq option for end-to-end reads ###########
-
-if [ $AMPE2EREADS -eq 1 ]; then
-  pce2erds=`awk -F \$'\t' 'NR>1 {e2e+=$8+$9;tr+=$10} END {if(tr>0){printf "%.2f",100*e2e/tr}else{print "0.00"}}' $TARGETCOVFILE`
-  echo "Percent end-to-end reads:          ${pce2erds}%" >> "$STATSFILE"
-fi
-
-########### Chromosome Coverage Analysis #########
-
-if [ $NOTARGETANAL -ne 0 ];then
-  echo "(`date`) Skipping generating reference coverage files..." >&2
-elif [ $RNABED -eq 0 ];then
-  if [ $TRACK -eq 1 ]; then
-    echo "(`date`) Generating reference coverage files..." >&2
-  fi
-  CBCFILE="${AUXFILEROOT}.cbc"
-  CHRCOVFILE="${OUTFILEROOT}.chr.cov.xls"
-  WGNCOVFILE="${OUTFILEROOT}.wgn.cov.xls"
-  TRGOPTS=""
-  if [ -n "$BEDFILE" -a $WGN_CONTIGS -eq 0 ]; then
-    TRGOPTS="-t"
-  fi
-  COVCMD="$RUNDIR/bbcCoarseCov.pl $TRGOPTS -O '$CBCFILE' -C '$CHRCOVFILE' -W '$WGNCOVFILE' '$BBCFILE'"
-  eval "$COVCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: bbcCourseCov.pl failed." >&2
-    echo "\$ $COVCMD" >&2
-    exit 1;
-  elif [ $SHOWLOG -eq 1 ]; then
-    echo "> $CBCFILE" >&2
-    echo "> $CHRCOVFILE" >&2
-    echo "> $WGNCOVFILE" >&2
-  fi
-  TMPFILE="${AUXFILEROOT}.chrcov.tmp"
-  COVCMD="$RUNDIR/addContigReads.pl $FILTOPTS -C '$CHRCOVFILE' '$BAMFILE' > '$TMPFILE'"
-  eval "$COVCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nWARNING: addContigReads.pl failed - tot_reads not added to $CHRCOVFILE.\n" >&2
-  else
-    mv "$TMPFILE" "$CHRCOVFILE"
-  fi
-  if [ $CONTIGS -ne 0 ];then
-    echo "" >> "$STATSFILE"
-    COVCMD="$RUNDIR/contigReadStats.pl '$CHRCOVFILE' >> '$STATSFILE'"
-    eval "$COVCMD" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nWARNING: contigReadStats.pl failed - contig coverage statistics not reported.\n" >&2
-    fi
-  fi
-fi
-
-fi;  # if BASECOVERAGE
-
-# gather contig stats that would usually come from base coverage analysis
-
-# ------------- Create Contig Coverage for no targets file -------------
-
-if [ $CONTIGS -ne 0 -a -z "$BEDFILE" ];then
-  if [ $TRACK -eq 1 ]; then
-    echo "(`date`) Generating contig coverage files..." >&2
-  fi
-  CTGCOVFILE="${OUTFILEROOT}.ctg.cov.xls"
-  COVCMD="$RUNDIR/addContigReads.pl $FILTOPTS -a '$BAMFILE' > '$CTGCOVFILE'"
-  eval "$COVCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nWARNING: addContigReads.pl failed - contig reads not created to $CTGCOVFILE.\n" >&2
-  else
-    echo "" >> "$STATSFILE"
-    COVCMD="$RUNDIR/contigReadStats.pl '$CTGCOVFILE' >> '$STATSFILE'"
-    eval "$COVCMD" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nWARNING: contigReadStats.pl failed - contig coverage statistics not reported.\n" >&2
     fi
   fi
 fi
@@ -910,7 +930,7 @@ if [ -n "$RESHTML" ]; then
     CBCFILE="$AUXFILEROOT.cbc"
     CHRCOVFILE="$FILESTEM.chr.cov.xls"
     WGNCOVFILE="$FILESTEM.wgn.cov.xls"
-    echo "<br/> <div id='ReferenceCoverageChart' $REFGEN $COLLAPSERCC bbcfile='$BBCFILE' cbcfile='$CBCFILE' chrcovfile='$CHRCOVFILE' wgncovfile='$WGNCOVFILE' class='center' style='width:800px;height:300px'></div>" >> "$RESHTML"
+    echo "<br/> <div id='ReferenceCoverageChart' $REFGEN $COLLAPSERCC bbcfile='$BBCFILE' annofile='$ANNOBED' chrcovfile='$CHRCOVFILE' wgncovfile='$WGNCOVFILE' class='center' style='width:800px;height:300px'></div>" >> "$RESHTML"
   fi
 
   echo "<br/> <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>" >> "$RESHTML"

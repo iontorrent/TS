@@ -1,25 +1,33 @@
 {% load static from staticfiles %}
-{%if report_status %}
+
+{% if report.status %}
 <div id="progress" class="alert alert-error alert-block">
-	<button type="button" class="close" data-dismiss="alert">&times;</button>
-	<h3>
-		{% if "Completed" in report_status %}
-			Report is finished.
-		{% else %}
-			This report is still being generated
-		{% endif %}
-	</h3>
-	<div id="analysis_started_content">
-		{% if "Completed" not in report_status %}<img src="{% static "resources/img/dna-loader-64.gif"%}">{% endif %} <span id="progress_message">{{report_status}}</span>
-	</div>
+    <button type="button" class="close" data-dismiss="alert">&times;</button>
+    <h3>
+    {% if "Completed" in report.status %}
+        The report is finished.
+    {% else %}
+        This report is still being generated.
+    {% endif %}
+    </h3>
+    <div id="analysis_started_content">
+    {% if "Completed" not in report.status %}
+        <img src="{% static "resources/img/dna-loader-64.gif" %}">
+    {% endif %}
+        <span id="progress_message">{{ report.status }}</span>
+    </div>
 </div>
+{% endif %}
+
+{% if do_page_refresh %}
 <script>
-  $(function(){
-      var refreshIntervalId = setInterval(function(){progress_load()}, 60000);
-      $(document).data('report_progress', refreshIntervalId);
-      $('#progress .close').click(function(){
-      	clearInterval(refreshIntervalId);
-      });
-  });
+    $(function(){
+        // Check the report status every minute
+        var refreshIntervalId = setInterval(function(){progress_load()}, 60000);
+        $(document).data('report_progress', refreshIntervalId);
+        $('#progress .close').click(function(){
+            clearInterval(refreshIntervalId);
+        });
+    });
 </script>
 {% endif %}

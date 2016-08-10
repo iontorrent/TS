@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include "LinuxCompat.h"
-#include <inttypes.h>
+#include <cinttypes>
 
 
 Mask::Mask ( int _w, int _h )
@@ -156,6 +156,15 @@ void Mask::Set ( int x, int y, MaskType type )
   }
 }
 
+// adds specified type flag to all wells in the mask
+void Mask::SetAll(MaskType type )
+{
+  int i;
+  for ( i=0;i<w*h;i++ ) {
+     mask[i] |= type; 
+    }
+}
+
 // sets the mask to be a barcode id
 void Mask::SetBarcodeId ( int x, int y, uint16_t barcodeId )
 {
@@ -250,7 +259,7 @@ int Mask::Export ( char *fileName, MaskType these ) const
 
     // Write out the mask
     for ( i = 0; i < ( w*h ); i++ ) {
-      fprintf ( fp, "%hu", ( ( mask[i] & these ) ? 1:0 ) );
+      fprintf ( fp, "%d", ( ( mask[i] & these ) ? 1:0 ) );
       if ( ( i+1 ) % w == 0 ) {
         fprintf ( fp, "\n" );
       } else {
@@ -299,7 +308,7 @@ int Mask::Export ( char *fileName, MaskType these, Region region ) const
     for ( y = region.row; y < ( region.row + region.h ); y++ ) {
       for ( x = region.col; x < ( region.col + region.w ); x++ ) {
         //disp = mask[x + ( y * this->w ) ];
-        fprintf ( fp, "%hu", ( ( mask[x + ( y * this->w ) ] & these ) ? 1:0 ) );
+        fprintf ( fp, "%d", ( ( mask[x + ( y * this->w ) ] & these ) ? 1:0 ) );
         if ( x+1 < region.col+region.w )
           fprintf ( fp, "," );
 

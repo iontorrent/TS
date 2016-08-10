@@ -30,7 +30,9 @@
 #include "CorrNoiseCorrector.h"
 #include "Image/Vecs.h"
 #include "Image/AdvCompr.h"
+#include "Image/RowSumCorrector.h"
 #include "PairPixelXtalkCorrector.h"
+#include "ChipIdDecoder.h"
 
 static pthread_t thr[200];
 static uint32_t numDirs=0;
@@ -100,6 +102,10 @@ void usage ( int cropx, int cropy, int cropw, int croph )
   fprintf ( stdout, "   -J apply row correction\n" );
   fprintf ( stdout, "   -K apply col correction\n" );
   fprintf ( stdout, "   -L <corr> apply xtalk correction\n" );
+  fprintf ( stdout, "   -M <corr> apply xtalk correction 2\n" );
+  fprintf ( stdout, "   -N Gain correction\n" );
+  fprintf ( stdout, "   -O Gain correction from beadfind\n" );
+  fprintf ( stdout, "   -P row sum correction\n" );
   fprintf ( stdout, "\n" );
   fprintf ( stdout, "usage:\n" );
   fprintf ( stdout, "   Crop -s /results/analysis/PGM/testRun1\n" );
@@ -143,6 +149,11 @@ typedef struct{
 	  int applyColCorrection;
 	  float applyXtalkCorrection1;
 	  float applyXtalkCorrection2;
+	  int doGainCorrection;
+	  int doGainCorrection_bf;
+	  int doGainCorrection_bf_doneOnce;
+	  int doFluidCorr;
+	  char *applyThumbnailXtalkCorrection;
 } OptionsCls;
 
 void DoCrop(OptionsCls &options);
@@ -161,6 +172,7 @@ void InitOptionsCls(OptionsCls &options)
 	options.excludeMaskFile = const_cast<char*> ( "/opt/ion/config/exclusionMask_318.bin" );
 	options.expPath  = const_cast<char*> ( "." );
 	options.destPath = const_cast<char*> ( "./converted" );
+	options.applyThumbnailXtalkCorrection = const_cast<char*> ( "" );
 }
 
 OptionsCls options;
@@ -362,6 +374,25 @@ int main ( int argc, char *argv[] )
     	else
     		options.applyXtalkCorrection2 = 0.2;
     	break;
+    case 'O':
+    	options.doGainCorrection_bf = 1;
+    	break;
+    case 'P':
+    	options.doFluidCorr = 1;
+    	break;
+    case 'k':
+
+    	if(argcc+1 <argc && argv[argcc+1][0] != '-'){
+			argcc++;
+			options.applyThumbnailXtalkCorrection = argv[argcc];
+    	}
+    	else
+    	{
+			printf("Missing file name for apply thumbnail xtalk correction (-k)\n");
+			exit(-1);
+    	}
+    	fprintf(stdout, "Apply thumbnail xtalk correction %s\n", options.applyThumbnailXtalkCorrection);
+    	break;
 
     default:
 
@@ -483,6 +514,7 @@ void DoOverSample(OptionsCls &options, Image &img)
 void DoCrop(OptionsCls &options)
 {
 	  char name[MAX_PATH_LENGTH];
+	  char BaseName[MAX_PATH_LENGTH];
 	  char destName[MAX_PATH_LENGTH];
 	  int i;
 	  Image loader;
@@ -549,16 +581,18 @@ void DoCrop(OptionsCls &options)
   }
   while ( mode < maxMode ) {
     if ( mode == 1 ) {
-      sprintf ( name, "%s/acq_%04d.dat", options.expPath, i );
-      sprintf ( destName, "%s/acq_%04d.dat", options.destPath, i );
+        sprintf ( BaseName, "acq_%04d.dat",i);
+        sprintf ( name, "%s/%s", options.expPath, BaseName );
+        sprintf ( destName, "%s/%s", options.destPath, BaseName );
     } else if ( mode == 0 ) {
       if ( i >= nameListLen ){
         mode++;
         i=0;
         continue;
       }
-      sprintf ( name, "%s/%s", options.expPath, nameList[i] );
-      sprintf ( destName, "%s/%s", options.destPath, nameList[i] );
+      sprintf ( BaseName, "%s", nameList[i]);
+      sprintf ( name, "%s/%s", options.expPath, BaseName );
+      sprintf ( destName, "%s/%s", options.destPath, BaseName );
     } else
       break;
 
@@ -583,10 +617,16 @@ void DoCrop(OptionsCls &options)
 			xtalkCorrector.Correct(loader.raw, options.applyXtalkCorrection1);
       }
 
+      if (strlen(options.applyThumbnailXtalkCorrection)){
+			PairPixelXtalkCorrector xtalkCorrector;
+			xtalkCorrector.CorrectThumbnailFromFile(loader.raw, options.applyThumbnailXtalkCorrection);
+      }
+
+
       if(options.applyRowCorrection){
     	  printf("Applying row noise correction\n");
      		CorrNoiseCorrector rnc;
-      		rnc.CorrectCorrNoise(loader.raw,options.applyColCorrection?3:1,true,true,false );
+     		rnc.CorrectCorrNoise(loader.raw,options.applyColCorrection?3:1,(loader.raw->cols==1200 && loader.raw->rows==800)?true:false,true,false );
       }
       else if(options.applyColCorrection){
     	    printf("Applying column noise correction\n");
@@ -598,6 +638,57 @@ void DoCrop(OptionsCls &options)
 			PairPixelXtalkCorrector xtalkCorrector;
 			xtalkCorrector.Correct(loader.raw, options.applyXtalkCorrection2);
       }
+      if(options.doFluidCorr){
+    	  char tn_name[2048];
+    	  sprintf(tn_name,"%s/../thumbnail/",options.expPath);
+    	  GenerateRowCorrFile(tn_name,BaseName);
+    	  CorrectRowAverages(options.expPath,BaseName,&loader);
+      }
+		if (options.doGainCorrection_bf) {
+			if (!options.doGainCorrection_bf_doneOnce) {
+				options.doGainCorrection_bf_doneOnce = 1;
+				// figure out gain
+				ImageTransformer::CalculateGainCorrectionFromBeadfindFlow(options.expPath,false);
+			}
+			// apply gain
+			ImageTransformer::GainCorrectImage(loader.raw);
+		}
+		if (options.doGainCorrection) {
+			options.doGainCorrection = 0;
+			static const char *gainName = "Gain.lsr";
+			// compute the gain image first...
+			char tstName3[1024];
+			char *last_lptr = NULL;
+			strcpy(tstName3, name);
+			char *lptr = (char *) tstName3;
+			while ((lptr = strstr(lptr, "/"))) {
+				if (lptr)
+					lptr++;
+				last_lptr = lptr;
+			}
+			if (last_lptr)
+				strcpy(last_lptr, gainName);
+			else
+				strcpy(tstName3, gainName);
+			printf("Loading gain mask from %s\n", tstName3);
+			float *gainPtr = AdvCompr::ReadGain(0, raw->cols, raw->rows, tstName3);
+			if(!options.pfc){
+				// apply it to the incoming file!
+				int frameStride=raw->rows*raw->cols;
+				for(int idx=0;idx<frameStride;idx++){
+					for(int frame=raw->frames-1;frame>=0;frame--){
+						raw->image[idx+frame*frameStride] = 12384/*raw->image[idx]*/ + ((raw->image[idx+frame*frameStride]-raw->image[idx])*(gainPtr[idx]));
+					}
+				}
+#if 0
+				// debug..  replace the last frame with the gain
+				for(int idx=0;idx<frameStride;idx++){
+					raw->image[idx+(raw->frames-1)*frameStride] = (8192.0f*gainPtr[idx]);
+				}
+#endif
+			}
+		}
+
 
       if(options.doColumnCorrectionTn)
 	  {
@@ -872,7 +963,7 @@ void *worker(void *arg)
 		    		LocalOptions.expPath=tmpExpPath;
 //		    		LocalOptions.destPath=tmpDestPath;
 
-		    		printf("worker %ld croping %s to %s\n",threadNum,tmpExpPath,tmpDestPath);
+		    		printf("worker %" PRIu64 " croping %s to %s\n",threadNum,tmpExpPath,tmpDestPath);
 		    		DoOverSampleSplitSubRegion(LocalOptions,entry->d_name);
 		    	}
 	    		localDirNum++;

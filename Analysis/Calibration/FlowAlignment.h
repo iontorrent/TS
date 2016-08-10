@@ -32,7 +32,7 @@ bool IsInDelAlignSymbol(char symbol);
 
 // ----------------------------------------------------------
 
-void ReverseComplementInPlace (std::string& sequence);
+//void ReverseComplementInPlace (std::string& sequence);
 
 void RetrieveBaseAlignment(
     // Inputs:
@@ -60,6 +60,40 @@ bool PerformFlowAlignment(
     std::vector<int>&              qseq,
     std::vector<int>&              tseq,
     std::vector<int>&              aln_flow_index,
-    std::vector<char>&             aln);
+    std::vector<char>&             aln,
+    bool                           debug_output=false);
+
+// same function signature
+bool NullFlowAlignment(
+    // Inputs:
+    const std::string&             tseq_bases,
+    const std::string&             qseq_bases,
+    const std::string&             main_flow_order,
+    int                       first_useful_flow,
+
+    // Outputs:
+    std::vector<char>&             flowOrder,
+    std::vector<int>&              qseq,
+    std::vector<int>&              tseq,
+    std::vector<int>&              aln_flow_index,
+    std::vector<char>&             aln,
+    bool                           debug_output=false);
+
+// lightweight, fast alignment
+bool LightFlowAlignment(
+    // Inputs:
+    const std::string&             t_char,
+    const std::string&             q_char,
+    const std::string&             main_flow_order,
+    bool match_nonzero, // enforce phase identity
+    float strange_gap,   // fill in gaps between impossible segments with too many errors  as they are likely bad alignments
+    // Outputs: all same length
+    std::vector<char>&             flowOrder,
+    std::vector<int>&              qseq,
+    std::vector<int>&              tseq,
+    std::vector<int>&              aln_flow_index,
+    std::vector<char>&             aln,
+    // synthetic reference for use in simulation
+    std::string &                  synthetic_reference);
 
 #endif // FLOWALIGNMENT_H

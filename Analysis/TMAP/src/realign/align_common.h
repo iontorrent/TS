@@ -1,7 +1,12 @@
 /* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#ifndef ALIGN_COMMON_H
-#define ALIGN_COMMON_H
+//////////////////////////////////////////////////////////////////////////////
+// Derived from QSimScan project, released under MIT license
+// (https://github.com/abadona/qsimscan)
+//////////////////////////////////////////////////////////////////////////////
+
+#ifndef __align_common_h__
+#define __align_common_h__
 
 #include "align_batch.h"
 
@@ -34,4 +39,4 @@ inline void reverse_inplace (T* pb, int cnt)
 }
 
 
-#endif // ALIGN_COMMON_H
+#endif // __align_common_h__

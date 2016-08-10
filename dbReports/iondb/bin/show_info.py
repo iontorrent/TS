@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved 
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 '''Shows Data Management information for a Report'''
 import sys
 import argparse
@@ -11,14 +11,14 @@ from iondb.rundb.data import dmactions_types as dmtypes
 
 def main(report_name):
     result = models.Results.objects.get(resultsName=report_name)
-    
+
     print ("")
     print("Report Dir: %s" % result.get_report_dir())
     print("      Date: %s" % result.timeStamp)
     print ("")
     print("SigProcDir: %s " % result.experiment.expDir)
     print("      Date: %s" % result.experiment.date)
-    
+
     print ("")
     for dmtype in dmtypes.FILESET_TYPES:
         dmfs = result.get_filestat(dmtype)
@@ -44,11 +44,11 @@ if __name__ == '__main__':
 Shows Data Management information for a Report
 ''')
     parser.add_argument('--report',
-                        help = 'Name of Report (not the report directory, not the experiment name)')
-    
+                        help='Name of Report (not the report directory, not the experiment name)')
+
     args = parser.parse_args()
     if args.report == None or len(sys.argv) == 1:
         parser.print_usage()
         sys.exit(0)
-        
+
     sys.exit(main(args.report))

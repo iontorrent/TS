@@ -1,3 +1,6 @@
+#!/bin/bash
+# Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
+
 #Make sure the ion packages are in /root/pkgs
 
 set -x

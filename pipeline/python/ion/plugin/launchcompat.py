@@ -15,20 +15,22 @@ from ion.plugin.constants import *
 
 logger = logging.getLogger(__name__)
 
+
 class IonLaunchPlugin(IonPlugin):
+
     """ Compatability with pre-3.0 launch.sh plugins
         Allows new setup and configuration definitions, but calls launch.sh
     """
 
-    ## Internal state - these are class attributes, as script is read
-    ## to populate VERSION and AUTORUNDISABLE in the class
-    _content={}
-    _pluginsettings={}
-    _launchsh=None
+    # Internal state - these are class attributes, as script is read
+    # to populate VERSION and AUTORUNDISABLE in the class
+    _content = {}
+    _pluginsettings = {}
+    _launchsh = None
 
-    ## Defaults for Launch Plugins
+    # Defaults for Launch Plugins
     # Can be overridden with pluginsettings.json file
-    _runtypes = [ RunType.FULLCHIP, RunType.THUMB ]
+    _runtypes = [RunType.FULLCHIP, RunType.THUMB]
     _features = []
     _runlevels = []
     _depends = []
@@ -66,7 +68,7 @@ class IonLaunchPlugin(IonPlugin):
         # Leading values ignored, usually '#VERSION' or '# VERSION'
         # Must be all-caps VERSION
         # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
-        VERSION=re.compile(r'VERSION\s*=\s*\"?\'?([\d\.\w\-\_]+)\"?\'?')
+        VERSION = re.compile(r'VERSION\s*=\s*\"?\'?([\d\.\w\-\_]+)\"?\'?')
         for line in cls.getContent():
             m = VERSION.search(line)
             if m:
@@ -83,16 +85,6 @@ class IonLaunchPlugin(IonPlugin):
         return "0"
 
     @classmethod
-    def allow_autorun(cls):
-        """ if the string AUTORUNDISABLE is in the lunch script
-        don't allow the autorun settings to be changed on the config tab
-        """
-        for line in cls.getContent():
-            if line.startswith("#AUTORUNDISABLE"):
-                return False
-        return True
-
-    @classmethod
     def major_block(cls):
         """ if the string AUTORUNDISABLE is in the lunch script
         don't allow the autorun settings to be changed on the config tab
@@ -102,7 +94,6 @@ class IonLaunchPlugin(IonPlugin):
                 return True
         return False
 
-
     @classmethod
     def runtypes(cls):
         pluginsettings = cls.pluginsettings()
@@ -111,11 +102,10 @@ class IonLaunchPlugin(IonPlugin):
 
         ret = []
         for k in pluginsettings.get('runtype', pluginsettings.get('runtypes', [])):
-            c = k # lookupEnum(RunType, k)
+            c = k  # lookupEnum(RunType, k)
             if c:
                 ret.append(c)
         return ret
-
 
     @classmethod
     def features(cls):
@@ -125,11 +115,10 @@ class IonLaunchPlugin(IonPlugin):
 
         ret = []
         for k in pluginsettings.get('feature', pluginsettings.get('features', [])):
-            c = k # lookupEnum(Feature, k)
+            c = k  # lookupEnum(Feature, k)
             if c:
                 ret.append(c)
         return ret
-
 
     @classmethod
     def runlevels(cls):
@@ -139,7 +128,7 @@ class IonLaunchPlugin(IonPlugin):
 
         ret = []
         for k in pluginsettings.get('runlevel', pluginsettings.get('runlevels', [])):
-            c = k # lookupEnum(RunLevel, k)
+            c = k  # lookupEnum(RunLevel, k)
             if c:
                 ret.append(c)
         return ret
@@ -152,7 +141,7 @@ class IonLaunchPlugin(IonPlugin):
 
         ret = []
         for k in pluginsettings.get('depend', pluginsettings.get('depends', [])):
-            c = k # lookupEnum(Feature, k)
+            c = k  # lookupEnum(Feature, k)
             if c:
                 ret.append(c)
         return ret
@@ -170,12 +159,13 @@ class IonLaunchPlugin(IonPlugin):
         self.exit_status = ret
         return (ret == 0)
 
-def get_launch_class(pluginname, launch_script):
+
+def get_launch_class(pluginname, launch_script, add_to_store=True):
     # Build our name from user provided pluginname
     # Our class name
     if pluginname is not None:
-        clsname = str(pluginname) ## de-unicodify
-        m = re.match('^'+tokenize.Name+'$',clsname)
+        clsname = str(pluginname)  # de-unicodify
+        m = re.match('^'+tokenize.Name+'$', clsname)
         if not m:
             logger.warn("Plugin Name: '%s' is not a valid python identifier", pluginname)
             clsname = None
@@ -189,5 +179,4 @@ def get_launch_class(pluginname, launch_script):
         clsname = "P" + md5(launch_script).hexdigest()
         logger.warn("Using '%s' for plugin '%s'", clsname, pluginname)
 
-    return type(clsname, (IonLaunchPlugin,), {'name': pluginname, '_launchsh': launch_script, '__doc__': ''})
-
+    return type(clsname, (IonLaunchPlugin,), {'name': pluginname, '_launchsh': launch_script, '__doc__': '', 'add_to_store': add_to_store})

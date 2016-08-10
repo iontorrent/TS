@@ -21,6 +21,25 @@ endif()
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
 
+FIND_PACKAGE(PythonInterp)
+# Determine python site-packages or dist-packages directory
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
+        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')"
+        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
+        OUTPUT_VARIABLE PYTHON_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/opt/ion" CACHE PATH "Ion Install Prefix")
 
@@ -33,13 +52,68 @@ configure_file (
 )
 
 include(../buildTools/cmake/CMakeLists.dependencies.txt)
-include_directories("/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl/include/")
-include_directories("${PROJECT_SOURCE_DIR}/Replay")
+
+message(STATUS "BUILD with ION_USE_CUDA ${ION_USE_CUDA}")
+message(STATUS "BUILD with ION_USE_SYSTEM_CUDA ${ION_USE_SYSTEM_CUDA}")
+
+if(ION_USE_CUDA)
+
+    if(NOT ION_USE_SYSTEM_CUDA)
+
+        message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
+
+        #install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib
+        #        DESTINATION /usr/local/cuda)
+
+        #install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64
+        #        DESTINATION /usr/local/cuda)
+
+        install(FILES ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.7.5
+                      ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.7.5.18
+                DESTINATION
+                      /usr/local/cuda/lib64)
+
+        #install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc
+        #        DESTINATION /usr/local/cuda/bin)
+
+    endif()
+
+
+    # from https://pypi.python.org/pypi/nvidia-ml-py/
+    install(FILES pynvml/nvidia_smi.py             DESTINATION ${PYTHON_SITE_PACKAGES})
+    install(FILES pynvml/nvidia_smi.pyc            DESTINATION ${PYTHON_SITE_PACKAGES})
+    install(FILES pynvml/pynvml.py                 DESTINATION ${PYTHON_SITE_PACKAGES})
+    install(FILES pynvml/pynvml.pyc                DESTINATION ${PYTHON_SITE_PACKAGES})
+    install(PROGRAMS pynvml/pynvml_test.py         DESTINATION /usr/local/bin)
+    install(PROGRAMS pynvml/nvidia_smi_test.py     DESTINATION /usr/local/bin)
+
+    CUDA_ADD_EXECUTABLE(xtalk_sim
+                        xtalk_sim/xtalk_sim.cpp
+                        xtalk_sim/DiffEqModel_Init.cpp
+                        xtalk_sim/DiffEqModel.cpp
+                        xtalk_sim/DelsqCUDA.cu
+                        xtalk_sim/utils.cpp
+                        xtalk_sim/xtalk_sim.cpp
+                        xtalk_sim/sim_incorp_flux.cpp
+                        xtalk_sim/WorkerInfoQueue.cpp)
+
+    target_link_libraries(xtalk_sim pthread)
+
+    add_dependencies(xtalk_sim     cuda_toolkit)
+
+    install(PROGRAMS ${PROJECT_BINARY_DIR}/xtalk_sim     DESTINATION gpu)
+
+endif()
+
+add_custom_target(compileall ALL
+    COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/pynvml/"
+)
+
+#include_directories("${PROJECT_SOURCE_DIR}/Replay")
 include_directories("${PROJECT_SOURCE_DIR}/AnalysisOrg")
 include_directories("${PROJECT_SOURCE_DIR}/AnalysisOrg/justBeadFind")
 include_directories("${PROJECT_SOURCE_DIR}/AnalysisOrg/IO")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel")
-include_directories("${PROJECT_SOURCE_DIR}/SynchDat")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/MathModel")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Bookkeeping")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/LocalTrace")
@@ -47,12 +121,14 @@ include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Fitters")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Fitters/Complex")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Writers")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA/HostDataWrapper")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA/HosteDeviceDataCubes")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA/KernelIncludes")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Sampling")
 include_directories("${PROJECT_SOURCE_DIR}/BaseCaller")
 include_directories("${PROJECT_SOURCE_DIR}/Calibration")
 include_directories("${PROJECT_SOURCE_DIR}/Separator")
-include_directories("${PROJECT_SOURCE_DIR}/NormWells")
+#include_directories("${PROJECT_SOURCE_DIR}/NormWells")
 include_directories("${PROJECT_SOURCE_DIR}/Util")
 #this has enough files now to justify own directory
 include_directories("${PROJECT_SOURCE_DIR}/Image")
@@ -63,22 +139,24 @@ include_directories("${PROJECT_SOURCE_DIR}/Wells")
 if(ION_USE_CUDA)
 
     CUDA_COMPILE(CUDA_TEMP_FILES 
+      BkgModel/CUDA/HosteDeviceDataCubes/MemoryManager.cu
+      BkgModel/CUDA/HosteDeviceDataCubes/ResourcePool.cu
+      BkgModel/CUDA/HosteDeviceDataCubes/LayoutTranslator.cu  
+      BkgModel/CUDA/HosteDeviceDataCubes/SampleHistory.cu
+      BkgModel/CUDA/HostDataWrapper/JobWrapper.cu 
+      BkgModel/CUDA/BkgGpuPipeline.cu
       BkgModel/CUDA/SingleFitStream.cu
+      BkgModel/CUDA/StreamManager.cu 
       BkgModel/CUDA/MultiFitStream.cu
       BkgModel/CUDA/StreamingKernels.cu
-      BkgModel/CUDA/JobWrapper.cu 
-      BkgModel/CUDA/BkgGpuPipeline.cu
-      BkgModel/CUDA/MemoryManager.cu
-      BkgModel/CUDA/ResourcePool.cu
-      BkgModel/CUDA/StreamManager.cu 
-      BkgModel/CUDA/LayoutTranslator.cu 
       BkgModel/CUDA/MasterKernel.cu      
-      BkgModel/CUDA/SampleHistory.cu
       SHARED
     )
 
     SET( CUDA_CPP_FILES
-      BkgModel/CUDA/ClonalFilterWrapper.cpp
+      BkgModel/CUDA/HosteDeviceDataCubes/PerBeadDataCubes.cpp
+      BkgModel/CUDA/HostDataWrapper/ClonalFilterWrapper.cpp
+      BkgModel/CUDA/KernelIncludes/DeviceParamDefines.cpp
     )
 
 endif()
@@ -100,6 +178,7 @@ add_library(ion-analysis
     Image/LSRowImageProcessor.cpp
     Image/ComparatorNoiseCorrector.cpp
     Image/CorrNoiseCorrector.cpp
+    Image/RowSumCorrector.cpp
     Image/IonImageSem.cpp
     Image/AdvCompr.cpp
     Image/PCACompression.cpp
@@ -116,7 +195,6 @@ add_library(ion-analysis
     Mask/ComplexMask.cpp
     
     Separator/DualGaussMixModel.cpp
-    Separator/Separator.cpp
     Separator/DifferentialSeparator.cpp
     Separator/NNAvg.cpp
     Separator/ChipReduction.cpp
@@ -202,6 +280,7 @@ add_library(ion-analysis
     BkgModel/MathModel/MultiFlowModel.cpp
 
     BkgModel/Bookkeeping/BeadParams.cpp
+    BkgModel/Bookkeeping/BarcodeTracker.cpp
     BkgModel/Bookkeeping/BeadTracker.cpp
     BkgModel/Bookkeeping/RegionParamDefault.cpp
     BkgModel/Bookkeeping/RegionParams.cpp
@@ -223,7 +302,7 @@ add_library(ion-analysis
 
     BkgModel/LocalTrace/BkgTrace.cpp
     BkgModel/LocalTrace/EmptyTrace.cpp
-    BkgModel/LocalTrace/TraceClassifier.cpp
+    #BkgModel/LocalTrace/TraceClassifier.cpp
     BkgModel/LocalTrace/EmptyTraceTracker.cpp
 
     BkgModel/Fitters/Complex/FitControl.cpp
@@ -241,6 +320,7 @@ add_library(ion-analysis
     BkgModel/Fitters/DarkMatter.cpp
     BkgModel/Fitters/TraceCorrector.cpp
     BkgModel/Fitters/ExpTailFitter.cpp
+    BkgModel/Fitters/exptaildecayfit.cpp
 
     BkgModel/Writers/DebugWriter.cpp
     BkgModel/Writers/GlobalWriter.cpp
@@ -255,35 +335,12 @@ add_library(ion-analysis
 	
     BkgModel/Sampling/FitDensity.cpp
     BkgModel/Sampling/SampleClonality.cpp
-    NormWells/NoKeyCall.cpp
 
-    SynchDat/BitHandler.cpp
-    SynchDat/HuffmanEncode.cpp
-    SynchDat/SynchDatSerialize.cpp
-    SynchDat/VencoLossless.cpp
-    SynchDat/DeltaComp.cpp
-    SynchDat/DeltaCompFst.cpp
-    SynchDat/DeltaCompFstSmX.cpp
-    SynchDat/SvdDatCompress.cpp
-    SynchDat/DelicatoCompression.cpp
-    SynchDat/compression.cpp
-    SynchDat/matrixRounding.cpp
-    SynchDat/unpackMatrix.cpp
-    SynchDat/packMatrix.cpp
-#    SynchDat/SvdDatCompressPlus.cpp 
-
-    #Replay/FileBkgReplay.cpp
-    Replay/H5Replay.cpp
-    #Replay/PinnedInFlowReplay.cpp
-    #Replay/EmptyTraceReplay.cpp
-    #Replay/RegionTrackerReplay.cpp
-    #Replay/BkgModelReplay.cpp
 
     crop/Acq.cpp
     crop/DCT0Finder.cpp
     crop/PreviousFrameSubtract.cpp 
 
-    SFFWrapper.cpp
     
     SamUtils/types/Cigar.cpp
     SamUtils/types/Qual.cpp
@@ -297,17 +354,13 @@ add_library(ion-analysis
     ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
     ${CUDA_TEMP_FILES}
 )
-add_dependencies(ion-analysis IONVERSION samtools bamtools armadillo_proj hdf5_proj kmeans_proj)
+add_dependencies(ion-analysis IONVERSION samtools bamtools armadillo_proj hdf5_proj boost_proj)
 if(ION_USE_CUDA)
   if(NOT ION_USE_SYSTEM_CUDA)
     add_dependencies(ion-analysis ${cuda_toolkit})
     # Changes J30
     #add_dependencies(ion-analysis ${cuda_toolkit} armadillo_proj)
   endif()
-endif()
-
-if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
-    set(LUCID_EXTRA_LIB lapack_atlas)
 endif()
 
 # armadillo doesn't provide those libs?
@@ -317,7 +370,7 @@ else()
     set(EXTRA_LIBS blas lapack)
 endif()
 
-target_link_libraries(ion-analysis ${ION_HDF5_LIBS} dl ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} file-io z)
+target_link_libraries(ion-analysis ${ION_HDF5_LIBS} dl ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${EXTRA_LIBS} file-io z)
 
 set_target_properties(ion-analysis PROPERTIES
     VERSION   "${ION_VERSION_MAJOR}.${ION_VERSION_MINOR}.${ION_VERSION_RELEASE}.${ION_VERSION_BUILDNUM}"
@@ -393,6 +446,7 @@ endif()
 #add_dependencies(DfcComprExample IONVERSION)
 # If defined while running cmake look for mkl
 # e.g. -DMKL_INSTALL_PATH=/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl
+# include_directories("/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl/include/")
 #if (DEFINED MKL_INSTALL_PATH)
 #  message("Compiling DfcComprExample with mkl")
 #  target_link_libraries(DfcComprExample ion-analysis ${MKL_LINK_LIBS} -lpthread -lm  dl z)
@@ -442,20 +496,28 @@ add_dependencies(CompareBf IONVERSION)
 target_link_libraries(CompareBf ion-analysis pthread dl)
 
 ## Standalone BaseCaller
-add_executable(BaseCaller 
+set(BaseCallerSRCS
     BaseCaller/BaseCaller.cpp
-    BaseCaller/BaseCallerParameters.cpp
     BaseCaller/BaseCallerFilters.cpp
-    BaseCaller/PerBaseQual.cpp
-    BaseCaller/PhaseEstimator.cpp
     BaseCaller/BaseCallerMetricSaver.cpp
-    BaseCaller/TreephaserSSE.cpp
+    BaseCaller/BaseCallerParameters.cpp
     BaseCaller/BarcodeClassifier.cpp
     BaseCaller/BarcodeDatasets.cpp
+    BaseCaller/MolecularTagTrimmer.cpp
     BaseCaller/OrderedDatasetWriter.cpp
+    BaseCaller/PhaseEstimator.cpp
+    BaseCaller/PerBaseQual.cpp
+    BaseCaller/WellsNormalization.cpp
     Calibration/HistogramCalibration.cpp
     Calibration/LinearCalibrationModel.cpp
+    
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+    list(APPEND BaseCallerSRCS
+        BaseCaller/TreephaserSSE.cpp)
+endif()
+
+add_executable(BaseCaller ${BaseCallerSRCS})
 add_dependencies(BaseCaller IONVERSION bamtools)
 target_link_libraries(BaseCaller ion-analysis pthread ${ION_BAMTOOLS_LIBS} dl)
 install(TARGETS BaseCaller DESTINATION bin)
@@ -468,7 +530,6 @@ set(ION_FREEBAYES_DIR ${ION_TS_EXTERNAL}/freebayes)
 include_directories(${ION_VCFLIB_DIR})
 include_directories(${ION_FREEBAYES_DIR}/src)
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller")
-include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/FlowDistEval")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/EnsembleEval")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Bookkeeping")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Reads")
@@ -477,7 +538,9 @@ include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Filter")
 include_directories("${PROJECT_SOURCE_DIR}/realignment")
 include_directories("${PROJECT_SOURCE_DIR}/Calibration")
 
-add_executable(tvc
+set(tvcSRCS
+  VariantCaller/IndelAssembly/IndelAssembly.cpp
+  VariantCaller/tvcutils/unify_vcf.cpp
   VariantCaller/VariantCaller.cpp
   VariantCaller/BAMWalkerEngine.cpp
   VariantCaller/OrderedBAMWriter.cpp
@@ -504,6 +567,8 @@ add_executable(tvc
   VariantCaller/Filter/VariantAssist.cpp
 
   VariantCaller/HypothesisEvaluator.cpp
+  
+  VariantCaller/MolecularTag.cpp
 
   VariantCaller/EnsembleEval/DiagnosticJSON.cpp
   VariantCaller/EnsembleEval/BiasGenerator.cpp
@@ -529,7 +594,7 @@ add_executable(tvc
 
   BaseCaller/PIDloop.cpp
   BaseCaller/DPTreephaser.cpp
-  BaseCaller/TreephaserSSE.cpp
+  BaseCaller/MolecularTagTrimmer.cpp
   Calibration/LinearCalibrationModel.cpp
   Calibration/FlowAlignment.cpp
   Util/OptArgs.cpp
@@ -537,13 +602,67 @@ add_executable(tvc
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
-target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} z file-io pthread)
+
+if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+    list(APPEND tvcSRCS
+        BaseCaller/TreephaserSSE.cpp)
+endif()
+
+add_executable(tvc ${tvcSRCS})
+target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z file-io pthread)
 add_dependencies(tvc IONVERSION bamtools armadillo_proj htslib_proj)
 install(TARGETS tvc DESTINATION bin)
 
 
+## tmol executable ##
+
+include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/tmol")
+
+set(tmolSRCS
+  VariantCaller/tmol/tmol.cpp
+  ${PROJECT_BINARY_DIR}/IonVersion.cpp
+)
+
+add_executable(tmol ${tmolSRCS})
+target_link_libraries(tmol ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z pthread)
+add_dependencies(tmol IONVERSION bamtools)
+install(TARGETS tmol DESTINATION bin)
+
+
+# bbctools
+set(bbctools_src
+bbctools/src/AmpliconRegionStatistics.cpp
+bbctools/src/AmpliconRegionStatistics.h
+bbctools/src/BaseCoverage.cpp
+bbctools/src/BaseCoverage.h
+bbctools/src/BbcCoarse.cpp
+bbctools/src/BbcCoarse.h
+bbctools/src/BbcCreate.cpp
+bbctools/src/BbcCreate.h
+bbctools/src/BbcDepth.cpp
+bbctools/src/BbcDepth.h
+bbctools/src/BbcIndex.cpp
+bbctools/src/BbcIndex.h
+bbctools/src/BbcMain.cpp
+bbctools/src/BbcUsage.h
+bbctools/src/BbcUtils.cpp
+bbctools/src/BbcUtils.h
+bbctools/src/BbcView.cpp
+bbctools/src/BbcView.h
+bbctools/src/RegionCoverage.cpp
+bbctools/src/RegionCoverage.h
+bbctools/src/RegionStatistics.cpp
+bbctools/src/RegionStatistics.h
+)
+
+add_executable(bbctools ${bbctools_src})
+target_link_libraries(bbctools ${ION_BAMTOOLS_LIBS} z pthread)
+add_dependencies(bbctools IONVERSION bamtools)
+install(TARGETS bbctools DESTINATION bin)
+
 
 add_executable(tvcassembly
+  VariantCaller/IndelAssembly/IndelAssemblyMain.cpp
   VariantCaller/IndelAssembly/IndelAssembly.cpp
   VariantCaller/TargetsManager.cpp
   VariantCaller/SampleManager.cpp
@@ -565,7 +684,7 @@ add_executable(tvcassembly
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
 
-target_link_libraries(tvcassembly ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} z pthread)
+target_link_libraries(tvcassembly ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z pthread)
 add_dependencies(tvcassembly IONVERSION bamtools htslib_proj)
 install(TARGETS tvcassembly DESTINATION bin)
 
@@ -576,6 +695,7 @@ add_executable(tvcutils
   VariantCaller/tvcutils/prepare_hotspots.cpp
   VariantCaller/tvcutils/validate_bed.cpp
   VariantCaller/tvcutils/unify_vcf.cpp
+  VariantCaller/tvcutils/split_vcf.cpp
   VariantCaller/TargetsManager.cpp
   Util/OptArgs.cpp
 #  Util/Utils.cpp
@@ -614,6 +734,7 @@ add_executable(Calibration
     Calibration/CalibrationHelper.cpp
     Calibration/FlowAlignment.cpp
     Calibration/HistogramCalibration.cpp
+    VariantCaller/Bookkeeping/MiscUtil.cpp
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Calibration IONVERSION bamtools)
 target_link_libraries(Calibration ion-analysis ${ION_BAMTOOLS_LIBS} pthread dl)
@@ -630,49 +751,6 @@ add_executable(bamrealignment
 target_link_libraries(bamrealignment ${ION_BAMTOOLS_LIBS} z pthread)
 add_dependencies(bamrealignment bamtools)
 install(TARGETS bamrealignment DESTINATION bin)
-
-
-add_executable(PairedEndErrorCorrection
-   ${PROJECT_BINARY_DIR}/IonVersion.cpp
-   SFFCorrection/Alignment.cpp
-   SFFCorrection/Cell.cpp
-   SFFCorrection/semaphore.cpp
-   SFFCorrection/Sequence.cpp
-   SFFCorrection/sffCorrection.cpp
-   SFFCorrection/SmithWaterman.cpp)
-add_dependencies(PairedEndErrorCorrection IONVERSION)
-target_link_libraries(PairedEndErrorCorrection ion-analysis file-io pthread ${ION_BAMTOOLS_LIBS} dl)
-install(TARGETS PairedEndErrorCorrection DESTINATION bin)
-
-# add_executable(WellsTimer WellsTimer.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-# add_dependencies(WellsTimer IONVERSION)
-# target_link_libraries(WellsTimer ion-analysis pthread)
-# install(TARGETS WellsTimer DESTINATION bin)
-
-## CK XXX
-#add_executable(Recall
-#	Recall/Recall.cpp
-#	${PROJECT_BINARY_DIR}/IonVersion.cpp)
-#target_link_libraries(Recall ion-analysis file-io dl)
-#install(TARGETS Recall DESTINATION bin)
-
-#add_executable(SeqBoost
-#        Recall/SeqBoost.cpp
-#        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-#target_link_libraries(SeqBoost ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread dl)
-#install(TARGETS SeqBoost DESTINATION bin)
-
-add_executable(sff2bam
-        Converter/sff2bam.cpp
-        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(sff2bam ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread dl)
-install(TARGETS sff2bam DESTINATION bin)
-
-add_executable(bam2sff
-        Converter/bam2sff.cpp
-        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(bam2sff ion-analysis file-io  ${ION_BAMTOOLS_LIBS} pthread dl)
-install(TARGETS bam2sff DESTINATION bin)
 
 add_executable(SamVsSam
         SamUtils/SamVsSam.cpp
@@ -713,14 +791,6 @@ add_library(file-io
         file-io/ion_error.c
         file-io/ion_string.c
         file-io/ion_util.c
-        file-io/sff.c
-        file-io/sff_file.c
-        file-io/sff_header.c
-        file-io/sff_index.c
-        file-io/sff_iter.c
-        file-io/sff_read.c
-        file-io/sff_read_header.c
-        file-io/sff_sort.c
         file-io/wells_chip.c
         file-io/wells_combine.c
         file-io/wells_data.c
@@ -742,15 +812,6 @@ add_executable(FlowErrTest
 )
 target_link_libraries(FlowErrTest ion-analysis z ${ION_SAMTOOLS_LIBS} ${ION_HTSLIB_LIBS} pthread dl)
 
-add_executable(SFFRead SFFUtils/SFFRead.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(SFFRead IONVERSION)
-target_link_libraries(SFFRead ion-analysis pthread dl)
-install(TARGETS SFFRead DESTINATION bin)
-
-add_executable(SFFRandom SFFUtils/SFFRandom.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(SFFRandom IONVERSION)
-target_link_libraries(SFFRandom ion-analysis pthread dl)
-install(TARGETS SFFRandom DESTINATION bin)
 
 add_executable(RawWellsEquivalent Wells/RawWellsEquivalent.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(RawWellsEquivalent IONVERSION)
@@ -775,41 +836,6 @@ add_executable(CompressDeviation Separator/CompressDeviation.cpp ${PROJECT_BINAR
 add_dependencies(CompressDeviation IONVERSION)
 target_link_libraries(CompressDeviation ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
 
-add_executable(DumpSynchDat SynchDat/DumpSynchDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(DumpSynchDat IONVERSION)
-target_link_libraries(DumpSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
-
-add_executable(GrindSynchDat SynchDat/GrindSynchDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(GrindSynchDat IONVERSION)
-target_link_libraries(GrindSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
-
-
-add_executable(TraceDriver SynchDat/TraceDriver.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(TraceDriver IONVERSION)
-target_link_libraries(TraceDriver ion-analysis pthread dl)
-
-add_executable(NormWells NormWells/NormWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(NormWells IONVERSION)
-target_link_libraries(NormWells ion-analysis pthread dl)
-
-add_executable(ExtractWells NormWells/ExtractWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(ExtractWells IONVERSION)
-target_link_libraries(ExtractWells ion-analysis pthread dl)
-
-# add_executable(VFCTest SynchDat/VFCTest.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-# add_dependencies(VFCTest IONVERSION)
-# target_link_libraries(VFCTest ion-analysis pthread profiler)
-
-
-# add_executable(ImageT0 ImageT0.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-# add_dependencies(ImageT0 IONVERSION)
-# target_link_libraries(ImageT0 ion-analysis pthread profiler)
-# install(TARGETS ImageT0 DESTINATION bin)
-
-#add_executable(PinnedWell PinnedWell.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-#add_dependencies(PinnedWell IONVERSION)
-#target_link_libraries(PinnedWell ion-analysis  pthread dl)
-#install(TARGETS PinnedWell DESTINATION bin)
 
 add_executable(readDat readDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(readDat IONVERSION)
@@ -822,7 +848,7 @@ add_dependencies(readWells IONVERSION)
 target_link_libraries(readWells ion-analysis pthread dl)
 install(TARGETS readWells DESTINATION bin)
 
-add_executable(iontools file-io/main.c file-io/sff_check.c ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_executable(iontools file-io/main.c  ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(iontools IONVERSION)
 target_link_libraries(iontools ion-analysis file-io pthread dl)
 install(TARGETS iontools DESTINATION bin)
@@ -881,17 +907,17 @@ if(GTEST_FOUND)
           COPYONLY
         )
 
-        add_executable(ComparatorClean_Test utest/ComparatorClean_Test.cpp)
-        target_link_libraries(ComparatorClean_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
-        add_test(ComparatorCleanTest ComparatorClean_Test --gtest_output=xml:./)
+#        add_executable(ComparatorClean_Test utest/ComparatorClean_Test.cpp)
+#        target_link_libraries(ComparatorClean_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
+#        add_test(ComparatorCleanTest ComparatorClean_Test --gtest_output=xml:./)
 
         add_executable(IonErr_Test utest/IonErr_Test.cpp)
         target_link_libraries(IonErr_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
         add_test(IonErrTest IonErr_Test --gtest_output=xml:./)
 
-        add_executable(Mask_Test utest/Mask_Test.cpp)
-        target_link_libraries(Mask_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
-        add_test(MaskTest Mask_Test --gtest_output=xml:./)
+#        add_executable(Mask_Test utest/Mask_Test.cpp)
+#        target_link_libraries(Mask_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
+#        add_test(MaskTest Mask_Test --gtest_output=xml:./)
 
         add_executable(Utils_Test utest/Utils_Test.cpp)
         target_link_libraries(Utils_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
@@ -937,9 +963,9 @@ if(GTEST_FOUND)
         target_link_libraries(OptionArgs_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
         add_test(OptionArgsTest OptionArgs_Test --gtest_output=xml:./)
 
-        add_executable(BitHandler_Test utest/BitHandler_Test.cpp)
-        target_link_libraries(BitHandler_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
-        add_test(BitHandlerTest BitHandler_Test --gtest_output=xml:./)
+#        add_executable(BitHandler_Test utest/BitHandler_Test.cpp)
+#        target_link_libraries(BitHandler_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
+#        add_test(BitHandlerTest BitHandler_Test --gtest_output=xml:./)
 
 endif()
 
@@ -958,8 +984,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_p1.1.17.txt" DESTINATI
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_p1.0.19.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_p1.0.20.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_521.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_522.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_530.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_540.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_541.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1030,6 +1058,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.17_im2" DESTINATION 
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.17_im2.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.17_im2.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.17_im2.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.541" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.541.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.541.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.1.541.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1038,6 +1070,15 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18_im2" DESTINATION 
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18_im2.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18_im2.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p1.2.18_im2.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.0.1" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.0.1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.0.1.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.0.1.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.1.1" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.1.1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.1.1.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.1.1.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.1" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.1.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1046,17 +1087,76 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.2" DESTINATION ${ION
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.2.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.2.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.2.2.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.3.1" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.3.1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.3.1.Recal" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.p2.3.1.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.520.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.520.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.521.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.521.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.521_ExT.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.521_ExT.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.522.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.522.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.530.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.530.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.540.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.540.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.550.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.550.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_314_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_314_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_316_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_316_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_316v2_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_316v2_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_318_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_318_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_318D_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_318D_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_318select_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_318select_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_520_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_520_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_521_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_521_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_522_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_522_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_530_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_530_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_540_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_540_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_541_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_541_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_550_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_550_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_900_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_900_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.0.19_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.0.19_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.0.20_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.0.20_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.1.17_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.1.17_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.1.541_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.1.541_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.2.18_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.2.18_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.2.1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.2.1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.2.2_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.2.2_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.0.1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.0.1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.1.1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.1.1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.3.1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.3.1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 #
 #
@@ -1069,18 +1169,26 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_314.param.json" DESTINATION ${I
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316v2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.0.19.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.0.20.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17_ampliseq_exome.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.541.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.2.18.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.0.1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.1.1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.2.1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.2.2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17_ampliseq_exome.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.3.1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_520.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_521.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_521_ExT.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_522.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_530.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_530_ExT.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_540.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_540_ampliseq_exome.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_541.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_550.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 #
 #
@@ -1094,16 +1202,15 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p2.2.2.null.json" DESTINATION 
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.p1.0.20.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.520.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.521.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.522.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.530.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 # Recalibration Panel
 install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
-install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
-
 if(NOT ION_USE_SYSTEM_ARMADILLO)
-   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-4.450.4+ion0-install/lib/libarmadillo.so.4" DESTINATION lib)
-   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-4.450.4+ion0-install/lib/libarmadillo.so.4.450.4" DESTINATION lib)
+   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6" DESTINATION lib)
+   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6.100.0" DESTINATION lib)
 endif()
 
 install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion0/tabix" DESTINATION bin)
@@ -1120,7 +1227,11 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/updateref.py" DESTINATION bin RENAME upd
 
 install(DIRECTORY "${PROJECT_BINARY_DIR}/../picard-1.130/" DESTINATION "/opt/picard/picard-tools-current/")
 
-add_subdirectory(TMAP)
+add_subdirectory (MapLab)
+
+if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+  add_subdirectory(TMAP)
+endif()
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
@@ -1131,14 +1242,13 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "libatlas3gf-base,
     libgfortran3,
     liblapack3gf,
     libstdc++6,
-    libgsl0ldbl,
     perl,
     ion-gpu (>=2.5.0)")
 
-set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<< 2.9), ion-alignment")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<< 2.9), ion-alignment")
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<< 5.1.5), ion-alignment")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<< 5.1.5), ion-alignment")
 
-set(CPACK_PACKAGE_DESCRIPTION "ion-analysis provides the command line workflow and supporting tools to process raw DAT files into SFF and fastq files.")
+set(CPACK_PACKAGE_DESCRIPTION "ion-analysis provides the command line workflow and supporting tools to process raw DAT files into bam and  fastq files.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     ${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
     ${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

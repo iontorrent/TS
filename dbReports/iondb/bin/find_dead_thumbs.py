@@ -14,14 +14,16 @@ from iondb.utils.files import getdiskusage
 def main(delete=False):
 
     # DBase objects of sigproc datasets that are deleted.
-    dir_list = models.DMFileStat.objects.filter(action_state__in=['DD'],dmfileset__type='Signal Processing Input').values_list('result_id__experiment_id__expDir',flat=True)
+    dir_list = models.DMFileStat.objects.filter(action_state__in=['DD'], dmfileset__type='Signal Processing Input').values_list(
+        'result_id__experiment_id__expDir', flat=True)
     print ("Number of sigproc datasets, deleted: %d" % (len(dir_list)))
     total_disk_space_mb = 0
     exclude_list = []
     for target_dir in dir_list:
         try:
             if not (target_dir in exclude_list) and os.path.isdir(target_dir):
-            #if ("Corvette" in target_dir) and not (target_dir in exclude_list) and os.path.isdir(target_dir):
+            # if ("Corvette" in target_dir) and not (target_dir in exclude_list) and
+            # os.path.isdir(target_dir):
                 exclude_list.append(target_dir)
                 sys.stdout.write("%s " % target_dir)
                 sys.stdout.write("exists ")
@@ -62,7 +64,8 @@ def main(delete=False):
     print ("Total disk usage (MB): %d" % (total_disk_space_mb))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Finds thumbnail datafiles on filesystem of datasets that have been deleted")
+    parser = argparse.ArgumentParser(
+        description="Finds thumbnail datafiles on filesystem of datasets that have been deleted")
     parser.add_argument('--delete',
                         help='Deletes the thumbnail files',
                         action='store_true',

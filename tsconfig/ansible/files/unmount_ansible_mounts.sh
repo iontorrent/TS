@@ -11,8 +11,8 @@ for entry in $(sed -n "/^$startline/,/$endline$/p" /etc/fstab); do
     if [ "${entry:0:1}" != "#" ]; then
         #echo $entry | awk '{print $2}'
         mntpt=$(echo $entry | awk '{print $2}')
-        sudo umount $mntpt
-        sudo rmdir $mntpt
+        umount -f -l $mntpt
+        rmdir $mntpt
     fi
 done
 

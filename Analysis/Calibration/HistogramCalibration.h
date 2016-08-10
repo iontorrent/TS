@@ -13,6 +13,8 @@
 
 #include "CalibrationHelper.h"
 
+
+
 using namespace std;
 
 // ==============================================================================
@@ -31,30 +33,34 @@ public:
   void  CleanSlate();
 
   // Adds the data from an aligned read to the training histogram
-  bool  AddTrainingRead(const ReadAlignmentInfo& read_alignment);
+  bool  AddTrainingRead(const ReadAlignmentInfo& read_alignment, const CalibrationContext &calib_context);
 
-  bool  GetHistogramBin(float measurement, float prediction, float state_inphase, int& bin, double& scaled_residual);
+  bool  GetHistogramBin_1D(float measurement, float prediction, float state_inphase,
+                           int& bin, double& residual_predictor) const;
 
   void  AccumulateHistData(const HistogramCalibration& other);
 
   bool  CreateCalibrationModel();
 
-  void  ExportModelToJson(Json::Value &json);
+  void  ExportModelToJson(Json::Value &json) const;
 
-  void  CalibrateRead(const ion::FlowOrder& flow_order, int well_x, int well_y, BasecallerRead & read);
+  void  PolishRead(const ion::FlowOrder& flow_order, int well_x, int well_y,
+                   BasecallerRead & read, LinearCalibrationModel *linear_cal_model) const;
+  
+  int   ComputeFinishHP(int called_hp, float local_measurement, float local_prediction) const; // helper function
 
   bool  InitializeModelFromJson(Json::Value &json);
 
   bool  InitializeModelFromLegacyFile(string legacy_file_name);
 
-  bool  is_enabled() const { return is_enabled_; }
-
+  bool  is_enabled()   const { return is_enabled_; };
+  bool  DoTraining()   const { return do_training_; };
   void  SetDebug(bool debug) { debug_ = debug; };
-  void  Defaults();
-
   static void PrintHelp_Training();
 
 private:
+
+  void  Defaults();
 
   // ------------------------------
   // Hold signal histogram data for one nucleotide over all HP lengths
@@ -70,10 +76,15 @@ private:
     vector<double>   sum_squares;
     vector<uint64_t> num_samples;
     vector<uint64_t> ignored_samples;
+    vector<uint64_t> outside_range;
 
     bool  AccumulateStatistics(const HistogramTrainingElement & other);
-    void  AddDataPoint(int iHP, double sclaled_residual);
-
+    
+    void  AddSummaryDataPoint(int iHP, double residual_predictor);
+    
+    void  UpdateIndividualHistogramsFromPredictor(int my_bin, int bin_idx, int hp_adjustment, int bin_center, int num_bins_);
+    
+    void  NewUpdateIndividualHistogramsFromPredictor(int bin_idx, int predicted_hp, int reference_hp, int called_hp);
   };
 
   // -----------------------------
@@ -86,25 +97,31 @@ private:
 
     void         ClearTrainingData();
 
-	void         SetTrainingModeAndSize(int training_mode, int num_hps, int num_bins);
+    void         SetTrainingModeAndSize(int training_mode, int num_hps, int num_bins);
 
-	bool         AccumulateTrainingData(const HistogramElement & other);
+    bool         AccumulateTrainingData(const HistogramElement & other);
 
-    void         SmoothHistograms(bool clip_mask, bool fractional_smooth, float min_smooth);
+    void         SmoothHistograms(bool fractional_smooth, float min_smooth);
 
-	string       GetBinBoundaries(unsigned int min_observations, int min_hp);
+    string       GetBinBoundaries(unsigned int min_observations, int min_hp);
 
-	Json::Value  ExportBinsToJson();
+    string       GetCarefulBinBoundaries(unsigned int min_observations, int min_hp);
+    
+    string       GetBlindBoundaries(unsigned int min_observations, int min_hp);
 
-    Json::Value  ExportHistogramsToJson();
+    Json::Value  ExportBinsToJson() const;
 
-	void         FromJson(Json::Value& json, int num_hps);
+    Json::Value  ExportHistogramsToJson() const;
 
-	// Model training data structures
+    void         FromJson(Json::Value& json, int num_hps);
+
+    void         NullCalibration(int num_hps);
+
+    // Model training data structures
     vector<HistogramTrainingElement> histogram_data;
     int                              training_mode_;
 
-	// Model application data structures:
+    // Model application data structures:
     // This structure hold our histogram calibration results by nuc and hp
     vector<vector<int> >             bin_boundaries;
 
@@ -128,13 +145,16 @@ private:
   // counter
   uint32_t           num_high_residual_reads_;        //!< Reads that have abs. scaled residuals of >0.5
 
+  bool               modify_measured_;                //!< Modify measured values
   bool               output_training_stats_;          //!< Write training statistics into output json
   bool               process_zero_mers_;              //!< Switch to calibrate to and from zero-mers
-  bool               threshold_residuals_;            //!< Clip scaled residuals to [-0.5,0.5]
   bool               fractional_smooth_;              //!< transition between smoothed histogram for bad data and unsmoothed for good
+  bool               careful_boundaries_;
+  bool               blind_training_;                 //!< have to do blind fitting here because can't trust reference
   bool               is_enabled_;                     //!< Ready to calibrate a read?
   bool               do_training_;                    //!< Is training on or off for this module?
-  bool               debug_;   //!< Are we in debug mode?
+  bool               old_style_bins_;
+  bool               debug_;                          //!< Are we in debug mode?
 
 
 };

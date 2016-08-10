@@ -45,7 +45,8 @@ OrderedDatasetWriter::~OrderedDatasetWriter()
 
 void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
      int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
-     int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments)
+     int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments,
+     MolecularTagTrimmer& tag_trimmer, bool trim_barcodes)
 {
   num_regions_ = num_regions;
   num_regions_written_ = 0;
@@ -73,6 +74,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   read_group_dataset_.assign(num_read_groups_, -1);
   read_group_num_Q20_bases_.assign(num_read_groups_,0);
   read_group_barcode_filt_zero_err_.assign(num_read_groups_, 0);
+  read_group_barcode_adapter_rejected_.assign(num_read_groups_, 0);
   read_group_num_barcode_errors_.resize(num_read_groups_);
   read_group_barcode_distance_hist_.resize(num_read_groups_);
   read_group_barcode_bias_.resize(num_read_groups_);
@@ -119,10 +121,13 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       read_group_dataset_[datasets.read_group_name_to_id(read_group_name)] = ds;
 
       SamReadGroup read_group (read_group_name);
+
       read_group.FlowOrder            = flow_order.full_nucs();
       read_group.KeySequence          = key;
-      read_group.KeySequence          += read_group_json.get("barcode_sequence","").asString();
-      read_group.KeySequence          += read_group_json.get("barcode_adapter","").asString();
+      if (trim_barcodes){ // We only add the barcode info to the key sequence if we hard clipped it
+        read_group.KeySequence          += read_group_json.get("barcode_sequence","").asString();
+        read_group.KeySequence          += read_group_json.get("barcode_adapter","").asString();
+      }
 
       read_group.ProductionDate       = basecaller_json["BaseCaller"]["start_time"].asString();
       read_group.Sample               = read_group_json.get("sample","").asString();
@@ -132,6 +137,13 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       read_group.SequencingCenter     = datasets.json().get("sequencing_center","").asString();
       read_group.SequencingTechnology = "IONTORRENT";
 
+      // Add custom tags: Structure of tags per read group XXX
+      if (datasets.IsLibraryDataset()) {
+        MolTag my_tags = tag_trimmer.GetReadGroupTags(read_group_name);
+        AddCustomReadGroupTag(read_group, "zt", my_tags.prefix_mol_tag);
+        AddCustomReadGroupTag(read_group, "yt", my_tags.suffix_mol_tag);
+      }
+
       sam_header.ReadGroups.Add(read_group);
     }
 
@@ -139,6 +151,21 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       sam_header.Comments.push_back(comments[i]);
   }
 
+}
+
+// ----------------------------------------------------------------------------
+
+void  OrderedDatasetWriter::AddCustomReadGroupTag (SamReadGroup & read_group, const string& tag_name, const string& tag_body)
+{
+  // Nothing to do if body is empty
+  if (tag_name.empty() or tag_body.empty())
+    return;
+
+  CustomHeaderTag my_custom_tag;
+  my_custom_tag.TagName  = tag_name;
+  my_custom_tag.TagValue = tag_body;
+
+  read_group.CustomTags.push_back(my_custom_tag);
 }
 
 // ----------------------------------------------------------------------------
@@ -175,6 +202,7 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
       // Log barcode statistics only for barcode read groups
       if (read_group_json.isMember("barcode_sequence")) {
         read_group_json["barcode_match_filtered"] = (Json::UInt64)read_group_barcode_filt_zero_err_[rg_index];
+        read_group_json["barcode_adapter_filtered"] = (Json::UInt64)read_group_barcode_adapter_rejected_[rg_index];
 
         for (unsigned int iflow=0; iflow < read_group_barcode_bias_[rg_index].size(); iflow++) {
           Json::Value av_bias_json(read_group_barcode_bias_[rg_index].at(iflow) / max(read_group_stats_.at(rg_index).num_reads_final_,(int64_t)1));
@@ -272,6 +300,10 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
     // 0-error filtered barcodes
     if (entry->barcode_filt_zero_error >= 0)
     	read_group_barcode_filt_zero_err_.at(entry->barcode_filt_zero_error)++;
+    // Account for filtered reads due to barcode adapter rejection
+    if (entry->barcode_adapter_filtered >= 0)
+           read_group_barcode_adapter_rejected_.at(entry->barcode_adapter_filtered)++;
+
 
     // Actually write out the read
 

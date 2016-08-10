@@ -46,12 +46,28 @@ $(document).ready(function () {
         showModal(this, 'modal_raid_info');
     });
 
-    $('.raid_status').click(function(){
-        $(this).next('tr').toggle();
-        $(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
-        return false;
+    $('.openclose').click(function(e){
+        if (!e.target.href){
+            $(this).next('tr').toggle();
+            $(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
+            return false;
+        }
     });
 
+    $('#refresh_raid_info').click(function(e){
+        e.preventDefault();
+        $('#raid_msg').html('<h4>Refreshing RAID info, please wait</h4>');
+        $('#raid_loading').removeClass('hidden');
+        $.get($(this).attr('href'), function(data){
+            $('#raid_msg').html('<h4>Success!</h4>');
+            setTimeout(function(){ window.location.reload(true); }, 1000);
+        }).fail(function(data){
+            $('#raid_msg').html('<h4>Failed, '+data.responseText+'</h4>');
+        }).always(function(){
+            $('#raid_loading').addClass('hidden');
+        });
+    });
+    
     $('#refresh_cluster_info').click(function(e){
         e.preventDefault();
         $('#cluster_msg').html('<h4>Refreshing cluster info, please wait</h4>');
@@ -91,15 +107,19 @@ $(document).ready(function () {
     });
     $('#analysis').click();
 
-    $("[name=nodectrl]").click(function(e){
+    $("[name^=nodectrl]").click(function(e){
         $("#cluster_msg").empty();
         $('#cluster_loading').removeClass('hidden');
         e.stopPropagation();
         $.post($(this).attr('href'), function(data){
-            $("#cluster_msg").html('<h4>Success! ' +data+'</h4>');
+            if (data.error){
+                $("#cluster_msg").html('<h4>'+data.error+'</h4>');
+            } else {
+                $("#cluster_msg").html('<h4>Success! ' +data.status+'</h4>');
+            }
         }).fail(function(data){
-            console.log(data)
-            $("#cluster_msg").html('<h4>Failed, '+data.responseText+'</h4>');
+            console.log('fail', data);
+            $("#cluster_msg").html('<h4>'+data.status+' '+data.statusText+'</h4>');
         }).always(function(){
             $('#cluster_loading').addClass('hidden');
         });
@@ -259,12 +279,17 @@ $(document).ready(function () {
         {% endif %}
     </div>
     <div class="content clearfix">
-        <h1>RAID Info <small>(last updated {{ raid_status_updated }})</small></h1>
-        {% if raid_err_msg %}<div class="text-error">Error: {{raid_err_msg}}</div><br>{% endif %}
+        <h1>RAID Info <small>(last updated {{ raid_status_updated }})</small>
+            <a title="Refresh RAID Info" id="refresh_raid_info" href="{% url 'raid_info_refresh' %}"><i class="icon-refresh"></i></a>
+            <div id="raid_msg" style="display:inline-block;"></div>
+            <div id="raid_loading" class="hidden" style="display:inline-block;">
+                <h4><img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
+            </div>
+        </h1>
         {% if raid_status %}
             <table class="table table-condensed table-hover">
                 {% for entry in raid_status %}
-                <tr class="{{entry.status}} raid_status">
+                <tr class="{{entry.status}} openclose">
                     <td>
                         {% if forloop.first %}<i class="icon-minus"></i>{% else %}<i class="icon-plus"></i>{% endif %}
                         <a>{{entry.adapter_id}} / {{entry.enclosure_id}}</a> ({{entry.status}})
@@ -298,6 +323,68 @@ $(document).ready(function () {
         {% endif %}
     </div>
 
+    {% if nas_info %}
+    <div class="content clearfix">
+        <h1>Torrent NAS Info</h1>
+        {% for nas in nas_info %}
+        <h2>address: {{nas.ipaddress}}</h2>
+        <table class="table table-condensed table-hover">
+            <thead>
+                <th></th>
+                <th>Name</th>
+                <th>Allocated</th>
+                <th>Available</th>
+                <th>Capacity</th>
+                <th>Health</th>
+                <th></th>
+            </thead>
+            <tbody>
+            {% for volume in nas.volumes %}
+                <tr class="{{volume.state}} openclose">
+                    <td><i class="icon-plus"></i></td>
+                    <td>{{volume.name}}</td>
+                    <td>{{volume.allocated}}</td>
+                    <td>{{volume.available}}</td>
+                    <td>{{volume.capacity}}</td>
+                    {% if volume.state == 'error' %}
+                        <td><span class="label label-important">{{volume.health}}</span></td>
+                    {% elif volume.state == 'warning' %}
+                        <td><span class="label label-warning">{{volume.health}}</span></td>
+                    {% else %}
+                        <td><span class="label label-success">{{volume.health}}</span></td>
+                    {% endif %}
+                    <td width="40%">{{volume.extra_info|safe}}</td>
+                </tr>
+                <tr class="hide">
+                    <td></td>
+                    <td colspan="6">
+                        <table class="table table-condensed">
+                            <thead>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Errors (Read / Write / Cksum)</th>
+                                <th></th>
+                            </thead>
+                            <tbody>
+                                {% for disk in volume.disks %}
+                                <tr class="{{disk.state}}">
+                                    <td>{{disk.name}}</td>
+                                    <td>{{disk.health}}</td>
+                                    <td>{{disk.err}}</td>
+                                    <td>{{disk.info}}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     {% if crunchers %}
     <div class="content clearfix">
         <h1>Cluster Info
@@ -310,7 +397,7 @@ $(document).ready(function () {
         </h1>
         <table class="table table-condensed table-hover">
             {% for node in crunchers %}
-                <tr class="{{node.get_state_display}} raid_status">
+                <tr class="{{node.get_state_display}} openclose">
                     <td><i class="icon-plus"></i></td>
                     <td>{{node.name}}</td>
                     <td>{{node.comments}}</td>
@@ -332,9 +419,9 @@ $(document).ready(function () {
                         <td>load: {{q.load}}</td>
                         <td>
                             <span class="option-group pull-right">
-                                <input type="radio" name="nodectrl" href="{% url 'cluster_ctrl' node.name 'enable' %}" value='enable'
+                                <input type="radio" name="nodectrl{{forloop.counter}}" href="{% url 'cluster_ctrl' node.name 'enable' %}" value='enable'
                                     {% ifnotequal q.disabled q.total %} checked="checked" {% endifnotequal %}>Enable
-                                <input type="radio" name="nodectrl" href="{% url 'cluster_ctrl' node.name 'disable' %}" value='disable'
+                                <input type="radio" name="nodectrl{{forloop.counter}}" href="{% url 'cluster_ctrl' node.name 'disable' %}" value='disable'
                                     {% ifequal q.disabled q.total %} checked="checked" {% endifequal %}>Disable
                             </span>
                         </td>
@@ -348,6 +435,12 @@ $(document).ready(function () {
                     <td></td>
                     <td colspan="5">
                         <table class="table table-condensed">
+                            <tr>
+                                <td>Last updated:</td><td>{{node.date}}</td>
+                            </tr>
+                            <tr>
+                                <td>Last changed:</td><td>{{node.last_log_date}}</td>
+                            </tr>
                             {% for test,status in node.info.connect_tests %}
                                 <tr {%if status == 'failure' %}class="text-error"{%endif%}>
                                     <td>{{test}}</td><td>{{status}}</td>
@@ -371,9 +464,4 @@ $(document).ready(function () {
         </table>
     </div>
     {% endif %}
-    
-    <div class="content clearfix">
-        <h1>Data Management</h1>
-        Go to <a href="{% url "datamanagement" %}"> Data Management </a>
-    </div>
 {% endblock content %}

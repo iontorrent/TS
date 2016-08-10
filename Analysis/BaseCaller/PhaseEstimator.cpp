@@ -39,21 +39,22 @@ float      PhaseEstimator::maxfrac_negative_flows_  = 0.2;
 void PhaseEstimator::PrintHelp()
 {
   printf ("Phasing estimation options:\n");
+  printf ("     --just-phase-estimation       BOOL      Do just phase estimation and nothing else [off]\n");
   printf ("     --phasing-estimator           STRING    phasing estimation algorithm [spatial-refiner-2]\n");
   printf ("     --libcf-ie-dr                 cf,ie,dr  don't estimate phasing and use specified values [not used]\n");
   printf ("     --initcf-ie-dr                cf,ie,dr  initial values of phase parameters to start optimizer [0.006,0.004,0]\n");
   printf ("     --phase-estimation-file       FILE      Load phase estimation from provided file [not used]\n");
   printf ("     --max-phasing-levels          INT       max number of rounds of phasing in SpatialRefiner [%d]\n",max_phasing_levels_default_);
-  printf ("     --phasing-fullchip-iterations INT       Number of EM iterations on level 1 [3]");
-  printf ("     --phasing-region-iterations   INT       Number of EM iterations on levels >1 [1]");
-  printf ("     --phasing-num-reads           INT       Target number of reads per region to do estimation [5000]");
-  printf ("     --phasing-min-reads           INT       Minimum number of reads per region to do estimation [1000]");
-  printf ("     --phasing-start-flow          INT       Start of phase estimation window [70]");
-  printf ("     --phasing-end-flow            INT       End of phase estimation window [150]");
-  printf ("     --phasing-signal-cutoff       FLOAT     Estimation uses measurement values below this cutoff [1.4]");
+  printf ("     --phasing-fullchip-iterations INT       Number of EM iterations on level 1 [3]\n");
+  printf ("     --phasing-region-iterations   INT       Number of EM iterations on levels >1 [1]\n");
+  printf ("     --phasing-num-reads           INT       Target number of reads per region to do estimation [5000]\n");
+  printf ("     --phasing-min-reads           INT       Minimum number of reads per region to do estimation [1000]\n");
+  printf ("     --phasing-start-flow          INT       Start of phase estimation window [70]\n");
+  printf ("     --phasing-end-flow            INT       End of phase estimation window [150]\n");
+  printf ("     --phasing-signal-cutoff       FLOAT     Estimation uses measurement values below this cutoff [1.4]\n");
   printf ("     --phasing-residual-filter     FLOAT     maximum sum-of-squares residual to use a read in phasing estimation [1.0]\n");
   printf ("     --phase-normalization         STRING    Read normalization method [adaptive]\n");
-  printf ("     --phase-norm-during-eval      BOOL      Invoke read normalization during parameter estimation [off]");
+  printf ("     --phase-norm-during-eval      BOOL      Invoke read normalization during parameter estimation [off]\n");
   printf ("     --phasing-norm-threshold      FLOAT     Threshold for switching methods in variable normalization [0.2]\n");
   printf ("\n");
 }
@@ -107,6 +108,9 @@ PhaseEstimator::PhaseEstimator()
 
   have_phase_estimates_ = false;
   max_phasing_levels_ = max_phasing_levels_default_;
+  wells_norm_method_ = "off";
+  wells_norm_ = NULL;
+  full_flow_order = NULL;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +130,8 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset 
   phase_file_name_        = opts.GetFirstString ('-', "phase-estimation-file", "");
   normalization_string_   = opts.GetFirstString ('-', "phase-normalization", "adaptive");
   key_norm_method_        = key_norm_method;
+  wells_norm_method_      = opts.GetFirstString ('-', "wells-normalization", "off");
+  just_phase_estimation_  = opts.GetFirstBoolean('-', "just-phase-estimation", false);
 
   // Static member variables
   norm_during_param_eval_ = opts.GetFirstBoolean('-', "phase-norm-during-eval", false);
@@ -202,6 +208,7 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset 
   printf("  reads per region target: %d-%d\n", min_reads_per_region_, num_reads_per_region_);
   printf("  normalization method   : %s\n", normalization_string_.c_str());
   printf("  variable norm threshold: %f\n", maxfrac_negative_flows_);
+  printf("  wells-normalization    : %s\n", wells_norm_method_.c_str());
   printf("\n");
 }
 
@@ -224,10 +231,18 @@ void PhaseEstimator::SetPhaseParameters(float cf, float ie, float dr)
 
 
 void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order,
-		                               const vector<KeySequence>& keys, bool use_single_core)
+		                               const vector<KeySequence>& keys, int num_workers)
 {
+  // For phase-estimation only mode: Strictly enforce that we have enough flows to do estimation
+  if (just_phase_estimation_ and (flow_order.num_flows() < phasing_end_flow_+20)) {
+    cerr << "PhaseEstimator ERROR: Need " << phasing_end_flow_+20 << " flows for phase estimation but 1.wells only contains "
+         << flow_order.num_flows() << " flows." <<endl;
+    exit(EXIT_FAILURE);
+  }
+
   // We only load / process what is necessary
   flow_order_.SetFlowOrder(flow_order.str(), min(flow_order.num_flows(), phasing_end_flow_+20));
+  full_flow_order = &flow_order;  // Store pointer to run flow order for wells normalizer
   keys_ = keys;
 
   // Do we have enough flows to do phase estimation?
@@ -268,20 +283,11 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
 
   } else if (phasing_estimator_ == "spatial-refiner") {
 
-    int num_workers = max(numCores(), 2);
-    if (use_single_core)
-      num_workers = 1;
-
     wells->Close();
     wells->OpenForIncrementalRead();
     SpatialRefiner(wells, mask, num_workers);
 
-
   } else if (phasing_estimator_ == "spatial-refiner-2") {
-
-    int num_workers = max(numCores(), 2);
-    if (use_single_core)
-      num_workers = 1;
 
     wells->Close();
     wells->OpenForIncrementalRead();
@@ -567,6 +573,9 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
 
   wells_ = wells;
   mask_ = mask;
+  WellsNormalization wells_norm(full_flow_order, wells_norm_method_);
+  wells_norm.SetWells(wells_, mask_);
+  wells_norm_ = &wells_norm;
 
   job_queue_.push_back(&subblocks[0]);
   jobs_in_progress_ = 0;
@@ -655,6 +664,9 @@ size_t PhaseEstimator::LoadRegion(int region)
 
   wells_->SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, flow_order_.num_flows());
   wells_->ReadWells();
+  wells_norm_->CorrectSignalBias(keys_);
+  wells_norm_->DoKeyNormalization(keys_);
+
 
   vector<float> well_buffer(flow_order_.num_flows());
 

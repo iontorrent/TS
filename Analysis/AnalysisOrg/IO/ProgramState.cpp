@@ -68,7 +68,7 @@ void ProgramState::Save(CommandLineOpts &clo, SeqListClass &seq, ImageSpecClass 
   AddImgControl(state_json[clo_name][img_control_name], clo.img_control);
   AddSeqList(state_json[seq_list_name], seq);
   AddImgSpec(state_json[img_spec_name], my_image_spec);
-  AddChipID(state_json[chip_id_name]);
+//  AddChipID(state_json[chip_id_name]);
 }
 
 
@@ -197,9 +197,7 @@ void ProgramState::AddImgControl(Json::Value &json, ImageControlOpts &img_contro
   json["outputPinnedWells"] = img_control.outputPinnedWells;
   json["tikSmoothingFile"] = img_control.tikSmoothingFile;
   json["tikSmoothingInternal"] = img_control.tikSmoothingInternal;
-  json["doSdat"] = img_control.doSdat; 
   json["total_timeout"] = img_control.total_timeout; 
-  json["sdatSuffix"] = img_control.sdatSuffix; 
   json["has_wash_flow"] = img_control.has_wash_flow; 
 }
 
@@ -232,8 +230,8 @@ void ProgramState::AddImgSpec(Json::Value &json, ImageSpecClass &my_image_spec)
 
 void ProgramState::AddChipID(Json::Value &json)
 {
-  json["chipType"] = ChipIdDecoder::GetChipType();
-  json["ChipIdEnum"] = ChipIdDecoder::GetGlobalChipId();
+//  json["chipType"] = ChipIdDecoder::GetChipType();
+//  json["ChipIdEnum"] = ChipIdDecoder::GetGlobalChipId();
 }
 
 // **** LOAD *****
@@ -378,9 +376,7 @@ void ProgramState::SetImgControl(Json::Value &json, ImageControlOpts &img_contro
   img_control.outputPinnedWells = json["outputPinnedWells"].asInt();
   strcpy(img_control.tikSmoothingFile, json["tikSmoothingFile"].asString().c_str());
   strcpy(img_control.tikSmoothingInternal, json["tikSmoothingInternal"].asString().c_str());
-  img_control.doSdat = json["doSdat"].asBool(); 
   img_control.total_timeout = json["total_timeout"].asInt(); 
-  img_control.sdatSuffix = json["sdatSuffix"].asString();
   img_control.has_wash_flow = json["has_wash_flow"].asInt();
 }  
 

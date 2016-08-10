@@ -66,18 +66,20 @@ if FASTQ_FILE_CREATED != 'N':
           transcript_sizes.append(parsed_line[1])
   # write counts file and filtered sam file, return stats tuple
   counts, all_ercc_counts, total_counts, mean_mapqs = write_output_counts_file(RAW_SAM_FILE,FILTERED_SAM_FILE,COUNTS_FILE,transcript_names,ONLY_FWD_READS)
-  if (total_counts > 0):
+  if total_counts > 0:
     percent_total_counts_ercc = '%.2f' % (100 * (all_ercc_counts / total_counts))
     percent_total_counts_non_ercc = 100 - float(percent_total_counts_ercc)
-  
-  coverage.parse_sam(FILTERED_SAM_FILE)
-  
-  ercc_conc = load_ercc_conc(filter = counts.keys(), pool = ERCC_POOL_NBR)
-  ercc_conc.sort()
-  
-  
-  dr = dose_response(coverage,ercc_conc,counts,MINIMUM_COUNTS)
-  trendline_points = generate_trendline_points(dr)
+  # GDM: changed to trap filtering out of all reads
+  if len(counts) > 2:
+    coverage.parse_sam(FILTERED_SAM_FILE)
+    ercc_conc = load_ercc_conc(filter = counts.keys(), pool = ERCC_POOL_NBR)
+    ercc_conc.sort()
+    dr = dose_response(coverage,ercc_conc,counts,MINIMUM_COUNTS)
+    trendline_points = generate_trendline_points(dr)
+  else:
+    msg_to_user = "Insufficient ERCC targets detected after applying filters to mapped reads."
+    data_to_display = False
+    
 else:
   msg_to_user = "The barcode you entered, "+BARCODE_ENTERED+", is not found.  This is most likely to result when the barcode is typed incorrectly, or the run was originally processed with a Torrent Suite version less than 3.4."
   data_to_display = False
@@ -106,9 +108,7 @@ if data_to_display:
   template = open(SRC + '/ercc_template.html')
   page_we_are_making = Template(template.read())
   if MINIMUM_COUNTS > 1:
-      counts_msg = "All transcripts with fewer than "+str(MINIMUM_COUNTS)+" counts are shown in the above figure (below the dotted line), but not used in calculating R-squared."
-  else:
-      counts_msg = "All transcripts, even those with only 1 count, were used in calculating R-squared."
+      counts_msg = "Transcripts with fewer than "+str(MINIMUM_COUNTS)+" counts (below the dashed line) are not used in calculating R-squared."
   if BARCODE_ENTERED != 'none found' and BARCODE_ENTERED != '':
     barcode = '('+BARCODE_ENTERED+')'
   else:

@@ -2,7 +2,7 @@
 #ifndef MASK_H
 #define MASK_H
 
-#include <inttypes.h>
+#include <cinttypes>
 #include "Region.h"
 #include <vector>
 #include "Serialization.h"
@@ -105,6 +105,7 @@ class Mask
 
 
     void    Set ( int x, int y, MaskType type );
+    void    SetAll(MaskType type );
     void    SetBarcodeId ( int x, int y, uint16_t barcodeId );
     void AddThese ( Mask *fromMask, MaskType these );
     void SetThese ( Mask *fromMask, MaskType these );

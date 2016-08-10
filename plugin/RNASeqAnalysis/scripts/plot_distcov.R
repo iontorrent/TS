@@ -47,7 +47,7 @@ for( i in 1:nplot) {
       write(sprintf("ERROR: No transcript coverage data in '%s'\n",nFileIn),stderr())
       q(status=1)
     }
-    write(sprintf("WARNING: No transcript coverage data in '%s'",nFileIn),stderr())
+    write(sprintf("WARNING: No transcript coverage data in '%s'\n",nFileIn),stderr())
     next
   }
   ym <- max(rcov$All_Reads.normalized_coverage)
@@ -58,6 +58,7 @@ ymax <- (ymax+0.0001)*1.01
 
 # loop again for making the plots
 usedcols <- c()
+firstPlot = TRUE
 for( i in 1:nplot) {
   nFileIn <- args[i+1]
   rcov <- try( read.table(nFileIn, skip=10, header=TRUE, sep="\t", as.is=T, comment.char="#"), T )
@@ -65,7 +66,7 @@ for( i in 1:nplot) {
   if( ndata < 2 ) next
   a <- rcov$normalized_position
   b <- rcov$All_Reads.normalized_coverage
-  if( i == 1 ) {
+  if( firstPlot ) {
     png(nFileOut,width=700,height=hgt)
     par(mfrow=c(1,1),mar=c(3.5,3.5,3,mrg),cex=2)
     plot( a, b, type="n", xlab="", ylab="", ylim=c(0,ymax) )
@@ -75,6 +76,7 @@ for( i in 1:nplot) {
     mtext("Normalized Coverage",side=2,line=2.4,cex=1.8)
     mtext("Normalized Distance Along Transcript",side=1,line=2.2,cex=1.8)
     box()
+    firstPlot = FALSE
   }
   lines( a, b, type="l", col=colors[i], lwd=2 )
   usedcols <- c(usedcols,colors[i])

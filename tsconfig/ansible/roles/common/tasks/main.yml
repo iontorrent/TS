@@ -3,16 +3,41 @@
 
 - name:
   include: '../../../globals.yml'
-  
+
+#-----------------------------------------------------------------------------
+# Replace official ubuntu repo with Ion-sourced ubuntu repo
+#-----------------------------------------------------------------------------
+- name: Disable /etc/apt/sources.list
+  command: "mv /etc/apt/sources.list{{FUNKYEXT|default('')}} /etc/apt/sources.list.orig removes=/etc/apt/sources.list{{FUNKYEXT|default('')}}"
+- name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
+  template: src=files/iontorrent-ubuntu.j2
+            dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{FUNKYEXT|default('')}}
+            owner=root group=root mode=644
+  when: "ansible_hostname == groups.headnode[0]"
+
+#-----------------------------------------------------------------------------
+# Adding IonReporter plugin repository
+#-----------------------------------------------------------------------------
+- name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
+  template: src=files/ionreporter-plugin.j2
+            dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{FUNKYEXT|default('')}}
+            owner=root group=root mode=644
+
 #-----------------------------------------------------------------------------
 # On each compute node, we need to replicate the Ion Repository configured
 # on the head node.
 #-----------------------------------------------------------------------------
+- name: Purge compute node's /etc/apt/sources.list.d directory
+  shell: bash -lc "rm -f /etc/apt/sources.list.d/*"
+  when: "ansible_hostname != groups.headnode[0]"
 - name: Replicating head node's /etc/apt/source.list.d/
   copy: src={{item}} dest=/etc/apt/sources.list.d/ mode=0644
-  when: "'{{ansible_hostname}}' != '{{groups.headnode[0]}}'"
+  when: "ansible_hostname != groups.headnode[0]"
   with_fileglob:
     - /etc/apt/sources.list.d/*
+
+- name:
+  apt: update_cache=yes
 
 #-----------------------------------------------------------------------------
 # Clean apt cache
@@ -23,21 +48,27 @@
 #-----------------------------------------------------------------------------
 # Disable installation of recommended and suggested debian packages
 #-----------------------------------------------------------------------------
-#- name: Disable apt installation of recommend and suggest packages
-#  template: src=98recommends.j2 dest=/etc/apt/apt.conf.d/98recommends mode=0644
+- name: Disable apt installation of recommend and suggest packages
+  template: src=98recommends.j2 dest=/etc/apt/apt.conf.d/98recommends mode=0644
+
+#-----------------------------------------------------------------------------
+# Disable apt from autodeleting debian package files
+#-----------------------------------------------------------------------------
+- name: Disable apt from autodeleting debian package files
+  template: src=99torrentserver.j2 dest=/etc/apt/apt.conf.d/99torrentserver mode=0644
 
 #-----------------------------------------------------------------------------
 # Install system packages common to all servers
 #-----------------------------------------------------------------------------
 - name: preseed tmpreaper package
   script: tmpreaper.preseed
-  
+
 - name: Set package preseed values
   script: "{{ansible_env.PWD}}/files/grub-pc.preseed {{GRUB_BOOT_DEVICE}}"
-  when: GRUB_BOOT_DEVICE is defined
-  
+  when: GRUB_BOOT_DEVICE is defined and not docker_image
+
 - name: Install system packages
-  apt: name={{item}} state=installed force=yes update_cache=yes cache_valid_time=300
+  apt: name={{item}} state=installed force=yes
   with_items: common_syspkg_list
 
 #=============================================================================
@@ -68,7 +99,18 @@
             reload=yes
             state=present
             value='core.%e.%p.%h.%t'
-    
+  when: not docker_image
+
+#-----------------------------------------------------------------------------
+# disable IPv6 (See JIRA TS-12538) or
+# https://brunomgalmeida.wordpress.com/tag/comm-postgres-tainted-g/
+#-----------------------------------------------------------------------------
+- name: Disable IPv6
+  sysctl: name=net.ipv6.conf.all.disable_ipv6
+            reload=yes
+            state=present
+            value='1'
+
 #-----------------------------------------------------------------------------
 # Ensure grub does not hang at the grub menu on reboot after an error
 #-----------------------------------------------------------------------------
@@ -78,7 +120,8 @@
                line='GRUB_RECORDFAIL_TIMEOUT=$GRUB_TIMEOUT'
                regexp='GRUB_RECORDFAIL_TIMEOUT.*'
   notify: update grub
-  
+  when: not docker_image
+
 #-----------------------------------------------------------------------------
 # Enable a console for S5 only
 #-----------------------------------------------------------------------------
@@ -98,21 +141,21 @@
 # Initialize ionian group and user
 - name: Add group ionian
   group: name=ionian gid=1100 state=present system=yes
-  
+
 # NOTE: non_unique was added as result of TS-11113
 - name: Initialize ionian user
   user: name=ionian uid=1100 state=present system=yes group=ionian non_unique=yes
-  
+
 # Initialize ionadmin
 # This shell method is because of having to use this password creation method
 - shell: bash -lc '/usr/bin/getent passwd | grep -q "^ionadmin:"'
   register: result
   ignore_errors: yes
-  
+
 - name: Initialize ionadmin user
   when: result|failed
   shell: /usr/sbin/useradd -m -s /bin/bash -p $(perl -e "print crypt(ionadmin, 'password')" $password) ionadmin;
-  
+
 - name: Add ionadmin to ionian www-data groups
   user: name=ionadmin append=yes groups=ionian,www-data
 
@@ -130,7 +173,7 @@
                 line='# Torrent Server maximum log file limit'
                 insertbefore=BOF
                 mode=0644
-                
+
 - name: Set logfile size limit
   lineinfile: dest=/etc/logrotate.conf
                 state=present
@@ -144,6 +187,7 @@
 #-----------------------------------------------------------------------------
 - name: Remove message regarding available OS upgrade
   file: dest=/etc/update-motd.d/91-release-upgrade state=absent
+  when: not docker_image
 
 #-----------------------------------------------------------------------------
 # Disable checking for updates
@@ -153,15 +197,16 @@
                 state=present
                 regexp='^[Pp]rompt=.*'
                 line='prompt=never'
+  when: not docker_image
 
 #-----------------------------------------------------------------------------
 # Configure tmpreaper package to purge old files from /tmp directory
 #-----------------------------------------------------------------------------
-- name: Configure tmpreaper
+- name: tmpreaper disable showing warning
   lineinfile: dest=/etc/tmpreaper.conf state=present
                 regexp='.*SHOWWARNING.*'
                 line='#SHOWWARNING=true'
-- name: Configure tmpreaper
+- name: tmpreaper purge every 7 days
   lineinfile: dest=/etc/tmpreaper.conf state=present
                 regexp='^.*TMPREAPER_TIME=.*'
                 line='TMPREAPER_TIME=7d'
@@ -192,6 +237,3 @@
                 regexp='.*root.*hard.*nofile.*$'
                 line='root             hard    nofile          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
-
-
-  

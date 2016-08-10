@@ -49,10 +49,10 @@ from iondb.rundb import models
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
 try:
-    import iondb.version as version #@UnresolvedImport
+    import iondb.version as version  # @UnresolvedImport
     GITHASH = version.IonVersionGetGitHash()
 except:
-    GITHASH = ""        
+    GITHASH = ""
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
@@ -68,6 +68,7 @@ DO_THUMBNAIL = True
 
 
 class CrawlLog(object):
+
     """``CrawlLog`` objects store and log metadata about the main crawl loop.
     Data logged by the ``CrawlLog`` includes the ten most recently saved runs
     to the database, and the crawler service's uptime.
@@ -97,10 +98,10 @@ class CrawlLog(object):
             infile.close()
         except IOError:
             fname = self.BASE_LOG_NAME
-        #rothandle = logging.handlers.RotatingFileHandler(fname, 'a', 65535)
+        # rothandle = logging.handlers.RotatingFileHandler(fname, 'a', 65535)
         rothandle = logging.handlers.RotatingFileHandler(fname, maxBytes=1024 * 1024 * 10, backupCount=5)
         cachehandle = logging.handlers.MemoryHandler(1024, logging.ERROR, rothandle)
-        #fmt = logging.Formatter("[%(asctime)s][%(levelname)s][%(lineno)d] ""%(message)s")
+        # fmt = logging.Formatter("[%(asctime)s][%(levelname)s][%(lineno)d] ""%(message)s")
         fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         rothandle.setFormatter(fmt)
         self.errors.addHandler(rothandle)
@@ -158,7 +159,7 @@ class CrawlLog(object):
         self.lock.acquire()
         self.exp_errors[str(unique)] = (datetime.datetime.now(), msg)
         self.lock.release()
-    
+
     def get_exp_errors(self):
         self.lock.acquire()
         ret = self.exp_errors
@@ -167,8 +168,10 @@ class CrawlLog(object):
 
 
 class Status(xmlrpc.XMLRPC):
+
     """The ``Status`` class provides access to a ``CrawlLog`` through
     the XMLRPC protocol."""
+
     def __init__(self, logger):
         xmlrpc.XMLRPC.__init__(self)
         self.logger = logger
@@ -201,8 +204,9 @@ class Status(xmlrpc.XMLRPC):
     def xmlrpc_exp_errors(self):
         '''Return list of errors: (date, exp folder, error msg)'''
         exp_errors = self.logger.get_exp_errors()
-        ret = [(v[0],k,v[1]) for k,v in exp_errors.iteritems()]
-        return sorted(ret, key=lambda l:l[0], reverse=True)
+        ret = [(v[0], k, v[1]) for k, v in exp_errors.iteritems()]
+        return sorted(ret, key=lambda l: l[0], reverse=True)
+
 
 def extract_prefix(folder):
     """Given the name of a folder storing experiment data, return the
@@ -216,7 +220,7 @@ def tdelt2secs(td):
     number of seconds."""
     day_seconds = float(td.days * 24 * 3600)
     ms_seconds = float(td.microseconds) / 1000000.0
-    return  day_seconds + float(td.seconds) + ms_seconds
+    return day_seconds + float(td.seconds) + ms_seconds
 
 
 def construct_crawl_directories(logger):
@@ -245,7 +249,8 @@ def construct_crawl_directories(logger):
             rig_folder = os.path.join(fs.filesPrefix, r.name)
             if os.path.exists(rig_folder):
                 logger.errors.debug("Checking %s" % rig_folder)
-                exp_val_list = models.Experiment.objects.filter(expDir__startswith=rig_folder).values_list('expDir', 'ftpStatus')
+                exp_val_list = models.Experiment.objects.filter(
+                    expDir__startswith=rig_folder).values_list('expDir', 'ftpStatus')
                 try:
                     subdir_bases = os.listdir(rig_folder)
                     # create array of paths for all directories in Rig's directory
@@ -263,7 +268,7 @@ def construct_crawl_directories(logger):
 def get_filecount(exp):
     '''Return number of acq files'''
     if 'tiled' in exp.rawdatastyle:
-        #N.B. Hack - we check ftp status of thumbnail data only
+        # N.B. Hack - we check ftp status of thumbnail data only
         expDir = os.path.join(exp.expDir, 'thumbnail')
     else:
         expDir = exp.expDir
@@ -301,12 +306,12 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
 
     blockArgs = 'fromRaw'
     if (exp.getPlatform in ['s5', 'proton']) and not thumbnail_analysis:
-        blockArgs = 'fromWells' # default pipeline setting for fullchip on-instrument analysis
+        blockArgs = 'fromWells'  # default pipeline setting for fullchip on-instrument analysis
 
     params = urllib.urlencode({'report_name': report_name,
                                'do_thumbnail': "%r" % thumbnail_analysis,
                                'blockArgs': blockArgs
-    })
+                               })
 
     status_msg = "Generated POST"
     try:
@@ -327,11 +332,12 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
     if f:
         error_code = f.getcode()
         if error_code is not 200:
-            msg = " !! Failed to start analysis. URL failed with error code %d for %s" % (error_code, f.geturl())
+            msg = " !! Failed to start analysis. URL failed with error code %d for %s" % (
+                error_code, f.geturl())
             msg2 = f.read()
             logger.errors.error(msg)
             logger.errors.error(msg2)
-            logger.add_exp_error(exp.unique, '%s\n Error: %s' % (msg,msg2))
+            logger.add_exp_error(exp.unique, '%s\n Error: %s' % (msg, msg2))
             status_msg = "Failure to generate POST"
 
     return status_msg
@@ -340,8 +346,9 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
 def generate_updateruninfo_post(_folder, logger):
     '''Generates a POST event to update the database objects with explog data'''
     params = urllib.urlencode(
-        {'datapath':_folder}
+        {'datapath': _folder}
     )
+    fhandle = None
     try:
         status_msg = "Generated POST"
         connection_url = 'http://127.0.0.1/rundb/updateruninfo/'
@@ -352,11 +359,12 @@ def generate_updateruninfo_post(_folder, logger):
     if fhandle:
         error_code = fhandle.getcode()
         if error_code is not 200:
-            msg = " !! Failed to update run info. URL failed with error code %d for %s" % (error_code, fhandle.geturl())
+            msg = " !! Failed to update run info. URL failed with error code %d for %s" % (
+                error_code, fhandle.geturl())
             msg2 = "%s" % "".join(fhandle.readlines())
             logger.errors.error(msg)
             logger.errors.error(msg2)
-            logger.add_exp_error(_folder, '%s\n Error: %s' % (msg,msg2))
+            logger.add_exp_error(_folder, '%s\n Error: %s' % (msg, msg2))
             status_msg = "Failure to generate POST"
     return status_msg
 
@@ -393,7 +401,7 @@ def check_for_abort(expDir, filelookup):
         print "Error opening file: ", os.path.join(expDir, filelookup)
         return False
 
-    #search for the line we need
+    # search for the line we need
     line = f.readline()
     while line:
         if "WARNINGS:" in line:
@@ -415,7 +423,7 @@ def check_for_critical(exp, filelookup):
         print "Error opening file: ", os.path.join(exp.expDir, filelookup)
         return False
 
-    #search for the line we need
+    # search for the line we need
     line = f.readline()
     while line:
         if "WARNINGS:" in line:
@@ -456,17 +464,17 @@ def check_for_completion(exp):
         file_list.append('beadfind_post_0003.dat')
 
     if check_for_file(exp.expDir, LOG_FINAL_BASENAME):
-        #check for critical errors
+        # check for critical errors
         if check_for_critical(exp, LOG_FINAL_BASENAME):
             return True  # run is complete; true
 
         if 'tiled' in exp.rawdatastyle:
-            #N.B. Hack - we check status of thumbnail data only
+            # N.B. Hack - we check status of thumbnail data only
             expDir = os.path.join(exp.expDir, 'thumbnail')
         else:
             expDir = exp.expDir
 
-        #check for required files
+        # check for required files
         for filename in file_list:
             if not check_for_file(expDir, filename):
                 exp.ftpStatus = RUN_STATUS_MISSING
@@ -513,14 +521,14 @@ def ready_to_process_thumbnail(exp):
 def autorun_thumbnail(exp, logger):
     '''Returns whether thumbnail autorun should be executed'''
     if 'tiled' in exp.rawdatastyle:
-        #support for old format
+        # support for old format
         for bs in exp.log['blocks']:
             if bs.find('thumbnail') > 0:
                 arg = bs.split(',')[4].strip()
                 if int(arg.split(':')[1]) == 1:
-                    #logger.errors.info ("Request to auto-run thumbnail analysis")
+                    # logger.errors.info ("Request to auto-run thumbnail analysis")
                     return True
-        #support new format
+        # support new format
         try:
             thumb = exp.log['thumbnail_000']
             logger.errors.debug("THUMB: %s" % thumb)
@@ -582,9 +590,8 @@ def crawl(folders, logger):
 
         # Save experiment object
         _expobj.save()
-        
-        return
 
+        return
 
     def update_expobj_ftptransfer(_expobj):
         '''Update Experiment object with in-transfer ftp status'''
@@ -635,9 +642,9 @@ def crawl(folders, logger):
 
     def explog_exists(folder):
         return os.path.isfile(os.path.join(folder, LOG_BASENAME))
-    
+
     #-----------------------------------------------------------
-    #Main
+    # Main
     #-----------------------------------------------------------
     if folders:
         logger.errors.info("checking %d directories" % len(folders))
@@ -667,8 +674,8 @@ def crawl(folders, logger):
                 #--------------------------------
                 # Handle auto-run analysis
                 # Conditions for starting auto-analysis:
-                #     #. ftpStatus is not one of the complete states
-                #     #. no report(s) exist.
+                # . ftpStatus is not one of the complete states
+                # . no report(s) exist.
                 # i.e. - if a user deletes all reports after ftp transfer is complete, do not start auto-analysis.
                 #--------------------------------
                 if not logger.disableautoanalysis:
@@ -722,7 +729,7 @@ def main(args):
     '''Main function'''
     logger = CrawlLog(args.disableautoanalysis)
     logger.errors.info("Crawler Initializing")
-        
+
     if logger.disableautoanalysis:
         logger.errors.info("Auto-Analysis has been disabled")
 

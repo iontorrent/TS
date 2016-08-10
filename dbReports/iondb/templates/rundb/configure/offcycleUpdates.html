@@ -1,0 +1,247 @@
+{% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load pagetools %}
+{% load static from staticfiles %}
+
+{% block extra_head %}
+<style>
+    .k-grid-content {
+        overflow: visible !important;
+        max-height: 200px;
+    }
+    .k-grid gridcell {
+        text-align: left;
+    }
+    
+</style>
+<script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
+{% endblock extra_head %}
+
+{% block tab-configure-updates %}
+    <li class="active"><a href="{% url "offcycle_updates" %}">Updates</a></li>
+{% endblock tab-configure-updates %}
+
+{% block content %}
+<div class="content">
+    <div id = "products">
+        <h2>Update Products</h2>
+        {% if products.error %}
+            <div class="alert alert-error">{{products.error}}</div>
+        {% else %}
+            <div class="alert hide"></div>
+        {% endif %}
+        {% if products.productContents %}
+        <table id="products_table">
+            <colgroup>
+                <col style="width:25%"/>
+                <col style="width:50%"/>
+                <col style="width:25%" />
+                <col style="width:100px" />
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Available Version</th>
+                    <th>Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products.productContents %}
+                <tr>
+                    <td>{{ product.name }}</td>
+                    <td>{{ product.product_desc }}</td>
+                    <td>{{ product.update_version }}</td>
+                    <td>
+                        {% if product.done %}
+                        <a href="#">Complete</a>
+                        {% else %}
+                        <a href="{% url 'update_product' product.name product.update_version %}" class="btn btn-small needsPermission do_update" data-confirm_msg="Install Product {{product.name}} {{ product.update_version }} ?">
+                            Update</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            No Product updates available at this time
+        {% endif %}
+    </div>
+</div>
+
+<div class="content hide"><!--- hide section, no updates available yet TS-12522 --->
+    <div id = "instruments">
+        <h2>Update Instruments</h2>
+        {% if instruments.error %}
+            <div class="alert alert-error">{{instruments.error}}</div>
+        {% else %}
+            <div class="alert hide"></div>
+        {% endif %}
+        {% if instruments.packageContents %}
+        <table id="instruments_table">
+            <colgroup>
+                <col style="width:25%"/>
+                <col style="width:100px" />
+                <col style="width:50%"/>
+                <col style="width:25%"/>
+                <col style="width:100px" />
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Version</th>
+                    <th>Description</th>
+                    <th>Available Versions</th>
+                    <th>Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for package in instruments.packageContents %}
+                <tr>
+                    <td>{{ package.name }}</td>
+                    <td>{{ package.currentVersion }}</td>
+                    <td>{{ package.description }}</td>
+                    <td>{{ package.availableVersions|join:" | " }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a class="btn dropdown-toggle needsPermission" data-toggle="dropdown" href="#">
+                                <img src="{% static "resources/img/gear-active.png"%}" border="0" />
+                                <span class="caret" />
+                            </a>
+                            <ul class="dropdown-menu pull-right">
+                                {% if package.upgradable %}
+                                <li>
+                                    <a href="{% url 'update_package' package.name package.candidateVersion %}" class="do_update" data-confirm_msg="Upgrade {{package.name}} to latest version?">
+                                        Upgrade to Latest</a>
+                                </li>
+                                {% endif %}
+                                {% for version in package.availableVersions %}
+                                    {% if not version == package.currentVersion %}
+                                    <li>
+                                        <a href="{% url 'update_package' package.name version %}" class="do_update" data-confirm_msg="Install {{package.name}} version {{version}}?">
+                                            Install {{version}}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            No Instrument updates available at this time
+        {% endif %}
+    </div>
+</div>
+
+<div class="content">
+    <div id = "plugins">
+        <h2>Update Plugins</h2>
+        {% if plugins.error %}
+            <div class="alert alert-error">{{plugins.error}}</div>
+        {% else %}
+            <div class="alert hide"></div>
+        {% endif %}
+        {% if plugins.pluginContents %}
+        <table id="plugins_table">
+            <colgroup>
+                <col style="width:25%"/>
+                <col style="width:100px" />
+                <col style="width:50%"/>
+                <col style="width:25%"/>
+                <col style="width:100px" />
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Version</th>
+                    <th>Description</th>
+                    <th>Available Versions</th>
+                    <th>Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plugin in plugins.pluginContents %}
+                <tr>
+                    <td>{{ plugin.name }}</td>
+                    <td>{{ plugin.currentVersion }}</td>
+                    <td>{{ plugin.description }}</td>
+                    <td>{{ plugin.availableVersions|join:" | " }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a class="btn dropdown-toggle needsPermission" data-toggle="dropdown" href="#">
+                                <img src="{% static "resources/img/gear-active.png"%}" border="0" />
+                                <span class="caret" />
+                            </a>
+                            <ul class="dropdown-menu pull-right">
+                                {% if plugin.upgradable %}
+                                <li>
+                                    <a href='/rundb/api/v1/plugin/{{plugin.pk}}/upgrade/' class="do_update" data-confirm_msg="Upgrade {{plugin.name}} to latest version?">
+                                        Upgrade to Latest</a>
+                                </li>
+                                {% endif %}
+                                {% for version in plugin.availableVersions %}
+                                    {% if not version == plugin.currentVersion %}
+                                    <li>
+                                        <a href='/rundb/api/v1/plugin/{{plugin.pk}}/{{version}}/install_to_version/' class="do_update" data-confirm_msg="Install {{plugin.name}} version {{version}}?">
+                                            Install {{version}}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            No Plugin updates available at this time
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    var options = { scrollable:false };
+    $("#products_table").kendoGrid(options);
+    $("#instruments_table").kendoGrid(options);
+    $("#plugins_table").kendoGrid(options);
+    $( document ).ready(function() {
+        {% if not user_can_update %}
+            $('.needsPermission').addClass('disabled');
+            $('.needsPermission').attr('title','Logged in user has insufficient permissions').attr('rel', 'tooltip');
+        {% endif %}
+        
+        $('.do_update').click(function(e){
+            var url = $(this).attr('href');
+            var msg = $(this).data('confirm_msg');
+            var $alert_div = $(this).parents('#products,#instruments,#plugins').find('.alert');
+            $alert_div.removeClass('alert-error', 'alert-success').hide();
+
+            bootbox.confirm('<h3>'+msg+'</h3><h4>The update process may take a few minutes to complete.</h4>', function(result){
+                if(result){
+                    $.blockUI();
+                    $('.blockMsg').prepend('<h1>Installing, please wait ...</h1>')
+                    $.post(url).done(function(data){
+                        $alert_div.html('Successfully updated! This page will now reload');
+                        $alert_div.addClass('alert-success').show();
+                        setTimeout(function(){
+                            window.location.reload(true);
+                        }, 1000);
+                    }).fail(function(data){
+                        $alert_div.html('Error: ' + data.responseText);
+                        $alert_div.addClass('alert-error').show();
+                    }).always(function(){
+                        $.unblockUI();
+                    });
+                }
+            });
+            return false;
+        });
+    });
+</script>
+{% endblock content %}

@@ -1,3 +1,4 @@
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 /*
  * DeviceSymbolCopy.h
  *
@@ -12,7 +13,7 @@
 #include "ImgRegParams.h"
 #include "DeviceParamDefines.h"
 
-class SampleCollectionConst;
+class HistoryCollectionConst;
 
 void copySymbolsToDevice( const ConstantFrameParams& ciP);
 void copySymbolsToDevice( const ImgRegParamsConst& irP );
@@ -21,7 +22,7 @@ void copySymbolsToDevice( const ConfigParams& cp);
 void copySymbolsToDevice( const PerFlowParamsGlobal& fp);
 void copySymbolsToDevice( const WellsLevelXTalkParamsConst<MAX_WELL_XTALK_SPAN,MAX_WELL_XTALK_SPAN> & cXtP);
 void copySymbolsToDevice(const XTalkNeighbourStatsConst<MAX_XTALK_NEIGHBOURS> & cTlXtP);
-void copySymbolsToDevice(const SampleCollectionConst& smplCol );
+void copySymbolsToDevice(const HistoryCollectionConst& histConst );
 //void copySymbolsToDevice( const ConstantRegParamBounds& fp);
 void CreatePoissonApproxOnDevice(int device);
 

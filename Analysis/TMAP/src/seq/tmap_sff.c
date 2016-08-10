@@ -216,8 +216,8 @@ tmap_sff_read_header_clone(tmap_sff_read_header_t *rh)
   ret->clip_qual_right = rh->clip_qual_right;
   ret->clip_adapter_left = rh->clip_adapter_left; 
   ret->clip_adapter_right = rh->clip_adapter_right;
-  ret->clip_left = ret->clip_left;
-  ret->clip_right = ret->clip_right;
+  ret->clip_left = rh->clip_left;
+  ret->clip_right = rh->clip_right;
   ret->name = tmap_string_clone(rh->name);
 
   return ret;

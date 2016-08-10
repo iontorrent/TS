@@ -10,33 +10,34 @@ import operator
 
 from hashlib import md5
 
-#import ion.plugin.base
-#from ion.plugin.base import IonPluginBase
+# import ion.plugin.base
+# from ion.plugin.base import IonPluginBase
 
-__all__=('cache','get_plugin')
+__all__ = ('cache', 'get_plugin')
 
 _log = logging.getLogger(__name__)
+
 
 class ModuleCache(object):
     # Borg pattern
     __shared_state = dict(
-        ## keys of module store are the python modules for each plugin
-        module_store = {},
-        ## mapping of installed plugin names to python module for that plugin
-        module_labels = {},
+        # keys of module store are the python modules for each plugin
+        module_store={},
+        # mapping of installed plugin names to python module for that plugin
+        module_labels={},
 
-        ## mapping of plugin names to plugin classes
-        module_cache = {},
+        # mapping of plugin names to plugin classes
+        module_cache={},
 
         # Log of errors during import/loading
-        module_errors = {},
+        module_errors={},
 
-        handled = {},
-        loaded = False,
-        write_lock = threading.RLock(),
-        installed_modules = [],
+        handled={},
+        loaded=False,
+        write_lock=threading.RLock(),
+        installed_modules=[],
 
-        _get_plugin_cache = {}
+        _get_plugin_cache={}
     )
 
     def __init__(self):
@@ -57,7 +58,7 @@ class ModuleCache(object):
             installed_modules = self.get_installed_modules()
             if not installed_modules:
                 #_log.info("No plugin modules installed")
-                return ## Do not set loaded with empty installed_modules
+                return  # Do not set loaded with empty installed_modules
             _log.debug("Scanning for installed modules")
             for (module_name, module_path) in installed_modules:
                 if module_name in self.handled:
@@ -81,13 +82,13 @@ class ModuleCache(object):
             self.write_lock.release()
 
     def get_installed_modules(self):
-        #return models.Plugin.objects.filter(active=True)$
+        # return models.Plugin.objects.filter(active=True)$
         return self.installed_modules or []
 
-    def load_compat_module(self, module_name, module_path):
+    def load_compat_module(self, module_name, module_path, add_to_store = True):
         import ion.plugin.launchcompat
         try:
-            mod = ion.plugin.launchcompat.get_launch_class(module_name, module_path)
+            mod = ion.plugin.launchcompat.get_launch_class(module_name, module_path, add_to_store)
         except Exception as e:
             _log.exception("Failed to import legacy plugin wrapper '%s':'%s'", module_name, module_path)
             self.module_errors[module_name] = e
@@ -99,29 +100,30 @@ class ModuleCache(object):
             self.module_labels[module_name] = mod
         return mod
 
-
-    def load_module(self, module_name, module_path):
+    def load_module(self, module_name, module_path, add_to_store=True):
         """
         Loads the module with the provided fully qualified name.
+        :parameter module_name:
+        :parameter module_path:
+        :parameter add_to_store: Flag to the store the results in the module store
         """
+
         self.handled[module_name] = None
 
-        #for path in glob.glob(os.path.join(module_path,'[!_]*.py')): # list .py files not starting with '_'
+        # for path in glob.glob(os.path.join(module_path,'[!_]*.py')): # list .py files not starting with '_'
         #    name, ext = splitext(basename(path))
         #    _log.debug("%s -- %s", name, path)
-        #    #modules[name] = imp.load_source(name, path)
+        # modules[name] = imp.load_source(name, path)
         module_dir, pyfile = os.path.split(module_path)
         name, ext = os.path.splitext(pyfile)
         if ext != '.py':
-            return self.load_compat_module(module_name, module_path)
+            return self.load_compat_module(module_name, module_path, add_to_store)
 
         try:
             _log.debug("Loading module '%s' from '%s'", module_name, module_path)
             sys.path.append(module_dir)
             mod = imp.load_source(md5(module_path).hexdigest(), module_path)
             _log.debug(mod)
-            # clean up sys.path
-            sys.path.remove(module_dir)
         except ImportError as e:
             _log.debug("Import Error '%s'", module_name, exc_info=True)
             self.module_errors[module_name] = e
@@ -130,11 +132,14 @@ class ModuleCache(object):
             _log.debug("Failed to import '%s'", module_name, exc_info=True)
             self.module_errors[module_name] = e
             return None
+        finally:
+            if module_dir in sys.path:
+                sys.path.remove(module_dir)
 
         if not mod:
             return None
 
-        if mod not in self.module_store:
+        if mod not in self.module_store and add_to_store:
             self.module_store[mod] = len(self.module_store)
             self.module_labels[module_name] = mod
 

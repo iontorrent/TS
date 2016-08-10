@@ -1,5 +1,382 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+
+# ===================
+# Print message on failure
+# ===================
+failure()
+{
+    echo "Warning: $1" 1>&2
+}
+
+# ================================
+# command line argument parsing
+# ================================
+cmd_line_args_old ()
+{
+    export RAW_DATA_DIR=""
+    export ANALYSIS_DIR=""
+    export LIBRARY_KEY=""
+    export TESTFRAG_KEY=""
+    export RESULTS_DIR=""
+    export URL_ROOT=""
+    while getopts ":vr:a:l:t:o:p:u:" opt; do
+        case $opt in
+            v  )
+                echo $VERSION
+                exit 0
+                ;;
+            r  )
+                RAW_DATA_DIR=$OPTARG
+                ;;
+            a  )
+                ANALYSIS_DIR=$OPTARG
+                ;;
+            l  )
+                LIBRARY_KEY=$OPTARG
+                ;;
+            t  )
+                TESTFRAG_KEY=$OPTARG
+                ;;
+            o  )
+                RESULTS_DIR=$OPTARG
+                ;;
+            p  )
+                DIRNAME=$OPTARG
+                ;;
+            u  )
+                URL_ROOT=$OPTARG
+                ;;
+            \? )
+                echo "plugin: $PROGRAM" 1>&2
+                echo "usage: launch.sh ..." 1>&2
+                echo "arguments:" 1>&2
+                echo "  -v                  print the version and exit" 1>&2
+                echo "  -r RAW_DATA_DIR     specify the location of the raw data" 1>&2
+                echo "  -a ANALYSIS_DIR     specify the location of the analysis results" 1>&2
+                echo "  -l LIBRARY_KEY      specify the library key" 1>&2
+                echo "  -t TESTFRAG_KEY     specify the testfrag key" 1>&2
+                echo "  -o RESULTS_DIR      specify the plugin result folder" 1>&2
+                echo "  -p DIRNAME          specify the plugin directory" 1>&2
+                echo "  -u URL_ROOT         specify the URL root of the results directory" 1>&2
+                exit 0
+                ;;
+        esac
+    done
+    shift $(($OPTIND - 1))
+
+}
+
+cmd_line_args()
+{
+    while [ $1 ]; do
+        case $1 in
+            -r)
+                shift
+                RAW_DATA_DIR=$1
+            ;;
+            -a)
+                shift
+                ANALYSIS_DIR=$1
+            ;;
+            -l)
+                shift
+                LIBRARY_KEY=$1
+            ;;
+            -t)
+                shift
+                TESTFRAG_KEY=$1
+            ;;
+            -o)
+                shift
+                RESULTS_DIR=$1
+                OUTPUT_DIR=$1
+            ;;
+            -p)
+                shift
+                DIRNAME=$1
+            ;;
+            -u)
+                shift
+                URL_ROOT=$1
+            ;;
+            -v)    # print version and exit
+                echo $VERSION
+                exit 0
+            ;;
+            -j)    # json file
+                shift
+                export json_fname=$1
+            ;;
+            *)    #unknown
+                echo "Unknown option: $1.  Ignoring"
+        esac
+    shift
+    done
+
+    if [ ! -z $json_fname ]; then
+        makeVarsFromJson $json_fname
+    fi
+
+    backwards_compatible
+
+    input_validation
+
+    # =================================
+    # print some status information
+    # =================================
+    echo "version=$VERSION"
+    echo "start time=`date`"
+    echo "command line=$COMMANDLINE"
+    echo "$PROGRAM: starting execution of plugin code"
+}
+
+backwards_compatible()
+{
+    if [ ! -z $RUNINFO__RAW_DATA_DIR ]; then
+        export RAW_DATA_DIR=$RUNINFO__RAW_DATA_DIR
+    fi
+    if [ ! -z $RUNINFO__ANALYSIS_DIR ]; then
+        export ANALYSIS_DIR=$RUNINFO__ANALYSIS_DIR
+    fi
+    if [ ! -z $RUNINFO__LIBRARY_KEY ]; then
+        export LIBRARY_KEY=$RUNINFO__LIBRARY_KEY
+    fi
+    if [ ! -z $RUNINFO__TESTFRAG_KEY ]; then
+        export TESTFRAG_KEY=$RUNINFO__TESTFRAG_KEY
+    fi
+    if [ ! -z $RUNINFO__RESULTS_DIR ]; then
+        export RESULTS_DIR=$RUNINFO__RESULTS_DIR
+    fi
+    if [ ! -z $RUNINFO__URL_ROOT ]; then
+        export URL_ROOT=$RUNINFO__URL_ROOT
+        #for path relative to root of web address:
+        #expect: "http://<server>/output<?>/<Location dir>"
+        #export URL_ROOT="/"$(echo $RUNINFO__URL_ROOT|cut -f4- -d"/")
+    fi
+    if [ ! -z $RUNINFO__DIRNAME ]; then
+        export DIRNAME=$RUNINFO__DIRNAME
+    fi
+}
+
+#---                                                                        ---#
+#---    Creates shell variables from keyword and assigns value as value     ---#
+#---    NOTE: the following are not converted to env variables
+#---    barcodeSamples, sampleinfo
+#---    The plugin should parse the startplugin.json file to get that information
+#---                                                                        ---#
+makeVarsFromJson()
+{
+    local IFS=$'\n'
+    for line in $(jsonpipe < $1);do
+        if echo $line|egrep -q '(\{}|\[]|barcodedSamples|sampleinfo)'; then
+            :
+        else
+            line=${line#/}
+            var_name=$(echo $line|awk '{print $1}') # =${line%%	*}
+            var_val=$(echo $line|awk -F'\t' '{print $2}'|sed 's/"//g') #=${line##*	}  #
+            index=$(basename $var_name) #=${var_name%%/*}
+
+            # Sanitize
+            #(sampleinfo can contain more chars than are valid variable names)
+            var_name=${var_name//-/_} # $(echo $line|sed 's:-:_:g')
+
+            # var_name ends in a number, its an array variable
+            # (test fails with "integer expression expected" for non-numbers)
+            if [ "$index "-eq "$index" 2>/dev/null ]; then
+                #strip off number
+                var_name=$(dirname $var_name) #=${var_name%%/$index}
+                #convert slashes to double underscore
+                #convert to uppercase
+                var_name=$(echo ${var_name^^} | sed 's:/:__:g')
+                var_name=$(echo ${var_name} | sed 's:\.:_:g')
+                eval $var_name[$index]=\""$var_val"\"
+                export ${var_name}
+            else
+                #convert slashes to double underscore
+                #convert to uppercase
+                var_name=$(echo ${var_name^^} | sed 's:/:__:g')
+                var_name=$(echo ${var_name} | sed 's:\.:_:g')
+                export eval "${var_name}"="${var_val}"
+            fi
+        fi
+    done
+}
+
+# ===========================
+# validate required inputs
+# ===========================
+input_validation()
+{
+    # These are guaranteed to be set by TLScript.py (ion_analysis_00.py)
+    if [ "${RAW_DATA_DIR}" = "" ]; then
+        failure "RAW_DATA_DIR not defined."
+    elif [ "${ANALYSIS_DIR}" = "" ]; then
+        failure "ANALYSIS_DIR not defined."
+    elif [ "${LIBRARY_KEY}" = "" ]; then
+        failure "LIBRARY_KEY not defined."
+    elif [ "${TESTFRAG_KEY}" = "" ]; then
+        failure "TESTFRAG_KEY not defined."
+    elif [ "${RESULTS_DIR}" = "" ]; then
+        failure "RESULTS_DIR not defined."
+    elif [ "${URL_ROOT}" = "" ]; then
+        failure "URL_ROOT not defined."
+    fi
+
+    if [ ! -d ${RAW_DATA_DIR} ]
+    then
+        failure "Raw data directory: ${RAW_DATA_DIR}. Invalid"
+    elif [ ! -r ${RAW_DATA_DIR} ]
+    then
+        failure "Raw data directory: ${RAW_DATA_DIR}. Not readable"
+    fi
+
+    if [ ! -d ${ANALYSIS_DIR} ]
+    then
+        failure "Analysis directory: ${ANALYSIS_DIR}. Invalid"
+    elif [ ! -r ${ANALYSIS_DIR} ]
+    then
+        failure "Analysis directory: ${ANALYSIS_DIR}. Not readable"
+    fi
+
+    if [ ! -d ${RESULTS_DIR} ]
+    then
+        failure "Results directory: ${RESULTS_DIR}. Invalid"
+    elif [ ! -w ${RESULTS_DIR} ]
+    then
+        failure "Results directory: ${RESULTS_DIR}. Not writeable"
+    fi
+
+    define_local_vars
+}
+
+# =========================================
+# generate useful variables
+# =========================================
+define_local_vars ()
+{
+    export REPORT_ROOT_DIR=${RUNINFO__ANALYSIS_DIR:-$ANALYSIS_DIR}
+    export SIGPROC_DIR=${RUNINFO__SIGPROC_DIR:-${ANALYSIS_DIR}/sigproc_results/}
+    export BASECALLER_DIR=${RUNINFO__BASECALLER_DIR:-${ANALYSIS_DIR}/basecaller_results/}
+    export ALIGNMENT_DIR=${RUNINFO__ALIGNMENT_DIR:-$ANALYSIS_DIR}
+
+    # Fallback to ANALYSIS_DIR for compatibility with older runs
+    if [ ! -d ${SIGPROC_DIR} ]; then
+        export SIGPROC_DIR=${ANALYSIS_DIR}
+    fi
+    if [ ! -d ${BASECALLER_DIR} ]; then
+        export BASECALLER_DIR=${ANALYSIS_DIR}
+    fi
+
+    export TSP_RUN_NAME=${EXPMETA__RUN_NAME}
+    export TSP_RUN_DATE=${EXPMETA__RUN_DATE}
+    export TSP_ANALYSIS_NAME=${EXPMETA__RESULTS_NAME}
+    export TSP_ANALYSIS_DATE=${EXPMETA__ANALYSIS_DATE}
+    export TSP_PROJECT=${EXPMETA__PROJECT}
+    export TSP_LIBRARY=${RUNINFO__LIBRARY}
+    export TSP_SAMPLE=${EXPMETA__SAMPLE}
+    export TSP_PGM_NAME=${EXPMETA__INSTRUMENT}
+    export TSP_NOTES=${EXPMETA__NOTES}
+    export TSP_CHIPTYPE=${EXPMETA__CHIPTYPE}
+
+    export TSP_RUNID=${EXPMETA__RUNID}
+    export TSP_FLOWORDER=${EXPMETA__FLOWORDER}
+    export TSP_LIBRARY_KEY=${RUNINFO__LIBRARY_KEY}
+    export TSP_TF_KEY=${RUNINFO__TESTFRAG_KEY}
+    export TSP_NUM_FLOWS=${EXPMETA__RUN_FLOWS}
+
+    # Fallback for reports <=2.2
+    PARAMS_PATH=${SIGPROC_DIR}/processParameters.txt
+    if [ -f ${PARAMS_PATH} ]; then
+
+      if [ "${TSP_RUNID}" == "" ]; then
+          export TSP_RUNID=$(grep '^runId' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_FLOWORDER}" == "" ]; then
+          export TSP_FLOWORDER=$(grep '^flowOrder' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_LIBRARY_KEY}" == "" ]; then
+          export TSP_LIBRARY_KEY=$(grep '^libraryKey' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_TF_KEY}" == "" ]; then
+          export TSP_TF_KEY=$(grep '^tfKey' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_NUM_FLOWS}" == "" ]; then
+          export TSP_NUM_FLOWS=$(grep '^numFlows' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+    fi
+
+    export TSP_FILEPATH_OUTPUT_STEM=${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
+    export TSP_URLPATH_OUTPUT_STEM=${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
+
+    SIGPROC_REPORT=${SIGPROC_DIR#${ANALYSIS_DIR}}
+    BASECALLER_REPORT=${BASECALLER_DIR#${ANALYSIS_DIR}}
+    ALIGNMENT_REPORT=${ALIGNMENT_DIR#${ANALYSIS_DIR}}
+
+    # FASTA File Locator
+    if [ "$RUNINFO__TMAP_VERSION" != "" ]; then
+        GENPATH="/results/referenceLibrary/$RUNINFO__TMAP_VERSION"
+    else
+        echo "WARNING: Using hardcoded path to genome index files!"
+        GENPATH="/results/referenceLibrary/tmap-f3"
+    fi
+    fastafile=$(find -L "$GENPATH" -maxdepth 2 -name "${TSP_LIBRARY}.fasta"|head -1)
+    export TSP_FILEPATH_GENOME_FASTA=
+    export TSP_URLPATH_GENOME_FASTA=
+    if [ ! -z "$fastafile" ]; then
+        export TSP_FILEPATH_GENOME_FASTA="$fastafile"
+        # strip portion of filepath not in URL path: tmap-* link in /var/www/output
+        fastaweb="${fastafile#*referenceLibrary\/}"
+        #export TSP_URLPATH_GENOME_FASTA=${RUNINFO__NET_LOCATION}/output/${fastaweb}
+        # relative web path. relative to html root
+        export TSP_URLPATH_GENOME_FASTA="/output/${fastaweb}"
+    fi
+
+    export TSP_FILEPATH_UNMAPPED_BAM=${BASECALLER_DIR}/rawlib.basecaller.bam
+    export TSP_FILEPATH_UNMAPPED_TF_BAM=${BASECALLER_DIR}/rawtf.basecaller.bam
+    export TSP_URLPATH_UNMAPPED_BAM=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.rawlib.basecaller.bam
+    export TSP_URLPATH_UNMAPPED_TF_BAM=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.rawtf.basecaller.bam
+
+    export TSP_FILEPATH_BAM=${ALIGNMENT_DIR}/rawlib.bam
+    export TSP_FILEPATH_BAI=${ALIGNMENT_DIR}/rawlib.bam.bai
+    export TSP_URLPATH_BAM=${URL_ROOT}/download_links/${TSP_URLPATH_OUTPUT_STEM}.bam
+    export TSP_URLPATH_BAI=${URL_ROOT}/download_links/${TSP_URLPATH_OUTPUT_STEM}.bam.bai
+
+    export TSP_FILEPATH_PLUGIN_DIR=${RESULTS_DIR}
+    export TSP_URLPATH_PLUGIN_DIR=${URL_ROOT}/plugin_out/$(basename ${RESULTS_DIR})
+
+    export TSP_FILEPATH_BARCODE_TXT=${REPORT_ROOT_DIR}/barcodeList.txt
+    export TSP_URLPATH_BARCODE_TXT=${URL_ROOT}/barcodeList.txt
+
+    #export TSP_PLUGIN_SCRATCH=${DIRNAME}/../scratch
+    export TSP_PLUGIN_SCRATCH=/results/plugins/scratch
+
+    # Clearer alias for DIRNAME
+    export PLUGIN_PATH=${DIRNAME}
+}
+
+#*! @function
+#  @param  $*  the file to be tested
+test_for_file ()
+{
+    if [ ! -f $* ]; then
+        failure "file '$*' was not found";
+    fi
+}
+
+#*! @function
+#  @param  $*  the executable to be tested
+test_for_executable ()
+{
+    eval which $* 2>/dev/null 1>/dev/null;
+    if test $? != 0; then
+        failure "executable '$*' was not found and/or executable";
+    fi
+}
+
+# Export functions to launch scripts
+export failure test_for_file test_for_executable
+
 {% comment %}
 # This is a django template for generating full launch.sh scripts from a plugin launch.sh fragment. 
 # All the launch.sh biolerplate code goes here, and can be omitted from plugin launch scripts.
@@ -59,14 +436,6 @@ fi
 # Set initial 'Started' status, now that we have started executing
 ion-plugin-status --pk '{{ runinfo.pluginresult }}' --msg 'Started' --jobid "${JOB_ID}"
 
-# Load function library
-#sourcefile=$(find /results/plugins {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions| head -n 1)
-sourcefile=/results/plugins/plugin_functions
-if [[ ! -e "$sourcefile" ]]; then
-    echo "FATAL: Unable to find plugin_functions library"
-    exit 1
-fi
-source "$sourcefile"
 cmd_line_args "$@"
 
 {% comment %}
@@ -146,8 +515,6 @@ ulimit -c 0
 date +'start time=%Y-%m-%d %k:%M:%S.%N'
 starttime=$(date +%s)
 
-# Start command in subshell
-(
 ## Plugin Error Handling
 function plugin_error_trap
 {
@@ -155,8 +522,19 @@ function plugin_error_trap
     local message="${1:-"Unknown Error"}"
     echo "==============================================================================="
     echo "ERROR: Plugin exited unexpectedly with error: ${exit_status} - ${message}"
+    ion-plugin-status --pk '{{ runinfo.pluginresult  }}' --msg 'Error' --jobid "${JOB_ID}" --jsonpath="${RESULTS_DIR}"
     exit ${exit_status}
 }
+
+function plugin_timeout_trap
+{
+    local exit_status="Plugin Timed Out"
+    echo "********************************************************************************"
+    echo "ERROR: Plugin exited unexpectedly with error: ${exit_status}"
+    ion-plugin-status --pk '{{ runinfo.pluginresult  }}' --msg 'Timed Out' --jobid "${JOB_ID}" --jsonpath="${RESULTS_DIR}"
+    exit 0
+}
+
 set -o errexit
 #set -o nounset
 #set -o errtrace
@@ -165,6 +543,7 @@ trap 'plugin_error_trap "Execution Interrupted with Ctrl-C"' SIGINT
 trap 'plugin_error_trap "Plugin Terminated by request (TERM/KILL)"' SIGTERM SIGKILL
 #trap 'plugin_error_trap "Plugin segfault. (Check sufficient memory was requested)"' SIGCORE
 trap 'plugin_error_trap "Plugin Execution Error"' ERR
+trap 'plugin_timeout_trap' SIGUSR1
 
 echo "==============================================================================="
 {% if debug %}
@@ -188,11 +567,10 @@ set -o xtrace
     -u "${URL_ROOT}" \
     -j "${json_fname}"
 {% endif %}
-)
+
 # ===================================================
 # Save return value from command subshell
 RETVAL=$?
-
 echo "==============================================================================="
 #echo "$PLUGINNAME: completing execution of plugin code"
 date +'end time=%Y-%m-%d %k:%M:%S.%N'

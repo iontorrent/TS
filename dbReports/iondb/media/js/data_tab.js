@@ -29,6 +29,9 @@ $(function () {
         render: function () {
             console.log("ReportView render");
             $(this.el).html(this.template.render({
+                "is_local": this.options.is_local, //Mesh
+                "url_prefix": this.options.url_prefix, //Mesh
+                "exp_name_prefix": this.options.exp_name_prefix, //Mesh
                 "report": this.model.toJSON(),
                 "total_q20bp": function(){
                     return this.quality_metrics && precisionUnits(this.quality_metrics.q20_bases);
@@ -136,7 +139,10 @@ $(function () {
             $(this.el).html(this.template.render({
                 'count': this.collection.length,
                 'more_reports': this.collection.length > 2,
-                'is_open': this.is_open
+                'is_open': this.is_open,
+                "is_local": this.options.is_local, //Mesh
+                "url_prefix": this.options.url_prefix, //Mesh
+                "exp_name_prefix": this.options.exp_name_prefix //Mesh
             }));
             this.elBody = this.$('.reports-top');
             this.elMore = this.$('.reports-more');
@@ -155,7 +161,10 @@ $(function () {
                 index = this.collection.length;
             }
             var tmpReportView = new ReportView({
-                model: report
+                model: report,
+                "is_local": this.options.is_local, //Mesh
+                "url_prefix": this.options.url_prefix, //Mesh
+                "exp_name_prefix": this.options.exp_name_prefix //Mesh
             });
             tmpReportView.runView = this.runView;
             tmpReportView.render();
@@ -218,8 +227,17 @@ $(function () {
                 'change_representative');
             this.model.bind('change', this.render);
             this.model.bind('remove', this.destroy_view);
+            var is_local = !this.model.get('_host');
+            var url_prefix = "";
+            var exp_name_prefix = "";
+            if (!is_local) {
+                url_prefix = "http://" + this.model.get('_host');
+                exp_name_prefix = "<strong>" + this.model.get('_host') + "</strong> "
+            }
             this.reports = new ReportListView({
-                collection: this.model.reports
+                collection: this.model.reports,
+                is_local: is_local,
+                url_prefix: url_prefix
             });
             this.reports.runView = this;
             console.log("Init CardRunView", this.reports.runView);
@@ -231,7 +249,17 @@ $(function () {
             console.log("CardRunView render");
             this.$('[rel="tooltip"]').tooltip('hide');
             var status = this.model.get("ftpStatus");
+            var is_local = !this.model.get('_host');
+            var url_prefix = "";
+            var exp_name_prefix = "";
+            if (!is_local) {
+                url_prefix = "http://" + this.model.get('_host');
+                exp_name_prefix = "<strong>" + this.model.get('_host') + "</strong> "
+            }
             $(this.el).html(this.template.render({
+                "is_local": is_local, //Mesh
+                "url_prefix": url_prefix, //Mesh
+                "exp_name_prefix": exp_name_prefix, //Mesh
                 "exp": this.model.toJSON(),
                 "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
                 "date_string": kendo.toString(this.model.get("date"),"MM/dd/yy hh:mm tt"),
@@ -387,30 +415,41 @@ $(function () {
         render: function () {
             var king_report = this.model.reports.length > 0 ? this.model.reports.at(0).toJSON() : null;
             var status = this.model.get("ftpStatus");
+            var is_local = !this.model.get('_host');
+            var url_prefix = "";
+            var exp_name_prefix = "";
+            if (!is_local) {
+                url_prefix = "http://" + this.model.get('_host');
+                exp_name_prefix = "<strong>" + this.model.get('_host') + "</strong> "
+            }
+            display_host =
             this.$el.html(this.template.render({
                 "exp": this.model.toJSON(),
+                "is_local": is_local, //Mesh
+                "url_prefix": url_prefix, //Mesh
+                "exp_name_prefix": exp_name_prefix, //Mesh
                 "run_date_string": this.model.get('date').toString("MM/dd/yy"),
                 "result_date_string": this.model.get('resultDate').toString("MM/dd/yy"),
                 "king_report": king_report,
                 "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / this.model.get('flows')) * 100),
                 "in_progress": !isNaN(parseInt(status)),
-                "total_q20bp": function(){
+                "total_q20bp": function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q20_bases);
                 },
-                "total_q0bp": function(){
+                "total_q0bp": function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_bases);
                 },
-                "reads_q20": function(){
+                "reads_q20": function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_reads);
                 },
-                "read_length": function(){
+                "read_length": function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_mean_read_length);
                 }
             }));
             var samples = this.$el.children('.samples')
             samples.html(this.sample_template(this.model.toJSON()));
-            samples.find('[rel=popover]').popover({content: samples.find('#sample'+this.model.id).html()});
+            samples.find('[rel=popover]').popover({content: samples.find('#sample' + this.model.id).html()});
         },
 
         edit: function (e) {
@@ -614,7 +653,27 @@ $(function () {
             this.search();
         },
 
-		_get_query: function() {
+        _get_query: function (isLocalDataSource) {
+            //Side effects to disable some dropdowns on remote
+            [
+                $("#id_project"),
+                $("#id_sample"),
+                $("#id_reference"),
+                $("#id_pgm"),
+            ].map(function (field) {
+                if (isLocalDataSource != undefined && !isLocalDataSource) {
+                    field.attr("disabled", "disabled").val("");
+                } else {
+                    field.removeAttr("disabled");
+                }
+                field.trigger("liszt:updated");
+            });
+            if (isLocalDataSource != undefined && !isLocalDataSource) {
+                $("#download_csv").hide();
+            }else{
+                $("#download_csv").show();
+            }
+
             //Date requires extra formatting
             var params = {
                 'all_date': $("#rangeA").val(),
@@ -626,7 +685,7 @@ $(function () {
                 'pgmName': $("#id_pgm").val(),
                 'results__eas__reference': $("#id_reference").val(),
                 'flows': $("#id_flows").val(),
-                'order_by': $("#order_by").val()
+                'order_by': $("#order_by").val(),
             };
 
             sampleTube = $("#search_subject_nav").attr("title");
@@ -683,7 +742,8 @@ $(function () {
 		},
 
         search: function() {
-            this.collection.filtrate(this._get_query());
+            var isLocalDataSource = $("#id_data_source").val() == "local";
+            this.collection.filtrate(this._get_query(isLocalDataSource), isLocalDataSource);
         }
 
     });

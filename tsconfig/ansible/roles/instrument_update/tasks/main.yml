@@ -1,0 +1,38 @@
+---
+# file: roles/instrument_update/tasks/main.yml
+
+- name:
+  include: '../../../globals.yml'
+#-----------------------------------------------------------------------------
+# Install PGM, Proton and/or S5 Updates Packages (optional)
+#-----------------------------------------------------------------------------
+
+# Check for existence of previous install of ion-protonupdates or ion-s5updates
+- stat: path=/results/proton/updates
+  register: proton
+
+- name: Install ion-protonupdates
+  apt: name=ion-protonupdates state=present force=yes
+  when: proton.stat.exists
+
+# Install ion-s5updates if this is S5VM
+- name: Install ion-s5updates
+  apt: name=ion-s5updates state=present force=yes
+  when: proton.stat.exists or S5_virtual_guest|bool
+
+# Check for existence of previous install of ion-pgmupdates
+- stat: path=/results/pgm/updates
+  register: pgm
+
+- name: Install ion-pgmupdates
+  apt: name=ion-pgmupdates state=present force=yes
+  when: pgm.stat.exists
+
+#-----------------------------------------------------------------------------
+# Install Chef and OT Update Packages (always)
+#-----------------------------------------------------------------------------
+- name: Install Chef and OT update packages
+  apt: name={{ item }} state=present force=yes
+  with_items:
+    - ion-chefupdates
+    - ion-onetouchupdater

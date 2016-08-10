@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved */
 
 /* Author: Alex Artyomenko <aartyomenko@cs.gsu.edu> */
 
@@ -30,7 +30,7 @@ class OrderedBAMWriter : protected alignment_queue {
   AlignmentComporator cmp;
 public:
   OrderedBAMWriter() : alignment_queue(cmp) { }
-  Alignment* process_new_etries(Alignment* list);
+  Alignment* process_new_entries(Alignment* list);
   Alignment* flush();
 private:
   Alignment* wrap_items_in_linkedlist(Alignment * current);

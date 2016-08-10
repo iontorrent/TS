@@ -9,6 +9,39 @@
 
 using namespace std;
 
+// barcode tracking for initial training, now that barcodes are relevant and important
+
+
+float BeadTracker::BarcodeNormalizeOneBead(int ibd, bool overwrite_barcode, int flow_block_size){
+  float normalizer = 1.0f;
+  BeadParams  *p  = &params_nn[ibd];
+  bound_params *pl = &params_low;
+  bound_params *ph = &params_high;
+
+// handles unidentified beads as well
+    normalizer = barcode_info.ComputeNormalizerBarcode(p->Ampl,barcode_info.barcode_id[ibd], flow_block_size,0);
+  p->Copies *= normalizer;
+  MultiplyVectorByScalar (p->Ampl,1.0f/normalizer,flow_block_size);
+  if (overwrite_barcode)
+    barcode_info.SetBarcodeFlows (p->Ampl,barcode_info.barcode_id[ibd]);
+
+  p->ApplyLowerBound (pl, flow_block_size);
+  p->ApplyUpperBound (ph, flow_block_size);
+  p->ApplyAmplitudeDrivenKmultLimit(flow_block_size, 2.0f);
+  return (p->Copies);
+}
+
+
+void BeadTracker::AssignBarcodeState(bool do_all, float basic_threshold, float tie_threshold, int flow_block_size, int flow_block_start){
+
+  barcode_info.ResetCounts();
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (Sampled(ibd) or do_all){
+      barcode_info.barcode_id[ibd]=barcode_info.ClassifyOneBead(params_nn[ibd].Ampl,basic_threshold,tie_threshold, flow_block_size, flow_block_start);
+    }
+  }
+}
+
 // bead parameter initial values and box constraints
 
 BeadTracker::BeadTracker()
@@ -24,6 +57,12 @@ BeadTracker::BeadTracker()
   ntarget = 0;
   ignoreQuality = false;
   doAllBeads = false;
+
+  // stop: should be own object
+  stop_alpha = 1/12.0f;
+  stop_maxvar = 9;
+  stop_threshold = 0.075;
+
 }
 
 void BeadTracker::InitHighBeadParams()
@@ -106,6 +145,9 @@ void BeadTracker::InitBeadList (Mask *bfMask, Region *region, bool nokey, Sequen
   DefineKeySequence (_seqList, _numSeq);
   high_quality.resize(numLBeads, true);
   sampled.resize(numLBeads, true);
+  decay_ssq.resize(numLBeads, 5.0f);
+  last_amplitude.resize(numLBeads, 0.5f);
+  barcode_info.barcode_id.resize(numLBeads,-1); // no barcode assigned to any beaads
 
   // makes spatially organized data if needed
   BuildBeadMap (region,bfMask,processMask);
@@ -135,20 +177,6 @@ float ComputeNormalizerKeyFlows (const float *observed, const int *keyval, int l
   return (wsum/wdenom);
 }
 
-
-float ComputeSSQRatioKeyFlows (const float *observed, const int *keyval, int len)
-{
-  float wsum = 0.01f;
-  float wdenom = 0.01f; // avoid dividing by zero in the bad case, smooth results to prevent wild values
-  for (int i=0; i<len; i++)
-  {
-    float delta = observed[i]-keyval[i];
-    
-    wsum += keyval[i]*keyval[i];  // variation due to signal
-    wdenom += delta*delta;  // variation due to noise
-  }
-  return ((wsum/wdenom));
-}
 
 
 //this function gets the  observed values for the initial flows of the key in *observed
@@ -195,15 +223,6 @@ void SetKeyFlows (float *observed, int *keyval, int len)
     observed[i] = keyval[i];
 }
 
-float BeadTracker::ComputeSSQRatioOneBead(int ibd, int flow_block_size)
-{
-  int key_val[flow_block_size];
-  struct BeadParams *p = &params_nn[ibd];
-  int key_len;
-  key_len = KEY_LEN; 
-  SelectKeyFlowValuesFromBeadIdentity (key_val,p->Ampl, key_id[ibd], key_len, flow_block_size); // what should we see
-  return(ComputeSSQRatioKeyFlows (p->Ampl, key_val, key_len)); // how much did we deviate from it?
-}
 
 float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key, int flow_block_size)
 {
@@ -239,6 +258,7 @@ float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key, int flow_bl
 
   p->ApplyLowerBound (pl, flow_block_size);
   p->ApplyUpperBound (ph, flow_block_size);
+  p->ApplyAmplitudeDrivenKmultLimit(flow_block_size, 2.0f);
   return (p->Copies);
 }
 
@@ -295,27 +315,124 @@ float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key, int flow_block_s
   return (meanCopyCount);
 }
 
-void BeadTracker::LowSSQRatioBeadsAreLowQuality(float snr_threshold, int flow_block_size)
-{
-  if (ignoreQuality)
-    return;
+void BeadTracker::SetCopyCountOnUnSampledBeads(int flow_block_size){
+  float high_copy_count = CopiesFromSampledReads ( );
 
-  int filter_total = 0;
-  // only use the top snr beads for region-wide parameter fitting
-  for (int ibd=0;ibd < numLBeads;ibd++)
-  {
-    float SNR = ComputeSSQRatioOneBead(ibd, flow_block_size);
-    if (SNR < snr_threshold)
-    {
-      high_quality[ibd] = false; // reject beads that don't match
-      filter_total++;
+  // whatever count I got is going to be on the high side because of filtering
+  int final_samples = 0;
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (Sampled(ibd)){
+      // do nothing because copy-count should be well-set already here
+      //params_nn[ibd].Copies = high_copy_count; // guessing the mean of good wells is better than guessing nothing?
+        final_samples++;
+    } else {
+      params_nn[ibd].Copies = high_copy_count; // guessing the mean of good wells is better than guessing nothing?
     }
-    //printf("LSSQ: %d %f\n",ibd, SNR);
   }
-//  printf("Region %d fit exclude %d beads of %d for poor ssq ratio less than %f\n", regionindex, filter_total, numLBeads, snr_threshold);
 }
 
-void BeadTracker::LowCopyBeadsAreLowQuality (float mean_copy_count)
+float BeadTracker::etbRFromSampledReads()
+{
+  float mean_etbR = 0.0;
+  int goodBeadCount=0;
+  // cout << "Number of live beads:" << numLBeads  <<"\n";
+  for (int ibd=0;ibd < numLBeads;ibd++)
+  {
+    if( Sampled (ibd) ){
+          mean_etbR += params_nn[ibd].R;
+          goodBeadCount++;
+      }
+  }
+  // cout << "Number of good beads:" << goodBeadCount  <<"\n";
+  if (goodBeadCount > 0)
+    mean_etbR /= goodBeadCount;
+  else
+    mean_etbR = 0.7f; // does this matter?
+
+  return (mean_etbR);
+}
+
+
+float BeadTracker::CopiesFromReads()
+{
+  float mean_copy = 0.0;
+  int goodBeadCount=0;
+  // cout << "Number of live beads:" << numLBeads  <<"\n";
+  for (int ibd=0;ibd < numLBeads;ibd++)
+  {
+    {
+          mean_copy += params_nn[ibd].Copies;
+          goodBeadCount++;
+      }
+  }
+  // cout << "Number of good beads:" << goodBeadCount  <<"\n";
+  if (goodBeadCount > 0)
+    mean_copy /= goodBeadCount;
+  else
+    mean_copy = 2.0f; // does this matter?
+
+  return (mean_copy);
+}
+
+float BeadTracker::CopiesFromSampledReads()
+{
+  float mean_copy= 0.0;
+  int goodBeadCount=0;
+  // cout << "Number of live beads:" << numLBeads  <<"\n";
+  for (int ibd=0;ibd < numLBeads;ibd++)
+  {
+    if( Sampled (ibd) ){
+          mean_copy += params_nn[ibd].Copies;
+          goodBeadCount++;
+      }
+  }
+  // cout << "Number of good beads:" << goodBeadCount  <<"\n";
+  if (goodBeadCount > 0)
+    mean_copy /= goodBeadCount;
+  else
+    mean_copy = 2.0f; // does this matter?
+
+  return (mean_copy);
+}
+
+
+float BeadTracker::etbRFromReads()
+{
+  float mean_etbR = 0.0;
+  int goodBeadCount=0;
+  // cout << "Number of live beads:" << numLBeads  <<"\n";
+  for (int ibd=0;ibd < numLBeads;ibd++)
+  {
+    {
+          mean_etbR += params_nn[ibd].R;
+          goodBeadCount++;
+      }
+  }
+  // cout << "Number of good beads:" << goodBeadCount  <<"\n";
+  if (goodBeadCount > 0)
+    mean_etbR /= goodBeadCount;
+  else
+    mean_etbR = 0.7f; // does this matter?
+
+  return (mean_etbR);
+}
+void BeadTracker::SetBufferingRatioOnUnSampledBeads(){
+  float typical_etbR = etbRFromSampledReads ( );
+  // whatever count I got is going to be on the high side because of filtering
+  int final_samples = 0;
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (Sampled(ibd)){
+      // do nothing because etbR should be well-set already here
+      //params_nn[ibd].R = typical_etbR; // guessing the mean of good wells is better than guessing nothing?
+      final_samples++;
+    } else {
+      params_nn[ibd].R = typical_etbR; // guessing the mean of good wells is better than guessing nothing?
+    }
+  }
+}
+
+
+void BeadTracker::LowCopyBeadsAreLowQuality (float min_copy_count, float max_copy_count)
 {
   if (ignoreQuality)
     return;
@@ -324,7 +441,7 @@ void BeadTracker::LowCopyBeadsAreLowQuality (float mean_copy_count)
   // only use the top amplitude signal beads for region-wide parameter fitting
   for (int ibd=0;ibd < numLBeads;ibd++)
   {
-    if (params_nn[ibd].Copies < mean_copy_count)
+    if ((params_nn[ibd].Copies < min_copy_count) or params_nn[ibd].Copies>max_copy_count)
     {
       high_quality[ibd] = false; // reject beads that don't match
       cp_filter++;
@@ -422,14 +539,14 @@ void BeadTracker::ComputeKeyNorm(const vector<int>& keyIonogram, const vector<fl
 void BeadTracker::CheckKey(const vector<float>& copy_multiplier)
 {
   // Flag beads with bad key:
-  vector<float> ampl(seqList[1].usableKeyFlows);
-  vector<float> nrm (seqList[1].usableKeyFlows);
+  vector<float> ampl(seqList[LIBKEYNDX].usableKeyFlows);
+  vector<float> nrm (seqList[LIBKEYNDX].usableKeyFlows);
   for (int bead=0; bead<numLBeads; ++bead)
   {
     BeadParams& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
     transform (ampl.begin(), ampl.end(), nrm.begin(), bind2nd (divides<float>(),p.my_state->key_norm));
-    if (not key_is_good (nrm.begin(), seqList[1].Ionogram, seqList[1].Ionogram+seqList[1].usableKeyFlows)){
+    if (not key_is_good (nrm.begin(), seqList[LIBKEYNDX].Ionogram, seqList[LIBKEYNDX].Ionogram+seqList[LIBKEYNDX].usableKeyFlows)){
       p.my_state->bad_read = true;
       ++numLBadKey;
     }
@@ -440,7 +557,7 @@ void BeadTracker::UpdateClonalFilter (int flow, const vector<float>& copy_multip
 {
   // first block only:
   if(flow_begin_real_index == 0 && flow == flow_block_size-1){
-    vector<int> keyIonogram(seqList[1].Ionogram, seqList[1].Ionogram+seqList[1].usableKeyFlows);
+    vector<int> keyIonogram(seqList[LIBKEYNDX].Ionogram, seqList[LIBKEYNDX].Ionogram+seqList[LIBKEYNDX].usableKeyFlows);
     ComputeKeyNorm(keyIonogram, copy_multiplier);
     CheckKey(copy_multiplier);
   }
@@ -535,6 +652,15 @@ int BeadTracker::NumBadKey() const
   return numLBadKey;
 }
 
+int BeadTracker::NumHighQuality(){
+  int num_high_quality = 0;
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (high_quality[ibd])
+      num_high_quality++;
+  }
+  return(num_high_quality);
+}
+
 void BeadTracker::ZeroOutPins (Region *region, const Mask *bfmask, const PinnedInFlow& pinnedInFlow, int flow, int iFlowBuffer)
 
 {
@@ -571,11 +697,22 @@ float BeadTracker::FindMeanDmult (bool skip_beads)
   return (mean_dmult);
 }
 
+
+
 void BeadTracker::RescaleDmult (float scale)
 {
   for (int ibd=0;ibd < numLBeads;ibd++)
   {
     params_nn[ibd].dmult /= scale;
+  }
+}
+
+void BeadTracker::RescaleDmultFromSample (float scale)
+{
+  for (int ibd=0;ibd < numLBeads;ibd++)
+  {
+    if (Sampled(ibd))
+      params_nn[ibd].dmult /= scale;
   }
 }
 
@@ -586,11 +723,64 @@ float BeadTracker::CenterDmult (bool skip_beads)
   return (mean_dmult);
 }
 
+bool BeadTracker::UpdateSTOP(int ibd, int flow_block_size){
+  // update this bead's "STOP" tracker
+  bool tripped_flag = false;
+  for (int fnum=0; fnum<flow_block_size; fnum++){
+    float delta = params_nn[ibd].Ampl[fnum]-last_amplitude[ibd];
+    last_amplitude[ibd] = params_nn[ibd].Ampl[fnum];
+    delta *= delta; // was there a big difference in signals?
+
+    if (delta>stop_maxvar) // large signals don't extend the decay window
+      delta = stop_maxvar;
+    decay_ssq[ibd] = (1.0f-stop_alpha)*decay_ssq[ibd]+stop_alpha*delta; // exponential tracker
+    if (decay_ssq[ibd]<stop_threshold){  // this bead now officially low variability - likely indicates stopped producing useful signal
+      if (high_quality[ibd]==true)
+        tripped_flag = true;
+      high_quality[ibd]=false; // stop using this bead for regional parameter fitting
+    }
+  }
+  return(tripped_flag);
+}
+
+void BeadTracker::CenterKmult( float *mean_kmult, bool skip_beads, int *flow_ndx_map, int flow_block_size){
+  float kmult_count[NUMNUC];
+  for (int nnuc=0; nnuc<NUMNUC; nnuc++){
+    mean_kmult[nnuc]=1.0f; // weak prior here
+    kmult_count[nnuc] = 1.0f;
+  }
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (BeadIncluded(ibd, skip_beads)){
+      for (int fnum=0; fnum<flow_block_size; fnum++){
+        int tnuc = flow_ndx_map[fnum];
+        float wt = 0.001;
+        if (params_nn[ibd].Ampl[fnum]>0.5) // if potentially accurate as fitted value = should be 'informative value' (copies?)
+           wt = 1.0f;
+        mean_kmult[tnuc] += wt*params_nn[ibd].kmult[fnum];
+        kmult_count[tnuc] += wt;
+      }
+    }
+  }
+  for (int nnuc=0; nnuc<NUMNUC; nnuc++){
+    mean_kmult[nnuc] /= kmult_count[nnuc];
+  }
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (BeadIncluded(ibd, skip_beads)){
+      for (int fnum=0; fnum<flow_block_size; fnum++){
+        int tnuc = flow_ndx_map[fnum];
+        params_nn[ibd].kmult[fnum] /=mean_kmult[tnuc];
+      }
+      params_nn[ibd].ApplyAmplitudeDrivenKmultLimit(flow_block_size, 2.0f);
+    }
+  }
+
+}
+
 
 float BeadTracker::CenterDmultFromSample ()
 {
   float mean_dmult = FindMeanDmultFromSample ();
-  RescaleDmult (mean_dmult);
+  RescaleDmultFromSample (mean_dmult);
   return (mean_dmult);
 }
 
@@ -599,6 +789,8 @@ void BeadTracker::RescaleRatio (float scale)
   for (int ibd=0; ibd<numLBeads; ibd++)
   {
     params_nn[ibd].R /= scale;
+    if (params_nn[ibd].R>1.0f)
+      params_nn[ibd].R = 1.0f; // cannot go above 1.0
   }
 }
 
@@ -619,7 +811,7 @@ float BeadTracker::FindMeanDmultFromSample ()
   if (num_checked > 0)
     mean_dmult /= num_checked;
   else
-    mean_dmult = 2.0f; // does this matter?
+    mean_dmult = 1.0f; // set mean_dmult to a sensible value, not 2.0!
 
   return (mean_dmult);
 }
@@ -721,6 +913,7 @@ void BeadTracker::AssignKeyID (Region *region, Mask *bfMask)
   }
 }
 
+
 void BeadTracker::InitRandomSample (Mask& bf, Region& region, const std::set<int>& sample)
 {
   int chipWidth = bf.W();
@@ -754,9 +947,9 @@ int BeadTracker::SystematicSampling(int sampling_rate, std::vector<size_t>::iter
   return nsample;
 }
 
-int BeadTracker::SetSampled()
+int BeadTracker::SetSampled(int numSamples)
 {
-  int sampling_rate = (numLBeads / NUMBEADSPERGROUP) + 1;
+  int sampling_rate = (numLBeads / numSamples) + 1;
 
   std::vector<size_t> ix(numLBeads, 0);
   for (size_t ibd=0; ibd < (size_t)numLBeads; ibd++) {
@@ -766,6 +959,20 @@ int BeadTracker::SetSampled()
   int nsample = SystematicSampling(sampling_rate, ix.begin(), ix.end());
   isSampled = true;
   return nsample;
+}
+
+int BeadTracker::SetPseudoRandomSampled(int sample_level){
+  for (int ibd=0; ibd<numLBeads; ibd++)
+    sampled[ibd] = false;
+  for (int i=0; i<sample_level; i++){
+      int rbd = (i+SMALL_PRIME)*LARGE_PRIME % numLBeads;
+      sampled[rbd] = true;
+  }
+  int nsample=0;
+  for (int ibd=0; ibd<numLBeads; ibd++)
+    if (sampled[ibd]) nsample++;
+  isSampled = true;
+  return(nsample);
 }
 
 /* choose a sample set of beads using penalty
@@ -827,6 +1034,22 @@ int BeadTracker::NumberSampled()
   return(n);
 }
 
+float BeadTracker::FindPercentageCopyCount(float percentage){
+  int num_sampled = NumberSampled();
+  std::vector<float> copy_count;
+      copy_count.resize(num_sampled);
+  int kount =0;
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    if (Sampled(ibd)){
+      copy_count[kount] = params_nn[ibd].Copies;
+      kount++;
+    }
+  }
+  sort(copy_count.begin(), copy_count.end()); // standard
+  int threshold = (num_sampled-1)*percentage; // rounding is fine here
+  return(copy_count.at(threshold));
+}
+
 void BeadTracker::DumpBeads (FILE *my_fp, bool debug_only, int offset_col, int offset_row, int flow_block_size)
 {
   if (numLBeads>0) // trap for dead regions
@@ -839,12 +1062,23 @@ void BeadTracker::DumpBeads (FILE *my_fp, bool debug_only, int offset_col, int o
   }
 }
 
+void BeadTracker::CheckPointClassifier(FILE *my_fp, int id, int offset_col, int offset_row, int flow_block_size)
+{
+  if (numLBeads>0){
+    params_nn[0].DumpBeadTitle(my_fp,flow_block_size);
+    for (int ibd=0; ibd<numLBeads; ibd++){
+      if (barcode_info.barcode_id[ibd]==id) // only matching beads
+        params_nn[ibd].DumpBeadProfile (my_fp, offset_col, offset_row, flow_block_size);
+    }
+  }
+}
+
 void BeadTracker::DumpAllBeadsCSV (FILE *my_fp, int flow_block_size)
 {
   for (int i=0;i<numLBeads;i++)
   {
     char sep_char = ',';
-    if (i == (numLBeads -1))
+    //if (i == (numLBeads -1))
       sep_char = '\n';
 
     for (int j=0;j<flow_block_size;j++)
@@ -853,20 +1087,3 @@ void BeadTracker::DumpAllBeadsCSV (FILE *my_fp, int flow_block_size)
     fprintf (my_fp,"%10.5f,%10.5f,%10.5f,%10.5f,%10.5f%c",params_nn[i].R,params_nn[i].dmult,params_nn[i].Copies,params_nn[i].gain,0.0,sep_char);
   }
 }
-
-/*void BeadTracker::DumpHits(int offset_col, int offset_row, int flow)
-{
-    char fname[100];
-    sprintf(fname,"%d.%d.beads.%d.txt",offset_col,offset_row,flow);
-    FILE *fp = fopen(fname,"wt");
-    for (int i=0; i<numLBeads; i++){
-      fprintf(fp, "%d",i);
-      for (int j=0; j<MAX_NUM_FLOWS_IN_BLOCK_GPU; j++)
-      {
-        fprintf(fp, "\t%d ",params_nn[i].my_state->hits_by_flow[j]);
-        params_nn[i].my_state->hits_by_flow[j] = 0;
-      }
-      fprintf(fp,"\n");
-    }
-    fclose(fp);
-}*/

@@ -17,14 +17,16 @@ using namespace std;
 
 class OrderedVCFWriter;
 
+// ====================================================================
+
 class AlleleDetails {
 public:
   AlleleDetails() : type(ALLELE_UNKNOWN), chr(0), position(0), ref_length(0),
       length(0), minimized_prefix(0),
       repeat_boundary(0), hp_repeat_len (0) , initialized(false), filtered(false), is_hotspot(false),
-      hotspot_params(NULL), coverage(0), coverage_fwd(0), coverage_rev(0), samples(1) {}
+      hotspot_params(NULL), coverage(0), coverage_fwd(0), coverage_rev(0), molecular_family_coverage(0), molecular_family_coverage_fwd(0), molecular_family_coverage_rev(0), samples(1) {}
 
-  void add_observation(const Allele& observation, int sample_index, bool is_reverse_strand, int _chr, int num_samples) {
+  void add_observation(const Allele& observation, int sample_index, bool is_reverse_strand, int _chr, int num_samples, int read_count) {
     if (not initialized) {
       type = observation.type;
       alt_sequence.append(observation.alt_sequence, observation.alt_length);
@@ -34,30 +36,42 @@ public:
       initialized = true;
     }
     if (sample_index < 0) return;
-    coverage++;
+    coverage += read_count;
+    molecular_family_coverage += 1;
     if ((int)samples.size() != num_samples)
       samples.resize(num_samples);
-    samples[sample_index].coverage++;
+    samples[sample_index].coverage += read_count;
+    samples[sample_index].molecular_family_coverage += 1;
     if (is_reverse_strand) {
-      coverage_rev++;
-      samples[sample_index].coverage_rev++;
+      coverage_rev += read_count;
+      samples[sample_index].coverage_rev += read_count;
+      molecular_family_coverage_rev += 1;
+      samples[sample_index].molecular_family_coverage_rev += 1;
     } else {
-      coverage_fwd++;
-      samples[sample_index].coverage_fwd++;
+      coverage_fwd += read_count;
+      samples[sample_index].coverage_fwd += read_count;
+      molecular_family_coverage_fwd += 1;
+      samples[sample_index].molecular_family_coverage_fwd += 1;
     }
   }
 
-  void add_reference_observation(int sample_index, bool is_reverse_strand, int chr_idx_) {
-    coverage++;
+  void add_reference_observation(int sample_index, bool is_reverse_strand, int chr_idx_, int read_count) {
+    coverage += read_count;
+    molecular_family_coverage += 1;
     //if ((int)samples.size() <= sample_index)
     //  samples.resize(sample_index+1);
-    samples[sample_index].coverage++;
+    samples[sample_index].coverage += read_count;
+    samples[sample_index].molecular_family_coverage += 1;
     if (is_reverse_strand) {
-      coverage_rev++;
-      samples[sample_index].coverage_rev++;
+      coverage_rev += read_count;
+      samples[sample_index].coverage_rev += read_count;
+      molecular_family_coverage_rev += 1;
+      samples[sample_index].molecular_family_coverage_rev += 1;
     } else {
-      coverage_fwd++;
-      samples[sample_index].coverage_fwd++;
+      coverage_fwd += read_count;
+      samples[sample_index].coverage_fwd += read_count;
+      molecular_family_coverage_fwd += 1;
+      samples[sample_index].molecular_family_coverage_fwd += 1;
     }
   }
 
@@ -70,6 +84,9 @@ public:
     coverage = 0;
     coverage_fwd = 0;
     coverage_rev = 0;
+    molecular_family_coverage = 0;
+    molecular_family_coverage_fwd = 0;
+    molecular_family_coverage_rev = 0;
     samples.clear();
     samples.resize(num_samples);
   }
@@ -102,10 +119,13 @@ public:
   }
 
   struct AlleleCoverage {
-    AlleleCoverage() : coverage(0), coverage_fwd(0), coverage_rev(0) {}
+    AlleleCoverage() : coverage(0), coverage_fwd(0), coverage_rev(0), molecular_family_coverage(0), molecular_family_coverage_fwd(0), molecular_family_coverage_rev(0) {}
     long int coverage;
     long int coverage_fwd;
     long int coverage_rev;
+    long int molecular_family_coverage;
+    long int molecular_family_coverage_fwd;
+    long int molecular_family_coverage_rev;
   };
 
   AlleleType              type;                 //! type of the allele
@@ -124,13 +144,17 @@ public:
   long int                coverage;             //! total allele coverage (across samples)
   long int                coverage_fwd;         //! forward strand allele coverage (across samples)
   long int                coverage_rev;         //! reverse strand allele coverage (across samples)
+  long int                molecular_family_coverage;             //! total molecular family allele coverage (across samples)
+  long int                molecular_family_coverage_fwd;         //! forward strand molecular family allele coverage (across samples)
+  long int                molecular_family_coverage_rev;         //! reverse strand molecular family allele coverage (across samples)
   vector<AlleleCoverage>  samples;              //! per-sample coverages
 };
 
+// ====================================================================
 
 class AllelePositionCompare {
 public:
-  bool operator()(const Allele& a, const Allele& b) {
+  bool operator()(const Allele& a, const Allele& b) const {
     if (a.position < b.position)
       return true;
     if (a.position > b.position)
@@ -163,7 +187,7 @@ public:
 };
 
 
-
+// ====================================================================
 
 class AlleleParser {
 public:
@@ -172,30 +196,39 @@ public:
        const SampleManager& sample_manager, OrderedVCFWriter& vcf_writer, HotspotReader& hotspot_reader);
   ~AlleleParser();
 
-  void BasicFilters(Alignment& ra);
-  void RegisterAlignment(Alignment& ra);
+  //! basic filters to reject a read
+  bool BasicFilters(Alignment& ra) const;
+
+  //! Populates the allele specific data in the read Alignment object
+  void UnpackReadAlleles(Alignment& ra) const;
+
   void GenerateCandidates(deque<VariantCandidate>& variant_candidates,
       list<PositionInProgress>::iterator& position_ticket, int& haplotype_length);
 
-  bool GetNextHotspotLocation(int& chr, long& position);
+  bool GetNextHotspotLocation(int& chr, long& position) const;
 
 private:
-  void SetupHotspotsVCF(const string& hotspots_file);
+  //void SetupHotspotsVCF(const string& hotspots_file); // XXX remove me!
 
-  void MakeAllele(deque<Allele>& alleles, AlleleType type, long int pos, int length, const char *alt_sequence);
+  void MakeAllele(deque<Allele>& alleles, AlleleType type, long int pos, int length, const char *alt_sequence) const;
 
   void PileUpAlleles(int allowed_allele_types, int haplotype_length, bool scan_haplotype,
       list<PositionInProgress>::iterator& position_ticket, int hotspot_window);
+
   void PileUpAlleles(int pos, int haplotype_length, list<PositionInProgress>::iterator& position_ticket);
+
   void PileUpHotspotOnly( vector<HotspotAllele> hotspot, list<PositionInProgress>::iterator& position_ticket) {
 	if (hotspot.size() == 0) return;
 	PileUpAlleles(hotspot[0].pos, hotspot[0].ref_length, position_ticket);
   }
-  void InferAlleleTypeAndLength(AlleleDetails& allele);
-  long ComputeRepeatBoundary(const string& seq, int chr, long position, int max_size, long &hp_repeat_len);
+
+  void InferAlleleTypeAndLength(AlleleDetails& allele) const;
+
+  long ComputeRepeatBoundary(const string& seq, int chr, long position, int max_size, long &hp_repeat_len) const;
 
   void GenerateCandidateVariant(deque<VariantCandidate>& variant_candidates,
       list<PositionInProgress>::iterator& position_ticket, int& haplotype_length);
+
   void FillInHotSpotVariant(deque<VariantCandidate>& variant_candidates, vector<HotspotAllele>& hotspot);
   void BlacklistAlleleIfNeeded(AlleleDetails& allele);
 
@@ -215,6 +248,7 @@ private:
   int                         min_alt_total_;             // -G --min-alternate-total
   int                         min_coverage_;             // -! --min-coverage
   int                         allowed_allele_types_;
+  int 			      merge_lookahead_;
 
   // data structures
   const ReferenceReader *     ref_reader_;
@@ -229,6 +263,7 @@ private:
   pileup                      allele_pileup_;
   AlleleDetails               ref_pileup_;
   vector<long int>           coverage_by_sample_;
+  vector<long int>           molecular_family_coverage_by_sample_;
   //vector<char>                black_list_strand_;
   char                        black_list_strand_; // revert to 4.2
   int                         hp_max_lenght_override_value; //! if not zero then it overrides the maxHPLenght parameter in filtering

@@ -2,7 +2,6 @@
 #include "GenerateBeadTraceKernels.h"
 //#include "cuda_runtime.h"
 #include "cuda_error.h"
-#include "dumper.h"
 #include "Mask.h"
 #include "Image.h"
 #include "TimeCompression.h"
@@ -285,6 +284,8 @@ void ShiftUncompressedTraceAndAccum(float * out, const float * in, const float s
 //all other passed pointers and values are specific to the well
 // const symbols:
 // ConstFrmP constant symbol needs to be initialized for this kernel
+
+/*
 __device__ inline
 int LoadImgWOffset(
     FG_BUFFER_TYPE * fgptr, //now points to frame 0 of current bead in image
@@ -387,7 +388,8 @@ int LoadImgWOffset(
   return ConstFrmP.getUncompFrames();
 
 }
-
+*/
+/*
 __device__ inline
 int LoadImgWOffset_WithRegionalSampleExtraction(
     FG_BUFFER_TYPE * fgptr, //now points to frame 0 of current bead in image
@@ -534,9 +536,9 @@ int LoadImgWOffset_WithRegionalSampleExtraction(
   return ConstFrmP.getUncompFrames();
 
 }
+*/
 
-
-
+/*
 __device__ inline
 int LoadImgWOffset_WithRegionalSampleExtractionInOrder(
     FG_BUFFER_TYPE * fgptr, //now points to frame 0 of current bead in image
@@ -668,7 +670,7 @@ int LoadImgWOffset_WithRegionalSampleExtractionInOrder(
   return ConstFrmP.getUncompFrames();
 
 }
-
+*/
 __device__ inline
 int LoadImgWOffset_OnTheFlyCompressionWithRegionalSampleExtractionInOrder(
     FG_BUFFER_TYPE * fgptr, //now points to frame 0 of current bead in image
@@ -702,7 +704,7 @@ int LoadImgWOffset_OnTheFlyCompressionWithRegionalSampleExtractionInOrder(
   int t0ShiftWhole;
   float t0ShiftFrac;
   int my_frame = 0,compFrm,curFrms,curCompFrms;
-  double prev;
+  double prev=0.0f;
   double next;
   double tmpAdder;
   double mult;
@@ -729,7 +731,7 @@ int LoadImgWOffset_OnTheFlyCompressionWithRegionalSampleExtractionInOrder(
   //int interf,lastInterf=-1;
   FG_BUFFER_TYPE fgTmp[MAX_COMPRESSED_FRAMES_GPU];
   float traceTmp[MAX_UNCOMPRESSED_FRAMES_GPU+4];
-  FG_BUFFER_TYPE lastVal;
+  FG_BUFFER_TYPE lastVal = 0;
 
 
 
@@ -830,6 +832,7 @@ int LoadImgWOffset_OnTheFlyCompressionWithRegionalSampleExtractionInOrder(
 #endif
       fgptr[frameStride*i] =  val;
       if(isSample) SampleCompressedTraces[SamplePlaneStride*i] = val; //copy current bead information to sample set
+      lastVal = val;
     }
 
     if(isSample){ //copy current bead information to sample set
@@ -1200,8 +1203,6 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
     const float * T0avg,  // ToDo: try already subtract T0 after calculating the average so this would not be needed here anymore!
     const ConstantParamsRegion * constRegP,
     const PerFlowParamsRegion * perFlowRegP,
-    //one empty trace per thread block
-    float * EmptyTraceAvgRegion, // contains result of emppty trace averaging per region
     float * EmptyTraceSumRegionTBlock, // has to be initialized to 0!! will contain sum of all empty trace frames for each row in a region
     int * EmptyTraceCountRegionTBlock, // has to be initialized to 0!! will contain number of empty traces summed up for each row in a region
     int * EmptyTraceComplete, //has to be initialized to 0!! completion counter per region for final sum ToDo: figure out if we can do without it
@@ -1221,7 +1222,7 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
 {
   extern __shared__ int smemGenBeadTraces[];  //4 Byte per thread
 
-  SampleCompressedTraces = ConstSmplCol.getWriteBuffer();
+  SampleCompressedTraces = ConstHistCol.getWriteBufferSampleTraces();
   //if(blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x ==0 && threadIdx.y ==0) printf("Device SampleComressedTrace: %p\n",SampleCompressedTraces);
   //determine shared memory pointers for each thread and the the base pointer for each warp (or warp half)
   int * sm_base = smemGenBeadTraces;
@@ -1275,7 +1276,7 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
   size_t numTBlocksRegion = (ImgRegP.getRegH()+blockDim.y-1)/blockDim.y;
   size_t TBlockId = ry/blockDim.y;
 
-  EmptyTraceAvgRegion +=regId* ConstFrmP.getUncompFrames();
+  //EmptyTraceAvgRegion +=regId* ConstFrmP.getUncompFrames();
 
   //offset to first buffer of region
   EmptyTraceCountRegionTBlock += regId * numTBlocksRegion;
@@ -1399,7 +1400,7 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
         else
           emptyCnt++; //count empties vor empty average,  this was moved up from after kernel execution
 
-
+/*
 #ifndef COLLECT_SAMPLES
         if(IamAlive || EmptyWell){
           usedUncomFrames = LoadImgWOffset(
@@ -1455,9 +1456,10 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
         }
 #endif
 #endif
+*/
 
-#ifdef COLLECT_SAMPLES
-#ifdef SAMPLES_IN_ORDER
+//#ifdef COLLECT_SAMPLES
+//#ifdef SAMPLES_IN_ORDER
 
         //*sm = *SampleRowPtr; // init sm with the offset for the first sample in this row.
 
@@ -1509,8 +1511,8 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
 
 
         }
-#endif
-#endif
+//#endif
+//#endif
 
       }
       ////////////////////////////////
@@ -1526,10 +1528,10 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
       fgPtr += windowSize;
 
 
-#ifdef COLLECT_SAMPLES
+//#ifdef COLLECT_SAMPLES
       BeadParamCube += windowSize;
       BeadStateMask += windowSize;
-#endif
+//#endif
 
     }
   }
@@ -1567,6 +1569,7 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
       *EmptyTraceCountTBlock =  emptyInBlockCnt; // add count of empty traces to allow for later average calculation
     }
   }
+/*
 #if EMPTY_AVERAGE_IN_GENTRACE
 
   __threadfence(); //guarantee global previous writes are visible to all threads
@@ -1603,6 +1606,7 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
     }
   }
 #endif
+*/
 }
 
 
@@ -1617,7 +1621,6 @@ __global__
 __launch_bounds__(128, 16)
 void ReduceEmptyAverage_k(
     unsigned short * RegionMask,
-    float * EmptyTraceAvgRegion,
     const ConstantParamsRegion * constRegP,
     const PerFlowParamsRegion * perFlowRegP,
     const float * frameNumberRegion, // from timing compression
@@ -1642,7 +1645,7 @@ void ReduceEmptyAverage_k(
   if( *RegionMask != RegionMaskLive) return;
 
 
-  EmptyTraceAvgRegion +=  regId * ConstFrmP.getUncompFrames();
+  float * EmptyTraceAvgRegion =  ConstHistCol.getWriteBufferEmptyTraceAvg() + regId * ConstFrmP.getUncompFrames();
   constRegP += regId;
   perFlowRegP += regId;
   //dcOffset_debug += regId;

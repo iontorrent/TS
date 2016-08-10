@@ -84,6 +84,9 @@ public:
   void SendBestRegion_LocationToHDF5 (int ibd, RegionalizedData &my_region_data );
   void SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
   void SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
+  void SendBestRegion_OriginalToHDF5 (int ibd, float *block_signal_original, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
+  void SendBestRegion_SBGToHDF5 (int ibd, float *block_signal_sbg, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
+
   void SendBestRegion_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendBestRegion_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendBestRegion_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
@@ -92,9 +95,15 @@ public:
   void SendBestRegion_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendBestRegion_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data );
   void SendBestRegion_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start );
+  void SendBestRegion_Converged_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
   void SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames);
-  void SendBestRegion_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
-  // regionSamples/regionSampleOut
+  void SendBestRegion_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendBestRegion_etbRToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendBestRegion_BkgLeakageToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendBestRegion_InitAkToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendBestRegion_TMS_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+
+    // regionSamples/regionSampleOut
   int numLiveBeads;
   int nSampleOut;
   int sampleIndex;
@@ -106,8 +115,12 @@ public:
   int get_sampleIndex(void) {return (sampleIndex);}
   void SendRegionSamples_LocationToHDF5 (int ibd, RegionalizedData &my_region_data );
   void SendRegionSamples_RegionParamsToHDF5 (int ibd, RegionalizedData &my_region_data );
+
   void SendRegionSamples_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
   void SendRegionSamples_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
+  void SendRegionSamples_OriginalToHDF5 (int ibd, float *block_signal_original, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
+  void SendRegionSamples_SBGToHDF5 (int ibd, float *block_signal_sbg, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start);
+
   void SendRegionSamples_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendRegionSamples_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendRegionSamples_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
@@ -116,8 +129,13 @@ public:
   void SendRegionSamples_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendRegionSamples_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data );
   void SendRegionSamples_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start );
+  void SendRegionSamples_Converged_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendRegionSamples_BkgLeakageToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendRegionSamples_InitAkToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
   void SendRegionSamples_TimeframeToHDF5 (RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames);
-  void SendRegionSamples_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
+  void SendRegionSamples_TaubToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t,  int flow_block_start );
+  void SendRegionSamples_etbRToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
+  void SendRegionSamples_TMS_ToHDF5 ( RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras,int flow_block_start );
   // xyflow
   int select_xy(int x, int y);
   int select_xyflow(int x, int y, int flow);
@@ -137,7 +155,7 @@ public:
   void SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendXyflow_GainSens_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
   void SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start );
-  void SendXyflow_Taub_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start );
+  void SendXyflow_Taub_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, error_track &err_t, int flow_block_start );
   // keys (TCAG) corresponding to xyflow
   void SendXyflow_Location_Keys_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras &my_region_data_extras, int flow_block_start );
   void SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start );

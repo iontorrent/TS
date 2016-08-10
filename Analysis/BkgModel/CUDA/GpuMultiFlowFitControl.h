@@ -11,20 +11,21 @@ using namespace std;
 // This used to be a Singleton class. Now it's not.
 class GpuMultiFlowFitControl
 {
+  private:
 
-private:
-
-  //private copy/= constructors to prevent usage
-  GpuMultiFlowFitControl(GpuMultiFlowFitControl const&);  
-  GpuMultiFlowFitControl& operator=(GpuMultiFlowFitControl const&);
+    //private copy/= constructors to prevent usage
+    GpuMultiFlowFitControl(GpuMultiFlowFitControl const&);  
+    GpuMultiFlowFitControl& operator=(GpuMultiFlowFitControl const&);
 
   
   public:
-  GpuMultiFlowFitControl();
-  ~GpuMultiFlowFitControl();
+    GpuMultiFlowFitControl();
+    ~GpuMultiFlowFitControl();
 
     // When something sets the flow params, it adjusts the current instance.
     void SetFlowParams( int flow_key, int flow_block_size );
+    GpuMultiFlowFitMatrixConfig* GetMatrixConfig(const string &name, 
+        const master_fit_type_table *table);
 
     unsigned int GetMaxSteps() const { return _maxSteps; }
     unsigned int GetMaxParamsToFit() const { return _maxParams; }
@@ -36,42 +37,41 @@ private:
     static unsigned int GetMaxFrames() { return _maxFrames; } 
     static bool doGPUTraceLevelXtalk() { return _gpuTraceXtalk; }
 
-    GpuMultiFlowFitMatrixConfig* GetMatrixConfig(const std::string & name) { 
-      return _allMatrixConfig[MatrixIndex( _activeFlowKey, _activeFlowMax, name ) ]; 
-    }
   private:
-    void CreateFitInitialGpuMatrixConfig( int flow_key, int flow_block_size ); 
-    void CreatePostKeyFitGpuMatrixConfig( int flow_key, int flow_block_size );
+    GpuMultiFlowFitMatrixConfig* createConfig(
+      const string &fitName,
+      const master_fit_type_table *table);
+
     void DetermineMaxSteps(int steps);
     void DetermineMaxParams(int params); 
 
-  // data members
-  struct MatrixIndex {
-    int flow_key;
-    int flow_block_size;
-    std::string name;
+    // data members
+    struct MatrixIndex {
+      int flow_key;
+      int flow_block_size;
+      std::string name;
 
-    MatrixIndex( int k, int m, std::string n ) :
-      flow_key( k ), flow_block_size( m ), name( n ) {
-    }
+      MatrixIndex( int k, int m, std::string n ) :
+        flow_key( k ), flow_block_size( m ), name( n ) {
+      }
 
-    bool operator < ( const MatrixIndex & that ) const {
-      if ( this->flow_key < that.flow_key )   return true;
-      if ( this->flow_key > that.flow_key )   return false;
-      if ( this->flow_block_size < that.flow_block_size )   return true;
-      if ( this->flow_block_size > that.flow_block_size )   return false;
-      return this->name < that.name;
-    }
-  };
+      bool operator < ( const MatrixIndex & that ) const {
+        if ( this->flow_key < that.flow_key )   return true;
+	if ( this->flow_key > that.flow_key )   return false;
+	if ( this->flow_block_size < that.flow_block_size )   return true;
+	if ( this->flow_block_size > that.flow_block_size )   return false;
+	return this->name < that.name;
+      }
+    };
 
-  int _activeFlowKey, _activeFlowMax;
-  std::map<MatrixIndex, GpuMultiFlowFitMatrixConfig* > _allMatrixConfig;
+    int _activeFlowKey, _activeFlowMax;
+    std::map<MatrixIndex, GpuMultiFlowFitMatrixConfig* > _allMatrixConfig;
     int _maxSteps;
     int _maxParams;
- 
-  static unsigned int _maxBeads;
-  static unsigned int _maxFrames;
-  static bool _gpuTraceXtalk;
+
+    static unsigned int _maxBeads;
+    static unsigned int _maxFrames;
+    static bool _gpuTraceXtalk;
 };
 
 #endif // GPUMULTIFLOWFITCONTROL_H

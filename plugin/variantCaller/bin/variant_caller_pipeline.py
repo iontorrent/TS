@@ -143,37 +143,41 @@ def main():
     # TVC
     printtime('Calling small INDELs and SNPs using tvc ...')
     
+    multisample = (options.bamfile.find(",") != -1)
     meta_tvc_args = parameters.get('meta',{}).get('tvcargs','tvc')
     if meta_tvc_args == 'tvc':
         tvc_command =   path_to_tvc
     else:
         tvc_command =   meta_tvc_args
     tvc_command +=      '   --output-dir %s' % options.outdir
-    tvc_command +=      '   --reference %s' % options.reference
+    tvc_command +=      '   --reference "%s"' % options.reference
     if options.numthreads:
         tvc_command +=  '   --num-threads %s' % options.numthreads
     if options.ptrim_bed:
-        tvc_command +=  '   --target-file %s' % options.ptrim_bed
+        tvc_command +=  '   --target-file "%s"' % options.ptrim_bed
         tvc_command +=  '   --trim-ampliseq-primers on'
     elif options.bedfile:
-        tvc_command +=  '   --target-file %s' % options.bedfile
+        tvc_command +=  '   --target-file "%s"' % options.bedfile
     if options.postprocessed_bam:
         #postprocessed_bam_tmp = options.postprocessed_bam + '.tmp.bam'
         #tvc_command +=  '   --postprocessed-bam %s' % postprocessed_bam_tmp
-        tvc_command +=  '   --postprocessed-bam %s' % options.postprocessed_bam
+        tvc_command +=  '   --postprocessed-bam "%s"' % options.postprocessed_bam
     if options.paramfile:
-        tvc_command +=  ' --parameters-file %s' % options.paramfile
+        tvc_command +=  ' --parameters-file "%s"' % options.paramfile
     if options.errormotifsfile:
-        tvc_command +=  '  --error-motifs %s' % options.errormotifsfile
+        tvc_command +=  '  --error-motifs "%s"' % options.errormotifsfile
     if options.normbamfile:
-         tvc_command += '   --input-bam %s,%s' % ((options.bamfile, options.normbamfile))
+         tvc_command += '   --input-bam "%s","%s"' % ((options.bamfile, options.normbamfile))
          tvc_command += '   --sample-name "%s"' % (options.testsamplename)    
     else:
-         tvc_command += '   --input-bam %s' % (options.bamfile)
+         tvc_command += '   --input-bam "%s"' % (options.bamfile)
     tvc_command +=      '   --output-vcf small_variants.vcf'
     if options.hotspot_vcf:
-        tvc_command +=  '   --input-vcf %s' % options.hotspot_vcf
-    
+        tvc_command +=  '   --input-vcf "%s"' % options.hotspot_vcf
+
+    if multisample:
+        tvc_command += '   --heal-snps false'
+
     if parameters and parameters['torrent_variant_caller'].get('process_input_positions_only','0') == '1' and parameters['freebayes'].get('use_input_allele_only','0') == '1':
         
         tvc_command +=  '   --process-input-positions-only on'
@@ -182,60 +186,61 @@ def main():
 
     else:
         RunCommand(tvc_command,'Call small indels and SNPs')
-
-        long_indel_command      =   path_to_tvcassembly
-        long_indel_command     +=   '   --reference %s' % options.reference
-        if options.normbamfile:
-            long_indel_command +=   '   --input-bam %s,%s' % ((options.bamfile, options.normbamfile))
-            long_indel_command +=   '   --sample-name "%s"' % (options.testsamplename)    
-        else:
-            long_indel_command +=   '   --input-bam %s' % (options.bamfile)
-        if options.bedfile:
-            long_indel_command +=   '   --target-file %s' % options.bedfile
-        long_indel_command +=       '   --output-vcf %s/indel_assembly.vcf' % options.outdir
-        if options.paramfile:
-            long_indel_command +=   '   --parameters-file %s' % options.paramfile
-        RunCommand(long_indel_command, "Assemble long indels")
+        if not os.path.isfile(options.outdir + '/indel_assembly.vcf'):
+            long_indel_command      =   path_to_tvcassembly
+            long_indel_command     +=   '   --reference "%s"' % options.reference
+            if options.normbamfile:
+                long_indel_command +=   '   --input-bam "%s","%s"' % ((options.bamfile, options.normbamfile))
+                long_indel_command +=   '   --sample-name "%s"' % (options.testsamplename)    
+            else:
+                long_indel_command +=   '   --input-bam "%s"' % (options.bamfile)
+            if options.bedfile:
+                long_indel_command +=   '   --target-file "%s"' % options.bedfile
+            long_indel_command +=       '   --output-vcf "%s/indel_assembly.vcf"' % options.outdir
+            if options.paramfile:
+                long_indel_command +=   '   --parameters-file "%s"' % options.paramfile
+            RunCommand(long_indel_command, "Assemble long indels")
         
-    
+
     if options.postprocessed_bam:
         #bamsort_command = 'samtools sort -m 2G -l1 -@6 %s %s' % (postprocessed_bam_tmp, options.postprocessed_bam[:-4])
         #RunCommand(bamsort_command,'Sort postprocessed bam')
-        bamindex_command = 'samtools index %s' % options.postprocessed_bam
+        bamindex_command = 'samtools index "%s"' % options.postprocessed_bam
         RunCommand(bamindex_command,'Index postprocessed bam')
         #RunCommand('rm -f ' + postprocessed_bam_tmp, 'Remove unsorted postprocessed bam')
-
-    if options.generate_gvcf == "on":
-        unify_command  =    'samtools depth'
-        if options.bedfile != None:
-            unify_command +=    '   -b ' + options.bedfile
-        if options.postprocessed_bam:
-            unify_command +=    '   ' + options.postprocessed_bam
+        
+    if not os.path.isfile(options.outdir + '/TSVC_variants.vcf.gz'):
+        if options.generate_gvcf == "on":
+            unify_command  =    'samtools depth'
+            if options.bedfile != None:
+                unify_command +=    '   -b "' + options.bedfile + '"'
+            if options.postprocessed_bam:
+                unify_command +=    '   "' + options.postprocessed_bam + '"'
+            else:
+                unify_command +=    '   ' + ' '.join(options.bamfile.split(','))
+            unify_command +=    ' | '
         else:
-            unify_command +=    '   ' + ' '.join(options.bamfile.split(','))
-        unify_command +=    ' | '
-    else:
-        unify_command = ''
+            unify_command = ''
 
-    unify_command     += path_to_tvcutils + ' unify_vcf'
-    unify_command     +=    '   --novel-tvc-vcf %s/small_variants.vcf' % options.outdir
-    if os.path.exists("%s/indel_assembly.vcf" % options.outdir):
-        unify_command +=    '   --novel-assembly-vcf %s/indel_assembly.vcf' % options.outdir
-    if options.hotspot_vcf:
-        unify_command +=    '   --hotspot-annotation-vcf "%s"' % options.hotspot_vcf
-    unify_command     +=    '   --output-vcf %s/TSVC_variants.vcf.gz' % options.outdir
-    unify_command     +=    '   --reference-fasta %s' % options.reference
-    if os.path.exists(options.outdir + '/tvc_metrics.json'):
-        unify_command +=    '   --tvc-metrics %s/tvc_metrics.json' % options.outdir
-    if options.bedfile:
-        unify_command +=    '   --target-file "%s"' % options.bedfile
-    if options.generate_gvcf == "on":
-        unify_command +=    '    --input-depth stdin'
-        if parameters and 'gen_min_coverage' in parameters.get('freebayes', {}):
-            unify_command +='    --min-depth ' + str(parameters['freebayes']['gen_min_coverage']) 
+        unify_command     += path_to_tvcutils + ' unify_vcf'
+        unify_command     +=    '   --novel-tvc-vcf "%s/small_variants.vcf"' % options.outdir
+        if os.path.exists("%s/indel_assembly.vcf" % options.outdir):
+            unify_command +=    '   --novel-assembly-vcf "%s/indel_assembly.vcf"' % options.outdir
+        if options.hotspot_vcf:
+            unify_command +=    '   --hotspot-annotation-vcf "%s"' % options.hotspot_vcf
+        unify_command     +=    '   --output-vcf "%s/TSVC_variants.vcf.gz"' % options.outdir
+        unify_command     +=    '   --reference-fasta "%s"' % options.reference
+        if os.path.exists(options.outdir + '/tvc_metrics.json'):
+            unify_command +=    '   --tvc-metrics "%s/tvc_metrics.json"' % options.outdir
+        if options.bedfile:
+            unify_command +=    '   --target-file "%s"' % options.bedfile
+        if options.generate_gvcf == "on":
+            unify_command +=    '    --input-depth stdin'
+            if parameters and 'gen_min_coverage' in parameters.get('freebayes', {}):
+                unify_command +='    --min-depth ' + str(parameters['freebayes']['gen_min_coverage']) 
             
 
-    RunCommand(unify_command, 'Unify variants and annotations from all sources (tvc,IndelAssembly,hotpots)')
+        RunCommand(unify_command, 'Unify variants and annotations from all sources (tvc,IndelAssembly,hotpots)')
 
     # Generate uncompressed vcf file
     RunCommand('gzip -dcf "%s/TSVC_variants.vcf.gz" > "%s/TSVC_variants.vcf"' % (options.outdir,options.outdir), 'Generate uncompressed vcf')

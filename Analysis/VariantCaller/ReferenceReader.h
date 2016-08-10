@@ -29,9 +29,13 @@ class ReferenceReader {
 public:
   ReferenceReader () : initialized_(false), ref_handle_(0), ref_mmap_(0) {}
   ~ReferenceReader () { Cleanup(); }
+  
+  string& get_filename() {return ref_filename_;}
 
   void Initialize(const string& fasta_filename) {
     Cleanup();
+
+    ref_filename_ = fasta_filename;
 
     ref_handle_ = open(fasta_filename.c_str(),O_RDONLY);
     if (ref_handle_ < 0) {
@@ -39,8 +43,18 @@ public:
       exit(1);
     }
 
-    fstat(ref_handle_, &ref_stat_);
-    ref_mmap_ = (char *)mmap(0, ref_stat_.st_size, PROT_READ, MAP_SHARED, ref_handle_, 0);
+    // get file size
+    if (fstat (ref_handle_, &ref_stat_) != 0) {
+       cout << "ERROR: fstat64 error" << endl;
+       exit(1);
+    }
+
+    // mmap the reference file
+    if ((ref_mmap_ = (char *)mmap(0, ref_stat_.st_size, PROT_READ, MAP_SHARED, ref_handle_, 0)) == MAP_FAILED) {
+        perror("mmap");
+        cout << "mmap error for reference file " << fasta_filename << " of size " << ref_stat_.st_size << endl;
+        exit(1);
+    }
 
     string fai_filename = fasta_filename + ".fai";
     FILE *fai = fopen(fai_filename.c_str(), "r");
@@ -209,10 +223,11 @@ private:
 
   bool                initialized_;
   int                 ref_handle_;
-  struct stat         ref_stat_;
+  struct stat       ref_stat_;
   char *              ref_mmap_;
   vector<Reference>   ref_index_;
   map<string,int>     ref_map_;
+  string              ref_filename_;
 
 };
 

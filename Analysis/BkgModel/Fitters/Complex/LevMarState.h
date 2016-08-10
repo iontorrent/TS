@@ -42,6 +42,7 @@ class LevMarBeadAssistant{
     
     
     int num_errors_logged; // track number of error messages spammed to output log, stop when we hit max
+    int region_success_step; // track number of regional optimization successes: most important when this is zero
 
     // residuals
     float *residual;
@@ -61,11 +62,20 @@ class LevMarBeadAssistant{
     int nonclonal_call_penalty_enforcement;
     float restrict_clonal;
     float non_integer_penalty[MAX_POISSON_TABLE_COL];
+
+    float ref_penalty_scale;
+    float kmult_penalty_scale;
+
     bool  skip_beads; // skip individual wells when doing regional optimization, pick up well parameters later
+    int derivative_direction; // take derivative in additive or negative direction - matters if we hit a parameter boundary
     
     // current optimizations
     unsigned int well_mask;
     unsigned int reg_mask;
+
+    // cheap scratch space
+    BeadParams ref_bead;
+    int ref_span;
     
     LevMarBeadAssistant();
     ~LevMarBeadAssistant();
@@ -81,6 +91,10 @@ class LevMarBeadAssistant{
     void SetNonIntegerPenalty(float *clonal_call_scale, float clonal_call_penalty, int len);
     void Delete();
     void ApplyClonalRestriction(float *fval, struct BeadParams *p, int npts, int flow_key, int flow_block_size);
+
+    void PenaltyForDeviationFromRef(float *fval, struct BeadParams *p, struct BeadParams *ref_ampl, int ref_span, int npts, int flow_block_size);
+    void PenaltyForDeviationFromKmult(float *fval, BeadParams *p,  int npts, int flow_block_size);
+
     void ReduceRegionStep();
     bool IncreaseRegionStep();
     void IncreaseRegionRegularizer();
@@ -91,7 +105,7 @@ class LevMarBeadAssistant{
     bool ValidBeadGroup(int ibd) const;
     bool WellBehavedBead(int ibd);
     int CountHappyBeads();
-    void ReAssignBeadsToRegionGroups(int num_beads_per_group);
+    void ReAssignBeadsToRegionGroups(BeadTracker &my_beads, int num_beads_per_group);
     bool LogMessage(){if (num_errors_logged<MAX_LM_MESSAGE_LOG){
             num_errors_logged++;
             return(true);} else {return(false);}};

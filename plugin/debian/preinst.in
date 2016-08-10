@@ -9,9 +9,7 @@ case "$1" in
     # Delete these aftermarket files: *.pyc
     # This code is placed here to clean up after previous versions of this package
     # Similar code is placed in prerm.
-    if [ -d @ION_INSTALL_PREFIX@/plugins ]; then
-        find @ION_INSTALL_PREFIX@/plugins -name \*.pyc -exec rm -f {} \;
-    fi
+    find @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@ -name \*.pyc -exec rm -f {} \; || true
 
     ;;
 esac

@@ -10,11 +10,10 @@
 void BasicBiasGenerator::GenerateBiasByStrand(int i_hyp, HiddenBasis &delta_state,  vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions){
 
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
      //float b_val = PredictBias(delta_state, strand_key, i_hyp, j_flow);
-     float b_val = delta_state.ServeCommonDirection(j_flow);
-     new_residuals[j_flow] -= b_val;
-     new_predictions[j_flow] -= b_val;
+     float b_val = delta_state.ServeCommonDirection(t_flow);
+     new_residuals[t_flow] -= b_val;
+     new_predictions[t_flow] -= b_val;
   }
 }
 
@@ -40,12 +39,11 @@ void BasicBiasGenerator::AddOneUpdate(HiddenBasis &delta_state, const vector<vec
   // note bias may vary by more complicated functions
   //cout << "SIZE: " <<  responsibility.size() << "\t" << update_latent_bias.at(0).size() << "\t" << weight_update.at(0).size() << endl;
     for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
      for (unsigned int i_hyp=1; i_hyp<responsibility.size(); i_hyp++){  // only non-outliers count!!!
-       float r_val = residuals[i_hyp][j_flow];
+       float r_val = residuals[i_hyp][t_flow];
        // normally this will be just a single o_alt value
        for (unsigned int o_alt = 0; o_alt<update_latent_bias[strand_key].size(); o_alt++){
-          float d_val = delta_state.ServeAltDelta(o_alt, j_flow);
+          float d_val = delta_state.ServeAltDelta(o_alt, t_flow);
           update_latent_bias[strand_key][o_alt] += responsibility[i_hyp] * d_val * r_val ; // estimate projection on delta
           weight_update[strand_key][o_alt] += responsibility[i_hyp] * d_val * d_val; // denominator
        }
@@ -186,8 +184,18 @@ void BiasChecker::DoUpdate(){
 
 void BiasChecker::UpdateBiasChecker(ShortStack &my_theory){
   ResetUpdate();
-
-  //for (unsigned int i_read=0; i_read<total_theory.my_hypotheses.size(); i_read++){
+  // ZZ output
+  /*
+  for (unsigned int i_read=0; i_read<my_theory.my_hypotheses.size(); i_read++){
+HiddenBasis &delta_state = my_theory.my_hypotheses[i_read].delta_state;
+  for (unsigned i =0; i < delta_state.delta.size(); i++) {
+        cout << "iread hyp " <<  i_read << i << "\t";
+        for (unsigned int j = 0; j < delta_state.delta[i].size(); j++)
+            cout << delta_state.delta[i][j] << "\t";
+        cout << endl;
+  }
+}
+*/
   for (unsigned int i_ndx = 0; i_ndx < my_theory.valid_indexes.size(); i_ndx++) {
     unsigned int i_read = my_theory.valid_indexes[i_ndx];
     AddCrossUpdate(my_theory.my_hypotheses[i_read]);
@@ -207,29 +215,28 @@ void BiasChecker::AddCrossUpdate(CrossHypotheses &my_cross){
 void BiasChecker::AddOneUpdate(HiddenBasis &delta_state, const vector<vector<float> > &residuals, const vector<int> &test_flow, const vector<float> &responsibility){
   // note bias may vary by more complicated functions
     for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
      // no null hypothesis
      // shut down crazy data points aggregating by a soft-clip value
 
      // ref hypothesis special - project on each alternate vector
      for (unsigned int i_hyp=2; i_hyp<responsibility.size(); i_hyp++){
        int o_alt = i_hyp-2;
-      float d_val = delta_state.ServeAltDelta(o_alt,j_flow);
+      float d_val = delta_state.ServeAltDelta(o_alt,t_flow);
       float r_val = responsibility[1];
       if (r_val<soft_clip)
         r_val = 0.0f;
-      update_ref_bias_v[i_hyp-1] += r_val * d_val * residuals[1][j_flow]; // estimate projection on delta
+      update_ref_bias_v[i_hyp-1] += r_val * d_val * residuals[1][t_flow]; // estimate projection on delta
       weight_ref_v[i_hyp-1] +=r_val * d_val * d_val; // denominator
      }
 // variant hypotheses
      for (unsigned int i_hyp=2; i_hyp<responsibility.size(); i_hyp++){  // only non-outliers count!!!
        // for each alternate hypothesis (or reference), we are checking the shift along the axis joining  reference to variant
        int o_alt = i_hyp-2;
-       float d_val = delta_state.ServeAltDelta(o_alt, j_flow);
+       float d_val = delta_state.ServeAltDelta(o_alt, t_flow);
        float r_val = responsibility[i_hyp];
        if (r_val<soft_clip)
          r_val = 0.0f;
-       update_variant_bias_v[i_hyp-1] += r_val * d_val * residuals[i_hyp][j_flow]; // estimate projection on delta
+       update_variant_bias_v[i_hyp-1] += r_val * d_val * residuals[i_hyp][t_flow]; // estimate projection on delta
        weight_variant_v[i_hyp-1] += r_val * d_val * d_val; // denominator
 
      }

@@ -5,6 +5,7 @@
 //! @brief    Command line option reading and storage for BaseCaller modules
 
 #include "BaseCallerParameters.h"
+#include "MolecularTagTrimmer.h"
 
 
 void SaveJson(const Json::Value & json, const string& filename_json); // Borrow from Basecaller.cpp
@@ -117,7 +118,12 @@ void BaseCallerParameters::PrintHelp()
     printf ("  -n,--num-threads           INT        number of worker threads [2*numcores]\n");
     printf ("  -f,--flowlimit             INT        basecall only first n flows [all flows]\n");
     printf ("     --keynormalizer         STRING     key normalization algorithm [gain]\n");
-    printf ("     --dephaser              STRING     dephasing algorithm [treephaser-sse]\n");
+    printf ("     --wells-normalization   STRING     normalize wells signal and correct for signal bias [off]/on/keyOnly/signalBiasOnly/pinZero\n");
+#if defined( __SSE3__ )
+    printf ("     --dephaser              STRING     dephasing algorithm e.g. treephaser-sse, treephaser-solve, dp-treephaser, treephaser-adaptive, treephaser-swan  [treephaser-sse]\n");
+#else
+    printf ("     --dephaser              STRING     dephasing algorithm e.g. dp-treephaser, treephaser-adaptive, treephaser-swan [treephaser-swan]\n");
+#endif
     printf ("     --window-size           INT        normalization window size (%d-%d) [%d]\n", DPTreephaser::kMinWindowSize_, DPTreephaser::kMaxWindowSize_, DPTreephaser::kWindowSizeDefault_);
     printf ("     --flow-signals-type     STRING     select content of FZ tag [none]\n");
     printf ("                                          \"none\" - FZ not generated\n");
@@ -126,7 +132,6 @@ void BaseCallerParameters::PrintHelp()
     printf ("                                          \"adaptive-normalized\" - Adaptive normalized and not dephased\n");
     printf ("                                          \"residual\" - Measurement-prediction residual\n");
     printf ("                                          \"scaled-residual\" - Scaled measurement-prediction residual\n");
-    printf ("     --extra-trim-left       INT        Number of additional bases after key and barcode to remove from each read [0]\n");
     printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
     printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
     printf ("\n");
@@ -142,15 +147,19 @@ void BaseCallerParameters::PrintHelp()
     printf ("     --calibration-training  INT        Generate training set of INT reads. No TFs, no unfiltered sets. -1=off [-1]\n");
     printf ("     --calibration-panel     FILE       Datasets json for calibration panel reads to be used for training [off]\n");
     printf ("     --calibration-json      FILE       Enable Calibration using models from provided json file [off]\n");
-    printf ("     --calibration-hp-thres  FILE       Threshold to switch between calibration models [4]\n");
     printf ("     --model-file            FILE       Legacy text input file for LinearModelCalibration [off]\n");
     printf ("     --calibration-file      FILE       Legacy text input file for HistogramCalibration [off]\n");
+    printf ("     --calibrate-tfs         FILE       Calibrate test fragment reads [off]\n");
+    printf ("\n");
+    printf ("Debug Options:\n");
+    printf ("     --debug-normalization-bam  BOOL       Output debug data to the bam tags Ya, Yb, Yw, and Yx, for the adaptive offset, adaptive slope, well-normalized measurements, and not-calibrated measurements [off]\n");
     printf ("\n");
 
     BaseCallerFilters::PrintHelp();
     PhaseEstimator::PrintHelp();
     PerBaseQual::PrintHelp();
     BarcodeClassifier::PrintHelp();
+    MolecularTagTrimmer::PrintHelp(false);
     BaseCallerMetricSaver::PrintHelp();
 
     exit (EXIT_SUCCESS);
@@ -183,6 +192,7 @@ bool BaseCallerParameters::InitializeFilesFromOptArgs(OptArgs& opts)
 
     bc_files.filename_filter_mask   = bc_files.output_directory + "/bfmask.bin";
     bc_files.filename_json          = bc_files.output_directory + "/BaseCaller.json";
+    bc_files.filename_phase         = bc_files.output_directory + "/PhaseEstimates.json";
 
     printf("\n");
     printf("Input files summary:\n");
@@ -216,19 +226,28 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     ion_run_to_readname (default_run_id, (char*)bc_files.output_directory.c_str(), bc_files.output_directory.length());
     context_vars.run_id                      = opts.GetFirstString ('-', "run-id", default_run_id);
 	num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
-	num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 6);
+	num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 0);
 
     context_vars.flow_signals_type           = opts.GetFirstString ('-', "flow-signals-type", "none");
-    context_vars.extra_trim_left             = opts.GetFirstInt    ('-', "extra-trim-left", 0);
     context_vars.only_process_unfiltered_set = opts.GetFirstBoolean('-', "only-process-unfiltered-set", false);
 
     // Treephaser options
+#if defined( __SSE3__ )
     context_vars.dephaser                    = opts.GetFirstString ('-', "dephaser", "treephaser-sse");
+#else
+    context_vars.dephaser                    = opts.GetFirstString ('-', "dephaser", "treephaser-swan");
+#endif
     context_vars.keynormalizer               = opts.GetFirstString ('-', "keynormalizer", "gain");
     context_vars.windowSize                  = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
-    context_vars.skip_droop                  = opts.GetFirstBoolean('-', "skip-droop", true);
+    context_vars.skip_droop                  = opts.GetFirstBoolean('-', "skip-droop", true); // cpp basecaller only
     context_vars.skip_recal_during_norm      = opts.GetFirstBoolean('-', "skip-recal-during-normalization", false);
     context_vars.diagonal_state_prog         = opts.GetFirstBoolean('-', "diagonal-state-prog", false);
+    context_vars.wells_norm_method           = opts.GetFirstString ('-', "wells-normalization", "off");
+    context_vars.just_phase_estimation       = opts.GetFirstBoolean('-', "just-phase-estimation", false);
+    context_vars.calibrate_TFs               = opts.GetFirstBoolean('-', "calibrate-tfs", false);
+
+    // debug options
+    context_vars.debug_normalization_bam     = opts.GetFirstBoolean ('-', "debug-normalization-bam", false);
 
     // Not every combination of options is possible here:
     if (context_vars.diagonal_state_prog and context_vars.dephaser != "treephaser-swan") {
@@ -247,6 +266,12 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
 bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const int num_wells)
 {
 	assert(context_vars.options_set);
+
+    // If we are just doing phase estimation none of the options matter, so don't spam output
+	if (context_vars.just_phase_estimation){
+	  sampling_opts.options_set = true;
+	  return true;
+	}
 
     sampling_opts.num_unfiltered           = opts.GetFirstInt    ('-', "num-unfiltered", 100000);
     sampling_opts.downsample_size          = opts.GetFirstInt    ('-', "downsample-size", 0);
@@ -305,20 +330,24 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
 
     bc.run_id                 = context_vars.run_id;
     bc.flow_signals_type      = context_vars.flow_signals_type;
-    bc.extra_trim_left        = context_vars.extra_trim_left;
     bc.process_tfs            = context_vars.process_tfs;
     bc.have_calibration_panel = sampling_opts.have_calib_panel;
     bc.calibration_training   = (sampling_opts.calibration_training >= 0);
     bc.only_process_unfiltered_set = context_vars.only_process_unfiltered_set;
 
+    bc.wells_norm_method      = context_vars.wells_norm_method;
     bc.keynormalizer          = context_vars.keynormalizer;
     bc.dephaser               = context_vars.dephaser;
+    bc.sse_dephaser           = (bc.dephaser == "treephaser-sse" or bc.dephaser == "treephaser-solve");
     bc.windowSize             = context_vars.windowSize;
     bc.diagonal_state_prog    = context_vars.diagonal_state_prog;
     bc.skip_droop             = context_vars.skip_droop;
     bc.skip_recal_during_norm = context_vars.skip_recal_during_norm;
+    bc.calibrate_TFs          = context_vars.calibrate_TFs;
 
-	return true;
+    // debug options
+    bc.debug_normalization_bam              = context_vars.debug_normalization_bam;
+    return true;
 };
 
 // ----------------------------------------------------------------------

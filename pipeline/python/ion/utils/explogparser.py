@@ -26,12 +26,12 @@ def extract_rig(folder):
 
 def getparameter(parameterfile=None):
 
-    #####################################################################
+    # 
     # Load the analysis parameters and metadata from a json file passed in on the
     # command line with --params=<json file name>
     # we expect this loop to iterate only once. This is more elegant than
     # trying to index into ARGUMENTS.
-    #####################################################################
+    # 
     EXTERNAL_PARAMS = {}
     warnings = ''
     env = {}
@@ -50,18 +50,18 @@ def getparameter(parameterfile=None):
     pathprefix = str(EXTERNAL_PARAMS['pathToData'])
     env['prefix'] = pathprefix
 
-    #get the experiment json data
-    
+    # get the experiment json data
+
     # exp_json compatibility with old format
     exp_json = EXTERNAL_PARAMS.get('exp_json')
     if exp_json and not isinstance(exp_json, dict):
         exp_json = json.loads(exp_json)
-    
+
     env['exp_json'] = exp_json
 
-    env['instrumentName'] = EXTERNAL_PARAMS.get('instrumentName','unknownInstrument')
+    env['instrumentName'] = EXTERNAL_PARAMS.get('instrumentName', 'unknownInstrument')
 
-    #this will get the exp data from the database
+    # this will get the exp data from the database
     if not isinstance(exp_json['log'], dict):
         exp_log_json = json.loads(exp_json['log'])
     else:
@@ -76,22 +76,22 @@ def getparameter(parameterfile=None):
 
     env['blockArgs'] = EXTERNAL_PARAMS.get('blockArgs')
 
-    #is it a thumbnail
+    # is it a thumbnail
     env['doThumbnail'] = EXTERNAL_PARAMS.get("doThumbnail")
     # get command line args
-    env['beadfindArgs'] = EXTERNAL_PARAMS.get("beadfindArgs","")
-    env['analysisArgs'] = EXTERNAL_PARAMS.get("analysisArgs","")
-    env['basecallerArgs'] = EXTERNAL_PARAMS.get("basecallerArgs","")
-    env['prebasecallerArgs'] = EXTERNAL_PARAMS.get("prebasecallerArgs","")
-    env['recalibArgs'] = EXTERNAL_PARAMS.get("recalibArgs","")
+    env['beadfindArgs'] = EXTERNAL_PARAMS.get("beadfindArgs", "")
+    env['analysisArgs'] = EXTERNAL_PARAMS.get("analysisArgs", "")
+    env['basecallerArgs'] = EXTERNAL_PARAMS.get("basecallerArgs", "")
+    env['prebasecallerArgs'] = EXTERNAL_PARAMS.get("prebasecallerArgs", "")
+    env['recalibArgs'] = EXTERNAL_PARAMS.get("recalibArgs", "")
     env['doBaseRecal'] = EXTERNAL_PARAMS.get("doBaseRecal", "no_recal")
-    env['alignmentArgs'] = EXTERNAL_PARAMS.get("aligner_opts_extra","")
-    env['ionstatsArgs'] = EXTERNAL_PARAMS.get("ionstatsArgs","")
+    env['alignmentArgs'] = EXTERNAL_PARAMS.get("aligner_opts_extra", "")
+    env['ionstatsArgs'] = EXTERNAL_PARAMS.get("ionstatsArgs", "")
 
-    #previousReports
-    env['previousReport'] = EXTERNAL_PARAMS.get("previousReport","")
+    # previousReports
+    env['previousReport'] = EXTERNAL_PARAMS.get("previousReport", "")
 
-    env['library'] = EXTERNAL_PARAMS.get("library","unknownLibrary")
+    env['library'] = EXTERNAL_PARAMS.get("library", "unknownLibrary")
 
     # this is the library reference name for the run taken from the library reference field in the database
     # old libraryName key check is needed for backwards compatibility for plugins
@@ -110,18 +110,18 @@ def getparameter(parameterfile=None):
     # user-input part of experiment name: R_2012_04_30_15_22_02_user_FOZ-389--R145025-CC409_allt_12878-asr
     # would get FOZ-389--R145025-CC409_allt_12878-asr
     env['shortRunName'] = env['expName'].split('_', 8)[-1]
-    #library key input
-    env['libraryKey'] = EXTERNAL_PARAMS.get("libraryKey","")
+    # library key input
+    env['libraryKey'] = EXTERNAL_PARAMS.get("libraryKey", "")
     if not env['libraryKey']:
         env['libraryKey'] = "TCAG"
         warnings += "WARNING: libraryKey redefine required.  set to TCAG\n"
-    #path to the raw data
+    # path to the raw data
     env['pathToRaw'] = EXTERNAL_PARAMS.get("pathToData")
-    #plugins
+    # plugins
     env['plugins'] = EXTERNAL_PARAMS.get("plugins")
-    #plan
+    # plan
     env['plan'] = EXTERNAL_PARAMS.get('plan', {})
-    #eas
+    # eas
     env['experimentAnalysisSettings'] = EXTERNAL_PARAMS.get('experimentAnalysisSettings', {})
     # skipChecksum?
     env['skipchecksum'] = EXTERNAL_PARAMS.get('skipchecksum', False)
@@ -142,23 +142,22 @@ def getparameter(parameterfile=None):
     env['project'] = EXTERNAL_PARAMS.get('project')
     env['sample'] = EXTERNAL_PARAMS.get('sample')
     env['chipType'] = EXTERNAL_PARAMS.get('chiptype')
-    env['barcodeId'] = EXTERNAL_PARAMS.get('barcodeId','')
+    env['barcodeId'] = EXTERNAL_PARAMS.get('barcodeId', '')
     env['barcodeInfo'] = EXTERNAL_PARAMS.get('barcodeInfo')
 
     env['reverse_primer_dict'] = EXTERNAL_PARAMS.get('reverse_primer_dict')
     env['rawdatastyle'] = EXTERNAL_PARAMS.get('rawdatastyle', 'single')
 
-    #extra JSON
+    # extra JSON
     env['extra'] = EXTERNAL_PARAMS.get('extra', '{}')
     # Aligner options
     env['mark_duplicates'] = EXTERNAL_PARAMS.get('mark_duplicates')
     env['realign'] = EXTERNAL_PARAMS.get('realign')
 
-    #get the name of the site
+    # get the name of the site
     env['site_name'] = EXTERNAL_PARAMS.get('site_name')
 
     env['runID'] = EXTERNAL_PARAMS.get('runid', 'ABCDE')
-
 
     env['tfKey'] = EXTERNAL_PARAMS.get('tfKey', '')
     if not env['tfKey']:
@@ -192,6 +191,7 @@ def getparameter(parameterfile=None):
 
     return env, warnings
 
+
 def getparameter_minimal(parameterfile=None):
 
     EXTERNAL_PARAMS = {}
@@ -221,6 +221,7 @@ def getparameter_minimal(parameterfile=None):
 def load_log_path(filepath):
     (head, tail) = os.path.split(filepath)
     return load_log(head, tail)
+
 
 def load_log(folder, logName):
     """Retrieve the contents of the experiment log found in ``folder``,
@@ -264,14 +265,15 @@ ENTRY_MAP = {
     "frame_time": lre.float_parse,
     "num_frames": lre.int_parse,
     "autoanalyze": lre.yn_parse,
-    "dac": lre.dac_parse,
+    "dac": lre.float_parse,
     "cal_chip_hist": lre.space_separated_parse,
     "cal_chip_high_low_inrange": lre.cal_range_parse,
     "prebeadfind": lre.yn_parse,
     "flows": lre.int_parse,
     "analyzeearly": lre.yn_parse,
-#    "chiptype": lre.chip_parse,
+    #    "chiptype": lre.chip_parse,
 }
+
 
 def parse_log(text):
     """Take the raw text of the experiment log, and return a dictionary
@@ -305,15 +307,18 @@ def parse_log(text):
     entries = extract_entries(text)
     for name, value in entries:
         # utf-8 replace code to ensure we don't crash on invalid characters
-        #ret[name] = ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii","ignore"))
+        # ret[name] = ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii","ignore"))
         ret[name] = filter_non_printable(ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii", "ignore")))
+        # back compatability for PGMs where dac value is string of 8 integers and not a float
+        if name == 'dac' and not ret['dac']:
+            ret['dac'] = filter_non_printable(lre.dac_parse(value.decode("ascii", "ignore")))
     ret['blocks'] = []
     ret['thumbnails'] = []
-    #For the oddball repeating keyword: BlockStatus create an array of them.compatibility:
+    # For the oddball repeating keyword: BlockStatus create an array of them.compatibility:
     for line in text.split('\n'):
         if line.startswith('BlockStatus'):
-            ret['blocks'].append(line.strip().replace('BlockStatus:',''))
-    #new format
+            ret['blocks'].append(line.strip().replace('BlockStatus:', ''))
+    # new format
     for k, v in ret.iteritems():
         if k.startswith('block_'):
             ret['blocks'].append(v)
@@ -321,6 +326,7 @@ def parse_log(text):
             ret['thumbnails'].append(v)
 
     return ret
+
 
 def getBlocksFromExpLogJson(exp_json, excludeThumbnail=False):
     '''Returns array of block dictionary objects defined in explog.txt'''
@@ -332,6 +338,7 @@ def getBlocksFromExpLogJson(exp_json, excludeThumbnail=False):
 
     return getBlocksFromExpLogDict(log, excludeThumbnail)
 
+
 def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):
     '''Returns array of block dictionary objects defined in explog.txt'''
     blocks = []
@@ -339,7 +346,7 @@ def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):
     blockstatus = explogdict.get('blocks', [])
     for line in blockstatus:
         # Remove keyword; divide argument by comma delimiter into an array
-        args = line.strip().replace('BlockStatus:','').split(',')
+        args = line.strip().replace('BlockStatus:', '').split(',')
 
         # Remove leading space
         args = [entry.strip() for entry in args]
@@ -349,14 +356,14 @@ def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):
         #   datasubdir contains name of block directory (i.e. 'X0_Y128')
         #   jobid contains job id returned when job is queued
         #   status contains job status string
-        block = {'id_str':'',
-                'datasubdir':'',
-                'jobid':None,
-                'autoanalyze':False,
-                'analyzeearly':False,
-                'status':None}
+        block = {'id_str': '',
+                 'datasubdir': '',
+                 'jobid': None,
+                 'autoanalyze': False,
+                 'analyzeearly': False,
+                 'status': None}
 
-        if args[0] =='thumbnail' or (args[0] == '0' and args[1] == '0'):
+        if args[0] == 'thumbnail' or (args[0] == '0' and args[1] == '0'):
             block['datasubdir'] = 'thumbnail'
             if excludeThumbnail:
                 continue
@@ -371,22 +378,23 @@ def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):
     return blocks
 
 # Moved from crawler_utils.py
-def getFlowOrder(rawString):
 
+
+def getFlowOrder(rawString):
     '''Parses out a nuke flow order string from entry in explog.txt of the form:
     rawString format:  "4 0 r4 1 r3 2 r2 3 r1" or "4 0 T 1 A 2 C 3 G".'''
 
-    #Initialize return value
+    # Initialize return value
     flowOrder = ''
 
-    #Capitalize all lowercase; strip leading and trailing whitespace
+    # Capitalize all lowercase; strip leading and trailing whitespace
     rawString = string.upper(rawString).strip()
 
     # If there are no space characters, it is 'new' format
     if rawString.find(' ') == -1:
         flowOrder = rawString
     else:
-        #Define translation table
+        # Define translation table
         table = {
             "R1": 'G',
             "R2": 'C',
@@ -396,7 +404,7 @@ def getFlowOrder(rawString):
             "A": 'A',
             "C": 'C',
             "G": 'G'}
-        #Loop thru the tokenized rawString extracting the nukes in order and append to return string
+        # Loop thru the tokenized rawString extracting the nukes in order and append to return string
         for c in rawString.split(" "):
             try:
                 flowOrder += table[c]
@@ -428,13 +436,12 @@ def exp_kwargs(d, folder, logobj):
             flag = False
         return flag
 
-
     identical_fields = ("sample", "cycles", "flows", "project",)
     simple_maps = (
         ("experiment_name", "expName"),
         ("chipbarcode", "chipBarcode"),
         ("user_notes", "notes"),
-        ##("seqbarcode", "seqKitBarcode"),
+        # ("seqbarcode", "seqKitBarcode"),
         ("autoanalyze", "autoAnalyze"),
         ("prebeadfind", "usePreBeadfind"),
         ("librarykeysequence", "libraryKey"),
@@ -443,15 +450,15 @@ def exp_kwargs(d, folder, logobj):
         ("library", "reference"),
     )
 
-    chiptype = d.get('chiptype','')
-    chipversion = d.get('chipversion','')
+    chiptype = d.get('chiptype', '')
+    chipversion = d.get('chipversion', '')
     if chipversion:
         chiptype = chipversion
     if chiptype.startswith('1.10'):
         chiptype = 'P1.1.17'
     elif chiptype.startswith('1.20'):
         chiptype = 'P1.2.18'
-    
+
     full_maps = (
         ("chipType", chiptype),
         ("pgmName", d.get('devicename', extract_rig(folder))),
@@ -478,7 +485,7 @@ def exp_kwargs(d, folder, logobj):
     for attribute in derive_attribute_list:
         ret[attribute] = ''
 
-    #N.B. this field is not used
+    # N.B. this field is not used
     ret['storageHost'] = 'localhost'
 
     # If Flows keyword is defined in explog.txt...
@@ -494,7 +501,7 @@ def exp_kwargs(d, folder, logobj):
     if ret['barcodeKitName'].lower() == 'none':
         ret['barcodeKitName'] = ''
 
-    #defensive code to intercept incorrect data coming from explog
+    # defensive code to intercept incorrect data coming from explog
     if ret['reference'].lower() == 'none':
         ret['reference'] = ''
 
@@ -512,11 +519,11 @@ def exp_kwargs(d, folder, logobj):
         ret['rawdatastyle'] = 'single'
 
     sequencingKitName = d.get("seqkitname", '')
-    #do not replace plan's seqKit info if explog has blank seqkitname
+    # do not replace plan's seqKit info if explog has blank seqkitname
     if sequencingKitName and sequencingKitName != "NOT_SCANNED":
         ret['sequencekitname'] = sequencingKitName
 
-    #in rundb_experiment, there are 2 attributes for sequencingKitBarcode!!
+    # in rundb_experiment, there are 2 attributes for sequencingKitBarcode!!
     sequencingKitBarcode = d.get("seqkitpart", '')
     if sequencingKitBarcode and sequencingKitBarcode != "NOT_SCANNED":
         ret['seqKitBarcode'] = sequencingKitBarcode
@@ -530,14 +537,14 @@ def exp_kwargs(d, folder, logobj):
     if libraryKitName and libraryKitName != "NOT_SCANNED":
         ret['libraryKitName'] = libraryKitName
 
-    ##note: if PGM is running the old version, there is no isReverseRun in explog.txt.
+    # note: if PGM is running the old version, there is no isReverseRun in explog.txt.
     isReverseRun = d.get("isreverserun", '')
     if isReverseRun == "Yes":
         ret['isReverseRun'] = True
     else:
         ret['isReverseRun'] = False
 
-    #instrument could have blank runType or be absent all together in explog
+    # instrument could have blank runType or be absent all together in explog
     runType = d.get('runtype', "")
     if not runType:
         runType = "GENS"
@@ -550,7 +557,7 @@ def exp_kwargs(d, folder, logobj):
         else:
             platform = 'PGM'
     ret['platform'] = platform.upper()
-    
+
     # Limit input sizes to defined field widths in models.py
     ret['notes'] = ret['notes'][:1024]
     ret['expDir'] = ret['expDir'][:512]
@@ -574,7 +581,6 @@ def exp_kwargs(d, folder, logobj):
     ret['runType'] = ret['runType'][:512]
 
     return ret
-
 
 
 def explog_time(timeValue, folder):
@@ -630,4 +636,6 @@ if __name__ == '__main__':
     logobj.propagate = True
     exp = parse_log(load_log_path(sys.argv[1]))
     (folder, filename) = os.path.split(sys.argv[1])
-    exp_kwargs(exp, folder, logobj)
+    ret = exp_kwargs(exp, folder, logobj)
+    log = json.loads(ret.get('log'))
+    print("dac = %s" % str(log.get('dac')))

@@ -1043,7 +1043,7 @@ void IntervalTree::ResolveOverlaps() {
       int thisStart     = thisNode->GetInterval()->GetLowPoint();
       int thisStop      = thisNode->GetInterval()->GetHighPoint();
       double thisValue  = thisNode->GetInterval()->GetValue();
-      if((thisStart == (lastStop+1)) && (abs(thisValue-lastValue) < 1e-10)) {
+      if((thisStart == (lastStop+1)) && (fabs(thisValue-lastValue) < 1e-10)) {
         newStops[newN-1] = thisStop;
       } else {
         newStarts[newN]  = thisStart;

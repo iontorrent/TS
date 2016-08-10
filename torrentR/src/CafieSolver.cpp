@@ -1626,7 +1626,7 @@ void CafieSolver::SetMeasured(int numMeasured, double *measuredVals)
 	bool ok = true;
 	for(i=0;i<numFlows;i++) {
 		// check for nan and inf values in the measured values array
-		if (isnan(measured[i]) || isinf(measured[i])) {
+		if (std::isnan(measured[i]) || std::isinf(measured[i])) {
 			measured[i] = 0.0; // just set to 0 in case other code tries to use this anyway.  We will set numFlows to 0 below
 			ok = false;
 		}
@@ -1738,7 +1738,7 @@ double CafieSolver::Normalize(int *keyVec, int numKeyFlows, double droopEst, boo
 
 		if (oneMer > 0.0) {
 			for(i=nuc;i<numFlows;i += (perNuc?4:1)) {
-				if (!isnan(measured[i] / oneMer)) {
+				if (!std::isnan(measured[i] / oneMer)) {
 					measured[i] /= oneMer;
 				} else {
 				//fprintf (stderr, "%s generated a NaN\n", "CafieSolver::Normalize");
@@ -1863,7 +1863,7 @@ void CafieSolver::ResidualScale(bool nucSpecific, int minFlow, int maxFlow, doub
 		double residual_denominator=0;
 		for(int i=minFlow; i<=maxFlow; i++) {
 			if(predictedExtension[i] < nWeight) {
-				if(isnan(measured[i]) || isnan(predicted[i]))
+				if(std::isnan(measured[i]) || std::isnan(predicted[i]))
 					continue;
 				double meas = std::max(measured[i],minObsValue);
 				double pred = std::max(predicted[i],minObsValue);

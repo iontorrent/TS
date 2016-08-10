@@ -1,7 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#include <cinttypes>
 #include "RawWells.h"
 #include "Mask.h"
-#include "Separator.h"
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -324,7 +324,8 @@ void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int 
   mStepSize = 100;
   mCurrentRegionRow = mCurrentRegionCol = 0;
   mCurrentRow = 0;
-  mCurrentCol = -1;
+  mCurrentCol = 0;
+  mFirsttimeGetRegionData = true;
   mDirectory = experimentPath;
   mFileLeaf = rawWellsName;
   if ( mDirectory != "" )
@@ -432,8 +433,8 @@ bool RawWells::OpenForReadLegacy()
   size_t count = 0;
   while ( !orig.ReadNextData ( &o ) )
   {
-    mRows = std::max ( ( uint64_t ) o.y, mRows );
-    mCols = std::max ( ( uint64_t ) o.x, mCols );
+    mRows = std::max ( ( size_t ) o.y, mRows );
+    mCols = std::max ( ( size_t ) o.x, mCols );
     mRankData[count] = o.rank;
     copy ( o.flowValues, o.flowValues + mFlows, mFlowData.begin() + count * mFlows );
     mIndexes[count] = count;
@@ -490,15 +491,16 @@ bool RawWells::InChunk ( size_t row, size_t col )
 
 size_t RawWells::GetNextRegionData()
 {
-  mCurrentCol++;
   bool reload = false;
-  if ( mCurrentCol == 0 && !mIsLegacy )
+  if ( mFirsttimeGetRegionData && !mIsLegacy )
   {
-    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow,0ul ), mWellChunkSizeRow ),
-               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol,0ul ), mWellChunkSizeCol ),
+    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow, (size_t) 0 ), mWellChunkSizeRow ),
+               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol, (size_t) 0 ), mWellChunkSizeCol ),
                0, mFlows );
     ReadWells();
   }
+  mFirsttimeGetRegionData = false;
+  mCurrentCol++;
   if ( mCurrentCol >= mWellChunkSizeCol || mCurrentRegionCol + mCurrentCol >= mCols )
   {
     mCurrentCol = 0;
@@ -520,8 +522,8 @@ size_t RawWells::GetNextRegionData()
   size_t col = mCurrentRegionCol + mCurrentCol;
   if ( reload && mCurrentRegionRow < mRows && !InChunk ( row,col ) )
   {
-    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow,0ul ), mWellChunkSizeRow ),
-               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol,0ul ), mWellChunkSizeCol ),
+    SetChunk ( mCurrentRegionRow, min ( max ( mRows - mCurrentRegionRow, (size_t) 0 ), mWellChunkSizeRow ),
+               mCurrentRegionCol, min ( max ( mCols - mCurrentRegionCol, (size_t) 0 ), mWellChunkSizeCol ),
                0, mFlows );
     ReadWells();
   }
@@ -825,8 +827,8 @@ void RawWells::WriteRanks()
 
   // Setup the chunking values
   hsize_t cdims[2];
-  cdims[0] = std::min ( ( uint64_t ) 50, mRows );
-  cdims[1] = std::min ( ( uint64_t ) 50, mCols );
+  cdims[0] = std::min ( ( size_t ) 50, mRows );
+  cdims[1] = std::min ( ( size_t ) 50, mCols );
 
   hid_t plist;
   plist = H5Pcreate ( H5P_DATASET_CREATE );
@@ -994,8 +996,8 @@ void RawWells::WriteWellsCopies()
 
     // Setup the chunking values
     hsize_t cdims[2];
-    cdims[0] = std::min ( ( uint64_t ) 50, mRows );
-    cdims[1] = std::min ( ( uint64_t ) 50, mCols );
+    cdims[0] = std::min ( ( size_t ) 50, mRows );
+    cdims[1] = std::min ( ( size_t ) 50, mCols );
 
     hid_t plist = H5Pcreate ( H5P_DATASET_CREATE );
     assert ( ( cdims[0]>0 ) && ( cdims[1] >0 ) );
@@ -1830,6 +1832,7 @@ void RawWells::Set ( size_t idx, size_t flow, float val )
   if ( mIndexes[idx] >= 0 )
   {
     uint64_t ii = ( uint64_t ) mIndexes[idx] * mChunk.flowDepth + flow - mChunk.flowStart;
+    if (! ( ii < mFlowData.size())) printf(" %zu mIndexes[%zu], ii:%" PRIu64 " =  %d * %zu + %zu - %zu\n",  mFlowData.size(), idx, ii, mIndexes[idx], mChunk.flowDepth, flow, mChunk.flowStart );
     assert ( ii < mFlowData.size() );
     mFlowData[ii] = val;
 	return;
@@ -2075,7 +2078,7 @@ void ChunkyWells::DoneUpThroughFlow( int flow )
   }
 }
 
-void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* writeQueue )
+void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue & packQueue, SemQueue & writeQueue )
 {
   int nextFlow = mChunk.flowStart + mChunk.flowDepth;
 
@@ -2087,7 +2090,7 @@ void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* wr
   ChunkFlowData* chunkData = NULL;
   while(NULL == chunkData)
   {
-    chunkData = packQueue->deQueue();
+    chunkData = packQueue.deQueue();
   }
 
   if ( nextFlow == endingFlow )
@@ -2100,7 +2103,7 @@ void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* wr
   copy(mFlowData.begin(), mFlowData.end(), chunkData->flowData);
   copy(mIndexes.begin(), mIndexes.end(), chunkData->indexes);
 
-  writeQueue->enQueue(chunkData);
+  writeQueue.enQueue(chunkData);
 
   CloseWithoutCleanupHdf5();
 

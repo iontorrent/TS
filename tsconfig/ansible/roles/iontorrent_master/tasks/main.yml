@@ -3,76 +3,66 @@
 
 - name:
   include: '../../../globals.yml'
-  
+
 #-----------------------------------------------------------------------------
 # Install system packages for a master node
 #-----------------------------------------------------------------------------
 - name: preseed postfix package
   script: postfix.preseed {{ ansible_fqdn }}
-  
+
 - name: preseed rabbitmq package
   script: rabbitmq.preseed
-  
+
 - name: preseed samba package
   script: samba.preseed
 
 - name: Install system packages for master node
   apt: name={{item}} state=present force=yes
   with_items: ionmaster_syspkg_list
-  
-# Set install_xserver variable in group_vars/all
-- name: Install X server packages for remote desktop
-  apt: name={{item}} state=present force=yes
-  with_items: xserver_pkg_list
-  when: install_xserver == true and S5_virtual_guest|bool == False
-  
+
 #-----------------------------------------------------------------------------
 # Copy configuration and init scripts celeryd and celerybeat daemons
 # (Currently provided via ion-dbreports package)
 #-----------------------------------------------------------------------------
 #- name: Install celeryd configuration file - /etc/default/celeryd
 #  copy: src=celeryd.conf dest=/etc/default/celeryd owner=root group=root mode=0644
-#  
+#
 #- name: Install celeryd init script - /etc/init.d/celeryd
 #  copy: src=celeryd.init dest=/etc/init.d/celeryd owner=root group=root mode=0755
-#  
+#
 #- name: Install celerybeat configuration file - /etc/default/celerybeat
 #  copy: src=celerybeat.conf dest=/etc/default/celerybeat owner=root group=root mode=0644
-#  
+#
 #- name: Install celerybeat init script - /etc/init.d/celerybeat
 #  copy: src=celerybeat.init dest=/etc/init.d/celerybeat owner=root group=root mode=0755
 
 #-----------------------------------------------------------------------------
 # mod-gnutls conflicts and so we install the package, b/c it is a dependency and
-# then disable gnutls. Else, apache2 fails to restart and we bomb-out 
+# then disable gnutls. Else, apache2 fails to restart and we bomb-out
 #-----------------------------------------------------------------------------
 - name: Install libapache2-mod-gnutls
   apt: name=libapache2-mod-gnutls state=present
-  
+
 - name: Disable conflicting apache modules - gnutls
   shell: /usr/sbin/a2dismod gnutls
   ignore_errors: yes
-  
+
 # This file is required prior to installing ion-rsmts (others?)
 - name: Tag the headnode with the masternode indicator file
   file: path=/opt/ion/.masternode owner=root group=root mode=0644 state=touch
-  
+
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for a master node
 #-----------------------------------------------------------------------------
 - name: Install packages for head node
   apt: name={{ item }} state=present force=yes
   with_items: ionmaster_ionpkg_list
- 
-# optional install:
-# ion-pgmupdates -or- ion-protonupdates -or- both(?)
-# Check for existence of previous install of ion-protonupdates
-- stat: path=/results/proton/updates
-  register: p
-  
-- name: Install ion-protonupdates
-  apt: name=ion-protonupdates state=present force=yes
-  when: p.stat.exists
+  when: item != ''
+- name: Install 3rd party plugin packages
+  apt: name={{ item }} state=present force=yes
+  with_items: ionmaster_pluginpkg_list
+  when: item != ''
+  ignore_errors: yes
 
 # Ensure Ion system daemons are running
 - name: Ion Daemons
@@ -90,10 +80,16 @@
 #-----------------------------------------------------------------------------
 # Add compute node hostnames to the Crunchers table
 - name: python script to add compute node to Cruncher Table
-  when: "'{{ item }}' != '{{ ansible_hostname }}'"
+  when: "item != ansible_hostname"
   script: 'add_cruncher.py {{ item }}'
   with_items:
     - "{{ groups.computes }}"
+
+# Modify the default Rig parameters record in the Rigs table
+- name: Modify the default Rig if this is S5VM
+  when: S5_virtual_guest
+  script: 's5_rig_default.py'
+  ignore_errors: no
 
 #-----------------------------------------------------------------------------
 # Create/update the tsconf.log file
@@ -101,10 +97,10 @@
 - name: Get version of ion-tsconfig
   shell: dpkg -l ion-tsconfig | tail -1 | awk '{print $3}'
   register: tsconfig_version
-  
+
 - name: Assures /etc/torrentserver dir exists
   file: path=/etc/torrentserver state=directory mode=0755 owner=root group=root
-  
+
 - name: Create/Update tsconf.log
   template: src={{ansible_env.PWD}}/templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
 
@@ -114,4 +110,29 @@
 - name: Increase minimum free memory
   sysctl: name=vm.min_free_kbytes value=524288 reload=yes
   when: S5_virtual_guest|bool == True
-  
+
+#-----------------------------------------------------------------------------
+# Enable console access to the TSVM running on S5 host
+#-----------------------------------------------------------------------------
+- name: Adding ttyS0 config to enable console on the S5TSVM
+  template: src={{ansible_env.PWD}}/templates/ttyS0.conf.j2 dest=/etc/init/ttyS0.conf mode=0644 owner=root group=root
+  when: S5_virtual_guest|bool == True
+
+#-----------------------------------------------------------------------------
+# Default tmpreaper will purge /tmp directory.  Headnode should also purge
+# /results/referenceLibrary/temp
+#-----------------------------------------------------------------------------
+- name: "directories to purge: /tmp /results/referenceLibrary/temp"
+  lineinfile: dest=/etc/tmpreaper.conf state=present
+                regexp='^.*TMPREAPER_DIRS=.*'
+                line=TMPREAPER_DIRS="'/tmp/. /results/referenceLibrary/temp/.'"
+
+#-----------------------------------------------------------------------------
+# Initialize no_proxy in /etc/environment file, if its missing
+#-----------------------------------------------------------------------------
+- name: Set no_proxy in /etc/environment
+  lineinfile: dest=/etc/environment line=no_proxy="localhost,127.0.0.1,127.0.1.1,::1"
+                insertafter=EOF
+- name: Set NO_PROXY in /etc/environment
+  lineinfile: dest=/etc/environment line=NO_PROXY="localhost,127.0.0.1,127.0.1.1,::1"
+                insertafter=EOF

@@ -4,7 +4,6 @@
 #include "LevMarFitterV2.h"
 #include "BkgFitLevMarDat.h"
 #include <float.h>
-#include <cblas.h>
 
 using namespace arma;
 
@@ -33,8 +32,7 @@ int LevMarFitterV2::Fit (bool gauss_newton,
     memcpy (fval_cache,fval,sizeof (float[npts]));
   
   r_start = CalcResidual (y, fval, npts, &err_vect[0]);
-  r_start += EvaluateParamFromPrior (params); // account for prior
-   
+
   bool converged = false;
   while (!(converged = DoneTest (iter,max_iter,data,lambda,done_cnt,r_start,r_chg)) and !ForceQuit(iter,max_iter, lambda))
   {
@@ -113,13 +111,6 @@ void LevMarFitterV2::Initialize (int _nparams,int _npts,float *_x)
   wtScale = npts;
   for (int i=0;i<npts;i++)
     residualWeight[i] = 1.0f;
-
-  prior = new float [nparams];
-  for (int i=0; i<nparams; i++)
-    prior[i] = 0;
-  dampers = new float [nparams];
-  for (int i=0; i<nparams; i++)
-    dampers[i] = 0.0; // no response to priors
 
   fval_cache = new float[npts];
   enable_fval_cache = false; // pick a start
@@ -220,14 +211,7 @@ void LevMarFitterV2::GridSearch (int steps,float *y,float *params)
 
   delete [] fval;
 }
-//
-float LevMarFitterV2::EvaluateParamFromPrior (float *param_new)
-{
-  float sum=0;
-  for (int j=0; j<nparams; j++)
-    sum += dampers[j]* (param_new[j]-prior[j]) * (param_new[j]-prior[j]);
-  return (sum);
-}
+
 
 static void LinSolveErrMessage( const char* str )
 {
@@ -322,7 +306,7 @@ void LevMarFitterV2::TryLevMarStep (float *y,
 
         // calculate error bw function and data
         r_trial = CalcResidual (y, tmp, npts, &err_vect[0]);
-        r_trial += EvaluateParamFromPrior (params_new);
+
         r_chg = r_trial - r_start;
       }
       else{
@@ -453,7 +437,6 @@ void LevMarFitterV2::TryGaussNewtonStep(float *y,
 
         // calculate error bw function and data
         r_trial = CalcResidual (y, tmp, npts, &err_vect[0]);
-        r_trial += EvaluateParamFromPrior (params_new);
         r_chg = r_trial - r_start;
       }
       else{
@@ -505,14 +488,8 @@ void LevMarFitterV2::CalculateJTJ (double *bfjtj, float *bfjac)
   // calculate jtj matrix
   for (int r=0;r < nparams;r++)
     for (int c=r;c < nparams;c++)
-      bfjtj[r*nparams+c] = bfjtj[c*nparams+r] = cblas_sdot (npts,&bfjac[r],nparams,&bfjac[c],nparams);
+      bfjtj[r*nparams+c] = bfjtj[c*nparams+r] = sdot (npts,&bfjac[r],nparams,&bfjac[c],nparams);
 
-  // adjust matrix for priors
-  for (int r=0; r<nparams; r++)
-  {
-    // diagonal terms only
-    bfjtj[r*nparams+r] += dampers[r]*dampers[r]; // damping not squared - this is >scaling< derivative automatically 1
-  }
 }
 
 void LevMarFitterV2::CalculateRHS (double *bfrhs,
@@ -523,14 +500,8 @@ void LevMarFitterV2::CalculateRHS (double *bfrhs,
   // calculate rhs
   //Blas_Mat_Trans_Vec_Mult(jac,err_vect,rhs,1.0,0.0);
   for (int r=0;r < nparams;r++)
-    bfrhs[r] = cblas_sdot (npts,&bfjac[r],nparams,&err_vect[0],1);
+    bfrhs[r] = sdot (npts,&bfjac[r],nparams,&err_vect[0],1);
 
-
-  // adjust vector for priors
-  for (int r=0; r<nparams; r++)
-  {
-    bfrhs[r] += dampers[r]*dampers[r]* (prior[r]-params[r]);
-  }
 }
 void LevMarFitterV2::SetLambdaThreshold (float _lambda_threshold)
 {
@@ -565,18 +536,7 @@ void LevMarFitterV2::SetWeightVector (float *vect)
     wtScale += vect[i];
   }
 }
-// set prior values for parameters
-void LevMarFitterV2::SetPrior (float *input_prior)
-{
-  for (int j=0; j<nparams; j++)
-    prior[j] = input_prior[j];
-}
-// dampening effect of prior for each parameter
-void LevMarFitterV2::SetDampers (float *input_dampers)
-{
-  for (int j=0; j<nparams; j++)
-    dampers[j] = input_dampers[j];
-}
+
 
 // get the mean squared error after the fit
 float LevMarFitterV2::GetMeanSquaredError (float *y,bool use_fval_cache)
@@ -626,8 +586,7 @@ LevMarFitterV2::~LevMarFitterV2()
 {
   delete [] residualWeight;
   delete [] dp;
-  delete [] prior;
-  delete [] dampers;
+
   delete [] fval_cache;
   if (data != NULL)
     delete data;

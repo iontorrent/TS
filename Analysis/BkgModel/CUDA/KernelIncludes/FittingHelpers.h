@@ -13,6 +13,7 @@
 #include "EnumDefines.h"
 #include "ImgRegParams.h"
 #include "DeviceParamDefines.h"
+#include "ConstantSymbolDeclare.h"
 
 __device__
 float ApplyDarkMatterToFrame(
@@ -35,11 +36,11 @@ float ComputeMidNucTime(
 
 __device__ 
 float ComputeETBR(
-  //const PerFlowParamsRegion * perFlowRegP,
   const PerNucParamsRegion * perNucRegP,
   const float ratioDrift,
   const float R,
-  float copies);
+  const float copies,
+  const int flow = ConstFlowP.getRealFnum());
 
 
 __device__
@@ -51,7 +52,8 @@ float ComputeTauB(
 __device__
 float ComputeSP(
   const float copyDrift,
-  const float copies);
+  const float copies,
+  const int flow = ConstFlowP.getRealFnum());
 
 __device__ 
 float ComputeSigma(

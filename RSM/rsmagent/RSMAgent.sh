@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 # Which Axeda server should we connect to?
@@ -33,9 +33,17 @@ if [ $on_intranet != "Yes" ]; then
 	fi
 fi
 
-# point to drmdev axeda server if on lifetech LAN
+# point to drmdev axeda server if on intranet
 if [ $on_intranet = "Yes" ]; then
-	/opt/ion/RSM/RSMAgent_TS https://drmdev.appliedbiosystems.com/eMessage >> /var/log/ion/RSMAgent_TS.log 2>&1 &
+	while [ 1 ]; do
+		/opt/ion/RSM/RSMAgent_TS https://drmdev.appliedbiosystems.com/eMessage >> /var/log/ion/RSMAgent_TS.log 2>&1
+		echo "RSMAgent_TS exited with exit code $?.  Restarting in 10 seconds..." >&2
+		sleep 10 # runaway protection
+	done
 else
-	/opt/ion/RSM/RSMAgent_TS https://drm.appliedbiosystems.com/eMessage >> /var/log/ion/RSMAgent_TS.log 2>&1 &
+	while [ 1 ]; do
+		/opt/ion/RSM/RSMAgent_TS https://drm.appliedbiosystems.com/eMessage >> /var/log/ion/RSMAgent_TS.log 2>&1
+		echo "RSMAgent_TS exited with exit code $?.  Restarting in 10 seconds..." >&2
+		sleep 10 # runaway protection
+	done
 fi

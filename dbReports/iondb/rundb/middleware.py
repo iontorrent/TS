@@ -10,13 +10,17 @@ from django.conf import settings
 import logging
 logger = logging.getLogger(__name__)
 
+
 class ChangeRequestMethodMiddleware(object):
+
     def process_request(self, request):
         if request.method == 'PROPPATCH':
             request.method = 'PATCH'
         return
 
+
 class LocalhostAuthMiddleware(object):
+
     """ If request originates from localhost, autologin as localuser
         Complements Allow records in apache basic auth """
 
@@ -38,7 +42,7 @@ class LocalhostAuthMiddleware(object):
             # No usable HEADER
             return
 
-        if remote not in ['127.0.0.1','127.0.1.1', '::1']:
+        if remote not in ['127.0.0.1', '127.0.1.1', '::1']:
             return
 
         # Keep existing user, allow it to pass through REMOTE_USER
@@ -67,10 +71,13 @@ class LocalhostAuthMiddleware(object):
 
 
 """Delete sessionid and csrftoken cookies on logout, for better compatibility with upstream caches."""
+
+
 class DeleteSessionOnLogoutMiddleware(object):
+
     def process_response(self, request, response):
         if getattr(request, '_delete_session', False):
-            logger.info( 'DeleteSessionOnLogoutMiddleware.process_response: Deleting Cookies')
+            logger.info('DeleteSessionOnLogoutMiddleware.process_response: Deleting Cookies')
             response.delete_cookie(settings.CSRF_COOKIE_NAME, domain=settings.CSRF_COOKIE_DOMAIN)
             response.delete_cookie(settings.SESSION_COOKIE_NAME, settings.SESSION_COOKIE_PATH, settings.SESSION_COOKIE_DOMAIN)
         return response

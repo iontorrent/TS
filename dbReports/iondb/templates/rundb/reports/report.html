@@ -2,256 +2,315 @@
 {% load static from staticfiles %}
 
 {%block title %}
-    <title> {{report.resultsName}} | {% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
+    <title> {{ report.resultsName }} | {% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
 {%endblock title%}
 {% load humanize %}
 
 
-	{% block responsive %}
-	{% endblock responsive %}
+{% block responsive %}
+{% endblock responsive %}
 
 {% block extra_head %}
-
-
     <script id="iru-list-tmpl" type="text/x-kendo-template">
+        # var asPlanned_ir_accountID = "{{ report.eas.selectedPlugins.IonReporterUploader.userInput.accountId }}"; #
+        # var irAccountName = "{{ report.eas.selectedPlugins.IonReporterUploader.userInput.accountName }}"; #
+        # var report_uri = "/plan/reviewplan/{{ plan }}/{{ report.pk }}/" ;#
+
+        # if (asPlanned_ir_accountID){ #
+            <li><a class="iru-account" data-uri="#= report_uri #" data-irAccountName="#= irAccountName #" data-value="asPlanned" data-id="#= asPlanned_ir_accountID #" href="\\#">Upload as Planned</a></li>
+        # } else { #
+            <li><a style="color:\\#ddd;" id="mytooltip" rel="tooltip" data-toggle="tooltip" data-original-title="No IR selected for this plan" href="\\#" >Upload as Planned</a></li>
+        # } #
+            <li class="divider"></li>
+
         # for (var i = 0; i < data.length; i++) { #
             <li><a class="iru-account" data-id="#= data[i]['id']#" href="\\#">#= data[i]["name"] #</a></li>
         # } #
 
         # if (data.length > 0){ #
-        <li class="divider"></li>
+            <li class="divider"></li>
         # } #
-        <li><a href="/configure/ionreporter">Configure IR accounts</a></li>
+            <li><a href="/configure/ionreporter">Configure IR accounts</a></li>
     </script>
 
     <link href="{% static "css/chosen.css" %}" rel="stylesheet"/>
-	<link rel="stylesheet" type="text/css" href="{% static "jquery/colorbox/colorbox.css"%}" media="screen" />
-	<script type="text/javascript" src="{% static "jquery/colorbox/jquery.colorbox.js"%}"></script>
-	<script type="text/javascript" src="{% static "resources/scripts/report.js"%}"></script>
-	<script type="text/javascript" src="{% static "jquery/js/jquery.tools.min.js"%}"></script>
-	<script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js"%}"></script>
-	<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
-	<script type="text/javascript" src="{% static "resources/scripts/signal.min.js"%}"></script>
-	<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-    <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
-    <script src="{% static "js/chosen.jquery.min.js"%}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static "jquery/colorbox/colorbox.css" %}" media="screen" />
+    <script type="text/javascript" src="{% static "jquery/colorbox/jquery.colorbox.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/report.js" %}"></script>
+    <script type="text/javascript" src="{% static "jquery/js/jquery.tools.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/signal.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/iso8601.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js" %}"></script>
+    <script src="{% static "js/chosen.jquery.min.js" %}"></script>
     <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
-	<link rel="stylesheet" type="text/css" href="{% static "resources/styles/print.css"%}" media="print" />
-	<link rel="stylesheet" type="text/css" href="{% static "resources/styles/report.css"%}" media="screen" />
-    <link type="text/css" rel="stylesheet" media="screen" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+    <link rel="stylesheet" type="text/css" href="{% static "resources/styles/print.css" %}" media="print" />
+    <link rel="stylesheet" type="text/css" href="{% static "resources/styles/report.css" %}" media="screen" />
+    <link type="text/css" rel="stylesheet" media="screen" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" %}" />
 
-	{%if not noheader  %}
-		<link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
-	{%endif%}
-	<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
-	<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
-	<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
+    {% if not noheader %}
+    <link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css" %}" >
+    {% endif %}
+    <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js" %}"></script>
+    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css" %}" />
+
+    <style>
+        /* When an entire menu is disabled */
+        .btn-group.disabled-menu a{
+            background-color:#d9d9d9 !important;
+            color:#aaa !important;
+        }
+        /* When a menu item is disabled */
+        .btn-group.disabled-menu > a{
+            pointer-events: none;
+        }
+    </style>
 {% endblock extra_head %}
-		
+
 {% block report-header %}
-<div class="container-fluid">
-	
-</div>		
+    <div class="container-fluid"></div>
 {% endblock report-header %}
-{%block extra-main-class%}
+
+{% block extra-main-class %}
 report
-{%endblock extra-main-class%}
+{% endblock extra-main-class %}
+
 {% block content %}
-		<div class="row-fluid" style="margin-bottom: 10px;">
-			<div class="span12">
-				<ul class="nav nav-pills dynamic-navbar pull-left" style="margin: 0">
+<div class="row-fluid" style="margin-bottom: 10px;">
+    <div class="span12">
+        <ul class="nav nav-pills dynamic-navbar pull-left" style="margin: 0">
+        </ul>
+        <div class="pull-right">
+
+            <span id="iru-button" {% if 'upload_to_ir' in disable_actions %}class="btn-group disabled-menu"{%else%}class="btn-group"{% endif %}>
+                <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+                    Upload to IR
+                    <span class="caret"></span>
+                </a>
+                <ul class="dropdown-menu" id="iru-list">
+                    <!-- dropdown menu links -->
                 </ul>
+            </span>
 
-                <div class="pull-right">
-                    <span class="btn-group" id="iru-button">
-                        <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-                            Upload to IR
-                            <span class="caret"></span>
-                        </a>
-                        <ul class="dropdown-menu" id="iru-list">
-                        <!-- dropdown menu links -->
-                        </ul>
-                    </span>
+            <span class="btn-group">
+                <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+                    Report Actions <span class="caret"></span>
+                </a>
+                <ul class="dropdown-menu pull-right">
+    {% if plan %}
+                    <li><a href="{% url 'review_plan' plan report.pk %}" id="review_plan" data-pk="{{ plan }}" class="review-plan">Review Plan</a></li>
+                    <li><a href="/plan/page_plan_edit_run/{{ report.experiment.id }}/">Edit Run Plan</a></li>
+                    <li><a href="{% url "page_plan_copy_plan" plan %}">Copy Plan</a></li>
+                    <li class="divider"></li>
+    {% endif %}
+                    <li id="id_select_plugins" {% if 'run_plugins' in disable_actions %}class="disabled"{% endif %}>
+						<a href="#" class="pluginDialogButton">Select Plugins to Run</a></li>
+                    <li id="id_reanalyze" {% if 'reanalyze' in disable_actions %} class="disabled" {% endif %}>
+						<a href="/report/analyze/{{ report.experiment.pk }}/0/">Reanalyze</a></li>
+                    <li><a href="{% url "dm_actions" report.pk %}" id="dm_actions">Data Management</a></li>
+                </ul>
+            </span>
 
-                    <span class="btn-group">
-                        <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-                            Report Actions <span class="caret"></span>
-                        </a>
-                        <ul class="dropdown-menu pull-right">
-                            {%if plan %}
-                                <li><a href="{% url 'review_plan' plan report.pk %}" id="review_plan" data-pk="{{plan}}" class="review-plan">Review Plan</a></li>
-                                <li><a href="/plan/page_plan_edit_run/{{report.experiment.id}}/">Edit Run Plan</a></li>
-                                <li><a href="{% url "page_plan_copy_plan" plan %}">Copy Plan</a></li>
-                                <li class="divider"></li>
-                            {% endif %}
-                            <li><a href="#" class="pluginDialogButton">Select Plugins to Run</a></li>
-                            <li><a href="/report/analyze/{{report.experiment.pk}}/0/">Reanalyze</a></li>
-                            <li><a href="{% url "dm_actions" report.pk %}" id="dm_actions">Data Management</a></li>
-                        </ul>
-                    </span>
+            <span id="id_reports_btn_group" {% if 'report_pdf' in disable_actions %}class="btn-group disabled-menu"{%else%}class="btn-group"{% endif %}>
+                <a class="btn dropdown-toggle disabled-menu" data-toggle="dropdown" href="#">
+                    Reports<span class="caret"></span>
+                </a>
+                <ul class="dropdown-menu">
+                    <li><a href="/report/latex/{{ report.pk }}.pdf">Summary PDF</a></li>
+                    <li><a href="/report/getPlugins/{{ report.pk }}.pdf">Plugins PDF</a></li>
+                    <li><a href="{{ report.reportLink }}">Classic Report</a></li>
+                </ul>
+            </span>
 
-                    <span class="btn-group">
-                        <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-                            Reports <span class="caret"></span>
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a href="/report/latex/{{report.pk}}.pdf">Summary PDF</a></li>
-                            <li><a href="/report/getPlugins/{{report.pk}}.pdf">Plugins PDF</a></li>
-                            <li><a href="{{report.reportLink}}">Classic Report</a></li>
-                        </ul>
-                    </span>
-                </div>
-			</div>
-		</div>
-
-		{#progress indicator#}
-		{% include "rundb/reports/blocks/progress.html" %}
-		
-		<div id="main" class="content group">
-			{% if request.GET.noplugins %}
-				<div class="alert alert-error">
-				  <button type="button" class="close" data-dismiss="alert">&times;</button>
-				  <strong>Plugin PDF could not be generated because there is no Plugin output!</strong> 
-				</div>
-			{% endif %}
-			{% if request.GET.nosummarypdf %}
-				<div class="alert alert-error">
-				  <button type="button" class="close" data-dismiss="alert">&times;</button>
-				  <strong>There was an error generating the Summary PDF! (See /var/log/ion/django.log)</strong> 
-				</div>
-			{% endif %}
-
-			<section id="RunSummary" {%spaceless%} {%if not datasets.barcode_config %} class="no_barcodes" {%endif%} {%endspaceless%}>
-				<div class="row-fluid">
-		            <div id="nameRow" class="span12">
-						<div id="resultSet" class="pull-right">
-
-                            <form class="form-horizontal">
-                              <div class="control-group">
-                                <label style=" margin-left: 14px; margin-top: -3px;" class="control-label" for="resultList">Reports</label>
-                                <div class="controls">
-                                        <select id="resultList">
-                                        <option value="{{report.pk}}" selected="selected">{{report}} ({{report.pk}})</option>
-                                        {% for otherReport in otherReports %}
-                                            <option value="{{otherReport.pk}}">{{otherReport}} ({{otherReport.pk}})</option>
-                                        {% endfor %}
-                                </select>
-                                </div>
-                              </div>
-                            </form>
-
-			            </div>
-		            	<!-- a dynamic-navbar-section="" dynamic-navbar-section-title="Run Summary" href="#RunSummary">
-			                <h2 id="report" data-pk="{{report.pk}}" data-web="{{report.reportWebLink}}" data-php="{{report.reportLink}}">
-		                		<span rel="tooltip"  data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">Run Summary:</span> {{report.experiment.expName}}
-							</h2>
-						</a -->
-                        <h2 id="report" data-pk="{{report.pk}}"><span rel="tooltip" data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">Run Summary: {{report.experiment.expName}}</span></h2>
-		            </div>
-				</div>
-				{% if report.experiment.notes %}
-					<p>	
-						<strong>Notes</strong> {{report.experiment.notes}}
-					</p>
-				{%endif%}
-
-				<div id="runSection" class="section">
-          {% if report.resultsType == "CombinedAlignments" %}
-            <h2><span rel="tooltip" title="Links to parent reports">Alignments Merged From:</span></h2>
-              {% for pk,name in parents %}
-                  <ul><a href=/report/{{pk}}/> {{name}} </a></ul>
-              {% endfor %}              
-              {% if CA_warnings %}
-				      <div id="warnings">
-				        <font color=red>
-				        <p class="form-label" > WARNING </p>
-				        <ul>
-				          {% for warning in CA_warnings %}
-				            <li>{{warning}}</li>				    
-				          {% endfor %}
-				        </ul>
-				        </font>  
-				      </div>
-				      {% endif %}
-          {% else %}
-					<h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data without alignment to a reference
-">Read Summary: Unaligned</span></h2>
-					<div class="row-fluid unaligned">
-						{#beadfind#}
-						{% include "rundb/reports/blocks/beadfind.html" %}
-
-						{#basecaller#}
-						{% include "rundb/reports/blocks/basecaller.html" %}
-
-						{#readlength#}
-						{% include "rundb/reports/blocks/readlength.html" %}
-					</div><!-- row-fluid -->
-          {% endif %}
-
-		  {% if isToShowAlignmentStats %}
-		      {% if reference %}
-					   {% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}
-                            <h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to barcoded samples' reference sequences 
-">Aligned to {{reference.name}} (and other references)</span></h2>
-                        {% else %}
-					       <h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence  
-">Aligned to {{reference.name}}</span></h2>
-                        {% endif %}
-
-					<div class="row-fluid aligned">		
-						{#map#}
-						{% include "rundb/reports/blocks/map.html" %}	
-
-                        {% if isToShowRawReadAccuracy %}
-						  {#raw accuracy#}
-						  {% include "rundb/reports/blocks/raw.html" %}
-                        {% endif %}
-                         
-						{#alignment#}
-						{% include "rundb/reports/blocks/alignment.html" %}
-
-					</div><!-- row-fluid -->
-			  {% else %}
-                    <h2><span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence
-">{% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}Aligned to multiple references){% else %}No Alignment Reference selected{% endif %}</span></h2>			  
-              {% endif %}
-              			
-          {% else %}
-                <h2><span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence">{{alternateAlignmentStatsMessage}}</span></h2>
-          {% endif %}
-
-				</div><!-- section -->
-			</section><!-- RunSummary -->
-
-{%if not noheader  %}
-	<div id="major_blocks">
-	</div>
-{%endif%}
-
-	{%if isInternalServer %}
-	{%if report.getPlatform == "s5" or report.getPlatform == "proton" %}
-		<h2>Proton <abbr title="Ion Sphere Particles">ISP</abbr> Map</h2> (on internal server only)
-		<br>Platform: '{{report.getPlatform}}'</br>
-		<div id="proton">
-
-		</div>
-		{% include "rundb/reports/blocks/proton_isp_map.html" %}
-	{%endif%}
-	{%endif%}
-
-	{#output files#}
-	{% include "rundb/reports/blocks/output.html" %}	
-
-	{#barcodes#}
-	{% include "rundb/reports/blocks/barcodes.html" %}
-
-	{#tabs#}
-	{% include "rundb/reports/blocks/tabs.html" %}	
-
-		
+         </div>
+    </div>
 </div>
 
-<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
-<script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
+    {% if do_show_progress %}{# TS-9782 #}
+        {# Show report progress if the report results are not "No Live Beads" #}
+        {% include "rundb/reports/blocks/progress.html" %}
+    {% endif %}
+
+<div id="main" class="content group"><!-- Main -->
+    {% if request.GET.noplugins %}
+    <div class="alert alert-error">
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+        <strong>Plugin PDF could not be generated because there is no Plugin output!</strong>
+    </div>
+    {% endif %}
+    {% if request.GET.nosummarypdf %}
+    <div class="alert alert-error">
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+        <strong>There was an error generating the Summary PDF! (See /var/log/ion/django.log)</strong>
+    </div>
+    {% endif %}
+
+    {% if no_live_beads %}
+    {# The report is complete but has a status of 'No Live Beads'. See TS-9782 #}
+
+    <!-- a dynamic-navbar-section="" dynamic-navbar-section-title="Run Summary" href="#RunSummary">
+        <h2 id="report" data-pk="{{ report.pk }}" data-web="{{ report.reportWebLink }}" data-php="{{ report.reportLink }}">
+            <span rel="tooltip"  data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">Run Summary:</span> {{ report.experiment.expName }}
+        </h2>
+    </a -->
+
+    <h2 id="report" data-pk="{{ report.pk }}">
+        <span rel="tooltip" data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">
+            Status: Run completed with {{ report.status }}!
+        </span>
+    </h2>
+    <h2>No results to report</h2>
+</div><!-- Main -->
+
+    {% else %}{# if no_live_beads #}
+
+    <h2 id="report" data-pk="{{ report.pk }}">
+        <span rel="tooltip" data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">
+            Run Summary: {{ report.experiment.expName }}
+        </span>
+    </h2>
+
+    <section id="RunSummary" {% spaceless  %} {%if not datasets.barcode_config %} class="no_barcodes" {% endif %} {% endspaceless %}>
+        <div class="row-fluid">
+            <div id="nameRow" class="span12">
+                <div id="resultSet" class="pull-right">
+                    <form class="form-horizontal">
+                        <div class="control-group">
+                            <label style=" margin-left: 14px; margin-top: -3px;" class="control-label" for="resultList">Reports</label>
+                            <div class="controls">
+                                <select id="resultList">
+                                    <option value="{{ report.pk }}" selected="selected">{{ report }} ({{ report.pk }})</option>
+                                {% for otherReport in otherReports %}
+                                    <option value="{{ otherReport.pk }}">{{ otherReport }} ({{ otherReport.pk }})</option>
+                                {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% if report.experiment.notes %}
+        <p>
+            <strong>Notes</strong> {{ report.experiment.notes }}
+        </p>
+        {% endif %}
+
+        <div id="runSection" class="section">
+        {% if report.resultsType == "CombinedAlignments" %}
+        <h2><span rel="tooltip" title="Links to parent reports">Alignments Merged From:</span></h2>
+            {% for pk,name in parents %}
+        <ul><a href=/report/{{ pk }}/> {{ name }} </a></ul>
+            {% endfor %}
+            {% if CA_warnings %}
+        <div id="warnings">
+            <font color=red>
+                <p class="form-label" > WARNING </p>
+                <ul>
+                {% for warning in CA_warnings %}
+                    <li>{{ warning }}</li>
+                {% endfor %}
+                </ul>
+            </font>
+        </div>
+            {% endif %}
+        {% else %}
+        <h2>
+            <span rel="tooltip" data-placement="right" title="Metrics for sequence data without alignment to a reference">
+                Read Summary: Unaligned
+            </span>
+        </h2>
+        <div class="row-fluid unaligned">
+            {# beadfind #}
+            {% include "rundb/reports/blocks/beadfind.html" %}
+
+            {# basecaller #}
+            {% include "rundb/reports/blocks/basecaller.html" %}
+
+            {# readlength #}
+            {% include "rundb/reports/blocks/readlength.html" %}
+        </div><!-- row-fluid -->
+        {% endif %}
+
+        {% if isToShowAlignmentStats %}
+            {% if reference %}
+                {% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}
+        <h2>
+            <span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to barcoded samples' reference sequences">
+                Aligned to {{ reference.name }} (and other references)
+            </span>
+        </h2>
+                {% else %}
+        <h2>
+            <span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence">
+                Aligned to {{ reference.name }}
+            </span>
+        </h2>
+                {% endif %}
+
+        <div class="row-fluid aligned">
+                {# map #}
+                {% include "rundb/reports/blocks/map.html" %}
+
+                {% if isToShowRawReadAccuracy %}
+                    {# raw accuracy #}
+                    {% include "rundb/reports/blocks/raw.html" %}
+                {% endif %}
+
+                {# alignment #}
+                {% include "rundb/reports/blocks/alignment.html" %}
+        </div><!-- row-fluid -->
+            {% else %}
+        <h2>
+            <span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence">
+                {% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}
+                Aligned to multiple references)
+                {% else %}
+                No Alignment Reference selected
+                {% endif %}
+            </span>
+        </h2>
+            {% endif %}
+        {% else %}
+        <h2>
+            <span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence">
+                {{ alternateAlignmentStatsMessage }}
+            </span>
+        </h2>
+        {% endif %}
+    </section><!-- RunSummary -->
+
+        {% if not noheader  %}
+    <div id="major_blocks">
+    </div>
+        {% endif %}
+        {% if isInternalServer %}
+            {% if report.getPlatform == "s5" or report.getPlatform == "proton" %}
+    <h2>Proton <abbr title="Ion Sphere Particles">ISP</abbr> Map</h2> (on internal server only)
+    <br>Platform: '{{ report.getPlatform }}'</br>
+    <div id="proton">
+    </div>
+                {% include "rundb/reports/blocks/proton_isp_map.html" %}
+            {% endif %}
+        {% endif %}
+
+        {# output files #}
+        {% include "rundb/reports/blocks/output.html" %}
+
+        {# barcodes #}
+        {% include "rundb/reports/blocks/barcodes.html" %}
+
+        {# tabs #}
+        {% include "rundb/reports/blocks/tabs.html" %}
+
+    {% endif %}{# if/else no_live_beads #}
+
+</div><!-- Main -->
+
+
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css" %}" />
+<script type="text/javascript" src="{% static "resources/scripts/wizard.min.js" %}"></script>
 
 {% endblock content %}

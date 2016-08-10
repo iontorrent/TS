@@ -38,9 +38,10 @@ public:
     // we recompute these for each bead needlessly
     std::vector< reg_params> step_rp;
     std::vector< NucStep> step_nuc_cache;
-
+    void SynchRefBead(int ibd);
     void FillDerivativeStepCache ( BeadParams &eval_params, reg_params &eval_rp, unsigned int PartialDeriv_mask, int flow_block_size );
-    void ComputeCachedPartialDerivatives ( BeadParams &eval_params,  unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start );
+    void ComputeCachedPartialDerivatives ( BeadParams &eval_params,   BeadParams *ref_p,
+                                           int ref_span,unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start );
 
     MultiFlowLevMar ( SignalProcessingMasterFitter &, int flow_block_size,
                       master_fit_type_table * table );
@@ -106,9 +107,15 @@ public:
 
     // do steps for computing partial derivatives
     // it is entirely likely that these functions should be functions for the "scratchspace" object
-    void    ComputePartialDerivatives ( BeadParams &eval_params, reg_params &eval_rp,  NucStep &cache_step, unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start );
+    void    ComputePartialDerivatives ( BeadParams &eval_params,
+                                        BeadParams *ref_p,
+                                          int ref_span,
+                                        reg_params &eval_rp,  NucStep &cache_step, unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start );
     void ComputeOnePartialDerivative ( float *output, CpuStep *StepP,
-                                       BeadParams &eval_params, reg_params &eval_rp, 
+                                       BeadParams &eval_params,
+                                       BeadParams *ref_p,
+                                         int ref_span,
+                                       reg_params &eval_rp,
                                        NucStep &cache_step, int flow_key, 
                                        int flow_block_size, int flow_block_start );
     void    MultiFlowComputePartialDerivOfTimeShift ( float *fval,struct BeadParams *p, struct reg_params *reg_p, float *neg_sbg, int flow_block_size, int flow_block_start );
@@ -119,7 +126,7 @@ public:
                 int flow_block_start );
     // utility functions for optimization
     void    UpdateBeadParametersFromRegion ( reg_params *new_rp, int flow_block_size );
-    void FillScratchForEval ( BeadParams *p, reg_params *reg_p, NucStep &cache_step, int flow_key, int flow_block_size, int flow_block_start );
+    void FillScratchForEval ( BeadParams *p, BeadParams *ref_p, int ref_span, reg_params *reg_p, NucStep &cache_step, int flow_key, int flow_block_size, int flow_block_start );
     void DynamicEmphasis ( BeadParams &p, int flow_block_size );
     void ChooseSkipBeads ( bool _skip_beads );
     bool SkipBeads();
@@ -140,13 +147,18 @@ public:
 
 };
 // add a unique penalty to values
-void    UpdateOneBeadFromRegion ( BeadParams *p, bound_params *hi, bound_params *lo, reg_params *new_rp, int *dbl_tap_map, int flow_block_size );
-void IdentifyParameters ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, bool skip_beads );
+void    UpdateOneBeadFromRegion ( BeadParams *p, bound_params *hi, bound_params *lo, reg_params *new_rp, int *dbl_tap_map, float krate_adj_limit, int flow_block_size );
+
+void IdentifyParameters ( BeadTracker &my_beads, RegionTracker &my_regions, FlowBufferInfo &my_flow, int flow_block_size,  unsigned int well_mask, unsigned int reg_mask, bool skip_beads );
 void    IdentifyDmult ( BeadTracker &my_beads, RegionTracker &my_regions, bool skip_beads );
+
+void    IdentifyDmult (BeadTracker &my_beads, RegionTracker &my_regions, bool skip_beads , int flow_block_size);
+
 void IdentifyNucMultiplyRatio ( BeadTracker &my_beads, RegionTracker &my_regions );
 
-void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask,const LevMarBeadAssistant &lm_state );
-void    IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, const LevMarBeadAssistant &lm_state );
+void IdentifyParametersFromSample (BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, const LevMarBeadAssistant &lm_state , int flow_block_size);
+void    IdentifyDmultFromSample (BeadTracker &my_beads, RegionTracker &my_regions, const LevMarBeadAssistant &lm_state , int flow_block_size);
 void IdentifyNucMultiplyRatioFromSample ( BeadTracker &my_beads, RegionTracker &my_regions );
+void IdentifyKmult(BeadTracker &my_beads, RegionTracker &my_regions, FlowBufferInfo &my_flow, int flow_block_size, bool skip_beads );
 
 #endif // MULTILEVMAR_H

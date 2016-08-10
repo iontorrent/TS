@@ -1,0 +1,31 @@
+{
+    "meta":{
+        "name"          : "Oncomine 0.5% LOD FFPE - PGM (3xx) or S5/S5XL (520/530)",
+        "tooltip"       : "Parameters optimized using TagSeq Tagging with FFPE samples at depth >20000, minimizing FP",
+        "configuration" : "tagseq_ffpe_pgm",
+        "ts_version"    : "5.0",
+        "compatibility" : {
+          "chip"        : ["520","530","pgm"],
+          "library"     : ["tag_sequencing"],
+          "frequency"   : ["rare_somatic","somatic","germline"],
+          "stringency"  : ["low"],
+          "panel"       : true
+        },
+		"tvcargs"       : "tmol",
+		"tmapargs"      : "tmap mapall -g 0 ... stage1 map4"
+    },
+    "torrent_variant_caller":{
+			"min_fam_size": 3,
+			"min_var_fam": 3,
+			"min_func_cov": 3,
+			"min_func_maf": 0.0035,
+            "hp_max_length": 5, 			
+			"hotspots_only": 1
+    },
+    "long_indel_assembler":{
+       
+    },
+    "freebayes":{
+
+    }
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 import os, sys
-#import site
-#from distutils.sysconfig import get_python_version
+# import site
+# from distutils.sysconfig import get_python_version
 
 ionpath = '/opt/ion'
 if ionpath not in sys.path:
@@ -10,7 +10,7 @@ if ionpath not in sys.path:
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "iondb.settings")
 
-## Preload Django.
+# Preload Django.
 # -- avoids delay for lazy loading at each thread restart
 import django.core.management
 utility = django.core.management.ManagementUtility()
@@ -23,17 +23,17 @@ command.validate()
 from django.core.wsgi import get_wsgi_application
 _application = get_wsgi_application()
 
+
 def application(environ, start_response):
     """ Relocate app to serve just subdirectories - rundb and admin, and anything WSGIScriptAliased here.
         Converts: '/rundb' and '/reports/' to '/' and '/rundb/reports/',
         so django has full path to match urls.py
     """
     environ['PATH_INFO'] = environ['SCRIPT_NAME'] + environ['PATH_INFO']
-    environ['SCRIPT_NAME'] = '' ## NB: Without this, got /rundb/rundb/.../ expansions
+    environ['SCRIPT_NAME'] = ''  # NB: Without this, got /rundb/rundb/.../ expansions
     return _application(environ, start_response)
 
-##======================================================================
+# ======================================================================
 # Authentication component embedded here. Uses django Users database
 
 from django.contrib.auth.handlers.modwsgi import check_password
-

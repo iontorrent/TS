@@ -198,12 +198,12 @@ void OutputFitSummary(DifSepOpt &opts, std::vector<KeyFit> &wells, GridMesh<FitT
   cout << "Shift Dist is: " << shiftQ.GetMedian() << " +/- " <<  DifferentialSeparator::IQR (shiftQ) << endl;
 }
 
-void CncProcessImage(Image &img, bool is_thumbnail, bool cnc_correct, Mask *cncMask, int region_size, bool aggressive_cnc) {
+void CncProcessImage(Image &img, bool is_thumbnail, bool cnc_correct, Mask *cncMask, int region_size_x, int region_size_y, bool aggressive_cnc) {
   if (!(img.raw->imageState & IMAGESTATE_ComparatorCorrected) &&
       cnc_correct) {
     ComparatorNoiseCorrector cnc;
     if (is_thumbnail) {
-      cnc.CorrectComparatorNoiseThumbnail(img.raw, cncMask, region_size, region_size, false);
+      cnc.CorrectComparatorNoiseThumbnail(img.raw, cncMask, region_size_x, region_size_y, false);
     }
     else {
       cnc.CorrectComparatorNoise(img.raw, cncMask, false, aggressive_cnc);
@@ -228,7 +228,10 @@ void GainCorrectImage(bool gain_correct, Image &img) {
 
 // Don't forget to clean up with img.Close()
 void OpenAndProcessImage(const char *name, char *results_dir, bool ignore_checksum, 
-                         bool gain_correct, Mask *mask, bool filt_pinned, Image &img, bool col_pair_pixel_xtalk_correct, float pair_xtalk_fraction, int thumbnail) {
+                         bool gain_correct, Mask *mask, bool filt_pinned, Image &img,
+                         bool col_pair_pixel_xtalk_correct,
+                         float pair_xtalk_fraction,
+                         bool corr_noise_correct, int thumbnail) {
   img.SetImgLoadImmediate (false);
   img.SetIgnoreChecksumErrors (ignore_checksum);
   bool loaded = img.LoadRaw(name);
@@ -248,8 +251,10 @@ void OpenAndProcessImage(const char *name, char *results_dir, bool ignore_checks
 	      PairPixelXtalkCorrector xtalkCorrector;
 	      xtalkCorrector.Correct(img.raw, pair_xtalk_fraction);
 	  }
+    if (corr_noise_correct){
       CorrNoiseCorrector rnc;
       rnc.CorrectCorrNoise(img.raw,3,thumbnail);
+    }
   }
 
   img.SetMeanOfFramesToZero (1,3);
@@ -287,6 +292,98 @@ void ZeroFlows(std::vector<KeySeq> &keys, DifSepOpt &opts, Col<int> &zeroFlows, 
   zeroFlows.resize(flowsAllZero.size());
   copy(flowsAllZero.begin(), flowsAllZero.end(), zeroFlows.begin());
   ION_ASSERT(zeroFlows.n_rows > 0, "Must have 1 all zeros flow in key");
+}
+
+void DumpStep(const char *name, const int flowIx, const int w, const int h, DifSepOpt *opts) {
+    Image img;
+    bool loaded = img.LoadRaw(name);
+    if (!loaded) { ION_ABORT ("Couldn't load file: " + ToStr(name)); }
+
+    string nucStepDir = opts->nucStepDir;
+    char nucChar = opts->flowOrder[flowIx];
+    int nSample=100000;
+    img.DumpDcOffset(nSample, nucStepDir, nucChar, flowIx);
+
+    size_t loadMinFlows = max (9, opts->maxKeyFlowLength+2);
+    Mask mask(w, h);
+    PinnedInFlow pinnedInFlow( &mask, loadMinFlows );
+    pinnedInFlow.Initialize(&mask);
+
+    // Set region width & height
+    int rWidth=50;
+    int rHeight=50;
+
+    // Lower left corner of the region should equal 0 modulus xModulus or yModulus
+    int xModulus=50;
+    int yModulus=50;
+
+    vector<string> regionName;
+    vector<int> regionStartCol;
+    vector<int> regionStartRow;
+    vector<int> regionWidth;
+    vector<int> regionHeight;
+
+    const RawImage *rawImg = img.GetImage();
+
+    // region choice based on chip type
+    if ( ChipIdDecoder::IsProtonChip())
+    {
+      // Proton chips
+      regionName.push_back ( "inlet" );
+      regionStartCol.push_back ( xModulus * floor ( 0.1 * ( float ) rawImg->cols / ( float ) xModulus ) );
+      regionStartRow.push_back ( yModulus * floor ( 0.5 * ( float ) rawImg->rows / ( float ) yModulus ) );
+      regionWidth.push_back ( rWidth );
+      regionHeight.push_back ( rHeight );
+
+      regionName.push_back ( "middle" );
+      regionStartCol.push_back ( xModulus * floor ( 0.5 * ( float ) rawImg->cols / ( float ) xModulus ) );
+      regionStartRow.push_back ( yModulus * floor ( 0.5 * ( float ) rawImg->rows / ( float ) yModulus ) );
+      regionWidth.push_back ( rWidth );
+      regionHeight.push_back ( rHeight );
+
+      regionName.push_back ( "outlet" );
+      regionStartCol.push_back ( xModulus * floor ( 0.9 * ( float ) rawImg->cols / ( float ) xModulus ) );
+      regionStartRow.push_back ( yModulus * floor ( 0.5 * ( float ) rawImg->rows / ( float ) yModulus ) );
+      regionWidth.push_back ( rWidth );
+      regionHeight.push_back ( rHeight );
+    }
+    else
+    {
+      // PGM chips
+      regionName.push_back ( "inlet" );
+      regionStartCol.push_back ( xModulus * floor ( 0.9 * ( float ) rawImg->cols / ( float ) xModulus ) );
+      regionStartRow.push_back ( yModulus * floor ( 0.9 * ( float ) rawImg->rows / ( float ) yModulus ) );
+      regionWidth.push_back ( rWidth );
+      regionHeight.push_back ( rHeight );
+
+      regionName.push_back ( "middle" );
+      regionStartCol.push_back ( xModulus * floor ( 0.5 * ( float ) rawImg->cols / ( float ) xModulus ) );
+      regionStartRow.push_back ( yModulus * floor ( 0.5 * ( float ) rawImg->rows / ( float ) yModulus ) );
+      regionWidth.push_back ( rWidth );
+      regionHeight.push_back ( rHeight );
+
+      regionName.push_back ( "outlet" );
+      regionStartCol.push_back ( xModulus * floor ( 0.1 * ( float ) rawImg->cols / ( float ) xModulus ) );
+      regionStartRow.push_back ( yModulus * floor ( 0.1 * ( float ) rawImg->rows / ( float ) yModulus ) );
+      regionWidth.push_back ( rWidth );
+      regionHeight.push_back ( rHeight );
+    }
+
+    for ( unsigned int iRegion=0; iRegion<regionStartRow.size(); iRegion++ )
+    {
+        img.DumpStep(
+                    regionStartCol[iRegion],
+                    regionStartRow[iRegion],
+                    regionWidth[iRegion],
+                    regionHeight[iRegion],
+                    regionName[iRegion],
+                    nucChar,
+                    nucStepDir,
+                    &mask,
+                    &pinnedInFlow,
+                    flowIx
+                    );
+    }
 }
 
 /** 
@@ -474,13 +571,12 @@ public:
     else {
       OpenAndProcessImage(fileName.c_str(), (char *)opts->resultsDir.c_str(), opts->ignoreChecksumErrors, 
                           opts->doGainCorrect, mask, true, imgLoad, opts->col_pair_pixel_xtalk_correct, 
-                          opts->pair_xtalk_fraction, opts->isThumbnail);
+                          opts->pair_xtalk_fraction, opts->corr_noise_correct, opts->isThumbnail);
       img = &imgLoad;
     }
-    CncProcessImage(*img, opts->isThumbnail, opts->doComparatorCorrect, cncMask, opts->clusterMeshStep, opts->aggressive_cnc);
+    CncProcessImage(*img, opts->isThumbnail, opts->doComparatorCorrect, cncMask, opts->clusterMeshStepX, opts->clusterMeshStepY, opts->aggressive_cnc);
     img->SetMeanOfFramesToZero (1,3);
 
-//#define DEBUG_IMAGE_CORR_ISSUES 1
 #ifdef DEBUG_IMAGE_CORR_ISSUES
 
         char newName[1024];
@@ -539,7 +635,7 @@ public:
     // Loop through and load each region with appropriate data
     GridMesh<int> t0Mesh;
     //    t0Mesh.Init (mask->H(), mask->W(), LOAD_MESH_SIZE, LOAD_MESH_SIZE);
-    t0Mesh.Init (mask->H(), mask->W(), opts->clusterMeshStep, opts->clusterMeshStep);
+    t0Mesh.Init (mask->H(), mask->W(), opts->clusterMeshStepY, opts->clusterMeshStepX);
     for (size_t binIx = 0; binIx < t0Mesh.GetNumBin(); binIx++) {
       // Get the region
       int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
@@ -625,6 +721,7 @@ public:
         }
       }
     }
+
     img->Close();
   }
 
@@ -653,13 +750,13 @@ void DifferentialSeparator::CalculatePixelNoise(RawImage *raw, Mask &mask,
   int vsize = VEC8F_SIZE_B;
   size_t n_well = raw->rows * raw->cols;
   size_t n_frame = raw->frames;
-  float *__restrict sum_stats = (float *__restrict) memalign(vsize, fsize * 2 * n_well);
+  float *__restrict sum_stats = (float *) memalign(vsize, fsize * 2 * n_well);
   assert(sum_stats);
-  float *__restrict image_nn_sub = (float *__restrict) memalign(vsize, fsize * n_frame * n_well);
+  float *__restrict image_nn_sub = (float *) memalign(vsize, fsize * n_frame * n_well);
   assert(image_nn_sub);
-  float *__restrict trace_min =  (float *__restrict) memalign(vsize, fsize * n_well);
+  float *__restrict trace_min =  (float *) memalign(vsize, fsize * n_well);
   assert(trace_min);
-  int *__restrict trace_min_frame = (int *__restrict) memalign(vsize, sizeof(int) * n_well);
+  int *__restrict trace_min_frame = (int *) memalign(vsize, sizeof(int) * n_well);
   assert(trace_min_frame);
   memset(trace_min_frame, 0, sizeof(int) * n_well);
 
@@ -691,8 +788,8 @@ void DifferentialSeparator::CalculatePixelNoise(RawImage *raw, Mask &mask,
     }
   }
 
-  float *__restrict m2 = (float *__restrict) memalign(vsize, fsize * n_well);
-  float *__restrict mean = (float *__restrict) memalign(vsize, fsize * n_well);
+  float *__restrict m2 = (float *) memalign(vsize, fsize * n_well);
+  float *__restrict mean = (float *) memalign(vsize, fsize * n_well);
   memset(m2, 0, sizeof(float) * n_well);
   memset(mean, 0, sizeof(float) * n_well);
   for (size_t f_ix = 0; f_ix < n_frame; f_ix++) {
@@ -736,11 +833,11 @@ void DifferentialSeparator::FilterNoisyColumns(int row_step, int col_step,
   vector<float> current_error(n_well, 0.0f);
   int n_prerun = 4;
   for (int pre_ix = 0; pre_ix < n_prerun; pre_ix++) {
-    snprintf(buffer, sizeof(buffer), "%s/%s%d.dat", opts.resultsDir.c_str(), prerun_prefix, pre_ix);
+    snprintf(buffer, sizeof(buffer), "%s/%s%d.%s", opts.resultsDir.c_str(), prerun_prefix, pre_ix, opts.datPostfix.c_str());
     Image img;
     OpenAndProcessImage(buffer, (char *)opts.resultsDir.c_str(), opts.ignoreChecksumErrors,
                         opts.doGainCorrect, &mask, true, img, opts.col_pair_pixel_xtalk_correct, 
-                        opts.pair_xtalk_fraction, opts.isThumbnail);
+                        opts.pair_xtalk_fraction, opts.corr_noise_correct, opts.isThumbnail);
     CalculatePixelNoise(img.raw, mask, row_step, col_step, current_error);
     for (size_t w_ix = 0; w_ix < n_well; w_ix++) {
       mWellNoise[w_ix] += current_error[w_ix];
@@ -1258,7 +1355,7 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mMask);
-  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
+  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStepY, opts.t0MeshStepX, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
   T0Prior prior;
@@ -1331,7 +1428,7 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mMask);
-  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
+  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStepY, opts.t0MeshStepX, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
   T0Prior prior;
@@ -1398,7 +1495,7 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mMask);
-  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
+  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStepY, opts.t0MeshStepX, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
   T0Prior prior;
@@ -1980,32 +2077,12 @@ void DifferentialSeparator::RankReference(TraceStoreCol &store,
   //  CountReference("After signal combined ranke", mFilteredWells);
 }
 
-void DifferentialSeparator::CalculateFrames(SynchDat &sdat, int &minFrame, int &maxFrame) {
-  vector<float> t0Frames;
-  minFrame = -1;
-  maxFrame = -1;
-  for (size_t i = 0; i < sdat.GetNumRegions(); i++) {
-    float t = sdat.T0RegionFrame(i);
-    if (t > 0) {
-      t0Frames.push_back(t);
-    }
-  }
-  if (t0Frames.size() > 0) {
-    sort(t0Frames.begin(), t0Frames.end());
-    float t = ionStats::quantile_sorted(t0Frames, .5);
-    int midT = floor(t);
-    
-    minFrame = max(midT - T0_LEFT_OFFSET, 0);
-    maxFrame = min(midT + T0_RIGHT_OFFSET, sdat.GetMaxFrames());
-  }
-}
-
 void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceStore, 
                                         vector<float> &bfMetric, DifSepOpt &opts, std::vector<float> &traceSd) {
                                
 
-  string resultsRoot = opts.resultsDir + "/acq_";
-  string resultsSuffix = "dat";
+  string resultsRoot = opts.resultsDir + "/" + opts.acqPrefix;
+  string resultsSuffix = opts.datPostfix;
   size_t numWells = mMask.H() * mMask.W();
   if (mKeys.empty()) {  DifferentialSeparator::MakeStadardKeys (mKeys); }
   cout.flush();
@@ -2041,6 +2118,10 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceS
     p = resultsRoot.c_str();
     s = resultsSuffix.c_str();
     snprintf (buff, sizeof (buff), "%s%.4d.%s", p, (int) i, s);
+    printf("Loading %s\n",buff);
+
+    DumpStep(buff, i, mMask.W(), mMask.H(), &opts);
+
     loadJobs[i].Init(buff, i, &traceStore, traceSdMin.colptr(i), &mMask, &cncMask, &mFilteredWells, &mT0, &opts);
     //  loadJobs[i].Run();
     jQueue.AddJob(loadJobs[i]);
@@ -2587,7 +2668,7 @@ void DifferentialSeparator::FitKeys(PJobQueue &jQueue, DifSepOpt &opts, GridMesh
 void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, GridMesh<struct FitTauEParams> &emptyEstimates,
                                     std::vector<char> &filteredWells, std::vector<float> &ftime, std::vector<int> &allZeroFlows, float *taub_est) {
   mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Zeromers.");
-  emptyEstimates.Init (mMask.H(), mMask.W(), opts.tauEEstimateStep, opts.tauEEstimateStep);
+  emptyEstimates.Init (mMask.H(), mMask.W(), opts.tauEEstimateStepY, opts.tauEEstimateStepX);
   ZeromerMatDiff z_diff;
   ZeromerMatDiff z_diff_big;
   int converged = 0;
@@ -2680,9 +2761,7 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
     modelOut << "bin\tbinRow\tbinCol\trowStart\trowEnd\tcolStart\tcolEnd\tcount\tmix\tmu1\tvar1\tmu2\tvar2\tthreshold\trefMean" << endl;
   }
   
-  opts.bfMeshStep = min (min (mask.H(), mask.W()), opts.bfMeshStep);
-  cout << "bfMeshStep is: " << opts.bfMeshStep << endl;
-  modelMesh.Init (mask.H(), mask.W(), opts.clusterMeshStep, opts.clusterMeshStep);
+  modelMesh.Init (mask.H(), mask.W(), opts.clusterMeshStepY, opts.clusterMeshStepX);
   SampleStats<double> bfSnr;
 
   //  double bfMinThreshold = bfQuantiles.GetQuantile (.02);
@@ -3079,7 +3158,7 @@ void DifferentialSeparator::SpatialSummary(const std::string &h5_file_name, cons
   json_header += ", \"col_step\" : " + ToStr(x_step);
   json_header += ", \"headers\" : [\"row_start\",\"row_end\",\"col_start\",\"col_end\"";
   int chip_offset_x = 0, chip_offset_y = 0;
-  string first_dat = opts.resultsDir + "/acq_0000.dat";
+  string first_dat = opts.resultsDir + "/" + opts.acqPrefix + "0000." + opts.datPostfix;
   Image::GetOffsetFromChipPath(first_dat.c_str(), chip_offset_x, chip_offset_y);
   int n_wells = mask.W() * mask.H();
   if (opts.isThumbnail) { x_clip = y_clip = BF_THUMBNAIL_SIZE; }
@@ -3333,13 +3412,22 @@ void DifferentialSeparator::DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, con
     ImageTransformer::gain_correction = NULL;
     OpenAndProcessImage(bfFile.c_str(), (char *)opts.resultsDir.c_str(), opts.ignoreChecksumErrors, 
                         false, &mask, false, img, opts.col_pair_pixel_xtalk_correct, 
-                        opts.pair_xtalk_fraction, opts.isThumbnail);
+                        opts.pair_xtalk_fraction, opts.corr_noise_correct, opts.isThumbnail);
     imageNN.SetGainMinMult(opts.gainMult);
     if (opts.doGainCorrect) {
-      mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf gain.");
-      if (opts.isThumbnail) { CalcImageGain(&img, &mask, &mFilteredWells[0], BF_THUMBNAIL_SIZE, BF_THUMBNAIL_SIZE, &imageNN); }
-      else { CalcImageGain(&img, &mask, &mFilteredWells[0], mask.H(), mask.W(), &imageNN); }
-      mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf gain.");
+      if (opts.useBeadfindGainCorrect) {
+        mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf gain.");
+        if (opts.isThumbnail) { CalcImageGain(&img, &mask, &mFilteredWells[0], BF_THUMBNAIL_SIZE, BF_THUMBNAIL_SIZE, &imageNN); }
+        else { CalcImageGain(&img, &mask, &mFilteredWells[0], mask.H(), mask.W(), &imageNN); }
+        mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf gain.");
+      }
+      else if (opts.useDataCollectGainCorrect) {
+        const string gainFile = "Gain.lsr";
+        const string destFile = opts.resultsDir + "/" + gainFile; 
+        std::cout << "Reading per pixel gain from " << destFile << std::endl; 
+        ImageTransformer::ReadDataCollectGainCorrection(destFile, img.GetRows(), img.GetCols());
+      }
+ 
       GainCorrectImage(opts.doGainCorrect, img);
     }
   }
@@ -3351,7 +3439,7 @@ void DifferentialSeparator::DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, con
   std::fill(t02.begin(), t02.end(), 0.0f);
   char incorporationFlowBuff[MAX_PATH_LENGTH];
   int mask_bad = MaskIgnore | MaskPinned | MaskExclude;
-  snprintf(incorporationFlowBuff, sizeof(incorporationFlowBuff), "acq_%.4d.dat", (int)mKeys[0].flows.size()-1);
+  snprintf(incorporationFlowBuff, sizeof(incorporationFlowBuff), "%s%.4d.%s", opts.acqPrefix.c_str(), (int)mKeys[0].flows.size()-1, opts.datPostfix.c_str());
 
   //  CountReference("Starting", mFilteredWells);
   for (size_t i = 0; i < numWells; i++) {
@@ -3565,7 +3653,7 @@ void DifferentialSeparator::SetUp(DifSepOpt &opts, std::string &bfFile, arma::Co
   if (mKeys.empty())  { MakeStadardKeys (mKeys); }
   for (size_t kIx = 0; kIx < mKeys.size(); kIx++) { opts.maxKeyFlowLength = max ( (unsigned int) opts.maxKeyFlowLength, mKeys[kIx].usableKeyFlows); }
   // Setup our job queue
-  int qSize = (mMask.W() / opts.t0MeshStep + 1) * (mMask.H() / opts.t0MeshStep + 1);
+  int qSize = (mMask.W() / opts.t0MeshStepX + 1) * (mMask.H() / opts.t0MeshStepY + 1);
   if (opts.nCores <= 0) {  opts.nCores = numCores(); }
   mQueue.Init (opts.nCores, qSize);
 

@@ -18,8 +18,8 @@ import subprocess
 
 def call(*cmd):
     # Root user at boot requires this addition to its path variable to locate tmap
-    env=dict(os.environ)
-    env['PATH'] = '/usr/local/bin:'+env['PATH']
+    env = dict(os.environ)
+    env['PATH'] = '/usr/local/bin:' + env['PATH']
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     stdout, stderr = proc.communicate()
     if proc.returncode == 0:

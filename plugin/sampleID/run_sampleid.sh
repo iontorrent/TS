@@ -16,7 +16,6 @@ OPTIONS="OPTIONS:
   -A <file> Output file for SNP Allele coverage and calls. Default: 'allele_counts.xls'.
   -D <dirpath> Path to root Directory where results are written. Default: ./
   -F <name> File name stem for analysis output files. Default: Use BAM file name provided (w/o extension).
-  -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
   -N <name> Sample Name for adding to reports. Default: '' ('' => 'None').
   -R <file> Output file name for general Read coverage. Default: 'read_stats.txt'
   -S <file> Output file name for SNPS BED coverage. Default: 'on_loci_stats.txt'
@@ -30,7 +29,6 @@ if [ "$1" = "--help" ]; then
     exit 0
 fi
 
-GENOME=""
 WORKDIR="."
 FILESTEM=""
 SAMPLE_NAME=""
@@ -45,7 +43,6 @@ do
     A) ALLELE_COV_OUT=$OPTARG;;
     D) WORKDIR=$OPTARG;;
     F) FILESTEM=$OPTARG;;
-    G) GENOME=$OPTARG;;
     N) SAMPLE_NAME=$OPTARG;;
     R) READ_STATS_OUT=$OPTARG;;
     S) SNP_STATS_OUT=$OPTARG;;
@@ -69,10 +66,6 @@ REFERENCE=$1
 BAMFILE=$2
 TARGETS_BEDFILE=$3
 SNPS_BEDFILE=$4
-
-if [ -z "$GENOME" ]; then
-  GENOME="${REFERENCE}.fai"
-fi
 
 RUNPTH=`readlink -n -f $0`
 RUNDIR=`dirname $RUNPTH`

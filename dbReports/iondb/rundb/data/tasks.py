@@ -9,11 +9,12 @@ import sys
 import traceback
 import logging
 import os
+import glob
 from datetime import timedelta, datetime
 
 from django.core import urlresolvers
 from django import shortcuts
-from iondb.rundb.models import Message, Results, EventLog, DMFileStat, FileServer
+from iondb.rundb.models import Message, Results, EventLog, DMFileStat, FileServer, Rig
 from iondb.rundb.data import dmactions
 from iondb.rundb.data import dm_utils
 from iondb.rundb.data import dmfilestat_utils
@@ -23,10 +24,10 @@ from iondb.rundb.data.project_msg_banner import project_msg_banner
 from celery.exceptions import SoftTimeLimitExceeded
 
 logger = get_task_logger('data_management')
-logid = {'logid':"%s" % ('tasks')}
+logid = {'logid': "%s" % ('tasks')}
 
 
-@app.task(queue = "dmmanage", ignore_result = True)
+@app.task(queue="dmmanage", ignore_result=True)
 def action_group(user, categories, action, dmfilestat_dict, user_comment, backup_directory=None, confirmed=False):
     '''Single task to group multiple results' actions status.
     Cycle through the dmfilestat objects per result_id, then per category.
@@ -36,12 +37,12 @@ def action_group(user, categories, action, dmfilestat_dict, user_comment, backup
     '''
     project_msg = {}
     for result_pk, DMFileStats in dmfilestat_dict.iteritems():
-        logger.debug("result_pk: %s" % result_pk, extra = logid)
-        logger.debug("%s contains %d" % (type(DMFileStats),DMFileStats.count()), extra = logid)
+        logger.debug("result_pk: %s" % result_pk, extra=logid)
+        logger.debug("%s contains %d" % (type(DMFileStats), DMFileStats.count()), extra=logid)
 
         msg_dict = {}
         for selection_id in categories:
-            logger.debug("category: %s" % selection_id, extra = logid)
+            logger.debug("category: %s" % selection_id, extra=logid)
 
             for dmfilestat in DMFileStats.filter(dmfileset__type=selection_id):
                 try:
@@ -52,36 +53,39 @@ def action_group(user, categories, action, dmfilestat_dict, user_comment, backup
                         delete_action(user, user_comment, dmfilestat, confirmed=confirmed)
                         status = "success"
                     elif action == dmactions.ARCHIVE or action == dmactions.EXPORT:
-                        status = dmactions.set_action_pending(user, user_comment, action, dmfilestat, backup_directory)
+                        status = dmactions.set_action_pending(
+                            user, user_comment, action, dmfilestat, backup_directory)
                     else:
                         status = "error, unknown action POSTed: '%s'" % action
-                        logger.error(status, extra = logid)
+                        logger.error(status, extra=logid)
                 except Exception as inst:
                     msg_dict[selection_id] = "Error: %s" % str(inst)
-                    logger.error("%s - %s" % (selection_id, msg_dict[selection_id]), extra = logid)
-                    logger.error(traceback.format_exc(), extra = logid)
-                    EventLog.objects.add_entry(dmfilestat.result,"%s - %s. User Comment: %s" % (selection_id, msg_dict[selection_id],user_comment),username=user)
+                    logger.error("%s - %s" % (selection_id, msg_dict[selection_id]), extra=logid)
+                    logger.error(traceback.format_exc(), extra=logid)
+                    EventLog.objects.add_entry(dmfilestat.result, "%s - %s. User Comment: %s" % (
+                        selection_id, msg_dict[selection_id], user_comment), username=user)
                 else:
                     msg_dict[selection_id] = status
-                    logger.debug("%s - %s" % (selection_id, msg_dict[selection_id]), extra = logid)
+                    logger.debug("%s - %s" % (selection_id, msg_dict[selection_id]), extra=logid)
 
         # Generates message per result
-        logger.debug("%s" % msg_dict, extra = logid)
+        logger.debug("%s" % msg_dict, extra=logid)
         project_msg[result_pk] = msg_dict
 
-    logger.debug(project_msg, extra = logid)
-    #Generate a status message per group of results?
+    logger.debug(project_msg, extra=logid)
+    # Generate a status message per group of results?
     project_msg_banner(user, project_msg, action)
 
 
-def delete_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False, confirmed=False):
+def delete_action(user, user_comment, dmfilestat, lockfile=None, msg_banner=False, confirmed=False):
     ''' Delete Action by wrapping invocation with celery task for sync / async execution'''
     try:
         dmactions.delete(user, user_comment, dmfilestat, lockfile, msg_banner, confirmed)
     except:
         raise
 
-def archive_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False):
+
+def archive_action(user, user_comment, dmfilestat, lockfile=None, msg_banner=False):
     ''' Archive Action by wrapping invocation with celery task for sync / async execution'''
     try:
         backup_directory = dmfilestat.archivepath if dmfilestat.action_state == 'SA' else None
@@ -90,7 +94,7 @@ def archive_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = F
         raise
 
 
-def export_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False):
+def export_action(user, user_comment, dmfilestat, lockfile=None, msg_banner=False):
     ''' Export Action by wrapping invocation with celery task for sync / async execution'''
     try:
         backup_directory = dmfilestat.archivepath if dmfilestat.action_state == 'SE' else None
@@ -99,7 +103,7 @@ def export_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = Fa
         raise
 
 
-def test_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False):
+def test_action(user, user_comment, dmfilestat, lockfile=None, msg_banner=False):
     ''' Test Action by wrapping invocation with celery task for sync / async execution'''
     try:
         backup_directory = dmfilestat.archivepath
@@ -108,41 +112,44 @@ def test_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = Fals
         raise
 
 
-@app.task(queue="diskutil", ignore_result = True)
+@app.task(queue="diskutil", ignore_result=True)
 def update_dmfilestats_diskspace(dmfilestat):
     ''' Task to update DMFileStat.diskspace '''
     search_dirs = [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir]
     try:
-        cached_file_list = dm_utils.get_walk_filelist(search_dirs, list_dir=dmfilestat.result.get_report_dir())
+        cached_file_list = dm_utils.get_walk_filelist(
+            search_dirs, list_dir=dmfilestat.result.get_report_dir())
         dmfilestat_utils.update_diskspace(dmfilestat, cached=cached_file_list)
     except:
-        logger.error(traceback.format_exc(), extra = logid)
+        logger.error(traceback.format_exc(), extra=logid)
         raise
 
 
-@app.task(queue="diskutil", time_limit=600, ignore_result = True)
+@app.task(queue="diskutil", time_limit=600, ignore_result=True)
 def update_dmfilestat_diskusage(resultpk):
     '''
     Task to update DMFileStat.diskspace for all associated with this resultpk
     This task is launched at the end of pipeline execution.
     NOTE: This can be a long-lived task
     '''
-    logid = {'logid':"%s" % ('tasks')}
+    logid = {'logid': "%s" % ('tasks')}
     try:
         result = Results.objects.get(pk=resultpk)
         search_dirs = [result.get_report_dir(), result.experiment.expDir]
-        cached_file_list = dm_utils.get_walk_filelist(search_dirs, list_dir=result.get_report_dir(), save_list=True)
+        cached_file_list = dm_utils.get_walk_filelist(
+            search_dirs, list_dir=result.get_report_dir(), save_list=True)
         for dmtype in FILESET_TYPES:
             dmfilestat = result.get_filestat(dmtype)
             dmfilestat_utils.update_diskspace(dmfilestat, cached=cached_file_list)
     except SoftTimeLimitExceeded:
-        logger.warn("Time exceeded update_diskusage for (%d) %s" % (resultpk,result.resultsName), extra = logid)
+        logger.warn("Time exceeded update_diskusage for (%d) %s" %
+                    (resultpk, result.resultsName), extra=logid)
     except:
         raise
-    
+
     try:
         disk_total = 0
-        for dmfilestat in [ result.get_filestat(dmtype) for dmtype in FILESET_TYPES]:
+        for dmfilestat in [result.get_filestat(dmtype) for dmtype in FILESET_TYPES]:
             if dmfilestat.dmfileset.type == dmactions_types.SIG:
                 dmfilestat.result.experiment.diskusage = dmfilestat.diskspace if dmfilestat.diskspace != None else 0
                 dmfilestat.result.experiment.save()
@@ -151,10 +158,10 @@ def update_dmfilestat_diskusage(resultpk):
                 disk_total += int(partial) if partial != None else 0
                 result.diskusage = disk_total
                 result.save()
-        # See dmaction._update_related_objects() which also updates Exp & Results diskusage fields
+        # See dmaction._update_diskspace_and_diskusage() which also updates Exp & Results diskusage fields
     except:
-        logger.error(traceback.format_exc(), extra = logid)
-        raise    
+        logger.error(traceback.format_exc(), extra=logid)
+        raise
 
 
 @periodic_task(run_every=300, expires=60, queue="diskutil")
@@ -162,15 +169,17 @@ def backfill_dmfilestats_diskspace():
     ''' Backfill records with DMFileStat.diskspace = None, one at a time
         These could be older data sets or new ones where update_diskusage task failed
     '''
-    dmfilestats = DMFileStat.objects.filter(diskspace=None, action_state='L', files_in_use='').order_by('-created')
+    dmfilestats = DMFileStat.objects.filter(
+        diskspace=None, action_state='L', files_in_use='').order_by('-created')
     if dmfilestats.count() > 0:
         dmfilestat = dmfilestats[0]
         search_dirs = [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir]
         try:
-            cached_file_list = dm_utils.get_walk_filelist(search_dirs, list_dir=dmfilestat.result.get_report_dir(), save_list=True)
+            cached_file_list = dm_utils.get_walk_filelist(
+                search_dirs, list_dir=dmfilestat.result.get_report_dir(), save_list=True)
             dmfilestat_utils.update_diskspace(dmfilestat, cached=cached_file_list)
         except:
-            logger.error(traceback.format_exc(), extra = logid)
+            logger.error(traceback.format_exc(), extra=logid)
             raise
 
 
@@ -184,38 +193,59 @@ def save_serialized_json(resultpk):
         raise
 
 
-def logs_cleanup_settings():
-    chef_logs = {
-        'folder': 'chef_logs',
-        'extensions': '.tar.gz',
-        'expire_days': 45
-    }
-    ot_logs = {
-        'folder': 'ot_logs',
-        'extensions': '.tar.gz',
-        'expire_days': 45
-    }
-    chips = {
-        'folder': 'Chips',
-        'extensions': ('.tar.bz2', '.txt'),
-        'expire_days': 30
-    }
-    return [chef_logs, ot_logs, chips]
-    
+def get_log_files():
+    ''' Returns list of log file patterns and expiration days for cleanup task'''
+    def logs_cleanup_settings():
+        chef_logs = {
+            'folder': 'chef_logs',
+            'extensions': ['.tar.gz'],
+            'expire_days': 45
+        }
+        ot_logs = {
+            'folder': 'ot_logs',
+            'extensions': ['.tar.gz'],
+            'expire_days': 45
+        }
+        chips = {
+            'folder': 'Chips',
+            'extensions': ['.tar.bz2', '.txt'],
+            'expire_days': 30
+        }
+        return [chef_logs, ot_logs, chips]
 
-@periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
-def logs_cleanup():
+    files = []
     settings = logs_cleanup_settings()
     for server in FileServer.objects.all():
         for item in settings:
-            threshold = datetime.now() - timedelta(days=item['expire_days'])        
-            directory = os.path.join(server.filesPrefix, item['folder'])
-            if os.path.exists(directory):
-                files = [os.path.join(directory,f) for f in os.listdir(directory) if f.endswith(item['extensions'])]
-                for filepath in files:
-                    try:
-                        if datetime.fromtimestamp(os.path.getmtime(filepath)) < threshold:
-                            logger.debug('Deleting %s.' % filepath, extra = logid)
-                            os.remove(filepath)
-                    except:
-                        logger.error(traceback.format_exc(), extra = logid)
+            for ext in item['extensions']:
+                files.append(
+                    (os.path.join(server.filesPrefix, item['folder'], '*' + ext), item['expire_days']))
+    return files
+
+
+def get_support_files():
+    ''' Returns list of support file patterns and expiration days for cleanup task'''
+    pattern = "support*.zip"
+    expire_days = 14
+    files = []
+    for server in FileServer.objects.all():
+        for rig in Rig.objects.filter(location=server.location):
+            files.append((os.path.join(server.filesPrefix, rig.name, pattern), expire_days))
+    return files
+
+
+@periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
+def file_cleanup():
+    now = datetime.now()
+    cleanup_files = []
+    cleanup_files.extend(get_log_files())
+    cleanup_files.extend(get_support_files())
+
+    for pattern, expire_days in cleanup_files:
+        for filepath in glob.glob(pattern):
+            try:
+                if datetime.fromtimestamp(os.path.getmtime(filepath)) < (now - timedelta(days=expire_days)):
+                    logger.debug('Deleting %s.' % filepath, extra=logid)
+                    os.remove(filepath)
+            except:
+                logger.error(traceback.format_exc(), extra=logid)

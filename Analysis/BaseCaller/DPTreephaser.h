@@ -30,7 +30,9 @@ struct BasecallerRead {
 
   float           key_normalizer;           //!< Scaling factor used for initial key normalization
   vector<float>   raw_measurements;         //!< Measured, key-normalized flow signal
+  vector<float>   normalized_wells;         //!< well-normalized flow signal
   vector<float>   normalized_measurements;  //!< Measured flow signal with best normalization so far
+  vector<float>   not_calibrated_measurements;  //!< Measured flow signal with best normalization so far
   vector<float>   prediction;               //!< Model-based phased signal predicted for the "solved" sequence
   vector<char>    sequence;                 //!< Vector of ACGT bases. Output from Solver, input to Simulator
 
@@ -43,7 +45,6 @@ struct BasecallerRead {
   vector<float>   penalty_mismatch;         //!< Score difference to second-best nuc hypothesis
 
   // Nuc gain data
-  #if __cplusplus >= 201103L
   static constexpr float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
   static constexpr float  kZeromerMax   =  0.37f;       //!< Key flow corrected non-key flow zeromer 3-sigma maximum
   static constexpr float  kOnemerMin    =  0.50f;       //!< Key flow corrected non-key flow onemer 3-sigma minimum
@@ -54,18 +55,6 @@ struct BasecallerRead {
   static constexpr float  kRunOneSigSq  = 0.015178f;    //!< Non-key flow onemer sigma squared
   static constexpr float  kInvZeroSigSq = 127.9849f;    //!< Non-key flow zeromer sigma squared inverse (1/sig^2)
   static constexpr float  kInvOneSigSq  = 65.88379f;    //!< Non-key flow onemer sigma squared inverse (1/sig^2)
-  #else
-  static const float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
-  static const float  kZeromerMax   =  0.37f;       //!< Key flow corrected non-key flow zeromer 3-sigma maximum
-  static const float  kOnemerMin    =  0.50f;       //!< Key flow corrected non-key flow onemer 3-sigma minimum
-  static const float  kOnemerMax    =  1.35f;       //!< Key flow corrected non-key flow onemer 3-sigma maximum
-  static const float  kZeromerMean  = 0.08555f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
-  static const float  kOnemerMean   = 0.90255f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
-  static const float  kRunZeroSigSq = 0.0078146f;   //!< Non-key flow zeromer sigma squared
-  static const float  kRunOneSigSq  = 0.015178f;    //!< Non-key flow onemer sigma squared
-  static const float  kInvZeroSigSq = 127.9849f;    //!< Non-key flow zeromer sigma squared inverse (1/sig^2)
-  static const float  kInvOneSigSq  = 65.88379f;    //!< Non-key flow onemer sigma squared inverse (1/sig^2)
-  #endif
 };
 
 
@@ -87,9 +76,10 @@ class DPTreephaser {
 
 public:
   // These need to be public for TreephaserSSE to use.
-  const static int    kWindowSizeDefault_ = 38;   //!< Default normalization window size
-  const static int    kMinWindowSize_     = 20;   //!< Minimum normalization window size
-  const static int    kMaxWindowSize_     = 60;   //!< Maximum normalization window size
+  const static int        kWindowSizeDefault_ = 38;   //!< Default normalization window size
+  const static int        kMinWindowSize_     = 20;   //!< Minimum normalization window size
+  const static int        kMaxWindowSize_     = 60;   //!< Maximum normalization window size
+  static constexpr char   nuc_int_to_char_[5] = "ACGT";
 
   //! @brief  Default constructor.
   DPTreephaser();
@@ -235,6 +225,7 @@ public:
     float             residual_left_of_window;  //!< Residual left of the state window
     float             per_flow_metric;          //!< Auxiliary tree search metric, useful for stack pruning
     int               dot_counter;              //!< Number of extreme mismatch flows encountered so far
+    int               max_population;           //!< Marks the flow in which the state vector has it's maximum
 
     // Recalibration - we actually need 1 data structure to apply this model.
     vector<float>     calibA;                   //!< Multiplicative offset per inphase flow
@@ -242,14 +233,28 @@ public:
     // PID loop state
     PIDloop           pidOffsetState;           //!< State of the pidOffset_ loop at window_start;
     PIDloop           pidGainState;             //!< State of the pidGain_ loop at window_start;
+
+    void Initialize();
   };
 
   TreephaserPath& path(int idx) { return path_[idx]; }
 
-
   //! @brief  Set path to an empty sequence, a starting point for phasing simulation
   //! @param[out]  state    Path slot
   void InitializeState(TreephaserPath *state) const;
+
+  //! @brief  Simulate all states + 1st generation dead children
+  void SimulateAllStates(vector<TreephaserPath> & states, BasecallerRead& data, int max_flows, bool debug);
+
+  //! @brief  Advance the in-phase flow for a base incorporation
+  void AdvanceFlow(int & flow, char nuc, int max_flow) const;
+
+  //! @brief  Only advance state and do not update any other quantities like predictions
+  //! @param[out]  child     Path slot to store the extended path
+  //! @param[in]   parent    Path to be extended
+  //! @param[in]   nuc       Nucleotide (integer) to extend the path by
+  //! @param[in]   max_flow  Do not read/write past this flow
+  void AdvanceOnlyState(TreephaserPath *child, const TreephaserPath *parent, char nuc, int max_flow) const;
 
   //! @brief  Perform a path extension by one nucleotide
   //! @param[out]  child     Path slot to store the extended path
@@ -297,7 +302,6 @@ protected:
   const static int    kMaxHP = MAX_HPXLEN;        //!< Maximum callable homopolymer length
   const static int    kMaxPathDelay = 40;         //!< Paths that are delayed more are killed
 
-  #if __cplusplus >= 201103L
   static constexpr float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
   static constexpr float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
   static constexpr float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
@@ -311,21 +315,7 @@ protected:
   static constexpr float  kIgainG       = 0.005f;
   static constexpr float  kDgainG       = 0.0f;
   static constexpr float  kInitGain     = 1.0f;
-  #else
-  static const float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
-  static const float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
-  static const float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
-  static const float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
 
-  static const float  kPgainO       = 0.06f;//0.075f;
-  static const float  kIgainO       = 0.005f;
-  static const float  kDgainO       = 0.0f;
-  static const float  kInitOffset   = 0.0f;
-  static const float  kPgainG       = 0.06f;//0.075f;
-  static const float  kIgainG       = 0.005f;
-  static const float  kDgainG       = 0.0f;
-  static const float  kInitGain     = 1.0f;
-  #endif
   const vector< vector< vector<float> > > *As_; //!< Pointer to recalibration structure: multiplicative constant
   const vector< vector< vector<float> > > *Bs_; //!< Pointer to recalibration structure: additive constant
   bool pm_model_available_;                     //!< Signals availability of a recalibration model

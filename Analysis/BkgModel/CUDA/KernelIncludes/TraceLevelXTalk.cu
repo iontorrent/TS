@@ -322,7 +322,6 @@ __global__ void SimpleXTalkNeighbourContribution(// Here FL stands for flows
     float * myBaseXTalkContribution,   // buffer XTalk contribution of this well NxF
 
     const short* RawTraces,  //NxF
-    const float * EmptyTraceRegion, //FxR
     const float* BeadParamCube, //NxP
     const float* RegionFrameCube, //FxRxT bkgTrace, DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
     const ConstantParamsRegion * constRegP, // R
@@ -364,7 +363,7 @@ __global__ void SimpleXTalkNeighbourContribution(// Here FL stands for flows
 
   //update base pointer to data for this region in region frame cube
   RegionFrameCube += regId*ConstFrmP.getMaxCompFrames();  //DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
-  const float * emptyTrace = EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
+  const float * emptyTrace = ConstHistCol.getLatestEmptyTraces() + regId*ConstFrmP.getUncompFrames(); //EmptyTraceRegion + regId*ConstFrmP.getUncompFrames();
   const float* deltaFrames = RegionFrameCube + RfDeltaFrames*RegionFramesPlaneStride;
 
 
@@ -448,7 +447,7 @@ __global__ void SimpleXTalkNeighbourContribution(// Here FL stands for flows
           }
 
           // Calculate lost hydrogen
-          f = perFlowRegP->getStart();
+          f = perFlowRegP->getFineStart();
           xt = 1.0f/(1.0f + (deltaFrames[f]*one_over_two_taub));
           lost_hydrogen[f] = incorp_rise[f]*xt;
           f++;
@@ -457,13 +456,13 @@ __global__ void SimpleXTalkNeighbourContribution(// Here FL stands for flows
             lost_hydrogen[f] = (incorp_rise[f] - incorp_rise[(f-1)] + (1.0f-(deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)])*xt;
           }
 
-          for (f = perFlowRegP->getStart();f<nframes; ++f) {
+          for (f = perFlowRegP->getFineStart();f<nframes; ++f) {
             lost_hydrogen[f] = incorp_rise[f] - lost_hydrogen[f];
           }
 
           // Calculate ions from bulk
           float taue = etbR * tauB;
-          f = perFlowRegP->getStart();
+          f = perFlowRegP->getFineStart();
           one_over_two_taub = 1.0f / (2.0f*taue);
           xt = 1.0f/(1.0f + (deltaFrames[f]*one_over_two_taub));
           bulk_signal[f] = lost_hydrogen[f]*xt;
@@ -475,7 +474,7 @@ __global__ void SimpleXTalkNeighbourContribution(// Here FL stands for flows
         }// if contributor
 
         //contributors store bulk_signal to global all other store 0 values
-        for(int f=perFlowRegP->getStart(); f<nframes; f++)
+        for(int f=perFlowRegP->getFineStart(); f<nframes; f++)
           lmyBaseXTalkContribution[f*BeadPlaneStride] = (contributor)?(bulk_signal[f]):(0);
 
       } //if lrx < regiond width

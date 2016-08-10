@@ -31,30 +31,3 @@ void TimeAndEmphasisDefaults::FromJson(Json::Value &gopt_params){
   emphasis_ampl_default = gopt_params["emp_amplitude"].asFloat();
   emphasis_width_default = gopt_params["emp_width"].asFloat();
 }
-
-void TimeAndEmphasisDefaults::FromCharacterLine(char *line){
-  float d[10];
-  int num;
-
-  if ( strncmp ( "emphasis",line,8 ) == 0 )
-  {
-    num = sscanf ( line,"emphasis: %f %f %f %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4],&d[5],&d[6],&d[7] );
-    for ( int i=0;i<num;i++ ) emp[i]=d[i];
-  }
-  if ( strncmp ( "emp_amp",line,7 ) == 0 )
-    num = sscanf ( line,"emp_amplitude: %f",&emphasis_ampl_default );
-  if ( strncmp ( "emp_width",line,7 ) == 0 )
-    num = sscanf ( line,"emp_width: %f",&emphasis_width_default );
-  if ( strncmp ( "nuc_flow_timing", line, 15 ) == 0 )
-  {
-    num = sscanf ( line,"nuc_flow_frame_width: %f", &d[0] );
-    nuc_flow_frame_width = d[0];
-  }
-  if ( strncmp ( "time_compression", line, 16 ) == 0 )
-  {
-    num = sscanf ( line,"time_compression: %f %f %f", &d[0], &d[1],&d[2] );
-    time_left_avg = d[0];
-    time_start_detail = d[1];
-    time_stop_detail = d[2];
-  }
-}

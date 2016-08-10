@@ -44,11 +44,7 @@ class MixModel {
 class DualGaussMixModel {
 
 public:
-#if __cplusplus >= 201103L
     static constexpr double GPI =  3.1415926535897932384626433832795;
-#else
-    static const double GPI =  3.1415926535897932384626433832795;
-#endif
   /** Constructor - How many points to use (sample) from total */
   DualGaussMixModel(int n=-1);
 

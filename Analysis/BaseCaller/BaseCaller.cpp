@@ -46,6 +46,7 @@
 #include "BaseCallerMetricSaver.h"
 #include "HistogramCalibration.h"
 #include "LinearCalibrationModel.h"
+#include "MolecularTagTrimmer.h"
 
 #include "BaseCallerParameters.h"
 
@@ -126,6 +127,18 @@ void SaveJson(const Json::Value & json, const string& filename_json)
         ION_WARN("Unable to write JSON file " + filename_json);
 }
 
+void JsonToCommentLine(const Json::Value & json, vector<string> &comments) {
+
+  Json::FastWriter writer;
+  string str = writer.write(json);
+  // trim unwanted newline added by writer
+  int last_char = str.size()-1;
+  if (last_char>=0 and str[last_char]=='\n') {
+    str.erase(last_char,1);
+  }
+  comments.push_back(str);
+}
+
 // ----------------------------------------------------------------
 void SaveBaseCallerProgress(int percent_complete, const string& output_directory)
 {
@@ -200,6 +213,23 @@ void ClassifyAndSampleWells(BaseCallerContext & bc, const BCwellSampling & Sampl
     cout << " - Num. calib. wells  : " << sum_calib_wells     << endl;
 };
 
+// --------------------------------------------------------------------------
+
+void scaleup_flowgram(const vector<float>& sigIn, vector<int16_t>& sigOut, int max_flow)
+{
+    if (sigOut.size() != (size_t)max_flow)
+      sigOut.resize(max_flow);
+    for (int flow = 0; flow < max_flow; ++flow){
+        int v = 128*sigIn[flow];
+        // handle overflow
+        if (v < -16383 or v > 16383) {
+            v = min(max(-16383,v), 16383);
+        }
+        sigOut[flow] = (int16_t)(2*v); // faster than sigOut.push_back()
+    }
+}
+
+
 
 // --------------------------------------------------------------------------
 //! @brief    Main function for BaseCaller executable Mark: XXX
@@ -215,6 +245,8 @@ int main (int argc, const char *argv[])
 
     Json::Value basecaller_json(Json::objectValue);
     DumpStartingStateOfProgram (argc,argv,analysis_start_time, basecaller_json["BaseCaller"]);
+    Json::Value basecaller_bam_comments(Json::objectValue); // Comment lines are json structures
+    vector<string> bam_comments; // Every entry in the vector is a comment line in the BAM
 
     //
     // Step 1. Process Command Line Options & Initialize Modules
@@ -251,6 +283,8 @@ int main (int argc, const char *argv[])
     if (wells.KeyExists("ChipType"))
         wells.GetValue("ChipType", chip_type);
 
+    if((!chip_type.empty()) && chip_type[0] == 'P') chip_type[0] = 'p';
+
     // Command line processing *** Various general option and opts to classify and sample wells
     BaseCallerContext bc;
     bc.mask = &mask;
@@ -260,8 +294,29 @@ int main (int argc, const char *argv[])
     // Sampling options may reset command line arguments & change context
     bc_params.InitializeSamplingFromOptArgs(opts, bc.chip_subset.NumWells());
     bc_params.SetBaseCallerContextVars(bc);
-    ClassifyAndSampleWells(bc, bc_params.GetSamplingOpts());
 
+    // --------- Stand alone phase estimation and exit ---------------------------------------
+    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer);
+
+    if (bc_params.JustPhaseEstimation()) {
+      wells.OpenForIncrementalRead();
+      bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc_params.NumThreads());
+      wells.Close();
+
+      bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
+      bc.estimator.ExportTrainSubsetToJson(basecaller_json["TrainSubset"]);
+
+      time_t analysis_end_time;
+      time(&analysis_end_time);
+      basecaller_json["BaseCaller"]["end_time"] = get_time_iso_string(analysis_end_time);
+      basecaller_json["BaseCaller"]["total_duration"] = (int)difftime(analysis_end_time,analysis_start_time);
+      SaveJson(basecaller_json, bc_params.GetFiles().filename_phase);
+
+      ReportState(analysis_start_time,"Phase Parameter Estimation Complete");
+      ReportState(analysis_start_time,"Basecalling Complete");
+      exit(EXIT_SUCCESS);
+    }
+    // --------- Or do phase estimation after booting up all modules & before base calling ---
 
     // *** Setup for different datasets
     BarcodeDatasets datasets_calibration(bc.run_id, bc_params.GetFiles().calibration_panel_file);
@@ -283,8 +338,9 @@ int main (int argc, const char *argv[])
 
 
     // *** Initialize remaining modules of BaseCallerContext
-    vector<string> bam_comments;
-    BaseCallerFilters filters(opts, bam_comments, bc.run_id, bc.flow_order, bc.keys, mask);
+    basecaller_bam_comments["BaseCallerComments"]["MasterKey"] = bc.run_id;
+
+    BaseCallerFilters filters(opts, basecaller_bam_comments["BaseCallerComments"], bc.flow_order, bc.keys, mask);
     bc.filters = &filters;
 
     BaseCallerMetricSaver metric_saver(opts, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY(), bc.flow_order.num_flows(),
@@ -301,8 +357,6 @@ int main (int argc, const char *argv[])
     // initialize the per base quality score generator - dependent on calibration
     bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, hist_calibration.is_enabled());
 
-    // Phase estimator
-    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer);
     // Barcode classification
     BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, bc_params.GetFiles().output_directory,
     		                   bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
@@ -311,6 +365,11 @@ int main (int argc, const char *argv[])
     BarcodeClassifier calibration_barcodes(null_opts, datasets_calibration, bc.flow_order, bc.keys,
                           bc_params.GetFiles().output_directory, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
     bc.calibration_barcodes = &calibration_barcodes;
+
+    // Molecular tag identification & trimming
+    MolecularTagTrimmer tag_trimmer;
+    tag_trimmer.InitializeFromJson(MolecularTagTrimmer::ReadOpts(opts), datasets.read_groups(), barcodes.TrimBarcodes());
+    bc.tag_trimmer = &tag_trimmer;
 
     // Command line parsing officially over. Detect unknown options.
     opts.CheckNoLeftovers();
@@ -323,8 +382,11 @@ int main (int argc, const char *argv[])
 
 
     //
-    // Step 2. Filter training and phase estimation
+    // Step 2. Filter training and do phase estimation
     //
+
+    // Classify wells subsets to be processed / ignored during base calling
+    ClassifyAndSampleWells(bc, bc_params.GetSamplingOpts());
 
     // Find distribution of clonal reads for use in read filtering:
     filters.TrainClonalFilter(bc_params.GetFiles().output_directory, wells, mask, bc.polyclonal_filter);
@@ -332,57 +394,60 @@ int main (int argc, const char *argv[])
     ReportState(analysis_start_time,"Polyclonal Filter Training Complete");
 
     // Library phasing parameter estimation
-    MemUsage("BeforePhaseEstimation");
     if (not bc.estimator.HaveEstimates()) {
-      wells.OpenForIncrementalRead();
-      bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, (bc_params.NumThreads() == 1));
-      wells.Close();
+        MemUsage("BeforePhaseEstimation");
+
+        wells.OpenForIncrementalRead();
+        bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc_params.NumThreads());
+        wells.Close();
+        MemUsage("AfterPhaseEstimation");
     }
     bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
     bc.estimator.ExportTrainSubsetToJson(basecaller_json["TrainSubset"]);
 
     SaveJson(basecaller_json, bc_params.GetFiles().filename_json);
     SaveBaseCallerProgress(10, bc_params.GetFiles().output_directory);  // Phase estimation assumed to be 10% of the work
+    ReportState(analysis_start_time,"Phase Parameter Estimation Complete");
+
 
     // Initialize Barcode Classifier(s) - dependent on phase estimates
     bc.barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
     bc.calibration_barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
 
-    MemUsage("AfterPhaseEstimation");
-    ReportState(analysis_start_time,"Phase Parameter Estimation Complete");
     MemUsage("BeforeBasecalling");
 
 
     //
     // Step 3. Open wells and output BAM files & initialize writers
     //
+    JsonToCommentLine(basecaller_bam_comments, bam_comments);
 
     // Library data set writer - always
     bc.lib_writer.Open(bc_params.GetFiles().output_directory, datasets, 0, bc.chip_subset.NumRegions(),
-                 bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
-                 bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
+                 bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(), bc_params.NumBamWriterThreads(),
+                 basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes());
 
     // Calibration reads data set writer - if applicable
     if (bc.have_calibration_panel)
       bc.calib_writer.Open(bc_params.GetFiles().output_directory, datasets_calibration, 0, bc.chip_subset.NumRegions(),
-                     bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
-                     bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
+                     bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(), bc_params.NumBamWriterThreads(),
+                     basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes());
 
     // Test fragments data set writer - if applicable
     if (bc.process_tfs)
       bc.tf_writer.Open(bc_params.GetFiles().output_directory, datasets_tf, 1, bc.chip_subset.NumRegions(),
-                  bc.flow_order, bc.keys[1].bases(), filters.GetTFBeadAdapters(),
-                  bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
+                  bc.flow_order, bc.keys[1].bases(), filters.GetTFBeadAdapters(), bc_params.NumBamWriterThreads(),
+                  basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes());
 
     // Unfiltered / unfiltered untrimmed data set writers - if applicable
     if (!bc.unfiltered_set.empty()) {
     	bc.unfiltered_writer.Open(bc_params.GetFiles().unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, -1,
                       bc.chip_subset.NumRegions(), bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
-                      bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
+                      bc_params.NumBamWriterThreads(), basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes());
 
         bc.unfiltered_trimmed_writer.Open(bc_params.GetFiles().unfiltered_trimmed_directory, datasets_unfiltered_trimmed, -1,
                               bc.chip_subset.NumRegions(), bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
-                              bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
+                              bc_params.NumBamWriterThreads(), basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes());
     }
 
     //
@@ -494,29 +559,33 @@ void * BasecallerWorker(void *input)
     wells.OpenForIncrementalRead();
     pthread_mutex_unlock(&bc.mutex);
 
-    vector<float> residual(bc.flow_order.num_flows(), 0);
-    vector<float> scaled_residual(bc.flow_order.num_flows(), 0);
-    vector<float> wells_measurements(bc.flow_order.num_flows(), 0);
-    vector<float> local_noise(bc.flow_order.num_flows(), 0);
-    vector<float> minus_noise_overlap(bc.flow_order.num_flows(), 0);
-    vector<float> homopolymer_rank(bc.flow_order.num_flows(), 0);
-    vector<float> neighborhood_noise(bc.flow_order.num_flows(), 0);
-    vector<float> phasing_parameters(3);
-    vector<uint16_t>  flowgram(bc.flow_order.num_flows());
-    vector<int16_t>   flowgram2(bc.flow_order.num_flows());
-    vector<int16_t> filtering_details(13,0);
+    WellsNormalization wells_norm(&bc.flow_order, bc.wells_norm_method);
+    wells_norm.SetWells(&wells, bc.mask);
+    int num_flows =  bc.flow_order.num_flows();
 
-    vector<char> abParams;
-    abParams.reserve(256);
+    vector<float>     residual(num_flows, 0);
+    vector<float>     scaled_residual(num_flows, 0);
+    vector<float>     wells_measurements(num_flows, 0);
+    vector<float>     local_noise(num_flows, 0);
+    vector<float>     minus_noise_overlap(num_flows, 0);
+    vector<float>     homopolymer_rank(num_flows, 0);
+    vector<float>     neighborhood_noise(num_flows, 0);
+    vector<float>     phasing_parameters(3);
+    vector<uint16_t>  flowgram(num_flows);
+    vector<int16_t>   flowgram2(num_flows);
+    vector<int16_t>   filtering_details(13,0);
+    vector<uint8_t>   quality(3*num_flows);
+    vector<int>       base_to_flow (3*num_flows);             //!< Flow of in-phase incorporation of each base.
 
-    vector<uint8_t>   quality(3*bc.flow_order.num_flows());
-    vector<int>       base_to_flow (3*bc.flow_order.num_flows());             //!< Flow of in-phase incorporation of each base.
-
-    TreephaserSSE treephaser_sse(bc.flow_order, bc.windowSize);
-    DPTreephaser  treephaser(bc.flow_order, bc.windowSize);
+    DPTreephaser      treephaser(bc.flow_order, bc.windowSize);
     treephaser.SetStateProgression(bc.diagonal_state_prog);
     treephaser.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
+    
+    // SSE treephaser definition. XXX
+#if defined( __SSE3__ )
+    TreephaserSSE treephaser_sse(bc.flow_order, bc.windowSize);
     treephaser_sse.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
+#endif
 
 
     while (true) {
@@ -573,8 +642,11 @@ void * BasecallerWorker(void *input)
             continue;
         }
 
-        wells.SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, bc.flow_order.num_flows());
+        wells.SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows);
         wells.ReadWells();
+        wells_norm.CorrectSignalBias(bc.keys);
+        wells_norm.DoKeyNormalization(bc.keys);
+
 
         for (int y = begin_y; y < end_y; ++y)
             for (int x = begin_x; x < end_x; ++x) {   // Loop over wells within current region
@@ -622,12 +694,12 @@ void * BasecallerWorker(void *input)
                 float ie = bc.estimator.GetWellIE(x,y);
                 float dr = bc.estimator.GetWellDR(x,y);
 
-                for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+                for (int flow = 0; flow < num_flows; ++flow)
                     wells_measurements[flow] = wells.At(y,x,flow);
 
                 // Sanity check. If there are NaNs in this read, print warning
                 vector<int> nanflow;
-                for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
+                for (int flow = 0; flow < num_flows; ++flow) {
                     if (!isnan(wells_measurements[flow]))
                         continue;
                     wells_measurements[flow] = 0;
@@ -673,84 +745,96 @@ void * BasecallerWorker(void *input)
                   }
                 }
 
-                // Equal recalibration opportunity for everybody! (except TFs!)
+                // Equal calibration opportunity for everybody! (except TFs!)
                 const vector<vector<vector<float> > > * aPtr = 0;
                 const vector<vector<vector<float> > > * bPtr = 0;
-                if (bc.linear_cal_model->is_enabled() && read_class == 0) { //do not recalibrate TF read bc.chip_subset.GetChipSizeX()
+                if (bc.linear_cal_model->is_enabled() && read_class == 0) { //do not recalibrate TFs
                   aPtr = bc.linear_cal_model->getAs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
                   bPtr = bc.linear_cal_model->getBs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
                 }
 
                 // Execute the iterative solving-normalization routine - switch by specified algorithm
-                if (bc.dephaser == "treephaser-sse") {
-                  treephaser_sse.SetAsBs(aPtr, bPtr);  // Set/delete recalibration model for this read
-                  treephaser_sse.SetModelParameters(cf, ie); // sse version has no hookup for droop.
-                  treephaser_sse.NormalizeAndSolve(read);
-                  treephaser.SetModelParameters(cf, ie); // Adapter trimming uses the cpp treephaser
-                }
-                // By popular demand: Solving bases without any normalization
-                else if (bc.dephaser == "treephaser-solve") {
-                  treephaser_sse.SetAsBs(aPtr, bPtr);
-                  treephaser_sse.SetModelParameters(cf, ie);
-                  treephaser_sse.SolveRead(read, 0, bc.flow_order.num_flows());
-                  treephaser.SetModelParameters(cf, ie);
-                }
-                // All other options are for the c++ version of the BaseCaller
-                else { // Setup cpp treephaser
-                  if (bc.skip_droop)
-                    treephaser.SetModelParameters(cf, ie);
-                  else
-                    treephaser.SetModelParameters(cf, ie, dr);
-                  treephaser.SetAsBs(aPtr, bPtr); // Set/delete recalibration model for this read
+                // Structure code by SSE or CPP code call
 
-                  if (bc.dephaser == "dp-treephaser") {
-                    // Single parameter gain estimation
-                    treephaser.NormalizeAndSolve_GainNorm(read, bc.flow_order.num_flows());
-                  } else if (bc.dephaser == "treephaser-adaptive") {
-                    // Adaptive nortmalization - resolving read from start in each iteration
-                    treephaser.NormalizeAndSolve_Adaptive(read, bc.flow_order.num_flows());
-                  } else { //if (bc.dephaser == "treephaser-swan") {
-                    // Default corresponding to (approximately) what the sse version is doing
-                	// Adaptive normalization - sliding window without resolving start
-                	treephaser.NormalizeAndSolve_SWnorm(read, bc.flow_order.num_flows());
+                bool compute_base_calls = true;
+                bool calibrate_read = bc.histogram_calibration->is_enabled();
+                calibrate_read = calibrate_read and (read_class == 0 or (bc.calibrate_TFs and read_class == 1));
+
+                treephaser.SetAsBs(aPtr, bPtr); // Set/delete recalibration model for this read
+                // Set up CPP base caller - Adapter trimming always uses cpp treephaser
+                if (bc.skip_droop or bc.sse_dephaser)
+                  treephaser.SetModelParameters(cf, ie);
+                else
+                  treephaser.SetModelParameters(cf, ie, dr);
+
+                // Execute vectorized basecaller version XXX
+#if defined( __SSE3__ )
+                if (bc.sse_dephaser) {
+                  treephaser_sse.SetAsBs(aPtr, bPtr);  // Set/delete recalibration model for this read
+                  treephaser_sse.SetModelParameters(cf, ie); // SSE version has no hook for droop.
+
+                  if (bc.dephaser == "treephaser-sse")
+                    treephaser_sse.NormalizeAndSolve(read);
+                  else // bc.dephaser == "treephaser-solve" Solving without normalization
+                    treephaser_sse.SolveRead(read, 0, num_flows);
+
+                  // Store debug info if desired and calibration enabled
+                  if (bc.debug_normalization_bam and bc.histogram_calibration->is_enabled())
+                    read.not_calibrated_measurements = read.normalized_measurements;
+
+                  // Calibrate library reads
+                  if (calibrate_read) {
+                    bc.histogram_calibration->PolishRead(bc.flow_order, x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset(), read, bc.linear_cal_model);
                   }
 
-                  // Need this function to calculate inphase population for cpp version
+                  // Compute QV metrics on pot. calibrated sequence
+                  treephaser_sse.ComputeQVmetrics(read);
+                  compute_base_calls = false;
+                }
+#endif
+
+                // Use CPP code version if we didn't already use vectorized code
+                if (compute_base_calls){
+                  if (bc.dephaser == "dp-treephaser") {
+                    // Single parameter gain estimation
+                    treephaser.NormalizeAndSolve_GainNorm(read, num_flows);
+                  } else if (bc.dephaser == "treephaser-adaptive") {
+                    // Adaptive nortmalization - resolving read from start in each iteration
+                    treephaser.NormalizeAndSolve_Adaptive(read, num_flows);
+                  } else { //if (bc.dephaser == "treephaser-swan") {
+                    // Default corresponding to (approximately) what the sse version is doing
+                    // Adaptive normalization - sliding window without resolving start
+                    treephaser.NormalizeAndSolve_SWnorm(read, num_flows);
+                  }
+                  
+                  // Store debug info if desired and calibration enabled
+                  if (bc.debug_normalization_bam and bc.histogram_calibration->is_enabled())
+                    read.not_calibrated_measurements = read.normalized_measurements;
+
+                  // Calibrate library reads
+                  if (calibrate_read) {
+                    treephaser.Simulate(read, num_flows, true);
+                    bc.histogram_calibration->PolishRead(bc.flow_order, x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset(), read, bc.linear_cal_model);
+                  }
+
                   treephaser.ComputeQVmetrics(read);
                 }
 
-                // If recalibration is enabled, generate adjusted sequence and normalized_measurements, and recompute QV metrics
-                bool calibrate_read = (bc.histogram_calibration->is_enabled() && read_class == 0); //do not recalibrate TF read
-                if (calibrate_read) {
-                	// Change base sequence for low hps
-                    //bc.recalibration.CalibrateRead(x+bc.chip_subset.GetColOffset(),y+bc.chip_subset.GetRowOffset(),read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
-                    bc.histogram_calibration->CalibrateRead(bc.flow_order, x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset(), read);
-
-                    if (bc.dephaser == "treephaser-sse")
-                      treephaser_sse.ComputeQVmetrics(read);
-                    else
-                      treephaser.ComputeQVmetrics(read);
-                } else if (bc.dephaser == "treephaser-sse") {
-                  // in case we didn't calibrate low hps, still want to have QV metrics for sse output
-                  treephaser_sse.ComputeQVmetrics(read);
-                }
-
                 // Misc data management: Generate residual, scaled_residual
-                for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
+                for (int flow = 0; flow < num_flows; ++flow) {
                     residual[flow] = read.normalized_measurements[flow] - read.prediction[flow];
                     scaled_residual[flow] = residual[flow] / read.state_inphase[flow];
                 }
 
                 // Misc data management: Put base calls in proper string form
-                processed_read.filter.n_bases = read.sequence.size();
-                processed_read.filter.is_called = true;
+                processed_read.filter.CalledRead(read.sequence.size());
 
                 // Misc data management: Generate base_to_flow
 
                 base_to_flow.clear();
                 base_to_flow.reserve(processed_read.filter.n_bases);
                 for (int base = 0, flow = 0; base < processed_read.filter.n_bases; ++base) {
-                    while (flow < bc.flow_order.num_flows() and read.sequence[base] != bc.flow_order[flow])
+                    while (flow < num_flows and read.sequence[base] != bc.flow_order[flow])
                         flow++;
                     base_to_flow.push_back(flow);
                 }
@@ -778,7 +862,7 @@ void * BasecallerWorker(void *input)
                 // Predictor 5 - Treephaser: Penalty indicating deletion after the called base
                 // Predictor 6 - Neighborhood noise - mean of 'noise' +-5 BASES around a base.  Noise is mean{abs(val - round(val))}
 
-                int num_predictor_bases = min(bc.flow_order.num_flows(), processed_read.filter.n_bases);
+                int num_predictor_bases = min(num_flows, processed_read.filter.n_bases);
 
                 PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction);
                 PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction);
@@ -787,7 +871,7 @@ void * BasecallerWorker(void *input)
                 PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, read.sequence);
 
                 quality.clear();
-                bc.quality_generator.GenerateBaseQualities(processed_read.bam.Name, processed_read.filter.n_bases, bc.flow_order.num_flows(),
+                bc.quality_generator.GenerateBaseQualities(processed_read.bam.Name, processed_read.filter.n_bases, num_flows,
                         read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
                         homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
                         base_to_flow, quality,
@@ -795,17 +879,13 @@ void * BasecallerWorker(void *input)
                         read.multiplicative_correction,
                         read.state_inphase);
 
+
                 //
                 // Step 4a. Barcode classification of library reads
                 //
 
-                if (processed_read.filter.n_bases_filtered == -1)
-                    processed_read.filter.n_bases_filtered = processed_read.filter.n_bases;
+                bc.filters->TrimKeySequence(bc.keys[read_class].bases_length(), processed_read.filter);
 
-                processed_read.filter.n_bases_key = min(bc.keys[read_class].bases_length(), processed_read.filter.n_bases);
-                processed_read.filter.n_bases_prefix = processed_read.filter.n_bases_key;
-
-                processed_read.barcode_n_errors = 0;
                 if (read_class == 0)
                 {   // Library beads - first separate out calibration barcodes
                 	processed_read.read_group_index = -1;
@@ -813,31 +893,33 @@ void * BasecallerWorker(void *input)
                 	  bc.calibration_barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
                 	  processed_read.is_control_barcode = (processed_read.read_group_index >= 0);
                 	}
-                    if (processed_read.read_group_index < 0)
+
+                	// *** Processing for standard library beads only
+                    if (processed_read.read_group_index < 0){
                       bc.barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
+                      bc.filters->TrimPrefixTag          (read_index, read_class, processed_read, read.sequence, bc.tag_trimmer);
+                      bc.filters->TrimExtraLeft          (read_class, processed_read, read.sequence); // Only those guys get an extra trim left
+                    }
                 }
-
-                //
-                // Step 4b. Custom mod: Trim extra bases after key and barcode. Make it look like barcode trimming.
-                //
-
-                if (bc.extra_trim_left > 0)
-                    processed_read.filter.n_bases_prefix = min(processed_read.filter.n_bases_prefix + bc.extra_trim_left, processed_read.filter.n_bases);
 
 
                 //
                 // Step 4. Calculate/save read metrics and apply filters
-                //
+                // The order of the filtering/trimming operations actually matters.
 
+                // Filters completely remove a read from the BAM
                 bc.filters->FilterZeroBases     (read_index, read_class, processed_read.filter);
                 bc.filters->FilterShortRead     (read_index, read_class, processed_read.filter);
                 bc.filters->FilterFailedKeypass (read_index, read_class, processed_read.filter, read.sequence);
                 bc.filters->FilterHighResidual  (read_index, read_class, processed_read.filter, residual);
-                bc.filters->FilterBeverly       (read_index, read_class, processed_read.filter, scaled_residual, base_to_flow);
+                //bc.filters->FilterBeverly       (read_index, read_class, processed_read.filter, scaled_residual, base_to_flow);
                 bc.filters->FilterQuality       (read_index, read_class, processed_read.filter, quality);
+
+                // Read trimming shortens a read or remove it if it's too short after trimming
                 bc.filters->TrimAdapter         (read_index, read_class, processed_read, scaled_residual, base_to_flow, treephaser, read);
+                bc.filters->TrimSuffixTag       (read_index, read_class, processed_read, read.sequence, bc.tag_trimmer);
+                bc.filters->TrimExtraRight      (read_index, read_class, processed_read, read.sequence);
                 bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality);
-                bc.filters->TrimAvalanche       (read_index, read_class, processed_read.filter, quality);
 
                 //! New mechanism for dumping potentially useful metrics.
                 if (bc.metric_saver->save_anything() and (is_random_unfiltered or !bc.metric_saver->save_subset_only())) {
@@ -865,34 +947,22 @@ void * BasecallerWorker(void *input)
                 // Step 4b. Add flow signal information to ZM tag in BAM record.
                 //
 
-                flowgram2.clear();
-                int max_flow = min(bc.flow_order.num_flows(),16);
+                int max_flow = min(num_flows,16);
                 if (processed_read.filter.n_bases_filtered > 0)
-                    max_flow = min(bc.flow_order.num_flows(), base_to_flow[processed_read.filter.n_bases_filtered-1] + 16);
+                    max_flow = min(num_flows, base_to_flow[processed_read.filter.n_bases_filtered-1] + 16);
 
-                vector<int> out_of_boud_flows;
-                for (int flow = 0; flow < max_flow; ++flow){
-                    float temp_flowgram = 128*read.normalized_measurements[flow];
-                    if (temp_flowgram < -16383.0f or temp_flowgram > 16383.0f) {
-                        out_of_boud_flows.push_back(flow);
-                        temp_flowgram = min(max(-16383.0f,temp_flowgram), 16383.0f);
-                    }
-                    //flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));
-                    flowgram2.push_back(2*(int16_t)temp_flowgram);
-                }
-                // Do not spam stderr
-                /*if (out_of_boud_flows.size() > 0) {
-                  cerr << "BaseCaller WARNING: Normalized signal out of bounds in well y="
-                       << y << ", x=" << x << ", in flows ";
-                  for (unsigned int flow = 0; flow < out_of_boud_flows.size()-1; ++flow)
-                    cerr << out_of_boud_flows.at(flow) << ',';
-                  cerr << out_of_boud_flows.at(out_of_boud_flows.size()-1) << endl;
-                } */
+                scaleup_flowgram(read.normalized_measurements,flowgram2,max_flow);
                 processed_read.bam.AddTag("ZM", flowgram2);
-                //flowgram2.push_back(1*(int16_t)(256*read.normalized_measurements[flow]));
-                //flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));
-                //flowgram2.push_back(4*(int16_t)(64*read.normalized_measurements[flow]));
-                //flowgram2.push_back(8*(int16_t)(32*read.normalized_measurements[flow]));
+                if (bc.debug_normalization_bam) {
+                    scaleup_flowgram(read.additive_correction,flowgram2,max_flow);
+                    processed_read.bam.AddTag("Ya", flowgram2);
+                    scaleup_flowgram(read.multiplicative_correction,flowgram2,max_flow);
+                    processed_read.bam.AddTag("Yb", flowgram2);
+                    scaleup_flowgram(read.raw_measurements,flowgram2,max_flow);
+                    processed_read.bam.AddTag("Yw", flowgram2);
+                    scaleup_flowgram(read.not_calibrated_measurements,flowgram2,max_flow);
+                    processed_read.bam.AddTag("Yx", flowgram2);
+                }
 
                 //
                 // Step 4c. Populate FZ tag in BAM record.
@@ -900,27 +970,27 @@ void * BasecallerWorker(void *input)
 
                 flowgram.clear();
                 if (bc.flow_signals_type == "wells") {
-                    for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+                    for (int flow = 0; flow < num_flows; ++flow)
                         flowgram.push_back(max(0,(int)(100.0*wells_measurements[flow]+0.5)));
                     processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
 
                 } else if (bc.flow_signals_type == "key-normalized") {
-                    for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+                    for (int flow = 0; flow < num_flows; ++flow)
                         flowgram.push_back(max(0,(int)(100.0*read.raw_measurements[flow]+0.5)));
                     processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
 
                 } else if (bc.flow_signals_type == "adaptive-normalized") {
-                    for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+                    for (int flow = 0; flow < num_flows; ++flow)
                         flowgram.push_back(max(0,(int)(100.0*read.normalized_measurements[flow]+0.5)));
                     processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
 
                 } else if (bc.flow_signals_type == "residual") {
-                    for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+                    for (int flow = 0; flow < num_flows; ++flow)
                         flowgram.push_back(max(0,(int)(1000 + 100*residual[flow])));
                     processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
 
                 } else if (bc.flow_signals_type == "scaled-residual") { // This settings is necessary part of calibration training
-                    for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
+                    for (int flow = 0; flow < num_flows; ++flow) {
                         //between 0 and 98
                         float adjustment = min(0.49f, max(-0.49f, scaled_residual[flow]));
                         flowgram.push_back(max(0,(int)(49.5 + 100*adjustment)));
@@ -999,8 +1069,5 @@ void * BasecallerWorker(void *input)
         }
     }
 }
-
-
-
 
 

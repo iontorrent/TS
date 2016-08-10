@@ -1,7 +1,6 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "EmptyTraceTracker.h"
-#include "SynchDatSerialize.h"
 
 // Each SignalProcessingMasterFitter object is associated with
 // 1 Region and 1 block of flows 
@@ -57,9 +56,6 @@ void EmptyTraceTracker::Allocate(const Mask *bfmask, const ImageSpecClass &imgSp
   // assumes regions are indexed over a small non-negative range
   imgFrames.resize(maxNumRegions);
 
-  // sdat handling
-  SynchDat sdat;
-  bool doSdat = inception_state.img_control.doSdat;
   for (unsigned int i=0; i<regions.size(); i++){
     Region region = regions[i];
     imgFrames[region.index] = imgSpec.uncompFrames;
@@ -87,22 +83,6 @@ void EmptyTraceTracker::Allocate(const Mask *bfmask, const ImageSpecClass &imgSp
                                         global_defaults.data_control.nuc_flow_frame_width);
   
     emptyTrace->T0EstimateToMap(sep_t0_est, &region, bfmask);
-    if (doSdat){
-      // make the empty trace's notion of time conform to an sdat region's
-      // notion of time mapping the upper left corner of the empty trace's
-      // region to the corresponding sdat region.  Note that multiple sdat
-      // regions may cover the empty trace's region
-      TraceChunkSerializer serializer;
-      char sdatFile[1024];
-      
-      sprintf (sdatFile, "%s/%s%04d.%s", inception_state.sys_context.dat_source_directory,inception_state.img_control.acqPrefix, 
-               0, inception_state.img_control.sdatSuffix.c_str() );
-      bool ok = serializer.Read ( sdatFile, sdat);
-      if (!ok) {
-        ION_ABORT("Couldn't load file: " + ToStr(sdatFile));
-      }
-      emptyTrace->SetTimeFromSdatChunk(region, sdat);
-    }
 
     emptyTrace->CountReferenceTraces(region, bfmask);
     //fprintf(stdout, "Found %d reference traces starting at %d in region %d\n", cnt, ((EmptyTraceRecorder *)emptyTrace)->regionIndicesStartIndex, region.index);
@@ -156,46 +136,6 @@ void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(
   // fill the buffer neg_bg_buffers_slope
   emptyTrace->RezeroReference(t_start, t_mid_nuc_start-MAGIC_OFFSET_FOR_EMPTY_TRACE, 
                               flow_buffer_index);
-  emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow_buffer_index);
- }
-
-void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(
-    SynchDat &sdat, 
-    const PinnedInFlow &pinnedInFlow, 
-    int raw_flow, 
-    const Mask *bfmask, 
-    Region& region, 
-    float t_mid_nuc, 
-    float sigma,
-    float t_start, 
-    TimeCompression *time_cp,
-    int flow_buffer_index
-  )
-{
-  EmptyTrace *emptyTrace = NULL;
-
-  // fprintf(stdout, "ETT: Setting Empty trace %lx in %lx[%d] for flow %d\n", (unsigned long)emptyTracesForBMFitter[region.index], (unsigned long)emptyTracesForBMFitter, region.index, raw_flow);
-  //TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region.row, region.col);
-  // TimeCompression time_cp;
-  // time_cp.choose_time = global_defaults.signal_process_control.choose_time; // have to start out using the same compression as bkg model - this will become easier if we coordinate time tracker
-  // time_cp.SetUpTime (imgFrames[region.index], chunk.mT0,global_defaults.data_control.time_start_detail, global_defaults.data_control.time_stop_detail, global_defaults.data_control.time_left_avg);
-  // float t_start = time_cp.time_start;
-
-  emptyTrace = emptyTracesForBMFitter[region.index];
-  emptyTrace->SetUsed(true);
-
-  // make the empty trace's notion of time conform to an sdat region's
-  // notion of time mapping the upper left corner of the empty trace's
-  // region to the corresponding sdat region.  Note that multiple sdat
-  // regions may cover the empty trace's region
-  emptyTrace->SetTimeFromSdatChunk(region, sdat);
-
-  // calculate average trace across all empty wells in this region for this flow
-  emptyTrace->GenerateAverageEmptyTrace( &region, pinnedInFlow, bfmask, sdat, 
-                                           flow_buffer_index, raw_flow);
-
-  // Fill The buffer neg_bg_buffers_slope
-  emptyTrace->RezeroReference(t_start, t_mid_nuc-MAGIC_OFFSET_FOR_EMPTY_TRACE, flow_buffer_index);
   emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow_buffer_index);
  }
 

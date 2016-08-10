@@ -80,10 +80,7 @@ void BkgTrace::SetBkgCorrectTrace()
   bead_trace_bkg_corrected = fg_buffers;
 }
 
-bool BkgTrace::AlreadyAdjusted()
-{
-  return(bead_trace_raw==NULL);
-}
+
 
 BkgTrace::~BkgTrace()
 {
@@ -732,17 +729,6 @@ void BkgTrace::KeepEmptyScale(Region *region, BeadTracker &my_beads, Image *img,
     }
 }
 
-// Keep empty scale associated with trace/image data - not a per bead data object
-// this lets us not allocate it if we're not using this hack.
-void BkgTrace::KeepEmptyScale(Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer)
-{
-  float ewamp =1.0f;
-  for (int nbd = 0;nbd < my_beads.numLBeads;nbd++) // is this the right iterator here?
-    {
-      bead_scale_by_flow[nbd*allocated_flow_block_size+iFlowBuffer] = ewamp;  // shouldn't even allocate if we're not doing image rescaling
-    }
-}
-
 
 void BkgTrace::LoadImgWOffset(const RawImage *raw, int16_t *out[VEC8_SIZE], std::vector<int> &compFrms, int nfrms, int l_coord[VEC8_SIZE], float t0Shift/*, int print*/)
 {
@@ -822,7 +808,7 @@ void BkgTrace::LoadImgWOffset(const RawImage *raw, int16_t *out[VEC8_SIZE], std:
 
 	  if(++curFrms >= curCompFrms)
 	  {
-		  curCompFrmsV.V = LD_VEC8F(curCompFrms);
+		  curCompFrmsV.V = LD_VEC8F((float)curCompFrms);
 //		  tmpAdder.V *= LD_VEC8F(2.0f);
 		  tmpAdder.V /= curCompFrmsV.V;
 		  for(i=0;i<VEC8_SIZE;i++)
@@ -970,7 +956,7 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
 
     if(++curFrms >= curCompFrms)
     {
-      curCompFrmsV.V = LD_VEC8F(curCompFrms);
+      curCompFrmsV.V = LD_VEC8F((float)curCompFrms);
 //      tmpAdder.V *= LD_VEC8F(2.0f);
       tmpAdder.V = tmpAdder.V / curCompFrmsV.V;
       for(i=0;i<VEC8_SIZE;i++)
@@ -1323,7 +1309,7 @@ void BkgTrace::GenerateAllBeadTrace_vec (Region *region, BeadTracker &my_beads,
 #endif
     		  if(++curFrms >= curCompFrms)
     		  {
-    			  curCompFrmsV.V = LD_VEC8F(curCompFrms);
+    			  curCompFrmsV.V = LD_VEC8F((float)curCompFrms);
     			  tmpAdder.V /= curCompFrmsV.V;
     			  // now, turn it back into short int's
     			  v8s_u svalV;
@@ -1407,43 +1393,6 @@ void BkgTrace::GenerateAllBeadTrace_vec (Region *region, BeadTracker &my_beads,
 	}
     }
 #endif
-}
-
-void BkgTrace::GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, SynchDat &sdat, int iFlowBuffer, bool matchSdat, int flow_block_size)
-{
-  //  ION_ASSERT(chunk.NumFrames(my_beads.params_nn[0].x,my_beads.params_nn[0].y) >= (size_t)time_cp->npts(), "Wrong data points.");
-  //  ION_ASSERT(chunk.NumFrames(region->row, region->col) >= (size_t)time_cp->npts(), "Wrong data points.");
-  assert(matchSdat);
-  TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region->row, region->col);
-  assert(chunk.mRowStart == (size_t)region->row && chunk.mColStart == (size_t)region->col && 
-	 chunk.mHeight == (size_t)region->h && chunk.mWidth == (size_t)region->w);
-    for (int nbd = 0;nbd < my_beads.numLBeads;nbd++) // is this the right iterator here?
-      {
-        int rx = my_beads.params_nn[nbd].x;  // should x,y be stored with traces instead?
-        int ry = my_beads.params_nn[nbd].y;
-
-        FG_BUFFER_TYPE *fg = &fg_buffers[npts*flow_block_size*nbd+time_cp->npts()*iFlowBuffer];
-        FG_BUFFER_TYPE *current = fg;
-        if (matchSdat) {
-	  int16_t *p = &chunk.mData[0] + ry * chunk.mWidth + rx;
-	  for (int i = 0; i < time_cp->npts(); i++) {
-	    *current++ = *p;
-	    p += chunk.mFrameStep;
-	  }
-	}
-	else {
-	  std::vector<float> tmp(time_cp->npts(), 0);
-	  sdat.InterpolatedAt(ry + region->row, rx + region->col, time_cp->mTimePoints, tmp);
-	  for (int i = 0; i < time_cp->npts(); i++) {
-	    fg[i] = tmp[i];
-	  }
-	}
-        // float offset = BkgTrace::ComputeDcOffset(fg, *time_cp, 0.0f, time_cp->t0-2);
-        // for (int i = 0; i < time_cp->npts(); i++) {
-        //   fg[i] = round(fg[i] - offset);
-        // }
-      }
-    KeepEmptyScale(region, my_beads, sdat, iFlowBuffer);
 }
 
 

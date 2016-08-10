@@ -1644,6 +1644,17 @@ tr.new_plan td {
   background-size: 100% 100%;
 }
 
+.TAG_SEQUENCING {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  *margin-right: .3em;
+  text-indent: 28px;
+  vertical-align: text-top;
+  background: url('../img/appl_tagSequencing.png') no-repeat center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
 /* =============================================================================
    Ion plugin report
    ========================================================================== */
@@ -1699,12 +1710,6 @@ div.valid {
 
 .control-group.invalid.alert.alert-error {
   padding: 0;
-}
-
-.alert-warning {
-  color: #c09853;
-  background-color: #fbb450;
-  border-color: #fa8f41;
 }
 
 @media print {
@@ -1832,6 +1837,14 @@ div.valid {
 #configModal {
   width: 850px;
   margin-left: -425px;
+}
+
+.bordered-section {
+  background: #f3f3f3;
+  border-bottom-width: 1px;
+  border-bottom-color: #f7ffb4;
+  border-bottom-style: solid;
+  box-shadow: 5px 7px 5px #cdcdcd;
 }
 
 .summary-section {

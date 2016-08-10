@@ -14,7 +14,9 @@ void GpuControlOpts::DefaultGpuControl()
 
     gpuWorkLoad = 1.0;
     gpuNumStreams = 2;
-
+    //gpuSharedByNumProcs = 0; //0 default nothing done. if provided GPU memory (minus some padding) will be divided by this number
+    gpuDevMemoryPerProc = 0;
+    gpuForceMultiFlowFit=false;
     gpuMultiFlowFit = 1;
     gpuThreadsPerBlockMultiFit = 128;
     gpuL1ConfigMultiFit = -1;  // actual default is set hardware specific in MultiFitStream.cu
@@ -27,7 +29,7 @@ void GpuControlOpts::DefaultGpuControl()
 
     // 0: GaussNewton, 1: LevMar 2:Hybrid (gpuHybridIterations Gauss Newton, then rest LevMar)
     // 3: Relaxing Kmult (two pass Gauss Newton)
-    gpuSingleFlowFitType = 3; 
+    gpuSingleFlowFitType = 3;
     gpuHybridIterations = 3;
 
     doGpuOnlyFitting = 1;
@@ -38,8 +40,9 @@ void GpuControlOpts::DefaultGpuControl()
     gpuVerbose = false;
 
     gpuFlowByFlowExecution = false;
-    postFitHandshakeWorker = false; 
+    postFitHandshakeWorker = false;
     switchToFlowByFlowAt = 20;
+    gpuNumHistoryFlows = 10;
 }
 
 void GpuControlOpts::PrintHelp()
@@ -52,13 +55,17 @@ void GpuControlOpts::PrintHelp()
 	printf ("     --gpu-fitting-only      BOOL              do gpu only fitting [true]\n");
 	printf ("     --gpu-flow-by-flow      BOOL              use new flow by flow GPU pipeline [false]\n");
 	printf ("     --post-fit-handshake-worker      BOOL     post fit steps in separate thread [false]\n");
+	printf ("     --gpu-num-history-flows    INT            number of history flows to perform regional fitting\n");
   printf ("     --gpu-tmidnuc-shift-per-flow     BOOL     do t_mid_nuc shift per flow [true]\n");
 	printf ("     --gpu-device-ids        INT               gpu device ids []\n");
 	printf ("     --gpu-num-streams       INT               gpu num streams [2]\n");
+	//printf ("     --gpu-shared-by-num-procs        INT      number of processes sharing the gpu, if provided gpu memory per process will be fixed as: gpu memory/num procs\n");
+	printf ("     --gpu-memory-per-proc   INT               request a minimum of <int>MB of device memory per process, if provided overwrites dynamic memory allocation\n");
 	printf ("     --gpu-amp-guess         INT               gpu amp guess [1]\n");
 	printf ("     --gpu-hybrid-fit-iter   INT               gpu hybrid fit iteration [3]\n");
 	printf ("     --gpu-single-flow-fit   INT               gpu single flow fit [1]\n");
 	printf ("     --gpu-multi-flow-fit    INT               gpu multi flow fit [1]\n");
+	printf ("     --gpu-force-multi-flow-fit          BOOL  force multi flow fit execution despite any other setting (for Vadim's use only)\n");
 	printf ("     --gpu-single-flow-fit-blocksize     INT   gpu threads per block single fit []\n");
 	printf ("     --gpu-multi-flow-fit-blocksize      INT   gpu threads per block multi fit [128]\n");
 	printf ("     --gpu-single-flow-fit-l1config      INT   gpu L1 config single fit []\n");
@@ -90,6 +97,18 @@ void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
     fprintf ( stderr, "Option Error: gpu-amp-guess must be either 0 or 1 (%d invalid).\n",gpuAmpGuess );
     exit ( EXIT_FAILURE );
   }
+//  gpuSharedByNumProcs = RetrieveParameterInt(opts, json_params, '-', "gpu-shared-by-num-procs", 0);
+//  if ( gpuSharedByNumProcs < 0  )
+//  {
+//    fprintf ( stderr, "Option Error: gpu-shared-by-num-procs must be >= 0, where 0 will do dynamic memory allocation (%d invalid).\n",gpuSharedByNumProcs );
+//    exit ( EXIT_FAILURE );
+//  }
+  gpuDevMemoryPerProc = RetrieveParameterInt(opts, json_params, '-', "gpu-memory-per-proc", 0);
+  if ( gpuDevMemoryPerProc < 0  )
+  {
+    fprintf ( stderr, "Option Error: gpu-memory-per-proc must be >= 0, where 0 will do dynamic memory allocation (%d invalid).\n",gpuDevMemoryPerProc );
+    exit ( EXIT_FAILURE );
+  }
   gpuSingleFlowFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit", 1);
   if ( gpuSingleFlowFit != 0 && gpuSingleFlowFit != 1 )
   {
@@ -107,6 +126,7 @@ void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
   }
   gpuL1ConfigSingleFit = RetrieveParameterInt(opts, json_params, '-', "gpu-single-flow-fit-l1config", -1);
   gpuMultiFlowFit = RetrieveParameterInt(opts, json_params, '-', "gpu-multi-flow-fit", 1);
+  gpuForceMultiFlowFit = RetrieveParameterBool(opts, json_params, '-', "gpu-force-multi-flow-fit", false);
   if ( gpuMultiFlowFit != 0 && gpuMultiFlowFit != 1 )
   {
     fprintf ( stderr, "Option Error: gpu-multi-flow-fit must be either 0 or 1 (%d invalid).\n", gpuMultiFlowFit );
@@ -136,7 +156,7 @@ void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
   {
     gpuDeviceIds.push_back(deviceIds[i]);
   }
-  if (deviceIds.size() > 0) 
+  if (deviceIds.size() > 0)
   {
     std::sort(gpuDeviceIds.begin(), gpuDeviceIds.end());
   }
@@ -148,6 +168,7 @@ void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
   if (gpuFlowByFlowExecution) {
     postFitHandshakeWorker = RetrieveParameterBool(opts, json_params, '-', "post-fit-handshake-worker", true);
     switchToFlowByFlowAt = RetrieveParameterInt(opts, json_params, '-', "gpu-switch-to-flow-by-flow-at", 20);
+    gpuNumHistoryFlows = RetrieveParameterInt(opts, json_params, '-', "gpu-num-history-flows", 10);
   }
   else {
     postFitHandshakeWorker = false;

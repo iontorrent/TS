@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
+#include <cinttypes>
 
 #include "ByteSwapUtils.h"
 #include "LSRowImageProcessor.h"
@@ -239,7 +239,7 @@ bool LSRowImageProcessor::GenerateGroupCorrection(int group_num,float *vect_outp
       //LaLinearSolve(lhs_matrix_fact,coeffs,rhs_vector);
       coeffs = solve(lhs_matrix,rhs_vector);
     }
-    catch (std::runtime_error le) {
+    catch (std::runtime_error& le) {
         result_ok = false;
         coeffs.zeros(nLen);
     }

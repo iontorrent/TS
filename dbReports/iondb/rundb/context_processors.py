@@ -21,7 +21,7 @@ def base_context_processor(request):
     msg_list = [resource.full_dehydrate(Bundle(message)) for message in messages]
     serialized_messages = resource.serialize(None, msg_list, "application/json")
     base_js_extra = settings.JS_EXTRA
-    
+
     if request.user:
         users = [request.user.username]
         if request.user.is_staff:
@@ -35,7 +35,7 @@ def base_context_processor(request):
         unread_news = models.NewsPost.objects.filter(updated__gte=request.user.userprofile.last_read_news_post).count()
 
     return {"base_site_name": gconfig.site_name, "global_messages": serialized_messages,
-            "user_messages":user_serialized_messages, "base_js_extra" : base_js_extra,
+            "user_messages": user_serialized_messages, "base_js_extra": base_js_extra,
             "unread_news": unread_news, "DEBUG": settings.DEBUG}
 
 
@@ -68,3 +68,26 @@ def bind_messages(*bindings):
                                            str(view_func.__name__)))
         return bound_view
     return bind_view
+
+
+def add_help_urls_processor(request):
+    """This function adds helps urls to the template context. Url patterns are limited to exact matches and
+    globs after a slash. This allows us to only make as many dict lookups as there are
+    slashes in the url. Much faster than actually globing each pattern or regex."""
+
+    help_urls = []
+
+    # Break the url up by /s
+    request_url_fragments = request.get_full_path().split("/")[1:-1]
+
+    # Check if there are any help urls for the specific url
+    # Example Url Pattern: /plan/plan_templates/
+    help_urls.extend(settings.HELP_URL_MAP.get("/" + "/".join(request_url_fragments) + "/", []))
+
+    # Check if there are any help urls for parent urls including this one
+    # Example Url Pattern: /plan/*
+    for i in range(1, len(request_url_fragments) + 1):
+        parent_url_fragments = request_url_fragments[0:i]
+        help_urls.extend(settings.HELP_URL_MAP.get("/" + "/".join(parent_url_fragments) + "/*", []))
+
+    return {"help_urls": help_urls}

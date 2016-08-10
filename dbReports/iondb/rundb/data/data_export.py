@@ -28,6 +28,7 @@ from iondb.rundb.api import SupportUploadResource
 
 logger = get_task_logger(__name__)
 
+
 @login_required
 def list_export_uploads(request, tag):
 
@@ -44,6 +45,7 @@ def md5_stats_file(path):
     with open(path, 'rb', 8192) as fp:
         digest_hex, diges_64, size = boto.s3.key.compute_md5(fp)
     return digest_hex, diges_64, size
+
 
 @task
 def export_upload_file(monitor_id):
@@ -84,17 +86,17 @@ def export_upload_file(monitor_id):
     monitor.save()
 
     # Rewrite this into a class or a callable object
-    #last_time = time.time()
+    # last_time = time.time()
     def get_progress(current, total):
-        #now = time.time()
-        #if now - last_time >= 0.5:
+        # now = time.time()
+        # if now - last_time >= 0.5:
         monitor.progress = current
         monitor.save()
-            #last_time = now
+            # last_time = now
 
     try:
         key.set_contents_from_filename(full, cb=get_progress, num_cb=1000,
-            md5=(digest_hex, diges_64))
+                                       md5=(digest_hex, diges_64))
     except Exception as err:
         logger.exception("Uploading error")
         monitor.status = "Error: Uploading {0}".format(err)[:60]
@@ -120,10 +122,10 @@ def export_upload_report(request):
         raise Http404("'{0}' does not exist as a file in report {1}".format(path, report_pk))
     tag = "report/{0}/".format(report_pk)
     monitor = models.FileMonitor(
-        local_dir = os.path.dirname(full_path),
-        name = os.path.basename(full_path),
-        tags = "upload,"+tag,
-        status = "Queued"
+        local_dir=os.path.dirname(full_path),
+        name=os.path.basename(full_path),
+        tags="upload," + tag,
+        status="Queued"
     )
 
     monitor.save()
@@ -246,7 +248,8 @@ def poll_support_site():
     user action, on a case by case basis, from the report page.
     """
     config = models.GlobalConfig.get()
-    account, created = models.RemoteAccount.objects.get_or_create(remote_resource="support.iontorrent", defaults={"account_label": "Ion Torrent Support"})
+    account, created = models.RemoteAccount.objects.get_or_create(
+        remote_resource="support.iontorrent", defaults={"account_label": "Ion Torrent Support"})
     url = settings.SUPPORT_AUTH_URL
     auth_header = make_auth_header(account)
     info = get_ts_info()
@@ -302,7 +305,8 @@ def upload_to_support(support_upload_pk):
             upload.local_status = "Complete"
             upload.ticket_id = tick.get("ticket_id", "None")
             upload.ticket_status = tick.get("ticket_status", "Remote Error")
-            upload.ticket_message = tick.get("ticket_message", "There was an error in the support server.  Your Torrent Server is working fine, and you should contact your support representative.")
+            upload.ticket_message = tick.get(
+                "ticket_message", "There was an error in the support server.  Your Torrent Server is working fine, and you should contact your support representative.")
         else:
             upload.local_status = "Error"
             upload.local_message = response.reason
@@ -337,25 +341,25 @@ def report_support_upload(request):
     if not form.is_valid():
         data["error"] = "invalid_form"
         data["form_errors"] = form.errors
-    
+
     if "error" not in data:
         result_pk = form.cleaned_data['result']
         support_upload = models.SupportUpload.objects.filter(result=result_pk).order_by('-id').first()
         if not support_upload:
             data["created"] = True
             support_upload = models.SupportUpload(
-                account = account,
-                result_id = result_pk,
-                user = request.user,
-                local_status = "Preparing",
-                contact_email = form.cleaned_data['contact_email'],
-                description = form.cleaned_data['description']
+                account=account,
+                result_id=result_pk,
+                user=request.user,
+                local_status="Preparing",
+                contact_email=form.cleaned_data['contact_email'],
+                description=form.cleaned_data['description']
             )
             support_upload.save()
-        
+
         async_result = AsyncResult(support_upload.celery_task_id)
-        if (not support_upload.celery_task_id 
-        or async_result.status in celery.states.READY_STATES):
+        if (not support_upload.celery_task_id
+           or async_result.status in celery.states.READY_STATES):
             if not support_upload.file:
                 monitor = models.FileMonitor()
                 monitor.save()
@@ -371,7 +375,8 @@ def report_support_upload(request):
             support_upload.file.celery_task_id = gen_result.task_id
 
             auth_result = check_authentication.delay(support_upload.pk)
-            upload_result = check_and_upload.apply_async((support_upload.pk, auth_result.task_id, gen_result.task_id), countdown=1)
+            upload_result = check_and_upload.apply_async(
+                (support_upload.pk, auth_result.task_id, gen_result.task_id), countdown=1)
 
             support_upload.celery_task_id = upload_result.task_id
             support_upload.save()
@@ -384,4 +389,3 @@ def report_support_upload(request):
     # start upload task
     # respond with support upload object for JS polling
     return HttpResponse(json.dumps(data, indent=4, sort_keys=True), mimetype='application/json')
-

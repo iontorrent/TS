@@ -1,0 +1,20 @@
+--- a/include/host_config.h	2015-09-10 15:32:14.658798489 -0400
++++ b/include/host_config.h	2015-09-10 15:33:47.750797001 -0400
+@@ -76,7 +76,7 @@
+ 
+ #if __ICC != 1500 || !defined(__GNUC__) || !defined(__LP64__)
+ 
+-#error -- unsupported ICC configuration! Only ICC 15.0 on Linux x86_64 is supported!
++//#error -- unsupported ICC configuration! Only ICC 15.0 on Linux x86_64 is supported!
+ 
+ #endif /* __ICC != 1500 || !__GNUC__ || !__LP64__ */
+ 
+@@ -112,7 +112,7 @@
+ 
+ #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 9)
+ 
+-#error -- unsupported GNU version! gcc versions later than 4.9 are not supported!
++//#error -- unsupported GNU version! gcc versions later than 4.9 are not supported!
+ 
+ #endif /* __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 9) */
+ 

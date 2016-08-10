@@ -22,40 +22,49 @@ from django.core.serializers.json import DjangoJSONEncoder
 from json import encoder
 encoder.FLOAT_REPR = lambda x: format(x, '.15g')
 
+
 class JSONEncoder(DjangoJSONEncoder):
+
     """ Override datetime.datetime representation. Defer to Django for other encodings """
+
     def default(self, obj):
         if isinstance(obj, datetime.datetime):
             assert settings.TIME_ZONE == 'UTC'
             return obj.strftime('%Y-%m-%dT%H:%M:%SZ')
-        return super(JSONEncoder,self).default(obj)
+        return super(JSONEncoder, self).default(obj)
+
 
 def dumps(value):
     assert isinstance(value, dict)
     return json.dumps(value, cls=JSONEncoder, separators=(',', ':'))
 
+
 def loads(txt):
     try:
         value = json.loads(
             txt,
-            parse_float = Decimal,
-            encoding = settings.DEFAULT_CHARSET
+            parse_float=Decimal,
+            encoding=settings.DEFAULT_CHARSET
         )
         assert isinstance(value, dict)
     except (TypeError, ValueError):
         value = {}
     return value
 
+
 class JSONDict(dict):
+
     """
     Hack so repr() called by dumpdata will output JSON instead of
     Python formatted data.  This way fixtures will work!
     """
+
     def __repr__(self):
         return dumps(self)
 
 
 class JSONField(models.TextField):
+
     """JSONField is a generic textfield that neatly serializes/unserializes
     JSON objects seamlessly.  Main thingy must be a dict object."""
 
@@ -78,7 +87,7 @@ class JSONField(models.TextField):
         else:
             return value
 
-    def get_db_prep_save(self, value, connection = None):
+    def get_db_prep_save(self, value, connection=None):
         """Convert our JSON object to a string before we save"""
         if not value:
             return super(JSONField, self).get_db_prep_save("", connection=connection)

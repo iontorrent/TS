@@ -101,7 +101,7 @@ int Axion::Average0MerOneBead(int ibd,float *avg0p, int flow_block_size, int flo
 {
    float block_signal_corrected[bkg.region_data->my_trace.npts * flow_block_size];
 
-   bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal (block_signal_corrected, ibd, flow_block_size,
+   bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal (block_signal_corrected, NULL,NULL, ibd, flow_block_size,
       flow_block_start );
 
    float tmp[bkg.region_data->time_c.npts()];

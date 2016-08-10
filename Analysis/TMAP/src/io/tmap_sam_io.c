@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <config.h>
+#include <inttypes.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
@@ -96,7 +97,7 @@ tmap_sam_io_set_vfo(tmap_sam_io_t *samio, int64_t bam_start_vfo, int64_t bam_end
   samio->bam_end_vfo = bam_end_vfo;
 
   if (bam_start_vfo > 0) {
-      fprintf(stderr, "seeking to bam virtual file offset %lu\n", bam_start_vfo);
+      fprintf(stderr, "seeking to bam virtual file offset %" PRId64 "\n", bam_start_vfo);
       BGZF* bgzf_fp = samio->fp->x.bam;
       if (0 > bam_seek(bgzf_fp, bam_start_vfo, SEEK_SET)) {
           fprintf(stderr, "error seeking to offset\n");
@@ -117,7 +118,7 @@ tmap_sam_io_read(tmap_sam_io_t *samio, tmap_sam_t *sam)
   if (samio->bam_end_vfo > 0) {
       BGZF* bgzf_fp = samio->fp->x.bam;
       if (bam_tell(bgzf_fp) >= samio->bam_end_vfo) {
-         fprintf(stderr, "stopping at bam virtual file offset %lu\n", samio->bam_end_vfo);
+         fprintf(stderr, "stopping at bam virtual file offset %" PRId64 "\n", samio->bam_end_vfo);
          return -1;
       }
   }

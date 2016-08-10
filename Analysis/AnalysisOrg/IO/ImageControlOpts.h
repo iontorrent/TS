@@ -3,7 +3,6 @@
 #define IMAGECONTROLOPTS_H
 
 #include <string>
-#include "ChipIdDecoder.h"
 #include "HandleExpLog.h"
 #include "OptBase.h"
 
@@ -26,6 +25,9 @@ class ImageControlOpts{
   bool col_flicker_correct_verbose;
   bool aggressive_cnc;
   bool col_pair_pixel_xtalk_correct;
+  bool corr_noise_correct;
+  bool mask_datacollect_exclude_regions;
+
   float pair_xtalk_fraction;
   int readaheadDat;  // should this be img_control instead???
   bool fluid_potential_correct;
@@ -37,11 +39,13 @@ class ImageControlOpts{
   char PCATest[128];
   char tikSmoothingFile[512];  // file holding data smoothing coeffcients (APB)
   char tikSmoothingInternal[32];  // parameter for internal smoothing matrix (APB)
-  bool doSdat;
   int total_timeout; // optional arg for image class, when set will cause the image class to wait this many seconds before giving up
   bool threaded_file_access; // read DAT files for signal processing in image processing threads
-  std::string sdatSuffix;
+
+  // naming scheme for files
     char *acqPrefix;
+    char *datPostfix;
+
     int has_wash_flow;
 
     

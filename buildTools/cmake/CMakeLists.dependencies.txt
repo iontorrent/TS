@@ -26,13 +26,6 @@ else()
     message(WARNING "Could not find a valid ION_UPDATE_SERVER.")
 endif()
 
-#custom ExternalProject_add with timeout feature
-IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.2)
-  SET(CMAKE_MODULE_PATH
-    ${CMAKE_MODULE_PATH}
-    ${ION_TS_EXTERNAL}/CMake
-  )
-ENDIF ()
 include(ExternalProject)
 
 find_program(LSB_RELEASE_COMMAND lsb_release)
@@ -77,11 +70,10 @@ mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "stretch" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "core" OR # CentOS Linux release 7.2.1511 (Core)
+    ${LSB_RELEASE_CODENAME} STREQUAL "xenial" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+    ${LSB_RELEASE_CODENAME} STREQUAL "trusty")
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" ON)
 else()
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" OFF)
@@ -100,72 +92,34 @@ mark_as_advanced(ION_USE_SYSTEM_BOOST)
 option(ION_USE_SYSTEM_PICARD "Use picard system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_PICARD)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
-    set(gpu_devdriver_version "346.47")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
-    set(cuda_proj_version "7.0.28-19326674")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
-    set(CUDA_VERSION "7.0")
-elseif (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
-    set(gpu_devdriver_version "346.47")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
-    set(cuda_proj_version "7.0.28-19326674")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
-    set(CUDA_VERSION "7.0")
-elseif (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
-    set(gpu_devdriver_version "346.47")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
-    set(cuda_proj_version "7.0.28-19326674")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
-    set(CUDA_VERSION "7.0")
-else()
-    set(gpu_devdriver_version "346.47")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
-    set(cuda_proj_version "7.0.28-19326674")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
-    set(CUDA_VERSION "7.0")
-endif()
+set(cuda_proj_version "7.5.18-19867135")
+set(cuda_toolkit_tar_file "cuda-linux64-rel-7.5.18-19867135.tar.gz")
+set(cuda_toolkit_patch_file "cuda_toolkit-7.5.18.patch")
+set(CUDA_VERSION "7.5")
 
 set(cuda_toolkit "cuda_toolkit")
 set(cuda_toolkit_version "${cuda_toolkit}-${cuda_proj_version}")
 
-set(gpu_devdriver "gpu_devdriver")
-set(gpu_devdriver_version "${gpu_devdriver}-${gpu_devdriver_version}")
-
-
-ExternalProject_add(${cuda_toolkit}
-    PREFIX ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${cuda_toolkit_tar_file}"
-#    URL_MD5 ""
-    TIMEOUT "3600"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/${cuda_toolkit_patch_file}"
-)
-
-
-ExternalProject_add(${gpu_devdriver}
-    PREFIX ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${gpu_devdriver_file}.tar.gz" # cmake doesn't download .run files
-#    URL_MD5 ""
-    TIMEOUT "3600"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-)
-
 
 if(ION_USE_CUDA)
+
     message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
     add_definitions(-DION_COMPILE_CUDA)
+
     if (NOT ION_USE_SYSTEM_CUDA)
+
+        ExternalProject_add(${cuda_toolkit}
+            PREFIX ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}-prefix
+            SOURCE_DIR ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}
+            URL "http://${ION_UPDATE_SERVER}/updates/software/external/${cuda_toolkit_tar_file}"
+#            URL_MD5 ""
+            TIMEOUT "3600"
+            CONFIGURE_COMMAND ""
+            BUILD_COMMAND ""
+            INSTALL_COMMAND ""
+            PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/${cuda_toolkit_patch_file}"
+        )
+
 
         set(CUDA_TOOLKIT_ROOT_DIR "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}")
         set(CUDA_INCLUDE_DIRS "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/include")
@@ -208,12 +162,14 @@ else()
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
   if (${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
-      ${LSB_RELEASE_CODENAME} STREQUAL "vivid")
+      ${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
+      ${LSB_RELEASE_CODENAME} STREQUAL "xenial")
     set(ION_HDF5_LIBS "hdf5;${HDF5_LIBRARIES}")
   else()
     set(ION_HDF5_LIBS "${HDF5_LIBRARIES}")
   endif()
-  if (${LSB_RELEASE_CODENAME} STREQUAL "vivid")
+  if (${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
+      ${LSB_RELEASE_CODENAME} STREQUAL "xenial")
     link_directories("/usr/lib/x86_64-linux-gnu/hdf5/serial/")
   endif()
   message(STATUS "ION_HDF5_LIBS: ${ION_HDF5_LIBS}")
@@ -224,11 +180,11 @@ endif()
 
 if(NOT ION_USE_SYSTEM_EIGEN)
   set(proj_name "eigen")
-  set(proj_version "3.2.4")
+  set(proj_version "3.2.7")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}_proj
     #URL "https://bitbucket.org/eigen/eigen/get/3.2.4.tar.gz"
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/eigen-3.2.4.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/eigen-3.2.7.tar.gz"
     #URL_MD5 9559c34af203dde5f3f1d976d859c5b3
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
@@ -245,16 +201,18 @@ endif()
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
-  set(proj_version "4.450.4+ion0")
+  set(proj_version "6.100.0+ion0")
   set(proj_name_version "${proj_name}-${proj_version}")
-  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-4.450.4+ion0.patch")
+  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-6.100.0+ion0.patch")
   ExternalProject_add(${proj_name}_proj
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-4.450.4.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-6.100.0.tar.gz"
     #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
     CMAKE_ARGS
+      -DARMA_USE_LAPACK:BOOL=TRUE
+      -DARMA_USE_BLAS:BOOL=TRUE
       -DARMA_USE_ATLAS:BOOL=FALSE
       -DARMA_USE_WRAPPER:BOOL=FALSE
       -DARMA_USE_MKL:BOOL=${ION_USE_MKL}
@@ -268,16 +226,15 @@ else()
 endif()
 
 
-# outdated - system libraries are preferred
 if(NOT ION_USE_SYSTEM_BOOST)
   set(proj_name "boost")
-  set(proj_version "1.49.0")
+  set(proj_version "1.59.0")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}_proj
-    SVN_REPOSITORY "http://svn.boost.org/svn/boost/tags/release/Boost_1_49_0"
+    URL "http://sourceforge.net/projects/boost/files/boost/1.59.0/boost_1_59_0.tar.gz"
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+    #BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
     UPDATE_COMMAND ""
     CONFIGURE_COMMAND ./bootstrap.sh
     BUILD_IN_SOURCE 1
@@ -291,9 +248,19 @@ if(NOT ION_USE_SYSTEM_BOOST)
   set(ION_BOOST_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libboost_serialization.a")
 else()
   add_custom_target(boost_proj)
-  find_package(Boost REQUIRED)
+
+  set(Boost_USE_STATIC_LIBS ON)
+#  set(Boost_USE_MULTITHREADED ON)
+#  unset(Boost_INCLUDE_DIR CACHE)
+#  unset(Boost_LIBRARY_DIRS CACHE)
+  find_package(Boost REQUIRED COMPONENTS serialization )
+  set(ION_BOOST_LIBS ${Boost_LIBRARIES})
+
+#  find_package(Boost REQUIRED)
+#  set(ION_BOOST_LIBS "boost_serialization.a")
+
+  message(STATUS "ION_BOOST_LIBS: ${ION_BOOST_LIBS}")
   include_directories(${Boost_INCLUDE_DIRS})
-  set(ION_BOOST_LIBS "boost_serialization.a")
 endif()
 
 # uncomment for profiling if gprofile installed
@@ -403,22 +370,6 @@ else()
     include_directories("/usr/include/bamtools")
 endif()
 
-
-
-  set(proj_name "kmeans")
-  set(proj_version "1.7")
-  set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}_proj
-    URL             "http://${ION_UPDATE_SERVER}/updates/software/external/kmlocal-1.7.2.tar.gz"
-    PREFIX          ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
-    SOURCE_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BINARY_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-#   CMAKE_ARGS      
-    INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p0 -t -N < "${ION_TS_EXTERNAL}/kmeans-1.7+ion1.patch"
-  )
-  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}/src")
-  set(ION_KMEANS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-build/libkmeans.a")
 
 
 

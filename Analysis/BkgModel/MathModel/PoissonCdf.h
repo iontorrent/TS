@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#if !defined( __CUDACC__ )
+#if defined( __SSE__ ) && !defined( __CUDACC__ )
     #include <x86intrin.h>
 #else
     typedef float __m128 __attribute__ ((__vector_size__ (16), __may_alias__));
@@ -83,7 +83,7 @@ inline float gser( float a, float x )
     sum += del;
     if ( fabs( del ) < fabs( sum ) * GAMMA_EPS )
     {
-      return sum * exp( -x + a * log( x ) - lgamma( a ) );
+      return sum * exp( -x + a * log( x ) - ::lgamma( a ) );
     }
   }
 
@@ -121,7 +121,7 @@ inline float gcf( float a, float x )
     h *= del;
     if ( fabs( del - 1.f ) < GAMMA_EPS )
     {
-      return exp( -x + a * log( x ) - lgamma( a ) ) * h;
+      return exp( -x + a * log( x ) - ::lgamma( a ) ) * h;
     }
   }
 

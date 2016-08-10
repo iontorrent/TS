@@ -12,8 +12,13 @@ import logging
 import json
 import httplib2
 import urllib2
-import ion.utils.TSversion
+from ion import version as TS_version
+from iondb.bin.add_or_update_systemPlanTemplates import add_or_updateSystemTemplate_OffCycleRelease
 import re
+import xmlrpclib
+import iondb.utils
+import traceback
+import subprocess
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render_to_response, get_object_or_404
@@ -24,11 +29,25 @@ from django.core import urlresolvers
 from django.contrib.auth.models import User
 
 from iondb.rundb.ajax import render_to_json
-from iondb.rundb.models import ReferenceGenome, FileMonitor
+from iondb.rundb.models import ReferenceGenome, FileMonitor, dnaBarcode, Plugin
+from iondb.utils.utils import GetChangeLog, VersionChange, get_apt_cache
 from django.db.models import get_model
-from distutils.version import StrictVersion
+from distutils.version import StrictVersion, LooseVersion
 
 logger = logging.getLogger(__name__)
+
+
+errorCode = {
+    "E001": "TS version({0}) not supported",
+    "E002": "Missing Product Info. Please try again later ({0})",
+    "E003": "HTTPError {0}",
+    "E004": "User ({0}) not authorized to update the Product. Please consult Torrent Suite Administrator",
+    "E005": "Validation Error",
+    #"E006" : "TBD. This error code should be overridden for future update".
+    "E007": "Host not reachable. Please check your internet connectivity and try again ({0})",
+    "E008": "{0}. Please check the network and try again",
+    "E009": "System Template Add/Update Failed"
+}
 
 
 def get_productUpdateList(url=None):
@@ -44,187 +63,182 @@ def get_productUpdateList(url=None):
             productContents = productJson['contents']
         if response['status'] == '404':
             isValid = False
-            errorMsg = "Product Information not available. Stay Tuned for New Products"
+            #errorMsg = "Product Information not available. Stay Tuned for New Products"
     except httplib2.ServerNotFoundError, err:
         isValid = False
         errorMsg = err
-    return (productContents,isValid,errorMsg)
+        logger.debug("httplib2.ServerNotFoundError: iondb.rundb.configure.updateProducts.get_productUpdateList %s", err)
+    except Exception, err:
+        logger.debug("urllib2.HTTPError: iondb.rundb.configure.updateProducts.get_productUpdateList %s", err)
+    return (productContents, isValid, errorMsg)
 
-def TS_version_comparison(tsVersion, version_req, url, **ctx):
-    isValid = True
-    # Compare local TS version with Required TS Version for any update
 
-    if StrictVersion(str(tsVersion.strip())) < StrictVersion(str(version_req.strip())):
-        isValid = False
-        ctx['versionMismatch'] = True
-        ctx['versionMismatch_url'] = url
-        ctx['errCode'] = 'E001'
-        ctx['msg'] = "TS version({0}) not supported".format(tsVersion)
-    ctx['isValid'] = isValid
-
-    return (isValid, ctx)
-
-def validate_product_fixture(productjsonURL, **ctx):
-    isValid = True
+def validate_product_fixture(productjsonURL):
     productInfo = None
+    error = ""
     try:
         productInfo = urllib2.urlopen(productjsonURL)
     except urllib2.HTTPError, err:
-        isValid = False
-        ctx['versionMismatch_url'] = productjsonURL
         if err.code == 404:
             logger.debug("Missing Product Fixture{0}. Try again later".format(productjsonURL))
-            ctx['errCode'] = 'E002'
-            ctx['msg'] = "Missing Product Info. Please try again later ({0})".format(err)
+            error = errorCode['E002'].format(err)
         else:
-            ctx['errCode'] = 'E003'
-            ctx['msg'] = err
+            error = errorCode['E003'].format(err)
+            logger.debug("urllib2.HTTPError: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
     except urllib2.URLError, err:
-        isValid = False
-        ctx['versionMismatch_url'] = productjsonURL
-        ctx['errCode'] = 'E007'
-        ctx['msg'] = "Host not reachable. Please check your internet connectivity and try again ({0})".format(err)
-        logger.debug(ctx['msg'])
+        error = errorCode["E007"].format(err)
+        logger.debug("urllib2.URLError: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
     except Exception, err:
-        isValid = False
-        ctx['versionMismatch_url'] = productjsonURL
-        ctx['errCode'] = 'E008'
-        ctx['msg'] = "{0}. Please check the network and try again".format("err")
-        logger.debug(ctx['msg'])
-    ctx['isValid'] = isValid
-    return (isValid, productInfo, ctx)
+        error = errorCode['E008'].format(err)
+        logger.debug("Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
 
-def validate_user_isStaff(userName,**ctx):
-    isValid = True
-    try:
-        user = User.objects.get(username=userName)
-        userAcesssDenied = False
-        isStaff = user.is_staff
-    except:
-        isStaff = None
-        userAcesssDenied = True
-    if not isStaff or userAcesssDenied:
-        isValid = False
-        ctx['errCode'] = 'E005'
-        ctx['isAccessDenied'] = "disabled"
-        ctx['msg'] = "User ({0}) not authorized to update the Product. Please consult Torrent Suite Administrator".format(userName)
-    ctx['isValid'] = isValid
+    return productInfo, error
 
-    return (isValid, ctx)
 
-def validate_product_updateVersion(productContents, downloads, tsVersion):
+def validate_product_updateVersion(productContents):
+    ''' Updates and returns productContents:
+        1) add product['done']=True if product was already updated (FileMonitor exists)
+        2) remove product if it's version_req or version_max are not compatible with current TS version
+    '''
+    valid = []
+    tsVersion = get_TSversion()
+    downloads = FileMonitor.objects.filter(tags__contains="offCycleRel", status="Complete")
+
     for product in productContents:
-        for download in downloads:
-            tagsInfo = download.tags
+        for download in downloads.filter(url=product['url']):
             try:
-                updateVersion = tagsInfo.split("offCycleRel_")[1]
-            except:
-                updateVersion = None
-            download.updateVersion = updateVersion
-            if download.status == "Complete" and download.url == product['url'] and updateVersion >= product['update_version']:
-                product['disable'] = "disabled"
-        product['TSVersion'] = tsVersion
-    return productContents
+                updateVersion = download.tags.split("offCycleRel_")[1]
+                if LooseVersion(updateVersion.strip()) >= LooseVersion(product['update_version'].strip()):
+                    product['done'] = True
+            except Exception, err:
+                logger.debug("Error: iondb.rundb.configure.updateProducts.validate_product_updateVersion %s", err)
 
-def getOnlyTwo_ThreeDigits_TSversion():
-    #TS-11832: TS release comparison should extend to the patch release version if available
-    versionsAll, versionTS = ion.utils.TSversion.findVersions()
-    getOnlyTwoDigits = re.match(r'([0-9]+\.[0-9]+(\.[0-9]+)?)', str(versionTS))
+        version_match = TS_version_comparison(tsVersion, product['version_req'], product['version_max'])
+        if version_match:
+            valid.append(product)
 
-    return (getOnlyTwoDigits.group(1));
+    return valid
 
-@login_required
-def update_product(request):
-    tsVersion = getOnlyTwo_ThreeDigits_TSversion()
+
+def TS_version_comparison(tsVersion, version_req, version_max):
+    # Compare local TS version with required and max TS Version, return True if passes
+    checkReq = StrictVersion(tsVersion) >= StrictVersion(str(version_req.strip()))
+    checkMax = StrictVersion(tsVersion) <= StrictVersion(str(version_max.strip()))
+    return checkReq and checkMax
+
+
+def get_TSversion():
+    # return 3 digit TS version
+    match = re.match(r'([0-9]+\.[0-9]+(\.[0-9]+)?)', str(TS_version))
+    return (match.group(1));
+
+
+def get_update_plugins():
+    # look up user friendly names for the plugins
+    pluginClient = xmlrpclib.ServerProxy(settings.IPLUGIN_STR)
+    upgradeablePlugins = pluginClient.GetSupportedPlugins(list(), True, True)
+    pluginPackages = upgradeablePlugins.keys()
+    pluginUpdates = list()
+    error = ""
+    try:
+        for pluginPackage in pluginPackages:
+            # separately attempt to get the changelog in and ommit it in case it fails
+            changeLog = VersionChange()
+            try:
+                changeLog = GetChangeLog(pluginPackage, upgradeablePlugins[pluginPackage]['AvailableVersions'][-1])
+            except Exception as exc:
+                logger.exception(exc)
+                changeLog = VersionChange()
+
+            currentVersion = upgradeablePlugins[pluginPackage]['CurrentVersion']
+            plugin = Plugin.objects.get(packageName=pluginPackage, version=currentVersion)
+            pluginUpdates.append({
+                'name': plugin.name,
+                'description': plugin.description,
+                'currentVersion': currentVersion,
+                'availableVersions': upgradeablePlugins[pluginPackage]['AvailableVersions'],
+                'upgradable': upgradeablePlugins[pluginPackage]['UpgradeAvailable'],
+                'changes': changeLog.Changes,
+                'pk': plugin.pk
+            })
+
+    except Exception as err:
+        logger.error(traceback.format_exc())
+        error = err
+
+    return {'pluginContents': pluginUpdates, 'error': error }
+
+
+def get_update_products():
+    productContents, isValid, error = get_productUpdateList() or []
+    if isValid:
+        productContents = validate_product_updateVersion(productContents)
+
+    return {'productContents': productContents, 'error': error }
+
+
+def update_product(name, update_version):
     productContents, isValidNetwork, network_or_file_errorMsg = get_productUpdateList() or []
-
     if not isValidNetwork:
-        ctx = { 
-               'isValidNetwork' : isValidNetwork, 
-               'errorMsg' : network_or_file_errorMsg 
-               }
-        return render_to_response("rundb/configure/updateProducts.html", ctx,
-                  context_instance=RequestContext(request))
+        raise Exception(network_or_file_errorMsg)
 
-    if not productContents:
-        ctx = {
-               'isValidNetwork' : isValidNetwork,
-               'productContents' : "N/A",
-               'errorMsg' : "Product information is not available. Please check this link later for New Products"
-               }
-        return render_to_response("rundb/configure/updateProducts.html", ctx,
-                  context_instance=RequestContext(request))
+    product = [ p for p in productContents if name == p['name'] and update_version == p['update_version'] ]
+    if not product:
+        raise Exception('Invalid product name: %s version: %s' % (name, update_version))
+    else:
+        product = product[0]
 
-    downloads = FileMonitor.objects.filter(tags__contains="offCycleRel").order_by('-updated')
-    productContents = validate_product_updateVersion(productContents, downloads, tsVersion)
+    productjsonURL = product['url']
+    productInfo, errMsg = validate_product_fixture(productjsonURL)
+    if errMsg:
+        logger.debug("Error: iondb.rundb.configure.updateProducts.update_product %s", errMsg)
+        raise Exception(errMsg)
 
-    ctx = {
-            'isValidNetwork' : isValidNetwork,
-       		'productContents': productContents,
-       		'downloads' : downloads,
-            'TSVersion' : tsVersion,
-    	  }
-    (isValid,ctx) = validate_user_isStaff(request.user, **ctx)
-    if not isValid:
-        return render_to_response("rundb/configure/updateProducts.html", ctx,
-     	         context_instance=RequestContext(request))
+    data = json.loads(productInfo.read())
+    productName = data['productName']
 
-    if request.method == "POST" and request.POST.get("offCycleUpdate"):
-        url = request.POST.get("kitchip_url", None)
-        version_req = request.POST.get("version_req", None)
-        update_version = request.POST.get("update_version", None)
-        (isValid, ctx) = TS_version_comparison(tsVersion, version_req, url, **ctx)
-        if not isValid:
-            return render_to_response("rundb/configure/updateProducts.html", ctx,
-        		context_instance=RequestContext(request))
-        logger.debug("TS version is valid, going to the next step {0} with Product Update {1}".format(url, tsVersion))
+    if "models_info" in data:
+        modelsToUpdate = data.get('models_info')
+        if modelsToUpdate:
+            monitor_pk = start_update_product(productName, productjsonURL, update_version)
+            # Validation for any invalid Model Name or Invalid PKs
+            isValidModelInfo, errMsg = validate_modelObject(modelsToUpdate)
 
-        if url and productContents:
-            productjsonURL = url
-            (isValid,productInfo, ctx) = validate_product_fixture(productjsonURL, **ctx)
-            if not isValid:
-                return render_to_response("rundb/configure/updateProducts.html", ctx,
-                        context_instance=RequestContext(request))
-            data = json.loads(productInfo.read())
-            productName = data['productName']
-            modelsToUpdate = data.get('models_info')
-            if modelsToUpdate:
-                monitor_pk = start_update_product(productName,url, update_version)
-                # Validation for any invalid Model Name or Invalid PKs
-                isValidModelInfo, errMsg = validate_modelObject(modelsToUpdate)
+            if isValidModelInfo:
+                for model in modelsToUpdate:
+                    pk = model.get('pk', None)
+                    modelName = model['model']
+                    fields = model['fields']
+                    modelObject = get_model('rundb', modelName)
+                    #"validate_modelObject" validates all the Models and PKs specified in the Product JSON Fixture
+                    #Go ahead and update the models
+                    off_software_release_product_update(modelObject, pk, modelName, **fields)
+                status = 'Complete'
+            else:
+                status = "Invalid Product/PK update."
+                logger.debug("Error: iondb.rundb.configure.updateProducts.update_product %s", status)
+                #delete the entry in File Monitor so that User can try again later
+                updateFileMonitor(monitor_pk, status)
+                raise Exception(errMsg)
 
-                if isValidModelInfo:
-                    for model in modelsToUpdate:
-                        pk = model['pk']
-                        modelName = model['model']
-                        fields = model['fields']
-                        modelObject = get_model('rundb', modelName)
-                        #"validate_modelObject" validates all the Models and PKs specified in the Product JSON Fixture
-                        #Go ahead and update the models
-                        off_software_release_product_update(modelObject,pk, modelName, **fields)
-                    status = 'Complete'
-                else:
-                    logger.debug("Invalid Product/PK update")
-                    status = "Validation Error"
-                    ctx['isValid'] = False
-                    ctx['errCode'] = 'E005'
-                    ctx['msg'] = errMsg
-                    ctx['invalidProductUrl'] = url
+            updateFileMonitor(monitor_pk, status)
+    elif "sys_template_info" in data:
+        # Add/Update the System Template via Off-Cycle Release path
+        sysTemplatesToUpdate = data.get('sys_template_info')
+        logger.debug("Going to Install System Template via Off cycle: %s" % sysTemplatesToUpdate)
+        if sysTemplatesToUpdate:
+            monitor_pk = start_update_product(productName, productjsonURL, update_version)
+            for sysTemp in sysTemplatesToUpdate:
+                ctx_sys_temp_upd = add_or_updateSystemTemplate_OffCycleRelease(**sysTemp)
+                if not ctx_sys_temp_upd['isValid']:
+                    status = errorCode['E009']
                     #delete the entry in File Monitor so that User can try again later
                     updateFileMonitor(monitor_pk, status)
-                    return render_to_response("rundb/configure/updateProducts.html", ctx,
-                        context_instance=RequestContext(request))
-                updateFileMonitor(monitor_pk, status)
-            else:
-                ctx['isValid'] = False
-                ctx['errCode'] = 'E004'
-                ctx['msg'] = "You are not authorized to Update the Product. Please consult Torrent Suite administrator."
-                return render_to_response("rundb/configure/updateProducts.html", ctx,
-        				context_instance=RequestContext(request))    
-        return HttpResponseRedirect(urlresolvers.reverse("update_product"))
+                    raise Exception(ctx_sys_temp_upd['msg'])
 
-    return render_to_response("rundb/configure/updateProducts.html", ctx,
-        context_instance=RequestContext(request))
+                status = 'Complete'
+            updateFileMonitor(monitor_pk, status)
+
 
 def validate_modelObject(modelsToUpdate):
     isValid = True
@@ -232,7 +246,7 @@ def validate_modelObject(modelsToUpdate):
     errCnt = 0
     for model in modelsToUpdate:
         isModelValid = True
-        modelName = model.get('model',None)
+        modelName = model.get('model', None)
         pk = model.get('pk', None)
         try:
             modelObject = get_model('rundb', modelName)
@@ -240,14 +254,15 @@ def validate_modelObject(modelsToUpdate):
             isModelValid = False
             logger.debug("Unable to find the Model({0}) object to Update. {1}".format(modelName, err))
         if not modelObject or not isModelValid:
-            errCnt =+ 1
+            errCnt = + 1
             isModelValid = False
             logger.debug("Unable to find the Model({0}) object to Update".format(modelName))
         if modelObject and isModelValid:
             try:
-                modelObject.objects.get(pk=pk)
+                if pk:
+                    modelObject.objects.get(pk=pk)
             except Exception as err:
-                errCnt =+ 1
+                errCnt = + 1
                 logger.debug("Unable to Update the Model's({0}) PK ({1}). {2}".format(modelName, pk, err))
     if not errCnt:
         return isValid, errMsg
@@ -257,6 +272,7 @@ def validate_modelObject(modelsToUpdate):
         logger.debug("validation failure {0}".format(errMsg))
         return isValid, errMsg
 
+
 def start_update_product(name, url, updateVersion, callback=None):
     tagsInfo = "offCycleRel_{0}".format(updateVersion)
     monitor = FileMonitor(name=name, url=url, tags=tagsInfo)
@@ -264,20 +280,113 @@ def start_update_product(name, url, updateVersion, callback=None):
     monitor.save()
     return monitor.id
 
-def off_software_release_product_update(modelObject,pk, modelName = None, **fields):
-    UpdatePk = modelObject.objects.get(pk=pk)
-    if UpdatePk:
-        for key, value in fields.items():
-            setattr(UpdatePk, key, value)
-        UpdatePk.save()
-    
+
+def model_specific_validations(modelObj, modelName, **fields):
+    isValidModel = None
+    if modelName == "dnaBarcode":
+        isValidModel = True
+        name = fields.get("name", None)
+        sequence = fields.get("sequence", None)
+
+        logger.debug("Check if the barcode is installed already by other route e.g. CSV upload")
+        try:
+            barcodeObj = modelObj.objects.get(name=name, sequence=sequence)
+            createPk = None
+            updatePk = barcodeObj
+        except modelObj.DoesNotExist:
+            logger.debug("modelObj.DoesNotExist")
+            createPk = True
+            updatePk = None
+        except Exception as e:
+            logger.debug("Unexpected error or returned more than one record %s" % e)
+            createPk = None
+            updatePk = None
+            raise Exception("Unexpected error or returned more than one record %s" % e)
+
+    if not isValidModel:
+        logger.debug("There is no specific validation for this model %s" % modelName)
+        raise NotImplementedError
+
+    return createPk, updatePk
+
+
+def off_software_release_product_update(modelObj, pk, modelName=None, **fields):
+    updatePk = None
+    createPk = None
+
+    if pk:
+        updatePk = modelObj.objects.get(pk=pk)
+    else:
+        createPk = True
+
+    if createPk and modelName == "dnaBarcode":
+         createPk, updatePk = model_specific_validations(modelObj, modelName, **fields)
+    try:
+        if createPk:
+            obj = modelObj(**fields)
+            obj.save()
+        elif updatePk:
+            for key, value in fields.items():
+                setattr(updatePk, key, value)
+            updatePk.save()
+    except Exception, e:
+       logger.debug("Model Object creation failed, %s" % e)
+       raise Exception("Model Object creation failed, %s" % e)
+
+
+
 def updateFileMonitor(filemonitor_pk, status):
     if filemonitor_pk:
         fm_pk = FileMonitor.objects.get(pk=filemonitor_pk)
-        if status == "Validation Error":
+        if status == "Validation Error" or \
+           status == "System Template Add/Update Failed":
             fm_pk.delete()
+            logger.debug("Error: iondb.rundb.configure.updateProducts.updateFileMonitor: %s" % status)
         else:
-            fm_pk.status  = status
+            fm_pk.status = status
             fm_pk.save()
 
 
+def get_update_packages():
+    installPackages = [
+        #('ion-chefupdates', 'Ion Chef scripts'),
+    ]
+    contents = []
+    error = ""
+    try:
+        for name, description in installPackages:
+            package, cache = get_apt_cache(name)
+            availableVersions = package.versions.keys()
+            installableVersions = [version for version in availableVersions if version != package.installed.version]
+            if installableVersions or package.is_upgradable:
+                contents.append({
+                    'name': name,
+                    'description': description,
+                    'currentVersion': package.installed.version,
+                    'candidateVersion': package.candidate.version,
+                    'availableVersions': availableVersions,
+                    'upgradable': package.is_upgradable
+                })
+
+    except Exception as err:
+        logger.error(traceback.format_exc())
+        error = err
+        
+    return {"packageContents": contents, "error": error}
+
+
+def update_package(name, version):
+    # call external install script
+    logger.debug('Install package %s version %s' % (name, version))
+    cmd = ['sudo','/opt/ion/iondb/bin/sudo_utils.py', 'install_ion_package', name, version]
+    try:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # print error to stdout to avoid getting dpkg error messages
+        error, _ = process.communicate()
+    except Exception as err:
+        logger.debug("Error: iondb.rundb.configure.updateProducts.update_package: Sub Process execution failed %s" % err)
+        error = err
+
+    if process.returncode:
+        logger.debug("Error: iondb.rundb.configure.updateProducts.update_package: %s" % error)
+        raise Exception(error)

@@ -170,6 +170,7 @@
                     <th>Deleted</th>
 					<th>In-process</th>
                     <th>Error</th>
+                    <th>Disk Usage (GB)</th>
                 </tr>
             </thead>
 			<tbody>
@@ -183,6 +184,7 @@
 						<td>{{stats.Deleted}}</td>
 						<td>{{stats.In_process}}</td>
 						<td>{{stats.Error}}</td>
+                        <td>{{stats.diskspace|floatformat:1}}</td>
 					</tr>
 				{%endfor%}
 			</tbody>

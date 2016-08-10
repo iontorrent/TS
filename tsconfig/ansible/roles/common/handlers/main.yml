@@ -3,6 +3,4 @@
 
 - name: update grub
   command: /usr/sbin/update-grub
-  
-- name: apt-get update
-  apt: update_cache=yes
+  when: not docker_image

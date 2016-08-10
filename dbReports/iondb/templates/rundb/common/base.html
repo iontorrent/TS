@@ -13,7 +13,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     {% if base_js_extra %}
-        {% include 'rundb/common/js_extra.html' %}
+        {% with "rundb/common/js_extra.html" as js_extra_html %}
+            {% include js_extra_html %}
+        {% endwith %}
     {% endif %}
 
     <script type="text/javascript">
@@ -42,7 +44,6 @@
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.min.css"%}" />
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
     <link type="text/css" rel="stylesheet" href="{% static "css/yamm.css"%}" />
-
     <script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/tb.jquery.min.js"%}"></script>
@@ -97,29 +98,43 @@
                 {% comment %} <!-- Display a via referer_site_name if planning wizard is embedded or setup to postback --> {% endcomment %}
                 <h1 class="logo pull-left">{{base_site_name}}{% if referer_site_name %} <small>via {{referer_site_name}}</small>{% endif %}</h1>
                 <ul class="nav nav-pills utility-menu pull-right">
-                {% if user.is_authenticated %} 
+                {% if user.is_authenticated %}
                     <li><span>Hi, {{ user.get_full_name|default:user.username }}</span></li>
                 {% endif %}
                     <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-                        Help
+                        <a class="dropdown-toggle" data-toggle="dropdown" href="#" style="margin-top: 2px;">
+                        Help {% if help_urls %}<span class="badge" style="line-height:10px">{{ help_urls|length }}</span>{% endif %}
                         <b class="caret"></b>
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a target="_blank" href="http://ioncommunity.thermofisher.com/community/protocols-home/pgm-protocols">New PGM Protocols/Manuals</a></li>
-                            <li><a href="http://ioncommunity.thermofisher.com/community/protocols-home/proton-protocols">New Proton Protocols/Manuals</a></li>
-                            <li><a href="http://ioncommunity.iontorrent.com/">IonCommunity</a></li>
-                            <li><a href="http://www.invitrogen.com/site/us/en/home/support/Contact-Us.html#tab-2">Support</a></li>
-                            <li><a href="https://www.ampliseq.com">AmpliSeq Designer</a></li>
-                            <li><a href="http://ioncommunity.thermofisher.com/docs/DOC-1556">TSS SDK Documentation</a></li>
+                            {% for help_url in help_urls %}
+                                <li><a href="{{ help_url.url }}" target="_blank" style="font-weight:bold">{{ help_url.display_name }}</a></li>
+                            {%  endfor %}
+                            {% if help_urls %}
+                                <li class="divider"></li>
+                            {% endif %}
+                            <li><a target="_blank" href="/ion-docs/">Software Help</a></li>
+                            <li class="dropdown-submenu">
+                                <a tabindex="-1" href="#">Protocols</a>
+                                <ul class="dropdown-menu">
+                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/s5-protocols">S5/S5 XL Protocols</a></li>
+                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/chef-protocols">Ion Chef Protocols</a></li>
+                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/pgm-protocols">PGM Protocols</a></li>
+                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/proton-protocols">Proton Protocols</a></li>
+                                </ul>
+                            </li>
+                            <li><a target="_blank" href="https://ioncommunity.thermofisher.com/welcome">Ion Community</a></li>
+                            <li><a target="_blank" href="https://ioncommunity.thermofisher.com/docs/DOC-9594">Ion Reporter Help</a></li>
+                            <li><a target="_blank" href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html#tab-2">Support</a></li>
+                            <li><a target="_blank" href="https://www.ampliseq.com">AmpliSeq Designer</a></li>
+                            <li><a target="_blank" href="http://ioncommunity.thermofisher.com/docs/DOC-1556">SDK Documentation</a></li>
                             <li class="divider"></li>
-                            <li><a href="/ion-docs/Home.html">Local Documentation</a></li>
                             <li><a href="/configure/info">System Support Diagnostics</a></li>
                             <li><a href="/configure/chips">Instrument Diagnostics</a></li>
                         </ul>
                     </li>
-                {% if user.is_authenticated %} 
-                    <li><a href="{% url "logout" %}">Sign Out</a></li>
+                {% if user.is_authenticated %}
+                    <li><a href="{% url "logout" %}" style="margin-top: 2px;">Sign Out</a></li>
                 {% endif %}
                 </ul>
             </div>
@@ -170,6 +185,7 @@
                                 <li><a href="{% url "configure_configure" %}">Configure</a></li>
                                 <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
                                 <li><a href="{% url "configure_account" %}">Accounts</a></li>
+                                <li><a href="{% url "offcycle_updates" %}">Updates</a></li>
                             </ul>
                         </li>
                     </ul>
@@ -178,7 +194,7 @@
             </div>
         </div>
     </div>
-</div>  
+</div>
 <div class="sub-nav">
     <div class="container-fluid">
         <div class="row-fluid">
@@ -190,10 +206,10 @@
             </div>
         </div>
     </div>
-</div>  
+</div>
 
 {% block report-header %}
-{% endblock report-header %}    
+{% endblock report-header %}
 <div class="main {%spaceless%} {%block extra-main-class%}{%endblock extra-main-class%} {%endspaceless%}">
     <div class="container-fluid">
         <div id="global_messages"></div>
@@ -236,5 +252,5 @@
   });
 </script>
 {% endif %}
-</body> 
-</html> 
+</body>
+</html>

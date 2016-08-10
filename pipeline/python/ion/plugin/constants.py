@@ -6,15 +6,19 @@ Definitions for enum like constants
 
 __all__ = ('Feature', 'RunType', 'RunLevel', 'lookupEnum', 'runLevelsList')
 
+
 def enum(**enums):
         return type('Enum', (), enums)
 
 # Helper lookup method - move to constants?
+
+
 def lookupEnum(enum, item):
-    for (k,v) in enum.__dict__.iteritems():
+    for (k, v) in enum.__dict__.iteritems():
         if item == v:
             return k
     return None
+
 
 def runLevelsList():
     # returns runlevels in the order launched by the pipeline
@@ -38,4 +42,3 @@ RunLevel = enum(
     SEPARATOR='separator',
     LAST='last',
 )
-

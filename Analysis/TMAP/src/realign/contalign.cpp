@@ -1,6 +1,9 @@
 /* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
 
-// This is modified code from SciDM's genomodules
+//////////////////////////////////////////////////////////////////////////////
+// Derived from QSimScan project, released under MIT license
+// (https://github.com/abadona/qsimscan)
+//////////////////////////////////////////////////////////////////////////////
 
 #include <iomanip>
 #include <limits>

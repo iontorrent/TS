@@ -3,10 +3,14 @@
 #include "ChipReduction.h"
 #include "NNAvg.h"
 #include "SampleStats.h"
+#include "ChipIdDecoder.h"
+
 void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOpts &inception_state, Mask *maskPtr, string &analysisLocation, SequenceItem *seqList, int numSeqListItems)
 {
   DifSepOpt opts;
   opts.doGainCorrect = inception_state.img_control.gain_correct_images;
+  opts.useBeadfindGainCorrect = inception_state.bfd_control.useBeadfindGainCorrection;
+  opts.useDataCollectGainCorrect = inception_state.bfd_control.useDatacollectGainCorrectionFile;
   opts.doubleTapFlows = inception_state.bfd_control.doubleTapFlows;
   opts.filterNoisyCols = inception_state.bfd_control.filterNoisyCols;
   opts.predictFlowStart = inception_state.bfd_control.predictFlowStart;
@@ -39,6 +43,10 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.blobFilter = inception_state.bfd_control.blobFilter == 1;
   opts.col_pair_pixel_xtalk_correct = inception_state.img_control.col_pair_pixel_xtalk_correct;
   opts.pair_xtalk_fraction = inception_state.img_control.pair_xtalk_fraction;
+  opts.corr_noise_correct = inception_state.img_control.corr_noise_correct;
+
+  opts.acqPrefix = inception_state.img_control.acqPrefix;
+  opts.datPostfix = inception_state.img_control.datPostfix;
 
   if (!opts.outData.empty())
   {
@@ -56,29 +64,29 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.mask = maskPtr;
   cout << "Out Data: " << opts.outData << endl;
   cout << "Analysis location: " << opts.analysisDir << endl;
-  if (inception_state.bfd_control.bfMinLiveTfSnr < 0) {
-    if ( ChipIdDecoder::IsProtonChip() ) {
-      inception_state.bfd_control.bfMinLiveTfSnr = 4;
-    }
-    else {
-      inception_state.bfd_control.bfMinLiveTfSnr = 7;
-    }
-  }
   diffSeparator->SetKeys (seqList, numSeqListItems, 
                           inception_state.bfd_control.bfMinLiveLibSnr, inception_state.bfd_control.bfMinLiveTfSnr, 
                           inception_state.bfd_control.minLibPeakMax, inception_state.bfd_control.minTfPeakMax);
   opts.smoothTrace = inception_state.bfd_control.beadfindSmoothTrace;
-  //Thumbnail regions for separator are 100x100. We use the same region size for Proton chips to match thumbnail performance.
-  if (inception_state.bfd_control.beadfindThumbnail == 1 || ChipIdDecoder::IsProtonChip() )
+
+  opts.t0MeshStepX = inception_state.bfd_control.meshStepX;
+  opts.t0MeshStepY = inception_state.bfd_control.meshStepY;
+  opts.clusterMeshStepX = inception_state.bfd_control.meshStepX;
+  opts.clusterMeshStepY = inception_state.bfd_control.meshStepY;
+  opts.tauEEstimateStepX = inception_state.bfd_control.meshStepX;
+  opts.tauEEstimateStepY = inception_state.bfd_control.meshStepY;
+  opts.useMeshNeighbors = 0;
+  opts.regionXSize = inception_state.loc_context.regionXSize;
+  opts.regionYSize = inception_state.loc_context.regionYSize;
+
+  // For saving dcOffset and NucStep
+  opts.nucStepDir = string ( opts.analysisDir + string ( "/NucStepFromBeadfind" ));
+  if ( mkdir ( opts.nucStepDir.c_str(), 0777 ) && ( errno != EEXIST ) )
   {
-    opts.t0MeshStep = 100; // inception_state.loc_context.regionXSize;
-    opts.bfMeshStep = 100; // inception_state.loc_context.regionXSize;
-    opts.clusterMeshStep = 100;
-    opts.tauEEstimateStep = 100; //inception_state.loc_context.regionXSize;
-    opts.useMeshNeighbors = 0;
-    opts.regionXSize = 100; //inception_state.loc_context.regionXSize;
-    opts.regionYSize = 100; //inception_state.loc_context.regionYSize;
+    perror ( opts.nucStepDir.c_str() );
+    return;
   }
+
   diffSeparator->Run (opts);
 }
 
@@ -200,7 +208,8 @@ void IsolatedBeadFind (
   CommandLineOpts &inception_state,
   char *results_folder, string &analysisLocation,
   SeqListClass &my_keys,
-  TrackProgress &my_progress )
+  TrackProgress &my_progress,
+  string& chipTpye)
 {
   /*********************************************************************
   // Beadfind Section
@@ -208,7 +217,7 @@ void IsolatedBeadFind (
   Mask bfmask ( 1, 1 );
   Mask *maskPtr = &bfmask;
   // beadfind has responsibility for defining the exclusion mask
-  SetExcludeMask ( inception_state.loc_context,maskPtr,ChipIdDecoder::GetChipType(),my_image_spec.rows,my_image_spec.cols );
+  SetExcludeMask ( inception_state.loc_context,maskPtr,(char*)chipTpye.c_str(),my_image_spec.rows,my_image_spec.cols );
   bool beadfind_done = false;
   if ( inception_state.mod_control.reusePriorBeadfind )
   {

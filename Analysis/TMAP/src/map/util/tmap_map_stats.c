@@ -65,7 +65,7 @@ tmap_map_stats_add(tmap_map_stats_t *dest, tmap_map_stats_t *src)
   dest->num_hpcost_modified += src->num_hpcost_modified;
   dest->num_hpcost_shifted += src->num_hpcost_shifted;
 
-  dest->num_len_filtered_als += src->num_len_filtered_als;
+  dest->num_filtered_als += src->num_filtered_als;
 }
 
 void
@@ -99,6 +99,6 @@ tmap_map_stats_print(tmap_map_stats_t *s)
   fprintf(stderr, "num_hpcost_modified=%llu\n", (unsigned long long int)s->num_hpcost_modified);
   fprintf(stderr, "num_hpcost_shifted=%llu\n", (unsigned long long int)s->num_hpcost_shifted);
 
-  fprintf(stderr, "num_len_filtered_als=%llu\n", (unsigned long long int)s->num_len_filtered_als);
+  fprintf(stderr, "num_filtered_als=%llu\n", (unsigned long long int)s->num_filtered_als);
 
 }

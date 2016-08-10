@@ -9,6 +9,12 @@
 #include <unistd.h>
 #include <stdint.h>
 #include "IonImageSem.h"
+#ifdef BB_DC
+#include "logging.h"
+#define ISMLOG DTRACE
+#else
+#define ISMLOG printf
+#endif
 
 pthread_once_t  IonImageSem::IonImageSemOnceControl = PTHREAD_ONCE_INIT;
 ion_semaphore_t *IonImageSem::Ion_Image_SemPtr=NULL;
@@ -28,7 +34,7 @@ ion_semaphore_t * IonImageSem::Create(const char *semaphore_name)
 
     fd = open(semaphore_name, O_RDWR | O_CREAT /*| O_EXCL*/, 0666);
     if (fd < 0){
-    	printf("%s: failed, %s\n",__FUNCTION__,strerror(errno));
+    	ISMLOG("%s: failed, %s\n",__FUNCTION__,strerror(errno));
         return (NULL);
     }
     if( ftruncate(fd, sizeof(ion_semaphore_t)))
@@ -66,10 +72,10 @@ ion_semaphore_t *IonImageSem::Open(const char *semaphore_name)
 {
     int fd;
     ion_semaphore_t *semap;
-    printf("%s: trying to open file: '%s'\n", __FUNCTION__, semaphore_name);
+    ISMLOG("%s: trying to open file: '%s'\n", __FUNCTION__, semaphore_name);
     fd = open(semaphore_name, O_RDWR, 0666);
     if (fd < 0){
-    	printf("%s: Creating sema, %s\n",__FUNCTION__,strerror(errno));
+    	ISMLOG("%s: Creating sema, %s\n",__FUNCTION__,strerror(errno));
     	semap = Create(semaphore_name);
     }
     else
@@ -104,6 +110,9 @@ void IonImageSem::LockWriter()
 
 	if(Ion_Image_SemPtr)
 	{
+		if(Ion_Image_SemPtr->WriterLock == 0){
+			ISMLOG("%s: writer locking semaphore\n",__FUNCTION__);
+		}
 		Ion_Image_SemPtr->WriterLock = pthread_self();
 	}
 }
@@ -114,48 +123,77 @@ void IonImageSem::UnLockWriter()
 
     if(Ion_Image_SemPtr)
 	{
+		if(Ion_Image_SemPtr->WriterLock != 0){
+			ISMLOG("%s: writer unlocking semaphore\n",__FUNCTION__);
+		}
 		Ion_Image_SemPtr->WriterLock = 0;
 	}
 }
 
 
-void IonImageSem::Take()
+void IonImageSem::Take(int fast)
 {
     pthread_once(&IonImageSem::IonImageSemOnceControl, IonImageSem::Init);
 
     ion_semaphore_t *sem = Ion_Image_SemPtr;
 	uint32_t msecs_waited=0;
+	uint32_t its_the_same_cnt=0;
+	pthread_t last_owner=0;
+	unsigned last_cnt=0;
+	static unsigned myLocalCnt=0;
+
 	if(sem)
 	{
 #ifdef USE_ION_PTHREAD_SEM
 	  int lock_rc;
 		if((lock_rc = pthread_mutex_lock(&ssem->lock)) != 0)
-		  printf("problems taking image sem %s\n",strerror(lock_rc));
+		  ISMLOG("problems taking image sem %s\n",strerror(lock_rc));
 #else
-		uint32_t i;
-		static const uint32_t sleepUsecs = 10000;
-		static const uint32_t limit=(2*60*(1000000/sleepUsecs));
-		
-		for(i=0;i<limit;i++)
-		  {
-		    if(sem->WriterLock == 0 && sem->owner == 0)
-		      {
-			break;
-		      }
-		    usleep(sleepUsecs); // sleep for 1/50 of a second
-		  }
-		if(i == limit)
-		  printf("issues taking semaphore writer=%lx owner=%lx\n",sem->WriterLock,sem->owner);
+         uint32_t i;
+         uint32_t sleepUsecs = 10000;
+         uint32_t same_limit=(30*(1000000/sleepUsecs)); // if the same reader holds for more than 30 seconds, something is wrong...
+         uint32_t limit=30*60*(1000000/sleepUsecs);
+
+
+         if(fast){
+                 sleepUsecs /= 5;
+                 limit *= 5;
+                 same_limit *= 5;
+         }
+
+         for(i=0;i<limit;i++)
+           {
+             if(sem->WriterLock == 0 && sem->owner == 0)
+               {
+                 break;
+               }
+             else if(sem->WriterLock == 0 && (sem->owner == last_owner && sem->count == last_cnt)){
+				 its_the_same_cnt++;
+				 if(its_the_same_cnt > same_limit){
+					 break;
+				 }
+			 }else{
+				 its_the_same_cnt=0;
+				 last_owner = sem->owner;
+				 last_cnt = sem->count;
+			 }
+             usleep(sleepUsecs);
+           }
+		if(i == limit || its_the_same_cnt > same_limit){
+		  ISMLOG("issues taking semaphore writer=%lx owner=%lx\n",sem->WriterLock,sem->owner);
+		}
 		
 		msecs_waited = i*sleepUsecs/1000;
-		if(msecs_waited > 0)
-		  printf("waited %d msecs for file semaphore\n",msecs_waited);
+		if(msecs_waited > 0){
+		  ISMLOG("waited %d msecs for file semaphore\n",msecs_waited);
+		}
 		sem->owner = pthread_self();
+		sem->count = myLocalCnt++;
 #endif
 	}
 	else
 	{
-		printf("Image Sem is NULL\n");
+		ISMLOG("Image Sem is NULL\n");
 	}
 }
 

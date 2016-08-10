@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <math.h>
 
-#ifndef __INTEL_COMPILER
-
 #include "VectorMacros.h"  // control madness of included headers
 
 void MathModel::PurpleSolveTotalTrace_Vec (float **vb_out, float **blue_hydrogen, float **red_hydrogen, int len, const float *deltaFrame, float *tauB, float *etbR, float gain, int flow_block_size)
@@ -170,4 +168,3 @@ void MathModel::RedSolveHydrogenFlowInWell_Vec  (float * const *vb_out, const fl
   }
 }
 
-#endif

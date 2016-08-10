@@ -30,7 +30,7 @@ const char *SAM_HEADER_SQ_TAGS_OPT[] = {"AS", "M5", "SP", "UR", NULL};
 const char *SAM_HEADER_SQ_TAGS_UNQ[] = {"SN", NULL};
 
 const char *SAM_HEADER_RG_TAGS_REQ[] = {"ID", NULL};
-const char *SAM_HEADER_RG_TAGS_OPT[] = {"CN", "DS", "DT", "FO", "KS", "LB", "PG", "PI", "PL", "PU", "SM", NULL};
+const char *SAM_HEADER_RG_TAGS_OPT[] = {"CN", "DS", "DT", "FO", "KS", "LB", "PG", "PI", "PL", "PU", "SM", "zt", "yt",  NULL};
 const char *SAM_HEADER_RG_TAGS_UNQ[] = {"ID", NULL};
 
 const char *SAM_HEADER_PG_TAGS_REQ[] = {"ID", NULL};

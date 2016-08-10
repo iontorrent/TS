@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "CommandLineOpts.h"
+#include "ChipIdDecoder.h"
 #include "IonErr.h"
 #include "mixed.h"
 
@@ -54,8 +55,6 @@ void CommandLineOpts::SetUpProcessing()
   SetSysContextLocations();
   SetFlowContext(sys_context.explog_path);
 
-  SetGlobalChipID ( sys_context.explog_path );
-
   loc_context.FindDimensionsByType ( (char*)(sys_context.explog_path.c_str()) );
   img_control.SetWashFlow ( (char*)(sys_context.explog_path.c_str()) );
 }
@@ -73,23 +72,11 @@ void CommandLineOpts::SetSysContextLocations ()
   CreateResultsFolder (sys_context.GetResultsFolder());
 }
 
-
-
 void CommandLineOpts::SetFlowContext ( string explog_path )
 {
   flow_context.DetectFlowFormula ( (char*)(explog_path.c_str()) ); // Set up flow order expansion
 }
 
-
-// explicitly set global variable
-// if we're going to do this
-// do this >once< only at the beginning
-void CommandLineOpts::SetGlobalChipID ( string explog_path )
-{
-  char *chipType = GetChipId ( (char*)(explog_path.c_str()) );
-  ChipIdDecoder::SetGlobalChipId ( chipType ); // @TODO: bad coding style, function side effect setting global variable
-  if (chipType) free (chipType);
-}
 
 void CommandLineOpts::PrintHelp()
 {
@@ -127,7 +114,7 @@ void CommandLineOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
   // Now that all the parameters have been set, we can check their sanity.
 
   // If we're goign to write out stuff just before a flow, the flow must exist.
-  if ( ! bkg_control.signal_chunks.restart_next.empty() && 
+  if ( ! bkg_control.signal_chunks.restart_next.empty() &&
        bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.endingFlow )->begin() !=
                                                     flow_context.endingFlow               )
   {
@@ -143,7 +130,7 @@ void CommandLineOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 
 
   // If we're goign to read stuff in at a flow, the flow must exist.
-  if ( ! bkg_control.signal_chunks.restart_from.empty() && 
+  if ( ! bkg_control.signal_chunks.restart_from.empty() &&
        bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.startingFlow )->begin() !=
                                                     flow_context.startingFlow               )
   {
@@ -157,51 +144,6 @@ void CommandLineOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
     exit( EXIT_FAILURE );
   }
 
-}
-
-void CommandLineOpts::PostProcessArgs(OptArgs &opts)
-{
-	sys_context.FindExpLogPath();
-	SetGlobalChipID ( sys_context.explog_path );
-
-	if(ChipIdDecoder::IsProtonChip())
-	{
-		if(!opts.HasOption('-', "clonal-filter-bkgmodel"))
-		{
-			bkg_control.polyclonal_filter.enable = false;
-		}
-		if(!opts.HasOption('-', "xtalk-correction") && !ChipIdDecoder::IsPzero())
-		{
-			bkg_control.enable_trace_xtalk_correction = false;
-		}
-		if(!opts.HasOption('-', "col-flicker-correct"))
-		{
-			img_control.col_flicker_correct = true;
-		}
-		if(!opts.HasOption('-', "col-flicker-correct-aggressive"))
-		{
-            if ( ChipIdDecoder::IsPzero() )
-            {
-                img_control.ImageControlForProton(false);
-            }
-
-            // PONE
-            if ( ChipIdDecoder::IsPone() )
-            {
-                img_control.ImageControlForProton(true);
-            }
-
-            //PTWO TYPE CHIPS
-            if (ChipIdDecoder::IsPtwo() )
-            {
-                img_control.ImageControlForProton(true);
-            }
-		}
-		if(!opts.HasOption('-', "img-gain-correct"))
-		{
-			img_control.gain_correct_images = true;
-		}
-	}
 }
 
 ValidateOpts::ValidateOpts()
@@ -222,30 +164,35 @@ ValidateOpts::ValidateOpts()
 	m_opts["mixed-stringency"] = VT_DOUBLE;
 	m_opts["sigproc-regional-smoothing-alpha"] = VT_FLOAT;
 	m_opts["sigproc-regional-smoothing-gamma"] = VT_FLOAT;
+        m_opts["restart-region-params-file"] = VT_STRING;
+        m_opts["skip-first-flow-block-regional-fitting"] = VT_BOOL;
 
 	// GpuControlOpts
 	m_opts["gpuworkload"] = VT_FLOAT;
 	m_opts["gpuWorkLoad"] = VT_FLOAT;
 	m_opts["gpu-num-streams"] = VT_INT;
+	m_opts["gpu-memory-per-proc"] = VT_INT;
 	m_opts["gpu-amp-guess"] = VT_INT;
 	m_opts["gpu-single-flow-fit"] = VT_INT;
 	m_opts["gpu-single-flow-fit-blocksize"] = VT_INT;
 	m_opts["gpu-single-flow-fit-l1config"] = VT_INT;
 	m_opts["gpu-multi-flow-fit"] = VT_INT;
+	m_opts["gpu-force-multi-flow-fit"] = VT_BOOL;
 	m_opts["gpu-multi-flow-fit-blocksize"] = VT_INT;
 	m_opts["gpu-multi-flow-fit-l1config"] = VT_INT;
 	m_opts["gpu-single-flow-fit-type"] = VT_INT;
 	m_opts["gpu-hybrid-fit-iter"] = VT_INT;
-	m_opts["gpu-partial-deriv-blocksize"] = VT_INT;	
+	m_opts["gpu-partial-deriv-blocksize"] = VT_INT;
 	m_opts["gpu-partial-deriv-l1config"] = VT_INT;
 	m_opts["gpu-use-all-devices"] = VT_BOOL;
-	m_opts["gpu-verbose"] = VT_BOOL;	
+	m_opts["gpu-verbose"] = VT_BOOL;
 	m_opts["gpu-device-ids"] = VT_INT;
 	m_opts["gpu-fitting-only"] = VT_BOOL;
-  m_opts["gpu-tmidnuc-shift-per-flow"] = VT_BOOL;
-  m_opts["gpu-flow-by-flow"] = VT_BOOL;
-  m_opts["post-fit-handshake-worker"] = VT_BOOL;
-  m_opts["gpu-switch-to-flow-by-flow-at"] = VT_INT;
+	m_opts["gpu-tmidnuc-shift-per-flow"] = VT_BOOL;
+	m_opts["gpu-flow-by-flow"] = VT_BOOL;
+	m_opts["post-fit-handshake-worker"] = VT_BOOL;
+	m_opts["gpu-switch-to-flow-by-flow-at"] = VT_INT;
+	m_opts["gpu-num-history-flows"] = VT_INT;
 
 
 	// SignalProcessingBlockControl
@@ -266,7 +213,7 @@ ValidateOpts::ValidateOpts()
 
 	// DebugMe
 	m_opts["bkg-debug-param"] = VT_INT;
-    m_opts["bkg-debug-nsamples"] = VT_INT;
+	m_opts["bkg-debug-nsamples"] = VT_INT;
 	m_opts["bkg-debug-region"] = VT_VECTOR_INT;
 	m_opts["bkg-debug-trace-sse"] = VT_STRING;
 	m_opts["bkg-debug-trace-rcflow"] = VT_STRING;
@@ -286,7 +233,7 @@ ValidateOpts::ValidateOpts()
 	m_opts["beadfind-sdasbf"] = VT_BOOL;
 	m_opts["beadfind-bfmult"] = VT_FLOAT;
 	m_opts["beadfind-minlive"] = VT_DOUBLE;
-    m_opts["beadfind-filt-noisy-col"] = VT_STRING;
+	m_opts["beadfind-filt-noisy-col"] = VT_STRING;
 	m_opts["beadfind-minlivesnr"] = VT_DOUBLE;
 	m_opts["beadfind-min-tf-snr"] = VT_DOUBLE;
 	m_opts["beadfind-tf-min-peak"] = VT_FLOAT;
@@ -294,12 +241,12 @@ ValidateOpts::ValidateOpts()
 	m_opts["beadfind-lib-filt"] = VT_DOUBLE;
 	m_opts["beadfind-tf-filt"] = VT_DOUBLE;
 	m_opts["beadfind-skip-sd-recover"] = VT_INT;
-	m_opts["beadfind-thumbnail"] = VT_INT;
 	m_opts["beadfind-sep-ref"] = VT_BOOL;
 	m_opts["beadfind-smooth-trace"] = VT_BOOL;
 	m_opts["beadfind-diagnostics"] = VT_INT;
 	m_opts["beadfind-gain-correction"] = VT_BOOL;
-	m_opts["beadfind-blob-filter"] = VT_BOOL;	
+	m_opts["datacollect-gain-correction"] = VT_BOOL;
+	m_opts["beadfind-blob-filter"] = VT_BOOL;
 	m_opts["beadfind-predict-start"] = VT_INT;
 	m_opts["beadfind-predict-end"] = VT_INT;
 	m_opts["beadfind-sig-ref-type"] = VT_INT;
@@ -308,16 +255,18 @@ ValidateOpts::ValidateOpts()
 	m_opts["bfold"] = VT_BOOL;
 	m_opts["noduds"] = VT_BOOL;
 	m_opts["b"] = VT_STRING;
-	m_opts["beadfindfile"] = VT_STRING;	
+	m_opts["beadfindfile"] = VT_STRING;
 	m_opts["beadfindFile"] = VT_STRING;
+	m_opts["beadfind-mesh-step"] = VT_VECTOR_INT;
 
 	//ImageControlOpts
-	m_opts["do-sdat"] = VT_BOOL;
 	m_opts["pca-test"] = VT_STRING;
 	m_opts["PCA-test"] = VT_STRING;
+	m_opts["acq-prefix"] = VT_STRING;
+	m_opts["dat-postfix"] = VT_STRING;
 	m_opts["col-flicker-correct"] = VT_BOOL;
 	m_opts["col-flicker-correct-verbose"] = VT_BOOL;
-	m_opts["col-flicker-correct-aggressive"] = VT_BOOL;	
+	m_opts["col-flicker-correct-aggressive"] = VT_BOOL;
 	m_opts["img-gain-correct"] = VT_BOOL;
 	m_opts["smoothing-file"] = VT_STRING;
 	m_opts["smoothing"] = VT_STRING;
@@ -339,8 +288,10 @@ ValidateOpts::ValidateOpts()
 	m_opts["frames"] = VT_INT;
 	m_opts["col-doubles-xtalk-correct"] = VT_BOOL;
 	m_opts["pair-xtalk-coeff"] = VT_FLOAT;
-    m_opts["fluid-potential-correct"] = VT_BOOL;
-    m_opts["fluid-potential-threshold"] = VT_FLOAT;
+	m_opts["fluid-potential-correct"] = VT_BOOL;
+	m_opts["fluid-potential-threshold"] = VT_FLOAT;
+	m_opts["corr-noise-correct"] = VT_BOOL;
+	m_opts["mask-datacollect-exclude-regions"] = VT_BOOL;
 
 
 	// ModuleControlOpts
@@ -351,7 +302,7 @@ ValidateOpts::ValidateOpts()
 	// SpatialContext
 	m_opts["region-size"] = VT_VECTOR_INT;
 	m_opts["cropped"] = VT_VECTOR_INT;
-	m_opts["analysis-region"] = VT_VECTOR_INT;	
+	m_opts["analysis-region"] = VT_VECTOR_INT;
 	m_opts["cropped-region-origin"] = VT_VECTOR_INT;
 
 	// FlowContext
@@ -373,7 +324,7 @@ ValidateOpts::ValidateOpts()
 
 	// SystemContext
 	m_opts["local-wells-file"] = VT_BOOL;
-	m_opts["well-stat-file"] = VT_STRING;	
+	m_opts["well-stat-file"] = VT_STRING;
 	m_opts["stack-dump-file"] = VT_STRING;
 	m_opts["wells-format"] = VT_STRING;
 	m_opts["output-dir"] = VT_STRING;
@@ -383,7 +334,7 @@ ValidateOpts::ValidateOpts()
 
 	// GlobalDefaultsForBkgModel
 	m_opts["gopt"] = VT_STRING;
-	m_opts["bkg-dont-emphasize-by-compression"] = VT_BOOL;	
+	m_opts["bkg-dont-emphasize-by-compression"] = VT_BOOL;
 	m_opts["xtalk"] = VT_STRING;
 	m_opts["bkg-well-xtalk-name"] = VT_STRING;
 
@@ -391,48 +342,80 @@ ValidateOpts::ValidateOpts()
 	m_opts["bkg-kmult-adj-low-hi"] = VT_FLOAT;
 	m_opts["kmult-low-limit"] = VT_FLOAT;
 	m_opts["kmult-hi-limit"] = VT_FLOAT;
-	m_opts["bkg-ssq-filter-region"] = VT_FLOAT;
+
+  // control bead selection
+  m_opts["bkg-copy-stringency"] = VT_FLOAT;
+  m_opts["bkg-min-sampled-beads"] = VT_INT;
+  m_opts["bkg-max-rank-beads"] = VT_INT;
+  m_opts["bkg-post-key-train"] = VT_INT;
+  m_opts["bkg-post-key-step"] = VT_INT;
+
 	m_opts["clonal-filter-bkgmodel"] = VT_BOOL;
 	m_opts["bkg-use-proton-well-correction"] = VT_BOOL;
 	m_opts["bkg-per-flow-time-tracking"] = VT_BOOL;
 
 	m_opts["bkg-exp-tail-fit"] = VT_BOOL;
-  m_opts["bkg-exp-tail-bkg-adj"] = VT_BOOL;
-  m_opts["bkg-exp-tail-tau-adj"] = VT_BOOL;
-  m_opts["bkg-exp-tail-bkg-limit"] = VT_FLOAT;
-  m_opts["bkg-exp-tail-bkg-lower"] = VT_FLOAT;
+	m_opts["bkg-exp-tail-bkg-adj"] = VT_BOOL;
+	m_opts["bkg-exp-tail-tau-adj"] = VT_BOOL;
+	m_opts["bkg-exp-tail-bkg-limit"] = VT_FLOAT;
+	m_opts["bkg-exp-tail-bkg-lower"] = VT_FLOAT;
+
 
 	m_opts["bkg-pca-dark-matter"] = VT_BOOL;
 	m_opts["regional-sampling"] = VT_BOOL;
-	m_opts["regional_sampling_type"] = VT_INT;
+	m_opts["regional-sampling-type"] = VT_INT;
+	m_opts["num-regional-samples"] = VT_INT;
 	m_opts["dark-matter-correction"] = VT_BOOL;
 	m_opts["bkg-prefilter-beads"] = VT_BOOL;
 	m_opts["vectorize"] = VT_BOOL;
 	m_opts["bkg-ampl-lower-limit"] = VT_FLOAT;
-	m_opts["single-flow-projection-search"] = VT_BOOL;
+
 	m_opts["limit-rdr-fit"] = VT_BOOL;
 	m_opts["use-alternative-etbr-equation"] = VT_BOOL;
 	m_opts["use-alternative-etbR-equation"] = VT_BOOL;
 
+	m_opts["suppress-copydrift"]  = VT_BOOL;
+	m_opts["use-safe-buffer-model"] = VT_BOOL;
+
+  m_opts["stop-beads"] = VT_BOOL;
 
 	m_opts["fitting-taue"] = VT_BOOL;
 	m_opts["incorporation-type"] = VT_INT;
-	m_opts["bkg-single-alternate"] = VT_BOOL;
+
 	m_opts["bkg-single-gauss-newton"] = VT_BOOL;
-	m_opts["bkg-single-flow-retry-limit"] = VT_INT;
-	m_opts["var-kmult-only"] = VT_BOOL;
+
+  m_opts["fit-region-kmult"] = VT_BOOL;
 	m_opts["bkg-recompress-tail-raw-trace"] = VT_BOOL;
-		
+
+	// barcode experiment
+	m_opts["barcode-flag"] = VT_BOOL;
+	m_opts["barcode-radius"] = VT_FLOAT;
+	m_opts["barcode-tie"] = VT_FLOAT;
+	m_opts["barcode-penalty"] = VT_FLOAT;
+	m_opts["barcode-debug"] = VT_BOOL;
+	m_opts["barcode-spec-file"] = VT_STRING;
+	m_opts["kmult-penalty"] = VT_FLOAT;
+
+  m_opts["revert-regional-sampling"] = VT_BOOL;
+  m_opts["always-start-slow"] = VT_BOOL;
+
+	// double-tap control
+	m_opts["double-tap-means-zero"] = VT_BOOL;
+
 	// ProcessImageToWell
 	m_opts["region-list"] = VT_VECTOR_INT;
-	m_opts["wells-save-queue-size"] = VT_VECTOR_INT;
-    m_opts["wells-save-as-ushort"] = VT_BOOL;
-    m_opts["wells-convert-low"] = VT_FLOAT;
-    m_opts["wells-convert-high"] = VT_FLOAT;
-    m_opts["wells-save-number-copies"] = VT_BOOL;
-    m_opts["wells-convert-with-copies"] = VT_BOOL;
+    m_opts["wells-save-queue-size"] = VT_INT;
+	m_opts["wells-save-as-ushort"] = VT_BOOL;
+	m_opts["wells-convert-low"] = VT_FLOAT;
+	m_opts["wells-convert-high"] = VT_FLOAT;
+	m_opts["wells-save-number-copies"] = VT_BOOL;
+	m_opts["wells-convert-with-copies"] = VT_BOOL;
 	m_opts["bkg-washout-threshold"] = VT_FLOAT;
-    m_opts["bkg-washout-flow-detection"] = VT_INT;
+	m_opts["bkg-washout-flow-detection"] = VT_INT;
+
+    m_opts["args-json"] = VT_STRING;
+    m_opts["args-beadfind-json"] = VT_STRING;
+    m_opts["thumbnail"] = VT_BOOL;
 }
 
 void ValidateOpts::Validate(const int argc, char *argv[])
@@ -442,7 +425,7 @@ void ValidateOpts::Validate(const int argc, char *argv[])
 		string s = argv[i];
 		if(s == "-" || s == "--")
 		{
-			cerr << "ERROR: command line input \"-\" must be followed by a short option name (a letter) and \"--\" must be followed by a long option name." << endl; 
+			cerr << "ERROR: command line input \"-\" must be followed by a short option name (a letter) and \"--\" must be followed by a long option name." << endl;
 			exit ( EXIT_FAILURE );
 		}
 		else if(s == "-v" || s == "--version")
@@ -475,7 +458,7 @@ void ValidateOpts::Validate(const int argc, char *argv[])
 						value = argv[i + 1];
 					}
 				}
-				
+
 				map<string, ValidTypes>::iterator iter = m_opts.find(s);
 				if(iter == m_opts.end())
 				{

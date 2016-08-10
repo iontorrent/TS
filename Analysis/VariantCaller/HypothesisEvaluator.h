@@ -33,7 +33,7 @@ int CalculateHypPredictions(
         const vector<string>     &Hypotheses,
         const vector<bool>       &same_as_null_hypothesis,
         vector<vector<float> >   &predictions,
-        vector<vector<float> >   &normalizedMeasurements,
+        vector<float>            &normalizedMeasurements,
         int flow_upper_bound);
 
 // Does what the name says

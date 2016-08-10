@@ -41,11 +41,14 @@
     	<div class="row-fluid">
 	    <h2>RAID Info</h2>
     	{% if raid_stats %}
-<pre>{{raid_stats}}</pre>
+        <pre>{{raid_stats}}</pre>
     	{% else %}
       		<p><b>No RAID statistics available</b></p>
     	{% endif %}
 	    </div>
 
-<h2>Disk Check</h2>
-<pre>{{disk_check_status}}</pre>
+        <div class="row-fluid">
+            <h2>Environment Info</h2>
+            <pre>{{ environment }}</pre>
+        </div>
+

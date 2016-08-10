@@ -42,6 +42,7 @@ public:
       return(0);
     return(1);
   }
+  const char *GetFlowOrder(){return(flowOrder.c_str());};
 
   void GetFlowOrderBlock(int *my_flow, int i_start, int i_stop) const;
 

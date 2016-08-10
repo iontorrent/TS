@@ -36,7 +36,7 @@ __device__ inline int WarpTraceAccumCount(T* smWarpTrace, const int nframes, T*s
 // Block level reduction 
 // blockDim.x should be power of 2 and less than equal to 512
 template<typename T>
-__device__ inline void ReduceAndAvgAtBlockLevel(T *sm, T N, bool avg);
+__device__ inline void ReduceAndAvgAtBlockLevel(T *sm, int N, bool avg = true);
 
 
 template<typename T>  //blockDim.x == warpsize !!
@@ -59,7 +59,7 @@ __device__ inline void BlockAccumValuePerWarpToGlobal( T*gValue, T*smBase, const
 
 
 template<typename T>
-__device__ inline void SimplestReductionAndAverage(T *sm, int N, bool avg); 
+__device__ inline void SimplestReductionAndAverage(T *sm, int N, bool avg = true); 
 
 
 //checks is the passed bit is set in the mask

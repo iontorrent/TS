@@ -170,10 +170,9 @@ else
 fi
 
 # Pre-check ERCC SAM file for sufficient number of targets - to catch errors early with better report
-NUM_ERCC_REF=`samtools view -S -F 4 "$WORKDIR/$SAMFILE" | awk '{++c[$3]} END {for(x in c){++n}print 0+n}'`
+NUM_ERCC_REF=`samtools view -S -F 4 "$WORKDIR/$SAMFILE" | awk "{++c[\\$3]} END {for(x in c){if(c[x]>=$MINREADS){++n}}print 0+n}"`
 if [ $NUM_ERCC_REF -lt 3 ];then
-  echo -e "\nFailed Analysis: Insufficient ERCC targets had mapped reads ($NUM_ERCC_REF)." >> "$STATSFILE"
-  echo -e "\nWARNING: Skipping ERCC analysis as less than 3 ERCC targets had mapped reads." >&2
+  echo -e "\nFailed Analysis: Insufficient ERCC targets ($NUM_ERCC_REF) had sufficient mapped reads ($MINREADS)." >> "$STATSFILE"
   exit 0;
 fi
 

@@ -3,14 +3,18 @@
 
 from os import path
 import socket
+import json
 from iondb.bin import dj_config
 from django.core import urlresolvers
+import subprocess
 
 HOSTNAME = socket.gethostname()
-TEST_INSTALL= False
+TEST_INSTALL = False
 LOCALPATH = path.abspath(path.dirname(__file__))
 AUTO_START = False
 
+# root directory on the file system of the running instance of Torrent Suite
+TS_ROOT = path.realpath(path.join(__file__, '..', '..'))
 
 DEBUG = False
 JS_EXTRA = False
@@ -92,10 +96,10 @@ STATICFILES_DIRS = (
 STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-#    'django.contrib.staticfiles.finders.DefaultStorageFinder',
+    #    'django.contrib.staticfiles.finders.DefaultStorageFinder',
 )
 # Generate static paths with cache busting md5 names
-STATICFILES_STORAGE='django.contrib.staticfiles.storage.CachedStaticFilesStorage'
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.CachedStaticFilesStorage'
 
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = 'mlnpl3nkj5(iu!517y%pr=gbcyi=d$^la)px-u_&i#u8hn0o@$'
@@ -129,7 +133,7 @@ TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")) or
                  "/opt/ion/iondb/templates",
                  "/usr/share/pyshared/django/contrib/admindocs/templates/",
                  "/results/publishers/",
-)
+                 )
 
 TEMPLATE_CONTEXT_PROCESSORS = (
     'django.contrib.auth.context_processors.auth',
@@ -139,6 +143,7 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'django.contrib.messages.context_processors.messages',
     'iondb.rundb.context_processors.base_context_processor',
     'iondb.rundb.context_processors.message_binding_processor',
+    'iondb.rundb.context_processors.add_help_urls_processor',
 )
 
 INSTALLED_APPS = (
@@ -157,27 +162,27 @@ INSTALLED_APPS = (
 )
 
 # This is not to be the full path to the module, just project.model_name
-#AUTH_PROFILE_MODULE = 'rundb.UserProfile' ## deprecated in 1.5
+# AUTH_PROFILE_MODULE = 'rundb.UserProfile' ## deprecated in 1.5
 
 # Allow internal or apache based authentication
 AUTHENTICATION_BACKENDS = (
-        'django.contrib.auth.backends.RemoteUserBackend',
-        'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.RemoteUserBackend',
+    'django.contrib.auth.backends.ModelBackend',
 )
 
 IONAUTH_ALLOW_REST_GET = False
 
 # Only allow json in API. Disable xml, csv, plist, html.
-TASTYPIE_DEFAULT_FORMATS=['json', 'jsonp']
+TASTYPIE_DEFAULT_FORMATS = ['json', 'jsonp']
 
-LOGIN_URL="/login/"
-LOGIN_REDIRECT_URL="/data/"
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/data/"
 # Whether to expire the session when the user closes his or her browser.
 # See "Browser-length sessions vs. persistent sessions", https://docs.djangoproject.com/en/dev/topics/http/sessions/#browser-length-sessions-vs-persistent-sessions
-SESSION_EXPIRE_AT_BROWSER_CLOSE=True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # Plans use objects not compatible with django 1.6 default json serializer
-SESSION_SERIALIZER="django.contrib.sessions.serializers.PickleSerializer"
+SESSION_SERIALIZER = "django.contrib.sessions.serializers.PickleSerializer"
 
 if path.exists("/opt/ion/.computenode"):
     # This is the standard way to disable logging in Django.
@@ -225,7 +230,7 @@ LOGGING = {
         # logs from any application in this project would go here.
         '': {
             'handlers': ['default'],
-            'level': 'INFO', # python default is WARN for root logger
+            'level': 'INFO',  # python default is WARN for root logger
             'propagate': True
         },
         'iondb': {
@@ -270,8 +275,13 @@ ANALYSIS_ROOT = "/opt/ion/iondb/anaserve"
 
 JOBSERVER_HOST = HOSTNAME
 JOBSERVER_PORT = 10000
+
+# the settings for the xmlrpc server connection to the plugins daemon
 IPLUGIN_HOST = HOSTNAME
 IPLUGIN_PORT = 9191
+IPLUGIN_STR = "http://%s:%s" % (IPLUGIN_HOST, IPLUGIN_PORT)
+
+DEFAULT_NO_PROXY="localhost,127.0.0.1,127.0.1.1,::1"
 
 # SGE settings - all you need to run SGE
 SGE_ROOT = "/var/lib/gridengine"
@@ -290,20 +300,11 @@ PLUGIN_PATH = "/results/plugins/"
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 114857600
 
-# Define Plugin Warehouse URLs as tuples of (Name, User URL, API URL)
-PLUGIN_WAREHOUSE = [
-    (
-     'Torrent Browser Plugin Store',
-     'http://ioncommunity.thermofisher.com/community/products/software/torrent_browser_plugin_store',
-     'http://torrentcircuit.iontorrent.com/warehouse/'
-    )
-]
-
 # This is defined here for sharing and debugging purpuses only
 # Remove before launch
 # Identify a Model and an event, which can be 'create', 'save', 'delete'
-EVENTAPI_CONSUMERS =  {}
-#EVENTAPI_CONSUMERS =  {
+EVENTAPI_CONSUMERS = {}
+# EVENTAPI_CONSUMERS =  {
 #    ('Result', 'save'): [
 #        'http://localhost/rundb/demo_consumer/result_save',
 #     ],
@@ -318,10 +319,10 @@ EVENTAPI_CONSUMERS =  {}
 # The AWS settings enable and configure Amazon S3 upload
 # Override them in local_settings.py
 AWS_ACCESS_KEY = None
-AWS_SECRET_KEY  = None
+AWS_SECRET_KEY = None
 AWS_BUCKET_NAME = None
 
-SUPPORT_AUTH_URL   = "https://support.iontorrent.com/asdf_authenticate"
+SUPPORT_AUTH_URL = "https://support.iontorrent.com/asdf_authenticate"
 SUPPORT_UPLOAD_URL = "https://support.iontorrent.com/asdf_upload"
 
 REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.json"
@@ -329,23 +330,26 @@ REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.
 PRODUCT_UPDATE_BASEURL = "http://ionupdates.com/"
 PRODUCT_UPDATE_PATH = "products/main.json"
 
+PLAN_CSV_VERSION = "1.0"
+SAMPLE_CSV_VERSION = "1.0"
+
 ABSOLUTE_URL_OVERRIDES = {
     'auth.user': lambda u: urlresolvers.reverse('configure_account'),
 }
 
 try:
     # this file is generated and placed into /opt/ion/iondb/ion_dbreports_version.py by the CMake process and .deb pkg installation
-    import iondb.version as version #@UnresolvedImport
+    import iondb.version as version  # @UnresolvedImport
     GITHASH = version.IonVersionGetGitHash()
     VERSION = 'v' + '.'.join([version.IonVersionGetMajor(), version.IonVersionGetMinor(), version.IonVersionGetRelease(), version.IonVersionGetGitHash()])
     RELVERSION = '.'.join([version.IonVersionGetMajor(), version.IonVersionGetMinor()])
 except:
-    GITHASH=''
-    VERSION=''
-    RELVERSION=''
+    GITHASH = ''
+    VERSION = ''
+    RELVERSION = ''
     pass
 
-TEST_RUNNER = "iondb.test_runner.IonTestSuiteRunner"
+# TEST_RUNNER = "iondb.test_runner.IonTestSuiteRunner"
 
 CACHES = {
     'default': {
@@ -357,16 +361,34 @@ CACHES = {
         'LOCATION': '/var/spool/ion',
     }
 }
+NOSE_ARGS = ['--nocapture', '--nologcapture', ]
+
+# Load context sensitive help map. Installed by ion-docs package.
+# JSON file contains an object with TS url patterns as keys and help system GUIDs as values.
+HELP_URL_MAP = {}
+try:
+    with open("/var/www/ion-docs/help-url-map.json") as fp:
+        HELP_URL_MAP = json.load(fp)
+except Exception as e:
+    pass
 
 ALLOWED_HOSTS = ['*']
 
 DEBUG_APPS = None
 DEBUG_MIDDLE = None
 
+# OPTIONAL: this is the pattern to be used by the python-apt method "get_changelog" (https://apt.alioth.debian.org/python-apt-doc/library/apt.package.html)
+# this should be where all of the changelogs are held for the plugin sets, should be setup in local_settings
+# PLUGIN_CHANGELOG_URL = "file:///var/cache/apt/localrepo/changelogs/%(src_pkg)s_%(src_ver)s.changelog"
+
+# Invoke this option in the local settings if you wish to process barcode information which would otherwise be filtered
+# out from the barcodes.json file.  If not included this will default to false.
+# PLUGINS_INCLUDE_FILTERED_BARCODES = True
+
 # import from the local settings file
 try:
     from iondb.local_settings import *
-    #add debug apps if they are defined in local_settings.py
+    # add debug apps if they are defined in local_settings.py
     if DEBUG_APPS:
         INSTALLED_APPS += DEBUG_APPS
     if DEBUG_MIDDLE:

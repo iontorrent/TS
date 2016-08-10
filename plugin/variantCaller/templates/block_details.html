@@ -35,6 +35,11 @@
           <tr>
             <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
             <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
+            {% if options.library_type == "tagseq" %}
+				<th class="k-header"><span class="help" title="Median number of reads covering on target position">Median Read Cov</span></th>
+				<th class="k-header"><span class="help" title="Median number of Molecules per target">Median Mol Cov</span></th>
+            	<th class="k-header"><span class="help" title="Targets with Molecular coverage above 80% of Median">Targets >0.8MM Cov</span></th>
+            {% endif %}
             {% if options.has_hotspots %}
               <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
             {% endif %}
@@ -44,14 +49,21 @@
         <tbody>
           <tr>
             <td><a href="variantCaller.html">{{summary.sample_name}}</a></td>
+            {% if options.library_type == "tagseq" %}
+			<td><a href="variantCaller.html">{{summary.median_depth}}</a></td>
+			<td><a href="variantCaller.html">{{summary.median_num_fam3}}</a></td>
+			<td><a href="variantCaller.html">{{summary.fm3_pass80}}</a></td>
+            {% endif %}
             <td>{{summary.variants_total.variants}}</td>
             {% if options.has_hotspots %}
               <td>{{summary.hotspots_total.variants}}</td>
             {% endif %}
             <td><a class="btn" href="{{variants_vcf_gz_link}}">VCF.GZ</a>
             <a class="btn" href="{{variants_tbi_link}}">VCF.GZ.TBI</a>
+            {% if options.library_type != "tagseq" %}
             <a class="btn" href="{{genome_vcf_gz_link}}">gVCF.GZ</a>
             <a class="btn" href="{{genome_tbi_link}}">gVCF.GZ.TBI</a>
+			{% endif %}
             <a class="btn" href="{{alleles_xls_link}}">XLS</a></td>
           </tr>
         </tbody>

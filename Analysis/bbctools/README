@@ -1,0 +1,6 @@
+The code in src should be built to an execuatble named 'bbctools'.
+It depends on the bamtools api (available via GitHub) and requires zlib (for static builds).
+
+E.g.
+$ gcc -o bbctools -I/…/bamtools/include -L/…/bamtools/lib -l bamtools -l z *.cpp 
+

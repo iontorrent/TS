@@ -78,7 +78,7 @@ typedef struct {
 }AdvCompr_Timing_t;
 
 
-#define ADVC_MAX_REGIONS 97
+#define ADVC_MAX_REGIONS 98
 #define BLK_SZ_X (16*18) // must be a multiple of 16 for avx
 #define BLK_SZ_Y (16*18) // must be a multiple of 16 for avx
 #define BLK_SZ (BLK_SZ_X*BLK_SZ_Y)
@@ -104,9 +104,10 @@ public:
     void SetDoCNC(bool value) { do_cnc = value; }
     static void SetGain(int region, int w, int h, float conv, uint16_t *gainPtr);
     static void ClearGain(int region);
-    static int  ReadGain(int region, uint32_t cols, uint32_t rows, char *srcPath);
+    static float *ReadGain(int region, uint32_t cols, uint32_t rows, char *srcPath);
     static void WriteGain(int region, int w, int h, char *destPath);
-    static void ReSetGain(int region, int w, int h, float *gainPtr);
+    static float *ReSetGain(int region, int w, int h, float *gainPtr);
+    static void xtalkCorrect_raw(float xtalk_fraction, int w, int h, int npts, short int *raw);
 
 private:
         AdvCompr() {} // no default constructor
@@ -118,7 +119,7 @@ private:
 	void Write(FILE_HANDLE fd, void *buf, int len);
 	int  Read(FILE_HANDLE fd, void *buf, int len);
 	void UnPackBits(uint64_t *trcs_coeffs_buffer, uint64_t *bufferEnd);
-	float findt0();
+	float findt0(int *idx);
 	int   PopulateTraceBlock_ComputeMean();
 	void  ComputeMeanTrace();
 	int   CompressBlock();
@@ -153,9 +154,10 @@ private:
 	void TimeTransform_trace(int npts, int npts_newfr, int *timestamps_compr,
 			int *timestamps_newfr, float *vectors, float * nvectors, int nvect);
     void xtalkCorrect(float xtalk_fraction);
+
     void SmoothMean();
     void ClearBeginningOfTrace();
-
+    void PostClearFrontPorch();
 
 
 
@@ -183,6 +185,7 @@ private:
 	int npts;             // number of frames in the traces
 	int nUncompImgPts;    // un-vfc number of frames in the trace
 	int t0est;            // estimate of t0 in frames.
+	int t0estIdx;         // frame index for t0
     int doGain;           // internal flag used for controling gain correction
     int pinnedTrcs;       // number of pinned trcs
 

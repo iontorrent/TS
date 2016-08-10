@@ -54,12 +54,13 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage="%prog [options] [HOST:PORT]...",
                                    description=__doc__)
     parser.add_option("-t", "--timeout", type=float, default=10,
-        help="Timeout each connection after TIMEOUT seconds (default 10)")
+                      help="Timeout each connection after TIMEOUT seconds (default 10)")
     parser.add_option("-a", "--asap", action="store_true",
-        help="Output the results as soon as they arrive rather than in order (Useful if you know the timeout should be long but get bored easily)")
+                      help="Output the results as soon as they arrive rather than in order (Useful if you know the timeout should be long but get bored easily)")
     parser.add_option("-l", "--list", action="store_true",
-        help="Print a list of the default remote hosts that would be checked and exit.")
-    parser.add_option("-c", "--clean", action="store_true", help="Exit status 0 whether or not any connections fail.  By default the exit status is 1 if any connections fail.")
+                      help="Print a list of the default remote hosts that would be checked and exit.")
+    parser.add_option("-c", "--clean", action="store_true",
+                      help="Exit status 0 whether or not any connections fail.  By default the exit status is 1 if any connections fail.")
     (opts, args) = parser.parse_args()
     if opts.list:
         print("\n".join(ion_remotes))

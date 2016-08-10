@@ -5,457 +5,308 @@
 var USERINPUT = USERINPUT || {};
 
 USERINPUT.user_input_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/userInput/";
+USERINPUT.workflows = [];
+USERINPUT.relations = [];
+USERINPUT.genders = [];
+USERINPUT.cancerTypes = [];
+USERINPUT.relations_with_gender = {};
 
-USERINPUT.sample_group_to_workflow_map = {};
-USERINPUT.workflow_to_application_type_map = {};
+var SEPARATOR = " | ";
+var ION_PRELOADED_LABEL = "Ion Torrent";
 
-USERINPUT.workflow_to_ocp_map = {};
-USERINPUT.workflow_ocp_list = [];
-USERINPUT.decorated_workflow_for_display_map = {};
-USERINPUT.gender_list = [];
-USERINPUT.relation_to_gender_map = {};
 
-function retrieve_application_type(data) {
-    var column_map = data["sampleRelationshipsTableInfo"]["column-map"];
-    $.each(column_map, function(i){
-        var _dict = column_map[i];
-        if (_dict['Workflow'] == USERINPUT.workflow) {
-            $("input[name=applicationType]").val(_dict['ApplicationType']);
-        }
-    });
-
+function getIonReporterFields(){
+    if (!USERINPUT.account_id || USERINPUT.account_id == "0" || USERINPUT.account_id == "-1"){
+        return [];
+    }
+    
+    var iru_fields = {
+        // Oncology
+        ircancerType:   { type: "string", defaultValue: "",
+            editable:function(){return USERINPUT.is_ir_connected}
+        },
+        ircellularityPct: { type: "number" },
+        // PGx
+        irbiopsyDays:   { type: "number" },
+        ircoupleID:     { type: "string", defaultValue: ""},
+        irembryoID:     { type: "string", defaultValue: ""},
+            // IR Workflow
+        irWorkflow:     { type: "string", defaultValue: USERINPUT.workflow,
+            editable:function(){return USERINPUT.is_ir_connected}
+        },
+        irtag_isFactoryProvidedWorkflow: { type: "bool", defaultValue: USERINPUT.tag_isFactoryProvidedWorkflow },
+        irRelationRole: { type: "string",
+            defaultValue: function getdefaultrelation(){ return defaultRelation(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow)},
+            isValueRequired: true,
+            editable: function(){return USERINPUT.is_ir_connected}
+        },
+        irGender:       { type: "string", defaultValue: "",
+            editable: function(){return USERINPUT.is_ir_connected}
+        },
+        irSetID:        { type: "number" }
+    }
+    return iru_fields;
 }
 
-function create_iru_ui_elements(data) {
-    
-    var columns = data["sampleRelationshipsTableInfo"]["columns"];
 
-    //sorts the columns by the Order key
-    columns.sort(function(columnA, columnB){
-        return columnA.Order - columnB.Order;
-    });
+function getIonReporterColumns(){
+    if (!USERINPUT.account_id || USERINPUT.account_id == "0" || USERINPUT.account_id == "-1"){
+        return [];
+    }
 
-    var $th = $("#chipsets thead tr");
-    var $rows = $("#chipsets tbody tr");
-
-    $.each(columns, function(i){
-        var th_count = $th.children().length;
-        var last_th = $th.find("th:eq("+(th_count-1)+")");
-
-        var name = columns[i]["Name"];
-
-        if (name == "Workflow") {
-        	name = "Ion Reporter Workflow";
+    var iru_columns = [
+        // Oncology
+        {
+            field: "ircancerType", title: "Cancer Type",
+            width: '150px',
+            attributes: { "name": "ircancerType" },
+            hidden: !$('#isOnco').is(':checked'),
+            editor: irCancerTypeEditor,
+            template: dropDnTemplate({'html': '#=ircancerType#'})
+        },
+        {
+            field: "ircellularityPct", title: "Cellularity %",
+            width: '150px',
+            attributes: { "name": "ircellularityPct", "class": "integer" },
+            hidden: !$('#isOnco').is(':checked'),
+            editor: ircellularityPctEditor,
+        },
+        // PGx
+        {
+            field: "irbiopsyDays", title: "Biopsy Days",
+            width: '100px',
+            attributes: { "name": "irbiopsyDays", "class": "integer" },
+            hidden: !$('#isPgs').is(':checked')
+        },
+        {
+            field: "ircoupleID", title: "Couple ID",
+            width: '100px',
+            attributes: { "name": "ircoupleID" },
+            hidden: !$('#isPgs').is(':checked')
+        },
+        {
+            field: "irembryoID", title: "Embryo ID",
+            width: '100px',
+            attributes: { "name": "irembryoID" },
+            hidden: !$('#isPgs').is(':checked')
+        },
+        // IR Workflow
+        {
+            field: "irWorkflow", title: "Ion Reporter Workflow",
+            width: '350px',
+            attributes: { "name": "irWorkflow" },
+            editor: irWorkflowEditor,
+            template: dropDnTemplate({'html': $('#irWorkflowColumnTemplate').html()})
+        },
+        {
+            field: "irRelationRole", title: "Relation",
+            width: '100px',
+            attributes: { "name": "irRelationRole" },
+            editor: irRelationEditor,
+            template: dropDnTemplate({'html': '#=irRelationRole#'})
+        },
+        {
+            field: "irGender", title: "Gender",
+            width: '100px',
+            attributes: { "name": "irGender" },
+            editor: irGenderEditor,
+            template: dropDnTemplate({'html': '#=irGender#'})
+        },
+        {
+            field: "irSetID", title: "IR Set ID",
+            width: '60px',
+            attributes: { "name": "irSetID" },
+            headerAttributes: { "rel": "tooltip", "data-original-title": "After file transfer, in Ion Reporter Software, samples with the same Set ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Set ID value (even if that value is zero or blank)."},
+            headerTemplate: '<i class="icon-info-sign"></i> IR Set ID'
         }
+    ];
+    return iru_columns;
+}
 
-        if (name == "SetID") {  
-            var $new_th = $("<th></th>", {"style" : "display: table-cell;", "name" : "ir"+name, "class" : "k-header k-widget", "rel" : "tooltip", "title" : "After file transfer, in Ion Reporter Software, samples with the same Set ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Set ID value (even if that value is zero or blank)."
-                    }).html("<i class='icon-info-sign'></i> IR Set ID");
-        } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType" || name == "biospyDays" || name == "coupleID" || name == "embryoID" ) {
-        //20140317-temp } else if (name == "RelationshipType") { 
-            //we are not creating a header for the relationshipType
-            //we are simply creating a hidden element below
-            return;
-        } else {
-                var widthClass = "input-medium";
-                var widthStyle = "display: table-cell; ";
-                if (name == "Ion Reporter Workflow") {
-                        widthClass = "";
-                        widthStyle = "width : 350px; display : table-cell; ";
+function getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow){
+    if (!workflow || workflow == "Upload Only") workflow = "";
+    var match = $.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == workflow && obj.tag_isFactoryProvidedWorkflow == tag_isFactoryProvidedWorkflow });
+    if (match.length == 0){
+        match = $.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == workflow });
+    }
+    //console.log('getWorkflowObj', workflow, tag_isFactoryProvidedWorkflow, match);
+    return (match.length > 0) ? match[0] : null;
+}
+
+function irWorkflowEditor(container, options) {
+    $('<input id="irWorkflowEditor" name="irWorkflowEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: USERINPUT.workflows,
+            dataTextField: "display",
+            dataValueField: "Workflow",
+            open: function(e){
+                var reference = options.model.get('reference');
+                if (reference){
+                    e.sender.dataSource.filter({
+                        logic: "or",
+                        filters: [
+                            { field: "Reference", value: reference },
+                            { field: "Reference", value: "" },
+                        ]
+                    });
                 }
-                var $new_th = $("<th></th>", {"style" : widthStyle, "name" : "ir"+name, "class" : "k-header k-widget " + widthClass
-                        }).text(name);
-        }
-        
-        $th.append($new_th);
-    });
+                // save next grid row to update for RNA/DNA plans
+                this.nextGridItem = $("#grid").data("kendoGrid").dataItem(this.element.closest("tr").next());
+            },
+            change: function(e){
+                var workflowObj = this.dataItem();
+                var relation = workflowObj.relations_list.length == 1 ? workflowObj.relations_list[0] : "";
 
+                options.model.set('irtag_isFactoryProvidedWorkflow', workflowObj.tag_isFactoryProvidedWorkflow);
+                options.model.set('irRelationRole', relation);
+                if (hasGender(relation)) options.model.set('irGender', '');
 
-    //loop through the rows and create an entry for each column
+                // fill in irSetID value
+                var data = $("#grid").data("kendoGrid").dataSource.data().toJSON();
+                data.splice(options.model.row, 1); // get rows other than this one
+                var setid = set_id_from_workflow(workflowObj, options.model.irSetID, data);
+                options.model.set('irSetID', setid);
 
-    var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
-    var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();         
-    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
-
-    $.each($rows, function(i, row){
-        var $row = $(row);
-        //console.log("at iru_get_user_input.create_iru_ui_elements() each i=", i, "; row=", $row);
-        var isToDisable = false;
-    	
-    	
-        if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual) && (i % 2 != 0)) {
-        	isToDisable = true;
-        }
-
-        //console.log("iru_get_user_input isSameSampleForDual=", isSameSampleForDual, "; isToDisable=", isToDisable);
-        
-        $.each(columns, function(j, column){
-            //columns are sorted so get them in order
-            var name = column["Name"];
-            var $elem, $new_td;
-
-            if (name == "SetID") {           
-                $elem = $("<input/>", {"type" : "number", "name" : "ir"+name, "style" : "width:100px; display: table-cell;", "class" : "ir"+name});
-                
-                if (isToDisable) {
-                    $elem = $("<input/>", {"type" : "text", "name" : "ir"+name,  "disabled" : "disabled", "style" : "width:100px; display: table-cell;", "class" : "ir"+name});
+                // update fields for RNA row if same sample for dual nuc type
+                var nextGridItem = this.nextGridItem;
+                var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+                if (planOpt.isDualNucleotideType && isSameSampleForDual && nextGridItem){
+                    nextGridItem.set('irRelationRole', relation);
+                    if (hasGender(relation)) nextGridItem.set('irGender', '');
+                            nextGridItem.set('irSetID', setid);
                 }
-            } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType" || name == "biospyDays" || name == "coupleID" || name == "embryoID" ) {
-            	//20140317-temp
-            	//no-op for now
-            	
-            	return;
-            } else {
-                var widthClass = "input-medium ";
-                var widthStyle = "display: table-cell; ";
-                if (name == "Workflow") {
-                        widthClass = "";
-                        widthStyle = "width : 350px; display : table-cell; ";
-                }
-            	
-                // we need to rename "Relation" to RelationRole as explained 
-                //at the top of the script
-                if (name == "Relation") {name = "RelationRole";}
-                $elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "class" : widthClass +"ir"+name });
 
-                if (isToDisable) {
-                	$elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "disabled" : "disabled", "class" : widthClass +"ir"+name});
-                }
-            }
-            $new_td = $("<td></td>");
-            $new_td.append($elem);
-            $row.append($new_td);
-           
+                // change IR validation errors to warnings
+                updateIRvalidationErrors(options.model.row, ['irWorkflow', 'irRelationRole', 'irGender', 'irSetID']);
+            },
         });
-
-    });
-
-    USERINPUT.irGenderSelects = $(".irGender");
-    USERINPUT.irWorkflowSelects = $(".irWorkflow");
-    USERINPUT.irSetIDInputs = $(".irSetID");
-    USERINPUT.irRelationRoleSelects = $(".irRelationRole");
-    USERINPUT.irbiopsyDays = $(".irbiopsyDays");
-    USERINPUT.ircoupleIDs = $(".ircoupleId");
-    USERINPUT.irembryoIDs = $(".irembryoId");
-    
-    //20140306-WIP
-    //USERINPUT.irCancerType = $(".ircancerType");
-    //USERINPUT.irCellularityPct = $(".ircellularityPct");
-
-} 
-
-
-/**
- *  If OCP is enabled and the plan's application group is DNA_RNA, show the OCP workflows.  
- *  Otherwise, hide them. 
- */
-function filter_workflow_ui_elements($workflowSelects) {
-	var isOcpEnabled = $('input[id=isOCPEnabled]').val();
-	var isOCPApplGroup = $('input[id=isOCPApplicationGroup]').val();	
-
-	//if both isOcpEnabled and isOCPAplGroup are true, we'll show the OCP workflows. Otherwise, hide it!
-	if (isOcpEnabled.toLowerCase() == "true" && isOCPApplGroup.toLowerCase() == "true") {
-		return;
-	}
-	
-    var $index = 0;
-    var values = USERINPUT.workflow_ocp_list;
-    $.each(values, function(i, ocpWorkflow){
-	    $workflowSelects.children().filter(function(index, option) {
-	    	//console.log("filter_workflow_ui_elements() index=", index, "; option.value=", option.value);
-	    	
-	        $index = index;
-	        return option.value === ocpWorkflow;
-	    }).remove();;
-    });	
-
 }
 
-/**
-    This is an abstract function that populates the Gender and Workflow drop down lists
-    based on a name parameter and a list of values to populate
-*/
-function add_ir_general_to_select(name, values) {
-//	if (name == "Workflow") {
-//		console.log("add_ir_general_to_select() name=", name, "; values=", values);
-//	}
-	
-	if (name == "Gender") {
-		USERINPUT.gender_list.length = 0;
-	}
-	
-    var $selects = $(".ir"+name+"");
-    $.each($selects, function(j){
-        var $select = $(this);
-        
-        $select.append($("<option></option>"));
-        $.each(values, function(i,value){
-            var $opt = $("<option></option>");
-            $opt.attr('value', value);
-
-            if (name == "Workflow" && !(jQuery.isEmptyObject(USERINPUT.decorated_workflow_for_display_map)) && (value in USERINPUT.decorated_workflow_for_display_map)) {
-                var displayedValue = USERINPUT.decorated_workflow_for_display_map[value];
-                $opt.text(displayedValue);
-            }
-            else {
-            	$opt.text(value);
-            }
-            $select.append($opt);
-            
-            if (name == "Gender") {
-            	//keep a distinct list of gender choices
-            	if ($.inArray(value, USERINPUT.gender_list) === -1) {
-            		USERINPUT.gender_list.push(value);
-            	}
+function irRelationEditor(container, options) {
+    $('<input id="irRelationEditor" name="irRelationEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: USERINPUT.relations,
+            dataTextField: "display",
+            dataValueField: "Relation",
+            optionLabel: "---",
+            open: function(e) {
+                var workflowObj = getWorkflowObj(options.model.irWorkflow, options.model.irtag_isFactoryProvidedWorkflow);
+                var irRelationshipType = workflowObj ? workflowObj.RelationshipType : "";
+                e.sender.dataSource.filter({
+                    field: "RelationshipType", operator: "contains", value: irRelationshipType
+                });
+            },
+            change: function(e){
+                if (hasGender(options.model.irRelationRole)){
+                    options.model.set('irGender', '');
+                }
+                updateIRvalidationErrors(options.model.row, ['irRelationRole', 'irGender']);
             }
         });
-    });
 }
 
-
-/**
-    This function creates a two dimentional map of workflows to relationshipType and relationRole values
-    extracted from the data returned by the API
-*/
-function populate_sample_grouping_to_workflow_map(data) {
-    var column_map = data["sampleRelationshipsTableInfo"]["column-map"];
-    var restrictions = data["sampleRelationshipsTableInfo"]["restrictionRules"];
-
-    $.each(column_map, function(i){
-        var cm = column_map[i];
-        var workflow = cm["Workflow"];
-        var relationshipType = cm["RelationshipType"];
-        USERINPUT.workflow_to_application_type_map[workflow] = cm["ApplicationType"];
-
-        if ("OCP_Workflow" in cm) {
-        	USERINPUT.workflow_to_ocp_map[workflow] =  cm["OCP_Workflow"];
-
-        	if (cm["OCP_Workflow"].toLowerCase() == "true") {
-            	//keep a distinct list of ocp workflows
-            	if ($.inArray(workflow, USERINPUT.workflow_ocp_list) === -1) {
-            		USERINPUT.workflow_ocp_list.push(workflow);
-            	}
-            	var displayedWorkflow =  workflow + " (" + cm["DNA_RNA_Workflow"] + ")";
-                if ($.inArray(displayedWorkflow, USERINPUT.workflow_with_sample_grouping_ocp_list) === -1) {
-                    USERINPUT.decorated_workflow_for_display_map[workflow] = displayedWorkflow;
-                }            	
-        	}
-        	else {
-                USERINPUT.workflow_to_ocp_map[workflow] = "false";
-            }       	
-        }
-        else {
-        	USERINPUT.workflow_to_ocp_map[workflow] = "false";
-        	if (workflow.toLowerCase() == "upload only") {
-        	   USERINPUT.decorated_workflow_for_display_map[workflow] = workflow;
-        	}
-        }
-        
-        //console.log("populate_sample_grouping_to_workflow_map() workflow_ocp_list=", USERINPUT.workflow_ocp_list);
-        
-        $.each(restrictions, function(j){
-            var restriction = restrictions[j];
-            if (typeof restriction["For"] != 'undefined') {
-                if (restriction["For"]["Name"] == 'RelationshipType' && restriction["For"]["Value"] == relationshipType) {
-                        
-                    USERINPUT.sample_group_to_workflow_map[workflow] = {};
-                    USERINPUT.sample_group_to_workflow_map[workflow]["relationshipType"] = restriction["For"]["Value"]
-                    USERINPUT.sample_group_to_workflow_map[workflow]["relations"] = restriction["Valid"]["Values"];
-                        
+function irGenderEditor(container, options) {
+    $('<input id="irGenderEditor" name="irGenderEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: USERINPUT.genders,
+            dataTextField: "display",
+            dataValueField: "Gender",
+            optionLabel: "---",
+            open: function(e) {
+                if (hasGender(options.model.irRelationRole)){
+                    e.sender.dataSource.filter({
+                        field: "Relation", operator: "contains", value: options.model.irRelationRole
+                    });
                 }
-                else if (restriction["For"]["Name"] == 'Relation') {
-                	USERINPUT.relation_to_gender_map[restriction["For"]["Value"]] = restriction["Valid"]["Values"];
-                }
+            },
+            change: function(e){
+                updateIRvalidationErrors(options.model.row, ['irGender']);
             }
         });
-
-    });
-
-    //console.log("populate_sample_grouping_to_workflow_map relation_to_gender_map=", USERINPUT.relation_to_gender_map);
 }
 
-/**
-    This function presets the IR fields based on either what was in the sample set if it is a new plan
-    or what was saved if it is an existing plan
-*/
-function preset_ir_fields(counter, irSampleName, irGender, irCancerType, irCellularityPct, irbiopsyDays, ircoupleId, irembryoId, irWorkflow, irRelationshipType, irRelationRole, irSetID) {
-	//console.log("at iru_get_user_input.preset_ir_fields() irSampleName=", irSampleName, "; irWorkflow=", irWorkflow);
-	
-    var $genderSelect = $(USERINPUT.irGenderSelects[counter]);
-    var $workflowSelect = $(USERINPUT.irWorkflowSelects[counter]);
-    var $relationRoleSelect = $(USERINPUT.irRelationRoleSelects[counter]);
-    var $irSetIDInput = $(USERINPUT.irSetIDInputs[counter]);
-    //20150515kchoi
-    var $irbiopsyDaysInput = $(USERINPUT.irbiopsyDays[counter]);  
-    var $ircoupleIdInput = $(USERINPUT.ircoupleIDs[counter]);
-    var $irembryoIdInput = $(USERINPUT.irembryoIDs[counter]);   
-
-    
-    if (irGender.length > 0) {
-        var irGenderTerms = USERINPUT.ir_sample_to_tss_sample[irGender];
-            
-        if (irGenderTerms.length > 1) {
-            irGender = irGenderTerms[1];
-        } else {
-            irGender = irGenderTerms[0];
-        }
-
-        var matchingGender = $genderSelect.find("option").filter(function () { 
-                    return this.value.toLowerCase() == irGender.toLowerCase(); 
-        }).attr('value');    
-        $genderSelect.val(matchingGender); 
-
-    }
-
-    if (irSampleName != '') {
-        $workflowSelect.find("option[value='"+irWorkflow+"']").attr('selected', true);        
-    } else {
-        $workflowSelect.find("option[value='"+USERINPUT.workflow+"']").attr('selected', true);
-    }
-
-    $workflowSelect.change();
-
-    if (irRelationRole.length > 0) {
-        var irRelationRoleTerms = USERINPUT.ir_sample_to_tss_sample[irRelationRole];
-        if (typeof irRelationRoleTerms != 'undefined') {
-            
-            $.each(irRelationRoleTerms, function(i){
-                var irRelationRole1 = irRelationRoleTerms[i];
-                    
-                var matchingRole = $relationRoleSelect.find("option").filter(function () { 
-                        return this.value.toLowerCase() == irRelationRole1.toLowerCase(); 
-                }).attr('value');    
-                if (matchingRole) {
-                    $relationRoleSelect.val(matchingRole);
-                    return;
-                }
-
-                
-            });
-        } else {
-            var matchingRole = $relationRoleSelect.find("option").filter(function () { 
-                    return this.value.toLowerCase() == irRelationRole.toLowerCase(); 
-            }).attr('value');    
-            $relationRoleSelect.val(matchingRole);
-        }
-    }
-
-    $irSetIDInput.val(irSetID);
-    //20150515kchoi
-    $irbiopsyDaysInput.val(irbiopsyDays);
-    $ircoupleIdInput.val(ircoupleId); 
-    $irembryoIdInput.val(irembryoId);   
-
+function irCancerTypeEditor(container, options) {
+    $('<input id="irCancerTypeEditor" name="irCancerTypeEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: USERINPUT.cancerTypes,
+            dataTextField: "display",
+            dataValueField: "CancerType",
+            optionLabel: "---",
+            change: function(e){
+                updateIRvalidationErrors(options.model.row, ['ircancerType']);
+            }
+        });
 }
 
-/**
-    This function populates the relation roles based on Workflow
-*/
-function set_relations_from_workflow($relation, relations, workflow, $gender) {
-	//console.log("set_relations_from_workflow() workflow=", workflow, "; relations=", relations);
-        
-    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+function ircellularityPctEditor(container, options) {
+    $('<input id="ircellularityPctEditor" name="ircellularityPctEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoNumericTextBox({ min: 0, max: 100, step: 1 });
+}
 
-    $relation.empty();
-    $relation.append($("<option></option>"));
+function hasGender(Relation){
+    return (Relation in USERINPUT.relations_with_gender)
+}
 
-    $.each(relations, function(i){
-        var $opt = $("<option></option>");
-        $opt.val(relations[i]);
-        $opt.text(relations[i]);
-        $relation.append($opt);
-    });
-    
-    if(relations.length == 1) {
-    	$relation.val(relations[0]);
-    	if (!isSameSampleForDual) {
-    		$gender.attr('disabled', false);
-    	}
+function defaultRelation(workflow, tag_isFactoryProvidedWorkflow){
+    var workflowObj=getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow)
+    if (workflowObj && workflowObj.relations_list.length == 1){
+        return workflowObj.relations_list[0];
     }
+    return "";
+}
+
+function irWorkflowNotValid(reference, workflow, tag_isFactoryProvidedWorkflow){
+    if (USERINPUT.is_ir_connected){
+        var workflowObj = getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow);
+        if (reference && workflowObj && workflowObj.Reference){
+            return reference != workflowObj.Reference;
+        }
+    }
+    return false;
 }
 
 /**
     Attempt to auto populate SetID, if simple logic is not enough then display the column for user input
 */
-function set_id_from_workflow($workflow, $setid, relations){
-    if ( $setid.is(':disabled') ) return;
-
-    var setid = $setid.val();
-    var $other_workflows = $(".irWorkflow").filter("[value='" + $workflow.val() + "']").not($workflow);
-    if ( (relations.length > 1) && ($other_workflows.length > 0) ){
+function set_id_from_workflow(workflowObj, old_setid, other_rows){
+    // data = $("#grid").data("kendoGrid").dataSource.data().toJSON();
+    var setid = parseInt(old_setid) || '';
+    var relations_list_length = workflowObj.relations_list.length;
+    var other_rows_w_same_workflow = other_rows.filter(function(obj){ return obj.irWorkflow == workflowObj.Workflow });
+    
+    if ( (relations_list_length > 1) && (other_rows_w_same_workflow.length > 0) ){
         // assign existing set id if available, otherwise show column for user input
-        if($other_workflows.length < relations.length){
-            setid = $other_workflows.eq(0).closest('tr').find('.irSetID').val();
-            $setid.val(setid);
+        if(other_rows_w_same_workflow.length < relations_list_length){
+            setid = other_rows_w_same_workflow[0]['irSetID'];
         } else {
-            $setid.val('');
-            console.log('unable to autofill IR SetID for', $workflow.val());
+            setid = '';
+            console.log('unable to autofill IR SetID for', workflowObj.Workflow);
         }
     }else{
-        var other_setids = $(".irSetID").not($setid).map(function(){return this.value});
+        var other_setids = other_rows.map(function(obj){ return obj.irSetID});
         if (!setid || ( $.inArray(setid, other_setids) >= 0) ){
             // assign unique set id for this workflow
             setid = Math.max.apply(Math, other_setids) + 1;
-            $setid.val(setid);
         }
     }
+    return setid;
 }
 
-/**
-    This function populates the genders based on relation selected
-*/
-function set_genders_from_relation($gender, relation_gender_map, relation) {
-	console.log("set_genders_from_relation() relation=", relation, "; relation_gender_map=", relation_gender_map);
-	
-    $gender.empty();
-    $gender.append($("<option></option>"));
-
-    $.each(relation_gender_map, function(i){
-        var $opt = $("<option></option>");
-        $opt.val(relation_gender_map[i]);
-        $opt.text(relation_gender_map[i]);
-        $gender.append($opt);
+function updateIRvalidationErrors(row, fields){
+    // change any IR validation errors to warnings when table values are updated
+    var needs_refresh = false;
+    $.each(samplesTableValidationErrors, function(i, error){
+        if (error.row == row && fields.indexOf(error.field) > -1){
+            error.type = 'warning';
+            needs_refresh = true;
+        }
     });
-    
-//    if (relation_gender_map.length == 0) {
-//        //$gender.attr('disabled', true); 
-//    }
-//    else {
-//    	$gender.attr('disabled', false);    	
-//    }
-
-    if (relation_gender_map.length == 1) {
-    	$gender.val(relation_gender_map[0]);
-    }
-}
-
-
-/**
-This function populates the genders with the complete list we have at hand
-*/
-function reset_genders($gender, values) {
-	//console.log("ENTER reset_genders() values=", values);
-	
-    $gender.empty();
-    $gender.append($("<option></option>"));
-    
-    $.each(values, function(i,value){
-        var $opt = $("<option></option>");
-        $opt.attr('value', value);
-        $opt.text(value);
-        $gender.append($opt);
-    });	
-    
-    if (values.length == 1) {
-    	$gender.val(values[0]);
-    	//$gender.attr('disabled', false);
-    }
-//    if (values.length == 0) {                  	
-//    	$gender.attr('disabled', true);
-//    }
-//    else {
-//    	$gender.attr('disabled', false);
-//    }
+    if (needs_refresh) setTimeout(function(){ gridRefresh($('#grid').data('kendoGrid'))}, 200);
 }
 
 /**
@@ -473,46 +324,45 @@ function find_relationship_type(workflow, columns_map) {
     return relationshipType;
 }
 
-
 /**
 * Filter IR workflows based on runType and application group
 */
 function get_workflow_url() {
-	var applicationGroupName = $('input[name=applicationGroupName]').val();  
-	var runType_name = $('input[name=runType_name]').val();
-	var runType_nucleotideType = $('input[name=runType_nucleotideType]').val();
-	
-	var planCategories = $('input[name=planCategories]').val();
-	console.log("iru_get_user_input.get_workflow_url() applicationGroupName=", applicationGroupName, "; runType_name=", runType_name, "; runType_nucleotideType=", runType_nucleotideType, "; planCategories=", planCategories);
+    var applicationGroupName = $('input[name=applicationGroupName]').val();
+    var runType_name = $('input[name=runType_name]').val();
+    var runType_nucleotideType = $('input[name=runType_nucleotideType]').val();
+
+    var planCategories = $('input[name=planCategories]').val();
+    console.log("iru_get_user_input.get_workflow_url() applicationGroupName=", applicationGroupName, "; runType_name=", runType_name, "; runType_nucleotideType=", runType_nucleotideType, "; planCategories=", planCategories);
   
-	var myURL = USERINPUT.user_input_url;
-  	
-	myURL += "?format=json&id=" + USERINPUT.account_id;
-	var isFilterSet = false;
-	
-	if (runType_nucleotideType.toLowerCase() == "dna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
-		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-		myURL += "DNA";
-		
-		isFilterSet = true;
-	}
-	else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
-		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-		myURL += "RNA";
-		
-		isFilterSet = true;
-	}
-	
+    var myURL = USERINPUT.user_input_url;
+
+    myURL += "?format=json&id=" + USERINPUT.account_id;
+    var isFilterSet = false;
+
+    if (runType_nucleotideType.toLowerCase() == "dna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
+        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+        myURL += "DNA";
+        
+        isFilterSet = true;
+    }
+    else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
+        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+        myURL += "RNA";
+        
+        isFilterSet = true;
+    }
+
     if (applicationGroupName == "DNA + RNA") {
-    	/*for mixed single & paired type support    
-    	if (runType_nucleotideType.toLowerCase() == "dna_rna") {
-    		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-    		myURL += "DNA_RNA";
-    		isFilterSet = true;
-    	}
+        /*for mixed single & paired type support    
+        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
+            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+            myURL += "DNA_RNA";
+            isFilterSet = true;
+        }
         */
-    	//myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-    	
+        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+
         if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
 //            if (!isFilterSet) {
 //                myURL += "&filterKey=Onconet_Workflow&filterValue=false";  
@@ -524,17 +374,22 @@ function get_workflow_url() {
                 myURL += "&filterKey=Onconet_Workflow&filterValue=true";
             }
             else {
-            	 myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
+                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
             }
-        }    	
+        }
     }
     else {
-    	if (runType_name.toLowerCase() != "amps") {
+        if (runType_name.toLowerCase() != "amps") {
             if (!isFilterSet) {
                 myURL += "&filterKey=Onconet_Workflow&filterValue=false";
             }
-            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
-    	}
+			if (applicationGroupName == "onco_liquidBiopsy") {
+				myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+			}
+			else {
+            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
+            }
+        }
         else {
             if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
                 myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
@@ -542,16 +397,157 @@ function get_workflow_url() {
             else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
                 myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
             }          
-        }    	
+        }
     }
-  
-	return myURL;
+    return myURL;
+}
+
+/**
+* Validate selected values are compatible with data returned by IRU
+*/
+function check_selected_values(){
+    var errors = [];
+    var samplesTableJSON = $("#grid").data("kendoGrid").dataSource.data().toJSON();
+    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+
+    $.each(samplesTableJSON, function(i,row){
+        if( row.irWorkflow && ($.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == row.irWorkflow } ).length == 0) ){
+            errors.push("<br>Row "+ (row.row+1) + ": Previous workflow for this plan is no longer available: " + row.irWorkflow)
+            row.irWorkflow = "";
+            row.irRelationRole = "Self";
+        }
+        if (row.irRelationRole && ($.grep(USERINPUT.relations, function(obj){ return obj.Relation == row.irRelationRole } ).length == 0) ){
+            errors.push("<br>Row "+ (row.row+1) + ": Selected Relation not found: " + row.irRelationRole);
+            row.irRelationRole = "";
+        }
+        if (row.irGender && ($.grep(USERINPUT.genders, function(obj){ return obj.Gender == row.irGender } ).length == 0) ){
+            errors.push("<br>Row "+ (row.row+1) + ": Selected Gender not found: " + row.irGender);
+            row.irGender = "";
+        }
+        if (row.ircancerType && ($.grep(USERINPUT.cancerTypes, function(obj){ return obj.CancerType == row.ircancerType } ).length == 0) ){
+            errors.push("<br>Row "+ (row.row+1) + ": Selected Cancer Type not found: " + row.ircancerType);
+            row.ircancerType = "";
+        }
+        if (!row.irSetID){
+            if( i > 0 && row.irWorkflow) {
+                if (planOpt.isDualNucleotideType && isSameSampleForDual && !isEven(i)){
+                    row.irSetID = samplesTableJSON[i-1].irSetID;
+                } else {
+                    var workflowObj=getWorkflowObj(row.irWorkflow, row.tag_isFactoryProvidedWorkflow)
+                    row.irSetID = set_id_from_workflow(workflowObj, 1, samplesTableJSON.slice(0, i));
+                }
+            } else {
+                row.irSetID = 1;
+            }
+        }
+    });
+
+    // update via local data to run dataSource initialization
+    samplesTableInit = samplesTableJSON;
+    $("#grid").data("kendoGrid").dataSource.read();
+
+    $("#error").html(errors.toString());
+    if (errors.length > 0) $('html, body').animate({scrollTop : $('#error').prop("scrollHeight")},500);
 }
 
 
+/**
+    Parse data returned from IRU and save in USERINPUT
+**/
+function populate_userinput_from_response(data){
+    var columns = data["sampleRelationshipsTableInfo"]["columns"];
+    var column_map = data["sampleRelationshipsTableInfo"]["column-map"];
+    var restrictions = data["sampleRelationshipsTableInfo"]["restrictionRules"];
+    
+    //sorts the columns by the Order key
+    columns.sort(function(columnA, columnB){
+        return columnA.Order - columnB.Order;
+    });
+
+    // parse restriction rules
+    var relation_to_relationshipType = {};
+    var gender_to_relation = {};
+    var relationshipType_to_relations = {};
+    $.each(restrictions, function(i, restriction){
+        if (typeof restriction["For"] != 'undefined') {
+            if (restriction["For"]["Name"] == 'RelationshipType') {
+                $.each(restriction["Valid"]["Values"], function(i, value){
+                    relation_to_relationshipType[value] = relation_to_relationshipType[value] || [];
+                    relation_to_relationshipType[value].push(restriction["For"]["Value"]);
+                });
+                
+                relationshipType_to_relations[restriction["For"]["Value"]] = restriction["Valid"]["Values"];
+            }
+            else if (restriction["For"]["Name"] == 'Relation') {
+                $.each(restriction["Valid"]["Values"], function(i, value){
+                    gender_to_relation[value] = gender_to_relation[value] || [];
+                    gender_to_relation[value].push(restriction["For"]["Value"]);
+                });
+                // also save which relations have associated Gender
+                USERINPUT.relations_with_gender[restriction["For"]["Value"]] = restriction["Valid"]["Values"];
+            }
+        }
+    });
+
+    // Workflow
+    $.each(column_map, function(i, cm){
+        var workflow = cm["Workflow"];
+        var irReference = cm["irReference"] || "";
+        // reference name conversion: TS "GRCh38.p2.mask1" = IR "GRCh38"
+        var reference = (irReference == "GRCh38") ? "GRCh38.p2.mask1" : irReference
+        var relationshipType = cm["RelationshipType"];
+
+        USERINPUT.workflows.push({
+            "Workflow": workflow != "Upload Only" ? workflow : "",
+            "display": get_decorated_workflow_name(cm, workflow, irReference, ION_PRELOADED_LABEL, SEPARATOR),
+            "tag_isFactoryProvidedWorkflow": cm["tag_isFactoryProvidedWorkflow"],
+            "ApplicationType": cm["ApplicationType"],
+            "RelationshipType": relationshipType,
+            "Reference": reference,
+            "relations_list": relationshipType_to_relations[relationshipType] || []
+        });
+    });
+
+    // Relation and Gender
+    $.each(columns, function(i, column){
+        if (column["Name"] == "Relation"){
+            USERINPUT.relations = $.map(column["Values"], function(value, key){
+                var relationshipType = relation_to_relationshipType[value] || [];
+                return {
+                    "Relation": value,
+                    "display": value,
+                    "RelationshipType": relationshipType.toString()
+                };
+            });
+        }
+        if (column["Name"] == "Gender"){
+            USERINPUT.genders = $.map(column["Values"], function(value, key){
+                var relation =  gender_to_relation[value] || [];
+                return {
+                    "Gender": value,
+                    "display": value,
+                    "Relation": relation.toString()
+                };
+            });
+        }
+        if (column["Name"] == "CancerType"){
+            USERINPUT.cancerTypes = $.map(column["Values"], function(value, key){
+                return {
+                    "CancerType": value,
+                    "display": value
+                };
+            });
+        }
+    });
+}
+
+/**
+    Main function to call IRU and process the response
+**/
 function load_and_set_ir_fields() {
     var myURL = get_workflow_url();
-    	
+
+    $.blockUI();
     var jqhxhr = $.ajax({
         type : "get",
         url : myURL,
@@ -561,117 +557,29 @@ function load_and_set_ir_fields() {
                 // failed to retrieve info
                 $("#loading").hide();
                 USERINPUT.is_ir_connected = false;
-            	$("#error").text("Cannot contact Ion Reporter Server!");
+                $("#error").text("Cannot contact Ion Reporter Server!");
                 $("input[name=irDown]").val('1');
-                $("#chipsets tr").find("[name^=ir]").hide();
-            	return;
+                return;
             }
             else {
-            	USERINPUT.is_ir_connected = true;
+                USERINPUT.is_ir_connected = true;
             }
-            
             $("#error").text("");
+            $("input[name=irDown]").val('0');
 
-            populate_sample_grouping_to_workflow_map(data);
-
-            if(USERINPUT.irWorkflowSelects === undefined){
-                create_iru_ui_elements(data);
-            }
-            retrieve_application_type(data);
-
-            prepareSampleIRConfiguration();
+            // parse data and fill in USERINPUT fields
+            populate_userinput_from_response(data);
             
-            var columns = data["sampleRelationshipsTableInfo"]["columns"];
-            var restrictions = data["sampleRelationshipsTableInfo"]["restrictionRules"];
-            
-            if (typeof columns != 'undefined') {
+            // set application type hidden input from selected workflow
+            var default_workflow = getWorkflowObj(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow);
+            if (default_workflow)
+                $("input[name=applicationType]").val(default_workflow.ApplicationType);
 
-                $("input[name=irDown]").val('0');
+            // make sure existing selections are valid
+            check_selected_values();
 
-                // populate IR dropdowns (except Relation which is Workflow-dependent)
-                $.each(columns, function(i){
-                    var result = columns[i];
-                    var name = result["Name"];
-                    var values = result["Values"];
-                    if (typeof values != 'undefined' && name != "Relation") {
-                        add_ir_general_to_select(name, values);
-                    }
-                });
-
-                // create Workflows onChange event to populate Relation
-                USERINPUT.irWorkflowSelects.on('change', function(){
-                    var $tr = $(this).parent().parent();
-                    var $relation = $tr.find(".irRelationRole");
-                    var $gender = $tr.find(".irGender");
-                    var $setid = $tr.find(".irSetID");
-                    
-                    var workflow = $(this).val();
-                    var workflow_map = USERINPUT.sample_group_to_workflow_map[workflow];
-                    //console.log("iru_get_user_input.load_and_set_ir_fields() workflow=", workflow, "; workflow_map=", workflow_map);
-
-                    if (typeof workflow_map != 'undefined') {
-
-                        var relations = workflow_map["relations"];
-
-                        // set Relation (aka RelationRole) selects
-                        set_relations_from_workflow($relation, relations, workflow, $gender);
-                        set_id_from_workflow($(this), $setid, relations);
-
-                    } else { // we remove this Workflow from the drop down list
-                        var $index = 0;
-                        $(this).children().filter(function(index, option) {
-                            $index = index;
-                            return option.value===workflow;
-                        }).remove();
-                        //now change the value to the next option
-                        $(this).children(":eq("+($index+1)+")").attr('selected', true);
-                        $(this).change();
-                    }
-                });
-                
-
-                // create relation onChange event to populate gender                
-                USERINPUT.irRelationRoleSelects.on('change', function(){
-
-                    var $tr = $(this).parent().parent();
-                    var $gender = $tr.find(".irGender");
-                       
-                    var relation = $(this).val();
-                    var relation_gender_map = USERINPUT.relation_to_gender_map[relation];
-
-                    if (typeof relation_gender_map != 'undefined') {
-                        // set gender selects
-                        set_genders_from_relation($gender, relation_gender_map, relation);                       
-                    } 
-                    else {
-                    	reset_genders($gender, USERINPUT.gender_list);
-                    }
-                });
-                
-                
-                // Set all IR fields based on USERINPUT values
-                $.each(USERINPUT.preset_ir_fields, function(i){
-                    var _array = USERINPUT.preset_ir_fields[i];
-                    //console.log("iru_get_user_input preset_ir_fields i=", i , "; _array.length=", _array.length, "; _array=", _array);
-                    
-                    //planByTemplate  pre_ir_fields _array=["0", "Sample 1", "", "", "", "my ir workflow", "", "", ""] (length = 9)
-                    //planBySampleSet pre_ir_fields _array= ["2", "Sample x", "Female", "Breast Cancer", "21", "0", "", "", "my ir workflow", "", "Self", "2"] (length = 12)
-
-                    if (_array.length == 9) {
-                    	preset_ir_fields(_array[0], _array[1], _array[2], "", "", "", "", "", _array[5], _array[6], _array[7],_array[8]);
-                    } 
-                    else {
-                    	preset_ir_fields(_array[0], _array[1], _array[2], _array[3], _array[4], _array[5],_array[6], _array[7], _array[8], _array[9], _array[10], _array[11]);
-                    }
-                });
-                
-                //filter_workflow_ui_elements(USERINPUT.irWorkflowSelects);
-                
-                $("#chipsets").change();
-            } 
-                
+            hide_summary_view();
             $("#loading").hide();
-            
         },
         error: function(jqXHR, textStatus, errorThrown){
             if(textStatus==="timeout") {
@@ -681,15 +589,18 @@ function load_and_set_ir_fields() {
                 $("input[name=irDown]").val('1');
                 return;
             }
+            else {
+                console.log("iru_get_user_input - textStatus=", textStatus);
+            }
         }
     });
 }
 
 $(document).ready(function(){
     //handler for asynchroneous Ajax calls to block and unblock the UI
-    $(document).ajaxStart($.blockUI).ajaxStop($.unblockUI);
+    $(document).ajaxStop($.unblockUI);
 
     if (USERINPUT.account_id != "0" && USERINPUT.account_id != "-1"){
         load_and_set_ir_fields();
-    } 
+    }
 });

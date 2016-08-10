@@ -31,6 +31,7 @@ class SpatialContext{
     int chip_offset_y;
     int chip_len_x;
     int chip_len_y;
+    string chipType;
     
     struct Region chipRegion;
     

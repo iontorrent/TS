@@ -1,12 +1,12 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "RawWellsV1.h"
 #include "Mask.h"
-#include "Separator.h"
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
 #include "Utils.h"
+#include <cinttypes>
 #ifndef WIN32
 #include <unistd.h>
 #include <sys/types.h>
@@ -184,55 +184,6 @@ static int WellRankAscend(const void *v1, const void *v2)
     return 0;
 }
 
-//
-// Modifies the rank field for TF and Lib beads based on Mask and RQS score
-void RawWellsV1::AddRank (Mask *mask, Separator *sep)
-{
-  int x;
-  int y;
-  int beadTF = 0;
-  int beadLib = 0;
- 
-  //Retrieve rqs scores: stored in first 'frame' of work matrix.
-  double *work = sep->GetWork();
- 
-  struct WellRank *rqsListTF = new struct WellRank[(*mask).GetCount(MaskTF)];
-  struct WellRank *rqsListLib = new struct WellRank[(*mask).GetCount(MaskLib)];
- 
-  for(y=0;y<rows;y++) {
-    for(x=0;x<cols;x++) {
-      if ((*mask)[x+y*cols] & MaskTF && ((*mask)[x+y*cols] & MaskLive)) {
-        rqsListTF[beadTF].x = x;
-        rqsListTF[beadTF].y = y;
-        rqsListTF[beadTF].rqs = work[x+y*cols];
-        beadTF++;
-      }
-      if ((*mask)[x+y*cols] & MaskLib && ((*mask)[x+y*cols] & MaskLive)) {
-        rqsListLib[beadLib].x = x;
-        rqsListLib[beadLib].y = y;
-        rqsListLib[beadLib].rqs = work[x+y*cols];
-        beadLib++;
-      }
-    }
-  }
-
-  //sort the beads: Best to worst. Bigger is better
-  qsort (rqsListTF, beadTF, sizeof(struct WellRank), WellRankAscend);
-  qsort (rqsListLib, beadLib, sizeof(struct WellRank), WellRankAscend);
-
-  // update the wells file ranking field
-  for (int i=0;i<beadLib;i++) {
-    WriteRank (i+1, rqsListLib[i].x, rqsListLib[i].y);
-  }
-  for (int i=0;i<beadTF;i++) {
-    WriteRank (i+1, rqsListTF[i].x, rqsListTF[i].y);
-  }
- 
-  delete [] rqsListTF;
-  delete [] rqsListLib;
-  return;
-}
-
 void RawWellsV1::WriteRank (int rank, int x, int y)
 {
   // skip to proper spot in memory - this is defined as the rank at location x,y
@@ -269,7 +220,7 @@ void RawWellsV1::OpenForWrite()
     perror ("mmap");
     if (errno == ENODEV)
       fprintf (stderr, "Darn!  Your filesystem does not support mmap files\n");
-    fprintf (stderr, "requested allocation size = %lu\n", rawWellsSize);
+    fprintf (stderr, "requested allocation size = %" PRIu64 "\n", rawWellsSize);
     exit (errno);
   }
 }

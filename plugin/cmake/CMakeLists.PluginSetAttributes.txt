@@ -1,0 +1,37 @@
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
+# INPUT: PLUGIN_NAME
+#        VERSION
+#        PROJECT_SOURCE_DIR
+#        PROJECT_BINARY_DIR
+# DESCRIPTION: This will setup all of the standard plugin package attributes and install scripts
+
+# clean the plugin name of illegal characters
+STRING(REPLACE "_" "" DEB_PLUGIN_NAME ${PLUGIN_NAME})
+STRING(TOLOWER ${DEB_PLUGIN_NAME} DEB_PLUGIN_NAME)
+
+SET(CPACK_PACKAGE_NAME "ion-plugin-${DEB_PLUGIN_NAME}")
+SET(CPACK_GENERATOR "DEB")
+SET(CPACK_PACKAGE_VENDOR "Ion Torrent")
+SET(CPACK_PACKAGE_VERSION "${VERSION}")
+SET(CPACK_SET_DESTDIR "ON")
+SET(CPACK_PACKAGE_INSTALL_DIRECTORY "/results/plugins")
+SET(CPACK_PACKAGE_FILE_NAME "ion-plugin-${DEB_PLUGIN_NAME}-${VERSION}")
+SET(CPACK_DEBIAN_PACKAGE_SECTION "ion-plugin")
+SET(CPACK_DEBIAN_PACKAGE_REPLACES "ion-plugins (<< 5.1.6)")
+SET(CPACK_DEBIAN_PACKAGE_BREAKS "ion-plugins (<< 5.1.6)")
+
+CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/../debian/postinst.in" "${PROJECT_BINARY_DIR}/debian/postinst" @ONLY)
+CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/../debian/prerm.in"    "${PROJECT_BINARY_DIR}/debian/prerm"    @ONLY)
+CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/../debian/preinst.in"  "${PROJECT_BINARY_DIR}/debian/preinst"  @ONLY)
+
+SET(
+    CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+    ${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
+    ${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
+    ${CMAKE_CURRENT_BINARY_DIR}/debian/prerm
+    )
+
+IF(EXISTS ${PROJECT_SOURCE_DIR}/debian/changelog)
+    ADD_CUSTOM_TARGET(compress_changelog ALL COMMAND gzip -c -9 ${PROJECT_SOURCE_DIR}/debian/changelog > ${PROJECT_SOURCE_DIR}/debian/changelog.gz)
+    INSTALL(FILES debian/changelog.gz DESTINATION /usr/share/doc/${CPACK_PACKAGE_NAME})
+ENDIF()

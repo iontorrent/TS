@@ -1,6 +1,10 @@
-QUICK START on Ubuntu 10.04 (=Lucid)
+QUICK START on Ubuntu 14.04 (=Trusty)
 
-    apt-get install \
+     Activate Ubuntu's universe in /etc/apt/sources.list to get libatlas-base-dev
+
+     apt-get update
+
+     apt-get install \
         build-essential \
         git-core \
         cmake \
@@ -9,14 +13,16 @@ QUICK START on Ubuntu 10.04 (=Lucid)
         libblas-dev \
         libblas3gf \
         libatlas-base-dev \
-        libatlas-headers \
         gfortran \
         zlib1g-dev \
-        libgsl0-dev \
         libbz2-dev \
         libcurl4-openssl-dev \
-        libncurses-dev \
+        libncurses5-dev \
         libboost-serialization-dev \
+        libhdf5-dev \
+        python-dev \
+        libboost-python-dev \
+        python-numpy \
         r-base
 
 
@@ -44,7 +50,6 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
         zlib1g-dev \
         libarmadillo-dev \
         libboost-serialization-dev \
-        libgsl0-dev \
         libncurses-dev \
         libbz2-dev
         libbz2-dev \
@@ -55,35 +60,6 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
    # icc needs sudo apt-get install libboost1.42-all-dev
 
    MODULES="gpu Analysis" ./buildTools/build.sh
-
-QUICK START on Ubuntu 14.04 (=Trusty) (EXPERIMENTAL)
-
-     Activate Ubuntu's universe in /etc/apt/sources.list to get libatlas-base-dev
-
-     apt-get update
-
-     apt-get install \
-        build-essential \
-        git-core \
-        cmake \
-        liblapack-dev \
-        liblapack3gf \
-        libblas-dev \
-        libblas3gf \
-        libatlas-base-dev \
-        gfortran \
-        zlib1g-dev \
-        libgsl0-dev \
-        libbz2-dev \
-        libcurl4-openssl-dev \
-        libncurses5-dev \
-        libboost-serialization-dev \
-        libhdf5-dev \
-        r-base
-
-   MODULES="gpu Analysis" ./buildTools/build.sh
-
-
 
 
 EXTERNAL DEPENDENCIES
@@ -104,7 +80,6 @@ you will need to install the following Ubuntu packages:
 * libatlas-headers
 * gfortran
 * zlib1g-dev
-* libgsl0-dev
 * libcurl4-openssl-dev
 
 
@@ -137,7 +112,8 @@ BUILD TORRENTR MODULE
 A number of R library modules need to be installed in order for the torrentR module to compile.
 
 Add to /etc/apt/sources.list:
-deb http://ionupdates.com/updates/software lucid/
+
+    deb http://updates.iontorrent.com/updates/software trusty/
 
 Then execute the following:
 apt-get update
@@ -146,7 +122,7 @@ apt-get install r-base
 The following R library modules are required to be installed:
 
 bitops_1.0-5.tar.gz
-Rcpp_0.10.4.tar.gz
+Rcpp_0.12.1.tar.gz
 spam_0.29-3.tar.gz
 maps_2.3-3.tar.gz
 fields_6.8.tar.gz
@@ -160,7 +136,7 @@ Here is a bash script which will download and install the required R library mod
 #!/bin/bash
 LIBLIST=(\
     bitops_1.0-5.tar.gz \
-    Rcpp_0.10.4.tar.gz \
+    Rcpp_0.12.1.tar.gz \
     spam_0.29-3.tar.gz \
     maps_2.3-3.tar.gz \
     fields_6.8.tar.gz \

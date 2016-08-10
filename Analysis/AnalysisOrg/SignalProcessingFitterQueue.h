@@ -169,8 +169,6 @@ struct BkgModelWorkInfo
   int type;
   SignalProcessingMasterFitter *bkgObj;
   int flow;
-  bool doingSdat;
-  SynchDat *sdat;
   Image *img;
   bool last;
   ProcessorQueue* QueueControl;

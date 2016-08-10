@@ -62,8 +62,8 @@ public:
   int TotalCount(int strand_key);
   int NumAltAlleles();
   void ResetCounter();
-  void AssignStrandToHardClassifiedReads(vector<bool> &strand_id, vector<int> &read_id);
-  void AssignPositionFromEndToHardClassifiedReads(vector<int> &read_id, vector<int> &left, vector<int> &right);
+  void AssignStrandToHardClassifiedReads(const vector<bool> &strand_id, const vector<int> &read_id);
+  void AssignPositionFromEndToHardClassifiedReads(const vector<int> &read_id, const vector<int> &left, const vector<int> &right);
   float PositionBias(int i_alt);
   float GetPositionBiasPval(int i_alt);
   float GetPositionBias(int i_alt);
@@ -89,16 +89,16 @@ class VariantOutputInfo {
     bool isFiltered;
     float variant_qual_score;
     float gt_quality_score;
-    int genotype_call;
+    // int genotype_call;
     vector<string>  filterReason; // make sure we can push back as many as we need
     string infoString;
 
 
     VariantOutputInfo() {
       isFiltered = false;
-     variant_qual_score = 0.0;
+      variant_qual_score = 0.0;
       gt_quality_score = 0.0f;
-      genotype_call = -1;
+      //genotype_call = -1;
       //filterReason = "";
       //infoString = "";
 

@@ -464,12 +464,10 @@ $(document).ready(function() {
 function detailInit(e) {
 	var detailRow = e.detailRow;
 	var sampleSetPk = e.data.id;
-
-	console.log("samplesets.js - detailInit - detailRow=", detailRow);
-	console.log("samplesets.js - detailInit - data.id=", sampleSetPk);
+	var isFusions = e.data.sampleGroupTypeName.indexOf('Fusions') > -1
 
 	var detailUrl = "/rundb/api/v1/samplesetiteminfo/?sampleSet="+sampleSetPk+"&order_by=sample__displayedName";
-	
+
 	console.log("samplesets.js detailInit() sampleSetPk=", sampleSetPk, "; detailUrl=", detailUrl);
 	
 	detailRow.find(".samples").kendoGrid({
@@ -602,7 +600,7 @@ function detailInit(e) {
         },
         pageable: false,
         //columns: TB.sample.sampleset.getColumns(),
-        columns : getColumns(),
+        columns : getColumns(isFusions),
 
 		dataBinding : onDetailDataBinding,
 		dataBound : onDetailDataBound,
@@ -638,7 +636,7 @@ function detailInit(e) {
 }
 
 
-function getColumns() {
+function getColumns(isFusions) {
     var columnArray = [];
     var custom_sample_list = [];
     	
@@ -685,7 +683,6 @@ function getColumns() {
     	}
 	});
 */
-
 	
     var default_columnArray = [
      {
@@ -717,7 +714,7 @@ function getColumns() {
          //template: kendo.template($('#sample_barcoding_id_kendo_template').html())    
      } , {       
          field: "nucleotideType",
-         title: "DNA/RNA",
+         title: isFusions? "DNA/Fusions":"DNA/RNA",
          sortable: true,
          template: kendo.template($('#sample_nucleotideType_kendo_template').html())  
      } , {    	 

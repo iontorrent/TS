@@ -83,7 +83,7 @@ function address_test()
     echo -n $FUNCNAME:>&1
     ip=$(nslookup $nodename|grep ^Address|grep -v '#'|awk '{print $2}')
     if [[ -z $ip ]] ;then
-        ip=$(awk '/$nodename/{print $1}' /etc/hosts)
+        ip=$(grep $nodename /etc/hosts | cut -f1 -d" ")
         if [[ -z $ip ]]; then
             echo failure>&1
             echo "Cannot resolve hostname $nodename to an IP address">&2
@@ -105,7 +105,13 @@ function network_test()
     nodename=$1
     echo -n $FUNCNAME:>&1
 
-    if ! ping -n -q -c 3 $nodename 2>/dev/null 1>&2; then
+    # ping options: only non-superuser values are used.
+    # -n Do not lookup symbolic names for host addresses.
+    # -q Limit output to summary information
+    # -c 3 Send 3 packets
+    # -l 3 Send 3 packets without waiting for response in between
+    # -w 2 Specify 2 second deadline for command to exit regardless
+    if ! ping -n -q -c 3 -l 3 -w 2 $nodename 2>/dev/null 1>&2; then
     	echo failure >&1
         echo "No response (ping) from server $nodename">&2
         return 1

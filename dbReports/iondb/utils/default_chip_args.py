@@ -4,12 +4,13 @@ from iondb.rundb import models
 import subprocess
 import traceback
 
+
 def default_chip_args(chipName):
 
     try:
         # Determine slots by number of cpu sockets installed
-        p1 = subprocess.Popen("/usr/bin/lscpu",stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(["grep","^CPU socket"],stdin=p1.stdout,stdout=subprocess.PIPE)
+        p1 = subprocess.Popen("/usr/bin/lscpu", stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(["grep", "^CPU socket"], stdin=p1.stdout, stdout=subprocess.PIPE)
         sockets = p2.stdout.read().strip().split(":")[1]
         sockets = int(sockets)
     except:
@@ -17,7 +18,7 @@ def default_chip_args(chipName):
         print traceback.format_exc()
 
     # Default cmdline args for this chip
-    if chipName in ['314','316','318','314v2','316v2','318v2']:
+    if chipName in ['314', '316', '318', '314v2', '316v2', '318v2']:
         # PGM defaults
         args = {
             "slots"                   : 1,
@@ -30,7 +31,7 @@ def default_chip_args(chipName):
             "prethumbnailBasecallerArgs" : "",
             "thumbnailBasecallerArgs" : ""
         }
-    elif chipName in ['900','900v2','P1.0.19','P1.1.16','P1.1.17','P1.2.18','P2.0.16','P2.1.16','P2.2.16']:
+    elif chipName in ['900', '900v2', 'P1.0.19', 'P1.1.16', 'P1.1.17', 'P1.2.18', 'P2.0.16', 'P2.1.16', 'P2.2.16']:
         # Proton defaults
         args = {
             "slots"                   : 1,
@@ -55,18 +56,17 @@ def default_chip_args(chipName):
             "thumbnailAnalysisArgs"   : "Analysis --from-beadfind",
             "prethumbnailBasecallerArgs" : "BaseCaller --calibration-training=100000 --flow-signals-type scaled-residual",
             "thumbnailBasecallerArgs" : "BaseCaller"
-        }    
+        }
         print "WARNING: Chip default args not found for chip name = %s." % chipName
-        
+
     return args
 
-    
+
 def restore_default_chip_args():
     # Restore default cmdline args
     chips = models.Chip.objects.all()
     for c in chips:
         args = default_chip_args(c.name)
-        for key,value in args.items():
+        for key, value in args.items():
             setattr(c, key.lower(), value)
         c.save()
-    

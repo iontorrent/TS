@@ -22,7 +22,7 @@ To prevent package updates from overwriting this file, create a copy named group
 1 - If there are NAS storage units that need to be NFS mounted on each compute resource, add them under the
 nas_mounts: category with an entry like so:
 
-  - { name: <<nas hostname>>, directory: <<exported directory>>, mountpoint: <<local mountpoint>> }
+  - { name: <<nas hostname>>, directory: <<exported directory>>, mountpoint: <<local mountpoint>>, options: defaults }
   
 Note: Space character after the colon is important!
 

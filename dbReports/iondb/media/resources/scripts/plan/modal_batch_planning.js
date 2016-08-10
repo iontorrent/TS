@@ -41,7 +41,8 @@ TB.plan.batchdownload.ready = function() {
                 return false;
             }
 
-            var url = "/plan/template/" + templateId + "/planCount/" + planCount + "/getcsvforbatchplanning.csv/", type = $('#modal_batch_planning #modalBatchPlanning').attr('method');
+            var uploadtype = $('[name=uploadtype_select]:checked').val();
+            var url = "/plan/template/" + templateId + "/planCount/" + planCount + "/getcsvforbatchplanning.csv/" + uploadtype + "/", type = $('#modal_batch_planning #modalBatchPlanning').attr('method');
 
             var data = {
                 'format' : 'csv'

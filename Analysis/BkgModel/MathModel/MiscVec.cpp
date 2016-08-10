@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <math.h>
 
-#ifndef __INTEL_COMPILER
-
 #include "VectorMacros.h"  // control madness of included headers
 
 
@@ -60,4 +58,3 @@ void Dfdgain_Step_Vec (int flow_block_size, float** dst, float** src, float** em
   }
 }
 
-#endif // INTEL_COMPILER

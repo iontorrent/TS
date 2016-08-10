@@ -23,27 +23,16 @@ ionmaster_syspkg_list:
     - megacli
     - dkms
 
-# X server package list
-xserver_pkg_list:
-    - nxclient
-    - nxnode
-    - nxserver
-    - xfce4
-
 ionmaster_ionpkg_list:
     - ion-dbreports
     - ion-gpu
     - ion-analysis
     - ion-pipeline
-    - samtools
     - ion-torrentr
+    - ion-torrentpy
     - ion-docs
-    - ion-referencelibrary
-    - ion-sampledata
     - ion-publishers
     - ion-plugins
-    - ion-rsmts
-    - ion-usbmount
-    - ion-pgmupdates
-    - ion-chefupdates
-    - ion-onetouchupdater
+
+ionmaster_pluginpkg_list:
+    - ion-plugin-ionreporteruploader

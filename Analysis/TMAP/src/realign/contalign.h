@@ -1,9 +1,13 @@
 /* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#ifndef CONTALIGN_H
-#define CONTALIGN_H
+//////////////////////////////////////////////////////////////////////////////
+// Derived from QSimScan project, released under MIT license
+// (https://github.com/abadona/qsimscan)
+//////////////////////////////////////////////////////////////////////////////
 
-// This is modified code from SciDM's genomodules
+#ifndef __contalign_h__
+#define __contalign_h__
+
 
 #include <ostream>
 #include "align_common.h"
@@ -98,4 +102,4 @@ public:
 };
 
 
-#endif // CONTALIGN_H
+#endif // __contalign_h__

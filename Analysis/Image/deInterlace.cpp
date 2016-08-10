@@ -166,7 +166,7 @@ char *GetFileData ( DeCompFile *dc, int offset, int len, unsigned int &cksm )
   dc->CurrentAllocPtr = ( char * ) MapViewOfFile ( dc->mFile, FILE_MAP_READ, 0, ( offset
                         - ( offset % dc->PageSize ) ), dc->CurrentAllocLen );
 #endif
-  if ( dc->CurrentAllocPtr == NULL )
+  if ( dc->CurrentAllocPtr == NULL || dc->CurrentAllocPtr == MAP_FAILED )
     return NULL;
   cksmPtr = ( unsigned char * ) ( dc->CurrentAllocPtr + ( offset % dc->PageSize ) );
   for ( i=0;i<len;i++ )

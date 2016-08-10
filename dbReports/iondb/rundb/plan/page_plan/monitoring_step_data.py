@@ -9,9 +9,11 @@ try:
 except ImportError:
     from ordereddict import OrderedDict
 
+
 class MonitoringFieldNames():
 
     QC_TYPES = 'qcTypes'
+
 
 class MonitoringStepData(AbstractStepData):
 
@@ -25,7 +27,7 @@ class MonitoringStepData(AbstractStepData):
             self.savedFields[qc_type.qcName] = qc_type.defaultThreshold
 
         self.sh_type = sh_type
-        
+
     def validateField(self, field_name, new_field_value):
         '''
         All qc thresholds must be positive integers
@@ -41,6 +43,6 @@ class MonitoringStepData(AbstractStepData):
 
     def updateSavedObjectsFromSavedFields(self):
         pass
-    
+
     def updateFromStep(self, updated_step):
         pass

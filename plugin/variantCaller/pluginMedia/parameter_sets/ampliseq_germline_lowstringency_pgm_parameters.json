@@ -3,10 +3,10 @@
         "name"          : "Generic - PGM - Germ Line - Low Stringency",
         "tooltip"       : "Parameters optimized using Ampliseq for 48K NA12878 for generic low stringency",
         "configuration" : "germline_low_stringency",
-        "ts_version"    : "5.0",
+        "ts_version"    : "5.2",
         "compatibility" : {
-          "chip"        : ["520","530","pgm"],
-          "library"     : ["wholegenome","ampliseq","targetseq"],
+          "chip"        : ["pgm"],
+          "library"     : ["wholegenome","ampliseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]
         },

@@ -203,7 +203,7 @@
     ANALYSIS_ENTRIES_THUMBNAIL_IONSTATS[key] =   '{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntryPreviouslySelected.thumbnailionstatsargs | default_if_none:""}}';    
 
     {% for paramSet in helper.getStepDict.Analysis_params.getPrePopulatedFieldDict.analysisParamsEntries %}
-        key = '{{paramSet.description | safe}}';
+        key = '{{paramSet.description | escapejs}}';
         ANALYSIS_ENTRIES[key] = '{{paramSet}}';
 
         ANALYSIS_ENTRIES_BEADFIND[key] = '{{paramSet.beadfindargs  | default_if_none:""}}';

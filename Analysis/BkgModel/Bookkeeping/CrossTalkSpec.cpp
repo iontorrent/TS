@@ -606,7 +606,7 @@ void TraceCrossTalkSpecification::BootUpXtalkSpec( bool can_do_xtalk_correction,
             if ( chipType == "318" || chipType == "316v2" )
                 SetNewHexGrid(); // find out who we really are!
 
-        else if( chipType == "p1.1.17" || chipType == "540" || chipType == "541" )
+        else if( chipType == "p1.1.17" || chipType == "540" || chipType == "541" || chipType == "p2.1.1" || chipType == "p2.3.1" || chipType == "p1.1.541" )
                 SetAggressiveHexGrid(); // 900 may have different cross-talk!
 
 	    else if( chipType == "p1.0.19") 
@@ -617,8 +617,10 @@ void TraceCrossTalkSpecification::BootUpXtalkSpec( bool can_do_xtalk_correction,
 		   ||  chipType == "530" 
 		   ||  chipType == "520" 
            ||  chipType == "531"
-           ||  chipType == "521")
-	      {
+           ||  chipType == "521"
+           ||  chipType == "522"
+           ||  chipType == "p2.0.1")
+        {
 
 		string filename = "xtalk.trace.";
 		filename += chipType;

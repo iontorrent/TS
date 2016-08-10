@@ -29,7 +29,7 @@ struct TimeAndEmphasisDefaults{
   TimeAndEmphasisDefaults();
   void DumpPoorlyStructuredText();
   void FromJson(Json::Value &gopt_params);
-  void FromCharacterLine(char *line);
+
 
 private:
   friend class boost::serialization::access;

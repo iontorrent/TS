@@ -1,3 +1,4 @@
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "RingBuffer.h"
 
 template<typename T>

@@ -90,7 +90,8 @@
           For additional information, check the online <a href="/ion-docs/Home.html">help</a>.
         </p>
       {% elif "error" in status|lower or "failed" in status|lower %}
-        <h2> Error: {{status}} </h2>
+        <h2> Status: {{status|capfirst}} </h2>
+        <h3> {{ reference.verbose_error }} </h3>
         <p> The Genome info text file for <strong>{{ name }}</strong> could not be opened from the filesystem.</p>
         <p> Please contact your Torrent Server Administrator.</p>
       {% else %}

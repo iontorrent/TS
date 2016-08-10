@@ -357,7 +357,7 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf runID & {{report.runid}} \\
     {% if not report.isThumbnail %}
         \bf BeadFind Args & {{ report.eas.beadfindargs }} \\
-        \bf Analysis Args & {{ report.eas.analysisargs }} \\
+        \bf Analysis Args & \detokenize{% verbatim %}{ {% endverbatim %}{{ report.eas.analysisargs }}{% verbatim %}}{% endverbatim %} \\
         \bf Pre-BaseCaller Args for calibration & {{ report.eas.prebasecallerargs }} \\
         \bf Calibration Args & {{ report.eas.calibrateargs }} \\
         \bf BaseCaller Args & {{ report.eas.basecallerargs }} \\
@@ -365,7 +365,7 @@ Run Report for {{report.resultsName|latexsafe}}
         \bf IonStats Args & {{ report.eas.ionstatsargs }} \\
     {% else %}
         \bf BeadFind Args & {{ report.eas.thumbnailbeadfindargs }} \\
-        \bf Analysis Args & {{ report.eas.thumbnailanalysisargs }} \\
+        \bf Analysis Args & \detokenize{% verbatim %}{ {% endverbatim %}{{ report.eas.thumbnailanalysisargs }}{% verbatim %}}{% endverbatim %}| \\
         \bf Pre-BaseCaller Args for calibration & {{ report.eas.prethumbnailbasecallerargs }} \\
         \bf Calibration Args: & {{ report.eas.thumbnailcalibrateargs }} \\
         \bf BaseCaller Args & {{ report.eas.thumbnailbasecallerargs }} \\

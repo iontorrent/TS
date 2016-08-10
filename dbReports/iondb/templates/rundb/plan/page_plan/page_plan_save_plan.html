@@ -2,22 +2,23 @@
 {% load url from future %}
 {% block extra_head %}
     {{ block.super }}
-    {% load static %}
+    {% load static from staticfiles %}
     <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
     <script src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
     <link rel="stylesheet" type="text/css"
         href="{% static "jquery/colorbox/colorbox.css"%}" media="screen"/>
     <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
         type="text/css"/>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_get_user_input.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/by_template.js"></script>   
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_sample_table.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_analysis_params_section.js"></script> 
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
-    <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
-
+    <script type="text/javascript" src="{% static "resources/scripts/plan/iru_validation.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/plan/ionreporter_util.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/plan/iru_get_user_input.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/plan/by_template.js" %}"></script>   
+    <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_sample_table.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_reference_section.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_analysis_params_section.js" %}"></script> 
+    <script type="text/javascript" src="{% static "resources/scripts/plan/validation.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
+    <script type="text/javascript" src="{% static "jquery/js/jquery.form.js" %}"></script>
 <style>
 .k-header {
     font-weight: bold!important;
@@ -57,8 +58,8 @@
         <input type="hidden" id="default_ref_section" name="default_ref_section" value={%if not helper.isPlanBySample%}"rundb/plan/page_plan/page_plan_reference_section.html"{%else%}""{%endif%}>
         
         <label for="planName" class="form-label">Run Plan Name (required)</label>
-        <input style="width: 700px;" id="planName" name="planName" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
-        <div id="error" style="color:red;"></div>
+        <input style="width: 420px;" id="planName" name="planName" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
+        <div id="error" style="color:red; margin-top: 10px;"></div>
         {% for key, validationErrors in step.validationErrors.items %}
             <div class="row-fluid">
                 {% if key == "bad_sample_name" %}
@@ -168,56 +169,6 @@
 {{ block.super }}
 <script type="text/javascript">
 
-    var USERINPUT = USERINPUT || {};
-
-    USERINPUT.validate = USERINPUT.is_by_sample = false;
-
-    USERINPUT.ir_sample_to_tss_sample = {};
-    USERINPUT.preset_ir_fields = [];
-    
-    USERINPUT.account_id = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}";
-    USERINPUT.workflow = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}";
-    USERINPUT.account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}";
-    USERINPUT.is_ir_connected = false;
-        
-    USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
-    USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
-    USERINPUT.iruUploadMode ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode}}";
-
-    {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
-        var ir_term = "{{sample_annotation.iRValue}}";
-        var ir_terms = ir_term.split("|");
-        $.each(ir_terms, function(i) {
-            var term = ir_terms[i];
-            //console.log("USERINPUT LOOP term=", term, "; sample_annotation_value=", "{{sample_annotation.value}}");
-            
-            if (typeof USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"] == 'undefined') {
-            
-                USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"] = []
-            }
-            USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"].push(term);
-        });
-    {%endfor%}
-
-    {% for sampleValues in step.savedObjects.samplesTableList %}
-        var _array = [];
-        _array.push("{{forloop.counter0}}");
-        _array.push("{{sampleValues.sampleName|default_if_none:""}}");
-        _array.push("{{sampleValues.irGender|default_if_none:""}}");
-        
-        _array.push("{{sampleValues.ircancerType|default_if_none:""}}");
-        _array.push("{{sampleValues.ircellularityPct|default_if_none:""}}");
-        _array.push("{{sampleValues.irbiopsyDays|default_if_none:""}}");
-        _array.push("{{sampleValues.ircoupleID|default_if_none:""}}");
-        _array.push("{{sampleValues.irembryoID|default_if_none:""}}");
-            
-        _array.push("{{sampleValues.irWorkflow|default_if_none:""}}");
-        _array.push("{{sampleValues.irRelationshipType|default_if_none:""}}");
-        _array.push("{{sampleValues.irRelationRole|default_if_none:""}}");
-        _array.push("{{sampleValues.irSetID|default:"1"}}");
-        USERINPUT.preset_ir_fields.push(_array);
-    {%endfor%}
-    
     var BARCODES = {{step.prepopulatedFields.barcodeSets_barcodes|safe}};
 
     var REFERENCE_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.references}}";

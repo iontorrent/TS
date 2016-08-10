@@ -5,17 +5,18 @@
 
 MultiFlowLevMar::MultiFlowLevMar ( SignalProcessingMasterFitter &_bkg, int flow_block_size,
                                    master_fit_type_table *table ) :
-    bkg ( _bkg ),
-    lev_mar_cur_bead_block( flow_block_size ),
-    lev_mar_cur_buffer_block( flow_block_size ),
-    fit_control( table )
+  bkg ( _bkg ),
+  lev_mar_cur_bead_block( flow_block_size ),
+  lev_mar_cur_buffer_block( flow_block_size ),
+  fit_control( table )
 {
-// create matrix packing object(s)
+  // create matrix packing object(s)
   //Note:  scratch-space is used directly by the matrix packer objects to get the derivatives
   // so this object >must< persist in order to be used by the fit control object in the Lev_Mar fit.
   // Allocate directly the annoying pointers that the lev-mar object uses for control
 
   lm_state.SetNonIntegerPenalty ( bkg.global_defaults.fitter_defaults.clonal_call_scale,bkg.global_defaults.fitter_defaults.clonal_call_penalty,MAGIC_MAX_CLONAL_HP_LEVEL );
+  lm_state.kmult_penalty_scale = bkg.global_defaults.signal_process_control.kmult_penalty; // make sure this is set on initialization(!)
   lm_state.AllocateBeadFitState ( bkg.region_data->my_beads.numLBeads );
   lm_state.AssignBeadsToRegionGroups ();
 
@@ -48,7 +49,7 @@ MultiFlowLevMar::~MultiFlowLevMar()
 
 // this does work on a sampling of wells >only< to find regional parameters
 int MultiFlowLevMar::MultiFlowSpecializedSampledLevMarFitParameters ( int additional_bead_only_iterations, int number_region_iterations_wanted, BkgFitMatrixPacker *well_fit, BkgFitMatrixPacker *reg_fit,float lambda_start,int clonal_restriction, int flow_key, int flow_block_size,
-    int flow_block_start )
+                                                                      int flow_block_start )
 {
 
   EnterTheOptimization ( well_fit,reg_fit,lambda_start,clonal_restriction );
@@ -80,6 +81,9 @@ int MultiFlowLevMar::MultiFlowSpecializedSampledLevMarFitParameters ( int additi
       total_iter++;
       if ( skip_region )
       {
+        if (loc_iter==0){
+          printf("Failed beads lead to skip region entirely\n");
+        }
         total_iter = 2*number_region_iterations_wanted;
         break;
       }
@@ -97,6 +101,9 @@ int MultiFlowLevMar::MultiFlowSpecializedSampledLevMarFitParameters ( int additi
     DoSampledBeadIteration ( true, well_fit, total_iter, flow_key, flow_block_size, flow_block_start );
     total_iter++;
   }
+  if ((lm_state.region_success_step<1) & (reg_fit!=NULL)){
+    printf("No successes: MultiFlowSpecializedSampledLevMarFitParameters in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
+  }
   CleanTerminateOptimization();
   return ( total_iter );
 }
@@ -105,7 +112,7 @@ int MultiFlowLevMar::MultiFlowSpecializedSampledLevMarFitParameters ( int additi
 
 // fitting all beads and some beads per region
 int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_bead_only_iterations, int number_region_iterations_wanted, BkgFitMatrixPacker *well_fit, BkgFitMatrixPacker *reg_fit,float lambda_start,int clonal_restriction, int flow_key, int flow_block_size,
-    int flow_block_start )
+                                                               int flow_block_start )
 {
 
   EnterTheOptimization ( well_fit,reg_fit,lambda_start,clonal_restriction );
@@ -156,7 +163,9 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
                          flow_block_start );
     total_iter++;
   }
-
+  if ((lm_state.region_success_step<1) & (reg_fit!=NULL)){
+    printf("No successes: MultiFlowSpecializedLevMarFitParameters in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
+  }
   CleanTerminateOptimization();
   return ( total_iter );
 }
@@ -165,8 +174,8 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
 int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParametersOnlyRegion ( 
     int number_region_iterations_wanted,  BkgFitMatrixPacker *reg_fit,
     float lambda_start,int clonal_restriction, int flow_key, int flow_block_size,
-    int flow_block_start 
-  )
+    int flow_block_start
+    )
 {
 
   EnterTheOptimization ( NULL,reg_fit,lambda_start,clonal_restriction );
@@ -181,7 +190,9 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParametersOnlyRegion (
       total_iter++;
     }
   }
-
+  if (lm_state.region_success_step<1){
+    printf("No successes: MultiFlowSpecializedLevMarFitParametersOnlyRegion in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
+  }
   CleanTerminateOptimization();
   return ( total_iter );
 }
@@ -202,59 +213,65 @@ void MultiFlowLevMar::MultiFlowSpecializedLevMarFitAllWells ( int bead_only_iter
 
 ///-----------------------------------done with entry points
 void MultiFlowLevMar::DoSampledRegionIteration (
-  BkgFitMatrixPacker *reg_fit,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    BkgFitMatrixPacker *reg_fit,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
 
   reg_params eval_rp;
   SetupAnyIteration ( eval_rp, iter, flow_block_size );
   // do my region iteration
   int reg_wells = LevMarAccumulateRegionDerivsForSampledActiveBeadList ( eval_rp,
-                  reg_fit, lm_state.reg_mask,
-                  iter, flow_key, flow_block_size, flow_block_start );
+                                                                         reg_fit, lm_state.reg_mask,
+                                                                         iter, flow_key, flow_block_size, flow_block_start );
   // solve per-region equation and adjust parameters
   if ( reg_wells > lm_state.min_bead_to_fit_region )
   {
     LevMarFitRegion ( reg_fit, flow_key, flow_block_size, flow_block_start );
+  } else {
+    printf("DoSampledRegionIteration: %d beads less than minimum %d required in region(col=%d,row=%d)\n",reg_wells, lm_state.min_bead_to_fit_region, bkg.region_data->region->col, bkg.region_data->region->row);
   }
-  IdentifyParametersFromSample ( bkg.region_data->my_beads,bkg.region_data->my_regions, lm_state.well_mask, lm_state.reg_mask, lm_state );
+  IdentifyParametersFromSample ( bkg.region_data->my_beads,bkg.region_data->my_regions, lm_state.well_mask, lm_state.reg_mask, lm_state , flow_block_size);
 }
 
 void MultiFlowLevMar::DoRegionIteration (
-  BkgFitMatrixPacker *reg_fit,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    BkgFitMatrixPacker *reg_fit,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
 
   reg_params eval_rp;
   SetupAnyIteration ( eval_rp, iter, flow_block_size );
   // do my region iteration
   int reg_wells = LevMarAccumulateRegionDerivsForActiveBeadList ( eval_rp,
-                  reg_fit, lm_state.reg_mask,
-                  iter, flow_key, flow_block_size, flow_block_start );
+                                                                  reg_fit, lm_state.reg_mask,
+                                                                  iter, flow_key, flow_block_size, flow_block_start );
   // solve per-region equation and adjust parameters
   if ( reg_wells > lm_state.min_bead_to_fit_region )
   {
     LevMarFitRegion ( reg_fit, flow_key, flow_block_size, flow_block_start );
     if ( !bkg.global_defaults.signal_process_control.regional_sampling )
       lm_state.IncrementRegionGroup();
+  } else {
+    int nhighqual=bkg.region_data->my_beads.NumHighQuality();
+    printf("DoRegionIteration: %d beads less than minimum %d required, high qual %d, in region group %d  in region(col=%d,row=%d)\n",reg_wells, lm_state.min_bead_to_fit_region, nhighqual, lm_state.current_bead_region_group, bkg.region_data->region->col, bkg.region_data->region->row);
+    if ( !bkg.global_defaults.signal_process_control.regional_sampling )
+      lm_state.IncrementRegionGroup(); // better try another bead set if this one doesn't work!
   }
-
-  IdentifyParameters ( bkg.region_data->my_beads,bkg.region_data->my_regions, lm_state.well_mask, lm_state.reg_mask,lm_state.skip_beads );
+  IdentifyParameters ( bkg.region_data->my_beads,bkg.region_data->my_regions, *bkg.region_data_extras.my_flow, flow_block_size, lm_state.well_mask, lm_state.reg_mask,lm_state.skip_beads );
 }
 
 
 bool MultiFlowLevMar::DoSampledBeadIteration (
-  bool well_only_fit,
-  BkgFitMatrixPacker *well_fit,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    bool well_only_fit,
+    BkgFitMatrixPacker *well_fit,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
   reg_params eval_rp;
   SetupAnyIteration ( eval_rp, iter, flow_block_size );
   float failed_frac = LevMarFitToRegionalActiveBeadList (
-                        well_only_fit,
-                        eval_rp,
-                        well_fit, lm_state.well_mask,
-                        iter, flow_key, flow_block_size, flow_block_start );
+        well_only_fit,
+        eval_rp,
+        well_fit, lm_state.well_mask,
+        iter, flow_key, flow_block_size, flow_block_start );
   // if more than 1/2 the beads aren't improving any longer, stop trying to do the
   // region-wide fit
   bool skip_region = false;
@@ -263,19 +280,19 @@ bool MultiFlowLevMar::DoSampledBeadIteration (
   return ( skip_region );
 }
 bool MultiFlowLevMar::DoAllBeadIteration (
-  bool well_only_fit,
-  BkgFitMatrixPacker *well_fit, int iter,
-  int bead_iterations, bool isSample, 
-  int flow_key, int flow_block_size, int flow_block_start )
+    bool well_only_fit,
+    BkgFitMatrixPacker *well_fit, int iter,
+    int bead_iterations, bool isSample,
+    int flow_key, int flow_block_size, int flow_block_start )
 {
 
   reg_params eval_rp;
   SetupAnyIteration ( eval_rp, iter, flow_block_size );
   float failed_frac = LevMarFitToActiveBeadList (
-                        well_only_fit,
-                        eval_rp,
-                        well_fit, lm_state.well_mask,
-                        bead_iterations, false, flow_key, flow_block_size, flow_block_start );
+        well_only_fit,
+        eval_rp,
+        well_fit, lm_state.well_mask,
+        bead_iterations, false, flow_key, flow_block_size, flow_block_start );
   // if more than 1/2 the beads aren't improving any longer, stop trying to do the
   // region-wide fit
   bool skip_region = false;
@@ -294,6 +311,7 @@ void MultiFlowLevMar::SetupAnyIteration ( reg_params &eval_rp,  int iter, int fl
   FillTshiftCache ( bkg.region_data->my_regions.rp.tshift, flow_block_size );
   lm_state.reg_error = 0.0f;
   eval_rp = bkg.region_data->my_regions.rp;
+  //lm_state.derivative_direction = -lm_state.derivative_direction; // flip derivatives in case we hit a boundary box and get stuck
 }
 
 void MultiFlowLevMar::EnterTheOptimization ( BkgFitMatrixPacker *well_fit, BkgFitMatrixPacker *reg_fit, float lambda_start, int clonal_restriction )
@@ -304,7 +322,9 @@ void MultiFlowLevMar::EnterTheOptimization ( BkgFitMatrixPacker *well_fit, BkgFi
   InitTshiftCache();
   bkg.region_data->my_beads.CorruptedBeadsAreLowQuality(); // make sure we're up to date with quality estimates
 
+  lm_state.ReAssignBeadsToRegionGroups(bkg.region_data->my_beads, NUMBEADSPERGROUP); // make sure we don't run out of good quality beads in any subgroup
   lm_state.SetupActiveBeadList ( lambda_start );
+  lm_state.derivative_direction = 1;
 }
 
 void MultiFlowLevMar::CleanTerminateOptimization()
@@ -324,31 +344,32 @@ void MultiFlowLevMar::DynamicEmphasis ( BeadParams &p, int flow_block_size )
 }
 
 
-void MultiFlowLevMar::FillScratchForEval ( BeadParams *p, reg_params *reg_p, NucStep &cache_step, int flow_key, int flow_block_size, int flow_block_start )
+void MultiFlowLevMar::FillScratchForEval ( BeadParams *p, BeadParams *ref_p, int ref_span, reg_params *reg_p, NucStep &cache_step, int flow_key, int flow_block_size, int flow_block_start )
 {
-//  params_IncrementHits(p);
+  //  params_IncrementHits(p);
   // evaluate the function
   MathModel::MultiFlowComputeCumulativeIncorporationSignal ( p,reg_p,lev_mar_scratch.ival,
-    cache_step,lev_mar_cur_bead_block,bkg.region_data->time_c,*bkg.region_data_extras.my_flow,
-    bkg.math_poiss, flow_block_size, flow_block_start );
+                                                             cache_step,lev_mar_cur_bead_block,bkg.region_data->time_c,*bkg.region_data_extras.my_flow,
+                                                             bkg.math_poiss, flow_block_size, flow_block_start );
   MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground ( lev_mar_scratch.fval,
-    p,reg_p,lev_mar_scratch.ival,cache_sbg,bkg.region_data->my_regions,
-    lev_mar_cur_buffer_block,bkg.region_data->time_c,*bkg.region_data_extras.my_flow,
-    use_vectorization, lev_mar_scratch.bead_flow_t, flow_block_size, flow_block_start );
+                                                                    p,reg_p,lev_mar_scratch.ival,cache_sbg,bkg.region_data->my_regions,
+                                                                    lev_mar_cur_buffer_block,bkg.region_data->time_c,*bkg.region_data_extras.my_flow,
+                                                                    use_vectorization, lev_mar_scratch.bead_flow_t, flow_block_size, flow_block_start );
 
   // add clonal restriction here to penalize non-integer clonal reads
   // this of course does not belong here and should be in the optimizer section of the code
   lm_state.ApplyClonalRestriction ( lev_mar_scratch.fval, p,bkg.region_data->time_c.npts(), flow_key, flow_block_size );
-
+  lm_state.PenaltyForDeviationFromRef(lev_mar_scratch.fval, p, ref_p, ref_span, bkg.region_data->time_c.npts(), flow_block_size );
+  lm_state.PenaltyForDeviationFromKmult(lev_mar_scratch.fval,p,bkg.region_data->time_c.npts(),flow_block_size);
   // put together the emphasis needed
   DynamicEmphasis ( *p, flow_block_size );
 }
 
 // assumes use of the cached regional derivative steps & nuc_step precomputation
 void MultiFlowLevMar::AccumulateRegionDerivForOneBead (
-  int ibd, int &reg_wells,
-  BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    int ibd, int &reg_wells,
+    BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
   // get the current parameter values for this bead
   BeadParams eval_params = bkg.region_data->my_beads.params_nn[ibd];
@@ -356,7 +377,8 @@ void MultiFlowLevMar::AccumulateRegionDerivForOneBead (
   DynamicEmphasis ( eval_params, flow_block_size );
   lev_mar_scratch.FillObserved ( bkg.region_data->my_trace, eval_params.trace_ndx, flow_block_size );
   // now we're set up, do the individual steps
-  ComputeCachedPartialDerivatives ( eval_params, PartialDeriv_mask, flow_key, flow_block_size,
+  SynchRefBead(ibd);
+  ComputeCachedPartialDerivatives ( eval_params, &lm_state.ref_bead, lm_state.ref_span, PartialDeriv_mask, flow_key, flow_block_size,
                                     flow_block_start );
   lm_state.residual[ibd] = lev_mar_scratch.CalculateFitError ( NULL, flow_block_size );
 
@@ -377,14 +399,14 @@ void MultiFlowLevMar::AccumulateRegionDerivForOneBead (
 
 // reg_proc = TRUE
 int MultiFlowLevMar::LevMarAccumulateRegionDerivsForSampledActiveBeadList (
-  reg_params &eval_rp,
-  BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    reg_params &eval_rp,
+    BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
   int reg_wells = 0;
-  // execute on every bead once to get current avg residual 
+  // execute on every bead once to get current avg residual
   // @TODO: execute on every bead we care about in this fit???
-  lm_state.avg_resid = CalculateCurrentResidualForTestBeads ( flow_key, flow_block_size, flow_block_start ); 
+  lm_state.avg_resid = CalculateCurrentResidualForTestBeads ( flow_key, flow_block_size, flow_block_start );
 
   BeadParams eval_params; // each bead over-rides this, so we only need for function call
   FillDerivativeStepCache ( eval_params,eval_rp,PartialDeriv_mask, flow_block_size );
@@ -393,22 +415,25 @@ int MultiFlowLevMar::LevMarAccumulateRegionDerivsForSampledActiveBeadList (
   {
     if ( ExcludeBead ( ibd ) )
       continue;
-    AccumulateRegionDerivForOneBead ( ibd, reg_wells, reg_fit, PartialDeriv_mask, iter, 
+    AccumulateRegionDerivForOneBead ( ibd, reg_wells, reg_fit, PartialDeriv_mask, iter,
                                       flow_key, flow_block_size, flow_block_start );
+  }
+  if (reg_wells<1){
+    printf("LevMarAccumulateRegionDerivsForSampledActiveBeadList: All beads excluded! in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
   }
   return ( reg_wells ); // number of live wells fit for region
 }
 
 // reg_proc = TRUE
 int MultiFlowLevMar::LevMarAccumulateRegionDerivsForActiveBeadList (
-  reg_params &eval_rp,
-  BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    reg_params &eval_rp,
+    BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
   int reg_wells = 0;
-  // execute on every bead once to get current avg residual 
+  // execute on every bead once to get current avg residual
   // @TODO: execute on every bead we care about in this fit???
-  lm_state.avg_resid = CalculateCurrentResidualForTestBeads ( flow_key, flow_block_size, flow_block_start  ); 
+  lm_state.avg_resid = CalculateCurrentResidualForTestBeads ( flow_key, flow_block_size, flow_block_start  );
 
   // Tricky here:  we fill the regional parameter & nuc_step and >apply< them across all beads
   // That way we don't recalculate regional parameters/steps for each bead as we take derivatives
@@ -420,15 +445,18 @@ int MultiFlowLevMar::LevMarAccumulateRegionDerivsForActiveBeadList (
     if ( ExcludeBead ( ibd ) )
       continue;
 
-    AccumulateRegionDerivForOneBead ( ibd, reg_wells,  reg_fit, PartialDeriv_mask, iter, 
+    AccumulateRegionDerivForOneBead ( ibd, reg_wells,  reg_fit, PartialDeriv_mask, iter,
                                       flow_key, flow_block_size, flow_block_start );
+  }
+  if (reg_wells<1){
+    printf("LevMarAccumulateRegionDerivsForActiveBeadList: All beads excluded! in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
   }
   return ( reg_wells ); // number of live wells fit for region
 }
 
 
 void MultiFlowLevMar::LevMarFitRegion (
-  BkgFitMatrixPacker *reg_fit, int flow_key, int flow_block_size, int flow_block_start )
+    BkgFitMatrixPacker *reg_fit, int flow_key, int flow_block_size, int flow_block_start )
 {
   bool cont_proc = false;
   if (lm_state.reg_lambda>lm_state.reg_lambda_max)
@@ -461,6 +489,7 @@ void MultiFlowLevMar::LevMarFitRegion (
         // it's better...apply the change to all the beads and the region
         // update regional parameters
         lm_state.reg_error =  new_reg_error;
+        lm_state.region_success_step++; // succeeded!
         new_rp.reg_error = new_reg_error;  // save reg_error to be dumped to region_param.h5
         bkg.region_data->my_regions.rp = new_rp;
 
@@ -473,6 +502,8 @@ void MultiFlowLevMar::LevMarFitRegion (
       else
       {
         cont_proc = lm_state.IncreaseRegionStep();
+        if (cont_proc)
+          printf ( "LevMarFitRegion: Reached max lambda %f in region(col=%d,row=%d):\n", lm_state.reg_lambda,bkg.region_data->region->col, bkg.region_data->region->row);
       }
     }
     else
@@ -486,7 +517,7 @@ void MultiFlowLevMar::LevMarFitRegion (
   }
 
   if ( defend_against_infinity>SMALLINFINITY )
-    printf ( "RegionLevMar taking a while: %d\n",defend_against_infinity );
+    printf ( "RegionLevMar taking a while: %d in region(col=%d,row=%d)\n",defend_against_infinity , bkg.region_data->region->col, bkg.region_data->region->row);
   //return (lm_state.reg_error);
 }
 
@@ -506,10 +537,12 @@ float MultiFlowLevMar::CalculateCurrentResidualForTestBeads ( int flow_key, int 
 
     // set scratch space for this bead
     lev_mar_scratch.FillObserved ( bkg.region_data->my_trace,
-      bkg.region_data->my_beads.params_nn[ibd].trace_ndx, flow_block_size ); 
-    FillScratchForEval ( &bkg.region_data->my_beads.params_nn[ibd], 
-      &bkg.region_data->my_regions.rp, bkg.region_data->my_regions.cache_step, 
-      flow_key, flow_block_size, flow_block_start );
+                                   bkg.region_data->my_beads.params_nn[ibd].trace_ndx, flow_block_size );
+    // update for known reference values for this bead
+    lm_state.ref_span = bkg.region_data->my_beads.barcode_info.SetBarcodeFlows(lm_state.ref_bead.Ampl,bkg.region_data->my_beads.barcode_info.barcode_id[ibd]);
+    FillScratchForEval ( &bkg.region_data->my_beads.params_nn[ibd], &lm_state.ref_bead, lm_state.ref_span,
+                         &bkg.region_data->my_regions.rp, bkg.region_data->my_regions.cache_step,
+                         flow_key, flow_block_size, flow_block_start );
     avg_error += lev_mar_scratch.CalculateFitError ( NULL, flow_block_size );
     cnt++;
   }
@@ -521,6 +554,7 @@ float MultiFlowLevMar::CalculateCurrentResidualForTestBeads ( int flow_key, int 
   }
   else   // in case the semantics need to be traced
   {
+    printf("CalculateCurrentResidualForTestBeads: Ran out of beads!  No progress made! in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
     avg_error = std::numeric_limits<float>::quiet_NaN();
   }
   return ( avg_error );
@@ -529,8 +563,8 @@ float MultiFlowLevMar::CalculateCurrentResidualForTestBeads ( int flow_key, int 
 
 
 float MultiFlowLevMar::TryNewRegionalParameters ( reg_params *new_rp, int flow_key, int flow_block_size,
-    int flow_block_start
-  )
+                                                  int flow_block_start
+                                                  )
 {
   float new_reg_error = 0.0f;
   //@TODO make this own cache not universal cache override
@@ -544,10 +578,11 @@ float MultiFlowLevMar::TryNewRegionalParameters ( reg_params *new_rp, int flow_k
 
     BeadParams eval_params = bkg.region_data->my_beads.params_nn[ibd];
     // apply the region-wide adjustments to each individual well
-    UpdateOneBeadFromRegion ( &eval_params,&bkg.region_data->my_beads.params_high, &bkg.region_data->my_beads.params_low,new_rp,bkg.region_data_extras.my_flow->dbl_tap_map, flow_block_size );
+    UpdateOneBeadFromRegion ( &eval_params,&bkg.region_data->my_beads.params_high, &bkg.region_data->my_beads.params_low,new_rp,bkg.region_data_extras.my_flow->dbl_tap_map, 2.0f, flow_block_size );
 
     lev_mar_scratch.FillObserved ( bkg.region_data->my_trace, bkg.region_data->my_beads.params_nn[ibd].trace_ndx, flow_block_size );
-    FillScratchForEval ( &eval_params, new_rp, bkg.region_data->my_regions.cache_step, flow_key, flow_block_size, flow_block_start );
+    lm_state.ref_span = bkg.region_data->my_beads.barcode_info.SetBarcodeFlows(lm_state.ref_bead.Ampl,bkg.region_data->my_beads.barcode_info.barcode_id[ibd]);
+    FillScratchForEval ( &eval_params,&lm_state.ref_bead, lm_state.ref_span, new_rp, bkg.region_data->my_regions.cache_step, flow_key, flow_block_size, flow_block_start );
 
     new_reg_error += lev_mar_scratch.CalculateFitError ( NULL, flow_block_size );
   }
@@ -563,16 +598,29 @@ void MultiFlowLevMar::UpdateBeadParametersFromRegion ( reg_params *new_rp, int f
   // update all but ignored beads
   for ( int ibd=0; ibd < lm_state.numLBeads; ibd++ )
   {
-    UpdateOneBeadFromRegion ( &bkg.region_data->my_beads.params_nn[ibd],&bkg.region_data->my_beads.params_high,&bkg.region_data->my_beads.params_low,new_rp, bkg.region_data_extras.my_flow->dbl_tap_map, flow_block_size );
+    // only update sampled beads if sampling(!)
+    if (bkg.region_data->my_beads.isSampled){
+      if (bkg.region_data->my_beads.Sampled(ibd))
+        UpdateOneBeadFromRegion ( &bkg.region_data->my_beads.params_nn[ibd],&bkg.region_data->my_beads.params_high,&bkg.region_data->my_beads.params_low,new_rp, bkg.region_data_extras.my_flow->dbl_tap_map, 2.0f, flow_block_size );
+
+    } else {
+      // update everything
+      UpdateOneBeadFromRegion ( &bkg.region_data->my_beads.params_nn[ibd],&bkg.region_data->my_beads.params_high,&bkg.region_data->my_beads.params_low,new_rp, bkg.region_data_extras.my_flow->dbl_tap_map, 2.0f, flow_block_size );
+    }
   }
 }
 
+void MultiFlowLevMar::SynchRefBead(int ibd){
+  lm_state.ref_span = bkg.region_data->my_beads.barcode_info.SetBarcodeFlows(lm_state.ref_bead.Ampl,bkg.region_data->my_beads.barcode_info.barcode_id[ibd]);
+
+}
+
 void MultiFlowLevMar::LevMarBuildMatrixForBead ( int ibd,
-    bool well_only_fit,
-    reg_params &eval_rp, NucStep &cache_step,
-    BkgFitMatrixPacker *well_fit,
-    unsigned int PartialDeriv_mask,
-    int iter, int flow_key, int flow_block_size, int flow_block_start )
+                                                 bool well_only_fit,
+                                                 reg_params &eval_rp, NucStep &cache_step,
+                                                 BkgFitMatrixPacker *well_fit,
+                                                 unsigned int PartialDeriv_mask,
+                                                 int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
   // get the current parameter values for this bead
   BeadParams eval_params = bkg.region_data->my_beads.params_nn[ibd];
@@ -580,7 +628,8 @@ void MultiFlowLevMar::LevMarBuildMatrixForBead ( int ibd,
   DynamicEmphasis ( eval_params, flow_block_size );
   lev_mar_scratch.FillObserved ( bkg.region_data->my_trace, eval_params.trace_ndx, flow_block_size );
   // now we're set up, do the individual steps
-  ComputePartialDerivatives ( eval_params, eval_rp, cache_step, PartialDeriv_mask, flow_key, flow_block_size, flow_block_start );
+  SynchRefBead(ibd);
+  ComputePartialDerivatives ( eval_params, &lm_state.ref_bead, lm_state.ref_span, eval_rp, cache_step, PartialDeriv_mask, flow_key, flow_block_size, flow_block_start );
   lm_state.residual[ibd] = lev_mar_scratch.CalculateFitError ( NULL, flow_block_size );
 
   if ( ( ibd == bkg.region_data->my_beads.DEBUG_BEAD ) && ( bkg.my_debug.trace_dbg_file != NULL ) )
@@ -597,11 +646,11 @@ void MultiFlowLevMar::LevMarBuildMatrixForBead ( int ibd,
 
 // reg_proc ==FALSE
 float MultiFlowLevMar::LevMarFitToActiveBeadList (
-  bool well_only_fit,
-  reg_params &eval_rp,
-  BkgFitMatrixPacker *well_fit, unsigned int PartialDeriv_mask,
-  int bead_iterations, bool isSample, int flow_key, int flow_block_size,
-  int flow_block_start )
+    bool well_only_fit,
+    reg_params &eval_rp,
+    BkgFitMatrixPacker *well_fit, unsigned int PartialDeriv_mask,
+    int bead_iterations, bool isSample, int flow_key, int flow_block_size,
+    int flow_block_start )
 {
 
   float req_done = 0.0f; // beads have improved?
@@ -624,16 +673,19 @@ float MultiFlowLevMar::LevMarFitToActiveBeadList (
   }
   // free up
   step_nuc_cache[0].Unlock();
+  if (executed_bead<1){
+    printf("LevMarFitToActiveBeadList: Ran out of beads!  No progress made!in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
+  }
   return ( req_done/executed_bead );
 }
 
 //TODO: Refactor to reuse previous function
 float MultiFlowLevMar::LevMarFitToRegionalActiveBeadList (
 
-  bool well_only_fit,
-  reg_params &eval_rp,
-  BkgFitMatrixPacker *well_fit, unsigned int PartialDeriv_mask,
-  int iter, int flow_key, int flow_block_size, int flow_block_start )
+    bool well_only_fit,
+    reg_params &eval_rp,
+    BkgFitMatrixPacker *well_fit, unsigned int PartialDeriv_mask,
+    int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
 
   float req_done = 0.0f; // beads have improved?
@@ -654,6 +706,9 @@ float MultiFlowLevMar::LevMarFitToRegionalActiveBeadList (
     req_done += LevMarFitOneBead ( ibd, eval_rp,well_fit,well_only_fit, flow_key, flow_block_size, flow_block_start );
   }
   step_nuc_cache[0].Unlock();
+  if (executed_bead<1){
+    printf("LevMarFitToRegionalActiveBeadList: Ran out of beads!  No progress made!in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
+  }
   return ( req_done/executed_bead );
 }
 
@@ -667,7 +722,7 @@ int MultiFlowLevMar::LevMarFitOneBead ( int ibd,
                                         int flow_key,
                                         int flow_block_size,
                                         int flow_block_start
-                                      )
+                                        )
 {
   int bead_not_improved = 0;
   BeadParams eval_params;
@@ -680,7 +735,7 @@ int MultiFlowLevMar::LevMarFitOneBead ( int ibd,
   // check to see if we're out of bounds and continuing by intertia
   if (lm_state.lambda[ibd]>lm_state.lambda_max)
     cont_proc = true; // done with this bead but don't know it
-    
+
   well_fit->resetNumException();
   while ( ( !cont_proc ) && ( defend_against_infinity<EFFECTIVEINFINITY ) )
   {
@@ -696,8 +751,10 @@ int MultiFlowLevMar::LevMarFitOneBead ( int ibd,
       eval_params.ApplyLowerBound ( &bkg.region_data->my_beads.params_low, flow_block_size );
       eval_params.ApplyUpperBound ( &bkg.region_data->my_beads.params_high, flow_block_size );
       eval_params.ApplyAmplitudeZeros ( bkg.region_data_extras.my_flow->dbl_tap_map, flow_block_size ); // double-tap
+      eval_params.ApplyAmplitudeDrivenKmultLimit(flow_block_size, bkg.global_defaults.signal_process_control.single_flow_master.krate_adj_limit);
 
-      FillScratchForEval ( &eval_params, &eval_rp, bkg.region_data->my_regions.cache_step, flow_key, flow_block_size, flow_block_start );
+      SynchRefBead(ibd);
+      FillScratchForEval ( &eval_params, &lm_state.ref_bead, lm_state.ref_span,&eval_rp, bkg.region_data->my_regions.cache_step, flow_key, flow_block_size, flow_block_start );
       float res = lev_mar_scratch.CalculateFitError ( NULL, flow_block_size );
 
       if ( res < ( lm_state.residual[ibd] ) )
@@ -712,7 +769,7 @@ int MultiFlowLevMar::LevMarFitOneBead ( int ibd,
       }
       else
       {
-//        params_CopyHits(&eval_params,&bkg.region_data->my_beads.params_nn[ibd]); // store hits
+        //        params_CopyHits(&eval_params,&bkg.region_data->my_beads.params_nn[ibd]); // store hits
         lm_state.IncreaseBeadLambda ( ibd );
       }
     }
@@ -727,7 +784,7 @@ int MultiFlowLevMar::LevMarFitOneBead ( int ibd,
       {
         //regularization has failed to stabilize as well
         // show this result only if total failure (such as nans contaminating the matrix)
-        printf ( "Well singular matrix: %d %f %f\n", ibd, lm_state.lambda[ibd], lm_state.regularizer[ibd] );
+        printf ( "Well singular matrix: %d %f %f in region(col=%d,row=%d)\n", ibd, lm_state.lambda[ibd], lm_state.regularizer[ibd] , bkg.region_data->region->col, bkg.region_data->region->row);
       }
       lm_state.IncreaseBeadLambda ( ibd );
       // failed the solver therefore must regularize in case we have a zero row or column in the derivatives
@@ -756,14 +813,14 @@ int MultiFlowLevMar::LevMarFitOneBead ( int ibd,
   
 
   if ( defend_against_infinity>SMALLINFINITY )
-    printf ( "Problem with bead %d %d\n", ibd, defend_against_infinity );
+    printf ( "Problem with bead %d %d in region(col=%d,row=%d)\n", ibd, defend_against_infinity , bkg.region_data->region->col, bkg.region_data->region->row);
   return ( bead_not_improved );
 }
 
 
 // arguably this is part of "scratch space" operations and should be part of that object
 // must have "pointed" scratch space at the current bead parameters
-void MultiFlowLevMar::ComputePartialDerivatives ( BeadParams &eval_params, reg_params &eval_rp, NucStep &cache_step, unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start )
+void MultiFlowLevMar::ComputePartialDerivatives ( BeadParams &eval_params, BeadParams *ref_p, int ref_span, reg_params &eval_rp, NucStep &cache_step, unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start )
 {
   float *output;
   CpuStep *StepP;
@@ -776,13 +833,13 @@ void MultiFlowLevMar::ComputePartialDerivatives ( BeadParams &eval_params, reg_p
 
     output = lev_mar_scratch.scratchSpace + step*lev_mar_scratch.bead_flow_t;
 
-    ComputeOnePartialDerivative ( output, StepP,  eval_params, eval_rp, cache_step, flow_key, flow_block_size, flow_block_start );
+    ComputeOnePartialDerivative ( output, StepP,  eval_params, ref_p, ref_span, eval_rp, cache_step, flow_key, flow_block_size, flow_block_start );
 
   }
 }
 
 // if I have cached region parameters and steps
-void MultiFlowLevMar::ComputeCachedPartialDerivatives ( BeadParams &eval_params,  unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start )
+void MultiFlowLevMar::ComputeCachedPartialDerivatives ( BeadParams &eval_params,  BeadParams *ref_p, int ref_span, unsigned int PartialDeriv_mask, int flow_key, int flow_block_size, int flow_block_start )
 {
   float *output;
   CpuStep *StepP;
@@ -795,7 +852,7 @@ void MultiFlowLevMar::ComputeCachedPartialDerivatives ( BeadParams &eval_params,
 
     output = lev_mar_scratch.scratchSpace + step*lev_mar_scratch.bead_flow_t;
 
-    ComputeOnePartialDerivative ( output, StepP,  eval_params, step_rp[step], step_nuc_cache[step], flow_key, flow_block_size, flow_block_start );
+    ComputeOnePartialDerivative ( output, StepP,  eval_params,  ref_p, ref_span, step_rp[step], step_nuc_cache[step], flow_key, flow_block_size, flow_block_start );
 
   }
 }
@@ -812,7 +869,7 @@ void MultiFlowLevMar::FillDerivativeStepCache ( BeadParams &eval_params, reg_par
       continue; // only do the steps we are interested in.
     step_rp[step] = eval_rp; // start where we should be
     // do my special step for each thing we're executing
-    DoStepDiff ( 1,backup, StepP,&eval_params,&step_rp[step], flow_block_size );
+    DoStepDiff ( lm_state.derivative_direction,backup, StepP,&eval_params,&step_rp[step], flow_block_size );
     step_nuc_cache[step].ForceLockCalculateNucRiseCoarseStep ( &step_rp[step],bkg.region_data->time_c,*bkg.region_data_extras.my_flow );
 
     // because our codebase is somewhat toxic, we cannot effectively tell when we're doing region derivatives or bead derivatives
@@ -823,14 +880,16 @@ void MultiFlowLevMar::FillDerivativeStepCache ( BeadParams &eval_params, reg_par
 
 
 void MultiFlowLevMar::ComputeOnePartialDerivative (
-  float *output,
-  CpuStep *StepP,
-  BeadParams &eval_params,
-  reg_params &eval_rp,
-  NucStep &cache_step,
-  int flow_key,
-  int flow_block_size, int flow_block_start
-  )
+    float *output,
+    CpuStep *StepP,
+    BeadParams &eval_params,
+    BeadParams *ref_p,
+    int ref_span,
+    reg_params &eval_rp,
+    NucStep &cache_step,
+    int flow_key,
+    int flow_block_size, int flow_block_start
+    )
 {
   if ( StepP->PartialDerivMask == DFDGAIN )
   {
@@ -858,18 +917,20 @@ void MultiFlowLevMar::ComputeOnePartialDerivative (
 
     // fill in the function value & incorporation trace
     MathModel::MultiFlowComputeCumulativeIncorporationSignal ( &eval_params,&eval_rp,lev_mar_scratch.ival,cache_step,lev_mar_cur_bead_block,bkg.region_data->time_c,
-      *bkg.region_data_extras.my_flow,bkg.math_poiss, flow_block_size, flow_block_start );
+                                                               *bkg.region_data_extras.my_flow,bkg.math_poiss, flow_block_size, flow_block_start );
     MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground ( output,&eval_params,&eval_rp,lev_mar_scratch.ival,cache_sbg,bkg.region_data->my_regions,lev_mar_cur_buffer_block,bkg.region_data->time_c,
-      *bkg.region_data_extras.my_flow,use_vectorization, lev_mar_scratch.bead_flow_t, flow_block_size,
-      flow_block_start );
+                                                                      *bkg.region_data_extras.my_flow,use_vectorization, lev_mar_scratch.bead_flow_t, flow_block_size,
+                                                                      flow_block_start );
     // add clonal restriction here to penalize non-integer clonal reads
     lm_state.ApplyClonalRestriction ( output, &eval_params,bkg.region_data->time_c.npts(), flow_key, flow_block_size );
+    lm_state.PenaltyForDeviationFromRef(output, &eval_params, ref_p, ref_span, bkg.region_data->time_c.npts(), flow_block_size );
+    lm_state.PenaltyForDeviationFromKmult(output,&eval_params,bkg.region_data->time_c.npts(),flow_block_size);
   }
   else if ( StepP->diff != 0 )
   {
     float ivtmp[lev_mar_scratch.bead_flow_t];
     float backup[lev_mar_scratch.bead_flow_t]; // more than we need
-    DoStepDiff ( 1,backup, StepP,&eval_params,&eval_rp, flow_block_size );
+    DoStepDiff ( lm_state.derivative_direction,backup, StepP,&eval_params,&eval_rp, flow_block_size );
     float *local_iv = lev_mar_scratch.ival;
 
     if ( StepP->doBoth )
@@ -882,8 +943,10 @@ void MultiFlowLevMar::ComputeOnePartialDerivative (
     MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground ( output,&eval_params,&eval_rp,local_iv,cache_sbg,bkg.region_data->my_regions,lev_mar_cur_buffer_block,bkg.region_data->time_c,*bkg.region_data_extras.my_flow,use_vectorization, lev_mar_scratch.bead_flow_t, flow_block_size, flow_block_start );
     // add clonal restriction here to penalize non-integer clonal reads
     lm_state.ApplyClonalRestriction ( output, &eval_params,bkg.region_data->time_c.npts(), flow_key, flow_block_size );
+    lm_state.PenaltyForDeviationFromRef(output, &eval_params, ref_p, ref_span, bkg.region_data->time_c.npts(), flow_block_size );
+    lm_state.PenaltyForDeviationFromKmult(output,&eval_params,bkg.region_data->time_c.npts(),flow_block_size);
 
-    CALC_PartialDeriv_W_EMPHASIS_LONG ( lev_mar_scratch.fval,output,lev_mar_scratch.custom_emphasis,lev_mar_scratch.bead_flow_t,StepP->diff );
+    CALC_PartialDeriv_W_EMPHASIS_LONG ( lev_mar_scratch.fval,output,lev_mar_scratch.custom_emphasis,lev_mar_scratch.bead_flow_t,lm_state.derivative_direction*StepP->diff );
 
     DoStepDiff ( 0,backup, StepP,&eval_params,&eval_rp, flow_block_size ); // reset parameter to default value
   }
@@ -893,7 +956,7 @@ void MultiFlowLevMar::ComputeOnePartialDerivative (
 void MultiFlowLevMar::Dfdgain_Step ( float *output,BeadParams *eval_p, int flow_block_size )
 {
 
-// partial w.r.t. gain is the function value divided by the current gain
+  // partial w.r.t. gain is the function value divided by the current gain
 
   float** src = new float *[ flow_block_size ];
   float** dst = new float *[ flow_block_size ];
@@ -906,22 +969,12 @@ void MultiFlowLevMar::Dfdgain_Step ( float *output,BeadParams *eval_p, int flow_
     em[fnum] = &lev_mar_scratch.custom_emphasis[bkg.region_data->time_c.npts() *fnum];
   }
   // execute in parallel
-#ifdef __INTEL_COMPILER
-  {
-    for ( int fnum=0; fnum<flow_block_size; fnum++ )
-    {
-      for ( int i=0;i < bkg.region_data->time_c.npts();i++ )
-        ( dst[fnum] ) [i] = ( src[fnum] ) [i]* ( em[fnum] ) [i]/eval_p->gain;
-    }
-  }
-#else
   if ( use_vectorization )
     Dfdgain_Step_Vec ( flow_block_size, dst, src, em, bkg.region_data->time_c.npts(), eval_p->gain );
   else
     for ( int fnum=0; fnum<flow_block_size; fnum++ )
       for ( int i=0;i < bkg.region_data->time_c.npts();i++ )
         ( dst[fnum] ) [i] = ( src[fnum] ) [i]* ( em[fnum] ) [i]/eval_p->gain;
-#endif
 
   // Cleanup.
   delete [] src;
@@ -944,15 +997,6 @@ void MultiFlowLevMar::Dfderr_Step ( float *output, BeadParams *eval_p, int flow_
     et[fnum] = bkg.region_data->my_regions.missing_mass.dark_nuc_comp[bkg.region_data_extras.my_flow->flow_ndx_map[fnum]];
   }
   //execute
-#ifdef __INTEL_COMPILER
-  {
-    for ( int fnum=0; fnum<flow_block_size;fnum++ )
-    {
-      for ( int i=0;i < bkg.region_data->time_c.npts();i++ )
-        ( dst[fnum] ) [i] = ( et[fnum] ) [i]* ( em[fnum] ) [i];
-    }
-  }
-#else
   if ( use_vectorization )
     Dfderr_Step_Vec ( flow_block_size, dst, et, em, bkg.region_data->time_c.npts() );
   else
@@ -963,7 +1007,6 @@ void MultiFlowLevMar::Dfderr_Step ( float *output, BeadParams *eval_p, int flow_
         ( dst[fnum] ) [i] = ( et[fnum] ) [i]* ( em[fnum] ) [i];
     }
   }
-#endif
 
   // Cleanup.
   delete [] dst;
@@ -1073,10 +1116,10 @@ void MultiFlowLevMar::FillTshiftCache ( float my_tshift, int flow_block_size )
     // for safety
     memset ( cache_sbg, 0, sizeof ( float[lev_mar_scratch.bead_flow_t] ) );
     bkg.region_data->emptytrace->GetShiftedBkg ( my_tshift, bkg.region_data->time_c, cache_sbg,
-      flow_block_size );
+                                                 flow_block_size );
     memset ( cache_slope, 0, sizeof ( float[lev_mar_scratch.bead_flow_t] ) );
     bkg.region_data->emptytrace->GetShiftedSlope( my_tshift, bkg.region_data->time_c, cache_slope,
-      flow_block_size );
+                                                  flow_block_size );
 
     tshift_cache = my_tshift;
   }
@@ -1089,7 +1132,7 @@ bool MultiFlowLevMar::ExcludeBead ( int ibd )
   // regional sampling is handled differently than rolling regional fits
 
   bool exclude = lm_state.well_completed[ibd];
-                 
+
   if (bkg.region_data->my_beads.isSampled) {
     // regional sampling enabled
     exclude = exclude || !bkg.region_data->my_beads.Sampled(ibd);
@@ -1112,9 +1155,9 @@ void MultiFlowLevMar::FinishBead ( int ibd )
 
 
 void MultiFlowLevMar::DoStepDiff ( int add, float *archive, CpuStep *step, BeadParams *p, 
-    reg_params *reg_p,
-    int flow_block_size 
-  )
+                                   reg_params *reg_p,
+                                   int flow_block_size
+                                   )
 {
   int i;
   float *dptr = NULL;
@@ -1143,14 +1186,14 @@ void MultiFlowLevMar::DoStepDiff ( int add, float *archive, CpuStep *step, BeadP
       case CpuStep::Singleton:            length = 1;         break;
       case CpuStep::PerNuc:               length = NUMNUC;    break;
       case CpuStep::PerFlow:              length = flow_block_size;  break;
-      // No default here; we want the compiler to complain if this enum is changed.
+        // No default here; we want the compiler to complain if this enum is changed.
     }
     for ( i=0;i<length;i++ )
     {
       if ( add )
       {
         archive[i] = *dptr;
-        *dptr += step->diff; // change
+        *dptr += add*step->diff; // change direction if we go negative or positive
       }
       else
         *dptr = archive[i]; // reset
@@ -1159,7 +1202,7 @@ void MultiFlowLevMar::DoStepDiff ( int add, float *archive, CpuStep *step, BeadP
   }
 }
 
-void UpdateOneBeadFromRegion ( BeadParams *p, bound_params *hi, bound_params *lo, reg_params *new_rp, int *dbl_tap_map, int flow_block_size )
+void UpdateOneBeadFromRegion ( BeadParams *p, bound_params *hi, bound_params *lo, reg_params *new_rp, int *dbl_tap_map, float krate_adj_limit, int flow_block_size )
 {
   for ( int i=0;i < flow_block_size;i++ )
     p->Ampl[i] += new_rp->Ampl[i];
@@ -1169,17 +1212,19 @@ void UpdateOneBeadFromRegion ( BeadParams *p, bound_params *hi, bound_params *lo
   p->ApplyLowerBound ( lo, flow_block_size );
   p->ApplyUpperBound ( hi, flow_block_size );
   p->ApplyAmplitudeZeros ( dbl_tap_map, flow_block_size ); // double-taps
+  p->ApplyAmplitudeDrivenKmultLimit(flow_block_size, krate_adj_limit);
 }
 
-void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, const LevMarBeadAssistant& lm_state )
+void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask,
+                                    unsigned int reg_mask, const LevMarBeadAssistant& lm_state, int flow_block_size )
 {
   if ( ( well_mask & DFDPDM ) >0 )  // only if actually fitting dmult do we need to do this step
-    IdentifyDmultFromSample ( my_beads,my_regions, lm_state );
+    IdentifyDmultFromSample ( my_beads,my_regions, lm_state , flow_block_size);
   if ( ( reg_mask & DFDMR ) >0 ) // only if actually fitting NucMultiplyRatio do I need to identify NMR so we don't slide around randomly
     IdentifyNucMultiplyRatioFromSample ( my_beads, my_regions );
 }
 
-void IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, const LevMarBeadAssistant& lm_state )
+void IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, const LevMarBeadAssistant& lm_state, int flow_block_size )
 {
   float mean_dmult = my_beads.CenterDmultFromSample ();
 
@@ -1187,6 +1232,8 @@ void IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions,
   {
     my_regions.rp.d[nnuc] *= mean_dmult;
   }
+  my_regions.rp.ApplyLowerBound(&my_regions.rp_low,flow_block_size);
+  my_regions.rp.ApplyUpperBound(&my_regions.rp_high, flow_block_size);
 }
 
 void IdentifyNucMultiplyRatioFromSample ( BeadTracker &my_beads, RegionTracker &my_regions )
@@ -1207,15 +1254,32 @@ void IdentifyNucMultiplyRatioFromSample ( BeadTracker &my_beads, RegionTracker &
   my_beads.RescaleRatio ( 1.0f/mean_x );
 }
 
-void IdentifyParameters ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, bool skip_beads )
+void IdentifyParameters ( BeadTracker &my_beads, RegionTracker &my_regions, FlowBufferInfo &my_flow, int flow_block_size, unsigned int well_mask, unsigned int reg_mask, bool skip_beads )
 {
   if ( ( well_mask & DFDPDM ) >0 )  // only if actually fitting dmult do we need to do this step
-    IdentifyDmult ( my_beads,my_regions,skip_beads );
+    IdentifyDmult ( my_beads,my_regions,skip_beads , flow_block_size);
+  if ( ( well_mask & DFDDKR) > 0 )
+    IdentifyKmult(my_beads,my_regions,my_flow, flow_block_size, skip_beads);
+
   if ( ( reg_mask & DFDMR ) >0 ) // only if actually fitting NucMultiplyRatio do I need to identify NMR so we don't slide around randomly
     IdentifyNucMultiplyRatio ( my_beads, my_regions );
 }
 
-void IdentifyDmult ( BeadTracker &my_beads, RegionTracker &my_regions, bool skip_beads )
+
+void IdentifyKmult(BeadTracker &my_beads, RegionTracker &my_regions, FlowBufferInfo &my_flow, int flow_block_size, bool skip_beads )
+{
+  // identify kmult to krate to make sure we don't slide around randomly
+  float mean_kmult[NUMNUC];
+
+  my_beads.CenterKmult(mean_kmult, skip_beads, my_flow.flow_ndx_map, flow_block_size);
+  for (int nnuc=0; nnuc<NUMNUC; nnuc++){
+    my_regions.rp.krate[nnuc] *= mean_kmult[nnuc]; //
+  }
+}
+
+
+void IdentifyDmult ( BeadTracker &my_beads, RegionTracker &my_regions, bool skip_beads , int flow_block_size)
+
 {
   float mean_dmult = my_beads.CenterDmult ( skip_beads ); // only active set
 
@@ -1223,7 +1287,10 @@ void IdentifyDmult ( BeadTracker &my_beads, RegionTracker &my_regions, bool skip
   {
     my_regions.rp.d[nnuc] *= mean_dmult;
   }
+  my_regions.rp.ApplyLowerBound(&my_regions.rp_low,flow_block_size);
+  my_regions.rp.ApplyUpperBound(&my_regions.rp_high, flow_block_size);
 }
+
 
 void IdentifyNucMultiplyRatio ( BeadTracker &my_beads, RegionTracker &my_regions )
 {

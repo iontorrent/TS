@@ -10,7 +10,6 @@
 	#define min( a, b ) ( ((a) < (b)) ? (a) : (b) )
 #endif
 
-#include "sff_definitions.h"
 
 typedef struct {
 	char *name;
@@ -25,12 +24,7 @@ typedef struct {
 extern "C" {
 #endif
 
-    /*!
-	    Create fastq structure from sff honoring the clip values in SFF
-        @param	sff	pointer to SFF to convert
-        @return		pointer to fastq
-     */
-    fq_t *sff2fq (sff_t *sff);
+
 
     /*!
 	    @return		a pointer to the empty fq

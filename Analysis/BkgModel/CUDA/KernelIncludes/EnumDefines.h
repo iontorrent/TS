@@ -1,3 +1,4 @@
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 /*
  * enumDefines.h
  *
@@ -60,6 +61,7 @@ enum RegionFramePlanes{
 //RfFramesPerPoint, //either std or etf frames per point
 
 //cube with dimensions: width: imageWidth, height: ImageHeight, depth: bp_NUM_PARAMS
+//Do not change order since device access is based on enum, host access is based on translate implementaion
 enum BeadParamPlanes{
   BpCopies = 0,
   BpR ,

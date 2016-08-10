@@ -30,7 +30,8 @@ void InputStructures::Initialize(ExtendParameters &parameters, const ReferenceRe
 
   // must do this first to detect nFlows
   DetectFlowOrderzAndKeyFromBam(bam_header);
-  // now get recalibration information, padded to account if nFlows for some bam is large
+
+  // now get calibration information, padded to account if nFlows for some bam is large
   do_recal.ReadRecalibrationFromComments(bam_header,num_flows_by_run_id); // protect against over-flowing nFlows, 0-based
 
   if (parameters.sseMotifsProvided) {
@@ -312,7 +313,7 @@ PersistingThreadObjects::PersistingThreadObjects(const InputStructures &global_c
 #ifdef __SSE3__
     if (use_SSE_basecaller) {
 	  for (unsigned int iFO=0; iFO < global_context.flow_order_vector.size(); iFO++){
-        TreephaserSSE     treephaser_sse(global_context.flow_order_vector.at(iFO), DPTreephaser::kWindowSizeDefault_);
+        TreephaserSSE*    treephaser_sse = new TreephaserSSE(global_context.flow_order_vector.at(iFO), DPTreephaser::kWindowSizeDefault_);
         treephaserSSE_vector.push_back(treephaser_sse);
       }
     }

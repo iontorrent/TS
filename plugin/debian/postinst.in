@@ -5,41 +5,17 @@ set -e
 
 case "$1" in
     configure)
+    
+    # Only necessary for first time bare-bones installs
+    [[ -d /results/pluginMedia ]] || mkdir -p -m 0777 /results/pluginMedia
+    
+    if [ -d @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@/pluginMedia ]; then
+        # remove to old symlink before attempting to create the new one
+        rm -f /results/pluginMedia/@PLUGIN_NAME@
 
-    # Set execute bit on shell scripts
-	find @ION_INSTALL_PREFIX@/plugins -name launch.sh -exec chmod a+x {} \;
-	# Set execute bit on perl scripts
-	find @ION_INSTALL_PREFIX@/plugins -name \*.pl -exec chmod a+x {} \;
-
-    # Create scratch space directory, writeable by plugin user for storing
-    # files
-    if [ ! -d @ION_INSTALL_PREFIX@/plugins/scratch ]; then
-        mkdir -m a=rwx -p @ION_INSTALL_PREFIX@/plugins/scratch
+        # create the new symlink
+        ln -sf @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@/pluginMedia /results/pluginMedia/@PLUGIN_NAME@
     fi
-    chmod -c a+rwx @ION_INSTALL_PREFIX@/plugins/scratch
-
-    if [ ! -d @ION_INSTALL_PREFIX@/plugins/implementations ]; then
-        mkdir -m a=rx -p @ION_INSTALL_PREFIX@/plugins/implementations
-    fi
-    # Perms were wrong in cmake script
-    chmod -c a+rx @ION_INSTALL_PREFIX@/plugins/implementations
-
-    # Set common owner, if ionadmin user exists
-    # BPP - Why is it necessary to set the ownership here of all plugins?
-    # Delete this bit if you can show that its not necessary.
-    # Only for plugin directories, TS-11727
-    if getent passwd | grep -q "^ionadmin:"; then
-        chown ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins
-        cd @ION_INSTALL_PREFIX@/plugins
-        for subdir in `ls|egrep -v '(scratch|implementations)'`; do
-            chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins/$subdir
-        done
-    fi
-
-    # Force a plugin rescan after installation
-    #(wget -q -O /dev/null http://localhost/configure/plugins/ > /dev/null) || \
-    #    echo "Loading plugin config page failed."
-    # Removed: TS-5154 - doing this here causes install to fail.
     ;;
 
 esac

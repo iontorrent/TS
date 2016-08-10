@@ -1,13 +1,13 @@
 ---
 
+- name: flush iptables
+  shell: bash -lc '/sbin/iptables -F && iptables -P INPUT ACCEPT'
+  
 - name: load iptables
   shell: bash -lc '/sbin/iptables-restore < /etc/iptables.rules'
   
 - name: load custom iptables
   shell: bash -lc '/sbin/iptables-restore --noflush < /etc/iptables.custom'
-  
-- name: flush iptables
-  shell: bash -lc '/sbin/iptables -F && iptables -P INPUT ACCEPT'
   
 - name: restart dhcp
   service: name=dhcp3-server state=restarted
@@ -27,4 +27,5 @@
   shell: bash -lc 'exportfs -ra'
   
 - name: resolvconf update
-  shell: bash -lc "resolvconf -u"
+  shell: bash -lc 'resolvconf -u'
+  

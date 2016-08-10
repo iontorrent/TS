@@ -48,7 +48,7 @@ WORKDIR="."
 STATSFILE=""
 DEDUP=0
 UNIQUE=0
-AMPOPT=""
+AMPOPT="-T trgreads"
 TRACKINGBED=""
 SAMPLENAME="None"
 ANNOBEDFORMAT=0
@@ -75,7 +75,7 @@ do
     R) ALENMIN=$OPTARG;;
     S) TRACKINGBED=$OPTARG;;
     T) TRGSID=$OPTARG;;
-    a) AMPOPT="-a";;
+    a) AMPOPT="-T AmpliSeq -M 70";;
     d) DEDUP=1;;
     g) ANNOBEDFORMAT=1;;
     u) UNIQUE=1;;
@@ -115,10 +115,17 @@ REFERENCE=`readlink -n -f "$REFERENCE"`
 GENOME=`readlink -n -f "$GENOME"`
 
 RUNDIR=`dirname $RUNPTH`
+BBCTOOLS="$RUNDIR/bin/bbctools"
 RUNDIR="${RUNDIR}/scripts"
 BAMBAI="${BAMFILE}.bai"
 BAMNAME=`echo $BAMFILE | sed -e 's/^.*\///'`
 BAMSTEM=`echo $BAMNAME | sed -e 's/\.[^.]*$//'`
+
+# if local (override) version of bbctools not present default to system version
+if [ ! -f "$BBCTOOLS" ]; then
+  BBCTOOLS="bbctools"
+  command -v bbctools || { echo "ERROR: 'bbctools' is not available as a command on this system!" >&2; exit 1; }
+fi
 
 if [ "$FILESTEM" = "" -o "$FILESTEM" = "-" ];then
   FILESTEM="$BAMSTEM"
@@ -250,23 +257,14 @@ echo "" >> "$STATSFILE"
 
 ########### Read Coverage Analysis #########
 
-if [ $TRACK -eq 1 ]; then
-  echo "(`date`) Generating basic reads stats..." >&2
-fi
-
-# basic read mappings from samtools
-read TOTAL_READS MAPPED_READS <<<$(samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}')
-ONTRG_READS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
-echo "Number of total reads:         $TOTAL_READS" >> "$STATSFILE"
-echo "Number of mapped reads:        $MAPPED_READS" >> "$STATSFILE"
-echo "Number of on-target reads:     $ONTRG_READS" >> "$STATSFILE"
-
 # primary read assignment analysis
-TARGETCOVFILE="${OUTFILEROOT}.amplicon.cov.xls"
-COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS -C 70 \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
 if [ $TRACK -eq 1 ]; then
   echo "(`date`) Analyzing $TARGETTYPE coverage..." >&2
 fi
+TARGETCOVFILE="${OUTFILEROOT}.amplicon.cov.xls"
+XTRAFIELDS="3:region_id,-2:attributes,-1:gc_count"
+SSTFILE="${OUTFILEROOT}.chr.reads.xls"
+COVCMD="$BBCTOOLS create -D '' $FILTOPTS -C '$TARGETCOVFILE' -A '$XTRAFIELDS' -S '$SSTFILE' -R '$ANNOBED' '$BAMFILE'"
 eval "$COVCMD" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: $TARGETTYPE analysis failed." >&2
@@ -274,7 +272,25 @@ if [ $? -ne 0 ]; then
   exit 1;
 elif [ $SHOWLOG -eq 1 ]; then
   echo "> $TARGETCOVFILE" >&2
+  echo "> $SSTFILE" >&2
 fi
+
+# basic read mappings from samtools
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Generating basic reads stats..." >&2
+fi
+# NOTE: Mapped and on-target reads here are before applying length and other filters (quality, unique, non-duplicate)
+# - to get with filters:
+#read MAPPED_READS ONTRG_READS <<< `awk 'NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
+#TOTAL_READS=`samtools view -c "$BAMFILE"`
+#
+read TOTAL_READS MAPPED_READS <<<$(samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}')
+ONTRG_READS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
+#
+echo "Number of total reads:         $TOTAL_READS" >> "$STATSFILE"
+echo "Number of mapped reads:        $MAPPED_READS" >> "$STATSFILE"
+echo "Number of on-target reads:     $ONTRG_READS" >> "$STATSFILE"
+
 # grab assigned reads and complete basic stats output
 ASN_READS=`awk '++c>1 {t+=$10} END {printf "%.0f",t}' "$TARGETCOVFILE"`
 echo "Number of assigned reads:      $ASN_READS" >> "$STATSFILE"
@@ -294,7 +310,7 @@ mv "$TMPFILE" "$TARGETCOVFILE"
 
 # add ERCC mapping stats if expected
 if [ -n "$TRACKINGBED" ]; then
-  TRACKING_READS=`samtools view -c -F 4 -L "$TRACKINGBED" "$BAMFILE"`
+  TRACKING_READS=`$BBCTOOLS create -T AmpliSeq -C - -R "$TRACKINGBED" "$BAMFILE" | awk 'NR>1 {c+=$7} END {print c+0}'`
   PC_TRACKING_READS=`echo "$TRACKING_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
   echo "Number of ERCC tracking reads: $TRACKING_READS" >> "$STATSFILE"
   echo "Percent ERCC tracking reads:   $PC_TRACKING_READS%" >> "$STATSFILE"

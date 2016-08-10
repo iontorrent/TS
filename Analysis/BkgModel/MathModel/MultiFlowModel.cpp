@@ -113,13 +113,6 @@ void MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground (
   }
 
   // do the actual computation
-#ifdef __INTEL_COMPILER
-  {
-    for ( int fnum=0; fnum<flow_block_size; fnum++ )
-      PurpleSolveTotalTrace ( vb_out[fnum],bkg_for_flow[fnum], new_hydrogen_for_flow[fnum], time_c.npts(),
-                              &time_c.deltaFrame[0], cur_buffer_block.tauB[fnum], cur_buffer_block.etbR[fnum] );
-  }
-#else // assumed to be GCC
   if ( use_vectorization )
   {
     MathModel::PurpleSolveTotalTrace_Vec ( vb_out, bkg_for_flow, new_hydrogen_for_flow, 
@@ -132,7 +125,6 @@ void MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground (
       PurpleSolveTotalTrace ( vb_out[fnum],bkg_for_flow[fnum], new_hydrogen_for_flow[fnum],time_c.npts(),
                               &time_c.deltaFrame[0], cur_buffer_block.tauB[fnum], cur_buffer_block.etbR[fnum] );
   }
-#endif
 
   // adjust for well sensitivity, unexplained systematic effects
   // gain naturally parallel across flows
@@ -255,13 +247,6 @@ void MathModel::MultiCorrectBeadBkg (
   }
 
   // do the actual calculation in parallel or not
-#ifdef __INTEL_COMPILER
-  {
-    for ( int fnum=0; fnum<flow_block_size; fnum++ )
-      BlueSolveBackgroundTrace ( vb_out[fnum],sbgPtr[fnum],time_c.npts(),&time_c.deltaFrame[0],
-                                 my_cur_buffer_block.tauB[fnum],my_cur_buffer_block.etbR[fnum] );
-  }
-#else
   if ( use_vectorization )
   {
     MathModel::BlueSolveBackgroundTrace_Vec ( vb_out, sbgPtr, time_c.npts(), &time_c.deltaFrame[0],
@@ -273,7 +258,6 @@ void MathModel::MultiCorrectBeadBkg (
       BlueSolveBackgroundTrace ( vb_out[fnum],sbgPtr[fnum],time_c.npts(),&time_c.deltaFrame[0],
                                  my_cur_buffer_block.tauB[fnum],my_cur_buffer_block.etbR[fnum] );
   }
-#endif
 
   MultiplyVectorByScalar ( vb,p->gain,my_scratch.bead_flow_t );
 
@@ -294,18 +278,6 @@ static void IonsFromBulk ( float **model_trace, float **incorporation_rise,
                     float *vec_tau_bulk, int flow_block_size )
 {
   // finally solve the way hydrogen ions diffuse out of the bulk
-#ifdef __INTEL_COMPILER
-  {
-    for ( int fnum=0; fnum<flow_block_size; fnum++ )
-    {
-      // Now solve the bulk
-      MathModel::RedSolveHydrogenFlowInWell ( model_trace[fnum],incorporation_rise[fnum],
-        time_c.npts(), my_regions.cache_step.i_start_coarse_step[my_flow.flow_ndx_map[fnum]],
-        &time_c.deltaFrame[0],vec_tau_bulk[fnum] ); 
-        // we retain hydrogen ions variably in the bulk depending on direction
-    }
-  }
-#else
   if ( use_vectorization )
   {
     // Now solve the bulk
@@ -324,7 +296,6 @@ static void IonsFromBulk ( float **model_trace, float **incorporation_rise,
         // we retain hydrogen ions variably in the bulk depending on direction
     }
   }
-#endif
 }
 
 
@@ -336,15 +307,6 @@ static void CumulativeLostHydrogens ( float **incorporation_rise_to_lost_hydroge
                                int flow_block_size )
 {
   // Put the model trace from buffering the incorporation_rise into scratch_trace
-#ifdef __INTEL_COMPILER
-  {
-    for ( int fnum=0; fnum<flow_block_size; fnum++ )
-    {
-      MathModel::RedSolveHydrogenFlowInWell ( scratch_trace[fnum],incorporation_rise_to_lost_hydrogens[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],vec_tau_top[fnum] ); // we lose hydrogen ions fast!
-
-    }
-  }
-#else
   if ( use_vectorization )
   {
     MathModel::RedSolveHydrogenFlowInWell_Vec ( scratch_trace,incorporation_rise_to_lost_hydrogens,time_c.npts(),&time_c.deltaFrame[0],vec_tau_top, flow_block_size ); // we lose hydrogen ions fast!
@@ -358,7 +320,6 @@ static void CumulativeLostHydrogens ( float **incorporation_rise_to_lost_hydroge
 
     }
   }
-#endif
 
   // return lost_hydrogens in the incorporation_rise variables by subtracting the trace from the cumulative
   for ( int fnum=0; fnum<flow_block_size; fnum++ )

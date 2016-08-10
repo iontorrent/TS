@@ -3,16 +3,17 @@
 import os
 import sys
 
+
 def textToDict(text):
     pkDict = {}
-    ###Get Headings for Process Params
+    # Get Headings for Process Params
     for line in text:
         if '=' in line:
             try:
                 parsline = line.strip().split("=")
                 key = parsline[0].strip()
                 value = parsline[1].strip()
-                pkDict[key]=value
+                pkDict[key] = value
             except IndexError:
                 pass
 
@@ -28,9 +29,9 @@ def fileToDict(fileIn):
     text = f.readlines()
     f.close()
     pkDict = textToDict(text)
-    return pkDict 
+    return pkDict
 
-if __name__=='__main__':
+if __name__ == '__main__':
 
     pkDict = fileToDict(sys.argv[1])
     print pkDict

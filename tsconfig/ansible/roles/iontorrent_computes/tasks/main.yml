@@ -12,12 +12,7 @@
 - name: Install system packages for compute resource - apt
   apt: name={{ item }} state=present force=yes
   with_items: ioncompute_syspkg_list
-  when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
-  
-#- name: Install system packages for compute resource - yum
-#  yum: name={{ item }} state=present force=yes
-#  with_items: ioncompute_syspkg_list
-#  when: "'{{ item }}' != '' and ansible_distribution == 'CentOS'"
+  when: "item != ''"
 
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for a compute node
@@ -25,14 +20,8 @@
 - name: Install Ion packages for compute resource - apt
   apt: name={{ item }} state=present force=yes
   with_items: ioncompute_ionpkg_list
-  when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
-  
-#- name: Install Ion packages for compute resource - yum
-#  yum: name={{ item }} state=present force=yes
-#  with_items: ioncompute_ionpkg_list
-#  when: "'{{ item }}' != '' and ansible_distribution == 'CentOS'"
+  when: "item != '' "
 
- 
 # Set host location of Ion Torrent Server Daemons
 #function config_cluster_settings()
 - name: Update cluster configuration file - local_cluster_settings.py

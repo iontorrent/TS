@@ -187,15 +187,20 @@ void SpatialCorrelator::BkgDistortion(int fnum, int flow_block_start)
   // this is put here because we are already looping over all beads
   distortion_factor = my_xtalk.my_bkg_distortion.AdditiveDistortion(flow_num,my_hplus.region_mean_sig);
   float multiplicative_distortion =my_xtalk.my_bkg_distortion.MultiplicativeDistortion(flow_num);
+  reg_params *my_rp = &region_data->my_regions.rp;
 
-  printf("Region: %d Flow: %d Distortion: %f\n",region_data->region->index,(int)flow_num, distortion_factor);
+  //printf("Region: %d Flow: %d Distortion: %f\n",region_data->region->index,(int)flow_num, distortion_factor);
   for (int ibd=0;ibd < region_data->my_beads.numLBeads;ibd++)
   {
     BeadParams *tbead = &region_data->my_beads.params_nn[ibd];
     // systematic shift detected in intensities
     // mostly proportional to mean signal (or possibly to out-of-phase signal)
     // systematic shift in all intensities: fudge factor
-    tbead->Ampl[fnum] += distortion_factor/tbead->Copies;
+    float etbR = my_rp->AdjustEmptyToBeadRatioForFlow(tbead->R, tbead->Ampl[fnum], tbead->Copies, tbead->phi, my_hplus.NucId, flow_num);
+    //float counter_etbR = 1/(1-0.7);  // default etbr = 0.7
+    //float local_distortion = counter_etbR*(1-etbR)*distortion_factor; // more like empty, less distortion?
+    float local_distortion = distortion_factor;
+    tbead->Ampl[fnum] += local_distortion/tbead->Copies;
     tbead->Ampl[fnum] *= multiplicative_distortion; // currently a nop
     if (tbead->Ampl[fnum]!=tbead->Ampl[fnum])
     {

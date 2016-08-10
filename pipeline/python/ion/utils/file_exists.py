@@ -4,6 +4,7 @@ import os
 import sys
 import time
 
+
 def file_exists(filepath, block=30, delay=1):
     """
     Returns True when file exists.  block is time in seconds to wait for the file.

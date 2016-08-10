@@ -92,6 +92,15 @@ $(function () {
                           Submit variants for TaqMan assay design.\
                         </label>\
                         </div>');
+            if (TVC.reference == 'hg19'){
+                $content.find('[name=modalradio]').each(function(){
+                    if (this.value == "ce" || this.value == "taqman"){
+                        $(this).prop('disabled', true);
+                        $(this).closest('label').css('color', 'gray').css('cursor','not-allowed');
+                        $(this).closest('label').attr('title', 'Reference Genome hg19 is no longer supported for sequencing primer or TaqMan assay design');
+                    }
+                });
+            }
             $('#exportOK').show();
         }
 
@@ -400,6 +409,16 @@ $(function () {
         return barcode;
     }
 
+    function get_reference() {
+        var reference = false;
+        $(".headvc").each(function () {
+            if ($(this).html() === "Reference Genome") {
+                reference = $.trim($(this).parent().parent().find("div:eq(1)").text());
+            }
+        });
+        return reference;
+    }
+
     function get_json(file_name) {
         //get the startplugin json
 
@@ -685,6 +704,7 @@ $(function () {
     TVC.plugin_dir = TVC.startplugin["runinfo"]["results_dir"];
     TVC.plugin_name = TVC.startplugin["runinfo"]["plugin_name"];
     TVC.barcode = get_barcode();
+    TVC.reference = get_reference();
     TVC.total_variants = TVC.variant_summary["variants_total"]["variants"];
 
     //TODO: do this in the Django template as well
@@ -773,6 +793,7 @@ $(function () {
         TVC.checked_data = [];
         TVC.grid.invalidateAllRows();
         TVC.order_col = TVC.col_lookup[args["sortCols"][0]["sortCol"]["field"]];
+        if (TVC.order_col == "position") {TVC.order_col = "Location";}
         TVC.order_dir = args["sortCols"][0]["sortAsc"];
         TVC.subload(0);
         TVC.pos = 0;

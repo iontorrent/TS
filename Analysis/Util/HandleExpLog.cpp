@@ -347,6 +347,11 @@ char * GetChipId (const char *filepath)
         else if (strncmp ("541", chipversion,3) == 0)    chip = strdup("541");
         else if (strncmp ("531", chipversion,3) == 0)    chip = strdup("531");
         else if (strncmp ("521", chipversion,3) == 0)    chip = strdup("521");
+        else if (strncmp ("522", chipversion,3) == 0)    chip = strdup("522"); 
+        else if (strncmp ("p2.0.1", chipversion,6) == 0)   chip = strdup("p2.0.1");
+        else if (strncmp ("p2.1.1", chipversion,6) == 0)   chip = strdup("p2.1.1");
+        else if (strncmp ("p2.3.1", chipversion,6) == 0)   chip = strdup("p2.3.1");
+        else if (strncmp ("p1.1.541", chipversion,8) == 0) chip = strdup("p1.1.541");
         else                                             chip = strdup("p1.1.17");  // default
         //Add new  P chips here and in chipIdDecoder too.
     }
@@ -396,6 +401,8 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
     }
     else if ((strncmp ("p1",type,2) == 0) ||
              (strncmp ("p2",type,2) == 0) ||
+             (strncmp ("P1",type,2) == 0) ||
+             (strncmp ("P2",type,2) == 0) ||
              (strncmp ("550",type,3) == 0) ||
              (strncmp ("540",type,3) == 0) ||
              (strncmp ("530",type,3) == 0) ||
@@ -403,7 +410,8 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
              (strncmp ("551",type,3) == 0) ||
              (strncmp ("541",type,3) == 0) ||
              (strncmp ("531",type,3) == 0) ||
-             (strncmp ("521",type,3) == 0))
+             (strncmp ("521",type,3) == 0) || 
+             (strncmp ("522",type,3) == 0)) 
     {
 
       // Method using the explog.txt
@@ -447,4 +455,144 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
     dims[1] = 0;
   }
 }
+
+// checks explog_final.txt if given chip area (e.g. block) overlaps with DataCollect exclude regions
+// WARNING: depends on the format of DataCollect output in explog_final.txt & hardcodded that we have 24 chip regions
+//
+// Currently supports the following formats of DataCollect exclude region log messages:
+//	(1) "Region Slip on file acq_0404.dat 0x7fffff" # hex is a binary mask for affected regions in the given flow
+//
+// Chip region map is a hex/binary mask (bits numbered right to left) one bit per half-column of blocks.
+// 
+//  Example: "Region Slip on file acq_0014.dat 0xefffff" 
+//  --> 1110 1111 1111 1111 1111 1111  
+//  --> region '20' is a DataCollect exclude region
+//
+// “NEW FORMAT” (DataCollect >=3363), bit mask for chip orientation in default TS beadfind plots:
+//      0  1  2   3   4  5  6  7  8  9 10 11
+//     23 22 21 >20< 19 18 17 16 15 14 13 12
+//
+// input (beginX, endX,  beginY, endY) defines chip area to check against detected DataCollect exclude regions in explog_final.txt
+//
+bool ifDatacollectExcludeRegion(const char *filename, int beginX, int endX, int chipSizeX, int beginY, int endY, int chipSizeY)
+{
+
+  // combined binary mask for all DataColect exclude regions in this run
+  std::bitset<24> exclude_region_binmask(0);
+  
+  std::ifstream infile;
+  infile.open(filename);
+
+  // should be already checked twice if explog_final.txt exists...
+  if (!(infile)){
+    printf("\n%s: %s \n\n", strerror(errno), filename );
+    return false;
+  }
+
+  std::string line;
+  std::string hexmask;
+
+  // process all DataCollect exclude region messages from explog_final.txt
+  while (std::getline(infile, line)) { 
+
+    hexmask="";
+
+    // Format:  "  Region Slip on file acq_0404.dat 0x7fffff"
+    // use only acquisition flows, ignore regions slips in pre-flows and bead find flows 
+    // reasoning: we have bias towards region slips in pre-flows, but they are not use in S5 runs;
+    // in Protons runs region slips in beadfind flows will kill affected regions anyway
+    if (line.find("Region Slip on file acq_") != std::string::npos){  
+      const auto last = line.find_last_of(" ");
+      if ( last != std::string::npos )
+	hexmask = line.substr(last+1, line.length()-last);
+    }
+
+
+    // add this DataCoillect exclude region event to the existing binary mask
+    if (!hexmask.empty()){
+
+      std::stringstream ss;
+      ss << std::hex << hexmask;
+      unsigned n;
+      ss >> n;
+      std::bitset<24> binmask_this(n);
+
+      exclude_region_binmask |= ~binmask_this;
+
+      printf("# DEBUG: found DataCollect exclude region %s ( %s ); combined DataCollect exclude region mask %s\n", 
+	     hexmask.c_str(), binmask_this.to_string().c_str(), exclude_region_binmask.to_string().c_str() );
+    }
+  }
+
+  printf("# DEBUG final combined DataCollect exclude region mask %s\n", exclude_region_binmask.to_string().c_str() );
+
+  // if no DataCollect exclude regions
+  if (not exclude_region_binmask.any()){
+    printf("No DataCollect exclude regions are found\n");
+    return false;
+  }
+
+  // create region mask for the provided chip subset; include all chip regions which overlap with the provided chip subset 
+  std::bitset<24> chipsubset_binmask(0);
+
+  //  chipsubset_binmask.set(); // start with full overlap, unset non-overlaping regions later
+
+  // chip region size
+  int region_sizeX = chipSizeX / 12;
+  int region_sizeY = chipSizeY / 2;
+
+  // which bit is for this chip region
+  int bit_idx;
+  // chip region coordinated (one of 24)
+  int region_beginX, region_beginY, region_endX, region_endY;
+
+  // go over all 24 chip regions and check if they overlap with provided chip coordinates
+  // there should be a pretier way to convert this chip area to a 2x12 bit mask
+  for (int xi=0; xi<12; xi++){
+    for (int yi=0; yi<2; yi++){
+
+      // this chip region boundaries
+      region_beginX = xi*region_sizeX;
+      region_endX = region_beginX + region_sizeX - 1;
+      region_beginY = yi*region_sizeY;
+      region_endY = region_beginY + region_sizeY - 1;
+      
+      // bit for this chip region in the mask
+
+      // “NEW FORMAT” (DataCollect >=3363), bit mask for chip orientation in default TS beadfind plots:
+      //      0  1  2  3  4  5  6  7  8  9 10 11
+      //     23 22 21 20 19 18 17 16 15 14 13 12
+      if (yi==0) // bottom half of the chip
+	bit_idx = 23 - xi;
+      else // top half of the chip
+	bit_idx = xi;
+
+
+      // set bit in the mask if this chip region overlaps with provided chip subset
+      if ( (( endX >= region_beginX and endX <= region_endX) or
+	    ( beginX >= region_beginX and beginX <= region_endX) or
+	    ( beginX <= region_beginX and endX >= region_endX) ) and
+	   (( endY >= region_beginY and endY <= region_endY) or
+	    ( beginY >= region_beginY and beginY <= region_endY) or
+	    ( beginY <= region_beginY and endY >= region_endY) ) ) {
+
+	chipsubset_binmask.set(bit_idx);
+      }
+
+    }
+  }
+
+  printf("# DEBUG this region X:%d-%d/0-%d Y:%d-%d/0-%d mask %s\n", beginX, endX, chipSizeX, beginY, endY, chipSizeY,
+	 chipsubset_binmask.to_string().c_str() );
+  chipsubset_binmask &= exclude_region_binmask;
+  printf("# DEBUG overlap with DataCollect exclude regions mask: if( %s ) = %d\n", chipsubset_binmask.to_string().c_str(),  chipsubset_binmask.any() );
+
+  // if there is an overlap between DataCollect exclude regions and this chip area:
+  if (chipsubset_binmask.any())
+    return true;
+  else
+    return false;
+}
+
+
 #endif

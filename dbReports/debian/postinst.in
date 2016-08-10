@@ -13,17 +13,17 @@ unset CELERY_LOADER
 case "$1" in
     configure)
 
+    # create or update the off-cycle release source url
+    if [ -f /etc/apt/sources.list.d/iontorrent-offcycle.list ]; then
+        sed -i "s/deb http:\/\/ionupdates.com\/updates\/software\/offcycle\/[^0-9.]*\([0-9.]*\).*/deb http:\/\/ionupdates.com\/updates\/software\/offcycle\/@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@\/ @LSB_RELEASE_CODENAME@\//" /etc/apt/sources.list.d/iontorrent-offcycle.list
+    else
+        echo "deb http://ionupdates.com/updates/software/offcycle/@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@/ @LSB_RELEASE_CODENAME@/" > /etc/apt/sources.list.d/iontorrent-offcycle.list
+    fi
+
     #MegaCli64 library support
     if [ -e /lib/libsysfs.so.2.0.1 ]; then
         if [ ! -h /usr/lib64/libsysfs.so.2.0.2 ]; then
             ln -s /lib/libsysfs.so.2.0.1 /usr/lib64/libsysfs.so.2.0.2 || true
-        fi
-    fi
-
-    #gridengine drmaa support on lucid
-    if [ -e /usr/lib/libdrmaa.so.1.0 ]; then
-        if [ ! -h /usr/lib/libdrmaa.so ]; then
-            ln -s /usr/lib/libdrmaa.so.1.0 /usr/lib/libdrmaa.so || true
         fi
     fi
 
@@ -170,6 +170,18 @@ ENDOFAPACHEENV
         ln -s -f /results/plugins /var/www/plugins
     fi
 
+    # create the plugins directory
+    mkdir -p /results/plugins
+    chmod 777 /results/plugins
+
+    # create the scratch directory
+    mkdir -p /results/plugins/scratch
+    chmod 777 /results/plugins/scratch
+
+    # create a plugin archive directory
+    mkdir -p /results/plugins/archive
+    chmod 777 /results/plugins/archive
+
     # Note, was a symlink, now a folder
     [ ! -d /var/www/media ] && rm -f /var/www/media
     mkdir -p /var/www/media
@@ -240,13 +252,6 @@ ENDOFAPACHEENV
     chown root:www-data /var/log/ion/data_management.log
 
     chown -R www-data:www-data @ION_INSTALL_PREFIX@/iondb
-
-    # ------------------------------------------
-    # Modify sudoers
-    # ------------------------------------------
-    SUDOFILE=/etc/sudoers
-    sed -i '/www-data/ d' ${SUDOFILE}
-    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py" >> ${SUDOFILE}
 
     #--------------------------------------------------#
     #---	Remove possible stale ion packages      ---#
@@ -368,6 +373,7 @@ EOF
     invoke-rc.d ionJobServer restart
     invoke-rc.d ionPlugin restart
     invoke-rc.d ionCrawler restart
+    invoke-rc.d avahi-daemon restart
     ;;
 esac
 

@@ -1,9 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#include <cstddef>
 #include "BkgFitStructures.h"
-#include "BkgFitOptim.h"
-#include "FlowDefaults.h"
 
 using namespace std;
 
@@ -83,6 +80,19 @@ fit_descriptor BkgFitStructures::fit_well_post_key_descriptor[] =
   {DFDA,      & BeadParams::AccessAmplPostKey, 0,   ParamTypeNotKey  }, // Not TRUE!!! Cannot be guaranteed 8+ are not key
   {TBL_END,   0,                                0,   ParamTableEnd    },
 };
+
+
+fit_descriptor BkgFitStructures::fit_well_all_descriptor[] =
+{
+//{PartialDerivComponent, bead_params_func, reg_params_func, ParameterSensitivityClassification}
+  {DFDR,      & BeadParams::AccessR,           0,   ParamTypeAllFlow },
+  {DFDP,      & BeadParams::AccessCopies,      0,   ParamTypeAllFlow },
+  {DFDPDM,    & BeadParams::AccessDmult,       0,   ParamTypeAllFlow  },
+  {DFDA,      & BeadParams::AccessAmpl, 0,   ParamTypePerFlow  }, // Not TRUE!!! Cannot be guaranteed 8+ are not key
+  {DFDDKR,      & BeadParams::AccessKmult, 0,   ParamTypePerFlow  }, // Not TRUE!!! Cannot be guaranteed 8+ are not key
+  {TBL_END,   0,                                0,   ParamTableEnd    },
+};
+
 
 fit_descriptor BkgFitStructures::fit_well_post_key_descriptor_nodmult[] =
 {
@@ -444,124 +454,45 @@ fit_descriptor BkgFitStructures::fit_region_full_taue_NoRDR_NoD_descriptor[] =
   {TBL_END,  0,     0,                                                            ParamTableEnd    },
 };
 
-
-master_fit_type_entry master_fit_type_table::base_bkg_model_fit_type[] =
+int BkgFitStructures::GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_block_size)
 {
-//{"name",                     &fit_descriptor,                              NULL, {NULL,0,NULL,0}},
-  // individual well fits
-  {"FitWellAmpl",               BkgFitStructures::fit_well_ampl_descriptor,                    NULL, {NULL,0,NULL,0}},
-  {"FitWellAmplBuffering",      BkgFitStructures::fit_well_ampl_buffering_descriptor,          NULL, {NULL,0,NULL,0}},
-  {"FitWellPostKey",            BkgFitStructures::fit_well_post_key_descriptor,                NULL, {NULL,0,NULL,0}},
-  {"FitWellPostKeyNoDmult",     BkgFitStructures::fit_well_post_key_descriptor_nodmult,        NULL, {NULL,0,NULL,0}},
-
-  // region-wide fits
-  {"FitRegionTmidnucPlus",      BkgFitStructures::fit_region_tmidnuc_plus_descriptor,          NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2",            BkgFitStructures::fit_region_init2_descriptor,                 NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2TauE",        BkgFitStructures::fit_region_init2_taue_descriptor,            NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2TauENoRDR",   BkgFitStructures::fit_region_init2_taue_NoRDR_descriptor,      NULL, {NULL,0,NULL,0}},
-  {"FitRegionFull",             BkgFitStructures::fit_region_full_descriptor,                  NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauE",         BkgFitStructures::fit_region_full_taue_descriptor,             NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauENoRDR",    BkgFitStructures::fit_region_full_taue_NoRDR_descriptor,       NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2NoRDR",       BkgFitStructures::fit_region_init2_noRatioDrift_descriptor,    NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullNoRDR",        BkgFitStructures::fit_region_full_noRatioDrift_descriptor,     NULL, {NULL,0,NULL,0}},
-  {"FitRegionTimeVarying",      BkgFitStructures::fit_region_time_varying_descriptor,          NULL, {NULL,0,NULL,0}},
-  {"FitRegionDarkness",         BkgFitStructures::fit_region_darkness_descriptor,              NULL, {NULL,0,NULL,0}},
-
-  //region-wide fits without diffusion
-  {"FitRegionInit2TauENoD",     BkgFitStructures::fit_region_init2_taue_NoD_descriptor,        NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2TauENoRDRNoD",BkgFitStructures::fit_region_init2_taue_NoRDR_NoD_descriptor,  NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauENoD",      BkgFitStructures::fit_region_full_taue_NoD_descriptor,         NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauENoRDRNoD", BkgFitStructures::fit_region_full_taue_NoRDR_NoD_descriptor,   NULL, {NULL,0,NULL,0}},
-
-  { NULL, NULL, NULL, {NULL,0,NULL,0} },  // end of table
-};
-
-
-fit_instructions *master_fit_type_table::GetFitInstructionsByName(const char *name)
-{
-  for (int i=0;data[i].name != NULL;i++)
+  int numParamsToFit = 0;
+  for (int i=0; fd[i].comp != TBL_END; ++i) 
   {
-    if (strcmp(data[i].name,name) == 0)
-      return &data[i].fi;
-  }
-
-  return NULL;
-}
-
-fit_descriptor *master_fit_type_table::GetFitDescriptorByName(const char *name)
-{
-  for (int i=0;data[i].name != NULL;i++)
-  {
-    if (strcmp(data[i].name,name) == 0)
-      return data[i].fd;
-  }
-
-  return NULL;
-}
-
-
-// @TODO:  Potential bug here due to historical optimization
-// does not update for further blocks of flows
-// Needs to update as blocks of flows arrive
-// fit instructions are optimized for first block of flows only
-// can be in error for later blocks of flows.
-master_fit_type_table::master_fit_type_table( 
-    const FlowMyTears & tears, 
-    int flow_start, 
-    int flow_key, 
-    int flow_block_size
-  )
-{
-  int my_nuc_block[flow_block_size];
-  tears.GetFlowOrderBlock( my_nuc_block, flow_start, flow_start + flow_block_size );
-
-  // We want to copy the prototype table.
-  data = new master_fit_type_entry[ sizeof( base_bkg_model_fit_type ) / 
-                                    sizeof( master_fit_type_entry ) ];
-
-  // go through the master table of fit types and generate all the build
-  // instructions for each type of fitting we are going to do
-  for (int i=0 ; ; i++)
-  {
-    data[i] = base_bkg_model_fit_type[i];
-
-    if ( base_bkg_model_fit_type[i].name == NULL )  break;
-
-    data[i].CreateBuildInstructions(my_nuc_block, max( flow_key - flow_start, 0 ), flow_block_size);
-  }
-}
-
-master_fit_type_table::~master_fit_type_table()
-{
-  for (int i=0;data[i].name != NULL;i++)
-  {
-    struct master_fit_type_entry *ft = &data[i];
-
-    // make sure there is a high-level descriptor for this row
-    // if there wasn't one, then the row might contain a hard link to
-    // a statically allocated matrix build instruction which we don't
-    // want to free
-    if (ft->fd != NULL)
+    switch (fd[i].ptype)
     {
-      if (ft->mb != NULL)
-      {
-        delete [](ft->mb);
-        ft->mb = NULL;
-      }
+      case ParamTypeAFlows:
+      case ParamTypeCFlows:
+      case ParamTypeGFlows:
+      case ParamTypeAllFlow:
+        numParamsToFit++;
+      break;
+      case ParamTypeNotKey:
+        numParamsToFit += max( 0, flow_block_size-flow_key );
+      break;
+      case ParamTypePerFlow:
+        numParamsToFit += flow_block_size;
+      break;
+      case ParamTypePerNuc:
+        numParamsToFit += NUMNUC;
+      break;
+      case ParamTypeAllButFlow0:
+        numParamsToFit += flow_block_size-1;
+      break;
+      default:
+        break;
     }
-
-    if (ft->fi.input != NULL)
-      delete [] ft->fi.input;
-
-    if (ft->fi.output != NULL)
-      delete [] ft->fi.output;
-
-    ft->fi.input  = NULL;
-    ft->fi.output = NULL;
   }
+  return numParamsToFit;
+}
 
-  // Final cleanup.
-  delete [] data;
+int BkgFitStructures::GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd) {
+  int numParDerivSteps = 0;
+  for (int i=0; fd[i].comp != TBL_END; ++i) 
+  {
+    numParDerivSteps++;
+  }
+  return numParDerivSteps;
 }
 
 //#define NUMERIC_PartialDeriv_CALC
@@ -604,43 +535,4 @@ void BuildMatrix(BkgFitMatrixPacker *fit,bool accum, bool debug)
 #endif
 }
 
-int GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_block_size)
-{
-  int numParamsToFit = 0;
-  for (int i=0; fd[i].comp != TBL_END; ++i) 
-  {
-    switch (fd[i].ptype)
-    {
-      case ParamTypeAFlows:
-      case ParamTypeCFlows:
-      case ParamTypeGFlows:
-      case ParamTypeAllFlow:
-        numParamsToFit++;
-      break;
-      case ParamTypeNotKey:
-        numParamsToFit += max( 0, flow_block_size-flow_key );
-      break;
-      case ParamTypePerFlow:
-        numParamsToFit += flow_block_size;
-      break;
-      case ParamTypePerNuc:
-        numParamsToFit += NUMNUC;
-      break;
-      case ParamTypeAllButFlow0:
-        numParamsToFit += flow_block_size-1;
-      break;
-      default:
-        break;
-    }
-  }
-  return numParamsToFit;
-}
 
-int GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd) {
-  int numParDerivSteps = 0;
-  for (int i=0; fd[i].comp != TBL_END; ++i) 
-  {
-    numParDerivSteps++;
-  }
-  return numParDerivSteps;
-}

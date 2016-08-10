@@ -1,48 +1,9 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
 
-#include <string>
-#include <vector>
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <fstream>
-#include <iomanip>
-#include <deque>
-#include <map>
+#include "IndelAssembly.h"
 
-#include <tr1/unordered_set>
-
-#include "IonVersion.h"
-#include "OptArgs.h"
-#include "api/BamMultiReader.h"
-#include "api/BamWriter.h"
-#include "json/json.h"
-#include "ReferenceReader.h"
-#include "TargetsManager.h"
-#include "SampleManager.h"
-
-
-
-// Example call:
-// java -Xmx8G -cp /results/plugins/variantCaller/share/TVC/jar/
-//  -jar /results/plugins/variantCaller/share/TVC/jar/GenomeAnalysisTK.jar
-//  -T IndelAssembly
-//  -R /results/referenceLibrary/tmap-f3/hg19/hg19.fasta
-//  -I IonXpress_001_rawlib.bam
-//  -L "/results/uploads/BED/1108/hg19/merged/plain/CHP2.20131001.designed.bed"
-//  -o indel_assembly.vcf
-//  -S SILENT
-//  -U ALL
-//  -filterMBQ
-//  --short_suffix_match 5   --output_mnv 0   --min_var_count 5   --min_var_freq 0.15
-//  --min_indel_size 4   --max_hp_length 8   --relative_strand_bias 0.8   --kmer_len 19
-
-using namespace std;
-using namespace std::tr1;
-using namespace BamTools;
-
-
+const int IndelAssembly::WINDOW_SIZE;
 
 void IndelAssemblyHelp() {
   printf("Usage: tvcassembly [options]\n");
@@ -55,6 +16,7 @@ void IndelAssemblyHelp() {
   printf("     --parameters-file                  FILE        json file with algorithm control parameters [optional]\n");
   printf("  -r,--reference                        FILE        reference fasta file [required]\n");
   printf("  -b,--input-bam                        FILE        bam file with mapped reads [required]\n");
+  printf("  -d,--depth-file                       FILE        output depth file [optional]\n");
   printf("  -t,--target-file                      FILE        only process targets in this bed file [optional]\n");
   printf("  -o,--output-vcf                       FILE        vcf file with variant calling results [required]\n");
   printf("  -g,--sample-name                      STRING      sample for which variants are called (In case of input BAM files with multiple samples) [optional if there is only one sample]\n");
@@ -63,6 +25,7 @@ void IndelAssemblyHelp() {
 
   printf("\n");
 
+  printf("     --read_limit                       INT         The maxmimum number of non-primary reads that can be held in memory [1000000].\n");
   printf("     --kmer_len                         INT         (klen) Size of the smallest k-mer used in assembly [19].\n");
   printf("     --min_var_count                    INT         (mincount) Minimum support for a variant to be evaluated [5].\n");
   printf("     --short_suffix_match               INT         (ssm) Minimum sequence match on both sides of the variant [5].\n");
@@ -76,8 +39,6 @@ void IndelAssemblyHelp() {
   printf("\n");
 }
 
-
-
 bool ValidateAndCanonicalizePath(string &path)
 {
   char *real_path = realpath (path.c_str(), NULL);
@@ -90,8 +51,7 @@ bool ValidateAndCanonicalizePath(string &path)
   return true;
 }
 
-
-int RetrieveParameterInt(OptArgs &opts, Json::Value& json, char short_name, const string& long_name_hyphens, int default_value)
+int RetrieveParameterInt_x(OptArgs &opts, Json::Value& json, char short_name, const string& long_name_hyphens, int default_value)
 {
   string long_name_underscores = long_name_hyphens;
   for (unsigned int i = 0; i < long_name_underscores.size(); ++i)
@@ -118,8 +78,7 @@ int RetrieveParameterInt(OptArgs &opts, Json::Value& json, char short_name, cons
   return value;
 }
 
-
-double RetrieveParameterDouble(OptArgs &opts, Json::Value& json, char short_name, const string& long_name_hyphens, double default_value)
+double RetrieveParameterDouble_x(OptArgs &opts, Json::Value& json, char short_name, const string& long_name_hyphens, double default_value)
 {
   string long_name_underscores = long_name_hyphens;
   for (unsigned int i = 0; i < long_name_underscores.size(); ++i)
@@ -146,12 +105,7 @@ double RetrieveParameterDouble(OptArgs &opts, Json::Value& json, char short_name
   return value;
 }
 
-
-
-
-class IndelAssemblyArgs {
-public:
-  IndelAssemblyArgs(int argc, char* argv[]) {
+  IndelAssemblyArgs::IndelAssemblyArgs(int argc, char* argv[]) {
 
     OptArgs opts;
     opts.ParseCmdLine(argc, (const char**)argv);
@@ -183,6 +137,8 @@ public:
     output_vcf = opts.GetFirstString('o',"output-vcf", "");
 
     sample_name = opts.GetFirstString('g',"sample-name", "");
+	multisample = false;
+	if (sample_name == "") {multisample = true;}
     force_sample_name = opts.GetFirstString('-',"force-sample-name", "");
 
     if (reference.empty()) {
@@ -194,7 +150,11 @@ public:
       exit(1);
     }
 
-    string parameters_file = opts.GetFirstString('-', "parameters-file", "");
+    parameters_file = opts.GetFirstString('-', "parameters-file", "");
+	processParameters(opts);
+}
+
+void IndelAssemblyArgs::processParameters(OptArgs& opts) {
     Json::Value assembly_params(Json::objectValue);
     if (!parameters_file.empty()) {
       Json::Value parameters_json(Json::objectValue);
@@ -210,63 +170,73 @@ public:
       assembly_params = parameters_json.get("long_indel_assembler", Json::objectValue);
     }
 
-    kmer_len = RetrieveParameterInt (opts, assembly_params, '-',"kmer-len", 19);
-    min_var_count = RetrieveParameterInt (opts, assembly_params, '-',"min-var-count", 5);
-    short_suffix_match = RetrieveParameterInt (opts, assembly_params, '-',"short-suffix-match", 5);
-    min_indel_size = RetrieveParameterInt (opts, assembly_params, '-',"min-indel-size", 4);
-    max_hp_length = RetrieveParameterInt (opts, assembly_params, '-',"max-hp-length", 8);
-    min_var_freq = RetrieveParameterDouble(opts, assembly_params, '-',"min-var-freq", 0.15);
-    min_var_score = RetrieveParameterDouble(opts, assembly_params, '-',"min-var-score", 10);
-    relative_strand_bias = RetrieveParameterDouble(opts, assembly_params, '-',"relative-strand-bias", 0.80);
-    output_mnv = RetrieveParameterInt (opts, assembly_params, '-',"output-mnv", 0);
+    read_limit = RetrieveParameterInt_x (opts, assembly_params, '-',"read-limit", 1000000);
+    kmer_len = RetrieveParameterInt_x (opts, assembly_params, '-',"kmer-len", 19);
+    min_var_count = RetrieveParameterInt_x (opts, assembly_params, '-',"min-var-count", 5);
+    short_suffix_match = RetrieveParameterInt_x (opts, assembly_params, '-',"short-suffix-match", 5);
+    min_indel_size = RetrieveParameterInt_x (opts, assembly_params, '-',"min-indel-size", 4);
+    max_hp_length = RetrieveParameterInt_x (opts, assembly_params, '-',"max-hp-length", 8);
+    min_var_freq = RetrieveParameterDouble_x(opts, assembly_params, '-',"min-var-freq", 0.15);
+    min_var_score = RetrieveParameterDouble_x(opts, assembly_params, '-',"min-var-score", 10);
+    relative_strand_bias = RetrieveParameterDouble_x(opts, assembly_params, '-',"relative-strand-bias", 0.80);
+    output_mnv = RetrieveParameterInt_x (opts, assembly_params, '-',"output-mnv", 0);
 
     opts.CheckNoLeftovers();
   }
+  
+  void IndelAssemblyArgs::setReference(const string& str) {
+      reference = str;
+      if (reference.empty()) {
+        cout << "ERROR: Argument --reference is required\n";
+        exit(1);
+      }
+  }
 
-  string reference;
-  vector<string> bams;
-  string target_file;
-  string output_vcf;
-  string sample_name;
-  string force_sample_name;
+  void IndelAssemblyArgs::setBams(vector<string>& v) {
+      if (v.empty()) {
+        cout << "ERROR: Argument --input-bam is required\n";
+        exit(-1);
+      }
+      for (unsigned int i_bam = 0; i_bam < v.size(); ++i_bam)
+        ValidateAndCanonicalizePath(v[i_bam]);
+      bams = v;
+  }
+  void IndelAssemblyArgs::setTargetFile(const string& str) {target_file = str;}
+  void IndelAssemblyArgs::setOutputVcf(const string& str) {
+      output_vcf = str;
+      if (output_vcf.empty()) {
+        cout << "ERROR: Argument --output-vcf is required\n";
+        exit(1);
+      }
+  }
+  void IndelAssemblyArgs::setParametersFile(const string& str) {parameters_file = str;}
 
+  void IndelAssemblyArgs::setSampleName(const string& str) {
+      sample_name = str;
+      multisample = false;
+      if (sample_name == "") {multisample = true;}
+  }
 
-  int kmer_len;
-  int min_var_count;
-  int short_suffix_match;
-  int min_indel_size;
-  int max_hp_length;
-  double min_var_freq;
-  double min_var_score;
-  double relative_strand_bias;
-  int output_mnv;
-};
-
-
-
-class CoverageBySample {
-public:
-  CoverageBySample() {}
-  CoverageBySample(int num_samples) {
+  CoverageBySample::CoverageBySample(int num_samples) {
     if ((int)cov_by_sample[0].size() != num_samples) {
       cov_by_sample[0].resize(num_samples, 0);
       cov_by_sample[1].resize(num_samples, 0);
     }
   }
 
-  void Clear(int num_samples) {
+  void CoverageBySample::Clear(int num_samples) {
     cov_by_sample[0].assign(num_samples,0);
     cov_by_sample[1].assign(num_samples,0);
   }
 
-  void Increment(int strand, int sample, int num_samples) {
+  void CoverageBySample::Increment(int strand, int sample, int num_samples) {
     if ((int)cov_by_sample[0].size() != num_samples) {
       cov_by_sample[0].resize(num_samples, 0);
       cov_by_sample[1].resize(num_samples, 0);
     }
     cov_by_sample[strand][sample]++;
   }
-  void Absorb(const CoverageBySample& other) {
+  void CoverageBySample::Absorb(const CoverageBySample& other) {
     if (cov_by_sample[0].size() < other.cov_by_sample[0].size()) {
       cov_by_sample[0].resize(other.cov_by_sample[0].size(), 0);
       cov_by_sample[1].resize(other.cov_by_sample[0].size(), 0);
@@ -277,7 +247,7 @@ public:
     }
   }
 
-  void Min(const CoverageBySample& other) {
+  void CoverageBySample::Min(const CoverageBySample& other) {
     if (cov_by_sample[0].size() < other.cov_by_sample[0].size()) {
       cov_by_sample[0].resize(other.cov_by_sample[0].size(), 0);
       cov_by_sample[1].resize(other.cov_by_sample[0].size(), 0);
@@ -288,7 +258,7 @@ public:
     }
   }
 
-  void Max(const CoverageBySample& other) {
+  void CoverageBySample::Max(const CoverageBySample& other) {
     if (cov_by_sample[0].size() < other.cov_by_sample[0].size()) {
       cov_by_sample[0].resize(other.cov_by_sample[0].size(), 0);
       cov_by_sample[1].resize(other.cov_by_sample[0].size(), 0);
@@ -299,77 +269,29 @@ public:
     }
   }
 
-  int Total() const {
+  int CoverageBySample::Total() const {
     int total = 0;
     for (int sample = 0; sample < (int)cov_by_sample[0].size(); ++sample)
       total += cov_by_sample[0][sample] + cov_by_sample[1][sample];
     return total;
   }
-  int TotalByStrand(int strand) const {
+  int CoverageBySample::TotalByStrand(int strand) const {
     int total = 0;
     for (int sample = 0; sample < (int)cov_by_sample[0].size(); ++sample)
       total += cov_by_sample[strand][sample];
     return total;
   }
-  int Sample(int sample) const {
+  int CoverageBySample::Sample(int sample) const {
     return cov_by_sample[0][sample] + cov_by_sample[1][sample];
   }
-  int SampleByStrand(int strand, int sample) const {
+  int CoverageBySample::SampleByStrand(int strand, int sample) const {
     return cov_by_sample[strand][sample];
   }
-  const vector<int>& operator[](int strand) const {
+  const vector<int>& CoverageBySample::operator[](int strand) const {
     return cov_by_sample[strand];
   }
-private:
-  vector<int> cov_by_sample[2];
-};
 
-
-class Spectrum {
-public:
-  struct TKmer {
-    int freq;
-    int pos_in_reference;
-    CoverageBySample cov_by_sample;
-    TKmer() : freq(-1), pos_in_reference(-1) {}
-
-    void Increment(int strand, int sample, int num_samples, bool is_primary_sample) {
-      cov_by_sample.Increment(strand, sample, num_samples);
-      if (is_primary_sample)
-        freq++;
-    }
-    void Absorb(const TKmer& other) {
-      cov_by_sample.Absorb(other.cov_by_sample);
-      freq += other.freq;
-    }
-  };
-
-  struct pair {
-    int count1, count2;
-    char key1, key2;
-    pair (char k1, int c1, char k2, int c2) : count1(c1), count2(c2), key1(k1), key2(k2) {}
-  };
-
-  struct TVarCall {
-    string varSeq;
-    int startPos;
-    int endPos;
-    CoverageBySample varCov;
-    bool repeatDetected;
-    int lastPos;
-  };
-
-  map<string, TKmer> spectrum;
-  int KMER_LEN;
-  bool isERROR_INS;
-  int num_samples;
-
-
-  Spectrum(int kmerlen, int _num_samples)
-      : KMER_LEN(kmerlen), isERROR_INS(false), num_samples(_num_samples) {}
-
-
-  void add(const string& sequence, int strand, int sample, bool is_primary) {
+  void Spectrum::add(const string& sequence, int strand, int sample, bool is_primary) {
     for(int x = 0; x <= (int)sequence.length() - KMER_LEN; x++) {
       TKmer& kmer = spectrum[sequence.substr(x,KMER_LEN)];
       kmer.Increment(strand, sample, num_samples, is_primary);
@@ -377,8 +299,7 @@ public:
   }
 
 
-  static int getRepeatFreeKmer(const string& reference, int kmer_len) {
-
+  int Spectrum::getRepeatFreeKmer(const string& reference, int kmer_len) {
     unordered_set<string> ref_spectrum;
     int kmer_max = 3 * kmer_len;
     for (; kmer_len < kmer_max; ++kmer_len) {
@@ -397,19 +318,19 @@ public:
     return kmer_len;
   }
 
-  int getCounts(const string& kmer) {
+  int Spectrum::getCounts(const string& kmer) {
     if (spectrum.find(kmer) != spectrum.end())
       return spectrum[kmer].freq;
     return 0;
   }
 
-  int getPosInReference(const string& kmer) {
+  int Spectrum::getPosInReference(const string& kmer) {
     if (spectrum.find(kmer) != spectrum.end())
       return spectrum[kmer].pos_in_reference;
     return -1;
   }
 
-  pair max2pairs(const string& kmer) {
+  Spectrum::base_counts Spectrum::max2pairs(const string& kmer) {
 
     int a = getCounts(kmer + 'A');
     int c = getCounts(kmer + 'C');
@@ -417,37 +338,37 @@ public:
     int t = getCounts(kmer + 'T');
 
     int max4 = max(a,max(c,max(g,t)));
-    if (a==max4) { if(c>=g) { if(c>=t) return pair('A',a,'C',c); else return pair('A',a,'T',t); }
-                   else     { if(g>=t) return pair('A',a,'G',g); else return pair('A',a,'T',t); } }
-    if (c==max4) { if(a>=g) { if(a>=t) return pair('C',c,'A',a); else return pair('C',c,'T',t); }
-                   else     { if(g>=t) return pair('C',c,'G',g); else return pair('C',c,'T',t); } }
-    if (g==max4) { if(c>=a) { if(c>=t) return pair('G',g,'C',c); else return pair('G',g,'T',t); }
-                   else     { if(a>=t) return pair('G',g,'A',a); else return pair('G',g,'T',t); } }
-                   if(c>=g) { if(c>=a) return pair('T',t,'C',c); else return pair('T',t,'A',a); }
-                   else     { if(g>=a) return pair('T',t,'G',g); else return pair('T',t,'A',a); }
+    if (a==max4) { if(c>=g) { if(c>=t) return base_counts('A',a,'C',c); else return base_counts('A',a,'T',t); }
+                   else     { if(g>=t) return base_counts('A',a,'G',g); else return base_counts('A',a,'T',t); } }
+    if (c==max4) { if(a>=g) { if(a>=t) return base_counts('C',c,'A',a); else return base_counts('C',c,'T',t); }
+                   else     { if(g>=t) return base_counts('C',c,'G',g); else return base_counts('C',c,'T',t); } }
+    if (g==max4) { if(c>=a) { if(c>=t) return base_counts('G',g,'C',c); else return base_counts('G',g,'T',t); }
+                   else     { if(a>=t) return base_counts('G',g,'A',a); else return base_counts('G',g,'T',t); } }
+                   if(c>=g) { if(c>=a) return base_counts('T',t,'C',c); else return base_counts('T',t,'A',a); }
+                   else     { if(g>=a) return base_counts('T',t,'G',g); else return base_counts('T',t,'A',a); }
   }
 
-  void updateReferenceKmers(int shift) {
+  void Spectrum::updateReferenceKmers(int shift) {
     for (map<string, TKmer>::iterator kmer = spectrum.begin(); kmer != spectrum.end(); ++kmer)
       kmer->second.pos_in_reference = max(kmer->second.pos_in_reference - shift, -1);
   }
 
 
-  bool KmerPresent(const string& kmerstr) {
+  bool Spectrum::KmerPresent(const string& kmerstr) {
     map<string,TKmer>::iterator kmer = spectrum.find(kmerstr);
     if (kmer  == spectrum.end())
       return false;
     return kmer->second.freq >= 0;
   }
 
-  bool KmerPresent(const map<string,TKmer>::iterator& kmer) {
+  bool Spectrum::KmerPresent(const map<string,TKmer>::iterator& kmer) {
     if (kmer  == spectrum.end())
       return false;
     return kmer->second.freq >= 0;
   }
 
 
-  string DetectLeftAnchor(const string& reference, int minCount, int shortSuffix) {
+  string Spectrum::DetectLeftAnchor(const string& reference, int minCount, int shortSuffix) {
 
     string anchorKMer;
     int firstAnchor = -1;
@@ -462,7 +383,7 @@ public:
       if (firstAnchor == -1 || i-firstAnchor == 1) {
 
         string otherKmer = refKMer.substr(0,refKMer.length()-1);
-        pair m2p = max2pairs(otherKmer);
+        base_counts m2p = max2pairs(otherKmer);
 
         int nCandPath = 0;
         if (m2p.count1 > minCount)
@@ -489,7 +410,7 @@ public:
       return anchorKMer;
   }
 
-  bool isCorrectionEligible(const string& prevKmer, char fixBase, char errorBase) {
+  bool Spectrum::isCorrectionEligible(const string& prevKmer, char fixBase, char errorBase) {
 
     //check if error is in HP (remove this condition when to consider other types of errors)
     if (prevKmer[prevKmer.length()-1] == fixBase || prevKmer[prevKmer.length()-1] == errorBase) {
@@ -523,7 +444,7 @@ public:
   }
 
 
-  bool ApplyCorrection(const string& prevKmer, char fixBase, char errorBase) {
+  bool Spectrum::ApplyCorrection(const string& prevKmer, char fixBase, char errorBase) {
 
     string errSeq = prevKmer.substr(1) + errorBase;
     string fixSeq;
@@ -567,13 +488,13 @@ public:
   }
 
 
-  string advanceOnMaxPath(string startKmer, int stepsAhead) {
+  string Spectrum::advanceOnMaxPath(string startKmer, int stepsAhead) {
 
     string varSeq;
     varSeq.reserve(stepsAhead);
     while ((int)varSeq.length() < stepsAhead) {
       startKmer = startKmer.substr(1);
-      pair m2p = max2pairs(startKmer);
+      base_counts m2p = max2pairs(startKmer);
       if (m2p.count1 <= 1)
         break;
       startKmer += m2p.key1;
@@ -582,7 +503,7 @@ public:
     return varSeq;
   }
 
-  bool getPath(const string& anchorKMer, int minCount, int WINDOW_PREFIX, TVarCall& results) {
+  bool Spectrum::getPath(const string& anchorKMer, int minCount, int WINDOW_PREFIX, TVarCall& results) {
 
     results.startPos = spectrum[anchorKMer].pos_in_reference + KMER_LEN;
     results.varSeq.clear();
@@ -593,7 +514,7 @@ public:
 
     while ((int)results.varSeq.length() < WINDOW_PREFIX) {
       nextKmer = prevKmer.substr(1);
-      pair m2p = max2pairs(nextKmer);
+      base_counts m2p = max2pairs(nextKmer);
       int nCandPath = (m2p.count1 > minCount ? 1 : 0) + (m2p.count2 > minCount ? 1 : 0);
       if (nCandPath == 0)
         break;
@@ -675,24 +596,44 @@ public:
     return true;
   }
 
-  int getKMER_LEN() {
+  int Spectrum::getKMER_LEN() {
     return KMER_LEN;
   }
-};
 
+  bool IndelAssembly::processRead(BamAlignment& alignment, vector<MergedTarget>::iterator& current_target) {
+    if (!alignment.IsMapped()) {
+      return true;
+    }
 
+    // back up a couple of targets
+    while (current_target != targets_manager->merged.end() && (alignment.RefID > current_target->chr || (alignment.RefID == current_target->chr && alignment.Position >= current_target->end))) {
+        ++current_target;
+    }
 
+    if (current_target == targets_manager->merged.end()) {
+        return false;
+    }
 
+    if (alignment.RefID < current_target->chr || (alignment.RefID == current_target->chr && alignment.GetEndPosition() <= current_target->begin)) {
+        return true;
+    }
+    pthread_mutex_lock (&mutexmap);
+    map(alignment);
+    pthread_mutex_unlock (&mutexmap);
 
-class IndelAssembly {
-public:
-  IndelAssembly(IndelAssemblyArgs *_options, ReferenceReader *_reference_reader, SampleManager *_sample_manager) {
+    return true;
+  }
+
+  IndelAssembly::IndelAssembly(IndelAssemblyArgs *_options, ReferenceReader *_reference_reader, SampleManager *_sample_manager, TargetsManager *_targets_manager) {
+	pthread_mutex_init(&mutexmap, NULL);
     options = _options;
     reference_reader = _reference_reader;
     sample_manager = _sample_manager;
+	targets_manager = _targets_manager;
 
     MIN_VAR_COUNT = options->min_var_count;
     VAR_FREQ = options->min_var_freq;
+	READ_LIMIT = options->read_limit;
     KMER_LEN = options->kmer_len;                         // fixed for now
     SHORT_SUFFIX_MATCH = options->short_suffix_match;
     RELATIVE_STRAND_BIAS = options->relative_strand_bias;
@@ -715,79 +656,13 @@ public:
     out.open(options->output_vcf.c_str());
     OutputVcfHeader();
   }
-
-  ~IndelAssembly() {
-    out.close();
-  }
-
-
-  struct Coverage {
-    int soft_clip[2];
-    int indel[2];
-    CoverageBySample total;
-    Coverage(int num_samples) {
-      Clear(num_samples);
-    }
-    void Clear(int num_samples) {
-      soft_clip[0] = soft_clip[1] = indel[0] = indel[1] = 0;
-      total.Clear(num_samples);
-    }
-  };
-
-
-  IndelAssemblyArgs *options;
-  ReferenceReader *reference_reader;
-  SampleManager *sample_manager;
-
-  ofstream out;
-
-  const static int WINDOW_PREFIX = 300; // set it to max read length
-  const static int WINDOW_SIZE = 2*WINDOW_PREFIX;
-  int MIN_VAR_COUNT;
-  double VAR_FREQ;
-  int KMER_LEN;                         // fixed for now
-  int SHORT_SUFFIX_MATCH;
-  double RELATIVE_STRAND_BIAS;
-  bool ASSEMBLE_SOFTCLIPS_ONLY;
-  bool SKIP_MNV;
-  int MIN_INDEL_SIZE;
-  int MAX_HP_LEN;
-
-  deque<Coverage> coverage;
-
-  int curLeft;
-  int curChrom;
-  int softclip_event_start[2];
-  int softclip_event_length[2];
-  int indel_event_last[2];
-  int assemStart;
-  int assemVarCov_positive;
-  int assemVarCov_negative;
-  CoverageBySample assembly_total_cov;
-
-  deque<BamAlignment> ReadsBuffer;
-  deque<BamAlignment> pre_buffer;
-
-
-  struct VarInfo {
-    int contig;
-    int pos;
-    string ref;
-    string var;
-    VarInfo(int _contig, int _pos, const string& _ref, const string& _var)
-      : contig(_contig), pos(_pos), ref(_ref), var(_var) {}
-  };
-  deque<VarInfo> calledVariants;
-
-
-
-
-  int getSoftEnd(BamAlignment& alignment) {
+  
+  int IndelAssembly::getSoftEnd(BamAlignment& alignment) {
 
     int position = alignment.Position + 1;
     bool left_clip_skipped = false;
 
-    for(int j = 0; j < (int)alignment.CigarData.size(); j++) {
+    for(int j = 0; j < (int)alignment.CigarData.size(); ++j) {
       char cgo = alignment.CigarData[j].Type;
       int cgl = alignment.CigarData[j].Length;
 
@@ -806,7 +681,7 @@ public:
 
 
 
-  int getSoftStart(BamAlignment& alignment) {
+  int IndelAssembly::getSoftStart(BamAlignment& alignment) {
 
     int position = alignment.Position + 1;
     for(vector<CigarOp>::const_iterator cigar = alignment.CigarData.begin(); cigar != alignment.CigarData.end(); ++cigar) {
@@ -822,7 +697,7 @@ public:
   }
 
 
-  void SetReferencePoint(BamAlignment& read) {
+  void IndelAssembly::SetReferencePoint(BamAlignment& read) {
     curChrom = read.RefID;
     curLeft = max(getSoftStart(read) - WINDOW_PREFIX, 0);
     softclip_event_start[0] = softclip_event_start[1] = 0;
@@ -834,20 +709,21 @@ public:
   }
 
 
-  void map(BamAlignment& read) {
-
+  void IndelAssembly::map(BamAlignment& read) {
     int sample;
     bool is_primary;
     if (!sample_manager->IdentifySample(read, sample, is_primary))
       return;
-
     if (!is_primary) {
-      pre_buffer.push_back(read);
+      if (pre_buffer.size() == READ_LIMIT) {
+        cerr << endl << "FATAL ERROR: IndelAssembly::map() pre_buffer overflow. You do not have enough primary sample reads in the BAM. Try increasing the read-limit parameter." << endl;
+        exit(1);
+      }
+      else {
+        pre_buffer.push_back(read);
+      }
       return;
     }
-
-
-
     int delta = WINDOW_SIZE; // signal start of a new chromosome
     if (curChrom == read.RefID)
       delta  = getSoftEnd(read) - curLeft - WINDOW_SIZE;
@@ -868,10 +744,11 @@ public:
           ReadsBuffer.pop_front();
       }
     }
-
+	
     while (!pre_buffer.empty()) {
       if (getSoftEnd(pre_buffer.front()) > curLeft) {
         ReadsBuffer.push_back(pre_buffer.front());
+
         AddCounts(pre_buffer.front());
       }
       pre_buffer.pop_front();
@@ -881,23 +758,19 @@ public:
     AddCounts(read);
   }
 
-  void onTraversalDone() {
-    DetectCandidateRegions(WINDOW_SIZE);
-  }
-
-  void cleanCounts() {
+  void IndelAssembly::cleanCounts() {
     for (deque<Coverage>::iterator I = coverage.begin(); I != coverage.end(); ++I)
       I->Clear(sample_manager->num_samples_);
   }
 
-  void shiftCounts(int delta) {
+  void IndelAssembly::shiftCounts(int delta) {
     coverage.erase(coverage.begin(), coverage.begin()+delta);
     coverage.resize(WINDOW_SIZE, sample_manager->num_samples_);
   }
 
 
 
-  void DetectCandidateRegions(int wsize) {
+  void IndelAssembly::DetectCandidateRegions(int wsize) {
 
     if (curChrom < 0)
       return;
@@ -966,7 +839,7 @@ public:
     }
   }
 
-  bool passFilter() {
+  bool IndelAssembly::passFilter() {
     if ((assemVarCov_positive + assemVarCov_negative) < VAR_FREQ*assembly_total_cov.Sample(sample_manager->primary_sample_)) //(assemTotCov_positive + assemTotCov_negative))
       return false;
     if (assembly_total_cov.SampleByStrand(0,sample_manager->primary_sample_) > 3 && assembly_total_cov.SampleByStrand(1,sample_manager->primary_sample_) > 3) {
@@ -980,7 +853,7 @@ public:
 
 
 
-  void BuildKMerSpectrum(Spectrum& spectrum, int assemStart, int assemLength) {
+  void IndelAssembly::BuildKMerSpectrum(Spectrum& spectrum, int assemStart, int assemLength) {
 
     for(int i = 0; i < (int)ReadsBuffer.size(); ++i) {
       BamAlignment& read = ReadsBuffer[i];
@@ -1036,7 +909,7 @@ public:
 
 
 
-  void SegmentAssembly(int assemStart, int assemLength) {
+  void IndelAssembly::SegmentAssembly(int assemStart, int assemLength) {
 
     if (assemStart >= (int)reference_reader->chr_size(curChrom))
       return;
@@ -1077,7 +950,7 @@ public:
   }
 
 
-  int DetectIndel (int genStart, string reference, Spectrum& spectrum) {
+  int IndelAssembly::DetectIndel (int genStart, string reference, Spectrum& spectrum) {
     int cutFreq = (int)(0.1*(assemVarCov_positive + assemVarCov_negative));    // check this later
     if(cutFreq<MIN_VAR_COUNT)
       cutFreq = MIN_VAR_COUNT;
@@ -1205,7 +1078,7 @@ public:
 
 
 
-  void PrintVCF(const string& refwindow, const Spectrum::TVarCall& v, int contig, int pos,
+  void IndelAssembly::PrintVCF(const string& refwindow, const Spectrum::TVarCall& v, int contig, int pos,
                 string ref, string var,
                 int varLen, int type, int qual) {
 
@@ -1303,22 +1176,40 @@ public:
     for (int sample = 0; sample < sample_manager->num_samples_; ++sample) {
       if (sample == sample_manager->primary_sample_)
         continue;
-      out << "\t./.:0:"
-          << assembly_total_cov.Sample(sample) << ":"
-          << max(assembly_total_cov.Sample(sample) - v.varCov.Sample(sample), 0) << ":"
-          << v.varCov.Sample(sample) << ":"
-          << v.varCov.SampleByStrand(0, sample) << ":"
-          << v.varCov.SampleByStrand(1, sample) << ":"
-          << max(assembly_total_cov.SampleByStrand(0, sample) - v.varCov.SampleByStrand(0, sample), 0) << ":"
-          << max(assembly_total_cov.SampleByStrand(1, sample) - v.varCov.SampleByStrand(1, sample), 0) << ":"
-          << (assembly_total_cov.Sample(sample) ? v.varCov.Sample(sample)/(float)assembly_total_cov.Sample(sample) : 0);
+      if (options->multisample) {
+          int varCounts = v.varCov.Sample(sample);
+          int totCounts = max(assembly_total_cov.Sample(sample), 1);
+          int refCounts = max(totCounts - varCounts, 0);
+          float reffq = (totCounts <= refCounts) ? 1.0f : ((float)refCounts)/((float)totCounts);
+          string genotype = (reffq > 0.2) ? "0/1" : "1/1";
+          out << "\t" << genotype << ":99:"
+              << assembly_total_cov.Sample(sample) << ":"
+              << max(assembly_total_cov.Sample(sample) - v.varCov.Sample(sample), 0) << ":"
+              << v.varCov.Sample(sample) << ":"
+              << v.varCov.SampleByStrand(0, sample) << ":"
+              << v.varCov.SampleByStrand(1, sample) << ":"
+              << max(assembly_total_cov.SampleByStrand(0, sample) - v.varCov.SampleByStrand(0, sample), 0) << ":"
+              << max(assembly_total_cov.SampleByStrand(1, sample) - v.varCov.SampleByStrand(1, sample), 0) << ":"
+              << (assembly_total_cov.Sample(sample) ? v.varCov.Sample(sample)/(float)assembly_total_cov.Sample(sample) : 0);
+      }
+      else {
+          out << "\t./.:0:"
+              << assembly_total_cov.Sample(sample) << ":"
+              << max(assembly_total_cov.Sample(sample) - v.varCov.Sample(sample), 0) << ":"
+              << v.varCov.Sample(sample) << ":"
+              << v.varCov.SampleByStrand(0, sample) << ":"
+              << v.varCov.SampleByStrand(1, sample) << ":"
+              << max(assembly_total_cov.SampleByStrand(0, sample) - v.varCov.SampleByStrand(0, sample), 0) << ":"
+              << max(assembly_total_cov.SampleByStrand(1, sample) - v.varCov.SampleByStrand(1, sample), 0) << ":"
+              << (assembly_total_cov.Sample(sample) ? v.varCov.Sample(sample)/(float)assembly_total_cov.Sample(sample) : 0);
+      }
     }
 
     out << "\n";
   }
 
 
-  void OutputVcfHeader() {
+  void IndelAssembly::OutputVcfHeader() {
     out << "##fileformat=VCFv4.1\n";
     out << "##source=\"tvcassembly "<<IonVersion::GetVersion()<<"-"<<IonVersion::GetRelease()<<" ("<<IonVersion::GetGitHash()<<")\"\n";
     out << "##reference=" << options->reference << "\n";
@@ -1350,8 +1241,7 @@ public:
   }
 
 
-  void AddCounts(BamAlignment& read) {
-
+  void IndelAssembly::AddCounts(BamAlignment& read) {
     int position_in_window = getSoftStart(read) - curLeft;
     int position_in_read = 0;
 
@@ -1365,7 +1255,7 @@ public:
     bool is_primary;
     if (!sample_manager->IdentifySample(read, sample, is_primary))
       return;
-
+  
     bool after_match = false;
     for (vector<CigarOp>::const_iterator cigar = read.CigarData.begin(); cigar != read.CigarData.end(); ++cigar) {
 
@@ -1404,77 +1294,10 @@ public:
       }
     }
   }
-};
+  
+  void IndelAssembly::onTraversalDone() {
+    DetectCandidateRegions(WINDOW_SIZE);
 
-
-const int IndelAssembly::WINDOW_SIZE;
-
-
-
-
-
-
-
-int main(int argc, char* argv[])
-{
-
-  printf("tvcassembly %s-%s (%s) - Torrent Variant Caller - Long Indel Assembly\n\n",
-         IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
-
-
-  IndelAssemblyArgs parsed_opts(argc, argv);
-
-  ReferenceReader reference_reader;
-  reference_reader.Initialize(parsed_opts.reference);
-
-  TargetsManager targets_manager;
-  targets_manager.Initialize(reference_reader, parsed_opts.target_file);
-
-
-  BamMultiReader bam_reader;
-  if (!bam_reader.SetExplicitMergeOrder(BamMultiReader::MergeByCoordinate)) {
-    cerr << "ERROR: Could not set merge order to BamMultiReader::MergeByCoordinate" << endl;
-    exit(1);
+    out.close();
   }
-  if (!bam_reader.Open(parsed_opts.bams)) {
-    cerr << "ERROR: Could not open input BAM file(s) : " << bam_reader.GetErrorString() << endl;
-    exit(1);
-  }
-
-  SampleManager sample_manager;
-  sample_manager.Initialize(bam_reader.GetHeader(), parsed_opts.sample_name, parsed_opts.force_sample_name);
-
-
-
-  IndelAssembly indel_assembly(&parsed_opts, &reference_reader, &sample_manager);
-
-  BamAlignment alignment;
-  vector<MergedTarget>::iterator current_target = targets_manager.merged.begin();
-
-
-  while (bam_reader.GetNextAlignment(alignment)) {
-    if (!alignment.IsMapped())
-      continue;
-
-    while (current_target != targets_manager.merged.end() && (alignment.RefID > current_target->chr || (alignment.RefID == current_target->chr && alignment.Position >= current_target->end)))
-      ++current_target;
-
-    if (current_target == targets_manager.merged.end())
-      break;
-
-    if (alignment.RefID < current_target->chr || (alignment.RefID == current_target->chr && alignment.GetEndPosition() <= current_target->begin))
-      continue;
-
-    indel_assembly.map(alignment);
-  }
-  indel_assembly.onTraversalDone();
-
-  bam_reader.Close();
-
-
-  return 0;
-}
-
-
-
-
+  

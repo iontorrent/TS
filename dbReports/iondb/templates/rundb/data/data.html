@@ -290,6 +290,13 @@ function set_search_subject_sampleTubeLabel(e) {
                     <option value="-repResult__qualitymetrics__q0_bases">Output Desc.</option>
                 </select>
             </div>
+            <div class="search-field">
+                <label for="id_data_source" class=" hide">Data Source</label>
+                <select id="id_data_source" name="data_source" class="chzn-select">
+                    <option value="local">This Torrent Server</option>
+                    <option value="remote">Shared Torrent Servers</option>
+                </select>
+            </div>
             <div class="search-field" style="width: 40px;">
                 <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
                     Clear
@@ -361,6 +368,7 @@ function set_search_subject_sampleTubeLabel(e) {
 {% comment %} NOTE: UGLY HACK to use django STATIC_URL here {% endcomment %}
 {% raw %}
             <div class="pull-left">
+    {{#is_local}}
                 {{#exp.star}}
 {% endraw %}
                     <img src="{% static "resources/img/star-blue.png"%}" border="0" class="completedrun-star" width="18">
@@ -371,6 +379,7 @@ function set_search_subject_sampleTubeLabel(e) {
                     <img src="{% static "resources/img/star_off.png"%}" border="0" class="completedrun-star" width="18">
 {% raw %}
                 {{/exp.star}}
+    {{/is_local}}
                 {{#is_proton}}
 {% endraw %}
                     <img src="{% static "resources/img/proton_jumbo_icon.png"%}" class="pull-left" />
@@ -388,7 +397,7 @@ function set_search_subject_sampleTubeLabel(e) {
                 {{/other_instrument}}
                 {{#exp.plan}}<span class="{{exp.plan.runType}} app-icon-completed"></span>{{/exp.plan}}
             </div>
-            <h1><span rel="tooltip" title="{{ exp.expName }}">{{ prettyExpName }}</span></h1>
+            <h1><span rel="tooltip" title="{{ exp.expName }}">{{{ exp_name_prefix }}}{{ prettyExpName }}</span></h1>
             <h3>{{ exp.pgmName }}</h3>
             <h4>
                 <div class="span3">
@@ -404,7 +413,7 @@ function set_search_subject_sampleTubeLabel(e) {
             </h4>
         </div>
         <div class="span1">
-            <img onerror="this.style.display='none';" src="{{king_report.reportLink}}Bead_density_70.png" />
+            <img onerror="this.style.display='none';" src="{{url_prefix}}{{king_report.reportLink}}Bead_density_70.png" />
         </div>
         <div class="completedrun-items span3">
             <ul class="unstyled">
@@ -423,8 +432,8 @@ function set_search_subject_sampleTubeLabel(e) {
             </ul>
         </div>
         <div class="run-actions pull-right">
-            <a class="btn btn-tertiary reanalyze-run btn75" href="/report/analyze/{{exp.id}}/0" >Reanalyze</a>
-            <a class="btn btn-tertiary btn75" href="/plan/page_plan_edit_run/{{exp.id}}/">Edit</a>
+            <a class="btn btn-tertiary reanalyze-run btn75" href="{{url_prefix}}/report/analyze/{{exp.id}}/0" >Reanalyze</a>
+            <a class="btn btn-tertiary btn75" href="{{url_prefix}}/plan/page_plan_edit_run/{{exp.id}}/">Edit</a>
             {{#comment}}
             <div class="btn-group storage">
 				{{#exp.archived}}
@@ -472,8 +481,8 @@ function set_search_subject_sampleTubeLabel(e) {
 </script>
 <script type="text/template" id="report_template">
     {{#report}}
-        <td><i class="icon-thumbs-up{{^representative}} icon-unchecked{{/representative}}"></i></td>
-        <td><span class="pull-left name-shorten"><a href="/report/{{id}}/" target="_blank" alt="Open report in new tab.">{{resultsName}}</a></span></td>
+        <td>{{#is_local}}<i class="icon-thumbs-up{{^representative}} icon-unchecked{{/representative}}"></i>{{/is_local}}</td>
+        <td><span class="pull-left name-shorten"><a href="{{url_prefix}}/report/{{id}}/" target="_blank" alt="Open report in new tab.">{{resultsName}}</a></span></td>
         <td>{{reads_q20}}</td>
         <td>{{read_length}}</td>
         <td>{{total_q20bp}}</td>
@@ -481,6 +490,7 @@ function set_search_subject_sampleTubeLabel(e) {
         <td>{{date_string}}</td>
         <td>{{status}}</td>
         <td style="overflow:visible;">
+            {{#is_local}}
             <div class="btn-group pull-right">
                 <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
 {% endraw %}
@@ -501,6 +511,7 @@ function set_search_subject_sampleTubeLabel(e) {
                     <li><a href="#" class="dm-actions">Data management</a></li>
                 </ul>
             </div>
+            {{/is_local}}
         </td>
     {{/report}}
 </script>
@@ -571,7 +582,7 @@ function set_search_subject_sampleTubeLabel(e) {
         {{/exp.star}}
     </td>
     <td>
-        {{ exp.expName }}
+        {{{ exp_name_prefix }}}{{ exp.expName }}
     </td>
     <td class="samples"></td>
     <td>
@@ -598,7 +609,7 @@ function set_search_subject_sampleTubeLabel(e) {
     <td>{{ exp.chipDescription }}</td>
     <td>
         {{#king_report}}
-            <a href="/report/{{king_report.id}}/" alt="Open report in new window." title="{{king_report.resultsName}}" target="_blank">{{king_report.resultsName}}</a>
+            <a href="{{url_prefix}}/report/{{king_report.id}}/" alt="Open report in new window." title="{{king_report.resultsName}}" target="_blank">{{king_report.resultsName}}</a>
         {{/king_report}}
     </td>
     <td>
@@ -621,8 +632,8 @@ function set_search_subject_sampleTubeLabel(e) {
             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></a>
 {% raw %}
             <ul class="dropdown-menu">
-                <li><a href="/report/analyze/{{exp.id}}/0/" class="reanalyze-run">Reanalyze</a></li>
-                <li><a href="/plan/page_plan_edit_run/{{exp.id}}/">Edit</a></li>
+                <li><a href="{{url_prefix}}/report/analyze/{{exp.id}}/0/" class="reanalyze-run">Reanalyze</a></li>
+                <li><a href="{{url_prefix}}/plan/page_plan_edit_run/{{exp.id}}/">Edit</a></li>
             </ul>
         </div>
     </td>

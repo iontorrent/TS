@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved */
 
 /* Author: Alex Artyomenko <aartyomenko@cs.gsu.edu> */
 
@@ -63,7 +63,7 @@ bool OrderedBAMWriter::cond(Alignment *current) {
                                   */
 }
 
-Alignment* OrderedBAMWriter::process_new_etries(Alignment *list) {
+Alignment* OrderedBAMWriter::process_new_entries(Alignment *list) {
   if (!list) return NULL;
   Alignment * last = list;
   for (Alignment* current = list;current; last = current, current = current->next) {

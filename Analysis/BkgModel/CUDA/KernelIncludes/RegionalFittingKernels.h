@@ -17,24 +17,20 @@
 __global__ 
 void PerformMultiFlowRegionalFitting(
   const unsigned short * RegionMask,
-  const short *observedTrace, // REGIONS X NUM_SAMPLES_RF x F
   const float *beadParamCube,
   const unsigned short *beadStateCube,
-  const float *emphasisVec, //(MAX_POISSON_TABLE_COL)*F
-  const int *nonZeroEmphFrames, 
-  float *nucRise,
+  const float *crudeemphasisVec, //(MAX_POISSON_TABLE_COL)*F
+  const int *crudenonZeroEmphFrames, 
+  float *finenucRise,
+  float *coarsenucRise,
   float *scratchSpace,
   const size_t *numFramesRegion,
   const ConstantParamsRegion * constRegP,
   PerFlowParamsRegion * perFlowRegP,
   const PerNucParamsRegion * perNucRegP,
   const float * RegionFrameCube,
-  const float * EmptyTracesRegion,
-  const int *NumSamples,
-  const size_t numFlows
+  const int *NumSamples
 );
-
-
 
 
 

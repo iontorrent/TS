@@ -214,7 +214,9 @@ typedef struct __tmap_map_opt_t {
     int32_t input_compr;  /*!< the input compression type (-j,--input-bz2 and -z,--input-gz) */
     int32_t output_type;  /*!< the output type (0 - SAM, 1 - BAM (compressed), 2 - BAM (uncompressed)) (-o,--output-type) */
     int32_t end_repair; /*!< specifies to perform 5' end repair (0 - disabled, 1 - prefer mismatches, 2 - prefer indels) (--end-repair) */
-    int32_t min_indel_end_repair;  /*!< Try to save long indel from end repair by count a longest indel as 1 error */
+    int32_t max_one_large_indel_rescue;  /*!< Try to rescue lone indel with amplicon info, largest gap to be rescued */
+    int32_t min_anchor_large_indel_rescue; /*!< minimum size of anchor needed to open one large gap*/
+    int32_t amplicon_overrun; /*!< maximum allowed alignment to overrun amplicon edge in one large indel alignment*/
     int32_t max_adapter_bases_for_soft_clipping; /*!< specifies to perform 3' soft-clipping (via -g) if at most this # of adapter bases were found (ZB tag) (--max-adapter-bases-for-soft-clipping) */ 
     key_t shm_key;  /*!< the shared memory key (-k,--shared-memory-key) */
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
@@ -248,6 +250,8 @@ typedef struct __tmap_map_opt_t {
 
     // DVK: alignment length filtering
     int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */
+    double  min_al_cov; /*!< minimal aligned fraction of the read */
+    double  min_identity; /*!< minimal identity (fraction) of the alignment */
 
     // stats output control
     int32_t report_stats;

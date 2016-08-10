@@ -1,20 +1,21 @@
 {%extends "rundb/plan/page_plan/base.html"%}
 {% block extra_head %}
 {{ block.super }}
-{% load static %}
+{% load static from staticfiles %}
 <script src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
     <link rel="stylesheet" type="text/css"
         href="{% static "jquery/colorbox/colorbox.css"%}" media="screen"/>
     <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
         type="text/css"/>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/by_sample.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_sample_table.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_analysis_params_section.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/iru_get_user_input.js"></script>
-<script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/iru_validation.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/validation.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_sample_table.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_reference_section.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_analysis_params_section.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/ionreporter_util.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/iru_get_user_input.js" %}"></script>
+<script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
+<script type="text/javascript" src="{% static "jquery/js/jquery.form.js" %}"></script>
 <style>
 .k-header {
     font-weight: bold!important;
@@ -66,9 +67,16 @@
 {{ block.super }}
 <script type="text/javascript">
 
-    var SAMPLESETITEMS = {};
+    var SAMPLESETITEMS = [];
     {% for item in step.prepopulatedFields.samplesetitems %}
-        SAMPLESETITEMS["{{item.sample.displayedName}}"] = {
+        var display = "{{item.sample.displayedName}}";
+        {% if step.prepopulatedFields.showSampleSetInfo %}
+            display += " (" + "{{item.sampleSet.displayedName}}" + ")";
+        {% endif %}
+
+        SAMPLESETITEMS.push({
+            "sampleName":       "{{item.sample.displayedName}}",
+            "display":          display,
             "barcodeId":        "{{item.dnabarcode.id_str}}",
             "externalId":       "{{item.sample.externalId}}",
             "description":      "{{item.sample.description}}",
@@ -80,56 +88,9 @@
             "irembryoID":       "{{item.embryoId}}",
             "irRelationRole":   "{{item.relationshipRole}}",
             "irSetID"    :      "{{item.relationshipGroup}}"
-        }
+        });
     {% endfor %}
 
-    var USERINPUT = USERINPUT || {};
-
-    USERINPUT.validate = USERINPUT.is_by_sample = true;
-
-    USERINPUT.ir_sample_to_tss_sample = {};
-    USERINPUT.preset_ir_fields = [];
-    
-    USERINPUT.account_id = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}";
-    USERINPUT.workflow = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}";
-    USERINPUT.account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}";
-    
-    USERINPUT.is_ir_connected = false;
-
-    USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
-    USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
-
-    {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
-        var ir_term = "{{sample_annotation.iRValue}}";
-        var ir_terms = ir_term.split("|");
-        $.each(ir_terms, function(i) {
-            var term = ir_terms[i];
-            if (typeof USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"] == 'undefined') {
-                USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"] = []
-            }
-            USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"].push(term);
-        });
-    {%endfor%}
-
-    {% for sampleValues in step.savedObjects.samplesTableList %}
-        var _array = [];
-        _array.push("{{forloop.counter0}}");
-        _array.push("{{sampleValues.sampleName|default_if_none:""}}");
-        _array.push("{{sampleValues.irGender|default_if_none:""}}");
-        
-        _array.push("{{sampleValues.ircancerType|default_if_none:""}}");
-        _array.push("{{sampleValues.ircellularityPct|default_if_none:""}}");
-        _array.push("{{sampleValues.irbiopsyDays|default_if_none:""}}");
-        _array.push("{{sampleValues.ircoupleID|default_if_none:""}}");
-        _array.push("{{sampleValues.irembryoID|default_if_none:""}}");
-              
-        _array.push("{{sampleValues.irWorkflow|default_if_none:""}}");
-        _array.push("{{sampleValues.irRelationshipType|default_if_none:""}}");
-        _array.push("{{sampleValues.irRelationRole|default_if_none:""}}");
-        _array.push("{{sampleValues.irSetID|default:"1"}}");
-        USERINPUT.preset_ir_fields.push(_array);
-    {%endfor%}
-    
     var BARCODES = {{step.prepopulatedFields.barcodeSets_barcodes|safe}};
 
 </script>

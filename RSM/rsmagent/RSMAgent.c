@@ -1,7 +1,6 @@
-//
-// Remote Support and Monitor Agent - Torrent Server
-// (c) 2011 Life Technologies, Ion Torrent
-//
+/* Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved.
+   Remote Support and Monitor Agent - Torrent Server
+*/
 #define _BSD_SOURCE
 // for sigprocmask
 #define _POSIX_SOURCE
@@ -45,6 +44,8 @@
 #define ALT_SN			SPOOL_DIR "/serial_number.alt"
 #define LOC_FILE		SPOOL_DIR "/loc.txt"
 #define RAIDINFO_FILE	SPOOL_DIR "/raidstatus.json"
+#define NEXENTA_DATA	SPOOL_DIR "/nexenta_data.txt"
+#define NEXENTA_CHECKSUM	SPOOL_DIR "/nexenta_md5sum.txt"
 #define LINELEN 128
 #define RSSH_RESULTS_FILE "/tmp/rsshResults"
 #define RSSH_CMD_FILE "/tmp/rsshcmd"
@@ -63,6 +64,7 @@ typedef enum {
 	STATUS_NETWORK,
 	STATUS_EXPERIMENT,
 	STATUS_RAIDINFO,
+	STATUS_NEXENTA,
 	STATUS_GPU
 } StatusType;
 
@@ -132,6 +134,7 @@ static double percentFull = -1.0;
 static time_t lastVersionModTime = 0;
 static time_t lastContactInfoTime = 0;
 static time_t lastLocationInfoTime = 0;
+static char lastNexentaChecksum [64] = {0};
 static int wantConfigUpdate = 1;
 static char const * const gpuErrorFile = "/var/spool/ion/gpuErrors";
 static char savedOsVersion[LINELEN] = {0};
@@ -141,12 +144,13 @@ UpdateItem updateItem[] = {
 		{STATUS_CONTACTINFO, 120, 0},	// check every 2 min but only send updates if contact info has changed
 		{STATUS_LOCATIONINFO,120, 0},	// check every 2 min but only send updates if location info has changed
 		{STATUS_EXPERIMENT, 120, 0},
+		{STATUS_NEXENTA, 300, 0},		// check every 5 min but only send updates if Nexenta info has changed
 		{STATUS_SERVICES, 360, 0},		// send status of all servers every 6 minutes, even if no change
 		{STATUS_FILESERVERS, 600, 0},
 		{STATUS_INSTRS, 3600, 0},
 		{STATUS_OS_VERSION, 3600, 0},
 		//{STATUS_NETWORK, 3600, 0},
-		{STATUS_RAIDINFO,  600, 0},
+		{STATUS_RAIDINFO, 600, 0},
 		{STATUS_GPU, 120, 0},
 };
 unsigned int numUpdateItems = sizeof(updateItem) / sizeof(UpdateItem);
@@ -166,6 +170,8 @@ void buildRaidAlarmName(const int eNum, const int sNum, char const * const iName
 void WriteAeStringDataItem(char const * const subcat, char const * const key,
 		char const * const value, AeDRMDataItem *item);
 void readGpuErrorFile(char const * const filename, int *gpuFound, int *allRevsValid);
+void getNexentaData(AeDRMDataItem *dataItem);
+void readNexentaData(char const * const filename, AeDRMDataItem *dataItem);
 
 // file upload callbacks
 static AeBool OnFileUploadBegin(AeInt32 iDeviceId, AeFileUploadSpec **ppUploads, AePointer *ppUserData);
@@ -886,6 +892,10 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 			prevAllRevsValid = allRevsValid;
 		}
 		break;
+
+	case STATUS_NEXENTA:
+		getNexentaData(dataItem);
+		break;
 	}
 
 	return ret;
@@ -1485,6 +1495,73 @@ void SendServersStatus(AeDRMDataItem *dataItem)
 		fprintf(stderr, "%s: rename: %s\n", __FUNCTION__, strerror(errno));
 }
 
+void getNexentaData(AeDRMDataItem *dataItem)
+{
+	// Run the script to get the current Nexenta data.
+	char const * const nexentaScript = "/opt/ion/RSM/get_nexenta_for_axeda.py";
+	if (verbose)
+		printf("running %s\n", nexentaScript);
+	int rc __attribute__((unused)) = system(nexentaScript);
+
+	// Send the Nexenta data to Axeda only if it has been modified since we last read it
+	// or if we haven't seen any yet.
+	int thereIsNewData = 1;	// If there is no checksum file, we should send the data.
+	char checksum[128] = {0};
+	FILE *fp = fopen(NEXENTA_CHECKSUM, "rb");
+	if (fp) {
+		if (fgets(checksum, sizeof(checksum), fp) != NULL) {
+			thereIsNewData = strncmp(checksum, lastNexentaChecksum, sizeof(checksum)) != 0;
+			if (verbose)
+				printf("%s\n", thereIsNewData ? "There is new Nexenta data" : "Nexenta data has not changed");
+			if (thereIsNewData) {
+				snprintf(lastNexentaChecksum, sizeof(lastNexentaChecksum), "%s", checksum);
+			}
+		}
+		fclose(fp);
+	}
+	else if (verbose) {
+		printf("RSMAgent_TS failed to open %s for input.\n", NEXENTA_CHECKSUM);
+	}
+
+
+	if (thereIsNewData) {
+		if (verbose)
+			printf("reading nexenta data\n");
+		readNexentaData(NEXENTA_DATA, dataItem);
+		// no need to set ret to 1, we have already posted the data
+	}
+}
+
+// Read raidstatus.json and identify the items with non-blank, non-good status
+void readNexentaData(char const * const filename, AeDRMDataItem *dataItem)
+{
+	FILE *fp = fopen(filename, "r");
+	if (fp) {
+		char line[256];
+		while (fgets(line, sizeof(line), fp)) {
+			char *key = line;
+			char *val = strchr(line, ':');
+			if (val) {
+				*val = '\0';					// set the end of the key string
+				++val; 							// skip over :
+				while (val && *val == ' ')		// skip over leading whitespace
+					++val;
+				trimTrailingWhitespace(val);	// drop the trailing newline
+
+				if (verbose)
+					printf("%s=%s\n", key, val);
+
+				WriteAeStringDataItem(NULL, key, val, dataItem);
+				AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
+			}
+		}
+		fclose(fp);
+	}
+	else if (verbose) {
+		printf("RSMAgent_TS failed to open %s for input.\n", filename);
+	}
+}
+
 /******************************************************************************
  * Callbacks
  ******************************************************************************/
@@ -1562,10 +1639,15 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 	pUpload = (AeDemoUpload *) pUserData;
 	if (!pUpload)
 		return AeFalse;
+	if (!pUpload->ppUploads)
+		return AeFalse;
 
 	/* no more files to upload: indicate that */
 	if (!pUpload->ppUploads[pUpload->iUploadIdx])
 		return AeTrue;
+
+	if (!pUpload->ppUploads[pUpload->iUploadIdx]->pName)
+		return AeFalse;
 
 	/* initialize next file */
 	if (pUpload->iCurFileHandle == AeFileInvalidHandle)	{

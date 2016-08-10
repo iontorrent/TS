@@ -1,6 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "BkgFitOptim.h"
+#include "BkgFitStructures.h"
 
 
 
@@ -378,5 +379,125 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
     InitializeLevMarFitter(mb,& (fi), flow_block_size);
 }
 
+
+master_fit_type_entry master_fit_type_table::base_bkg_model_fit_type[] =
+{
+//{"name",                     &fit_descriptor,                              NULL, {NULL,0,NULL,0}},
+  // individual well fits
+  {"FitWellAmpl",               BkgFitStructures::fit_well_ampl_descriptor,                    NULL, {NULL,0,NULL,0}},
+  {"FitWellAmplBuffering",      BkgFitStructures::fit_well_ampl_buffering_descriptor,          NULL, {NULL,0,NULL,0}},
+  {"FitWellPostKey",            BkgFitStructures::fit_well_post_key_descriptor,                NULL, {NULL,0,NULL,0}},
+  {"FitWellAll",                BkgFitStructures::fit_well_all_descriptor,                     NULL, {NULL,0,NULL,0}},
+  {"FitWellPostKeyNoDmult",     BkgFitStructures::fit_well_post_key_descriptor_nodmult,        NULL, {NULL,0,NULL,0}},
+
+  // region-wide fits
+  {"FitRegionTmidnucPlus",      BkgFitStructures::fit_region_tmidnuc_plus_descriptor,          NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2",            BkgFitStructures::fit_region_init2_descriptor,                 NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2TauE",        BkgFitStructures::fit_region_init2_taue_descriptor,            NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2TauENoRDR",   BkgFitStructures::fit_region_init2_taue_NoRDR_descriptor,      NULL, {NULL,0,NULL,0}},
+  {"FitRegionFull",             BkgFitStructures::fit_region_full_descriptor,                  NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauE",         BkgFitStructures::fit_region_full_taue_descriptor,             NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauENoRDR",    BkgFitStructures::fit_region_full_taue_NoRDR_descriptor,       NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2NoRDR",       BkgFitStructures::fit_region_init2_noRatioDrift_descriptor,    NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullNoRDR",        BkgFitStructures::fit_region_full_noRatioDrift_descriptor,     NULL, {NULL,0,NULL,0}},
+  {"FitRegionTimeVarying",      BkgFitStructures::fit_region_time_varying_descriptor,          NULL, {NULL,0,NULL,0}},
+  {"FitRegionDarkness",         BkgFitStructures::fit_region_darkness_descriptor,              NULL, {NULL,0,NULL,0}},
+
+  //region-wide fits without diffusion
+  {"FitRegionInit2TauENoD",     BkgFitStructures::fit_region_init2_taue_NoD_descriptor,        NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2TauENoRDRNoD",BkgFitStructures::fit_region_init2_taue_NoRDR_NoD_descriptor,  NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauENoD",      BkgFitStructures::fit_region_full_taue_NoD_descriptor,         NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauENoRDRNoD", BkgFitStructures::fit_region_full_taue_NoRDR_NoD_descriptor,   NULL, {NULL,0,NULL,0}},
+
+  { NULL, NULL, NULL, {NULL,0,NULL,0} },  // end of table
+};
+
+
+fit_instructions *master_fit_type_table::GetFitInstructionsByName(const char *name) const
+{
+  for (int i=0;data[i].name != NULL;i++)
+  {
+    if (strcmp(data[i].name,name) == 0)
+      return &data[i].fi;
+  }
+
+  return NULL;
+}
+
+fit_descriptor *master_fit_type_table::GetFitDescriptorByName(const char *name) const
+{
+  for (int i=0;data[i].name != NULL;i++)
+  {
+    if (strcmp(data[i].name,name) == 0)
+      return data[i].fd;
+  }
+
+  return NULL;
+}
+
+
+// @TODO:  Potential bug here due to historical optimization
+// does not update for further blocks of flows
+// Needs to update as blocks of flows arrive
+// fit instructions are optimized for first block of flows only
+// can be in error for later blocks of flows.
+master_fit_type_table::master_fit_type_table( 
+    const FlowMyTears & tears, 
+    int flow_start, 
+    int flow_key, 
+    int flow_block_size
+  )
+{
+  int my_nuc_block[flow_block_size];
+  tears.GetFlowOrderBlock( my_nuc_block, flow_start, flow_start + flow_block_size );
+
+  // We want to copy the prototype table.
+  data = new master_fit_type_entry[ sizeof( base_bkg_model_fit_type ) / 
+                                    sizeof( master_fit_type_entry ) ];
+
+  // go through the master table of fit types and generate all the build
+  // instructions for each type of fitting we are going to do
+  for (int i=0 ; ; i++)
+  {
+    data[i] = base_bkg_model_fit_type[i];
+
+    if ( base_bkg_model_fit_type[i].name == NULL )  break;
+
+    data[i].CreateBuildInstructions(my_nuc_block, std::max( flow_key - flow_start, 0 ), flow_block_size);
+  }
+}
+
+master_fit_type_table::~master_fit_type_table()
+{
+  for (int i=0;data[i].name != NULL;i++)
+  {
+    struct master_fit_type_entry *ft = &data[i];
+
+    // make sure there is a high-level descriptor for this row
+    // if there wasn't one, then the row might contain a hard link to
+    // a statically allocated matrix build instruction which we don't
+    // want to free
+    if (ft->fd != NULL)
+    {
+      if (ft->mb != NULL)
+      {
+        delete [](ft->mb);
+        ft->mb = NULL;
+      }
+    }
+
+    if (ft->fi.input != NULL)
+      delete [] ft->fi.input;
+
+    if (ft->fi.output != NULL)
+      delete [] ft->fi.output;
+
+    ft->fi.input  = NULL;
+    ft->fi.output = NULL;
+  }
+
+  // Final cleanup.
+  delete [] data;
+}
 
 

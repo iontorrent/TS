@@ -20,13 +20,14 @@ import ion.plugin.base
 import logging
 LOG = logging.getLogger(__name__)
 
-__all__ = ('PluginCLI','cli',)
+__all__ = ('PluginCLI', 'cli',)
 
 
 # atexit handler
 def plugin_shutdown(runningcli):
     if runningcli.ret is not None:
         sys.exit(runningcli.ret)
+
 
 class PluginCLI(object):
     EXIT_SUCCESS = 0
@@ -39,14 +40,14 @@ class PluginCLI(object):
             frm = inspect.stack()[1]
             pluginmod = inspect.getmodule(frm[0])
             (name, suffix, mode, module_type) = inspect.getmoduleinfo(pluginmod.__file__)
-            #name = inspect.getmodulename(pluginmod)
+            # name = inspect.getmodulename(pluginmod)
             self.cls = getattr(pluginmod, name)
         elif isinstance(plugin, types.TypeType):
             # Got class - recommended usage
             self.cls = plugin
         elif isinstance(plugin, types.ModuleType):
             # Got Module (returned from import. Find class of same name
-            #cache.load_module(module.__name__)
+            # cache.load_module(module.__name__)
             # FIXME - iterate through all module attrs to find the class
             for name, obj in inspect.getmembers(plugin):
                 if hasattr(obj, "__bases__") and ion.plugin.base.IonPluginBase in obj.__bases__:
@@ -73,7 +74,7 @@ class PluginCLI(object):
     def run(self):
         self.parse_command_line()
 
-        ## Instantiate class with proper environment
+        # Instantiate class with proper environment
         if not self.instance:
             self.instance = self.cls()
         plugin = self.instance
@@ -90,7 +91,6 @@ class PluginCLI(object):
                 LOG.fatal("Block runmode requires --block identifier")
                 return self.EXIT_ERROR
             return plugin.block(self.options.block)
-
 
     def parse_command_line(self):
         version = getattr(self.cls, '__version__', getattr(self.cls, 'version', "(Unknown)"))
@@ -114,4 +114,3 @@ class PluginCLI(object):
         return
 
 cli = PluginCLI
-

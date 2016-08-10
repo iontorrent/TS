@@ -1,0 +1,21 @@
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
+# INPUT: PLUGIN_NAME
+#        CMAKE_CURRENT_SOURCE_DIR
+# OUPTUT: VERSION
+# DESCRIPTION: This will grep through the plugin script file looking for the version number and assign it to the VERSION variable
+
+# get the file version from either launch.sh or <plugin_name>.py script file
+SET(PLUGIN_PYTHON_FILE_NAME "${PLUGIN_NAME}.py")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_PYTHON_FILE_NAME}")
+    SET(SCRIPT_NAME "${PLUGIN_PYTHON_FILE_NAME}")
+else()
+    SET(SCRIPT_NAME "launch.sh")
+endif()
+EXECUTE_PROCESS(COMMAND grep -i VERSION\\s*= ${CMAKE_CURRENT_SOURCE_DIR}/${SCRIPT_NAME} COMMAND head -n 1 COMMAND sed -E "s/(.*)=(.*)/\\2/" OUTPUT_VARIABLE VERSION)
+STRING(REGEX REPLACE "(\"|'|\\s|\t|\r|\n)" "" VERSION ${VERSION})
+STRING(STRIP ${VERSION} VERSION)
+
+# test the version number
+if(NOT VERSION MATCHES "^[0-9]+(\\.[0-9]+)+$")
+    MESSAGE(FATAL_ERROR "Invalid version number in launch script - " ${VERSION})
+endif()

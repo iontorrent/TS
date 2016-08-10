@@ -11,6 +11,7 @@
 #include <vector>
 #include "OptArgs.h"
 #include "json/json.h"
+#include "MolecularTagTrimmer.h"
 
 using namespace std;
 
@@ -39,8 +40,12 @@ class EnsembleEvalTuningParameters {
     float soft_clip_bias_checker;
     float filter_deletion_bias;
     float filter_insertion_bias;
+
     int   max_detail_level;
+    int   min_detail_level_for_fast_scan;
+    bool  try_few_restart_freq;
     
+    bool preserve_full_data; // Preserve the data for all flows if true, otherwise preserve the data only at test flows
 
     EnsembleEvalTuningParameters() {
       germline_prior_strength = 0.0f;
@@ -62,12 +67,15 @@ class EnsembleEvalTuningParameters {
       filter_deletion_bias = 10.0f;
       filter_insertion_bias = 10.0f;
       max_detail_level = 0;
-      
+      min_detail_level_for_fast_scan = 2500;
+
+      try_few_restart_freq = false;
+      preserve_full_data = false;
       //use_all_compare_for_test_flows = false;
     };
 
     float DataReliability() {
-      return(1.0f -outlier_prob);
+      return(1.0f - outlier_prob);
     };
 
     void CheckParameterLimits();
@@ -86,6 +94,7 @@ class BasicFilters {
 
     int min_cov;
     int min_cov_each_strand;
+    int min_var_cov;
 
     BasicFilters() {
       min_allele_freq = 0.2f;
@@ -95,6 +104,7 @@ class BasicFilters {
       min_cov = 3;
       min_cov_each_strand = 3;
       min_quality_score = 2.5f;
+      min_var_cov = 0;
     };
 };
 
@@ -162,6 +172,10 @@ class ControlCallAndFilters {
     float position_bias;
     float position_bias_pval;
 
+    // Dima's LOD filter
+    bool use_lod_filter;
+    float lod_multiplier;
+
     ClassifyFilters filter_variant;
 
     // tuning parameter for xbias 
@@ -185,6 +199,8 @@ class ProgramControlSettings {
     int nVariantsPerThread;
     int DEBUG;
 
+    bool do_indel_assembly;
+
     bool rich_json_diagnostic;
     bool minimal_diagnostic;
      string json_plot_dir;
@@ -195,11 +211,16 @@ class ProgramControlSettings {
 
     bool inputPositionsOnly;
 
+    bool is_multi_min_allele_freq;
+    vector<float> snp_multi_min_allele_freq;
+    vector<float> mnp_multi_min_allele_freq;
+    vector<float> indel_multi_min_allele_freq;
+    vector<float> hotspot_multi_min_allele_freq;
+
     ProgramControlSettings();
     void SetOpts(OptArgs &opts, Json::Value & pf_params);
     void CheckParameterLimits();
 };
-
 
 class ExtendParameters {
 public:
@@ -207,6 +228,7 @@ public:
   string            fasta;                // -f --fasta-reference
   string            targets;              // -t --targets
   string            outputFile;
+  string            blacklistFile;
   string            variantPriorsFile;
   string            postprocessed_bam;
 
@@ -235,14 +257,16 @@ public:
   int minAltCount;             // -C --min-alternate-count
   int minAltTotal;             // -G --min-alternate-total
   int minCoverage;             // -! --min-coverage
+  int mergeLookAhead;          // --merge-variant-lookahead
   bool debug; // set if debuglevel >=1
+  bool multisample;            // multisample run
 
 
-
-	OptArgs opts;
+  OptArgs opts;
   ControlCallAndFilters my_controls;
   EnsembleEvalTuningParameters my_eval_control;
   ProgramControlSettings program_flow;
+  TagTrimmerParameters         tag_trimmer_parameters;
 
   //Input files
   string outputDir;
@@ -263,7 +287,7 @@ public:
   ExtendParameters(int argc, char** argv);
 
   bool ValidateAndCanonicalizePath(string &path);
-  void SetupFileIO(OptArgs &opts);
+  void SetupFileIO(OptArgs &opts, Json::Value& tvc_params);
   void SetFreeBayesParameters(OptArgs &opts, Json::Value& fb_params);
   void ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params, Json::Value &fb_params, Json::Value &params_meta);
   void CheckParameterLimits();
@@ -326,6 +350,8 @@ bool CheckParameterUpperBound(string identifier ,T &parameter, T upper_limit) {
   cout << endl;
   return (is_ok);
 }
+
+bool CheckParameterStringContext(string identifier, string &parameter, const string &context, const string &default_value);
 
 #endif // EXTENDPARAMETERS_H
 

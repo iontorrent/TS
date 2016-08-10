@@ -5,7 +5,7 @@
 Tasks
 =====
 
-The ``tasks`` module contains Python functions which spawn Celery tasks 
+The ``tasks`` module contains Python functions which spawn Celery tasks
 in the background.
 
 Not all functions contained in ``tasks`` are actual Celery tasks, only those
@@ -29,6 +29,7 @@ __version__ = filter(str.isdigit, "$Revision: 74807 $")
 
 logger = get_task_logger(__name__)
 
+
 def numBarcodes(r):
     """Count the number of barcodes in this run that weren't filtered out of the views.py output """
     nBarcodes = 0;
@@ -41,13 +42,14 @@ def numBarcodes(r):
             for read_group in read_groups:
                 try:
                     if not read_groups[read_group]['filtered']:
-                        if "nomatch" not in read_groups[read_group]['barcode_name']: 
+                        if "nomatch" not in read_groups[read_group]['barcode_name']:
                             nBarcodes = nBarcodes + 1
                 except:
                     pass
     except:
         pass
-    return nBarcodes 
+    return nBarcodes
+
 
 @app.task
 def createRSMExperimentMetrics(resultId):
@@ -60,7 +62,7 @@ def createRSMExperimentMetrics(resultId):
         logger.debug("createRSMExperimentMetrics after results objects")
 
         # initialize metrics object
-        metrics = [ ]
+        metrics = []
 
         # information from explog
         e = r.experiment
@@ -74,16 +76,16 @@ def createRSMExperimentMetrics(resultId):
 
         explog = e.log
         keys = [
-                'serial_number',
-                'run_number',
-                'chipbarcode',
-                'seqbarcode',
-                'flows',
-                'cycles',
-                'gain',
-                'noise',
-                'cal_chip_high_low_inrange'
-                ]
+            'serial_number',
+            'run_number',
+            'chipbarcode',
+            'seqbarcode',
+            'flows',
+            'cycles',
+            'gain',
+            'noise',
+            'cal_chip_high_low_inrange'
+            ]
 
         for k in keys:
             try:
@@ -95,12 +97,12 @@ def createRSMExperimentMetrics(resultId):
 
         # information from libmetrics
         keys = [
-                'sysSNR',
-                'aveKeyCounts',
-                'total_mapped_target_bases',
-                'totalNumReads',
-                'raw_accuracy',
-                ]
+            'sysSNR',
+            'aveKeyCounts',
+            'total_mapped_target_bases',
+            'totalNumReads',
+            'raw_accuracy',
+            ]
         for k in keys:
             try:
                 # there should be only one libmetrics in the set
@@ -112,9 +114,9 @@ def createRSMExperimentMetrics(resultId):
 
         # information from quality metrics
         keys = [
-                'q17_mean_read_length',
-                'q20_mean_read_length',
-                ]
+            'q17_mean_read_length',
+            'q20_mean_read_length',
+            ]
         for k in keys:
             try:
                 # there should be only one qualitymetrics in the set
@@ -141,7 +143,7 @@ def createRSMExperimentMetrics(resultId):
             pass
 
         try:
-            #metrics.append("runPlanName:" + e.plan); not wanted 
+            # metrics.append("runPlanName:" + e.plan); not wanted
             metrics.append("isBarcoded:" + str(e.isBarcoded()));
             nBarcodes = numBarcodes(r)
             metrics.append("numBarcodes:" + str(nBarcodes));
@@ -164,10 +166,10 @@ def createRSMExperimentMetrics(resultId):
         wells_with_isps = 0
         addressable_wells = 0
         keys = [
-                'bead',
-                'empty',
-                'pinned',
-                'ignored',
+            'bead',
+            'empty',
+            'pinned',
+            'ignored',
             ]
         for k in keys:
             try:
@@ -186,8 +188,8 @@ def createRSMExperimentMetrics(resultId):
 
         # write out the metrics
         x = uuid.uuid1()
-        fname = os.path.join("/var/spool/ion/",'TSexperiment-' + str(x) + '.txt')
-        f = open(fname, 'w' )
+        fname = os.path.join("/var/spool/ion/", 'TSexperiment-' + str(x) + '.txt')
+        f = open(fname, 'w')
 
         try:
             f.write("\n".join(metrics))

@@ -5,8 +5,8 @@
 
 __version__ = '1.0'
 
-import os, sys,logging
-#from ion.plugin.utils.pluginsLogger import *
+import os, sys, logging
+# from ion.plugin.utils.pluginsLogger import *
 from optparse import OptionParser
 import json
 from glob import glob
@@ -22,69 +22,70 @@ import shutil
 from distutils.sysconfig import get_python_lib
 from ion.plugin.utils.Utility import Utility
 
+
 class Validateimage(Utility):
+
         """Check for proper json format in the image section"""
 
-        def expandimage(self,section):
+        def expandimage(self, section):
             """Set the Default values of the section"""
-            #vimagelog = logging.getLogger("imagelogging")
+            # vimagelog = logging.getLogger("imagelogging")
             self.section = section
             self.section["id"] = self.generateID()
             imagesinDir = []
 
-            #print "in Validimage constructor"
+            # print "in Validimage constructor"
             if "title" not in self.section:
                 logging.error("title not provided for field section type %s. Using the default title. " % self.section["type"])
                 self.section["title"] = "Image Section"
             if "resultsDir" in self.section:
                 logging.debug("Looking for images in resultsDir %s" % self.section["resultsDir"])
-                imagesinDir = glob(os.path.join(self.results_dir, self.section["resultsDir"],"*.png"))
-                #imagesinDir.append(glob.glob("*.jpg"))
-                imageList = [os.path.join(self.section["resultsDir"] , os.path.basename(img)) for img in imagesinDir]
+                imagesinDir = glob(os.path.join(self.results_dir, self.section["resultsDir"], "*.png"))
+                # imagesinDir.append(glob.glob("*.jpg"))
+                imageList = [os.path.join(self.section["resultsDir"], os.path.basename(img)) for img in imagesinDir]
                 self.section["content"] = imageList
                 logging.debug("Found images %s in results directory" % self.section["content"])
 
-
-            self.imageArray=[]
+            self.imageArray = []
             if "content" in self.section and self.section["content"]:
-                if isinstance(self.section["content"][0],types.DictType):
+                if isinstance(self.section["content"][0], types.DictType):
                     logging.debug("Image block - Dictionary Type")
                     for image in self.section["content"]:
                         if os.path.isfile(os.path.join(self.results_dir, image["source"])):
                             imageJson = {}
-                            imageJson["source"] = os.path.join(self.url_root,"plugin_out",os.path.basename(self.results_dir),image["source"])
-                            #print "IMAGEJSON", imageJson["source"]
+                            imageJson["source"] = os.path.join(self.url_root, "plugin_out", os.path.basename(self.results_dir), image["source"])
+                            # print "IMAGEJSON", imageJson["source"]
                             if "caption" in image and image["caption"]:
                                 try:
                                     imageJson["caption"] = image["caption"]
                                 except:
-                                    imageJson["caption"] = '.'.join(os.path.basename(image["source"]).split('.')[0:-1])#Default caption for images
+                                    imageJson["caption"] = '.'.join(os.path.basename(image["source"]).split('.')[0:-1])  # Default caption for images
                                     logging.debug("Using default filename as caption")
                             else:
                                 logging.debug("No image caption found. Using the default filename as caption")
-                                imageJson["caption"] = '.'.join(os.path.basename(image["source"]).split('.')[0:-1])#Default caption for imag
+                                imageJson["caption"] = '.'.join(os.path.basename(image["source"]).split('.')[0:-1])  # Default caption for imag
 
                             if "description" in image and image["description"]:
                                 try:
                                     imageJson["description"] = image["description"]
                                 except:
-                                    imageJson["description"] = "" #blank is the default description
+                                    imageJson["description"] = ""  # blank is the default description
                             else:
                                 logging.debug("No description found. Using the default description as blank")
-                                imageJson["description"] = "" #blank if the default description
+                                imageJson["description"] = ""  # blank if the default description
 
                             self.imageArray.append(imageJson)
                         else:
                             logging.error("Image %s does not exist" % os.path.join(self.results_dir, image["source"]))
                     self.section["content"] = self.imageArray
 
-                elif isinstance(self.section["content"][0],types.UnicodeType):
+                elif isinstance(self.section["content"][0], types.UnicodeType):
                     logging.debug("Image block - List Type")
                     for images in self.section["content"]:
                         if os.path.isfile(os.path.join(self.results_dir, images)):
-                            imageJson={}
-                            imageJson["source"] = os.path.join(self.url_root,"plugin_out",os.path.basename(self.results_dir),images)
-                            imageJson["caption"] =""
+                            imageJson = {}
+                            imageJson["source"] = os.path.join(self.url_root, "plugin_out", os.path.basename(self.results_dir), images)
+                            imageJson["caption"] = ""
                             self.imageArray.append(imageJson)
                     self.section["content"] = self.imageArray
                 else:
@@ -93,13 +94,13 @@ class Validateimage(Utility):
 
             else:
                 logging.debug("No content section found. Checking for images in the results directory")
-                imagesinDir = glob(os.path.join(self.results_dir,"*.png"))
-                #imagesinDir.append(glob.glob("*.jpg"))
+                imagesinDir = glob(os.path.join(self.results_dir, "*.png"))
+                # imagesinDir.append(glob.glob("*.jpg"))
                 if imagesinDir:
                     for image in imagesinDir:
                         imageJson = {}
                         print image
-                        imageJson["source"] = os.path.join(self.url_root,"plugin_out",os.path.basename(self.results_dir),os.path.basename(image))
+                        imageJson["source"] = os.path.join(self.url_root, "plugin_out", os.path.basename(self.results_dir), os.path.basename(image))
                         imageJson["caption"] = os.path.basename(image)
                         self.imageArray.append(imageJson)
                     self.section["content"] = self.imageArray

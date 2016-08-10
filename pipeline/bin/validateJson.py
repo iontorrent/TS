@@ -5,17 +5,17 @@
 import json
 import csv
 
+
 @staticmethod
 def parseJsonFile(jsonFile):
-     with open(jsonFile, 'r') as f:
+    with open(jsonFile, 'r') as f:
         content = f.read()
         result = json.loads(content)
         return result
 
 
-
 class VerifyJson(object):
-    def __init__(self,json_file):
+    def __init__(self, json_file):
         self.json_file = json_file
 
     def checkJson(self):
@@ -40,10 +40,5 @@ class VerifyJson(object):
         pass
 
 if __name__ == "__main__":
-    
+
     obj = VerifyJson(json_filename)
-
-
-
-
-

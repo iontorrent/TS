@@ -4,7 +4,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "ChipIdDecoder.h"
 #include "ChannelXTCorrection.h"
 
 #define NUM_CHANS   4

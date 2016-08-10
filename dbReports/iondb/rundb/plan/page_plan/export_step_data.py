@@ -3,6 +3,7 @@ from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.models import Plugin
 
+
 class ExportFieldNames():
 
     IR_OPTIONS = 'irOptions'
@@ -13,7 +14,9 @@ class ExportFieldNames():
     IR_VERSION_40 = '4.0'
     IR_PLUGIN = 'IR_PLUGIN'
 
+
 class ExportStepData(AbstractStepData):
+
     '''
     Holds the data needed by and saved into the export step.
     '''
@@ -31,7 +34,7 @@ class ExportStepData(AbstractStepData):
         # self.prepopulatedFields[ExportFieldNames.IR_OPTIONS] = [ExportFieldNames.IR_VERSION_NONE, ExportFieldNames.IR_VERSION_16, ExportFieldNames.IR_VERSION_40]
 
         self.sh_type = sh_type
-        
+
     def getStepName(self):
         return StepNames.EXPORT
 

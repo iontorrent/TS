@@ -548,7 +548,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
 
 tmap_map_bam_t*
 tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sams, int32_t end_num,
-                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, int32_t min_al_len) 
+                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, int32_t min_al_len, double min_coverage, double min_identity, int32_t match_score, uint64_t* filtered) 
 {
   int32_t i;
   tmap_map_sam_t *mate = NULL;
@@ -564,25 +564,35 @@ tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sam
           mate_unmapped = 1;
       }
   }
-  // print only alignments longer then min_al_len
-  int32_t map_cnt = 0;
+  // filter alignments; store filtered out ones as unmapped
+  int32_t mapped_cnt = 0;
+  int8_t* passed = alloca (sams->n);
 
   for(i=0;i<sams->n;i++) 
   {
     unsigned q_len_cigar, r_len_cigar;
     seq_lens_from_bin_cigar (sams->sams [i].cigar, sams->sams [i].n_cigar, &q_len_cigar, &r_len_cigar);
-    if (r_len_cigar >= min_al_len)
-        ++map_cnt;
+    int8_t mapped = 1;
+    if (mapped && r_len_cigar < min_al_len)
+        mapped = 0;
+    if (mapped && seq->data.sam->seq->l != 0 && ((double) r_len_cigar) / seq->data.sam->seq->l < min_coverage)
+        mapped = 0;
+    if (mapped && r_len_cigar != 0 && match_score != 0 && ((double) sams->sams [i].score) / (r_len_cigar*match_score) < min_identity )
+        mapped = 0;
+    passed [i] = mapped;
+    if (mapped)
+       ++ mapped_cnt;
+    else
+       ++ *filtered;
   }
 
-  if(map_cnt) {
-      bams = tmap_map_bam_init(map_cnt);
+  int32_t written_cnt = 0;
+  if(mapped_cnt) {
+      bams = tmap_map_bam_init(mapped_cnt);
       for(i=0;i<sams->n;i++) 
       {
-         unsigned q_len_cigar, r_len_cigar;
-         seq_lens_from_bin_cigar (sams->sams [i].cigar, sams->sams [i].n_cigar, &q_len_cigar, &r_len_cigar);
-         if (r_len_cigar >= min_al_len)
-             bams->bams[i] = tmap_map_sam_print(seq, refseq, &sams->sams[i], sam_flowspace_tags, bidirectional, seq_eq, sams->max, i, end_num, mate_unmapped, mate);
+          if (passed [i])
+             bams->bams[written_cnt++] = tmap_map_sam_print(seq, refseq, &sams->sams[i], sam_flowspace_tags, bidirectional, seq_eq, sams->max, i, end_num, mate_unmapped, mate);
       }
   }
   else {
@@ -1967,6 +1977,8 @@ tmap_map_util_one_gap(uint8_t *query, int32_t qlen, uint8_t *target, int32_t tle
     if (qlen < min_size || tlen < min_size) return 0;
     if (qlen-min_size < max_q) max_q= qlen-min_size;
     if (tlen-min_size < max_t) max_t = tlen-min_size;
+    if (qlen*3 < max_indel) max_indel = qlen*3;
+    if (/*max_MM > 1 &&*/ qlen-max_q+1 < 8*max_MM) max_MM = (qlen-max_q+1)/8; // 7-14 bp allow 1 MM, 15 allow 2 etc.
     if (qlen-tlen> max_indel) return 0;
     if (tlen-max_t-qlen > max_indel) return 0;
     //debug
@@ -2088,8 +2100,8 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
     }
     if (worst >= 0) return;
     nCC = target_red+total_scl+1;
-    if (num_gap < 3 && max_gap >= 3 /*opt->min_indel_end_repair*/) {
-	int del = max_gap/opt->min_indel_end_repair;
+    if (num_gap < 3 && max_gap >= 3) {
+	int del = max_gap/15; //increase the error by 1 for each 15 bp of the gap.
 	int adj = max_gap-1-del;
 	/* int adj = max_gap-1;*/
 	nMM -= adj; nCC-= adj;
@@ -2141,7 +2153,7 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
 		tmap_map_get_amplicon(refseq, s->seqid, s->pos, s->pos+s->target_len-1, &ampl_start, &ampl_end, strand)) {
 		//fprintf(stderr, "%d %d \n", ampl_start, ampl_end);
 	 	int need_do = 1;
-		int half_buffer = 6;
+		int half_buffer = /*6*/ opt->amplicon_overrun; // outside freedom.
 		int buffer = half_buffer+3;
 		uint32_t start, end;
 		if (strand == 0) {
@@ -2167,7 +2179,7 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
           	     }
 		} else need_do = 0;
 		int softclip, target_adj, n_mismatch, indel_size, is_ins;
-		if (need_do && tmap_map_util_one_gap(query, total_scl, target, tlen, 6, 2/*int max_q*/, buffer /*int max_t*/, 1 /*maxNM*/, 20, /*int max_indel*/
+		if (need_do && tmap_map_util_one_gap(query, total_scl, target, tlen,  opt->min_anchor_large_indel_rescue /*anchor size*/, 2/*int max_q*/, buffer /*int max_t*/, 3 /*maxNM*/, opt->max_one_large_indel_rescue, /*int max_indel*/
                         strand, &n_mismatch, &indel_size, &is_ins, &softclip)) {
 		    //adjust cigar
 		    int match_size;

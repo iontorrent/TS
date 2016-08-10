@@ -1,0 +1,55 @@
+
+Development install:
+
+1. Install dependencies
+wget https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py
+sudo python ez_setup.py --insecure
+
+wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py
+sudo python get-pip.py
+
+sudo apt-get install libpq-dev
+sudo apt-get install python-dev
+sudo apt-get install libfreetype6-dev
+sudo apt-get install libhdf5-serial-dev
+sudo apt-get install libboost-python-dev
+
+sudo pip install numpy
+sudo pip install scipy
+sudo pip install scikits.statsmodels
+sudo pip install numexpr
+sudo pip install psycopg2
+sudo pip install pandas
+sudo pip install Cython
+sudo pip install tables
+sudo pip install matplotlib
+sudo pip install patsy
+sudo pip install statsmodels
+
+2. Run setup:
+MODULES='torrentPy' buildTools/build.sh
+
+3. Build modules:
+cd build/torrentPy
+python setup.py build
+sudo python setup.py install
+
+4. Developer setup
+cd build/torrentPy
+python setup.py build
+sudo python setup_dev.py
+
+
+Tips and gotchas:
+
+1. Don't copy setup string from Powerpoint presentation. Powerpoint surreptitiously changes "quotes" to "backquotes" and you will get strange compile errors. Use this string:
+MODULES='torrentPy' buildTools/build.sh
+
+2. If pandas installation gives an error related to outdated version of Numpy, you are likely to have an old version of Numpy installed using debian package. You should uninstall it:
+
+sudo aptitude remove python-numpy
+
+and install current version of Numpy:
+
+sudo pip install numpy
+

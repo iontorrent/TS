@@ -18,6 +18,7 @@ using namespace std;
 using namespace BamTools;
 
 void * CalibrationWorker(void *input);
+int ExecuteThreadedCalibrationTraining(CalibrationContext &calib_context);
 
 // ----------------------------------------------------------------
 //! @brief    Write Calibration startup info to json structure.
@@ -25,25 +26,25 @@ void * CalibrationWorker(void *input);
 
 void DumpStartingStateOfProgram (int argc, const char *argv[], time_t analysis_start_time, Json::Value &json)
 {
-    char my_host_name[128] = { 0 };
-    gethostname (my_host_name, 128);
-    string command_line = argv[0];
-    for (int i = 1; i < argc; i++) {
-        command_line += " ";
-        command_line += argv[i];
-    }
+  char my_host_name[128] = { 0 };
+  gethostname (my_host_name, 128);
+  string command_line = argv[0];
+  for (int i = 1; i < argc; i++) {
+    command_line += " ";
+    command_line += argv[i];
+  }
 
-    cout << "---------------------------------------------------------------------" << endl;
-    cout << "Calibration " << IonVersion::GetVersion() << "-" << IonVersion::GetRelease()
-         << " (" << IonVersion::GetGitHash() << ")" << endl;
-    cout << "Command line = " << command_line << endl;
+  cout << "---------------------------------------------------------------------" << endl;
+  cout << "Calibration " << IonVersion::GetVersion() << "." << IonVersion::GetRelease()
+       << " (" << IonVersion::GetGitHash() << ") (" << IonVersion::GetBuildNum() << ")" << endl;
+  cout << "Command line = " << command_line << endl;
 
-    json["host_name"]    = my_host_name;
-    json["start_time"]   = get_time_iso_string(analysis_start_time);
-    json["version"]      = IonVersion::GetVersion() + "-" + IonVersion::GetRelease();
-    json["git_hash"]     = IonVersion::GetGitHash();
-    json["build_number"] = IonVersion::GetBuildNum();
-    json["command_line"] = command_line;
+  json["host_name"]    = my_host_name;
+  json["start_time"]   = get_time_iso_string(analysis_start_time);
+  json["version"]      = IonVersion::GetVersion() + "." + IonVersion::GetRelease();
+  json["git_hash"]     = IonVersion::GetGitHash();
+  json["build_number"] = IonVersion::GetBuildNum();
+  json["command_line"] = command_line;
 }
 
 
@@ -102,41 +103,46 @@ int main (int argc, const char *argv[])
   //
   // Step 2. Execute threaded calibration
   //
+  int calibration_thread_time = 0;
 
-  time_t calibration_start_time;
-  time(&calibration_start_time);
+  if (calib_context.successive_fit) {
 
-  pthread_mutex_init(&calib_context.read_mutex,  NULL);
-  pthread_mutex_init(&calib_context.write_mutex, NULL);
+    // first train linear model
+    if (master_linear_model.DoTraining()) {
+      int l_thread_time = 0;
+      for (int i_iteration=0; i_iteration<calib_context.num_train_iterations; i_iteration++) {
+        cout << " -Training Iteration " << i_iteration+1;
+        l_thread_time = ExecuteThreadedCalibrationTraining(calib_context);
+        calibration_thread_time += l_thread_time;
+        calib_context.bam_reader.Rewind(); // reset all files for another pass
+        cout << " Duration = " << l_thread_time << endl;
+      }
+    }
 
-  pthread_t worker_id[calib_context.num_threads];
-  for (int worker = 0; worker < calib_context.num_threads; worker++)
-  if (pthread_create(&worker_id[worker], NULL, CalibrationWorker, &calib_context)) {
-    cerr << "Calibration ERROR: Problem starting thread" << endl;
-    exit (EXIT_FAILURE);
+    // Then apply it during polish model training
+    if (master_histogram.DoTraining()) {
+      calib_context.local_fit_linear_model = false;
+      calib_context.local_fit_polish_model = true;
+      calibration_thread_time += ExecuteThreadedCalibrationTraining(calib_context);
+    }
   }
-
-  for (int worker = 0; worker < calib_context.num_threads; worker++)
-    pthread_join(worker_id[worker], NULL);
-
-  pthread_mutex_destroy(&calib_context.read_mutex);
-  pthread_mutex_destroy(&calib_context.write_mutex);
-
-  time_t calibration_end_time;
-  time(&calibration_end_time);
+  else {
+    // Single pass in which both models are fit jointly
+    calibration_thread_time=ExecuteThreadedCalibrationTraining(calib_context);
+  }
 
 
   //
   // Step 3. Create models, write output, and close modules
   //
 
-  // HP histogram calibration
-  if (master_histogram.CreateCalibrationModel())
-    master_histogram.ExportModelToJson(calibration_json["HPHistogram"]);
-
   // Linear Model
   if (master_linear_model.CreateCalibrationModel())
     master_linear_model.ExportModelToJson(calibration_json["LinearModel"], "");
+
+  // HP histogram calibration
+  if (master_histogram.CreateCalibrationModel())
+    master_histogram.ExportModelToJson(calibration_json["HPHistogram"]);
 
 
   // Transfer stuff from calibration context and close bam reader
@@ -147,10 +153,38 @@ int main (int argc, const char *argv[])
 
   calibration_json["Calibration"]["end_time"] = get_time_iso_string(program_end_time);
   calibration_json["Calibration"]["total_duration"] = (Json::Int)difftime(program_end_time,program_start_time);
-  calibration_json["Calibration"]["calibration_duration"] = (Json::Int)difftime(calibration_end_time,calibration_start_time);
+  calibration_json["Calibration"]["calibration_duration"] = (Json::Int)calibration_thread_time;
 
   SaveJson(calibration_json, calib_context.filename_json);
   return EXIT_SUCCESS;
+}
+
+// --------------------------------------------------------------------------
+
+int ExecuteThreadedCalibrationTraining(CalibrationContext &calib_context){
+
+  time_t calibration_start_time;
+  time(&calibration_start_time);
+
+  pthread_mutex_init(&calib_context.read_mutex,  NULL);
+  pthread_mutex_init(&calib_context.write_mutex, NULL);
+
+  pthread_t worker_id[calib_context.num_threads];
+  for (int worker = 0; worker < calib_context.num_threads; worker++)
+    if (pthread_create(&worker_id[worker], NULL, CalibrationWorker, &calib_context)) {
+      cerr << "Calibration ERROR: Problem starting thread" << endl;
+      exit (EXIT_FAILURE);
+    }
+
+  for (int worker = 0; worker < calib_context.num_threads; worker++)
+    pthread_join(worker_id[worker], NULL);
+
+  pthread_mutex_destroy(&calib_context.read_mutex);
+  pthread_mutex_destroy(&calib_context.write_mutex);
+
+  time_t calibration_end_time;
+  time(&calibration_end_time);
+  return difftime(calibration_end_time,calibration_start_time);
 }
 
 
@@ -169,6 +203,7 @@ void * CalibrationWorker(void *input)
   bam_alignments.reserve(calib_context.num_reads_per_thread);
   ReadAlignmentInfo read_alignment;
   read_alignment.SetSize(calib_context.max_num_flows);
+  bool update_bam_stats = (calib_context.bam_reader.NumPasses() == 0);
 
   vector<DPTreephaser> treephaser_vector;
   for (unsigned int iFO=0; iFO < calib_context.flow_order_vector.size(); iFO++) {
@@ -178,6 +213,15 @@ void * CalibrationWorker(void *input)
 
   HistogramCalibration    hist_calibration_local(*calib_context.hist_calibration_master);
   LinearCalibrationModel  linear_cal_model_local(*calib_context.linear_model_master);
+  pthread_mutex_lock(&calib_context.write_mutex);
+  LinearCalibrationModel  linear_model_cal_sim (*calib_context.linear_model_master); // make a copy, as master may be changing(!)
+  pthread_mutex_unlock(&calib_context.write_mutex);
+
+  // Activate local copy of linear model
+  if (calib_context.blind_fit){
+    linear_model_cal_sim.CreateCalibrationModel(false);
+    linear_model_cal_sim.SetModelGainsAndOffsets();
+  }
 
 
   // *** Process reads
@@ -186,10 +230,10 @@ void * CalibrationWorker(void *input)
 
     // Step 1 *** load a number of reads from the BAM files
 
-	hist_calibration_local.CleanSlate();
-	linear_cal_model_local.CleanSlate();
+    hist_calibration_local.CleanSlate();
+    linear_cal_model_local.CleanSlate();
 
-	unsigned long num_useful_reads = 0;
+    unsigned long num_useful_reads = 0;
 
     pthread_mutex_lock(&calib_context.read_mutex);
 
@@ -201,19 +245,24 @@ void * CalibrationWorker(void *input)
     while((bam_alignments.size() < calib_context.num_reads_per_thread) and have_alignment) {
 
       have_alignment = calib_context.bam_reader.GetNextAlignment(new_alignment);
+      // Only log read stats during first pass through BAM
       if (have_alignment) {
-        calib_context.num_reads_in_bam++;
+        if (update_bam_stats)
+          calib_context.num_reads_in_bam++;
 
         if (new_alignment.IsMapped()) {
-          calib_context.num_mapped_reads++;
+          if (update_bam_stats)
+            calib_context.num_mapped_reads++;
 
           if(new_alignment.MapQuality >= calib_context.min_mapping_qv) {
-            calib_context.num_loaded_reads++;
+            if (update_bam_stats)
+              calib_context.num_loaded_reads++;
             bam_alignments.push_back(new_alignment);
           }
         }
         else if (calib_context.load_unmapped) {
-          calib_context.num_loaded_reads++;
+          if (update_bam_stats)
+            calib_context.num_loaded_reads++;
           bam_alignments.push_back(new_alignment);
         }
       }
@@ -232,9 +281,9 @@ void * CalibrationWorker(void *input)
     for (unsigned int iRead=0; iRead<bam_alignments.size(); iRead++) {
 
       // Unpack alignment related information & generate predictions
-      read_alignment.UnpackReadInfo(&bam_alignments[iRead], calib_context);
-      read_alignment.UnpackAlignmentInfo(calib_context, calib_context.debug);
-      read_alignment.GeneratePredictions(treephaser_vector, calib_context);
+      read_alignment.UnpackReadInfo(&bam_alignments[iRead], treephaser_vector, calib_context);
+      read_alignment.UnpackAlignmentInfo(calib_context);
+      read_alignment.GeneratePredictions(treephaser_vector, linear_model_cal_sim);
 
       if (read_alignment.is_filtered)
         continue; // No need to waste time.
@@ -242,9 +291,15 @@ void * CalibrationWorker(void *input)
       // *** Pass read info to different modules so they can extract whatever info they need
 
       num_useful_reads++;
+      if (calib_context.local_fit_polish_model)
+        hist_calibration_local.AddTrainingRead(read_alignment, calib_context);
 
-      hist_calibration_local.AddTrainingRead(read_alignment);
-      linear_cal_model_local.AddTrainingRead(read_alignment);
+      if (calib_context.local_fit_linear_model){
+        if (!calib_context.blind_fit)
+          linear_cal_model_local.AddTrainingRead(read_alignment,linear_model_cal_sim);
+        else
+          linear_cal_model_local.AddBlindTrainingRead(read_alignment,linear_model_cal_sim);
+      }
     }
 
 
@@ -252,11 +307,24 @@ void * CalibrationWorker(void *input)
 
     pthread_mutex_lock(&calib_context.write_mutex);
 
-    calib_context.num_useful_reads += num_useful_reads;
-    calib_context.hist_calibration_master->AccumulateHistData(hist_calibration_local);
-    calib_context.linear_model_master->AccumulateTrainingData(linear_cal_model_local);
+    if (update_bam_stats)
+      calib_context.num_useful_reads += num_useful_reads;
+    if (calib_context.local_fit_polish_model)
+      calib_context.hist_calibration_master->AccumulateHistData(hist_calibration_local);
+    if (calib_context.local_fit_linear_model)
+      calib_context.linear_model_master->AccumulateTrainingData(linear_cal_model_local);
+
+    // If we do blind fitting we'd like to use the most recent model.
+    if (calib_context.blind_fit)
+      linear_model_cal_sim.CopyTrainingData(*calib_context.linear_model_master); // update from current master model
 
     pthread_mutex_unlock(&calib_context.write_mutex);
+
+    if (calib_context.blind_fit){
+      // Activate local copy of linear model
+      linear_model_cal_sim.CreateCalibrationModel(false);
+      linear_model_cal_sim.SetModelGainsAndOffsets();
+    }
 
   } // -- end while loop
 }

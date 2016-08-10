@@ -5,7 +5,6 @@
 #include "Image.h"
 #include <vector>
 #include "Serialization.h"
-#include "SynchDat.h"
 
 #define  SETPIN_WITH_MUTEX  //makes setPinned thread safe
 
@@ -22,7 +21,6 @@ class PinnedInFlow
   virtual void Initialize (Mask *maskPtr);
   virtual int Update(int flow, Image *img, float *gainPtr);
   virtual int QuickUpdate(int flow, Image *img);
-  virtual int Update (int flow, class SynchDat *img, float *gainPtr);
 
   void UpdateMaskWithPinned (Mask *maskPtr);
   short *Pins() { return (&mPinnedInFlow[0]); };

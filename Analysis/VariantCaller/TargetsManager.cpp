@@ -253,6 +253,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   // set these before any trimming
   rai->align_start = rai->alignment.Position;
   rai->align_end = rai->alignment.GetEndPosition(false, true);
+  rai->old_cigar = rai->alignment.CigarData;
 
   if (not trim_ampliseq_primers)
     return;
@@ -309,7 +310,6 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
 
   if (best_target_idx == -1) {
     rai->filtered = true;
-    rai->evaluator_filtered = true;
     return;
   }
 

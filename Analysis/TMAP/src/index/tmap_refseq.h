@@ -236,6 +236,16 @@ tmap_refseq_refinfo_main(int argc, char *argv[]);
 int
 tmap_refseq_pac2fasta_main(int argc, char *argv[]);
 
+/*!
+  main-like function for 'tmap mask'
+  @param  argc  the number of arguments
+  @param  argv  the argument list
+  @return       0 if executed successful
+  */
+
+int 
+tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[]);
+
 int
 tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile);
 #endif // TMAP_REFSEQ_H

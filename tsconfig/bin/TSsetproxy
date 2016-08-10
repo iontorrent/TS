@@ -6,8 +6,8 @@ set -e
 #--- Include function definition file
 #--------------------------------------
 TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
-source $TSCONFIG_SRC_DIR/ts_params
-source $TSCONFIG_SRC_DIR/ts_functions
+source $TSCONFIG_SRC_DIR/ts_params||source ../ts_params||true
+source $TSCONFIG_SRC_DIR/ts_functions||source ../ts_functions||true
 
 #--------------------------------------
 # Functions
@@ -38,7 +38,7 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision$'|awk '{print $2}'`
+version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@"
 DEMO=0
 interactive=1
 REMOVE=0
@@ -131,18 +131,20 @@ if [ $REMOVE -eq 1 ]; then
         echo
         echo "Would be modified to:"
         echo
-        sed "/^http_proxy/d" $environment
+        sed -e "/^http_proxy/d" -e "/^HTTP_PROXY/d" -e "/^https_proxy/d" -e "/^HTTPS_PROXY/d" $environment
         echo
     else
     #=============================================================
     # Edit /etc/environment
     #=============================================================
-        # Remove existing proxy setting
+        # Remove existing proxy settings
         if [ -e $environment ]; then
-            sed -i "/^http_proxy/d" $environment
-            unset http_proxy
+            for _proxy in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY; do
+                sed -i "/^$_proxy/d" $environment
+                unset $_proxy
+            done
+            
             echo "$environment has been modified."
-            #echo -e "\nRebooting will ensure the http_proxy environment variable is cleared.\n"
         fi
 
     #=============================================================
@@ -274,6 +276,9 @@ if [ $DEMO -eq 1 ]; then
     echo "will be written to $environment:"
     echo
     echo "http_proxy=$proxy_addr:$proxy_port"
+    echo "HTTP_PROXY=$proxy_addr:$proxy_port"
+    echo "https_proxy=$proxy_addr:$proxy_port"
+    echo "HTTPS_PROXY=$proxy_addr:$proxy_port"
     echo
 else
     #=============================================================
@@ -281,20 +286,20 @@ else
     #=============================================================
     # = remove previous proxy information
     if [ -e $environment ]; then
-        sed -i '/http_proxy/d' $environment
-    fi
-
-    # If not present in file, add it.  Else, correct it.
-    if ! grep -q ^no_proxy $environment; then
-        echo "no_proxy=localhost,127.0.0.1,127.0.1.1,::1" >> $environment
-    else
-        sed -i 's/^no_proxy=.*/no_proxy=localhost,127.0.0.1,127.0.1.1,::1/' $environment
+        for _proxy in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY; do
+            sed -i "/$_proxy/d" $environment
+        done
     fi
 
     # = write to $environment file and reload it
-    echo "http_proxy="$proxy_addr:$proxy_port >> $environment
+    for _proxy in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY; do
+        echo "$_proxy="$proxy_addr:$proxy_port >> $environment
+    done
     source $environment
-    echo "http_proxy is set to "$http_proxy
+    for _proxy in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY; do
+        echo -n "$_proxy is set to "
+        eval echo \$$_proxy
+    done
 
     #=============================================================
     # Edit apt configuration

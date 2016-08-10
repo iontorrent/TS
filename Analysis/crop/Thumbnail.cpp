@@ -211,8 +211,8 @@ struct foobar {
   char *destPath;
   Acq *saver;
   Image *loader;
-  int doAscii;
-  int vfc;
+  //int doAscii;
+  //int vfc;
   int i;
 };
 
@@ -308,7 +308,7 @@ int main ( int argc, char *argv[] )
   int flowstart = 0;
   int flowlimit = 0;
   //int alternate_sampling=0;
-  int doAscii = 0;
+  //int doAscii = 0;
   int vfc = 1;
   int dont_retry = 1;
   int ignoreChecksumErrors = 1;
@@ -319,7 +319,8 @@ int main ( int argc, char *argv[] )
   while ( argcc < argc ) {
     switch ( argv[argcc][1] ) {
     case 'a':
-      doAscii = 1;
+      //doAscii = 1;
+	  usage ( cropx, cropy, kernx, kerny );
       break;
 
     case 'x':
@@ -367,17 +368,19 @@ int main ( int argc, char *argv[] )
       break;
 
     case 'c':
-      vfc=1;
+      //vfc=1;
       cropx=0;
       cropy=0;
       break;
 
     case 'n':
-      vfc=0;
+      //vfc=0;
+	  usage ( cropx, cropy, kernx, kerny );
       break;
 
     case 'b':
       //alternate_sampling=1;
+	  usage ( cropx, cropy, kernx, kerny );
       break;
 
     case 'v':

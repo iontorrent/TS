@@ -121,7 +121,7 @@ def purge_publishers():
 
 
 class PublisherContentUploadValidator(forms.Form):
-    file  = forms.FileField()
+    file = forms.FileField()
     meta = forms.CharField(widget=forms.HiddenInput)
 
 
@@ -135,6 +135,7 @@ def write_file(file_data, destination):
         out.write(chunk)
     out.close()
 
+
 @login_required
 def write_plupload(request, pub_name):
     """file upload for plupload"""
@@ -145,7 +146,7 @@ def write_plupload(request, pub_name):
 
     logger.debug("Publisher Plupload started")
     if request.method == 'POST':
-        name = request.REQUEST.get('name','')
+        name = request.REQUEST.get('name', '')
         uploaded_file = request.FILES['file']
         if not name:
             name = uploaded_file.name
@@ -157,20 +158,20 @@ def write_plupload(request, pub_name):
         upload_dir = "/results/referenceLibrary/temp"
 
         if not os.path.exists(upload_dir):
-            return render_to_json({"error":"upload path does not exist"})
+            return render_to_json({"error": "upload path does not exist"})
 
         dest_path = os.path.join(upload_dir, name)
 
         logger.debug("plupload destination = '%s'" % dest_path)
 
-        chunk = request.REQUEST.get('chunk','0')
-        chunks = request.REQUEST.get('chunks','0')
+        chunk = request.REQUEST.get('chunk', '0')
+        chunks = request.REQUEST.get('chunks', '0')
 
         logger.debug("plupload chunk %s %s of %s" % (str(type(chunk)), str(chunk), str(chunks)))
 
         debug = [chunk, chunks]
 
-        with open(dest_path,('wb' if chunk=='0' else 'ab')) as f:
+        with open(dest_path, ('wb' if chunk == '0' else 'ab')) as f:
             for content in uploaded_file.chunks():
                 logger.debug("content chunk = '%d'" % len(content))
                 f.write(content)
@@ -190,19 +191,19 @@ def write_plupload(request, pub_name):
         return render_to_json({"chunk posted": debug, "contentupload_id": my_contentupload_id})
 
     else:
-        return render_to_json({"method":"only post here"})
+        return render_to_json({"method": "only post here"})
 
 
 def new_upload(pub, file_name, meta_data=None):
-    
+
     #try:
     meta_data_dict = json.loads(meta_data)
     meta_data_dict['upload_date'] = dateutil.parser.parse(time.asctime()).isoformat()
     meta_data = json.dumps(meta_data_dict)
     #except:
     #    pass
-        
-    
+
+
     upload = models.ContentUpload()
     upload.status = "Saving"
     upload.publisher = pub
@@ -326,32 +327,33 @@ def publisher_upload(request, pub_name):
     If the view is POSTed to, the pass the uploaded data to the publisher.
     """
     pub = models.Publisher.objects.get(name=pub_name)
-    
+
     if request.method == 'POST':
         meta = request.POST.dict()
         files = request.FILES.values()
-        
+
         if len(files) == 0:
-            return render_to_json({"error":"Error: No file selected for upload"})
+            return render_to_json({"error": "Error: No file selected for upload"})
         else:
             try:
                 upload, async = edit_upload(pub, files[0], json.dumps(meta))
                 return render_to_json({"status": upload.status, "id": upload.id})
             except Exception as e:
-                return render_to_json({"error":str(e)})
+                return render_to_json({"error": str(e)})
     else:
         action = request.get_full_path()
         error = ''
         contents = ''
         try:
             path = os.path.join(pub.path, 'upload.html')
-            with open(path,'r') as f:
+            with open(path, 'r') as f:
                 contents = f.read()
         except:
             error = "Error: Unable to read %s" % path
-        
-        ctx = RequestContext(request, {"contents":contents, "action":action, "error":error})
-        return render_to_response('rundb/configure/modal_publisher_upload.html', context_instance = ctx)
+
+        ctx = RequestContext(request, {"contents": contents, "action": action, "error": error})
+        return render_to_response('rundb/configure/modal_publisher_upload.html', context_instance=ctx)
+
 
 @login_required
 def publisher_api_upload(request, pub_name):
@@ -377,6 +379,7 @@ def publisher_api_upload(request, pub_name):
     else:
         return HttpResponseRedirect("/rundb/publish/%s/" % pub_name)
 
+
 @login_required
 def upload_status(request, contentupload_id, frame=False):
     """If we're in an iframe, we can skip basically everything, and tell the
@@ -387,7 +390,7 @@ def upload_status(request, contentupload_id, frame=False):
                 {"go": "/rundb/uploadstatus/%s/" % contentupload_id,
                  "contentupload_id": contentupload_id})
     upload = models.ContentUpload.objects.get(pk=contentupload_id)
-    
+
     def intWithCommas(x):
         if type(x) not in [type(0), type(0L)]:
             raise TypeError("Parameter must be an integer.")
@@ -398,22 +401,22 @@ def upload_status(request, contentupload_id, frame=False):
             x, r = divmod(x, 1000)
             result = ",%03d%s" % (r, result)
         return "%d%s" % (x, result)
-    
-    
+
+
     logs = list(upload.logs.all())
     logs.sort(key=lambda x: x.timeStamp)
 
     file_log = ""
     try:
-        with open(os.path.dirname(upload.file_path)+"/publisher.log",'r') as f:
+        with open(os.path.dirname(upload.file_path)+"/publisher.log", 'r') as f:
             file_log = f.read()
     except Exception as err:
         #file_log = str(err)
         pass
-        
+
     upload_type = upload.upload_type()
-    upload_date = upload.meta.get('upload_date','Unknown')
-    
+    upload_date = upload.meta.get('upload_date', 'Unknown')
+
     try:
         file_size_string = '(%s bytes)' % intWithCommas(os.stat(upload.file_path).st_size)
         if 'upload_date' not in upload.meta:
@@ -422,18 +425,18 @@ def upload_status(request, contentupload_id, frame=False):
         file_size_string = ''
 
     status_line = upload.status
-    
+
     processed_uploads = []
-    
+
     for content in models.Content.objects.filter(contentupload=contentupload_id):
         if 'unmerged/detail' not in content.file:
             continue
-        
+
         try:
             content_file_size_string = '(%s bytes)' % intWithCommas(os.stat(content.file).st_size)
         except:
             content_file_size_string = ''
-        
+
         bonus_fields = []
         if content.meta['hotspot']:
             if 'reference' in content.meta:
@@ -453,39 +456,39 @@ def upload_status(request, contentupload_id, frame=False):
                 bonus_fields.append({'title': 'Covered Bases', 'value': intWithCommas(content.meta['num_bases'])})
             content_type = 'Target Regions'
             content_type_hash = 'target-regions'
-        
-        enabled = content.meta.get('enabled',True)
-        
-        processed_uploads.append({'file_name' : content.file,
+
+        enabled = content.meta.get('enabled', True)
+
+        processed_uploads.append({'file_name': content.file,
                                   'file_size_string': content_file_size_string,
                                   'content_name': os.path.basename(content.file),
                                   'content_type': content_type,
                                   'content_type_hash': content_type_hash,
-                                  'description': content.meta.get('description',''),
-                                  'notes': content.meta.get('notes',''),
+                                  'description': content.meta.get('description', ''),
+                                  'notes': content.meta.get('notes', ''),
                                   'enabled': enabled,
                                   'bonus_fields': bonus_fields,
                                   'content_id': content.id})
-    
+
     return render_to_response('rundb/ion_publisher_upload_status.html',
                 {"contentupload": upload,
                  "upload_name": os.path.basename(upload.file_path),
-                 "logs" : logs,
-                 "file_log" : file_log,
+                 "logs": logs,
+                 "file_log": file_log,
                  "upload_type": upload_type,
                  "upload_date": upload_date,
                  "file_size_string": file_size_string,
                  "status_line": status_line,
                  "processed_uploads": processed_uploads
                  },
-                context_instance = RequestContext(request))
+                context_instance=RequestContext(request))
 
 
 @login_required
 def content_details(request, content_id):
 
     content = models.Content.objects.get(pk=content_id)
-    
+
     def intWithCommas(x):
         if type(x) not in [type(0), type(0L)]:
             raise TypeError("Parameter must be an integer.")
@@ -496,60 +499,61 @@ def content_details(request, content_id):
             x, r = divmod(x, 1000)
             result = ",%03d%s" % (r, result)
         return "%d%s" % (x, result)
-    
-    content_date =  content.meta.get('upload_date','Unknown')
-        
+
+    content_date = content.meta.get('upload_date', 'Unknown')
+
     try:
         file_size_string = '(%s bytes)' % intWithCommas(os.stat(content.file).st_size)
     except:
         file_size_string = ''
-    
+
     bonus_fields = []
     if content.meta['hotspot']:
         content_type = 'Hotspots'
-        bonus_fields.append({'title': 'Reference', 'value': content.meta.get('reference','unknown')})
-        bonus_fields.append({'title': 'Upload Date', 'value': content.meta.get('upload_date','unknown')})
-        bonus_fields.append({'title': 'Number of Loci', 'value': content.meta.get('num_loci','unknown')})
+        bonus_fields.append({'title': 'Reference', 'value': content.meta.get('reference', 'unknown')})
+        bonus_fields.append({'title': 'Upload Date', 'value': content.meta.get('upload_date', 'unknown')})
+        bonus_fields.append({'title': 'Number of Loci', 'value': content.meta.get('num_loci', 'unknown')})
     else:
         content_type = 'Target Regions'
         bonus_fields.append({'title': 'Reference', 'value': content.meta['reference']})
-        bonus_fields.append({'title': 'Upload Date', 'value': content.meta.get('upload_date','unknown')})
+        bonus_fields.append({'title': 'Upload Date', 'value': content.meta.get('upload_date', 'unknown')})
         if 'num_targets' in content.meta:
             bonus_fields.append({'title': 'Number of Targets', 'value': intWithCommas(content.meta['num_targets'])})
         if 'num_genes' in content.meta:
             bonus_fields.append({'title': 'Number of Genes', 'value': intWithCommas(content.meta['num_genes'])})
         if 'num_bases' in content.meta:
             bonus_fields.append({'title': 'Covered Bases', 'value': intWithCommas(content.meta['num_bases'])})
-    
-    
+
+
     if request.method == "POST":
-        content.meta['description'] = request.POST.get('description','')
-        content.meta['notes'] = request.POST.get('notes','')
-        content.meta['enabled'] = request.POST.get('enabled','true') == 'true'
+        content.meta['description'] = request.POST.get('description', '')
+        content.meta['notes'] = request.POST.get('notes', '')
+        content.meta['enabled'] = request.POST.get('enabled', 'true') == 'true'
         content.save()
-    
+
     return render_to_response('rundb/ion_publisher_content_details.html',
                 {"content": content,
                  "file_size_string": file_size_string,
                  "content_type": content_type,
                  'bonus_fields': bonus_fields
                  },
-                context_instance = RequestContext(request))
+                context_instance=RequestContext(request))
 
 
 
 @login_required
 def content_download(request, content_id):
     content = models.Content.objects.get(pk=content_id)
-    response = StreamingHttpResponse(open(content.file,'r'))
+    response = StreamingHttpResponse(open(content.file, 'r'))
     response['Content-Type'] = "application/octet-stream"
     response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(content.file)
     return response
 
+
 @login_required
 def upload_download(request, contentupload_id):
     upload = models.ContentUpload.objects.get(pk=contentupload_id)
-    response = StreamingHttpResponse(open(upload.file_path,'r'))
+    response = StreamingHttpResponse(open(upload.file_path, 'r'))
     response['Content-Type'] = "application/octet-stream"
     response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(upload.file_path)
     return response
@@ -560,19 +564,19 @@ def content_add(request, hotspot=False):
 
     active_ref = None
     if request.method == "GET":
-        active_ref = request.GET.get('reference',None)
+        active_ref = request.GET.get('reference', None)
 
     references = []
-    
+
     #for ref in models.ReferenceGenome.objects.all():
-    for ref in models.ReferenceGenome.objects.filter(index_version = settings.TMAP_VERSION):
+    for ref in models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION):
         references.append({"long_name": ref.short_name+" - "+ref.name,
                            "short_name": ref.short_name,
-                           "selected": ref.short_name==active_ref})
-    
+                           "selected": ref.short_name == active_ref})
+
     return render_to_response('rundb/ion_publisher_content_add.html',
                 {'hotspot': hotspot, 'references': references},
-                context_instance = RequestContext(request))
+                context_instance=RequestContext(request))
 
 
 
@@ -580,7 +584,7 @@ def content_add(request, hotspot=False):
 @login_required
 def list_content(request):
     publishers = models.Publisher.objects.all()
-    selected = request.GET.get('from','')
+    selected = request.GET.get('from', '')
     ctxd = {"publishers": publishers, "selected": selected}
     return render_to_response('rundb/configure/contentupload_history.html', ctxd)
 

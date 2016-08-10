@@ -3,9 +3,9 @@
         "name"          : "AmpliSeq Panel - PGM - Somatic - Low Stringency",
         "tooltip"       : "Parameters optimized using Oncomine Comprehensive AmpliSeq Panel with AcroMetrix Oncology Hotspot Control AF at 5% at depth 500, minimizing FP with 48K NA12878 at depth 130",
         "configuration" : "ampliseq_somatic_lowstringency_pgm",
-        "ts_version"    : "5.0",
+        "ts_version"    : "5.2",
         "compatibility" : {
-          "chip"        : ["520","530","pgm"],
+          "chip"        : ["pgm"],
           "library"     : ["ampliseq"],
           "frequency"   : ["somatic"],
           "stringency"  : ["low"],

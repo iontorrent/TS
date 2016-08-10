@@ -32,7 +32,7 @@ urlcolor=myurlcolor     % color of external links
 % TODO check all options are present
 
 % Version number
-\newcommand{\Version}{3.4.1}
+\newcommand{\Version}{5.1.0}
 
 % layout
 \setlength\topmargin{0in}
@@ -60,7 +60,7 @@ urlcolor=myurlcolor     % color of external links
 \author{Nils Homer}
 \date{}
 \title{TMAP: the torrent mapping program
-\thanks{Copyright \copyright 2010-2011 Ion Torrent Systems, Inc. All Rights, made for TMAP version \Version}
+\thanks{Copyright \copyright 2015 Thermo Fisher Scientific. Covers TMAP version \Version}
 }
 \begin{document}
 \frontmatter
@@ -150,6 +150,9 @@ This facilitates the use of these TMAP commands in a pipe-and-filter model.
 Specifies the file name of the reference genome in FASTA format.
 The maximum number of bases in the reference genome can be $4294967295$, due to the use of 32-bit values to represent each position in the reference.
 
+\subsubsection{\TT{--bed-file FILE}}
+bed file for AmpliSeq
+
 \subsubsection{\TT{-r,--fn-reads FILE}}
 Specifies the file name of the reads to mapped.
 The input reads can be in FASTA, FASTQ, or SFF format.
@@ -164,6 +167,12 @@ If compiled with SAMTools support, the option also supports \TT{sam} for SAM, or
 \subsubsection{\TT{-s,--fn-sam FILE}}
 Specifies the file name of the output file SAM format.
 If this is not specified, the output will be written to stdout.
+
+\subsubsection{\TT{--bam-start-vfo INT}}
+Sets starting virtual file offsets that limits the range of BAM reads that will be processed, default 0
+
+\subsubsection{\TT{--bam-end-vfo INT}}
+Sets ending virtual file offsets that limits the range of BAM reads that will be processed, default 0 - process to the end of file.
 
 \subsubsection{\TT{-A,--score-match INT}}
 Specifies the match score.
@@ -267,8 +276,10 @@ Specifies the number of letters to be excluded from the prefix of read name befo
 
 \subsubsection{\TT{--suffix-exclude INT}}
 Specifies the number of letters to be excluded from the suffix of read name before we randomize based on the read name. This is only effective when -u is set
-.
 
+\subsubsection{\TT{--newQV}}
+Specifies whether to use mapping QV formula. The new formula is TMAP-specific,
+the old one is based on BWA-long.
 
 \subsubsection{\TT{-C,--ignore-rg-from-sam}}
 Specifies to do not use the RG header and RG record tags in the SAM file (if the input file is a SAM file, and SAM input files are enabled).
@@ -293,11 +304,16 @@ Specifies to perform end repair.
 	\item Disable.
 	\item Prefer mismatches (when breaking ties).
 	\item Prefer indels (when breaking ties).
+	\item and over: specify %% Mismatch above which to trim end alignment
 \end{enumerate}
 The basic algorithm is to examine each alignment for a stretch of match/mismatches at the 5' end of the read with at least one mismatch.
 We then perform a new Smith-Waterman alignment on a prefix of the read (beginning/5'-end) where we set the gap open penalty is set to zero, the gap extension penalty is set to the previous mismatch penalty, and the mismatch penalty is set to effectively infinity.
 
 This solves a problem where mismatches can be over-represented at the 5' end of the read when no 5' soft-clipping is performed, and there is a more likely (homopolymer error) explanation.
+
+\subsubsection{\TT{--min-indel-end-repair INT}} 
+minimum indel size to try to save from end repair, default 3
+
 
 \subsubsection{\TT{-J,--max-adapter-bases-for-soft-clipping}}
 Specifies to perform 3' soft-clipping (via -g) if at most this \# of adapter bases were found (ZB tag).
@@ -330,6 +346,84 @@ Specifies to print verbose progress messages, otherwise progress messages will b
 
 \subsubsection{\TT{-h,--help}}
 Specifies to print a help message, listing all available options.
+
+\subsubsection{\TT{--do-realign}}
+Perform realignment of the found matches with different scoring schema (increased mismatch costs by default), same as bamrealignment tool does. This helps representing some HP over/undercalls as gaps and fixes some dyslexic errors.
+
+\subsubsection{\TT{--r-mat}}
+Realignment match score, default 4
+
+\subsubsection{\TT{--r-mis}}
+Realignment mismatch score, default -6
+
+\subsubsection{\TT{--r-gip}}
+Realignment gap opening score, default -5
+
+\subsubsection{\TT{--r-gep}}
+Realignment gap extension score, default -2
+
+\subsubsection{\TT{--r-bw}}
+Realignment clip type
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item global realignment
+	\item semiglobal (can start/end anywhere in reference)
+	\item semiglobal with soft clip on bead side of a read (default)
+	\item semiglobal with soft clip on key side of a read
+	\item local (semiglobal with soft clip on both sides of a read
+\end{enumerate}
+
+\subsubsection{\TT{--stats}}
+Report processing statistics. 
+WARNING: statistics is pronted to stdout. Thus, do not use this with the output data printed to stdout, use only together with -s <OUTFILE> option
+
+\subsubsection{\TT{--r-log FILENAME}}
+Write log of alignment post-processing into the file. The realignment, context-realignment and repeat clipping actions are logged.
+
+\subsubsection{\TT{--do-repeat-clip}}
+Clip tandem repeats from 3' ends of alignments. Fully clipped reads are reported as unmapped.
+
+\subsubsection{\TT{--repclip-cont}}
+Clip only repeats continued into the reference for at least one period 
+
+\subsubsection{\TT{--context}}
+Realign with context-dependent gap scores
+
+\subsubsection{\TT{--gap-scale INT}}
+Gaps over homopolymers score scale mode
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item no scaling
+	\item scale gap extension cost (default)
+	\item scale gap opening and gap extension costs
+\end{enumerate}
+	
+\subsubsection{\TT{--c-mat INT}}
+Context match score (default 1)
+
+\subsubsection{\TT{--c-mis INT}}
+Context mismatch score (default -3)
+
+\subsubsection{\TT{--c-gip INT}}
+Context gap opening score (default -5)
+
+\subsubsection{\TT{--c-gip INT}}
+Context gap extension score (default -2)
+
+\subsubsection{\TT{--c-bw INT}}
+Context band width (default 5)
+
+\subsubsection{\TT{--context-debug-log}}
+log context alignment details to post-processing log file (specified with --r-log)
+
+\subsubsection{\TT{--min-al-len INT}}
+Filter out alignments shorter then given length, default - no filtering. Filtered reads reported as unmapped.
+
+\subsubsection{\TT{--min-cov FLOAT}}
+Filter out alignments which cover less then given fraction of total read length, default - no filtering. Filtered reads reported as unmapped.
+
+\subsubsection{\TT{--min-iden FLOAT}}
+Filter out alignments which identity fraction is below given one, default - no filtering. Filtered reads reported as unmapped.
 
 \subsubsection{\TT{--min-seq-length INT}}
 Specifies the minimum sequence length to consider (inclusive).

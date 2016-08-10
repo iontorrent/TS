@@ -9,7 +9,6 @@
 
 ControlSingleFlow::ControlSingleFlow(){
 krate_adj_limit = 2.0f; // you must be at least this tall to ride the ride
-dampen_kmult = 0.0f;
 kmult_low_limit = 0.65;
 kmult_hi_limit = 1.75f;
 }

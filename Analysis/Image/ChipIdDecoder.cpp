@@ -30,6 +30,11 @@ ChipIdDecodeArrayType ChipIdDecoder::chip_id_str_lookup_array[] =
   { "541", ChipId541    },
   { "531", ChipId531    },
   { "521", ChipId521    },
+  { "522", ChipId522    }, 
+  { "p2.0.1", ChipId2_0_1    },
+  { "p2.1.1", ChipId2_1_1    },
+  { "p2.3.1", ChipId2_3_1    },
+  { "p1.1.541", ChipId1_1_541    },
   { NULL,   ChipIdUnknown },
 };
 
@@ -96,6 +101,11 @@ bool ChipIdDecoder::IsProtonChip(){
     case ChipId541:
     case ChipId531:
     case ChipId521:
+    case ChipId522:
+    case ChipId2_0_1:
+    case ChipId2_1_1:
+    case ChipId2_3_1:
+    case ChipId1_1_541:
       return true;
       break;
     default:
@@ -111,6 +121,8 @@ bool ChipIdDecoder::IsPzero(){
     case ChipId520:
     case ChipId531:
     case ChipId521:
+    case ChipId522:
+    case ChipId2_0_1:
       return true;
       break;
     default:
@@ -123,6 +135,9 @@ bool ChipIdDecoder::IsPone(){
     case ChipId1_1_17:
     case ChipId540:
     case ChipId541:
+    case ChipId2_1_1:
+    case ChipId2_3_1:
+    case ChipId1_1_541:
       return true;
       break;
     default:
@@ -206,6 +221,11 @@ bool ChipIdDecoder::BigEnoughForGPU(){
     case ChipId541:
     case ChipId531:
     case ChipId521:
+    case ChipId522:
+    case ChipId2_0_1:
+    case ChipId2_1_1:
+    case ChipId2_3_1:
+    case ChipId1_1_541:
       return true;
     case ChipId314:
     case ChipId316:

@@ -49,7 +49,6 @@ __global__ void SimpleXTalkNeighbourContribution(// Here FL stands for flows
     float * myBaseXTalkContribution,  // buffer XTalk contribution of this well NxF
 
     const short* RawTraces,  //NxF
-    const float * EmptyTraceRegion, //FxR
     const float* BeadParamCube, //NxP
     const float* RegionFrameCube, //FxRxT bkgTrace, DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
     const ConstantParamsRegion * constRegP, // R

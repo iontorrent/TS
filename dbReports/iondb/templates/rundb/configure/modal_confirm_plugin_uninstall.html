@@ -8,8 +8,8 @@
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
     </div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
-        <a href="#" class="btn btn-danger">Yes, Uninstall!</a>
+        <a href="#" id="cancel_button" class="btn" data-dismiss="modal">Cancel</a>
+        <a href="#" id="install_button" class="btn btn-danger">Yes, Uninstall!</a>
     </div>
 
     <script>
@@ -20,8 +20,11 @@
             var url = $('#modal_confirm_plugin_uninstall').attr('action')
                 , type = $('#modal_confirm_plugin_uninstall').attr('method');
 
+            $('#single_msg').text("Now uninstalling, please wait.");
+            $('#cancel_button').attr('disabled','disabled');
+            $('#install_button').attr('disabled','disabled');
             console.log('transmitting :', type, url);
-               var jqxhr = $.ajax(url, {
+            var jqxhr = $.ajax(url, {
                                 type: type
                                , contentType: 'application/json'
                                , dataType: 'json'
@@ -45,7 +48,7 @@
         });
         $('#modal_confirm_plugin_uninstall').on('hidden', function () {
             $('body #modal_confirm_plugin_uninstall').remove();
-           });
+        });
 </script>
 
 </div>

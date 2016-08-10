@@ -111,14 +111,19 @@ if hasattr(zipfile.ZipFile, '__exit__'):
     ZipContextManager = zipfile.ZipFile
 else:
     class ZipContextManager():
+
         def __init__(self, *args, **kwargs):
             self.zobj = zipfile.ZipFile(*args, **kwargs)
+
         def __enter__(self):
             return self.zobj
+
         def __exit__(self, type, value, traceback):
             self.zobj.close()
 
 # Unified unzip function
+
+
 def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
     """ unzip files in archive to destination folder
     extracting only files in prefix and omitting prefix from output path.
@@ -129,13 +134,18 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
     dest = os.path.normpath(dest)
     if os.path.exists(dest):
         if not os.path.isdir(dest):
-            raise OSError("Must extract zip file to a directory. File already exists: '%s'", dest)
+            raise OSError("Must extract zip file to a directory. File already exists: '%s'" % dest)
+
         if dest.find(settings.PLUGIN_PATH) == 0:
             ## Only delete content under PLUGIN_PATH.
             delete_that_folder(dest, "Deleting content at destination path '%s'" % dest)
-        else:
-            raise OSError("Unable to extract ZIP - directory '%s' already exists", dest)
-    os.makedirs(dest, 0777)
+        elif os.listdir(dest):
+            # if the directory is not empty then a error needs to be raised
+            raise OSError("Unable to extract ZIP - directory '%s' already exists" % dest)
+
+        os.chmod(dest, 0777)
+    else:
+        os.makedirs(dest, 0777)
 
     logger.info("Extracting ZIP '%s' to '%s'", archive, dest)
 
@@ -181,7 +191,7 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
                 continue
 
             # ZIP archives can have symlinks. Nope.
-            if ((member.external_attr <<16L) & 0120000):
+            if ((member.external_attr << 16L) & 0120000):
                 logging.error("ZIP archive contains symlink: '%s'. Skipping.", member.filename)
                 continue
 
@@ -190,7 +200,7 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
                 continue
 
             # Get permission set inside archive
-            perm = ((member.external_attr >> 16L) & 0777 ) or 0755
+            perm = ((member.external_attr >> 16L) & 0777) or 0755
 
             # Create all upper directories if necessary.
             upperdirs = os.path.dirname(targetpath)
@@ -206,7 +216,7 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
                 continue
 
             try:
-                with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm),'wb') as targetfh:
+                with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm), 'wb') as targetfh:
                     zipfh = zfobj.open(member)
                     shutil.copyfileobj(zipfh, targetfh)
                     zipfh.close()
@@ -220,82 +230,11 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
                 os.chown(targetpath, uid, gid)
             except (OSError, IOError) as e:
                 # Non fatal if time and owner fail.
-                logger.warn("Failed to set owner attributes on '%s': %s", targetpath , e)
+                logger.warn("Failed to set owner attributes on '%s': %s", targetpath, e)
 
             extracted_files.append(targetpath)
 
     return (prefix, extracted_files)
-
-def unzipPlugin(zipfile, logger=None):
-    if not logger:
-        logger = logging.getLogger(__name__)
-    ## Extract plugin to scratch folder. When complete, move to final location.
-    plugin_path, ext = os.path.splitext(zipfile)
-    plugin_name = os.path.basename(plugin_path)
-
-    # ZIP file must named with plugin name - fragile
-    # FIXME - handle (1) additions (common for multiple downloads via browser)
-    # FIXME - handle version string in ZIP archive name
-
-    scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch","install-temp",plugin_name)
-    (prefix, files) = extract_zip(zipfile, scratch_path, auto_prefix=True, logger=logger)
-    if prefix:
-        plugin_name = os.path.basename(prefix)
-
-    plugin_temp_home = os.path.join(scratch_path, prefix)
-    try:
-        # Convert script into PluginClass, get info by introspection
-        from iondb.plugins.manager import pluginmanager
-        script, islaunch = pluginmanager.find_pluginscript(plugin_temp_home, plugin_name)
-        logger.debug("Got script: %s", script)
-        from ion.plugin.loader import cache as plugincache
-        ret = plugincache.load_module(plugin_name, script)
-        cls = plugincache.get_plugin(plugin_name)
-        p = cls()
-        final_name = p.name # what the plugin calls itself, regardless of ZIP file name
-        logger.info("Plugin calls itself: '%s'", final_name)
-    except:
-        logger.exception("Unable to interrogate plugin name from: '%s'", zipfile)
-        final_name = plugin_name
-
-    #move to the plugin dir
-    # New extract_zip removes prefix from extracted files.
-    # But still writes to file_name
-    try:
-        final_install_dir =  os.path.join(settings.PLUGIN_PATH, final_name)
-        if os.path.exists(final_install_dir) and (final_install_dir != settings.PLUGIN_PATH):
-            logger.info("Deleting old copy of plugin at '%s'", final_install_dir)
-            delete_that_folder(final_install_dir, "Error Deleting old copy of plugin at '%s'" % final_install_dir)
-        parent_folder = os.path.dirname(final_install_dir)
-        if not os.path.exists(parent_folder):
-            logger.info("Creating path for plugin '%s' for '%s'", parent_folder, final_install_dir)
-            os.makedirs(parent_folder, 0555)
-
-        logger.info("Moving plugin from temp extract folder '%s' to final location: '%s'", plugin_temp_home, final_install_dir)
-        shutil.move(plugin_temp_home, final_install_dir)
-        delete_that_folder(scratch_path, "Deleting plugin install scratch folder")
-
-        # Moving files reverts owner to root, change back to ionadmin
-        fix_plugin_owner(final_install_dir)
-
-    except (IOError, OSError):
-        logger.exception("Failed to move plugin from temp extract folder '%s' to final location: '%s'", plugin_temp_home, final_install_dir)
-        raise
-
-    # Now that it has been downloaded,
-    # convert pre-plugin into real db plugin object
-    try:
-        from iondb.plugins.manager import pluginmanager
-        (new_plugin, updated) = pluginmanager.install(final_name, final_install_dir)
-    except ValueError:
-        logger.exception("Failed to install plugin")
-        #delete_that_folder(final_install_dir)
-
-    return {
-        "plugin": final_name,
-        "path": final_install_dir,
-        "files": files,
-    }
 
 
 @app.task
@@ -303,6 +242,7 @@ def echo(message, wait=0.0):
     time.sleep(wait)
     logger.info("Logged: " + message)
     print(message)
+
 
 @app.task
 def delete_that_folder(directory, message):
@@ -314,6 +254,8 @@ def delete_that_folder(directory, message):
         shutil.rmtree(directory, onerror=delete_error)
 
 #N.B. Run as celery task because celery runs with root permissions
+
+
 @app.task
 def removeDirContents(folder_path):
     for file_object in os.listdir(folder_path):
@@ -325,6 +267,7 @@ def removeDirContents(folder_path):
         else:
             shutil.rmtree(file_object_path)
 
+
 def downloadChunks(url):
     """Helper to download large files"""
 
@@ -334,11 +277,11 @@ def downloadChunks(url):
     #move the file to a more uniq path
     os.umask(0002)
     temp_path = settings.TEMP_PATH
-    temp_path_uniq = os.path.join(temp_path,uuid_path)
+    temp_path_uniq = os.path.join(temp_path, uuid_path)
     os.mkdir(temp_path_uniq)
 
     try:
-        file = os.path.join(temp_path_uniq,baseFile)
+        file = os.path.join(temp_path_uniq, baseFile)
 
         req = urllib2.urlopen(url)
         try:
@@ -351,11 +294,11 @@ def downloadChunks(url):
             shutil.copyfileobj(req, fp, CHUNK)
         url = req.geturl()
     except urllib2.HTTPError, e:
-        logger.error("HTTP Error: %d '%s'",e.code , url)
+        logger.error("HTTP Error: %d '%s'", e.code, url)
         delete_that_folder(temp_path_uniq, "after download error")
         return False
     except urllib2.URLError, e:
-        logger.error("URL Error: %s '%s'",e.reason , url)
+        logger.error("URL Error: %s '%s'", e.reason, url)
         delete_that_folder(temp_path_uniq, "after download error")
         return False
     except:
@@ -365,10 +308,12 @@ def downloadChunks(url):
 
     return file, url
 
+
 @app.task
 def downloadGenome(url, genomeID):
     """download a genome, and update the genome model"""
     downloadChunks(url)
+
 
 def fix_plugin_owner(target_path):
     # Fix ownership - zeroinstall can leave files owned by root
@@ -389,7 +334,7 @@ def fix_plugin_owner(target_path):
 
     file_walker = (
         os.path.join(root, f)
-        for root, _, files in os.walk( target_path )
+        for root, _, files in os.walk(target_path)
         for f in files
     )
     for f in file_walker:
@@ -399,51 +344,9 @@ def fix_plugin_owner(target_path):
             os.chown(f, uid, gid)
         except (OSError, IOError) as e:
             # Non fatal if time and owner fail.
-            logger.warn("Failed to set time/owner attributes on '%s': %s", f , e)
+            logger.warn("Failed to set time/owner attributes on '%s': %s", f, e)
     return
 
-@app.task
-def downloadPlugin(plugin, zipFile):
-    """download a plugin, extract and install it"""
-    
-    if not plugin:
-        from iondb.rundb import models
-        plugin = models.Plugin.objects.create(name='Unknown', version='Unknown', status={})
-    plugin.status["installStatus"] = "downloading"
-
-    # Extract zipfile
-    scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch")
-    zipFullPath = os.path.join(scratch_path, zipFile)
-    plugin.status["installStatus"] = "extracting zip"
-
-    try:
-        ret = unzipPlugin(zipFullPath)
-    except:
-        logger.exception("Failed to unzip Plugin: '%s'", zipFullPath)
-    finally:
-        #remove the zip file
-        os.unlink(zipFullPath)
-
-    plugin.name = ret['plugin']
-    plugin.path = ret['path']
-    plugin.status["installStatus"] = "installing from zip"
-
-    # Now that it has been downloaded,
-    # convert pre-plugin into real db plugin object
-    try:
-        from iondb.plugins.manager import pluginmanager
-        (new_plugin, updated) = pluginmanager.install(plugin.name, plugin.path)
-    except ValueError:
-        logger.exception("Plugin rejected by installer. Check syntax and content.")
-        return None
-
-    # Copy over download status messages and url
-    new_plugin.status = plugin.status
-    new_plugin.save()
-
-    logger.info("Successfully downloaded and installed plugin %s v%s", new_plugin.name, new_plugin.version)
-
-    return new_plugin
 
 @app.task
 def downloadPublisher(url, zip_file=None):
@@ -501,6 +404,7 @@ def downloadPublisher(url, zip_file=None):
 
     return
 
+
 @app.task
 def contact_info_flyaway():
     """This invokes an external on the path which performs 3 important steps:
@@ -519,19 +423,23 @@ def contact_info_flyaway():
 
 
 @app.task
-def static_ip(address, subnet, gateway):
+def static_ip(address, subnet, gateway, nameserver=None, search=None):
     """Usage: TSstaticip [options]
-         --ip      Define host IP address
-         --nm      Define subnet mask (netmask)
-         --nw      Define network ID
-         --bc      Define broadcast IP address
-         --gw      Define gateway/router IP address
+         --ip         Define host IP address
+         --nm         Define subnet mask (netmask)
+         --gw         Define gateway/router IP address
+         --nameserver Specify one or more nameserver IP addresses
+         --search     Specify one or more search domains
     """
     cmd = ["/usr/sbin/TSstaticip",
            "--ip", address,
            "--nm", subnet,
            "--gw", gateway,
            ]
+    if nameserver:
+        cmd += ["--nameserver", nameserver]
+    if search:
+        cmd += ["--search", search]
     logger.info("Network: Setting host static, '%s'" % " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
@@ -560,18 +468,41 @@ def dhcp():
 def proxyconf(address, port, username, password):
     """Usage: TSsetproxy [options]
          --address     Proxy address (http://proxy.net)
-         --port         Proxy port number
+         --port        Proxy port number
          --username    Username for authentication
          --password    Password for authentication
+         --no_proxy    no_proxy setting
          --remove      Removes proxy setting
     """
     cmd = ["/usr/sbin/TSsetproxy",
            "--address", address,
            "--port", port,
            "--username", username,
-           "--password", password,
+           "--password", password
            ]
     logger.info("Network: Setting proxy settings, '%s'" % " ".join(cmd))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    if stderr:
+        logger.warning("Network error: %s" % stderr)
+    return stdout
+
+
+@app.task
+def noproxyconf(no_proxy):
+    """Usage: TSsetnoproxy [options]
+         --no_proxy    no_proxy setting
+         --remove      Removes no_proxy setting
+    """
+    if no_proxy:
+        cmd = ["/usr/sbin/TSsetnoproxy",
+               "--no_proxy", no_proxy,
+               ]
+    else:
+        cmd = ["/usr/sbin/TSsetnoproxy",
+               "--remove",
+               ]
+    logger.info("Network: Setting no_proxy settings, '%s'" % " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
     if stderr:
@@ -594,20 +525,6 @@ def ax_proxy():
 
 
 @app.task
-def dnsconf(dns):
-    """Usage: TSdns [options]
-         --dns      Define one or more comma delimited dns servers
-    """
-    cmd = ["/usr/sbin/TSdns", "--dns", dns]
-    logger.info("Network: Changing DNS settings, '%s'" % " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
-    if stderr:
-        logger.warning("Network error: %s" % stderr)
-    return stdout
-
-
-@app.task
 def updateOneTouch():
     sys.path.append("/opt/ion/onetouch")
     from onetouch import findHosts
@@ -618,15 +535,15 @@ def updateOneTouch():
         if os.path.exists("/tmp/OTstatus"):
             os.unlink("/tmp/OTstatus")
         #touch the status file
-        otStatus = open("/tmp/OTstatus",'w').close()
+        otStatus = open("/tmp/OTstatus", 'w').close()
         #run the onetouch update script
         try:
             updateStatus = findHosts.findOneTouches()
         except:
             updateStatus = "FAILED"
-        otStatus = open("/tmp/OTstatus",'w')
+        otStatus = open("/tmp/OTstatus", 'w')
         otStatus.write(str(updateStatus) + "\n")
-        otStatus.write( "DONE\n")
+        otStatus.write("DONE\n")
         otStatus.close()
         #now remove the lock
         os.unlink("/tmp/OTlock")
@@ -635,49 +552,8 @@ def updateOneTouch():
     return False
 
 
-def make_reference_paths(reference):
-    reference.reference_path = os.path.join(settings.TMAP_DISABLED_DIR, reference.short_name)
-    os.mkdir(reference.reference_path)
-    reference.save()
-    return os.path.join(reference.reference_path, reference.short_name + ".fasta")
-
-
 @app.task(queue="slowlane")
-def unzip_reference(reference_id, reference_file=None):
-    from iondb.rundb import models
-    reference = models.ReferenceGenome.objects.get(pk=reference_id)
-    reference.status = "preprocessing"
-    reference.save()
-    zip_path = reference.file_monitor.full_path()
-    destination = make_reference_paths(reference)
-    try:
-        archive =  zipfile.ZipFile(zip_path)
-        source_file = archive.open(reference_file, 'rU')
-        dest_file = open(destination, 'w')
-        shutil.copyfileobj(source_file, dest_file)
-        archive.close()
-    except Exception as err:
-        logger.error("Could extract fasta zipped reference id=%d at %s" % (reference.pk, zip_path))
-        raise err
-    reference.file_monitor.delete()
-    return destination
-
-
-@app.task(queue="slowlane")
-def copy_reference(reference_id):
-    from iondb.rundb import models
-    reference = models.ReferenceGenome.objects.get(pk=reference_id)
-    reference.status = "preprocessing"
-    reference.save()
-    fasta_path = reference.file_monitor.full_path()
-    destination = make_reference_paths(reference)
-    shutil.move(fasta_path, destination)
-    reference.file_monitor.delete()
-    return destination
-
-
-@app.task(queue="slowlane")
-def build_tmap_index(reference_id):
+def build_tmap_index(reference_id, fasta=None, reference_mask_path=None):
     """ Provides a way to kick off the tmap index generation
         this should spawn a process that calls the build_genome_index.pl script
         it may take up to 3 hours.
@@ -691,8 +567,10 @@ def build_tmap_index(reference_id):
     reference = models.ReferenceGenome.objects.get(pk=reference_id)
     reference.status = "indexing"
     reference.save()
-    fasta = os.path.join(reference.reference_path , reference.short_name + ".fasta")
-    logger.debug("TMAP %s rebuild, for reference %s(%d) using fasta %s"%
+
+    if not fasta:
+        fasta = os.path.join(reference.reference_path, reference.short_name + ".fasta")
+    logger.debug("TMAP %s rebuild, for reference %s(%d) using fasta %s" %
          (settings.TMAP_VERSION, reference.short_name, reference.pk, fasta))
 
     cmd = [
@@ -703,6 +581,9 @@ def build_tmap_index(reference_id):
         "--genome-name-long", reference.name,
         "--genome-version", reference.version
     ]
+    if reference_mask_path:
+        cmd.append("--reference-mask")
+        cmd.append(reference_mask_path)
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=settings.TMAP_DIR, preexec_fn=os.setsid)
 
@@ -720,7 +601,6 @@ def build_tmap_index(reference_id):
         reference.status = 'complete'
         reference.index_version = settings.TMAP_VERSION
         reference.save()
-        reference.enabled = True
         reference.enable_genome()
     else:
         logger.error('TMAP index rebuild "%s" failed:\n%s' %
@@ -728,20 +608,16 @@ def build_tmap_index(reference_id):
         reference.status = 'error'
         reference.verbose_error = stderr[:3000]
         reference.save()
-        reference.enabled = False
         reference.disable_genome()
 
     return ret == 0
 
 
-def IonReporterWorkflows(autorun=True):
+def IonReporterWorkflows():
 
     try:
         from iondb.rundb import models
-        if autorun:
-            IonReporterUploader= models.Plugin.objects.get(name="IonReporterUploader_V1_0",selected=True,active=True,autorun=True)
-        else:
-            IonReporterUploader= models.Plugin.objects.get(name="IonReporterUploader_V1_0",selected=True,active=True)
+        IonReporterUploader = models.Plugin.objects.get(name="IonReporterUploader_V1_0", selected=True, active=True)
 
         logging.error(IonReporterUploader.config)
         config = IonReporterUploader.config
@@ -751,8 +627,8 @@ def IonReporterWorkflows(autorun=True):
         return False, error
 
     try:
-        headers = {"Authorization" : config["token"] }
-        url = config["protocol"] + "://" + config["server"] + ":" + config["port"] +"/grws/analysis/wflist"
+        headers = {"Authorization": config["token"]}
+        url = config["protocol"] + "://" + config["server"] + ":" + config["port"] + "/grws/analysis/wflist"
         logging.info(url)
     except KeyError:
         error = "IonReporterUploader V1.0 Plugin Config is missing needed data."
@@ -761,7 +637,7 @@ def IonReporterWorkflows(autorun=True):
 
     try:
         #using urllib2 right now because it does NOT verify SSL certs
-        req = urllib2.Request(url = url, headers = headers)
+        req = urllib2.Request(url=url, headers=headers)
         response = urllib2.urlopen(req)
         content = response.read()
         content = json.loads(content)
@@ -790,7 +666,7 @@ def IonReporterVersion(plugin):
 
     try:
         from iondb.rundb import models
-        IonReporterUploader= models.Plugin.objects.get(name=plugin,selected=True,active=True)
+        IonReporterUploader = models.Plugin.objects.get(name=plugin, selected=True, active=True)
         logging.error(IonReporterUploader.config)
         config = IonReporterUploader.config
     except models.Plugin.DoesNotExist:
@@ -799,18 +675,18 @@ def IonReporterVersion(plugin):
         return False, error
 
     try:
-        headers = {"Authorization" : config["token"] }
+        headers = {"Authorization": config["token"]}
         url = config["protocol"] + "://" + config["server"] + ":" + config["port"] + "/grws_1_2/data/versionList"
         logging.info(url)
     except KeyError:
         error = plugin + " Plugin Config is missing needed data."
-        logging.debug(plugin +" config: " + config)
+        logging.debug(plugin + " config: " + config)
         logging.exception(error)
         return False, error
 
     try:
         #using urllib2 right now because it does NOT verify SSL certs
-        req = urllib2.Request(url = url, headers = headers)
+        req = urllib2.Request(url=url, headers=headers)
         response = urllib2.urlopen(req)
         content = response.read()
         content = json.loads(content)
@@ -846,24 +722,40 @@ def scheduled_update_check():
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
 
+
 @app.task
 def check_updates():
     """Currently this is passed a TSConfig object; however, there might be a
     smoother design for this control flow.
     """
     from iondb.rundb import models
+    from iondb.utils.files import rename_extension
     try:
         import ion_tsconfig.TSconfig
+        from iondb.utils.usb_check import getUSBinstallerpath, change_list_files
+
+        path = getUSBinstallerpath()
+        if path:
+            change_list_files(path)
+        if not path:
+            rename_extension('etc/apt/', '.USBinstaller', '')
+            if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
+                os.remove('/etc/apt/sources.list.d/usb.list')
+
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
         enable_security_update = models.GlobalConfig.get().enable_auto_security
         tsconfig.set_securityinstall(enable_security_update)
         packages = tsconfig.TSpoll_pkgs()
     except Exception as err:
+        rename_extension('etc/apt/', '.USBinstaller', '')
+        if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
+            os.remove('/etc/apt/sources.list.d/usb.list')
         logger.error("TSConfig raised '%s' during update check." % err)
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
 
     return packages
+
 
 @app.task
 def download_updates(auto_install=False):
@@ -917,6 +809,11 @@ def _do_the_install():
         models.Message.objects.filter(expires="system-update-finished").delete()
         models.Message.objects.filter(tags__contains="new-upgrade").delete()
     finally:
+        from iondb.utils.files import rename_extension
+        #undo edits
+        rename_extension('etc/apt/', '.USBinstaller', '')
+        if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
+            os.remove('/etc/apt/sources.list.d/usb.list')
         # This will start celeryd if it is not running for any reason after
         # attempting installation.
         call('service', 'celeryd', 'start')
@@ -937,14 +834,14 @@ def install_updates():
 
 
 # This can get stuck when NFS filesystems are misbehaving so need a timeout
-@app.task(queue = "diskutil", soft_time_limit = 60)
+@app.task(queue="diskutil", soft_time_limit=60)
 def update_diskusage(fs_name):
     from iondb.utils.files import percent_full
     from iondb.rundb import models
-    fs = models.FileServer.objects.get(name = fs_name)
+    fs = models.FileServer.objects.get(name=fs_name)
     if os.path.exists(fs.filesPrefix):
         try:
-            fs.percentfull=percent_full(fs.filesPrefix)
+            fs.percentfull = percent_full(fs.filesPrefix)
             fs.save()
             #logger.debug("Used space: %s %0.2f%%" % (fs.filesPrefix,fs.percentfull))
         except Exception as e:
@@ -952,12 +849,12 @@ def update_diskusage(fs_name):
             logger.error(e)
     else:
         logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
-        fs.percentfull=0
+        fs.percentfull = 0
         fs.save()
     return fs_name
 
 
-@task(queue = 'diskutil')
+@task(queue='diskutil')
 def post_update_diskusage(fs_name):
     '''Handler for update_diskusage task output'''
     from iondb.rundb import models
@@ -966,7 +863,7 @@ def post_update_diskusage(fs_name):
     critical_threshold = 99
     warning_threshold = 95
     friendly_threshold = 70
-    fs = models.FileServer.objects.get(name = fs_name)
+    fs = models.FileServer.objects.get(name=fs_name)
     gc = models.GlobalConfig.get()
     dmfs = models.DMFileSet.objects.filter(version=settings.RELVERSION)
 
@@ -977,18 +874,18 @@ def post_update_diskusage(fs_name):
     warn_tag = "%s_disk_usage_warning" % (fs.name)
     golink = "<a href='%s' >  Visit Data Management</a>" % ('/data/datamanagement/')
     if fs.percentfull > critical_threshold:
-        msg = "* * * CRITICAL! %s: Partition is getting very full - %0.2f%% * * *" % (fs.filesPrefix,fs.percentfull)
+        msg = "* * * CRITICAL! %s: Partition is getting very full - %0.2f%% * * *" % (fs.filesPrefix, fs.percentfull)
         logger.debug(msg+"   %s" % golink)
-        message  = models.Message.objects.filter(tags__contains=crit_tag)
+        message = models.Message.objects.filter(tags__contains=crit_tag)
         if not message:
-            models.Message.error(msg+"   %s" % golink,tags=crit_tag)
+            models.Message.error(msg+"   %s" % golink, tags=crit_tag)
             notify_diskfull(msg)
     elif fs.percentfull > warning_threshold:
-        msg = "%s: Partition is getting full - %0.2f%%" % (fs.filesPrefix,fs.percentfull)
+        msg = "%s: Partition is getting full - %0.2f%%" % (fs.filesPrefix, fs.percentfull)
         logger.debug(msg+"   %s" % golink)
-        message  = models.Message.objects.filter(tags__contains=warn_tag)
+        message = models.Message.objects.filter(tags__contains=warn_tag)
         if not message:
-            models.Message.error(msg+"   %s" % golink,tags=warn_tag)
+            models.Message.error(msg+"   %s" % golink, tags=warn_tag)
             notify_diskfull(msg)
     else:
         # Remove any message objects
@@ -1001,11 +898,11 @@ def post_update_diskusage(fs_name):
     try:
         friendly_tag = "%s_dm_not_enabled" % (fs.name)
         if not gc.auto_archive_enable and fs.percentfull > friendly_threshold:
-            msg = "Data Management Auto Actions are not enabled and %s is %0.2f%% full" % (fs.filesPrefix,fs.percentfull)
+            msg = "Data Management Auto Actions are not enabled and %s is %0.2f%% full" % (fs.filesPrefix, fs.percentfull)
             logger.debug(msg+"   %s" % golink)
-            message  = models.Message.objects.filter(tags__contains=friendly_tag)
+            message = models.Message.objects.filter(tags__contains=friendly_tag)
             if not message:
-                models.Message.error(msg+"   %s" % golink,tags=friendly_tag, route=models.Message.USER_STAFF)
+                models.Message.error(msg+"   %s" % golink, tags=friendly_tag, route=models.Message.USER_STAFF)
                 notify_diskfull(msg)
         else:
             models.Message.objects.filter(tags__contains=friendly_tag).delete()
@@ -1018,11 +915,11 @@ def post_update_diskusage(fs_name):
     try:
         friendly_tag = "%s_all_auto_actions_disabled" % (fs.name)
         if gc.auto_archive_enable and dmfs.filter(auto_action="OFF").count() == 4:
-            msg = "All Data Management Auto Actions are disabled and %s is %0.2f%% full" % (fs.filesPrefix,fs.percentfull)
+            msg = "All Data Management Auto Actions are disabled and %s is %0.2f%% full" % (fs.filesPrefix, fs.percentfull)
             logger.debug(msg+"   %s" % golink)
-            message  = models.Message.objects.filter(tags__contains=friendly_tag)
+            message = models.Message.objects.filter(tags__contains=friendly_tag)
             if not message:
-                models.Message.error(msg+"   %s" % golink,tags=friendly_tag, route=models.Message.USER_STAFF)
+                models.Message.error(msg+"   %s" % golink, tags=friendly_tag, route=models.Message.USER_STAFF)
                 notify_diskfull(msg)
         else:
             models.Message.objects.filter(tags__contains=friendly_tag).delete()
@@ -1038,7 +935,7 @@ def post_update_diskusage(fs_name):
         if float(iuse)/float(itot) > inode_threshold:
             msg = "Running out of inodes on %s. Used %d of %d. Contact IT or system support for further investigation." % (fs.filesPrefix, iuse, itot)
             logger.debug(msg+"   %s" % golink)
-            message  = models.Message.objects.filter(tags__contains=inode_tag)
+            message = models.Message.objects.filter(tags__contains=inode_tag)
             if not message:
                 models.Message.error(msg, tags=inode_tag, route=models.Message.USER_STAFF)
                 notify_diskfull(msg)
@@ -1051,7 +948,7 @@ def post_update_diskusage(fs_name):
 # Expires after 5 minutes; is scheduled every 10 minutes
 # To trigger celery task from command line:
 # python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.check_disk_space.apply_async()'
-@periodic_task(run_every=600, expires=300, queue="periodic", ignore_result = True)
+@periodic_task(run_every=600, expires=300, queue="periodic", ignore_result=True)
 def check_disk_space():
     """
     For every FileServer object, start a task to get percentage of used disk space.
@@ -1068,7 +965,7 @@ def check_disk_space():
 
     for fs in fileservers:
         if os.path.exists(fs.filesPrefix):
-            async_result = update_diskusage.apply_async([fs.name], link = post_update_diskusage.s())
+            async_result = update_diskusage.apply_async([fs.name], link=post_update_diskusage.s())
         else:
             # log the error
             logger.warn("File Server does not exist.  Name: %s Path:%s" % (fs.name, fs.filesPrefix))
@@ -1094,7 +991,7 @@ def check_disk_space():
         if root_free_space < root_threshold:
             msg = "Root Partition is getting full - less than 1GB available"
             logger.warn(msg)
-            message  = models.Message.objects.filter(tags__contains=warn_tag)
+            message = models.Message.objects.filter(tags__contains=warn_tag)
             if not message:
                 models.Message.warn(msg, tags=warn_tag)
         else:
@@ -1104,20 +1001,72 @@ def check_disk_space():
         logger.error(traceback.format_exc())
 
 
+def notify_services_error(subject_line, msg, html_msg):
+    '''sends an email with message'''
+    logid = {'logid': "%s" % ('notify_services_error')}
+    try:
+        recipient = User.objects.get(username='it_contact').email
+        logger.warning("it_contact is %s." % recipient, extra=logid)
+    except:
+        logger.warning("Could not retrieve it_contact.  No email sent.", extra=logid)
+        return False
+    # Check for blank email
+    # TODO: check for valid email address
+    if not recipient:
+        logger.warning("No it_contact email configured.", extra=logid)
+        return False
+
+    #Needed to send email
+    settings.EMAIL_HOST = 'localhost'
+    settings.EMAIL_PORT = 25
+    settings.EMAIL_USE_TLS = False
+
+    try:
+        site_name = models.GlobalConfig.get().site_name
+    except:
+        site_name = "Torrent Server"
+
+    hname = socket.getfqdn()
+
+    reply_to = 'donotreply@iontorrent.com'
+    message = 'From: %s (%s)\n' % (site_name, hname)
+    message += '\n'
+    message += msg
+    message += "\n"
+    html_content = 'From: %s (<a href=%s>%s</a>)<br>' % (site_name, hname, hname)
+    html_content += '<br>'
+    html_content += html_msg
+    html_content += "<br>"
+
+    # Send the email
+    try:
+        recipient = recipient.replace(',', ' ').replace(';', ' ').split()
+        logger.debug(recipient, extra=logid)
+        sendthis = mail.EmailMultiAlternatives(subject_line, message, reply_to, recipient)
+        sendthis.attach_alternative(html_content, "text/html")
+        sendthis.send()
+    except:
+        logger.warning(traceback.format_exc(), extra=logid)
+        return False
+    else:
+        logger.info("email sent for services alert", extra=logid)
+        return True
+
+
 def notify_diskfull(msg):
     '''sends an email with message'''
-    logid = {'logid':"%s" % ('notify_diskfull')}
+    logid = {'logid': "%s" % ('notify_diskfull')}
     try:
         recipient = User.objects.get(username='dm_contact').email
-        logger.warning("dm_contact is %s." % recipient, extra = logid)
+        logger.warning("dm_contact is %s." % recipient, extra=logid)
     except:
-        logger.warning("Could not retrieve dm_contact.  No email sent.", extra = logid)
+        logger.warning("Could not retrieve dm_contact.  No email sent.", extra=logid)
         return False
 
     # Check for blank email
     # TODO: check for valid email address
     if not recipient:
-        logger.warning("No dm_contact email configured.  No email sent.", extra = logid)
+        logger.warning("No dm_contact email configured.  No email sent.", extra=logid)
         return False
 
     #Needed to send email
@@ -1141,14 +1090,14 @@ def notify_diskfull(msg):
 
     # Send the email
     try:
-        recipient = recipient.replace(',',' ').replace(';',' ').split()
-        logger.debug(recipient, extra = logid)
+        recipient = recipient.replace(',', ' ').replace(';', ' ').split()
+        logger.debug(recipient, extra=logid)
         mail.send_mail(subject_line, message, reply_to, recipient)
     except:
-        logger.warning(traceback.format_exc(), extra = logid)
+        logger.warning(traceback.format_exc(), extra=logid)
         return False
     else:
-        logger.info("Notification email sent for user acknowledgement", extra = logid)
+        logger.info("Notification email sent for user acknowledgement", extra=logid)
         return True
 
 
@@ -1159,6 +1108,8 @@ if time.localtime().tm_isdst and time.daylight:
 else:
     cronjobtime = 6 + int(time.timezone/60/60)
 cronjobtime = (24 + cronjobtime) % 24
+
+
 @periodic_task(run_every=crontab(hour=str(cronjobtime), minute="0", day_of_week="*"), queue="periodic")
 def runnightly():
     import traceback
@@ -1275,6 +1226,7 @@ def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth
     # write generic err-back to log failure in DownloadProgress
     # write wrapper function to set up the common case.
 
+
 @app.task
 def ampliseq_zip_upload(args, meta):
     from iondb.rundb import publishers
@@ -1286,30 +1238,89 @@ def ampliseq_zip_upload(args, meta):
     publishers.run_pub_scripts(pub, upload)
 
 
-@app.task
-def install_reference(args, reference_id):
+@app.task(queue="slowlane")
+def install_reference(args, reference_id, reference_mask_filename=None):
     from iondb.rundb import models
-    full_path, monitor_id = args
-    monitor = models.FileMonitor.objects.get(id=monitor_id)
+
+    def _is_genome_file(reference_path):
+        ext = os.path.splitext(reference_path)[1]
+        return ext.lower() in ['.fasta', '.fas', '.fa', '.fna', '.seq']
+
     reference = models.ReferenceGenome.objects.get(id=reference_id)
-    if monitor.status == "Complete":
-        reference.status = "preprocessing"
-        reference.save()
-        extracted_path = os.path.join(monitor.local_dir, "reference_contents")
-        extract_zip(full_path, extracted_path)
-        reference.reference_path = extracted_path
-        reference.save()
-        if reference.index_version == settings.TMAP_VERSION:
-            reference.status = "complete"
-            reference.enabled = True
-            reference.enable_genome()
+    reference.status = "preprocessing"
+    reference.save()
+
+    full_path, monitor_id = args
+    if monitor_id:
+        monitor = models.FileMonitor.objects.get(id=monitor_id)
+        if monitor.status == "Complete":
+            local_dir = monitor.local_dir
         else:
-            reference.status = "queued"
-            result = build_tmap_index.delay(reference.id)
-            reference.celery_task_id = result.task_id
-        reference.save()
+            reference.status = "download failed"
+            reference.save()
+            return
     else:
-        reference.status = "download failed"
+        local_dir = tempfile.mkdtemp(suffix=reference.short_name, dir=settings.TEMP_PATH)
+        os.chmod(local_dir, 0777)
+        shutil.move(reference.source, local_dir)
+        full_path = os.path.join(local_dir, os.path.basename(reference.source))
+
+    reference_mask_path = None
+    logger.debug('Install reference %s (%d) from file: %s' % (reference.short_name, reference.pk, full_path))
+
+    # handle gzip files
+    if os.path.splitext(full_path)[1] == '.gz':
+        success, gunzipped = check_gunzip(full_path)
+        if success:
+            full_path = gunzipped
+
+    # handle ZIP files
+    if zipfile.is_zipfile(full_path):
+        extracted_path = os.path.join(local_dir, "reference_contents")
+        extract_zip(full_path, extracted_path)
+
+        reference.reference_path = extracted_path
+        fasta_path = os.path.join(reference.reference_path, reference.short_name + '.fasta')
+
+        # uploaded reference file name can be other than short_name and extension other than .fasta
+        if not os.path.exists(fasta_path):
+            files = filter(lambda x: _is_genome_file(x), os.listdir(reference.reference_path))
+            if len(files) == 1:
+                fasta_path = os.path.join(reference.reference_path, files[0])
+            else:
+                reference.status = "error"
+                reference.verbose_error = "Error: upload must contain exactly one reference file"
+                reference.save()
+                logger.error('Error: Reference upload for %s (%d) had %d genome files' % (reference.short_name, reference.pk, len(files)))
+                delete_that_folder(local_dir, "deleting uploaded reference temp files")
+                return
+
+        if reference_mask_filename:
+            reference_mask_path = os.path.join(reference.reference_path, reference_mask_filename)
+            #error if the specified reference_mask is not found
+            if not os.path.exists(reference_mask_path):
+                reference.status = "error"
+                reference.verbose_error = "Error: reference upload refers to a non-existing file"
+                reference.save()
+                logger.error('Error: Reference upload for %s (%d) refers to a non-existing %s mask file' % (reference.short_name, reference.pk, reference_mask_filename))
+                delete_that_folder(local_dir, "deleting uploaded reference temp files")
+                return
+
+    else:
+        reference.reference_path = local_dir
+        fasta_path = full_path
+    reference.save()
+
+    # preloaded references don't need to be indexed. Always force re-indexing if reference mask is used
+    if reference.index_version == settings.TMAP_VERSION and not reference_mask_filename:
+        logger.info('Skipping build tmap index for %s(%d), already indexed %s' % (reference.short_name, reference.pk, reference.index_version))
+        reference.status = "complete"
+        reference.enable_genome()
+        delete_that_folder(local_dir, "deleting uploaded reference temp files")
+    else:
+        delete_task = delete_that_folder.subtask((local_dir, "deleting uploaded reference temp files"), immutable=True)
+        async_result = build_tmap_index.apply_async((reference.id, fasta_path, reference_mask_path), link=delete_task)
+        reference.celery_task_id = async_result.task_id
         reference.save()
 
 
@@ -1325,7 +1336,7 @@ def get_raid_stats():
     return raid_stats
 
 
-@app.task (queue = "w1", soft_time_limit = 60)
+@app.task (queue="w1", soft_time_limit=60)
 def get_raid_stats_json():
     '''Wrapper to bash script calling MEGAraid tool'''
     raid_stats = None
@@ -1340,7 +1351,7 @@ def get_raid_stats_json():
     return raid_stats
 
 
-@task (queue = "w1", ignore_result = True)
+@task (queue="w1", ignore_result=True)
 def post_check_raid_status(raidinfo):
     '''Handler for output from get_raid_stats_json task'''
     from iondb.rundb import models
@@ -1352,23 +1363,23 @@ def post_check_raid_status(raidinfo):
             if not message:
                 msg = 'WARNING: RAID storage disk error.'
                 golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
-                models.Message.warn(msg+"   %s" % golink,tags="raid_alert")
+                models.Message.warn(msg+"   %s" % golink, tags="raid_alert")
+
+                # TS-9461.  Send an email alert in conjunction with displaying the banner message
+                msg = "WARNING: RAID storage disk error.\n"
+                msg = msg+"\nVisit the Services Tab for more information"
+                html_content = "WARNING: RAID storage disk error.<br>"
+                html_content = html_content+"Visit the <a href='%s/%s' >Services Tab</a> for more information." % (socket.getfqdn(), 'configure/services/')
+                notify_services_error('Torrent Server RAID Array Alert', msg, html_content)
+
         else:
             message.delete()
 
 
-@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result = True)
+@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result=True)
 def check_raid_status():
     '''check RAID state and alert user with message banner of any problems'''
-    get_raid_stats_json.apply_async(link = post_check_raid_status.s())
-
-
-@app.task
-def disk_check_status():
-    status, stdout, stderr = call("tune2fs", "-l", "/dev/sda1")
-    if status != 0:
-        logger.error("tune2fs error: " + stderr)
-    return stdout
+    get_raid_stats_json.apply_async(link=post_check_raid_status.s())
 
 
 @periodic_task(run_every=timedelta(hours=4), queue="periodic")
@@ -1397,6 +1408,7 @@ def update_news_posts():
                 article.delete()
     else:
         logger.error("Could not get Ion Torrent news feed.")
+
 
 @periodic_task(run_every=timedelta(minutes=3600), expires=600, queue="periodic")
 def checkLspciForGpu():
@@ -1439,6 +1451,7 @@ def checkLspciForGpu():
 
     return gpuFound and revsValid
 
+
 def findNvidiaInLspci(lspciStr, startIndex):
 
     # find the line with the NVIDIA controller information
@@ -1461,9 +1474,11 @@ def findNvidiaInLspci(lspciStr, startIndex):
 
     return nvidiaLine[beg:end], newline + 1
 
+
 def writeError(errorFileName, gpuFound, allRevsValid):
     with open(errorFileName, 'w') as f:
         f.write(json.dumps({'gpuFound': gpuFound, 'allRevsValid': allRevsValid}))
+
 
 @app.task
 def hide_apt_sources():
@@ -1497,7 +1512,7 @@ def lock_ion_apt_sources(enable=False):
 
     # get distribution string
     def get_distrib_name():
-        with open('/etc/lsb-release','r') as fp:
+        with open('/etc/lsb-release', 'r') as fp:
             for line in fp.readlines():
                 if line.startswith('DISTRIB_CODENAME'):
                     return line.split('=')[1].strip()
@@ -1517,7 +1532,7 @@ def lock_ion_apt_sources(enable=False):
     #     /etc/apt/sources.list
     #     /etc/apt/sources.list.d/*.list
     #
-    filepaths = [os.path.join("/etc/apt/sources.list.d",x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list']
+    filepaths = [os.path.join("/etc/apt/sources.list.d", x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list']
     filepaths.append("/etc/apt/sources.list")
     for filepath in filepaths:
         logger.debug("Looking in %s" % filepath)
@@ -1531,31 +1546,53 @@ def lock_ion_apt_sources(enable=False):
             logger.error("%s: %s" % (sys._getframe().f_code.co_name, stderr))
 
 
-@app.task(queue = 'w1')
-def post_run_nodetests(result):
-    '''Handler for return value of set of tasks running test_node_and_update_db
-    result is an array of strings
+@periodic_task(run_every=timedelta(minutes=10), expires=300, queue="periodic")
+def post_run_nodetests():
     '''
-    from iondb.rundb.models import Message, Cruncher
+        Alert user with message banner and email of any problems with cluster node
+        Autodisables failed nodes if GlobalConfig.cluster_auto_disable flag is set
+        Also updates queue info for the cluster
+    '''
+    from iondb.rundb.models import Message, Cruncher, GlobalConfig
 
     bad_nodes = Cruncher.objects.exclude(state='G')
     message = Message.objects.filter(tags="cluster_alert")
     if len(bad_nodes) > 0:
+        auto_disable = GlobalConfig.get().cluster_auto_disable
         if not message:
             msg = 'WARNING: Cluster node failure.'
             golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
-            Message.warn(msg+"   %s" % golink,tags="cluster_alert")
+            Message.warn(msg+"   %s" % golink, tags="cluster_alert")
+
+            # TS-9461. Send an email in conjunction with displaying the banner message
+            msg = "The following nodes have been disabled due to an error condition.\n"
+            for node in bad_nodes:
+                msg = msg+node.name+"\n"
+            msg = msg+"\nVisit the Services Tab for more information"
+            msg = msg+"http://%s/configure/services" % (socket.getfqdn())
+            if auto_disable:
+                html_content = "The following nodes have been disabled due to an error condition.<br>"
+            else:
+                html_content = "The following nodes have an error condition.<br>"
+            html_content += "<ul>"
+            for node in bad_nodes:
+                err_status = node.info['error']
+                html_content = html_content+"<li>"+node.name+" - "+err_status+"</li>"
+            html_content += "</ul>"
+            html_content = html_content+"Visit the <a href='%s/%s' >Services Tab</a> for more information." % (socket.getfqdn(), 'configure/services/')
+            notify_services_error('Torrent Server Cluster Node Alert', msg, html_content)
 
         # disable nodes that fail nfs_mount_test or version_test
-        disable_on_tests = ['nfs_mount_test','version_test']
-        for node in bad_nodes:
-            queues = node.info.get('queues')
-            node_disabled = queues['disabled'] == queues['total'] if queues else False
-            if not node_disabled and 'config_tests' in node.info:
-                failed_tests = sum(test[1]=='failure' for test in node.info['config_tests'] if test[0] in disable_on_tests)
-                if failed_tests > 0:
-                    logger.info('Node %s failed tests and will be disabled' % node.name)
-                    cluster_ctrl_task("disable", node.name, "system")
+        if auto_disable:
+            disable_on_tests = ['nfs_mount_test', 'version_test']
+            for node in bad_nodes:
+                queues = node.info.get('queues')
+                node_disabled = queues['disabled'] == queues['total'] if queues else False
+                if not node_disabled and 'config_tests' in node.info:
+                    failed_tests = sum(test[1] == 'failure' for test in node.info['config_tests'] if test[0] in disable_on_tests)
+                    if failed_tests > 0:
+                        logger.info('Node %s failed tests and will be disabled' % node.name)
+                        cluster_ctrl_task("disable", node.name, "system")
     else:
         message.delete()
 
@@ -1563,7 +1600,7 @@ def post_run_nodetests(result):
     cluster_queue_info()
 
 
-@task(queue = 'w1', soft_time_limit = 60, expires=600)
+@task(queue='w1', soft_time_limit=60, expires=600)
 def test_node_and_update_db(node, head_versions):
     '''run tests'''
     logger.info("Testing node: %s" % node.name)
@@ -1581,11 +1618,12 @@ def test_node_and_update_db(node, head_versions):
         node_status['error'] = "Time limit exceeded for connect_nodetest()"
     except:
         logger.error(traceback.format_exc())
-        
+
     if node_status['status'] == 'good':
         logger.info("Node: %s passed connect test" % node.name)
         try:
             node_status.update(config_nodetest(node.name, head_versions))
+            logger.info("Node: %s passed config test" % node.name)
         except SoftTimeLimitExceeded:
             logger.error("Time limit exceeded for config_nodetest on %s" % node.name)
             node_status['status'] = 'error'
@@ -1607,9 +1645,9 @@ def test_node_and_update_db(node, head_versions):
     return (node.name, node_status['status'])
 
 
-@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result = True)
+@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result=True)
 def check_cluster_status():
-    # run tests for cluster nodes and alert user with message banner of any problems
+    # run tests for cluster nodes
     from ion.utils.TSversion import findVersions
     from iondb.rundb.models import Cruncher
 
@@ -1617,12 +1655,11 @@ def check_cluster_status():
     if not nodes:
         pass
     else:
-        # launch parallel celery tasks to test all nodes, and then call the final task to return a status
+        # launch parallel celery tasks to test all nodes
         # Note that parallelism will be limited by the number of workers in a queue.
         head_versions, _ = findVersions()
-        tasks = group(test_node_and_update_db.s(node, head_versions) for node in nodes)
-        c = chord(tasks)(post_run_nodetests.s())
-        return c
+        result = group(test_node_and_update_db.s(node, head_versions) for node in nodes).apply_async()
+        return result
 
 
 def cluster_queue_info():
@@ -1635,12 +1672,12 @@ def cluster_queue_info():
         node.save()
 
 
-@app.task(queue = 'w1')
+@app.task(queue='w1')
 def cluster_ctrl_task(action, name, username):
     ''' send SGE commands, run as task to get root permissions '''
     from iondb.rundb.models import Cruncher, EventLog
 
-    nodes = Cruncher.objects.filter(name=name) if name!="all" else Cruncher.objects.all()
+    nodes = Cruncher.objects.filter(name=name) if name != "all" else Cruncher.objects.all()
     if not nodes:
         return "Node %s not found" % node
 
@@ -1684,7 +1721,7 @@ def add_eventlog(node, new_status):
     else:
         msg = "%s state is %s<br>" % (node.name, new_status['status'].title())
 
-    addlog = addlog or node.info.get('error','') != new_status.get('error','')
+    addlog = addlog or node.info.get('error', '') != new_status.get('error', '')
     addlog = addlog or node.info.get('version_test_errors', '') != new_status.get('version_test_errors', '')
     msg += "Error: %s %s<br>" % (new_status.get('error', ''), new_status.get('version_test_errors', ''))
 
@@ -1736,6 +1773,7 @@ def generate_TF_files(tfkey, tf_dir='/results/referenceLibrary/TestFragment'):
         except OSError:
             logger.error("Failed to delete folder %s" % dest)
 
+
 def check_gunzip(gunZipFile, logger=None):
     #import mimetypes
     isTaskSuccess = False
@@ -1746,12 +1784,13 @@ def check_gunzip(gunZipFile, logger=None):
         result = subprocess.check_call("gunzip %s" % gunZipFile, shell=True)
         if not result: #extract failed If non-zero exit status
             isTaskSuccess = True
-            fileToRegister = re.sub('.gz$','', gunZipFile)
+            fileToRegister = re.sub('.gz$', '', gunZipFile)
             return isTaskSuccess, fileToRegister
     except Exception, err:
         logger.error("Failed to extract .gz file %s" % err)
 
     return isTaskSuccess, gunZipFile
+
 
 @app.task
 def new_annotation_download(annot_url, updateVersion, **reference_args):
@@ -1780,7 +1819,7 @@ def new_annotation_download(annot_url, updateVersion, **reference_args):
         upload.name = file_name
         #Go ahead and register the annotation file via publisher framework
         pub_name = "refAnnot"
-        meta = {"publisher" : pub_name, "reference": ref_short_Name, "annotation_url" : annot_url, "upload_type" : "Annotation" }
+        meta = {"publisher": pub_name, "reference": ref_short_Name, "annotation_url": annot_url, "upload_type": "Annotation"}
         try:
             pub = Publisher.objects.get(name=pub_name)
             contentUpload, async_upload = publishers.edit_upload(pub, upload, json.dumps(meta))
@@ -1789,6 +1828,7 @@ def new_annotation_download(annot_url, updateVersion, **reference_args):
             logger.debug("Publisher does not exists {0}".format(pub_name))
 
     return isTaskSuccess
+
 
 def start_annotation_download(annot_url, reference, callback=None, updateVersion=None, monitor=None):
     from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
@@ -1809,7 +1849,7 @@ def start_annotation_download(annot_url, reference, callback=None, updateVersion
         return (False, fileToRegister, monitor.status)
     try:
         download_args = (annot_url, monitor.id, settings.TEMP_PATH)
-        async_result = download_something.apply_async(download_args,refID=reference.id)
+        async_result = download_something.apply_async(download_args, refID=reference.id)
         logger.error(async_result)
 
         isTaskSuccess = False
@@ -1821,7 +1861,7 @@ def start_annotation_download(annot_url, reference, callback=None, updateVersion
                 monitor.save()
                 logger.error("Error in Download File '{0}': {1}".format(annot_url, err))
         if async_result.status == 'SUCCESS':
-            monitor = FileMonitor.objects.get(tags=tagsInfo,url=annot_url)
+            monitor = FileMonitor.objects.get(tags=tagsInfo, url=annot_url)
             isTaskSuccess = async_result.successful()
             result = async_result.result
             downloaded_fileTempPath = result[0]
@@ -1845,3 +1885,119 @@ def start_annotation_download(annot_url, reference, callback=None, updateVersion
         logger.debug("System Error: Caused Unknown Exception {0}".format(err))
         monitor.status = "System Error. Please contact TS administrator"
         monitor.save()
+
+
+@app.task(queue="w1")
+def set_timezone(request):
+    logger.debug("MY ERROR")
+    with open ('/etc/timezone', 'w') as f:
+        f.write(request)
+    reconfig = subprocess.Popen(['dpkg-reconfigure', '-f', "noninteractive", "tzdata"], stdout=subprocess.PIPE)
+    configOut, configErr = reconfig.communicate()
+    reconfig.wait()
+    logger.debug("MY ERROR %s" % configOut)
+    logger.debug("MY ERROR %s" % configErr)
+
+    return reconfig.returncode
+
+
+def run_ansible_playbook(playbook):
+    '''Run ansible-playbook in a subshell'''
+    # Which hosts file to use
+    hosts_file = '/usr/share/ion-tsconfig/ansible/torrentsuite_hosts'
+    if os.path.isfile(hosts_file+'_local'):
+        inventory_file = hosts_file+'_local'
+    else:
+        inventory_file = hosts_file
+    # Run ansible-playbook in a subshell since running it from python celery task is broken
+    cmd = "ansible-playbook -i %s %s --sudo" % (inventory_file, playbook)
+    p = subprocess.Popen(cmd.split(),
+                         cwd="/usr/share/ion-tsconfig/ansible",
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    stdout, stderr = p.communicate()
+    if p.returncode == 0:
+        pass
+    else:
+        pass
+    with open("/tmp/run_ansible_playbook_%s.debug" % playbook, "w") as log:
+        log.write(datetime.now().ctime()+'\n')
+        log.write("STDOUT\n\n")
+        log.write(stdout)
+        log.write("STDERR\n\n")
+        log.write(stderr)
+    #    # Run ansible-playbook - nfs_client.yml
+    #    # http://oriolrius.cat/blog/2015/01/21/using-ansible-like-library-programming-in-python/
+    #    # Here is the bug which prevents ansible-playbooks from running in celery task:
+    #    # https://github.com/celery/celery/issues/1709
+    #    from datetime import datetime
+    #    from ansible.playbook import PlayBook
+    #    from ansible import callbacks
+    #    from ansible import utils
+    #    stats = callbacks.AggregateStats()
+    #    playbook_cb = callbacks.PlaybookCallbacks(verbose=utils.VERBOSITY)
+    #    runner_cb = callbacks.PlaybookRunnerCallbacks(stats, verbose=utils.VERBOSITY)
+    #    pb = PlayBook(playbook='/usr/share/ion-tsconfig/ansible/nfs_client.yml',
+    #                  host_list=inventory_file,
+    #                  sudo=True,
+    #                  remote_user='ionadmin',
+    #                  private_key_file='/home/ionadmin/.ssh/ansible_rsa_key',
+    #                  stats=stats,
+    #                  callbacks=playbook_cb,
+    #                  runner_callbacks=runner_cb)
+    #    #Note: this will dump ansible output to stdout - it gets lost.
+    #    results = pb.run()
+    #    #This merely captures the final status of ansible-playbook
+    #    with open("/tmp/add_nfs_mount.task.ansible.out", "a") as log:
+    #        log.write(datetime.now().ctime()+'\n')
+    #        log.write(json.dumps(results)+'\n')
+
+
+@app.task(queue="w1")
+def add_nfs_mount(servername, sharename, mountpoint):
+    '''Modifies all_local file and calls ansible-playbook to enable a new NFS mount
+       Needs celery task because needs superuser privilege'''
+    try:
+        # create all_local from all
+        filename = "/usr/share/ion-tsconfig/ansible/group_vars/all_local"
+        tempfile = "/usr/share/ion-tsconfig/ansible/group_vars/all_local.temp"
+        if not os.path.isfile(filename):
+            shutil.copy2("/usr/share/ion-tsconfig/ansible/group_vars/all", filename)
+        # Line to add - spaces are important!
+        new_nas = "  - { name: %s, directory: %s, mountpoint: %s, options: %s }" % (servername, sharename, mountpoint, "defaults")
+        # Check if line exists.  This is a small file so we can do this cheat
+        with open(filename, 'r') as fh:
+            if new_nas in fh.read():
+                logger.warn("This line: '%s'. Already exists in all_local." % (new_nas))
+            else:
+                fh.seek(0)
+                # Insert line after pattern ^nas_mounts:
+                with open(tempfile, "w") as out:
+                    for line in fh:
+                        out.write(line)
+                        if 'nas_mounts:' in line:
+                            out.write(new_nas+'\n')
+                shutil.move(tempfile, filename)
+        run_ansible_playbook('nfs_client.yml')
+    except:
+        logger.error(traceback.format_exc())
+
+
+@app.task(queue="w1")
+def remove_nas_storage(mountpoint):
+    '''Edit all_local, run nfs_clients.yml playbook'''
+    try:
+        filename = "/usr/share/ion-tsconfig/ansible/group_vars/all_local"
+        tempfile = "/tmp/all_local.temp"
+        # Delete the line matching the pattern
+        with open(tempfile, "w") as out, open(filename, "r") as fh:
+            for line in fh:
+                if mountpoint in line:
+                    pass
+                else:
+                    out.write(line)
+        shutil.move(tempfile, filename)
+        run_ansible_playbook('nfs_client.yml')
+    except:
+        logger.error(traceback.format_exc())
+

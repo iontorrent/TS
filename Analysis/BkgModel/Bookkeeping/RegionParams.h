@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "Serialization.h"
+#include "json/json.h"
 
 #ifdef ION_COMPILE_CUDA
   #include <host_defines.h>   // for __host__ and __device__
@@ -52,6 +53,8 @@ public:
         float * AccessTMidNucShiftPerFlow() { return t_mid_nuc_shift_per_flow; }
 
   void ResetPerFlowTimeShift( int flow_block_size );
+  void ToJson(Json::Value &nucparams_json);
+  void FromJson(const Json::Value &nucparams_json);
 
 private:
   friend class boost::serialization::access;
@@ -107,7 +110,7 @@ struct reg_params
   float tau_R_o;  // relationship of empty to bead offset
   float tauE;
   float min_tauB;
-  float mid_tauB;
+
   float max_tauB; // range of possible values
   float RatioDrift;      // change over time in buffering
   float NucModifyRatio[NUMNUC];  // buffering modifier per nuc
@@ -140,6 +143,11 @@ struct reg_params
   nuc_rise_params nuc_shape;
   bool fit_taue;
   bool use_alternative_etbR_equation;
+
+  bool suppress_copydrift;
+  bool safe_model;
+  bool bounded_buffering;
+
 
   int hydrogenModelType;
 
@@ -186,10 +194,13 @@ private:
       & tau_R_o
       & tauE
       & min_tauB
-      & mid_tauB
       & max_tauB
       & fit_taue
       & use_alternative_etbR_equation
+
+      & suppress_copydrift
+        & bounded_buffering
+
       & hydrogenModelType
       & RatioDrift
       & NucModifyRatio
@@ -212,14 +223,16 @@ public:
 
   // standard initialization values
   void SetStandardHigh( float t_mid_nuc_start, int flow_block_size );
-  void SetStandardLow( float t_mid_nuc_start, int flow_block_size );
+  void SetStandardLow( float t_mid_nuc_start, int flow_block_size , bool _suppress_copydrift);
                            
-  void SetStandardValue( float t_mid_nuc_start, float sigma_start, float *dntp_concentration_in_uM,
-                         bool _fit_taue, bool _use_alternative_etbR_equation,
+  void SetStandardValue(float t_mid_nuc_start, float sigma_start, float *dntp_concentration_in_uM,
+                         bool _fit_taue, bool _use_alternative_etbR_equation, bool _suppress_copydrift, bool _safe_model,
                          int _hydrogenModelType, int flow_block_size );
   void SetTshift(float _tshift);
   static void DumpRegionParamsTitle(FILE *my_fp, int flow_block_size);
   void DumpRegionParamsLine(FILE *my_fp,int my_row, int my_col, int flow_block_size);
+  void ToJson(Json::Value &params_json);
+  void FromJson(const Json::Value &params_json);
 };
 
 
@@ -277,7 +290,7 @@ void reg_params_setSens(reg_params *cur, float sens_default);
 void reg_params_setConversion(reg_params *cur, float _molecules_conversion);
 void reg_params_setBuffModel(reg_params *cur, float tau_R_m_default, float tau_R_o_default);
 void reg_params_setBuffModel(reg_params *cur, float tau_E_default);
-void reg_params_setBuffRange(reg_params *cur, float min_tauB_default, float max_tauB_default, float mid_tauB_default);
+void reg_params_setBuffRange(reg_params *cur, float min_tauB_default, float max_tauB_default);
 void reg_params_setNoRatioDriftValues(reg_params *cur);
 void reg_params_setSigmaMult(reg_params *cur, float *sigma_mult_default);
 void reg_params_setT_mid_nuc_delay (reg_params *cur, float *t_mid_nuc_delay_default);

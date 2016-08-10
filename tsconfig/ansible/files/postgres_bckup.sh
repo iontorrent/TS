@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
 # Make a backup of the database.  This is intended to backup an existing TS
 # prior to installing ion-dbreports which usually makes db changes.
 BACKUP_DBASE_DIR=/results

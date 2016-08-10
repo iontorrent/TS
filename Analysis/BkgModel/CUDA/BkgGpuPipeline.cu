@@ -45,16 +45,14 @@ using namespace std;
 
 BkgGpuPipeline::BkgGpuPipeline(
     BkgModelWorkInfo* pbkinfo, 
- //   int fbSize,
-    int startingFlow,
     int deviceId,
-    SampleCollection * smpCol)
+    HistoryCollection * HistCol)
 { 
 
   this->bkinfo = pbkinfo;
 
-  startFlowNum = startingFlow; 
- // flowBlockSize = fbSize;
+  startFlowNum = pbkinfo->flow; //the flow at which we create this class is also the starting flow so all the correct initalisations are triggered, could be removed since only used in first flow update to prevent double copying
+
   SpDev = NULL;
   HostTLXTalkData=NULL;
   DevTLXTalkData=NULL;
@@ -62,18 +60,18 @@ BkgGpuPipeline::BkgGpuPipeline(
   pConstXTP = NULL;
   Dev=NULL;
   Host=NULL;
-  pSmplCol = smpCol;
+  pHistCol = HistCol;
 
   devId = deviceId;
-
   cudaSetDevice( devId );
-
   cudaDeviceProp cuda_props;
   cudaGetDeviceProperties( &cuda_props, devId );
 
   cout << "CUDA: BkgGpuPipeline: Initiating Flow by Flow Pipeline on Device: "<< devId << "( " << cuda_props.name  << " v"<< cuda_props.major <<"."<< cuda_props.minor << ")" << endl;
 
   setSpatialParams();
+
+
   InitPipeline();
 
 }
@@ -95,38 +93,38 @@ void BkgGpuPipeline::setSpatialParams()
 void BkgGpuPipeline::InitPipeline()
 {
   //check memory and set context/device
-    checkAvailableDevMem();
+  checkAvailableDevMem();
 
-    //Todo: Mulit-Device support
-    CreatePoissonApproxOnDevice(devId);
-
-
-    ConstanSymbolCopier::PopulateSymbolConstantImgageParams(ImgP, ConstFrmP, bkinfo);
-    ConstanSymbolCopier::PopulateSymbolConstantGlobal(ConstGP,bkinfo);
-    ConstanSymbolCopier::PopulateSymbolConfigParams(ConfP,bkinfo);
-    ConstanSymbolCopier::PopulateSymbolPerFlowGlobal(GpFP, bkinfo);
-    copySymbolsToDevice(ImgP);
+  //Todo: Mulit-Device support
+  CreatePoissonApproxOnDevice(devId);
 
 
-    //ToDo: exception handling for Unsuccessful allocate
-    try{
-      Dev = new DeviceData(ImgP,ConstFrmP);
-    }catch(cudaException &e){
-      e.Print();
-      throw cudaAllocationError(e.getCudaError(), __FILE__, __LINE__);
-    }
-
-    if(Host == NULL)
-      Host = new HostData(ImgP,ConstFrmP);
+  ConstanSymbolCopier::PopulateSymbolConstantImgageParams(ImgP, ConstFrmP, bkinfo);
+  ConstanSymbolCopier::PopulateSymbolConstantGlobal(ConstGP,bkinfo);
+  ConstanSymbolCopier::PopulateSymbolConfigParams(ConfP,bkinfo);
+  ConstanSymbolCopier::PopulateSymbolPerFlowGlobal(GpFP, bkinfo);
+  copySymbolsToDevice(ImgP);
 
 
+  //ToDo: exception handling for Unsuccessful allocate
+  try{
+    Dev = new DeviceData(ImgP,ConstFrmP);
+  }catch(cudaException &e){
+    e.Print();
+    throw cudaAllocationError(e.getCudaError(), __FILE__, __LINE__);
+  }
 
-    PrepareSampleCollection();
+  if(Host == NULL)
+    Host = new HostData(ImgP,ConstFrmP);
 
-    PrepareInputsForSetupKernel();
-    ExecuteT0AvgNumLBeadKernel();
-    InitPersistentData();
-    InitXTalk();
+
+
+  PrepareSampleCollection();
+
+  PrepareInputsForSetupKernel();
+  ExecuteT0AvgNumLBeadKernel();
+  InitPersistentData();
+  InitXTalk();
 
 }
 
@@ -150,29 +148,30 @@ size_t BkgGpuPipeline::checkAvailableDevMem()
 
 void BkgGpuPipeline::PrepareInputsForSetupKernel()
 {
-  Host->BfMask.wrappPtr(&bkinfo->bkgObj->GetGlobalStage().bfmask->mask[0]);
+  Host->BfMask.init(bkinfo);
   Dev->BfMask.copy(Host->BfMask);
 
-  Dev->T0.copyIn( &(*(bkinfo->smooth_t0_est))[0]);
+  Dev->T0.init(bkinfo);
 
-  Host->BeadStateMask.memSet(0);
-  for(size_t i=0; i< ImgP.getNumRegions(); i++){
-    WorkSet myJob(&bkinfo[i]);
-    if(myJob.DataAvailalbe()){
-      size_t regId = ImgP.getRegId(myJob.getRegCol(),myJob.getRegRow());
-      TranslatorsFlowByFlow::TranslateBeadStateMask_RegionToCube(Host->BeadStateMask, &bkinfo[i],regId);
-    }
-  }
+  Host->BeadStateMask.init(bkinfo);
+
   Dev->BeadStateMask.copy(Host->BeadStateMask);
 
 }
 
 void BkgGpuPipeline::PrepareSampleCollection()
 {
-  if(pSmplCol == NULL)
-    pSmplCol = new SampleCollection(ImgP,10,ConstFrmP.getMaxCompFrames());
+  if(pHistCol == NULL){ // no history provided use only current flow
+    cout << "CUDA WARNING: BkgGpuPipeline: No HistoryCollection found! Creating new HistoryCollection initialized with latest available Regional Params!" <<endl;
+    pHistCol = new HistoryCollection(ImgP,1,ConstFrmP.getMaxCompFrames(),ConstFrmP.getUncompFrames());
+    for(size_t i=0; i < ImgP.getNumRegions(); i++){
+      WorkSet myJob(&bkinfo[i]);
+      size_t regId = ImgP.getRegId(myJob.getRegCol(),myJob.getRegRow());
+      pHistCol->initRegionalParametersOneRegion(&bkinfo[i],regId);
+    }
+  }
 
-  pSmplCol->InitDeviceBuffersAndSymbol(ConstFrmP.getMaxCompFrames());
+  pHistCol->InitDeviceBuffersAndSymbol(ConstFrmP);
 
 }
 
@@ -183,10 +182,12 @@ void BkgGpuPipeline::InitPersistentData()
   //Temporary Host Buffers only needed once for setup
   LayoutCubeWithRegions<float>HostRegionFrameCube(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), Rf_NUM_PARAMS, HostMem);
   LayoutCubeWithRegions<int>HostRegionFramesPerPoint(ImgP.getGridParam(ConstFrmP.getMaxCompFrames()), 1, HostMem);
-  LayoutCubeWithRegions<float> HostBeadParamCube(ImgP, Bp_NUM_PARAMS, HostMem);
-  LayoutCubeWithRegions<float> HostPolyClonalCube(ImgP, Poly_NUM_PARAMS, HostMem);
+  //LayoutCubeWithRegions<float> HostBeadParamCube(ImgP, Bp_NUM_PARAMS, HostMem);
   LayoutCubeWithRegions<int>HostNonZeroEmphasisFrames(ImgP.getGridParam(MAX_POISSON_TABLE_COL),Nz_NUM_PARAMS, HostMem);
   LayoutCubeWithRegions<PerNucParamsRegion>HostPerNucRegP(ImgP.getGridParam(),NUMNUC,HostMem);
+
+  //perBeadParamCubeClass HostBeadParamCube(ImgP, HostMem);
+  //perBeadPolyClonalCubeClass HostPolyClonalCube(ImgP, HostMem);
 
   for(size_t i=0; i < ImgP.getNumRegions(); i++)
   {
@@ -202,22 +203,28 @@ void BkgGpuPipeline::InitPersistentData()
       TranslatorsFlowByFlow::TranslateConstantRegionParams_RegionToCube(Host->ConstRegP,&bkinfo[i],regId);
       TranslatorsFlowByFlow::TranslateRegionFrameCube_RegionToCube(HostRegionFrameCube, &bkinfo[i], regId);
       TranslatorsFlowByFlow::TranslateRegionFramesPerPoint_RegionToCube(HostRegionFramesPerPoint,&bkinfo[i], regId);
-      TranslatorsFlowByFlow::TranslateBeadParams_RegionToCube(HostBeadParamCube, &bkinfo[i], regId);
-      TranslatorsFlowByFlow::TranslatePolyClonal_RegionToCube(HostPolyClonalCube,&bkinfo[i], regId);
       TranslatorsFlowByFlow::TranslateNonZeroEmphasisFrames_RegionToCube(HostNonZeroEmphasisFrames, &bkinfo[i], regId);
       TranslatorsFlowByFlow::TranslatePerNucRegionParams_RegionToCube(HostPerNucRegP,&bkinfo[i],regId);
 
+      //HostBeadParamCube.initHostRegion(&bkinfo[i], regId);
+      //HostPolyClonalCube.initHostRegion(&bkinfo[i], regId);
+
     }
   }
+
+  //Dev->BeadParamCube.copy(HostBeadParamCube);
+  //Dev->PolyClonalCube.copy(HostPolyClonalCube);
+
+  Dev->BeadParamCube.init(bkinfo);
+  Dev->PolyClonalCube.init(bkinfo);
+
 
   //Copy temp buffers to device
   Dev->NumFrames.copy(Host->NumFrames);
   Dev->ConstRegP.copy(Host->ConstRegP);
   Dev->RegionFrameCube.copy(HostRegionFrameCube);
   Dev->RegionFramesPerPoint.copy(HostRegionFramesPerPoint);
-  Dev->BeadParamCube.copy(HostBeadParamCube);
-  Dev->PolyClonalCube.copy(HostPolyClonalCube);
-  Dev->NonZeroEmphasisFrames.copy(HostNonZeroEmphasisFrames);
+  Dev->fineNonZeroEmphasisFrames.copy(HostNonZeroEmphasisFrames);
   Dev->PerNucRegP.copy(HostPerNucRegP);
 
 #if INIT_CONTROL_OUPUT
@@ -314,13 +321,15 @@ void BkgGpuPipeline::PerFlowDataUpdate(BkgModelWorkInfo* pbkinfo)
 
   if(!firstFlow()){ //  copied in constructor for first flow
     //Host->BfMask.copyIn(&bkinfo->bkgObj->GetGlobalStage().bfmask->mask[0]);  // debugging only
-    Host->BfMask.wrappPtr(&bkinfo->bkgObj->GetGlobalStage().bfmask->mask[0]);
+    Host->BfMask.init(bkinfo);
     Dev->BfMask.copy(Host->BfMask);
   }
 
   //raw image
-  Host->RawTraces.wrappPtr(bkinfo->img->raw->image);
-  Dev->RawTraces.copy(Host->RawTraces);
+  Dev->RawTraces.init(bkinfo);
+
+  //Host->RawTraces.wrappPtr(bkinfo->img->raw->image);
+  //Dev->RawTraces.copy(Host->RawTraces);
 
 }
 
@@ -361,7 +370,7 @@ void BkgGpuPipeline::ExecuteT0AvgNumLBeadKernel()
       Dev->SampleRowPtr.getPtr(),
       Dev->NumSamples.getPtr(),
       Dev->NumLBeads.getPtr(), //numLbeads of whole region
-      Dev->T0Avg.getPtr() // T0Avg per REgion //ToDo check if this is really needed of if updating the T0Est would be better
+      Dev->T0Avg.getPtr() // T0Avg per REgion //ToDo check if this is really needed or if updating the T0Est would be better
   );
 
 #if DEBUG_SYNC || DEBUG_OUTPUT
@@ -375,12 +384,14 @@ void BkgGpuPipeline::ExecuteT0AvgNumLBeadKernel()
 #if INIT_CONTROL_OUPUT || DEBUG_OUTPUT
   LayoutCubeWithRegions<float>HostT0Avg(Dev->T0Avg,HostMem);
   LayoutCubeWithRegions<int>HostNumLBeads(Dev->NumLBeads, HostMem);
-  LayoutCubeWithRegions<float>HostT0(Dev->T0, HostMem);
+
 
   cout << "CUDA: BkgGpuPipeline: ExecuteT0AvgNumLBeadKernel: num live beads per region: " << endl;
   HostNumLBeads.printRegionTable<int>();
   cout << "CUDA: BkgGpuPipeline: ExecuteT0AvgNumLBeadKernel: T0 avg per region: " << endl;
   HostT0Avg.printRegionTable<float>();
+
+  // perBeadT0CubeClass HostT0(Dev->T0, HostMem);
   //LayoutCubeWithRegions<float> RegionStdDev(ImgP.getGridDimX(), ImgP.getGridDimY());
   //for(size_t i=0; i<ImgP.getNumRegions(); i++){
   //RegionStdDev[i] = HostT0.getStdDevReg<float>(i,0,HostT0Avg[i],0,&Host->BfMask,(unsigned short)MaskLive);
@@ -423,7 +434,8 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
   //ToDo: exception Handling if alloc fails
 
   Dev->EmptyTraceComplete.memSet(0);
-  Dev->EmptyTraceAvg.memSet(0);
+
+  //Dev->EmptyTraceAvg.memSet(0); //DoTo: Stuff!
 
   SpDev->EmptyTraceSumRegionTBlock.memSet(0);
   SpDev->EmptyTraceCountRegionTBlock.memSet(0);
@@ -431,7 +443,7 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
   Dev->SampleRowCounter.memSet(0);
 
   //Dev->SampleCompressedTraces.memSet(0);
-  pSmplCol->RezeroWriteBuffer();
+  pHistCol->RezeroWriteBuffer();
 
   Dev->SampleParamCube.memSet(0);
   Dev->SampleStateMask.memSet(0);
@@ -460,6 +472,13 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
 
   }
 
+  // print bead traces
+  /*LayoutCubeWithRegions<short> HostRawTraces(Dev->RawTraces, HostMem);
+  HostRawTraces.print();
+  HostRawTraces.setRWStrideZ();
+  cout << "Gen Trace From Host" << endl;
+  cout << HostRawTraces.getCSVatReg<short>(0,0,0,0,105) << endl; 
+  */
 
   cout << "CUDA: BkgGpuPipeline: ExecuteGenerateBeadTrace: executing GenerateAllBeadTraceFromMeta_k Kernel grid(" << grid.x << "," << grid.y  << "), block(" << block.x << "," << block.y <<"), smem("<< smem <<")" << endl;
   GenerateAllBeadTraceEmptyFromMeta_k<<<grid, block, smem >>> (
@@ -473,8 +492,8 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
       Dev->NumLBeads.getPtr(),
       Dev->T0Avg.getPtr(),  // ToDo: try already subtract T0 after calculating the average so this would not be needed here anymore!
       Dev->ConstRegP.getPtr(),
-      Dev->PerFlowRegionParams.getPtr(),
-      Dev->EmptyTraceAvg.getPtr(), // has to be initialized to 0!! will contain avg of all empty trace frames for each region
+      //Dev->PerFlowRegionParams.getPtr(),
+      pHistCol->getDevPerFlowRegParams().getPtr(),
       SpDev->EmptyTraceSumRegionTBlock.getPtr(), // has to be initialized to 0!! will contain avg of all empty trace frames for each region
       SpDev->EmptyTraceCountRegionTBlock.getPtr(), // has to be initialized to 0!! will contain number of empty traces summed up for each region
       Dev->EmptyTraceComplete.getPtr(), //has to be initialized to 0!! completion counter per region for final sum ToDo: figure out if we can do without it
@@ -499,11 +518,25 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
   cudaDeviceSynchronize();
   CUDA_ERROR_CHECK();
 #endif
+
+  // print bead traces post GPU GenBeadTracesKernel
+  /*LayoutCubeWithRegions<short> HostBeadTraces(Dev->RawTraces, HostMem);
+  HostBeadTraces.print();
+  HostBeadTraces.setRWStrideZ();
+  cout << "Gen Trace From Device" << endl;
+  cout << HostBeadTraces.getCSVatReg<short>(0,0,0,0,29) << endl; 
+  */
+
+  /*LayoutCubeWithRegions<float> HostFrameNum(Dev->RegionFrameCube, HostMem);
+  cout << "Frame Num" << endl;
+  HostFrameNum.print();
+  cout << HostFrameNum.getCSVRegionPlane<float>(0,0,0,RfFrameNumber) << endl; 
+  cout << HostFrameNum.getCSVRegionPlane<float>(0,0,0,RfDeltaFrames) << endl; 
+  */
+
 #if DEBUG_OUTPUT
   cout << "CUDA: BkgGpuPipeline: ExecuteGenerateBeadTrace: GenerateAllBeadTraceEmptyFromMeta_k finalize" << endl;
 #endif
-
-  pSmplCol->UpdateSampleCollection(GpFP.getRealFnum());
 
   //one block per region execution model, no y-dim check needed
   dim3 blockER(32,1);
@@ -518,9 +551,8 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
   cout << "CUDA: BkgGpuPipeline: ExecuteGenerateBeadTrace: executing ReduceEmptyAverage_k Kernel grid(" << gridER.x << "," << gridER.y  << "), block(" << blockER.x << "," << blockER.y <<"), smem("<< smem <<")" << endl;
   ReduceEmptyAverage_k<<<gridER, blockER, smem>>>(
       Dev->RegionStateMask.getPtr(),
-      Dev->EmptyTraceAvg.getPtr(),
       Dev->ConstRegP.getPtr(),
-      Dev->PerFlowRegionParams.getPtr(),
+      pHistCol->getDevPerFlowRegParams().getPtr(),
       Dev->RegionFrameCube.getPtrToPlane(RfFrameNumber),
       Dev->RegionFramesPerPoint.getPtr(),
       Dev->NumFrames.getPtr(),  //frames p
@@ -530,6 +562,7 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
       //DevDcOffsetDebug.getPtr()
   );
 
+
 #if DEBUG_SYNC || DEBUG_OUTPUT
   cudaDeviceSynchronize();
   CUDA_ERROR_CHECK();
@@ -537,16 +570,9 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
 #if DEBUG_OUTPUT
   cout << "CUDA: BkgGpuPipeline: ExecuteGenerateBeadTrace: ReduceEmptyAverage_k finalize" << endl;
 #endif
-  /*
-  LayoutCubeWithRegions<float> HostDcOffset(DevDcOffsetDebug,HostMem);
-  HostDcOffset.setRWStrideX();
-  HostDcOffset.setRWPtr(0);
-  cout << GpFP.getRealFnum() <<"," << GpFP.getNucId();
-  for(size_t i=0; i< HostDcOffset.numElements(); i++)
-    cout << "," << HostDcOffset.read();
-  cout << endl;
-   */
 
+
+  pHistCol->UpdateHistoryCollection(GpFP);
 
 
   if(GpFP.getRealFnum() == 20){
@@ -563,18 +589,18 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
 
 #if DEBUG_OUTPUT
   //static LayoutCubeWithRegions<int>HostEmptyTraceComplete(ImgP.getGridParam(),1,HostMem);HostEmptyTraceComplete.trackMe(muT);
-  static LayoutCubeWithRegions<float>HostEmptyTraceAvg(Dev->EmptyTraceAvg,HostMem);
-  HostEmptyTraceAvg.copy(Dev->EmptyTraceAvg);
-  HostEmptyTraceAvg.setRWStrideX();
+  //static LayoutCubeWithRegions<float>HostEmptyTraceAvg(Dev->EmptyTraceAvg,HostMem);
+  LayoutCubeWithRegions<float> * HostEmptyTraceAvg = pHistCol->getLatestEmptyTraceAvgs();
+  //HostEmptyTraceAvg->copy(Dev->EmptyTraceAvg);
+  HostEmptyTraceAvg->setRWStrideX();
 
   cout << "CUDA: BkgGpuPipeline: ExecuteGenerateBeadTrace: Average Empty Traces:" << endl;
   for(size_t regId = 0; regId < ImgP.getNumRegions(); regId++){
-    if(regId == DEBUG_REGION || DEBUG_REGION_ALL ){
+    if ( regId == DEBUG_REGION  ||  DEBUG_REGION_ALL ){
       int nf = Host->NumFrames.getAtReg(regId);
       if(nf <= 0 || nf > ConstFrmP.getMaxCompFrames())
         nf = ConstFrmP.getMaxCompFrames();
-      cout <<"BkgGpuPipeline: ExecuteGenerateBeadTrace: DEBUG GPU " << regId <<"," << nf << "," << HostEmptyTraceAvg.getCSVatReg<float>(regId,0,0,0,nf) << endl;
-
+      cout <<"DEBUG GPU EmptytraceAvg Current," << regId <<"," << GpFP.getRealFnum() << "," << HostEmptyTraceAvg->getCSVatReg<float>(regId,0,0,0,nf) << endl;
     }
   }
 
@@ -582,10 +608,10 @@ void BkgGpuPipeline::ExecuteGenerateBeadTrace()
 
 #if SAMPLE_CONTROL
   LayoutCubeWithRegions<int> HostNumSample(Dev->NumSamples,HostMem);
-  LayoutCubeWithRegions<short> * SampleHostCompressedTraces = pSmplCol->getLatestSampleFromDevice();
+  LayoutCubeWithRegions<short> * SampleHostCompressedTraces = pHistCol->getLatestSampleTraces();
 
   LayoutCubeWithRegions<SampleCoordPair> HostSamplesCoords(Dev->SampleCoord, HostMem);
-  SampleHostCompressedTraces SampleHostCompressedTraces->setRWStrideZ();
+  SampleHostCompressedTraces->setRWStrideZ();
   HostSamplesCoords.setRWStrideX();
   for(size_t rgid =0 ; rgid < ImgP.getNumRegions(); rgid++){
     if( rgid == DEBUG_REGION || DEBUG_REGION_ALL){
@@ -631,21 +657,21 @@ void BkgGpuPipeline::ExecuteTraceLevelXTalk()
         Dev->BeadStateMask.getPtr(),
         DevTLXTalkData->BaseXTalkContribution.getPtr(),
         Dev->RawTraces.getPtr(),
-        Dev->EmptyTraceAvg.getPtr(), //FxR
         Dev->BeadParamCube.getPtr(), //NxP
         Dev->RegionFrameCube.getPtr(), //FxRxT bkgTrace, DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
         Dev->ConstRegP.getPtr(), // R
-        Dev->PerFlowRegionParams.getPtr(), // R
+        //Dev->PerFlowRegionParams.getPtr(), // R
+        pHistCol->getDevPerFlowRegParams().getPtr(),
         Dev->PerNucRegP.getPtr(), //RxNuc
         Dev->NumFrames.getPtr() // R
     );
 
 #if DEBUG_SYNC || DEBUG_OUTPUT
-  cudaDeviceSynchronize();
-  CUDA_ERROR_CHECK();
+    cudaDeviceSynchronize();
+    CUDA_ERROR_CHECK();
 #endif
 #if DEBUG_OUTPUT
-  cout << "CUDA: BkgGpuPipeline: ExecuteTraceLevelXTalk: SimpleXTalkNeighbourContribution finalize" << endl;
+    cout << "CUDA: BkgGpuPipeline: ExecuteTraceLevelXTalk: SimpleXTalkNeighbourContribution finalize" << endl;
 #endif
     /*
     if (GpFP.getRealFnum() == 20 ){
@@ -689,17 +715,18 @@ void BkgGpuPipeline::ExecuteTraceLevelXTalk()
         DevTLXTalkData->xTalkContribution.getPtr(),  // buffer XTalk contribution to this well NxF
         DevTLXTalkData->pDyncmaicPerBLockGenericXTalk->getPtr(), // one trace of max compressed frames per thread block
         DevTLXTalkData->numGenericXTalkTracesRegion.getPtr(), //one int per region to average after accumulation
-        Dev->PerFlowRegionParams.getPtr(), // R
+        //Dev->PerFlowRegionParams.getPtr(), // R
+        pHistCol->getDevPerFlowRegParams().getPtr(),
         Dev->NumFrames.getPtr(), // R
         DevTLXTalkData->TestingGenericXTalkSampleMask.getPtr()  //ToDo: remove when testing done
     );
 
 #if DEBUG_SYNC || DEBUG_OUTPUT
-  cudaDeviceSynchronize();
-  CUDA_ERROR_CHECK();
+    cudaDeviceSynchronize();
+    CUDA_ERROR_CHECK();
 #endif
 #if DEBUG_OUTPUT
-  cout << "CUDA: BkgGpuPipeline: ExecuteTraceLevelXTalk: GenericXTalkAndNeighbourAccumulation finalize" << endl;
+    cout << "CUDA: BkgGpuPipeline: ExecuteTraceLevelXTalk: GenericXTalkAndNeighbourAccumulation finalize" << endl;
 #endif
 
     dim3 accumBlock(128,1);
@@ -715,11 +742,11 @@ void BkgGpuPipeline::ExecuteTraceLevelXTalk()
     );
 
 #if DEBUG_SYNC || DEBUG_OUTPUT
-  cudaDeviceSynchronize();
-  CUDA_ERROR_CHECK();
+    cudaDeviceSynchronize();
+    CUDA_ERROR_CHECK();
 #endif
 #if DEBUG_OUTPUT
-  cout << "CUDA: BkgGpuPipeline: ExecuteTraceLevelXTalk: GenericXTalkAccumulation finalize" << endl;
+    cout << "CUDA: BkgGpuPipeline: ExecuteTraceLevelXTalk: GenericXTalkAccumulation finalize" << endl;
 #endif
     /*
 
@@ -737,11 +764,11 @@ void BkgGpuPipeline::ExecuteTraceLevelXTalk()
       DevTLXTalkData->genericXTalkTracesRegion.getPtr(), // one trace of max compressed frames per thread block or per region (atomicAdd)
       DevTLXTalkData->numGenericXTalkTracesRegion.getPtr(), //one int per region to average after accumulation
       Dev->RawTraces.getPtr(),
-      Dev->EmptyTraceAvg.getPtr(), //FxR
       Dev->BeadParamCube.getPtr(), //NxP
       Dev->RegionFrameCube.getPtr(), //FxRxT bkgTrace, DarkMatter, DeltaFrames, DeltaFramesStd, FrameNumber
       Dev->ConstRegP.getPtr(), // R
-      Dev->PerFlowRegionParams.getPtr(), // R
+      //Dev->PerFlowRegionParams.getPtr(), // R
+      pHistCol->getDevPerFlowRegParams().getPtr(),
       Dev->PerNucRegP.getPtr(), //RxNuc
       Dev->NumFrames.getPtr(), // R
       DevTLXTalkData->TestingGenericXTalkSampleMask.getPtr()  //ToDo: remove when testing done
@@ -836,13 +863,12 @@ void BkgGpuPipeline::ExecuteSingleFlowFit()
   }
 
   Dev->ResultCube.memSet(0);
-  //  Dev->RawTraces.memSet(0,(ConstFrmP.getRawFrames()-3)*ImgP.getImgSize()*sizeof(short),ImgP.getImgSize()*sizeof(short)*3);
-  //   Dev->RawTraces.memSetPlane(0,ConstFrmP.getRawFrames()-3, 3);
+
   //TMemSegPairAlloc<int> numLBeads(sizeof(int)*36,HostPageLocked,DeviceGlobal);
   //numLBeads.memSet(0);
 
   // Do we need this here ?
-  Dev->ResultCube.memSetPlane(0,ResultAmpl);
+  //Dev->ResultCube.memSetPlane(0,ResultAmpl);
   //  Dev->ResultCube.memSetPlane(0,ResultAmplXTalk);
 
   cout << "CUDA: BkgGpuPipeline: ExecuteSingleFlowFit: executing ExecuteThreadBlockPerRegion2DBlocks Kernel (SingleFlowFit) grid(" << grid.x << "," << grid.y  << "), block(" << block.x << "," << block.y <<"), smem("<< smem <<")" << endl;
@@ -852,17 +878,20 @@ void BkgGpuPipeline::ExecuteSingleFlowFit()
       Dev->BeadStateMask.getPtr(),
       Dev->RawTraces.getPtr(),
       Dev->BeadParamCube.getPtr(),
-      Dev->EmphasisVec.getPtr(),
-      Dev->NonZeroEmphasisFrames.getPtr(),
-      Dev->NucRise.getPtr(),
+      Dev->crudeEmphasisVec.getPtr(),
+      Dev->crudeNonZeroEmphasisFrames.getPtr(),
+      Dev->fineEmphasisVec.getPtr(),
+      Dev->fineNonZeroEmphasisFrames.getPtr(),
+      Dev->fineNucRise.getPtr(),
+      Dev->coarseNucRise.getPtr(),
       Dev->ResultCube.getPtr(),
       Dev->NumFrames.getPtr(), // moce to constant per region
       Dev->NumLBeads.getPtr(),
       Dev->ConstRegP.getPtr(),
-      Dev->PerFlowRegionParams.getPtr(),
+      //Dev->PerFlowRegionParams.getPtr(),
+      pHistCol->getDevPerFlowRegParams().getPtr(),
       Dev->PerNucRegP.getPtr(),
       Dev->RegionFrameCube.getPtr(),
-      Dev->EmptyTraceAvg.getPtr(),
       (DevTLXTalkData)?(DevTLXTalkData->xTalkContribution.getPtr()):(NULL),  // buffer XTalk contribution to this well NxF
           (DevTLXTalkData)?(DevTLXTalkData->genericXTalkTracesRegion.getPtr()):(NULL) // one trace of max compressed frames per thread block or per region (atomicAdd)
   );
@@ -981,30 +1010,40 @@ void BkgGpuPipeline::HandleResults(RingBuffer<float> * ringbuffer)
 /////////////////////////////////////////
 // Temporary Functions needed to simulate region fitting
 
+//TODO: can be removed since Regional Parameters will get initalized in RE
+/*
 void BkgGpuPipeline::InitRegionalParamsAtFirstFlow()
 {
 
   if(GpFP.getRealFnum() == startFlowNum){
-    std::cout << "CUDA: BkgGpuPipeline: Starting Flow: " << startFlowNum << std::endl;
-    Host->PerFlowRegionParams.memSet(0);
-    for(size_t i=0; i < ImgP.getNumRegions(); i++)
-    {
-      WorkSet myJob(&bkinfo[i]);
-      size_t regId = ImgP.getRegId(myJob.getRegCol(), myJob.getRegRow());
-      if(myJob.DataAvailalbe()){
-        //translate current reg params inot new layout
-        TranslatorsFlowByFlow::TranslatePerFlowRegionParams_RegionToCube(Host->PerFlowRegionParams, &bkinfo[i], 0,  regId);
+    if(!isRestart){
+      std::cout << "CUDA: BkgGpuPipeline: Starting Flow: " << startFlowNum << std::endl;
+      //Host->PerFlowRegionParams.memSet(0);
+      pHistCol->getHostPerFlowRegParams().memSet(0);
+      for(size_t i=0; i < ImgP.getNumRegions(); i++)
+      {
+        WorkSet myJob(&bkinfo[i]);
+        size_t regId = ImgP.getRegId(myJob.getRegCol(), myJob.getRegRow());
+        if(myJob.DataAvailalbe()){
+          //translate current reg params inot new layout
+          //TranslatorsFlowByFlow::TranslatePerFlowRegionParams_RegionToCube(Host->PerFlowRegionParams, &bkinfo[i], 0,  regId);
+          TranslatorsFlowByFlow::TranslatePerFlowRegionParams_RegionToCube(pHistCol->getHostPerFlowRegParams(), &bkinfo[i], 0,  regId);
 #if DEBUG_OUTPUT
-        if(regId == DEBUG_REGION || DEBUG_REGION_ALL)
-          cout << "CUDA: BkgGpuPipeline: InitOldRegionalParamsAtFirstFlow: DEBUG regId " << regId << " PerFlowRegionParams,";
-        Host->PerFlowRegionParams.getAtReg(regId).print();
+          if(regId == DEBUG_REGION || DEBUG_REGION_ALL)
+            cout << "CUDA: BkgGpuPipeline: InitOldRegionalParamsAtFirstFlow: DEBUG regId " << regId << " PerFlowRegionParams,";
+          //Host->PerFlowRegionParams.getAtReg(regId).print();
+          pHistCol->getHostPerFlowRegParams().getAtReg(regId).print();
 #endif
 
+        }
       }
     }
-    Dev->PerFlowRegionParams.copy(Host->PerFlowRegionParams); // can get moved here, see comment below
+    //Dev->PerFlowRegionParams.copy(Host->PerFlowRegionParams); // can get moved here, see comment below
+    pHistCol->getDevPerFlowRegParams().copy(pHistCol->getHostPerFlowRegParams());
   }
 }
+ */
+
 
 /*
 void BkgGpuPipeline::ReadRegionDataFromFileForBlockOf20()
@@ -1053,27 +1092,25 @@ void BkgGpuPipeline::ExecuteRegionalFitting() {
   dim3 block(NUM_SAMPLES_RF);
   dim3 grid(ImgP.getNumRegions());
 
-  size_t numFlows = 1;
+  //size_t numFlows = 1;
 
   cout << "CUDA: BkgGpuPipeline: ExecuteRegionalFitting: executing PerformMultiFlowRegionalFitting Kernel grid(" << grid.x << "," << grid.y  << "), block(" << block.x << "," << block.y <<"), smem(0)" << endl;
   PerformMultiFlowRegionalFitting<<<grid, block>>>(
       Dev->RegionStateMask.getPtr(),
-      NULL, //Dev->SampleCompressedTraces.getPtr(),
       Dev->SampleParamCube.getPtr(),
       Dev->SampleStateMask.getPtr(),
-      Dev->EmphasisVec.getPtr(),
-      Dev->NonZeroEmphasisFrames.getPtr(),
-      Dev->NucRise.getPtr(),
+      Dev->crudeEmphasisVec.getPtr(),
+      Dev->crudeNonZeroEmphasisFrames.getPtr(),
+      Dev->fineNucRise.getPtr(),
+      Dev->coarseNucRise.getPtr(),
       Dev->ResultCube.getPtr(),
       Dev->NumFrames.getPtr(), // move to constant per region
       Dev->ConstRegP.getPtr(),
-      //Dev->NewPerFlowRegionParams.getPtr(),
-      Dev->PerFlowRegionParams.getPtr(),
+      pHistCol->getDevPerFlowRegParams().getPtr(),
+      //Dev->PerFlowRegionParams.getPtr(),
       Dev->PerNucRegP.getPtr(),
       Dev->RegionFrameCube.getPtr(),
-      Dev->EmptyTraceAvg.getPtr(),
-      Dev->NumSamples.getPtr(),
-      numFlows
+      Dev->NumSamples.getPtr()
   );
 #if DEBUG_SYNC || DEBUG_OUTPUT
   cudaDeviceSynchronize();
@@ -1103,8 +1140,8 @@ void BkgGpuPipeline::PrepareForRegionalFitting()
       TranslatorsFlowByFlow::TranslateNonZeroEmphasisFrames_RegionToCube(HostNonZeroEmphasisFrames, &bkinfo[i], regId);
     }
   }
-  Dev->EmphasisVec.copy(Host->EmphasisVec);
-  Dev->NonZeroEmphasisFrames.copy(HostNonZeroEmphasisFrames);
+  Dev->crudeEmphasisVec.copy(Host->EmphasisVec);
+  Dev->crudeNonZeroEmphasisFrames.copy(HostNonZeroEmphasisFrames);
   //Dev->NewPerFlowRegionParams.copy(Dev->PerFlowRegionParams);
 }
 
@@ -1120,19 +1157,18 @@ void BkgGpuPipeline::PrepareForSingleFlowFit()
       if(i==0) cout << "CUDA: BkgGpuPipeline: PrepareForSingleFlowFit: updating GPU fine emphasis" << endl;
 #endif
       myJob.setUpFineEmphasisVectors();
-      if (myJob.performExpTailFitting() && myJob.performRecompressionTailRawTrace())
-        myJob.setUpFineEmphasisVectorsForStdCompression();
       TranslatorsFlowByFlow::TranslateEmphasis_RegionToCube(Host->EmphasisVec, &bkinfo[i], regId);
       TranslatorsFlowByFlow::TranslateNonZeroEmphasisFrames_RegionToCube(HostNonZeroEmphasisFrames, &bkinfo[i], regId);
     }
   }
-  Dev->EmphasisVec.copy(Host->EmphasisVec);
-  Dev->NonZeroEmphasisFrames.copy(HostNonZeroEmphasisFrames);
+  Dev->fineEmphasisVec.copy(Host->EmphasisVec);
+  Dev->fineNonZeroEmphasisFrames.copy(HostNonZeroEmphasisFrames);
 }
 
 void BkgGpuPipeline::HandleRegionalFittingResults()
 {
-  Host->PerFlowRegionParams.copy(Dev->PerFlowRegionParams);
+  pHistCol->getHostPerFlowRegParams().copy(pHistCol->getDevPerFlowRegParams());
+  //Host->PerFlowRegionParams.copy(Dev->PerFlowRegionParams);
   for (size_t i=0; i<ImgP.getNumRegions(); ++i) {
     WorkSet myJob(&bkinfo[i]);
     size_t regId = ImgP.getRegId(myJob.getRegCol(), myJob.getRegRow());
@@ -1140,7 +1176,8 @@ void BkgGpuPipeline::HandleRegionalFittingResults()
 #if DEBUG_OUTPUT
       if(i==0) cout << "CUDA: BkgGpuPipeline: HandleRegionalFittingResults: updating reg params on host" << endl;
 #endif
-      TranslatorsFlowByFlow::TranslatePerFlowRegionParams_CubeToRegion(Host->PerFlowRegionParams, &bkinfo[i], regId);
+      //TranslatorsFlowByFlow::TranslatePerFlowRegionParams_CubeToRegion(Host->PerFlowRegionParams, &bkinfo[i], regId);
+      TranslatorsFlowByFlow::TranslatePerFlowRegionParams_CubeToRegion(pHistCol->getHostPerFlowRegParams(), &bkinfo[i], regId);
     }
   }
 
@@ -1170,12 +1207,13 @@ void BkgGpuPipeline::ExecuteCrudeEmphasisGeneration() {
       Dev->RegionStateMask.getPtr(),
       MAX_POISSON_TABLE_COL,
       CRUDEXEMPHASIS,
-      Dev->PerFlowRegionParams.getPtr(),
+      //Dev->PerFlowRegionParams.getPtr(),
+      pHistCol->getDevPerFlowRegParams().getPtr(),
       Dev->RegionFramesPerPoint.getPtr(),
       Dev->RegionFrameCube.getPtr(),
       Dev->NumFrames.getPtr(),
-      Dev->EmphasisVec.getPtr(),
-      Dev->NonZeroEmphasisFrames.getPtr());
+      Dev->crudeEmphasisVec.getPtr(),
+      Dev->crudeNonZeroEmphasisFrames.getPtr());
 #if DEBUG_SYNC || DEBUG_OUTPUT
   cudaDeviceSynchronize();
   CUDA_ERROR_CHECK();
@@ -1196,12 +1234,13 @@ void BkgGpuPipeline::ExecuteFineEmphasisGeneration() {
       Dev->RegionStateMask.getPtr(),
       MAX_POISSON_TABLE_COL,
       FINEXEMPHASIS,
-      Dev->PerFlowRegionParams.getPtr(),
+      //Dev->PerFlowRegionParams.getPtr(),
+      pHistCol->getDevPerFlowRegParams().getPtr(),
       Dev->RegionFramesPerPoint.getPtr(),
       Dev->RegionFrameCube.getPtr(),
       Dev->NumFrames.getPtr(),
-      Dev->EmphasisVec.getPtr(),
-      Dev->NonZeroEmphasisFrames.getPtr());
+      Dev->fineEmphasisVec.getPtr(),
+      Dev->fineNonZeroEmphasisFrames.getPtr());
 #if DEBUG_SYNC || DEBUG_OUTPUT
   cudaDeviceSynchronize();
   CUDA_ERROR_CHECK();
@@ -1217,7 +1256,7 @@ void BkgGpuPipeline::ExecutePostFitSteps() {
   //if (!(myJob.performPostFitHandshake()))
   //  return;
 
-  dim3 block(32,4);
+  dim3 block = matchThreadBlocksToRegionSize(32,4);
   dim3 gridBlockPerRegion(ImgP.getGridDimX(),ImgP.getGridDimY());
   dim3 gridWarpPerRow(ImgP.getGridDimX(),(ImgP.getImgH()+block.y-1)/block.y);
 
@@ -1236,8 +1275,8 @@ void BkgGpuPipeline::ExecutePostFitSteps() {
     );
 
 #if DEBUG_SYNC || DEBUG_OUTPUT
-  cudaDeviceSynchronize();
-  CUDA_ERROR_CHECK();
+    cudaDeviceSynchronize();
+    CUDA_ERROR_CHECK();
 #endif
 #if DEBUG_OUTPUT
     cout << "CUDA: BkgGpuPipeline: ExecutePostFitSteps: UpdateSignalMap_k finalized" << endl;
@@ -1250,7 +1289,8 @@ void BkgGpuPipeline::ExecutePostFitSteps() {
 
     PostProcessingCorrections_k<<<gridWarpPerRow, block, 0>>>(
         Dev->RegionStateMask.getPtr(),
-        Dev->PerFlowRegionParams.getPtr(),
+        //Dev->PerFlowRegionParams.getPtr(),
+        pHistCol->getDevPerFlowRegParams().getPtr(),
         Dev->PerNucRegP.getPtr(),
         Dev->BfMask.getPtr(),
         Dev->BeadParamCube.getPtr(),
@@ -1261,8 +1301,8 @@ void BkgGpuPipeline::ExecutePostFitSteps() {
     );
 
 #if DEBUG_SYNC || DEBUG_OUTPUT
-  cudaDeviceSynchronize();
-  CUDA_ERROR_CHECK();
+    cudaDeviceSynchronize();
+    CUDA_ERROR_CHECK();
 #endif
 #if DEBUG_OUTPUT
     cout << "CUDA: BkgGpuPipeline: ExecutePostFitSteps: ProtonXTalk_k finalized" << endl;
@@ -1299,7 +1339,8 @@ void BkgGpuPipeline::ApplyClonalFilter()
         //host bf mask updated so update original bfmask being written out
 
 
-        Host->BfMask.copyPlanesOut(&bkinfo->bkgObj->GetGlobalStage().bfmask->mask[0],0,1);
+        //WHY IS THIS NEEDED??
+        //Host->BfMask.copyPlanesOut(&bkinfo->bkgObj->GetGlobalStage().bfmask->mask[0],0,1);
 
         Dev->BeadStateMask.copy(Host->BeadStateMask);
         Dev->BfMask.copy(Host->BfMask);
@@ -1316,6 +1357,35 @@ void BkgGpuPipeline::ApplyClonalFilter()
 
 }
 
+
+void BkgGpuPipeline::CopySerializationDataFromDeviceToHost()
+{
+  Dev->PolyClonalCube.reinjectHostStructures(bkinfo);
+}
+
+void BkgGpuPipeline::DebugOutputDeviceBuffers(){
+
+//#if DEBUG_OUTPUT
+  LayoutCubeWithRegions<int> tmpHostNumSamples(Dev->NumSamples,HostMem);
+
+  cout << "CUDA DEBUG: "; ImgP.print();
+  cout << "CUDA DEBUG:" << GpFP << endl;
+  cout << "CUDA DEBUG:" << ConfP << endl;
+  cout << "CUDA DEBUG:" << ConstFrmP << endl;
+  cout << "CUDA DEBUG:" << ConstGP << endl;
+  pHistCol->getHostPerFlowRegParams().copy(pHistCol->getDevPerFlowRegParams());
+  for(size_t regId = 0; regId < ImgP.getNumRegions(); regId++){
+    cout << "CUDA DEBUG:" <<  regId  << "," << Host->ConstRegP.refAtReg(regId) << endl;
+    cout << "CUDA DEBUG:" <<  regId  << "," << pHistCol->getHostPerFlowRegParams().refAtReg(regId) << endl;
+    cout << "CUDA DEBUG Sample traces:" << endl;
+    cout << pHistCol->getLatestSampleTraces(GpFP.getRealFnum())->getCSVRegionCube<short>(regId,tmpHostNumSamples[regId],0,Host->NumFrames[regId]);
+    cout << "CUDA DEBUG Empty Trace Avg:";
+    cout << pHistCol->getLatestEmptyTraceAvgs(GpFP.getRealFnum())->getCSVRegionPlane<float>(regId,Host->NumFrames[regId]);
+  }
+//#endif
+}
+
+
 void BkgGpuPipeline::getDataForRawWells(RingBuffer<float> * ringbuffer)
 {
   float *ampBuf = ringbuffer->writeOneBuffer();
@@ -1328,7 +1398,8 @@ void BkgGpuPipeline::getDataForPostFitStepsOnHost()
 {
   Host->ResultCube.copy(Dev->ResultCube);
   Host->BeadStateMask.copy(Dev->BeadStateMask);
-  Host->PerFlowRegionParams.copy(Dev->PerFlowRegionParams);
+  //Host->PerFlowRegionParams.copy(Dev->PerFlowRegionParams);
+  pHistCol->getHostPerFlowRegParams().copy(pHistCol->getDevPerFlowRegParams());
 }
 
 

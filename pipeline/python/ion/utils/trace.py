@@ -12,8 +12,9 @@ _RMS_AMPLITUDE = 'RMS Amplitude'
 
 TRACE_STAT_NAMES = [_RISE_TIME, _SLOPE, _RMS_AMPLITUDE]
 
+
 def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None,
-        as_dict=False):
+                as_dict=False):
     """
     @TODO: jhoon
     """
@@ -39,7 +40,7 @@ def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None,
         endIndex += lbound
     if endIndex > beginIndex:
         slope = numpy.polyfit(numpy.arange(beginIndex, endIndex),
-                trace[beginIndex:endIndex], 1)[0]
+                              trace[beginIndex:endIndex], 1)[0]
         riseTime = endIndex - beginIndex
     else:
         slope = None
@@ -52,5 +53,4 @@ def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None,
             _RMS_AMPLITUDE: rmsAmpl
         }
     else:
-        return riseTime,slope,rmsAmpl
-    
+        return riseTime, slope, rmsAmpl

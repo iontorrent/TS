@@ -29,6 +29,17 @@
         float: left;
         margin: 10px 15px 15px 0;
     }
+
+    ::-webkit-scrollbar {
+        -webkit-appearance: none;
+        width: 7px;
+    }
+    ::-webkit-scrollbar-thumb {
+        border-radius: 4px;
+        background-color: rgba(0,0,0,.5);
+        -webkit-box-shadow: 0 0 1px rgba(255,255,255,.5);
+    }
+
 </style>
 <script src="{% static "js/date.min.js"%}"></script>
 <script src="{% static "js/jquery.daterangepicker.js"%}"></script>
@@ -142,7 +153,9 @@
         # } else if (runType == "TARS_16S") { #
           <img src="{% static "resources/img/appl_metagenomics.png"%}" width="24px" height="24px" />  
         # } else if (runType == "AMPS_DNA_RNA") { #
-          <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" width="24px" height="24px" />           
+          <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "TAG_SEQUENCING") { #
+          <img src="{% static "resources/img/appl_tagSequencing.png"%}" width="24px" height="24px" />                     
         # } # 
         # } # 
 	</span>

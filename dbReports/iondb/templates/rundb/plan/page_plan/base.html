@@ -1,50 +1,11 @@
 {% extends "rundb/plan/base.html" %}
 {% load url from future %}
+{% load static from staticfiles %}
 {% block extra_head %}
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script type="text/javascript" src="{% static "resources/scripts/mockup.min.js" %}"></script>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" %}"/>
+<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js" %}"></script>
 
-<script type="text/javascript">
-        if (!window.console) {( function() {
-                    var names = ["log", "debug", "info", "warn", "error", "assert", "dir", "dirxml", "group", "groupEnd", "time", "timeEnd", "count", "trace", "profile", "profileEnd"];
-                    window.console = {};
-                    for (var i = 0; i < names.length; ++i) {
-                        window.console[names[i]] = function() {
-                        };
-                    }
-                }());
-        }
-</script>
-
-<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
-<link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
-<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
-<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
-
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.css" />
-   
-<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
-<script type="text/javascript" src="/site_media/resources/jquery/jquery.cookie.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/tb.jquery.min.js"></script>
-<script type="text/javascript" src="/site_media/js/json2.min.js"></script>
-    <!-- include in cases browser doesn't natively support JSON.stringify -->
-<script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/kendo.grid.override.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/mockup.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/tb.min.js"></script>
-
-<script type="text/javascript" src="/site_media/resources/scripts/tb-bootstrap-modal.min.js"></script>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
-<script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery.slider/jquery.slider.min.css" />
-<script type="text/javascript" src="/site_media/resources/jquery.slider/jquery.slider.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/jquery.slider/jquery.slider.support.js"></script>
-    
-<script src="/site_media/resources/scripts/workflows.widgets.js"></script>
-<script src="/site_media/resources/scripts/workflows.filters.js"></script>
-<script src="/site_media/resources/scripts/workflows.prioritization.js"></script>
 <style type="text/css">
 .folders {
     border: 1px solid #E5E5E5;
@@ -59,6 +20,15 @@
     background: none;
 }
 
+{% if helper.isPlanBySample %}
+.chevrons li{
+    width: 12.5%;
+}
+{% else %}
+.chevrons li{
+    width: 14.25%;
+}
+{% endif %}
 </style>
 {% endblock extra_head %}
 {% block sub-nav %}
@@ -91,74 +61,64 @@
     </a>
 </li>
 {% endblock sub-nav %}
+{%block extra-main-class%}clearbg{%endblock extra-main-class%}
 {% block content %}
-    <div class="main clearbg">
-        <div class="container-fluid">
-            <div id="global_messages"></div>
-            <div id="user_messages"></div>
-
             <div class="content group">
-            
                 <!--img src="resources/img/Torrent_Browser_Chevron2.jpg" alt="Torrent_Browser_Chevron2" width="1352" height="56" style="margin-bottom:20px;" /-->           
-
                 <div class="row-fluid chevrons workflow">
                     <ul>
                         {% if helper.isPlan %}
                             {% if helper.isEdit %}
-                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #FFFF66">Edit Plan</a></li>
+                                <li class="parent"><a href="#" style="color: #FFFF66">Edit Plan</a></li>
                             {% elif helper.isEditRun %}
-                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #99FFFF;">Edit Run</a></li>
+                                <li class="parent"><a href="#" style="color: #99FFFF;">Edit Run</a></li>
                             {% elif helper.isCopy %}
-                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #FFCC33;">Copy Plan</a></li>
+                                <li class="parent"><a href="#" style="color: #FFCC33;">Copy Plan</a></li>
                             {% else %}
-                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #FFCC33;">Create Plan</a></li>                            
+                                <li class="parent"><a href="#" style="color: #FFCC33;">Create Plan</a></li>                            
                             {% endif %}
                         {% else %}
                             {% if helper.isEdit %}
-                                <li class="parent" style="width:9.722%;"><a href="#">Edit Template</a></li> 
+                                <li class="parent"><a href="#">Edit Template</a></li> 
                             {% elif helper.isCopy %}
-                                <li class="parent" style="width:9.722%;"><a href="#">Copy Template</a></li>                             
+                                <li class="parent"><a href="#">Copy Template</a></li>                             
                             {% else %}
-                                <li class="parent" style="width:9.722%;"><a href="#">Create Template</a></li>                                
+                                <li class="parent"><a href="#">Create Template</a></li>                                
                             {% endif %}
                         {% endif %}
                         
-                        <li class="disabled" style="width:9.722%;" id="Ionreporter"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">IonReporter</a></li>
-                        <li id="Application" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">Application</a></li>
-                        <li id="Kits" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">Kits</a></li>
+                        <li class="disabled" id="Ionreporter"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">Ion Reporter</a></li>
+                        <li id="Application" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">Application</a></li>
+                        <li id="Kits" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">Kits</a></li>
                         <!--- TODO: Remove Dead Monitoring Page Code
-                            <li id="Monitoring" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">Monitoring</a></li>
+                            <li id="Monitoring" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">Monitoring</a></li>
                         -->
-                        <li id="Plugins" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">Plugins</a></li>
+                        <li id="Plugins" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">Plugins</a></li>
                         {%if helper.isPlanBySample%}
-                            <li id="Barcode_by_sample" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">Barcoding</a></li>
-                            <li id="Output" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Projects</a></li>
-                            <li id="Save_plan_by_sample" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_save_plan" %}');$('#step_form').submit();return false;">Save & Finish</a></li>
+                            <li id="Barcode_by_sample" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">Barcoding</a></li>
+                            <li id="Output" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Projects</a></li>
+                            <li id="Save_plan_by_sample" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_save_plan" %}');$('#step_form').submit();return false;">Save & Finish</a></li>
                         {%else%}
-                            <li id="Output" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Projects</a></li>
+                            <li id="Output" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Projects</a></li>
                             {% if helper.isPlan %}
                                 {% if helper.isCreate %}
-                                    <li id="Save_plan" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Plan</a></li>
+                                    <li id="Save_plan" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Plan</a></li>
                                 {% else %}
-                                    <li id="Save_plan" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Save</a></li>
+                                    <li id="Save_plan" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Save</a></li>
                                 {% endif %}
                             {% else %}
                                 {%if helper.isTemplateBySample%}
-                                    <li id="Save_template_by_sample" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template_by_sample" %}');$('#step_form').submit();return false;">Save</a></li>
+                                    <li id="Save_template_by_sample" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template_by_sample" %}');$('#step_form').submit();return false;">Save</a></li>
                                 {%else%}
-                                    <li id="Save_template" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template" %}');$('#step_form').submit();return false;">Save</a></li>
+                                    <li id="Save_template" class="disabled"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template" %}');$('#step_form').submit();return false;">Save</a></li>
                                 {%endif%}
-                                
-                                
                             {% endif %}
                         {%endif%}
-                        
-                                                                                                
                     </ul>
                 </div>
                 <div class="row-fluid">
                     <div class="span8" id="mainContent">
-                        <a class="btn pull-right hide" id="showSummary" href="#">Show Summary</a>
+                        <a class="btn pull-right hide" style="margin-top: 10px;" id="showSummary" href="#">Show Summary</a>
                         <h3>{% block main-title %} {% endblock main-title %}</h3>
                         <form id='step_form' method='post'>
                             {% block page-plan-content %}
@@ -193,9 +153,6 @@
                     </div>
                 </div>
             </div>
-         </div>
-     </div>
-
 {% endblock content %}
 {% block post-raw %}
 <script type="text/javascript">
@@ -205,11 +162,13 @@
         applicationToRuntype = {};
         {% for application in helper.getStepDict.Application.getPrePopulatedFieldDict.applicationGroups %}
             applicationToRuntype['{{application.name}}'] = [];
-            {% for runType in application.applications.all %}
-                applicationToRuntype['{{application.name}}'].push('{{runType.pk}}');
+            {% for runType in helper.getStepDict.Application.getPrePopulatedFieldDict.runTypes %}
+                {% if runType in application.applications.all %}
+                    applicationToRuntype['{{application.name}}'].push('{{runType.pk}}');
+                {% endif %}
             {% endfor %}
             {% if application.name == helper.getApplicationGroupName %}
-                $("#selectedApplication").text('{{application.description}}');
+                $("#selectedApplication").html('{{application.description}}');
             {% endif %}
         {% endfor %}
 
@@ -229,59 +188,70 @@
 
         //if sample group is in savedFields then show in the summary
         {%if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping%}
-            $("#selectedGroup").text(sampleGroupIdToDesc['{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}']);
+            $("#selectedGroup").html(sampleGroupIdToDesc['{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}']);
         {%endif%}
 
         //if runType is in the savedFields then show in the summary
         {%if helper.getStepDict.Application.getCurrentSavedFieldDict.runType%}
-            $("#selectedTechnique").text(runTypeIdToAltName['{{helper.getStepDict.Application.getCurrentSavedFieldDict.runType}}']);
+            $("#selectedTechnique").html(runTypeIdToAltName['{{helper.getStepDict.Application.getCurrentSavedFieldDict.runType}}']);
         {%endif%}
-        
-              
+
+        applProductToInstrumentType = {};
+        {% for applProduct in helper.getStepDict.Application.getPrePopulatedFieldDict.applProducts %}
+            applProductToInstrumentType['{{applProduct.instrumentType | lower}}'] = '{{applProduct}}';
+        {% endfor %}
+                
         libraryKeySeqToNameAndSeq = {};
         {% for libKey in helper.getStepDict.Kits.getPrePopulatedFieldDict.forwardLibKeys %}
         	libraryKeySeqToNameAndSeq['{{libKey.sequence}}'] = '{{libKey.name}}' + ' (' + '{{libKey.sequence}}' + ')';
         {% endfor %}
-        $("#selectedLibraryKey").text(libraryKeySeqToNameAndSeq['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryKey}}']);
+        $("#selectedLibraryKey").html(libraryKeySeqToNameAndSeq['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryKey}}']);
 
     
         threePrimeAdapterSeqToNameAndSeq = {};
         {% for adapter in helper.getStepDict.Kits.getPrePopulatedFieldDict.forward3Adapters %}
         	threePrimeAdapterSeqToNameAndSeq['{{adapter.sequence}}'] = '{{adapter.name}}' + ' (' + '{{adapter.sequence}}' + ')';
         {% endfor %}
-        $("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.forward3primeAdapter}}']);
+        $("#selected3PrimeAdapter").html(threePrimeAdapterSeqToNameAndSeq['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.forward3primeAdapter}}']);
+
+    
+        flowOrderToDescAndFlowOrder = {};
+        {% for flowOrder in helper.getStepDict.Kits.getPrePopulatedFieldDict.flowOrders %}
+            flowOrderToDescAndFlowOrder['{{flowOrder.flowOrder}}'] = '{{flowOrder.description}}' + ' (' + '{{flowOrder.flowOrder}}' + ')';
+        {% endfor %}
+        $("#selectedFlowOrder").html(flowOrderToDescAndFlowOrder['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.flowOrder}}']);
 
         
         libKitNameToDesc = {};
         {% for kit in helper.getStepDict.Kits.getPrePopulatedFieldDict.libKits %}
             libKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';
         {% endfor %}
-        $("#selectedLibraryKitType").text(libKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.librarykitname}}']);
+        $("#selectedLibraryKitType").html(libKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.librarykitname}}']);
              
         templateKitNameToDesc = {};
         {% for kit in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}
             templateKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';
         {% endfor %}
-        $("#selectedTemplatingKitName").text(templateKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}']);
+        $("#selectedTemplatingKitName").html(templateKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}']);
         
                
         seqKitNameToDesc = {};
         {% for kit in helper.getStepDict.Kits.getPrePopulatedFieldDict.seqKits %}
             seqKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';
         {% endfor %}
-        $("#selectedSequenceKit").text(seqKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.sequencekitname}}']);
+        $("#selectedSequenceKit").html(seqKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.sequencekitname}}']);
         
         chipNameToDisplayName = {};
         {% for chipType in helper.getStepDict.Kits.getPrePopulatedFieldDict.chipTypes %}
             chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedNamePrimaryPrefix}}\u2122{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}';
         {% endfor %}
-        $("#selectedChipType").text(chipNameToDisplayName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
+        $("#selectedChipType").html(chipNameToDisplayName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
         
         referenceShortToLongName = {};
         {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
             referenceShortToLongName['{{ref.short_name}}'] = '{{ref.short_name}}({{ref.name}})';
         {% endfor %}
-        $('#selectedReferenceLibrary').text(referenceShortToLongName['{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}']);
+        $('#selectedReferenceLibrary').html(referenceShortToLongName['{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}']);
         
         pluginIdToName = {};
         var pluginStr = "";
@@ -304,7 +274,7 @@
             {% endif %}
         {% endfor %}
         pluginStr = pluginStr.substring(0, pluginStr.length - 2);
-        $('#selectedPlugins').text(pluginStr);
+        $('#selectedPlugins').html(pluginStr);
         
         projectIdToName = {};
         {% for project in helper.getStepDict.Output.getPrePopulatedFieldDict.projects %}
@@ -319,7 +289,7 @@
         {% else %}
             projectStr = projectStr.substring(0, projectStr.length - 2);
         {% endif %}
-        $('#selectedProjects').text(projectStr);
+        $('#selectedProjects').html(projectStr);
         
         uploaderIdToName = {};
         {% for uploader in helper.getStepDict.Ionreporter.getPrePopulatedFieldDict.uploaders %}
@@ -330,7 +300,7 @@
             uploaderStr += uploaderIdToName['{{uploaderId}}'] + ", "
         {% endfor %}
         uploaderStr = uploaderStr.substring(0, uploaderStr.length - 2);
-        $('#selectedUploaders').text(uploaderStr);
+        $('#selectedUploaders').html(uploaderStr);
         
         $("#sidebarCollapse").click(function() {
             $("#sidebar").hide();

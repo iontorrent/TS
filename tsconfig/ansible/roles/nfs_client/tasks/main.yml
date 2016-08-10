@@ -11,10 +11,6 @@
   debug: msg="No NFS mounts to be configured"
   with_items: nas_mounts
   when: nas_mounts|default(None) == None
-- name: DEBUG
-  debug: msg=""
-  with_items: nas_mounts
-  when: nas_mounts|default(None) != None
 
 # Unmount any ansible-added mounts
 - name: "Unmounting all ansible-added mountpoints"
@@ -24,7 +20,7 @@
 - name: "Remove mountpoints from /etc/fstab"
   shell: sed -i '/^{{startline}}/,/{{endline}}$/d' /etc/fstab
 
-- name: Create external storage mountpoints
+- name: Create mountpoint for external storage
   shell: bash -lc 'if [ ! -d {{ item.mountpoint }} ]; then mkdir -p {{ item.mountpoint }}; chmod 0777 {{ item.mountpoint }}; fi'
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
@@ -34,18 +30,22 @@
                 state=present
                 line='{{startline}}'
                 insertafter=EOF
+  when: nas_mounts|default(None) != None
                 
 - name: Create fstab footer line
   lineinfile: dest=/etc/fstab
                 state=present
                 line='{{endline}}'
                 insertafter='{{startline}}'
+  when: nas_mounts|default(None) != None
 
+# Format of the nas_mounts variable changed in TS5.2 with addition of the 'options' keyword
+# By providing a default value here, we are backwards compatibile with old versions
 - name: Create fstab entry
   lineinfile: dest=/etc/fstab
                 state=present
                 regexp='{{item.name}}:{{item.directory}}.*'
-                line='{{item.name}}:{{item.directory}} {{item.mountpoint}} nfs defaults 0 0'
+                line='{{item.name}}:{{item.directory}} {{item.mountpoint}} nfs {{item.options|default('defaults')}} 0 0'
                 insertbefore='{{endline}}'
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
@@ -59,32 +59,3 @@
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
   ignore_errors: yes    # TODO: Having trouble with some already-mounted volumes detected to be unmounted.
-
-#-----------------------------------------------------------------------------
-# Remove what we have done - for development only
-#-----------------------------------------------------------------------------
-#- name: Unmount mountpoints
-#  when: (nas_mounts is defined)
-#  shell: bash -lc 'umount {{item.mountpoint}}'
-#  with_items:
-#    - "{{nas_mounts}}"
-#  ignore_errors: yes
-#  tags: delete
-#    
-#- name: Delete mountpoints
-#  when: (nas_mounts is defined)
-#  file: dest={{item.mountpoint}}
-#          state=absent
-#          recurse=no
-#  with_items:
-#    - "{{nas_mounts}}"
-#  tags: delete
-#          
-#- name: Remove fstab entry
-#  when: (nas_mounts is defined)
-#  lineinfile: dest=/etc/fstab
-#                state=absent
-#                regexp='{{item.name}}:{{item.directory}}.*'
-#  with_items:
-#    - "{{nas_mounts}}"
-#  tags: delete

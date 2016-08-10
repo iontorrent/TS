@@ -80,12 +80,16 @@ TB.plan.batchupload.ready = function(plannedUrl) {
                 hasErrors = true;
                 error += "<ul class='unstyled'>";
 
-                error += "<li><strong> Row " + key + " contained error(s):</strong> ";
+                error += "<li><strong>" + key + " contained error(s):</strong> ";
                 error += "<ul>";
                 for (var i = 0; i < responseText.failed[key].length; i++) {
-                    error += "<li><strong>  " + responseText.failed[key][i][0] + "</strong> column ";
-                    error += " : " + responseText.failed[key][i][1];
-                    error += "</li>";
+                    if (key.indexOf('Row') > -1){
+                        error += "<li><strong>  " + responseText.failed[key][i][0] + "</strong> column ";
+                        error += " : " + responseText.failed[key][i][1];
+                        error += "</li>";
+                    } else {
+                        error += "<li><strong>  " + responseText.failed[key][i] + "</strong></li>";
+                    }
                 }
                 error += "</ul>";
                 error += "</li>";

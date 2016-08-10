@@ -88,7 +88,7 @@ float erf_approx_streaming (float x)
 {
 
 #ifdef USE_CUDA_ERF
-  return erf (x);
+  return ::erf (x);
 #else
 
   int left, right;
@@ -401,7 +401,7 @@ void ComputeSP_dev(
     float Copies,
     int absFnum,
     int sId) {
-  SP = (float)(COPYMULTIPLIER * Copies) * pow(pCP->CopyDrift,absFnum);
+  SP = (float)(COPYMULTIPLIER * Copies) * pow(pCP->CopyDrift,(float)absFnum);
 }
 
 

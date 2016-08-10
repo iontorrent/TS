@@ -9,13 +9,18 @@ fi
 rm -f /var/spool/ion/InstrumentList.txt
 rm -f /var/spool/ion/RsmAlarmCache
 rm -f /var/spool/ion/ContactInfo.txt
+rm -f /var/spool/ion/gpuErrors
 rm -f /var/spool/ion/ip.txt
 rm -f /var/spool/ion/loc.txt
+rm -f /var/spool/ion/nexenta_data.txt
+rm -f /var/spool/ion/nexenta_md5sum.txt
 rm -f /var/spool/ion/product_info.alt
+rm -f /var/spool/ion/RsmAlarmCache
 rm -f /var/spool/ion/serial_number.alt
 rm -f /var/spool/ion/TSConfig.txt
 rm -f /var/spool/ion/TSexperiments.txt
 rm -f /var/spool/ion/TSFileServers.txt
+rm -f /var/spool/ion/TSServers.old
 rm -f /var/spool/ion/TSnetwork.txt
 rm -f /var/spool/ion/TSServers.txt
 

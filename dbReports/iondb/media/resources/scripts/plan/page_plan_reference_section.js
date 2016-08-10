@@ -3,6 +3,7 @@
     /**
     Show/hide barcoded sample table ref info columns based on if isSameRefInfoPerSample is checked
     */
+    /*
     handle_isSampleRefInfoPerBarcodeSample = function (isChecked, isInit) {
         //(1) if isChecked is true and plan is barcoded, 
         //(1.1) cascade default values to each reference and BED table cell
@@ -17,10 +18,6 @@
         var selectedBarcodeKit = $('#barcodeSet').val();
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
    
-        //console.log("page_plan_reference_section.js - handle_isSampleRefInfoPerBarcodeSample() isPlan=", isPlan, "; selectedBarcodeKit=", selectedBarcodeKit, "; isChecked=", isChecked, "; isInit=", isInit);
-
-        //20141005-WIP if (isPlan == "True" && selectedBarcodeKit != "") {
-        //need to support both barcoded and multi-chip planning
         if (isPlan == "True") {
             var selectedReference = $('select[name=default_reference]').val();
             var selectedTargetBedFile = $('select[name=default_targetBedFile]').val();
@@ -31,8 +28,6 @@
 
 			//if we're initializing the page for an edit operation, do not alter the original sample selections
             var isCreate = $('input[id=isCreate]').val();
-
-            //console.log("page_plan_reference_section.js - handle_isSampleRefInfoPerBarcodeSample() isCreate=", isCreate);
               
             //beware of hotSpot column which may not be shown for an application
             var isReferenceSupported = $('input[id=isReferenceSupported]').val();
@@ -73,4 +68,4 @@
         }
           
     }
-
+    */

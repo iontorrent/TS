@@ -14,10 +14,6 @@ set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 configure_file (
-	"${PROJECT_SOURCE_DIR}/debian/preinst.in"
-	"${PROJECT_BINARY_DIR}/debian/preinst" @ONLY
-)
-configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/postinst.in"
 	"${PROJECT_BINARY_DIR}/debian/postinst" @ONLY
 )
@@ -29,6 +25,10 @@ configure_file (
 	"${PROJECT_SOURCE_DIR}/ts_functions"
 	"${PROJECT_BINARY_DIR}/ts_functions" @ONLY
 )
+configure_file (
+	"${PROJECT_SOURCE_DIR}/bin/TSsetproxy"
+	"${PROJECT_BINARY_DIR}/bin/TSsetproxy" @ONLY
+)
 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-ansible" DESTINATION sbin )
@@ -37,7 +37,8 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSchkconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip-ansible" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip-legacy" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSsetproxy" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_BINARY_DIR}/bin/TSsetproxy" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSsetnoproxy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSquery" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSdns" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSwrapper" DESTINATION sbin )
@@ -47,16 +48,12 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TScreateLocalRepository" DESTINATION
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/ion" DESTINATION bin )
 install(FILES "${PROJECT_BINARY_DIR}/ts_functions" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/ts_params" DESTINATION share/ion-tsconfig )
-install(FILES "${PROJECT_SOURCE_DIR}/config/iptables.rules" DESTINATION share/ion-tsconfig )
-install(FILES "${PROJECT_SOURCE_DIR}/config/torrentsuite-packagelist.json" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/stresstest.tgz" DESTINATION share/ion-tsconfig )
-install(DIRECTORY "${PROJECT_SOURCE_DIR}/sge-configuration" DESTINATION share/ion-tsconfig )
 
 install(FILES "${PROJECT_SOURCE_DIR}/bin/grp_functions" DESTINATION share/ion-tsconfig )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_validate.sh" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_terminal" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_update.sh" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TScssh" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_config_nodetest" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_connect_nodetest" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_configuration_test" DESTINATION sbin )
@@ -76,14 +73,6 @@ install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DEST
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION share/ion-tsconfig/perl)
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION share/ion-tsconfig/perl)
 
-# postgresql-shm config file: configures kernel memory compatible with our postgres memory settings
-install(FILES "${PROJECT_SOURCE_DIR}/config/10-postgresql-shm.conf" DESTINATION "/etc/sysctl.d")
-# Install prolog/epilog scripts
-install(DIRECTORY "${PROJECT_SOURCE_DIR}/gridengine-scripts" DESTINATION share/ion-tsconfig
-    USE_SOURCE_PERMISSIONS )
-# Disable apt archive which deletes deb package files
-install(FILES "${PROJECT_SOURCE_DIR}/config/99torrentserver" DESTINATION /etc/apt/apt.conf.d/)
-
 # Deploy the ansible heirarchy for internal testing
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/ansible" DESTINATION share/ion-tsconfig
     USE_SOURCE_PERMISSIONS )
@@ -99,8 +88,6 @@ execute_process (
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(PYTHON_SITE_PACKAGES "${PYTHON_SITE_PACKAGES}" CACHE PATH "Python Install Prefix")
-#install(DIRECTORY ion_tsconfig DESTINATION ${PYTHON_SITE_PACKAGES}
-#    USE_SOURCE_PERMISSIONS )
 install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSconfig.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 
@@ -111,11 +98,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
-if (NOT ${LSB_RELEASE_CODENAME} STREQUAL "lucid")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "ansible (>=1.6)")
-endif()
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm
 )

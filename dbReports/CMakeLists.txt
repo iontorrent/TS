@@ -60,10 +60,11 @@ install(FILES "${PROJECT_SOURCE_DIR}/iondb/index.html" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/docsnotfound.html" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/templates/500.html" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/templates/404.html" DESTINATION /var/www)
+install(FILES "${PROJECT_SOURCE_DIR}/iondb/templates/maintenance.html" DESTINATION /var/www)
 
 install(DIRECTORY iondb DESTINATION .
     USE_SOURCE_PERMISSIONS
-    PATTERN "local_settings.py" EXCLUDE
+    REGEX "^${PROJECT_SOURCE_DIR}/iondb/local_settings.py" EXCLUDE
     PATTERN ".svn" EXCLUDE
     PATTERN "rndbin" EXCLUDE
     PATTERN "ionArchive" EXCLUDE
@@ -148,6 +149,11 @@ install(FILES "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.py" DESTINATION iondb
     RENAME version.py
 )
 
+install(FILES "${PROJECT_SOURCE_DIR}/iondb/bin/ionMesh.service" DESTINATION /etc/avahi/services)
+
+# install the sudoers file
+install(FILES "${PROJECT_SOURCE_DIR}/sudo/torrent-server-sudoers" DESTINATION /etc/sudoers.d)
+
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")
 
@@ -155,6 +161,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
+    avahi-daemon,
     ion-pipeline (>= 4.3.1),
     texlive-latex-base,
     texlive-latex-extra,
@@ -166,6 +173,7 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     libapache2-mod-gnutls,
     apache2-utils,
     ssl-cert,
+    python-avahi,
     python-celery (>= 3.1.6),
     python-django (>= 1.6.1),
     libjs-jquery (>= 1.7.2),
@@ -190,11 +198,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-oauthlib,
     memcached,
     python-memcache,
-    samtools (>= 0.1.19),
     python-dev,
     rabbitmq-server (>= 3.2.0),
     ion-analysis (>=3.5.15),
-    megacli")
+    megacli,
+    python-apt")
 
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job server and run crawler.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

@@ -6,6 +6,9 @@ LOCALHEADNODE ansible_connection=local
 [webserver:children]
 headnode
 
+[instrument_update:children]
+headnode
+
 [db:children]
 headnode
 
@@ -13,6 +16,9 @@ headnode
 headnode
 
 [iontorrent_master:children]
+headnode
+
+[iontorrent_auxiliary:children]
 headnode
 
 [iontorrent_computes:children]

@@ -44,8 +44,6 @@ void TraceCurry::ErrorSignal(float *obs,float *fit, float *posptr, float *negptr
 
 
 
-
-
 float TraceCurry::GuessAmplitude(float *red_obs)
 {
     float red_guess[npts];
@@ -71,7 +69,7 @@ void TraceCurry::SetWellRegionParams (struct BeadParams *_p,struct reg_params *_
 
     // since this uses a library function..and the parameters involved aren't fit
     // it's helpful to compute this once and not in the model function
-    SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
+    SP = (float) (COPYMULTIPLIER * p->Copies) *reg_p->CalculateCopyDrift(flow);
 
     etbR = reg_p->AdjustEmptyToBeadRatioForFlow (p->R, p->Ampl[fnum], p->Copies, p->phi, NucID, flow);
     tauB = reg_p->ComputeTauBfromEmptyUsingRegionLinearModel (etbR);

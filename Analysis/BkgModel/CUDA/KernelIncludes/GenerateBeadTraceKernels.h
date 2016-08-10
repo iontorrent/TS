@@ -63,8 +63,6 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
     const float * T0avg,  // ToDo: try already subtract T0 after calculating the average so this would not be needed here anymore!
     const ConstantParamsRegion * constRegP,
     const PerFlowParamsRegion * perFlowRegP,
-    //one empty trace per thread block
-    float * EmptyTraceAvgRegion, // contains result of emppty trace averaging per region
     float * EmptyTraceSumRegionTBlock, // has to be initialized to 0!! will contain sum of all empty trace frames for each row in a region
     int * EmptyTraceCountRegionTBlock, // has to be initialized to 0!! will contain number of empty traces summed up for each row in a region
     int * EmptyTraceComplete, //has to be initialized to 0!! completion counter per region for final sum ToDo: figure out if we can do without it
@@ -85,7 +83,6 @@ void GenerateAllBeadTraceEmptyFromMeta_k (
 __global__
 void ReduceEmptyAverage_k (
     unsigned short * RegionMask,
-    float * EmptyTraceAvgRegion,
     const ConstantParamsRegion * constRegP,
     const PerFlowParamsRegion * perFlowRegP,
     const float * frameNumberRegion, // from timing compression

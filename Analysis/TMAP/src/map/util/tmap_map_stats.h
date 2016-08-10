@@ -33,8 +33,8 @@ typedef struct {
     uint64_t num_hpcost_skipped;
     uint64_t num_hpcost_modified;
     uint64_t num_hpcost_shifted;
-    // alignments filtered by length
-    uint64_t num_len_filtered_als;
+    // number of filtered alignments 
+    uint64_t num_filtered_als;
 } tmap_map_stats_t;
 
 /*!

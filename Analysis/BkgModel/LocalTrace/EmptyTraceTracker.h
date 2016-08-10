@@ -9,7 +9,6 @@
 #include "GlobalDefaultsForBkgModel.h"
 #include "ImageSpecClass.h"
 #include "CommandLineOpts.h"
-#include "SynchDat.h"
 #include "Serialization.h"
 
 // declare save_construct_data
@@ -33,12 +32,8 @@ class EmptyTraceTracker
     
     void Allocate(const Mask *bfmask, const ImageSpecClass &imgSpec, int flow_block_size);
     void SetEmptyTracesFromImage (Image &img, const PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
-    void SetEmptyTracesFromImage(SynchDat &mesh, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
     void SetEmptyTracesFromImageForRegion(Image &img, const PinnedInFlow &pinnedInFlow, 
       int raw_flow, const Mask *bfmask, Region& region, float t_mid_nuc, int flow_buffer_index);
-    void SetEmptyTracesFromImageForRegion(SynchDat &mesh, const PinnedInFlow &pinnedInFlow, 
-      int raw_flow, const Mask *bfmask, Region& region, float t_mid_nuc, float sigma, 
-      float t_start,TimeCompression *time_cp, int flow_buffer_index );
     EmptyTrace *AllocateEmptyTrace (Region &region, int imgFrames, int flow_block_size);
     EmptyTrace *GetEmptyTrace (const Region &region);
 

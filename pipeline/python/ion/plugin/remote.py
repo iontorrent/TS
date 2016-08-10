@@ -12,13 +12,15 @@ except ImportError:
     sys.path.append('/etc/')
     import torrentserver.cluster_settings as settings
 
+
 def get_serverProxy():
-    host = getattr(settings,'PLUGINSERVER_HOST',getattr(settings,'IPLUGIN_HOST','127.0.0.1'))
-    port = getattr(settings,'PLUGINSERVER_PORT',getattr(settings,'IPLUGIN_PORT',8080))
-    server = xmlrpclib.ServerProxy("http://%s:%d" % (host,port), allow_none=True, verbose=True)
+    host = getattr(settings, 'PLUGINSERVER_HOST', getattr(settings, 'IPLUGIN_HOST', '127.0.0.1'))
+    port = getattr(settings, 'PLUGINSERVER_PORT', getattr(settings, 'IPLUGIN_PORT', 8080))
+    server = xmlrpclib.ServerProxy("http://%s:%d" % (host, port), allow_none=True, verbose=False)
     return server
 
-def callPluginXMLRPC(start_json, conn = None, retries = 60):
+
+def callPluginXMLRPC(start_json, conn=None, retries=60):
     """ Contact plugin daemon and make XMLRPC call to launch plugin job
         defined in start_json, which must be fully populated.
         Retries for 5 minutes on connection failure
@@ -30,7 +32,7 @@ def callPluginXMLRPC(start_json, conn = None, retries = 60):
     attempts = 0
 
     log = logging.getLogger(__name__)
-    #log.propagate = False
+    # log.propagate = False
 
     try:
         plugin_name = start_json["runinfo"]["plugin"]["name"]
@@ -44,7 +46,7 @@ def callPluginXMLRPC(start_json, conn = None, retries = 60):
             jobid = conn.pluginStart(start_json)
             if jobid == -1:
                 log.warn("Error Starting Plugin: '%s'", plugin_name)
-                attempts+=1
+                attempts += 1
                 time.sleep(delay)
                 continue
             log.info("Plugin %s Queued '%s'", plugin_name, jobid)
@@ -61,12 +63,13 @@ def callPluginXMLRPC(start_json, conn = None, retries = 60):
 
 
 def call_launchPluginsXMLRPC(result_pk, plugins, net_location, username, runlevel='default', params={}, conn=None):
-    
-    if conn is None:    
+
+    if conn is None:
         conn = get_serverProxy()
     plugins_dict, msg = conn.launchPlugins(result_pk, plugins, net_location, username, runlevel, params)
 
     return plugins_dict, msg
+
 
 def call_pluginStatus(jobid, conn=None):
     if jobid is None:
@@ -84,6 +87,7 @@ def call_pluginStatus(jobid, conn=None):
 
     return ret
 
+
 def call_sgeStop(jobid, conn=None):
     if jobid is None:
         return "Invalid JobID"
@@ -99,4 +103,3 @@ def call_sgeStop(jobid, conn=None):
         ret = str(f)
 
     return ret
-

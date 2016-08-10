@@ -12,6 +12,7 @@ from ion.reports import beadDensityPlot, StatsMerge, plotKey
 from ion.utils.blockprocessing import printtime, isbadblock
 from ion.utils import blockprocessing
 
+
 def beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
     if beadfindArgs:
         cmd = beadfindArgs  # e.g /home/user/Beadfind -xyz
@@ -27,6 +28,7 @@ def beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
     return cmd
 
+
 def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
     cmd = beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS)
@@ -40,6 +42,7 @@ def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
     status = proc.wait()
 
     return status
+
 
 def sigproc_cmd(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
@@ -57,8 +60,9 @@ def sigproc_cmd(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
     return cmd
 
+
 def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
-    
+
     cmd = sigproc_cmd(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS)
     cmd += " >> %s 2>&1" % os.path.join(SIGPROC_RESULTS, 'sigproc.log')
 
@@ -73,9 +77,9 @@ def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
 
 def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
-    ########################################################
-    #Generate Raw Data Traces for lib and TF keys          #
-    ########################################################
+    # 
+    # Generate Raw Data Traces for lib and TF keys          #
+    # 
     printtime("Generate Raw Data Traces for lib and TF keys(iontrace_Test_Fragment.png, iontrace_Library.png) and raw_peak_signal file")
 
     tfRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % tfKey)
@@ -86,7 +90,7 @@ def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
         try:
             kp = plotKey.KeyPlot(tfKey, floworder, 'Test Fragment')
             kp.parse(tfRawPath)
-            kp.dump_max(os.path.join('.',peakOut))
+            kp.dump_max(os.path.join('.', peakOut))
             kp.plot()
         except:
             printtime("TF key graph didn't render")
@@ -98,7 +102,7 @@ def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
         try:
             kp = plotKey.KeyPlot(libKey, floworder, 'Library')
             kp.parse(libRawPath)
-            kp.dump_max(os.path.join('.',peakOut))
+            kp.dump_max(os.path.join('.', peakOut))
             kp.plot()
         except:
             printtime("Lib key graph didn't render")
@@ -109,36 +113,35 @@ def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
 
 def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title, exclusionMask=''):
 
-    bfmaskPath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.bin')
-    bfmaskstatspath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.stats')
+    bfmaskPath = os.path.join(SIGPROC_RESULTS, 'analysis.bfmask.bin')
+    bfmaskstatspath = os.path.join(SIGPROC_RESULTS, 'analysis.bfmask.stats')
 
-    ######################################################################
+    # 
     # Merge individual block bead metrics files and generate bead stats  #
-    ######################################################################
+    # 
     printtime("Merging individual block bead metrics files")
 
     try:
         cmd = 'BeadmaskMerge -i analysis.bfmask.bin -o ' + bfmaskPath
         if exclusionMask:
             cmd += ' -e %s' % exclusionMask
-        
+
         for subdir in dirs:
-            subdir = os.path.join(SIGPROC_RESULTS,subdir)
+            subdir = os.path.join(SIGPROC_RESULTS, subdir)
             if isbadblock(subdir, "Merging individual block bead metrics files"):
                 continue
-            bfmaskbin = os.path.join(subdir,'analysis.bfmask.bin')
+            bfmaskbin = os.path.join(subdir, 'analysis.bfmask.bin')
             if os.path.exists(bfmaskbin):
                 cmd = cmd + ' %s' % subdir
             else:
                 printtime("ERROR: skipped %s" % bfmaskbin)
         printtime("DEBUG: Calling '%s'" % cmd)
-        subprocess.call(cmd,shell=True)
+        subprocess.call(cmd, shell=True)
     except:
         printtime("BeadmaskMerge failed")
 
-
     ''' Not needed: BeadmaskMerge will generate analysis.bfmask.stats with exclusion mask applied
-    
+
     ###############################################
     # Merge individual block bead stats files     #
     ###############################################
@@ -162,9 +165,9 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title, exclusionMask=''):
         traceback.print_exc()
     '''
 
-    ########################################################
-    #Make Bead Density Plots                               #
-    ########################################################
+    # 
+    # Make Bead Density Plots                               #
+    # 
     printtime("Make Bead Density Plots (composite report)")
 
     printtime("DEBUG: generate composite heatmap")
@@ -205,29 +208,30 @@ def mergeRawPeakSignals(dirs):
     printtime("Finished mergeRawPeakSignals")
 '''
 
+
 def mergeAvgNukeTraces(dirs, SIGPROC_RESULTS, key, beads):
 
-    ###############################################
+    # 
     # Merging avgNukeTrace_*.txt files            #
-    ###############################################
+    # 
     printtime("Merging avgNukeTrace_*.txt files")
 
     try:
-        output_trace_file = os.path.join(SIGPROC_RESULTS,'avgNukeTrace_%s.txt' % key)
+        output_trace_file = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % key)
         sumAvgNukeTraceData = None
         sumWells = 0
         config = ConfigParser.RawConfigParser()
 
         for subdir in dirs:
             try:
-                input_trace_file = os.path.join(subdir,SIGPROC_RESULTS,'avgNukeTrace_%s.txt' % key)
+                input_trace_file = os.path.join(subdir, SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % key)
                 if os.path.exists(input_trace_file):
-                    config.read(os.path.join(subdir,SIGPROC_RESULTS,'bfmask.stats'))
+                    config.read(os.path.join(subdir, SIGPROC_RESULTS, 'bfmask.stats'))
                     wells = config.getint('global', beads)
                     labels = numpy.genfromtxt(input_trace_file, delimiter=' ',  usecols=[0], dtype=str)
-                    currentAvgNukeTraceData = numpy.genfromtxt(input_trace_file, delimiter=' ')[:,1:]
+                    currentAvgNukeTraceData = numpy.genfromtxt(input_trace_file, delimiter=' ')[:, 1:]
                 else:
-                    continue 
+                    continue
             except:
                 traceback.print_exc()
                 continue
@@ -239,7 +243,7 @@ def mergeAvgNukeTraces(dirs, SIGPROC_RESULTS, key, beads):
             sumWells += wells
 
         AvgNukeTraceData = sumAvgNukeTraceData / sumWells
-        AvgNukeTraceTable = numpy.column_stack((labels,AvgNukeTraceData.astype('|S10'))) 
+        AvgNukeTraceTable = numpy.column_stack((labels, AvgNukeTraceData.astype('|S10')))
         numpy.savetxt(output_trace_file, AvgNukeTraceTable, fmt='%s')
 
     except:

@@ -3,60 +3,58 @@
 
 - name:
   include: '../../../globals.yml'
-  
+  tags: network-reset
 #============================================================================
 # Fix erroneous setup of resolv.conf as a regular file
 #============================================================================
 - name: /etc/resolv.conf needs to be symbolic link
   file: path=/etc/resolv.conf state=link src=/run/resolvconf/resolv.conf force=True
   notify: resolvconf update
-  
-#============================================================================ 
+  tags: network-reset
+
+#============================================================================
+# iptables configuration
+#============================================================================
+- name: Remove iptables.rules and flush iptables rules
+  file: path=/etc/iptables.rules state=absent
+  notify: flush iptables
+  when: config_firewall|bool == True
+
+- name: iptables.rules file configuration
+  template: src=iptables.j2 dest=/etc/iptables.rules mode=0644
+  notify: load iptables
+  when: config_firewall|bool == True
+
+- name: iptables.custom initialization
+  file: name=/etc/iptables.custom owner=root mode=0644 state=touch
+  notify: load custom iptables
+  when: config_firewall|bool == True
+
+#============================================================================
 # network interfaces configuration
-#============================================================================ 
-- name: Stop default network interface device
+#============================================================================
+- name: stop default network interface - {{default_interface}}
   shell: bash -lc "ifdown {{default_interface}}"
-  register: output
-- debug: var=output
-- name: Edit /etc/network/interfaces
+  tags: network-reset
+  when: edit_interfaces|bool == True
+- name: Edit /etc/network/interfaces and restart networking
   template: src=interfaces.j2 dest=/etc/network/interfaces mode=0644 backup=yes
-- name: Restart default network interface device
+  tags: network-reset
+  when: edit_interfaces|bool == True
+- name: start default network interface - {{default_interface}}
   shell: bash -lc "ifup {{default_interface}}"
-  register: output
-- debug: var=output
-  
+  tags: network-reset
+  when: edit_interfaces|bool == True
+
 #============================================================================
 # Enable IP forwarding
 #============================================================================
 - name: IP Forwarding
   sysctl: name="net.ipv4.ip_forward" state=present value=1 reload=yes sysctl_set=yes
-  when: S5_virtual_guest|bool == False
-  
-#============================================================================ 
-# iptables configuration
-#============================================================================
-- name: Remove iptables.rules and flush iptables rules
-  file: path=/etc/iptables.rules state=absent
-# notify task does not work here because I think it gets run in separate thread.
-# so we call it explicitly
-#  notify: flush iptables
 
-- name: flush iptables
-  shell: bash -lc '/sbin/iptables -F && iptables -P INPUT ACCEPT'
-  
-- name: iptables.rules file configuration
-  template: src=iptables.j2 dest=/etc/iptables.rules mode=0644
-  notify: load iptables
-  when: S5_virtual_guest|bool == False
-  
-- name: iptables.custom initialization
-  file: name=/etc/iptables.custom owner=root mode=0644 state=touch
-  notify: load custom iptables
-  when: S5_virtual_guest|bool == False
-  
-#============================================================================ 
+#============================================================================
 # ftp configuration
-#============================================================================ 
+#============================================================================
 - name: install vsftpd package
   apt: name=vsftpd state=present
 
@@ -68,26 +66,26 @@
   command: grep -q ^DenyUsers /etc/ssh/sshd_config
   register: result
   ignore_errors: yes
-  
+
 - name: Add ftp user to the existing DenyUsers list
   when: result|success
   command: sed -i "/^DenyUsers/ {/$deny_user/! s/.*/& $deny_user/}" /etc/ssh/sshd_config
-  
+
 - name: Add DenyUsers list
   when: result|failed
   command: echo "DenyUsers $deny_user" >> /etc/ssh/sshd_config
-  
+
 #============================================================================
 # If /results exists, link to it.  next, if /rawdata exists, link to it instead
 #============================================================================
 - name: Test if /results directory exists
   stat: path=/results
   register: p
-  
+
 - name: Set correct file permissions on /results directory
   file: name=/results state=directory mode=0777 owner=root group=root
   when: p.stat.exists
-  
+
 - name: ftp download directory symlink to /results
   file: src=/results dest=/home/{{ftp_username}}/results state=link
   when: p.stat.exists
@@ -95,110 +93,92 @@
 - name: Test if /rawdata directory exists
   stat: path=/rawdata
   register: p
-  
+
 - name: Set correct file permissions on /rawdata directory
   file: name=/rawdata state=directory mode=0777 owner=root group=root
   when: p.stat.exists
-              
+
 - name: ftp download directory symlink to /rawdata
   file: src=/rawdata dest=/home/{{ftp_username}}/results state=link
   when: p.stat.exists
 
 - name: configure allowed_users file
   template: src=vsftpd.allowed_users.j2 dest=/etc/vsftpd.allowed_users mode=0644
-  
+
 - name: configure vsftpd service
   template: src=vsftpd.j2 dest=/etc/vsftpd.conf mode=0644
   notify: restart vsftpd
-  
 
-#============================================================================  
+
+#============================================================================
 # dhcp server package install
-#============================================================================ 
-- name: install dhcp3-server package for lucid
-  apt: name=dhcp3-server state=present
-  when: ansible_distribution_release == "lucid"
-  
-- name: install isc-dhcp-server package for trusty
+#============================================================================
+- name: install isc-dhcp-server package
   apt: name=isc-dhcp-server state=present
-  when: ansible_distribution_release == "trusty"
+  when: enable_dhcp|bool == True
 
-#============================================================================  
+#============================================================================
 # dhcp server configuration
-#============================================================================ 
-- name: dhcp server configuration
-  template: src=dhcpd.j2 dest=/etc/dhcp3/dhcpd.conf mode=0644
-  when: ansible_distribution_release == "lucid"
-  notify: restart dhcp
-
+#============================================================================
 - name: dhcp server configuration
   template: src=dhcpd.j2 dest=/etc/dhcp/dhcpd.conf mode=0644
-  when: ansible_distribution_release == "trusty"
   notify: restart isc-dhcp
+  when: enable_dhcp|bool == True
 
-
-#============================================================================ 
+#============================================================================
 # dhclient configuration
-#============================================================================ 
-- name: Configure dhclient.conf
-  template: src=dhclient.j2 dest=/etc/dhcp3/dhclient.conf mode=0644
-  when: ansible_distribution_release == "lucid"
-  
+#============================================================================
 - name: Configure dhclient.conf
   template: src=dhclient.j2 dest=/etc/dhcp/dhclient.conf mode=0644
-  when: ansible_distribution_release == "trusty"
 
-  
+
 #============================================================================
 # dnsmasq configuration
 # Only DNS service is enabled; dhcp via dnsmasq is disabled
 #============================================================================
 - name: install dnsmasq package
   apt: name=dnsmasq state=present
-  when: S5_virtual_guest|bool == False
-  
+
 - name: dnsmasq configuration
   template: src=ion-dhcp.j2 dest=/etc/dnsmasq.d/ion-dhcp mode=0644
-  when: S5_virtual_guest|bool == False
 
 - name: hosts configuration
   template: src=hosts-dnsmasq.j2 dest=/etc/hosts-dnsmasq mode=0644
-  when: S5_virtual_guest|bool == False
 
 - name: enable dnsmasq configuration subdirectory
   lineinfile: dest=/etc/dnsmasq.conf
                 regexp="^.*conf-dir=.*"
                 line="conf-dir=/etc/dnsmasq.d"
-  when: S5_virtual_guest|bool == False
 
 - name: restart dnsmasq service
   service: name=dnsmasq state=restarted
-  when: S5_virtual_guest|bool == False
 
-#============================================================================ 
+#============================================================================
 # ntp configuration
-#============================================================================ 
+# Restrict ntp to the instrument subnets only
+#============================================================================
 - name: install ntp server package
   apt: name=ntp state=present
-  
+
 - name: Edit ntp.conf
   lineinfile: dest=/etc/ntp.conf
-                regexp="^restrict 192\.168\.0\.0.*"
-                line="restrict 192.168.0.0 mask 255.255.0.0 nomodify notrap"
+                regexp="^restrict {{b_subnet}}.*"
+                line="restrict {{b_subnet}}.0.0 mask 255.255.0.0 nomodify notrap"
   notify: restart ntp
-  
-#============================================================================ 
+
+
+#============================================================================
 # exportfs configuration of /results
 #============================================================================
 - name: Restart nfs daemon
   service: name=nfs-kernel-server state=restarted
   when: export_results == True
-  
+
 - name: Status of /results
   stat: path=/results
   register: p
   when: export_results == True
-  
+
 - name: Exporting /results file system
   lineinfile: dest=/etc/exports
                 state=present
@@ -207,14 +187,14 @@
   when: export_results == True and p.stat.exists
   notify: restart exportfs
 
-#============================================================================ 
+#============================================================================
 # exportfs configuration of /rawdata
-#============================================================================ 
+#============================================================================
 - name: Status of /rawdata
   stat: path=/rawdata
   register: p
   when: export_results == True
-  
+
 - name: Exporting /rawdata file system
   lineinfile: dest=/etc/exports
                 state=present
@@ -223,6 +203,9 @@
   when: export_results == True and p.stat.exists
   notify: restart exportfs
 
-
-  
-
+#============================================================================
+# Copy /etc/hosts to compute nodes.  Cluster config only
+#============================================================================
+- name: Install /etc/hosts
+  when: enable_hosts_copy == True
+  template: src=hosts.j2 dest=/etc/hosts mode=0644 owner=root group=root backup=yes

@@ -120,10 +120,10 @@ void SimpleSingleFitStream::resetPointers()
     //do not start new group since outputs are also parts of input group
     _hdDarkMatter = _resource->GetHostDevPair(_myJob.getDarkMatterSize(true)); // NUMNUC*F
     _hdShiftedBkg = _resource->GetHostDevPair(_myJob.getShiftedBackgroundSize(true)); // flow_block_size*F
-    _hdEmphVector = _resource->GetHostDevPair(_myJob.getEmphVecSize(true)); // (MAX_POISSON_TABLE_COL)*F
-    _hdStdTimeCompEmphVec = _resource->GetHostDevPair(_myJob.GetStdTimeCompEmphasisSize(true));
-    _hdNucRise = _resource->GetHostDevPair(_myJob.getNucRiseSize(true));  // ISIG_SUB_STEPS_SINGLE_FLOW * F * flow_block_size
-    _hdStdTimeCompNucRise = _resource->GetHostDevPair(_myJob.GetStdTimeCompNucRiseSize(true));  // ISIG_SUB_STEPS_SINGLE_FLOW * F * flow_block_size
+    _hdFineEmphVector = _resource->GetHostDevPair(_myJob.getEmphVecSize(true)); // (MAX_POISSON_TABLE_COL)*F
+    _hdCrudeEmphVector = _resource->GetHostDevPair(_myJob.getEmphVecSize(true)); // (MAX_POISSON_TABLE_COL)*F
+    _hdCoarseNucRise = _resource->GetHostDevPair(_myJob.getCoarseNucRiseSize(true));  // ISIG_SUB_STEPS_MULTI_FLOW * F * flow_block_size
+    _hdFineNucRise = _resource->GetHostDevPair(_myJob.getFineNucRiseSize(true));  // ISIG_SUB_STEPS_SINGLE_FLOW * F * flow_block_size
     //all inputs are grouped now
     _hdCopyInGroup = _resource->GetCurrentPairGroup();
 
@@ -225,8 +225,9 @@ void SimpleSingleFitStream::serializeInputs()
     _hdBeadState.copyIn(_myJob.getBeadState(),_myJob.getBeadStateSize());
     _hdDarkMatter.copyIn(_myJob.getDarkMatter(), _myJob.getDarkMatterSize());
     _hdShiftedBkg.copyIn(_myJob.getShiftedBackground(), _myJob.getShiftedBackgroundSize());
-    _hdEmphVector.copyIn(_myJob.getEmphVec(), _myJob.getEmphVecSize());
-    _hdNucRise.copyIn(_myJob.getCalculateNucRise(), _myJob.getNucRiseSize());
+    
+    _hdCoarseNucRise.copyIn(_myJob.getCoarseNucRise(), _myJob.getCoarseNucRiseSize());
+    _hdFineNucRise.copyIn(_myJob.getFineNucRise(), _myJob.getFineNucRiseSize());
 
 
     // a little hacky but we want to fill the structure in page locked memory with data
@@ -235,15 +236,28 @@ void SimpleSingleFitStream::serializeInputs()
     reg_params* tmpConstPCastToReg = (reg_params*)tmpConstP;
     *(tmpConstPCastToReg) = *(_myJob.getRegionParams()); // use the
     // init the rest of the ConstParam buffers
-    memcpy( tmpConstP->start, _myJob.getStartNuc(), _myJob.getStartNucSize() );
+#if 0
+    cout << "flow," << _myJob.getAbsoluteFlowNum() << ",ratiodrift," << tmpConstPCastToReg->RatioDrift << endl;
+#endif
+    
+    memcpy( tmpConstP->coarse_nuc_start, _myJob.getCoarseNucStart(), _myJob.getStartNucSize() );
+    memcpy( tmpConstP->fine_nuc_start, _myJob.getFineNucStart(), _myJob.getStartNucSize() );
     memcpy( tmpConstP->deltaFrames, _myJob.getDeltaFrames(), _myJob.getDeltaFramesSize() );
     memcpy( tmpConstP->frameNumber, _myJob.getFrameNumber(), _myJob.getFrameNumberSize() );
     memcpy( tmpConstP->flowIdxMap, _myJob.getFlowIdxMap(), _myJob.getFlowIdxMapSize());
-    memcpy(tmpConstP->non_zero_emphasis_frames, _myJob.GetNonZeroEmphasisFrames(), 
+
+    _myJob.setUpCrudeEmphasisVectors();
+    memcpy(tmpConstP->non_zero_crude_emphasis_frames, _myJob.GetNonZeroEmphasisFrames(), 
         _myJob.GetNonZeroEmphasisFramesVecSize());
+    _hdCrudeEmphVector.copyIn(_myJob.getEmphVec(), _myJob.getEmphVecSize());
+
+    _myJob.setUpFineEmphasisVectors();
+    memcpy(tmpConstP->non_zero_fine_emphasis_frames, _myJob.GetNonZeroEmphasisFrames(), 
+        _myJob.GetNonZeroEmphasisFramesVecSize());
+    _hdFineEmphVector.copyIn(_myJob.getEmphVec(), _myJob.getEmphVecSize());
+
+
     tmpConstP->useDarkMatterPCA = _myJob.useDarkMatterPCA();
-    tmpConstP->useRecompressTailRawTrace = (_myJob.performRecompressionTailRawTrace() && 
-        _myJob.performExpTailFitting());
 
     size_t rC = _myJob.getRegCol();
     size_t rR = _myJob.getRegRow();
@@ -256,44 +270,27 @@ void SimpleSingleFitStream::serializeInputs()
     else tmpConstP->dumRegion = false;
      */
 
-    memcpy(tmpConstP->std_frames_per_point, _myJob.GetETFFramesPerPoint(), _myJob.GetETFFramesPerPointSize());
-    // for recompressing traces
-    if (_myJob.performExpTailFitting() && _myJob.performRecompressionTailRawTrace()) {
-      _hdStdTimeCompEmphVec.copyIn(_myJob.GetStdTimeCompEmphasis(), _myJob.GetStdTimeCompEmphasisSize());
-      _hdStdTimeCompNucRise.copyIn(_myJob.GetStdTimeCompNucRise(), _myJob.GetStdTimeCompNucRiseSize());
-      memcpy(tmpConstP->std_frames_per_point, _myJob.GetStdFramesPerPoint(), _myJob.GetStdFramesPerPointSize());
-      memcpy(tmpConstP->etf_interpolate_frame, _myJob.GetETFInterpolationFrames(), 
-          _myJob.GetETFInterpolationFrameSize());
-      memcpy(tmpConstP->etf_interpolateMul, _myJob.GetETFInterpolationMul(), 
-          _myJob.GetETFInterpolationMulSize());
-      memcpy(tmpConstP->deltaFrames_std, _myJob.GetStdTimeCompDeltaFrame(), 
-          _myJob.GetStdTimeCompDeltaFrameSize());
-      memcpy(tmpConstP->std_non_zero_emphasis_frames,
-          _myJob.GetNonZeroEmphasisFramesForStdCompression(),
-          _myJob.GetNonZeroEmphasisFramesVecSize());
 
-    }
+  if(_myJob.performCrossTalkCorrection()) {
+    // copy neighbor map for xtalk
+    ConstXtalkParams *tmpConstXtalkP = _hConstXtalkP.getPtr();
+    tmpConstXtalkP->simpleXtalk = _myJob.IsSimpleTraceLevelXtalk();
+    tmpConstXtalkP->neis = _myJob.getNumXtalkNeighbours();
+    memcpy( tmpConstXtalkP->multiplier, _myJob.getXtalkNeiMultiplier(),sizeof(float)*_myJob.getNumXtalkNeighbours());
+    memcpy( tmpConstXtalkP->tau_top, _myJob.getXtalkNeiTauTop(),sizeof(float)*_myJob.getNumXtalkNeighbours());
+    memcpy( tmpConstXtalkP->tau_fluid, _myJob.getXtalkNeiTauFluid(),sizeof(float)*_myJob.getNumXtalkNeighbours());
 
-    if(_myJob.performCrossTalkCorrection()) {
-      // copy neighbor map for xtalk
-      ConstXtalkParams *tmpConstXtalkP = _hConstXtalkP.getPtr();
-      tmpConstXtalkP->simpleXtalk = _myJob.IsSimpleTraceLevelXtalk();
-      tmpConstXtalkP->neis = _myJob.getNumXtalkNeighbours();
-      memcpy( tmpConstXtalkP->multiplier, _myJob.getXtalkNeiMultiplier(),sizeof(float)*_myJob.getNumXtalkNeighbours());
-      memcpy( tmpConstXtalkP->tau_top, _myJob.getXtalkNeiTauTop(),sizeof(float)*_myJob.getNumXtalkNeighbours());
-      memcpy( tmpConstXtalkP->tau_fluid, _myJob.getXtalkNeiTauFluid(),sizeof(float)*_myJob.getNumXtalkNeighbours());
+    _hNeiIdxMap.copyIn(const_cast<int*>(_myJob.getNeiIdxMapForXtalk()),
+		    sizeof(int)*_myJob.getNumBeads()*_myJob.getNumXtalkNeighbours());
 
-      _hNeiIdxMap.copyIn(const_cast<int*>(_myJob.getNeiIdxMapForXtalk()),
-          sizeof(int)*_myJob.getNumBeads()*_myJob.getNumXtalkNeighbours());
-
-      _hSampleNeiIdxMap.copyIn(const_cast<int*>(_myJob.getSampleNeiIdxMapForXtalk()),
-          sizeof(int)*(GENERIC_SIMPLE_XTALK_SAMPLE)*_myJob.getNumXtalkNeighbours());
-    }
+    _hSampleNeiIdxMap.copyIn(const_cast<int*>(_myJob.getSampleNeiIdxMapForXtalk()),
+		    sizeof(int)*(GENERIC_SIMPLE_XTALK_SAMPLE)*_myJob.getNumXtalkNeighbours());
+  }
 
 
-    if( (_myJob.getAbsoluteFlowNum()%_myJob.getFlowBlockSize()) == 0 ){
-      ImgRegParams irP(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
-      if(_myJob.getAbsoluteFlowNum() >= 20){
+  if( (_myJob.getAbsoluteFlowNum()%_myJob.getFlowBlockSize()) == 0 ){
+    ImgRegParams irP(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
+    if(_myJob.getAbsoluteFlowNum() >= 20){
 
         //static RegParamDumper regDump(_myJob.getImgWidth(),_myJob.getImgHeight(),_myJob.getRegionWidth(), _myJob.getRegionHeight());
         //regDump.DumpAtFlow(rC, rR,*tmpConstP,_myJob.getAbsoluteFlowNum());
@@ -710,7 +707,6 @@ void SimpleSingleFitStream::executeKernel()
         _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
         _N, // 4
         _F, // 4
-        //_myJob.performAlternatingFit(),
         false,
         getStreamId(),
         _myJob.getFlowBlockSize());
@@ -725,8 +721,8 @@ void SimpleSingleFitStream::executeKernel()
         _stream,
         _hdBeadState.getPtr(),
         _dFgBufferFloat.getPtr(),
-        _hdEmphVector.getPtr(),
-        _hdNucRise.getPtr(),
+        _hdCrudeEmphVector.getPtr(),
+        _hdCoarseNucRise.getPtr(),
         _dCopies.getPtr(),
         _dfval.getPtr(),
         _myJob.getAbsoluteFlowNum(),
@@ -791,35 +787,9 @@ void SimpleSingleFitStream::executeKernel()
         _myJob.getFlowBlockSize());
     }
 
-    if (_myJob.performRecompressionTailRawTrace())
-      StreamingKernels::RecompressRawTracesForSingleFlowFit(
-        grid, 
-        block, 
-        0, 
-	_stream,
-	_dFgBufferFloat.getPtr(), 
-	_dtmp_fval.getPtr(),
-	_myJob.GetETFStartFrame(),
-	_F, // exponential tail fit compressed frames
-	_myJob.GetNumStdCompressedFrames(),
-	_myJob.getFlowBlockSize(),
-	_N,
-	getStreamId());
   }
 
-  // decide some data buffers based on whether tail need to be recompressed 
-  // or not. Need to refactor
   int sharedMem = _myJob.getEmphVecSize();
-  float* dEmpVec = _hdEmphVector.getPtr();
-  float* dNucRise = _hdNucRise.getPtr();
-  int numFrames = _F;
-  if (_myJob.performExpTailFitting() && _myJob.performRecompressionTailRawTrace()) {
-    sharedMem = _myJob.GetStdTimeCompEmphasisSize();
-    dEmpVec = _hdStdTimeCompEmphVec.getPtr();
-    dNucRise = _hdStdTimeCompNucRise.getPtr();
-    numFrames = _myJob.GetNumStdCompressedFrames();
-  }
-
 #if PROJECTION_ONLY
   if(_myJob.getAbsoluteFlowNum() < 20 )
   {
@@ -831,8 +801,8 @@ void SimpleSingleFitStream::executeKernel()
         StreamingKernels::PerFlowLevMarFit(getL1Setting(), grid, block, sharedMem, _stream,
             // inputs
             _dFgBufferFloat.getPtr(),
-            dEmpVec,
-            dNucRise,
+            _hdFineEmphVector.getPtr(),
+            _hdFineNucRise.getPtr(),
             // bead params
             _dCopies.getPtr(),
             _hdBeadState.getPtr(),
@@ -849,7 +819,7 @@ void SimpleSingleFitStream::executeKernel()
             _myJob.fitkmultAlways(),
             _myJob.getAbsoluteFlowNum() , // real flow number
             _myJob.getNumBeads(), // 4
-            numFrames,
+            _F,
             _myJob.useDynamicEmphasis(),
             getStreamId(), // stream id for offset in const memory
             _myJob.getFlowBlockSize()
@@ -859,8 +829,8 @@ void SimpleSingleFitStream::executeKernel()
         StreamingKernels::PerFlowHybridFit(getL1Setting(), grid, block, sharedMem, _stream,
             // inputs
             _dFgBufferFloat.getPtr(),
-            dEmpVec,
-            dNucRise,
+            _hdFineEmphVector.getPtr(),
+            _hdFineNucRise.getPtr(),
             // bead params
             _dCopies.getPtr(),
             _hdBeadState.getPtr(),
@@ -877,7 +847,7 @@ void SimpleSingleFitStream::executeKernel()
             _myJob.fitkmultAlways(),
             _myJob.getAbsoluteFlowNum() , // real flow number
             _myJob.getNumBeads(), // 4
-            numFrames,
+            _F,
             _myJob.useDynamicEmphasis(),
             getStreamId(), // stream id for offset in const memory
             3,              // switchToLevMar ???
@@ -888,8 +858,8 @@ void SimpleSingleFitStream::executeKernel()
         StreamingKernels::PerFlowRelaxKmultGaussNewtonFit(getL1Setting(), grid, block, sharedMem, _stream,
             // inputs
             _dFgBufferFloat.getPtr(),
-            dEmpVec,
-            dNucRise,
+            _hdFineEmphVector.getPtr(),
+            _hdFineNucRise.getPtr(),
             // bead params
             _dCopies.getPtr(),
             _hdBeadState.getPtr(),
@@ -907,8 +877,9 @@ void SimpleSingleFitStream::executeKernel()
             _myJob.fitkmultAlways(),
             _myJob.getAbsoluteFlowNum() , // real flow number
             _myJob.getNumBeads(), // 4
-            numFrames,
+            _F,
             _myJob.useDynamicEmphasis(),
+            _myJob.useSlowKmultInit(),
             getStreamId(),  // stream id for offset in const memory
             _myJob.getFlowBlockSize()
         );
@@ -918,8 +889,8 @@ void SimpleSingleFitStream::executeKernel()
         StreamingKernels::PerFlowGaussNewtonFit(getL1Setting(), grid, block, sharedMem, _stream,
             // inputs
             _dFgBufferFloat.getPtr(),
-            dEmpVec,
-            dNucRise,
+            _hdFineEmphVector.getPtr(),
+            _hdFineNucRise.getPtr(),
             // bead params
             _dCopies.getPtr(),
             _hdBeadState.getPtr(),
@@ -936,7 +907,7 @@ void SimpleSingleFitStream::executeKernel()
             _myJob.fitkmultAlways(),
             _myJob.getAbsoluteFlowNum() , // real flow number
             _myJob.getNumBeads(), // 4
-            numFrames,
+            _F,
             _myJob.useDynamicEmphasis(),
             getStreamId(),  // stream id for offset in const memory
             _myJob.getFlowBlockSize()
@@ -1024,10 +995,8 @@ void SimpleSingleFitStream::copyToHost()
 }
 
 void SimpleSingleFitStream::preProcessCpuSteps() {
-  _myJob.setUpFineEmphasisVectors();
-
-  if (_myJob.performExpTailFitting() && _myJob.performRecompressionTailRawTrace())
-    _myJob.setUpFineEmphasisVectorsForStdCompression();
+  _myJob.calculateCoarseNucRise();
+  _myJob.calculateFineNucRise();
 }
 
 
@@ -1085,10 +1054,10 @@ size_t SimpleSingleFitStream::getMaxHostMem(int flow_key, int flow_block_size)
   ret += Job.getBeadStateSize(true);
   ret += Job.getDarkMatterSize(true); 
   ret += Job.getShiftedBackgroundSize(true);
-  ret += Job.getEmphVecSize(true);
-  ret += Job.getNucRiseSize(true);
-  ret += Job.GetStdTimeCompEmphasisSize(true);
-  ret += Job.GetStdTimeCompNucRiseSize(true);
+  ret += Job.getEmphVecSize(true); // crude emphasis
+  ret += Job.getEmphVecSize(true); // fine emphasis
+  ret += Job.getCoarseNucRiseSize(true);
+  ret += Job.getFineNucRiseSize(true);
 
   return ret;
 
@@ -1133,10 +1102,10 @@ size_t SimpleSingleFitStream::getMaxDeviceMem( int flow_key, int flow_block_size
   ret += Job.getBeadStateSize(true);
   ret += Job.getDarkMatterSize(true); 
   ret += Job.getShiftedBackgroundSize(true);
-  ret += Job.getEmphVecSize(true);
-  ret += Job.getNucRiseSize(true);
-  ret += Job.GetStdTimeCompEmphasisSize(true);
-  ret += Job.GetStdTimeCompNucRiseSize(true);
+  ret += Job.getEmphVecSize(true); // crude emphasis
+  ret += Job.getEmphVecSize(true); // fine emphasis
+  ret += Job.getCoarseNucRiseSize(true);
+  ret += Job.getFineNucRiseSize(true);
 
   ret += Job.getFgBufferSizeShort(true);
   ret += Job.getFgBufferSize(true);

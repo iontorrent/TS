@@ -258,6 +258,76 @@ int TrapAndDeprecateOldArgs(int argc, char *argv[], char *argv2[])
   return datind;
 }
 
+void LoadArgsJson(const string& argsJsonFile, Json::Value& json_params, bool thumbnail)
+{
+    Json::Value json_params0;
+
+    ifstream ifs(argsJsonFile.c_str());
+    Json::Reader reader;
+    reader.parse(ifs, json_params0, false);
+    ifs.close();
+
+    Json::Value json_tn;
+
+     Json::Value::Members groups = json_params0.getMemberNames();
+     for(Json::Value::Members::iterator it1 = groups.begin(); it1 != groups.end(); ++it1)
+     {
+         if(*it1 == "chipType")
+         {
+             json_params["chipType"] = json_params0["chipType"];
+         }
+         else if(*it1 == "ThumbnailControl")
+         {
+             if(thumbnail)
+             {
+                 Json::Value::Members items = json_params0[*it1].getMemberNames();
+                 for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+                 {
+                     string sname(*it2);
+                     for(size_t i = 0; i < sname.size(); ++i)
+                     {
+                         if(sname[i] == '-')
+                         {
+                             sname[i] = '_';
+                         }
+                     }
+                     json_tn[sname] = json_params0[*it1][*it2];
+                 }
+             }
+         }
+         else
+         {
+             Json::Value::Members items = json_params0[*it1].getMemberNames();
+             for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+             {
+                 string sname(*it2);
+                 for(size_t i = 0; i < sname.size(); ++i)
+                 {
+                     if(sname[i] == '-')
+                     {
+                         sname[i] = '_';
+                     }
+                 }
+                 json_params[sname] = json_params0[*it1][*it2];
+             }
+         }
+     }
+
+     if(thumbnail)
+     {
+         Json::Value::Members items = json_tn.getMemberNames();
+         for(Json::Value::Members::iterator it2 = items.begin(); it2 != items.end(); ++it2)
+         {
+             string sname(*it2);
+
+             if(json_params.isMember(sname))
+             {
+                json_params[sname] = json_tn[*it2];
+             }
+         }
+     }
+}
+
 /*************************************************************************************************
  *************************************************************************************************
  *
@@ -303,6 +373,7 @@ int main (int argc, char *argv[])
   OptArgs opts;
   opts.ParseCmdLine(argc, (const char**)argv2);
 
+
   for(int k = 0; k < argc ; ++k)
   {
 	  delete [] argv2[k];
@@ -310,8 +381,27 @@ int main (int argc, char *argv[])
   delete [] argv2;
    
   Json::Value json_params;
+  bool thumbnail = opts.GetFirstBoolean('-', "thumbnail", false);
+  string argsJsonFile = opts.GetFirstString('-', "args-json", "");
+  if(argsJsonFile.length() > 0)
+  {
+      struct stat sb0;
+      if(!(stat(argsJsonFile.c_str(), &sb0) == 0 && S_ISREG(sb0.st_mode)))
+      {
+          cerr << "ERROR: " << argsJsonFile << " does not exist or it is not a regular file." << endl;
+          exit ( EXIT_FAILURE );
+      }
+
+      LoadArgsJson(argsJsonFile, json_params, thumbnail);
+  }
+  else
+  {
+      cerr << "ERROR: --args-json must be provided." << endl;
+      exit ( EXIT_FAILURE );
+  }
   CommandLineOpts inception_state;
   inception_state.SetOpts(opts, json_params);
+  inception_state.bfd_control.SetThumbnail(thumbnail);
 
   if(datind < 0) // there is no "--dat-source-directory"
   {
@@ -326,7 +416,8 @@ int main (int argc, char *argv[])
 	  exit ( EXIT_FAILURE );
   }
 
-  inception_state.PostProcessArgs(opts);
+  string chipType = GetParamsString(json_params, "chipType", "");
+  ChipIdDecoder::SetGlobalChipId ( chipType.c_str() );
 
   SeqListClass my_keys;
   ImageSpecClass my_image_spec;
@@ -339,11 +430,11 @@ int main (int argc, char *argv[])
 
   // Write processParameters.parse file now that processing is about to begin
   my_progress.WriteProcessParameters(inception_state);
-  
+
   // Do separator
   Region wholeChip(0, 0, my_image_spec.cols, my_image_spec.rows);
   IsolatedBeadFind( my_prequel_setup, my_image_spec, wholeChip, inception_state,
-        inception_state.sys_context.GetResultsFolder(), inception_state.sys_context.analysisLocation,  my_keys, my_progress);
+        inception_state.sys_context.GetResultsFolder(), inception_state.sys_context.analysisLocation,  my_keys, my_progress, chipType);
 
   exit (EXIT_SUCCESS);
 }

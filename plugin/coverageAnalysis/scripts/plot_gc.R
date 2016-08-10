@@ -261,7 +261,7 @@ if( haveNVP && grepl("p",option,ignore.case=TRUE) ) {
   if( sum(!is.na(pools)) > 0 ) {
     # replace no POOL key targets with '?' as pool
     pools[is.na(pools)] <- "?"
-    # this assumes vlaues of NVP's are merged by '@', not vectors
+    # this assumes values of NVP's are merged using '&'
     pools <- sub("POOL=(.*?);","\\1",pools)
     # treat merged regions as also assigned to multiple pools (or even the same pools)
     pools <- gsub("&",",",pools)
@@ -273,18 +273,9 @@ if( haveNVP && grepl("p",option,ignore.case=TRUE) ) {
     # assume targets belonging to multiple pools have coverage divided evenly between pools
     npools <- sapply(spools,length)
     cov <- yprop / npools
-    # modify and add the extra elements from splitting pools
-    idx <- length(pools)
-    while(idx) {
-      if( npools[idx] > 1 ) {
-        pools[idx] <- spools[[idx]][1]
-        for( p in 2:npools[idx] ) {
-          cov <- c(cov,cov[idx])
-          pools <- c(pools,spools[[idx]][p])
-        }
-      }
-      idx <- idx-1
-    }
+    # expand list and duplicate averaged values to create factors/values pairs
+    pools <- unlist(spools)
+    cov <- rep(cov,npools)
     # check if pools (factors) should be converted to numeric for better plot axis
     poolns <- suppressWarnings(as.numeric(pools))
     if( sum(is.na(poolns)) == 0 ) pools = poolns

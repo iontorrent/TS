@@ -364,7 +364,7 @@ int main ( int argc, char *argv[] )
   //int alternate_sampling=0;
   int doAscii = 0;
   int vfc = 1;
-  int dont_retry = 0;
+  //int dont_retry = 0;
   if ( argc<=2 ) {
     usage ( cropx, cropy, kernx, kerny );
   }
@@ -426,7 +426,8 @@ int main ( int argc, char *argv[] )
       break;
 
     case 'z':
-      dont_retry = 1;
+      //dont_retry = 1;
+	  usage ( cropx, cropy, kernx, kerny );
       break;
 
     case 'c':

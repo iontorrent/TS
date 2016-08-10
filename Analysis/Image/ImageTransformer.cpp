@@ -3,14 +3,13 @@
 #include "LSRowImageProcessor.h"
 #include "Image.h"
 #include "IonErr.h"
-#include "SynchDat.h"
 #include "deInterlace.h"
 #include "Vecs.h"
 #include <malloc.h>
 #include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
-#include <string>
+#include <fstream>
 #include "ChannelXTCorrection.h"
 #include "ChipIdDecoder.h"
 #include "RawImage.h"
@@ -243,15 +242,11 @@ void ImageTransformer::XTChannelCorrect(RawImage *raw,
             }
 
             for (lc = 0; lc < 4; lc++) {
-#ifndef __INTEL_COMPILER
               Svect[lc].V =
                   Avect[lc].V
                   * vectsV[((col
                              + ImageCropping::cropped_region_offset_x)
                             + lc) % nvects][j].V; // apply the vector
-#else
-#pragma message "WARNING, code not implemented for ICC"
-#endif
 
               prow[col + lc] = Svect[lc].A[0] + Svect[lc].A[1]
                   + Svect[lc].A[2] + Svect[lc].A[3]
@@ -384,12 +379,10 @@ void ImageTransformer::GainCorrectImage(RawImage *raw)
   if ((raw->cols % VEC8_SIZE) == 0)
   {
     int lw=raw->rows*raw->cols/VEC8_SIZE;
-    v8f_u  val,max;
+    v8f_u  val;
     short int *imagePtr=raw->image;
     v8f_u *gainPtr;
     int frame,idx;
-
-    max.V=LD_VEC8F(MAX_GAIN_CORRECT);
 
     // the alligned case
     for (frame=0;frame < raw->frames;frame++)
@@ -402,6 +395,8 @@ void ImageTransformer::GainCorrectImage(RawImage *raw)
         val.V *= gainPtr->V;
 
 #ifdef __AVX__
+        v8f_u max;
+        max.V=LD_VEC8F(MAX_GAIN_CORRECT);
         val.V = __builtin_ia32_minps256(val.V,max.V); // cap at MAX_GAIN_CORRECT
 #else
         for(int k=0;k<VEC8_SIZE;k++)
@@ -440,25 +435,6 @@ void ImageTransformer::GainCorrectImage(RawImage *raw)
 
 }
 
-void ImageTransformer::GainCorrectImage(SynchDat *sdat)
-{
-  for (size_t bIx = 0; bIx < sdat->mChunks.mBins.size(); bIx++) {
-    TraceChunk &chunk = sdat->mChunks.mBins[bIx];
-    for (size_t row = 0; row < chunk.mHeight; row++) {
-      for (size_t col = 0; col < chunk.mWidth; col++){
-        float gain = gain_correction[(row+chunk.mRowStart)*sdat->NumCol() + (col+chunk.mColStart)];
-        //      size_t numFrames = sdat->NumFrames(row, col);
-        size_t numFrames = chunk.mDepth;
-        size_t idx = row * chunk.mWidth + col;
-        for (size_t frame=0;frame < numFrames;frame++) {
-          //        sdat->At(row, col, frame) = std::min(MAX_GAIN_CORRECT, (int)round(sdat->At(row, col, frame) * gain));
-          chunk.mData[idx] = std::min(MAX_GAIN_CORRECT, (int)round(chunk.mData[idx]* gain));
-          idx += chunk.mFrameStep;
-        }
-      }
-    }
-  }
-}
 
 float CalculatePixelGain(float *my_trc,float *reference_trc,int min_val_frame, int raw_frames)
 {
@@ -593,27 +569,27 @@ void ImageTransformer::GainCalculationFromBeadfindFaster(Mask *mask, RawImage *r
 
   /* Data cube for cumulative sum for calculating averages fast. 
      Note the padding by 1 row and colum for easy code flow */
-  int64_t *__restrict cum_sum = (int64_t *__restrict)memalign(VEC8F_SIZE_B, sizeof(int64_t) * (size_t)(raw->cols +1) * (raw->rows + 1) * raw->frames);
+  int64_t *__restrict cum_sum = (int64_t *)memalign(VEC8F_SIZE_B, sizeof(int64_t) * (size_t)(raw->cols +1) * (raw->rows + 1) * raw->frames);
   assert(cum_sum);
   size_t cum_sum_size = (size_t)(raw->cols +1) * (raw->rows + 1) * raw->frames;
   memset(cum_sum, 0, sizeof(int64_t) * cum_sum_size); // zero out
   int cs_frame_stride = (raw->cols + 1) * (raw->rows + 1);
 
   /* Mask of the cumulative number of good wells so we know denominator of average also padded. */
-  int *__restrict num_good_wells = (int *__restrict) memalign(VEC8F_SIZE_B, sizeof(int) * cs_frame_stride);
+  int *__restrict num_good_wells = (int *) memalign(VEC8F_SIZE_B, sizeof(int) * cs_frame_stride);
   assert(num_good_wells);
   memset(num_good_wells, 0, sizeof(int) * cs_frame_stride);
 
   /* Data cube for our averages */
-  float *__restrict nn_avg = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) raw->frameStride * raw->frames);
+  float *__restrict nn_avg = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) raw->frameStride * raw->frames);
   assert(nn_avg);
 
   /* Summary statistics for regression */
-  float *__restrict sum_stats = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * 2 * raw->frameStride);
+  float *__restrict sum_stats = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * 2 * raw->frameStride);
   assert(sum_stats);
 
   /* Matrix for minimum values */
-  float *__restrict trace_min = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) raw->frameStride);
+  float *__restrict trace_min = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) raw->frameStride);
   assert(trace_min);
   float *__restrict tm_start = trace_min;
   float *__restrict tm_end= trace_min + raw->frameStride;
@@ -623,7 +599,7 @@ void ImageTransformer::GainCalculationFromBeadfindFaster(Mask *mask, RawImage *r
   }
 
   /* Matrix for minimum frame */
-  int *__restrict trace_min_frame = (int *__restrict) memalign(VEC8F_SIZE_B, sizeof(int) * (size_t) raw->frameStride);
+  int *__restrict trace_min_frame = (int *) memalign(VEC8F_SIZE_B, sizeof(int) * (size_t) raw->frameStride);
   assert(trace_min_frame);
   memset(trace_min, 0, sizeof(int) * (size_t) raw->frameStride);
 
@@ -841,11 +817,11 @@ void ImageTransformer::GainCalculationFromBeadfindFasterSave(RawImage *raw, Mask
   imageNN->CalcCumulativeSum(raw->image, mask, bad_wells);
 
   /* Summary statistics for regression */
-  float *__restrict sum_stats = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * 2 * raw->frameStride);
+  float *__restrict sum_stats = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * 2 * raw->frameStride);
   assert(sum_stats);
 
   /* Matrix for minimum values */
-  float *__restrict trace_min = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) raw->frameStride);
+  float *__restrict trace_min = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) raw->frameStride);
   assert(trace_min);
   float *__restrict tm_start = trace_min;
   float *__restrict tm_end= trace_min + raw->frameStride;
@@ -855,7 +831,7 @@ void ImageTransformer::GainCalculationFromBeadfindFasterSave(RawImage *raw, Mask
   }
 
   /* Matrix for minimum frame */
-  int *__restrict trace_min_frame = (int *__restrict) memalign(VEC8F_SIZE_B, sizeof(int) * raw->frameStride);
+  int *__restrict trace_min_frame = (int *) memalign(VEC8F_SIZE_B, sizeof(int) * raw->frameStride);
   assert(trace_min_frame);
   memset(trace_min_frame, 0, sizeof(int) * raw->frameStride);
 
@@ -983,4 +959,58 @@ void ImageTransformer::DumpTextGain(int _image_cols, int _image_rows)
     fprintf (gainfile,"%7.5f\n",getPixelGain (row,col,_image_cols));
   }
   fclose (gainfile);
+}
+
+
+#ifndef BB_DC
+struct lsrow_header {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t rows;
+    uint32_t cols;
+};
+#define LSROWIMAGE_MAGIC_VALUE    0xFF115E3A
+#endif
+
+bool ImageTransformer::ReadDataCollectGainCorrection(
+  const std::string &dataPath,
+  unsigned int rows,
+  unsigned int cols) {
+
+  size_t dataSize = sizeof(float)*rows*cols; 
+  if (gain_correction == NULL)
+    gain_correction = (float*)malloc(dataSize);
+
+  ifstream gainFile;
+  gainFile.open(dataPath.c_str(),ios::in | ios::binary);
+
+  if (gainFile.is_open()) {
+    struct lsrow_header hdr;
+    gainFile.read((char*)&hdr,sizeof(lsrow_header));
+
+    if (gainFile.good() &&
+        hdr.magic == LSROWIMAGE_MAGIC_VALUE &&
+        hdr.rows == rows &&
+        hdr.cols == cols) {
+
+      std::cout << "Gain.lsr: rows: " << hdr.rows << ",cols: " << hdr.cols << std::endl;
+      gainFile.read((char*)gain_correction,dataSize);
+
+      if (gainFile.good()) {
+        gainFile.close();
+       
+        std::cout << "Successfully read Gain.lsr file" << std::endl;
+        return true;
+      }
+    }
+  }
+
+  std::cout << "Error in opening/reading Gain.lsr file. Using gain value of 1.0f" << std::endl; 
+  for (size_t r = 0; r < rows; ++r) {
+    for (size_t c = 0; c < cols; ++c) {
+      gain_correction[r*cols + c] = 1.0f;
+    }
+  }
+
+  return false;
 }

@@ -73,7 +73,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoiseThumbnail(RawImage *raw,Mas
 
 void ComparatorNoiseCorrector::CorrectComparatorNoiseThumbnail(short *_image, int _rows, int _cols, int _frames, Mask *mask, int regionXSize, int regionYSize, bool verbose)
 {
-	  CorrectComparatorNoise(_image, _rows, _cols, _frames, mask, verbose, 0, false, -1, /*regionXSize*/100, /*regionYSize*/100);
+      CorrectComparatorNoise(_image, _rows, _cols, _frames, mask, verbose, 0, false, -1, /*regionXSize*/100, /*regionYSize*/100);
 
 }
 
@@ -1160,11 +1160,8 @@ void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,
 
 void ComparatorNoiseCorrector::HighPassFilter(float *pnn,int n_comparators,int nframes,int span)
 {
-#ifdef __INTEL_COMPILER
-  v8f_u* trc_scratch = new v8f_u[nframes];
-#else
+  //v8f_u* trc_scratch = new v8f_u[nframes];
   v8f_u trc_scratch[nframes];
-#endif
 
   for ( int i=0;i < n_comparators;i+=VEC8_SIZE )
   {

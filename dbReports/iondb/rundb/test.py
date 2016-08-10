@@ -20,7 +20,9 @@ from selenium.common.exceptions import NoSuchElementException
 
 from iondb.rundb.tests.selenium.webdriver import CustomWebDriver
 
+
 class SeleniumTestCase(LiveServerTestCase):
+
     """
     A base test case for selenium, providing hepler methods for generating
     clients and logging in profiles.
@@ -32,16 +34,18 @@ class SeleniumTestCase(LiveServerTestCase):
     @classmethod
     def setUpClass(cls):
         if settings.GUIDISPLAY == False:
-            settings.DISPLAY.start()  
+            settings.DISPLAY.start()
         LOGGER.setLevel(logging.WARNING)
-        
+
         # Instantiating the WebDriver will load your browser
         cls.wd = CustomWebDriver()
         cls.server_url = settings.TEST_SERVER_URL
+        cls.base64String = base64.encodestring("%s:%s" % ("ionadmin", "ionadmin")).replace("\n", "")
+
         ##cls.server_url = 'http://ts-sandbox.itw'
         cls.wd.get("%s%s" % (cls.server_url, '/login'))
         ##the login now persists between tests
-        ##so we only need to login with the username/password if the page 
+        ##so we only need to login with the username/password if the page
         ##has the username fields
         try:
             #enter the username and password
@@ -56,25 +60,25 @@ class SeleniumTestCase(LiveServerTestCase):
 
 
     def delete_planned_experiment(self, pk):
-        logger.info(">>>> Going to delete_planned_experiment... pk=%s" %(str(pk)))
-        
+        logger.info(">>>> Going to delete_planned_experiment... pk=%s" % (str(pk)))
+
         self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/{0}/'.format(pk)
-        
+
         host = settings.TEST_SERVER_URL
         url = host + self.latest_pe_api_url
         request = urllib2.Request(url)
-        
-        base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
-        request.add_header("Authorization", "Basic %s" %(base64String))
-        request.get_method = lambda : 'DELETE'
+
+        base64String = base64.encodestring("%s:%s" % ("ionadmin", "ionadmin")).replace("\n", "")
+        request.add_header("Authorization", "Basic %s" % (base64String))
+        request.get_method = lambda: 'DELETE'
         response = urllib2.urlopen(request)
 
         #logger.info(">>>> delete_planned_experiment... DELETE response=%s" %(response))
-        
+
 #        json = simplejson.loads(response.read())
 #        return json['objects'][0]
 
-    def get_latest_all_nth_planned_experiment(self,n): 
+    def get_latest_all_nth_planned_experiment(self, n):
         try:
             self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/?format=json&order_by=-id'+"&limit="+str(n)
 
@@ -82,16 +86,16 @@ class SeleniumTestCase(LiveServerTestCase):
             url = host + self.latest_pe_api_url
             request = urllib2.Request(url)
 
-            base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
-            request.add_header("Authorization", "Basic %s" %(base64String))
-            
+            base64String = base64.encodestring("%s:%s" % ("ionadmin", "ionadmin")).replace("\n", "")
+            request.add_header("Authorization", "Basic %s" % (base64String))
+
             response = urllib2.urlopen(request)
             json = simplejson.loads(response.read())
             return json['objects']
         except Exception, e:
             #TO-DO: do something with the exception
             raise e
-        
+
     def get_latest_planned_experiment(self):
         try:
             self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/?format=json&order_by=-id'
@@ -100,12 +104,55 @@ class SeleniumTestCase(LiveServerTestCase):
             url = host + self.latest_pe_api_url
             request = urllib2.Request(url)
 
-            base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
-            request.add_header("Authorization", "Basic %s" %(base64String))
-            
+            base64String = base64.encodestring("%s:%s" % ("ionadmin", "ionadmin")).replace("\n", "")
+            request.add_header("Authorization", "Basic %s" % (base64String))
+
             response = urllib2.urlopen(request)
             json = simplejson.loads(response.read())
             return json['objects'][0]
+        except Exception, e:
+            #TO-DO: do something with the exception
+            raise e
+
+    def get_latest_apiResponse(self, pk=None, apiName=None):
+
+        if not apiName:
+            raise Exception('API Name is required for get_latest_apiResponse()')
+
+        try:
+            api_url = '/rundb/api/v1/' + apiName + '/?format=json'
+            if pk:
+                api_url += "&id=%d" % pk
+            else:
+                api_url += "&order_by=-id"
+
+            url = self.server_url + api_url
+            request = urllib2.Request(url)
+
+            request.add_header("Authorization", "Basic %s" % (self.base64String))
+
+            response = urllib2.urlopen(request)
+            json = simplejson.loads(response.read())
+            return json['objects'][0]
+
+            resp = requests.get(url, auth=('ionadmin', 'ionadmin'))
+            return json.loads(resp.content)['objects'][0]
+
+        except Exception, e:
+            #TO-DO: do something with the exception
+            raise e
+
+    def getSpecific_api_response(self, specific_api_link):
+        try:
+            complete_api_url = self.server_url + specific_api_link
+            request = urllib2.Request(complete_api_url)
+
+            request.add_header("Authorization", "Basic %s" % (self.base64String))
+
+            response = urllib2.urlopen(request)
+            model_dict = simplejson.loads(response.read())
+            return model_dict
+
         except Exception, e:
             #TO-DO: do something with the exception
             raise e

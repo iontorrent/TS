@@ -19,31 +19,32 @@ import shutil
 
 from distutils.sysconfig import get_python_lib
 
+
 class Utility(object):
-   """Class containing utility methods or helper methods used by other classes"""
 
-   def generateID(self):
+    """Class containing utility methods or helper methods used by other classes"""
+
+    def generateID(self):
         """Generate a ID number using random module of python. And ID should be unique"""
-        return random.choice('abcdefghijklmn') + str(random.randint(1,50))
+        return random.choice('abcdefghijklmn') + str(random.randint(1, 50))
 
-   def parseJsonFile(self,jsonFile):
+    def parseJsonFile(self, jsonFile):
         try:
             with open(jsonFile, 'r') as f:
-                  content = f.read()
-                  try:
-                      result = json.loads(content)
-                  except:
-                      logging.error("Invalid Json file %s " % jsonFile)
-                      sys.exit(0)
-                  return result
+                content = f.read()
+                try:
+                    result = json.loads(content)
+                except:
+                    logging.error("Invalid Json file %s " % jsonFile)
+                    sys.exit(0)
+                return result
         except IOError:
             logging.error("FATAL ERROR. Can't open file %s " % jsonFile)
 
-   def generateHTML(self,template, context):
-        #self.InitializeTemplates()
+    def generateHTML(self, template, context):
+        # self.InitializeTemplates()
         try:
             content = render_to_string(template, context)
             return content
         except Exception, e:
             logging.error("Report Generation failed for %s " % template, e)
-

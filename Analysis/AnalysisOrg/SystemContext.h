@@ -43,7 +43,16 @@ class SystemContext{
     bool NO_SUBDIR; // when set to true, no experiment subdirectory is created for output files.
     bool LOCAL_WELLS_FILE;
     std::string wellsFormat;
-	std::string explog_path;
+    std::string explog_path;
+    std::string explog_final_path;
+
+    bool well_convert;
+    float well_upper;
+    float well_lower;
+    int wells_save_queue_size;
+    bool wells_save_number_copies;
+    bool wells_convert_with_copies;
+    std::vector<int> region_list;
 
     //const char *GetResultsFolder();    
     char *GetResultsFolder() const;    
@@ -51,10 +60,14 @@ class SystemContext{
     void DefaultSystemContext();
     void GenerateContext();
     void FindExpLogPath();
+    void WaitForExpLogFinalPath();
     void SetUpAnalysisLocation();
     void MakeSymbolicLinkToOldDirectory (char *experimentName);
     void CopyFilesForReportGeneration (char *experimentName, SeqListClass &my_keys);
     void MakeNewTmpWellsFile( char *experimentName);
+
+    // check explog_final.txt if there are DataCollect exclude regions
+    bool CheckDatacollectExcludeRegions(int beginX, int endX, int chipSizeX, int beginY, int endY, int chipSizeY);
 
     void CleanupTmpWellsFile();
     void CopyTmpWellFileToPermanent( char *experimentName);

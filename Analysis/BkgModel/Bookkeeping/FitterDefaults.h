@@ -21,7 +21,7 @@ struct FitterDefaults{
   float clonal_call_penalty;
   FitterDefaults();
   void FromJson(Json::Value &gopt_params);
-  void FromCharacterLine(char *line);
+
   void DumpPoorlyStructuredText();
 
 private:

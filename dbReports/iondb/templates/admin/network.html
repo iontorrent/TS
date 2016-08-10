@@ -35,17 +35,6 @@
           }
         });
       });
-      // This saves the starting value of each from input so that the reset
-      // buttons work.  It should execute before any code that would set a
-      // form elements value to something that you would not want it 'reset' to
-      $('form.resetable input').each(function () {
-        $(this).data("original_value", $(this).val());
-      });
-      $('form.resetable input[type="reset"]').click(function () {
-        $(this).parent('form').children('input').each(function () {
-          $(this).val($(this).data("original_value"));
-        });
-      });
 
       function toggle_network_fields() {
         if ($('input[name=network-mode]:checked').val() == "dhcp") {
@@ -113,7 +102,10 @@
       });
 
       $("#resetBtn").click(function () {
-        $("#network")[0].reset();
+        window.location.reload(true);
+      });
+      $("#reset_no_proxy").click(function () {
+        $("#id_network-no_proxy").val("{{ network.form.default_no_proxy }}");
       });
 
     });
@@ -248,7 +240,14 @@
               <div>
                 {{ network.form.nameservers.label_tag }} {{ network.form.nameservers }}
               </div>
+              <div>
+                {{ network.form.dnssearch.label_tag }} {{ network.form.dnssearch }}
+              </div>
             </fieldset>
+            <div id="no_proxy_setting" class="form-horizontal">
+              {{ network.form.no_proxy.label_tag}} {{ network.form.no_proxy }}
+              <input id="reset_no_proxy" type="button" value="Set Default"/>
+            </div>
             <div id="proxy_server" class="inline-fields">
               <label>Proxy server</label>
               <abbr title="Address">{{ network.form.proxy_address }}</abbr>
@@ -286,14 +285,11 @@
     <div id="explanations">
       <h3>Remote System Summary</h3>
       <dl>
-        <dt>rssh.iontorrent.com:22</dt>
-        <dd>Outgoing access to rssh.iontorrent.com over port 22 is required for the Remote System Monitoring (RSM) agent on the Torrent Server to initiate a remote access. When remote support or troubleshooting is required, remote access through the agent can reduce resolution time to hours instead of days and require minimal on-site resources. Without the remote access capabilities, diagnosing and implementing a solution can take much longer and will require significant back and forth over telephone and email with your on-site personnel.</dd>
+        <dt>support.iontorrent.com:443</dt>
+        <dd>Access to "support.iontorrent.com" is required to initiate Customer Support Archive uploads for a run report in the event of a customer support request.</dd>
 
         <dt>ionupdates.com:80</dt>
         <dd>Access to "ionupdates.com" is required to download updates for Torrent Suite software when they are made available.</dd>
-
-        <dt>security.ubuntu.com:80</dt>
-        <dd>Access to "security.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
 
         <dt>us.archive.ubuntu.com:80</dt>
         <dd>Access to "us.archive.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
@@ -301,8 +297,12 @@
         <dt>drm.appliedbiosystems.com:443</dt>
         <dd>The Remote System Monitoring (RSM) agent on the Torrent Server sends system metrics & health information to this URL over port 443 to facilitate Life Technologies ability to help our customers maintain their systems in running order. If a problem with the PGM or Torrent Server is detected, the RSM agent provides real time warnings to help proactively diagnose issues before they cause any failures and downtime. Without access to the RSM agent, issues may not be detected until a failure occurs on the Torrent Server. Also please keep in mind that remote troubleshooting cannot be provided if this functionality is disabled.</dd>
 
-        <dt>support.iontorrent.com:443</dt>
-        <dd>Access to "support.iontorrent.com" is required to initiate Customer Support Archive uploads for a run report in the event of a customer support request.</dd>
+        <dt>security.ubuntu.com:80</dt>
+        <dd>Access to "security.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
+
+        <dt>rssh.iontorrent.com:22</dt>
+        <dd>Outgoing access to rssh.iontorrent.com over port 22 is required for the Remote System Monitoring (RSM) agent on the Torrent Server to initiate a remote access. When remote support or troubleshooting is required, remote access through the agent can reduce resolution time to hours instead of days and require minimal on-site resources. Without the remote access capabilities, diagnosing and implementing a solution can take much longer and will require significant back and forth over telephone and email with your on-site personnel.</dd>
+
       </dl>
     </div>
   </div>

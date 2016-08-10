@@ -47,6 +47,8 @@ from ion.utils.explogparser import parse_log
 from ion.utils.explogparser import exp_kwargs
 import copy
 
+from iondb.rundb.models import Plugin
+
 FILTERED = None # contains the last filter for the reports page for csv export
 
 logger = logging.getLogger(__name__)
@@ -66,15 +68,16 @@ def tf_csv(request):
     ret['Content-Disposition'] = 'attachment; filename=metrics_%s.csv' % now
     return ret
 
+
 def remove_experiment(request, page=None):
     """TODO: Blocked on modifying the database schema"""
     pass
 
+
 @login_required
 @csrf_exempt
 def displayReport(request, pk):
-    ctx = {}
-    ctx = template.RequestContext(request, ctx)
+    ctx = template.RequestContext(request, {})
     return shortcuts.render_to_response("rundb/reports/report.html", context_instance=ctx)
 
 
@@ -84,7 +87,8 @@ def blank(request, **kwargs):
     just render a blank template
     """
     return shortcuts.render_to_response("rundb/reports/30_default_report.html",
-        {'tab':kwargs['tab']})
+        {'tab': kwargs['tab']})
+
 
 def getCSV(request):
     CSVstr = ""
@@ -105,11 +109,13 @@ def getCSV(request):
 # Global configuration processing and helpers
 # ============================================================================
 
+
 @login_required
 def PDFGen(request, pkR):
     from iondb.utils import makePDF
     pkR = pkR[:len(pkR)-4]
     return http.HttpResponse(makePDF.get_summary_pdf(pkR), mimetype="application/pdf")
+
 
 @login_required
 def PDFGenOld(request, pkR):
@@ -126,11 +132,11 @@ def viewLog(request, pkR):
         for datum in ret.metaData["Log"]:
             logList = []
             for dat in datum:
-                logList.append("%s: %s"%(dat, datum[dat]))
+                logList.append("%s: %s" % (dat, datum[dat]))
             log.append(logList)
     except:
         log = [["no actions have been taken on this report."]]
-    ctxd = {"log":log}
+    ctxd = {"log": log}
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_reportLog.html",
                                         context_instance=context)
@@ -158,10 +164,10 @@ def barcodeData(filename, metric=None):
                     try:
                         d = {"axis": int(row["Index"]),
                              "name": row["ID"],
-                             "value" : float(row[metric]),
-                             "sequence" : row["Sequence"],
+                             "value": float(row[metric]),
+                             "sequence": row["Sequence"],
                              "adapter": '',
-                             "annotation" : '',
+                             "annotation": '',
                         }
                         if "Adapter" in row:
                             d["adapter"] = row["Adapter"]
@@ -301,15 +307,15 @@ def get_planned_exp_objects(d, folder):
                 easObj.pk = None
                 easObj.experiment = expObj
                 easObj.save()
-                
+
                 planObj.latestEAS = easObj
                 planObj.save()
-                
+
             #skip setting the sampleSet to run since a sampleSet can have multiple plans and sequencing runs associated with it
 #             sampleSetObj = planObj.sampleSet
 #             if sampleSetObj:
 #                 logger.debug("crawler going to mark planObj.name=%s; sampleSet.id=%d as run" %(planObj.planDisplayedName, sampleSetObj.id))
-# 
+#
 #                 sampleSetObj.status = "run"
 #                 sampleSetObj.save()
 
@@ -321,7 +327,7 @@ def get_planned_exp_objects(d, folder):
     #if user does not use a plan for the run, fetch the system default plan template, and clone it for this run
         logger.warn("expName: %s not yet in database and needs a sys default plan" % expName)
         try:
-            chipversion = d.get('chipversion','')
+            chipversion = d.get('chipversion', '')
             if chipversion:
                 explogChipType = chipversion
                 if explogChipType.startswith('1.10'):
@@ -329,7 +335,7 @@ def get_planned_exp_objects(d, folder):
                 elif explogChipType.startswith('1.20'):
                     explogChipType = 'P1.2.18'
             else:
-                explogChipType = d.get('chiptype','')
+                explogChipType = d.get('chiptype', '')
 
             systemDefaultPlanTemplate = None
 
@@ -358,6 +364,7 @@ def get_planned_exp_objects(d, folder):
             planObj.planExecuted = True
             planObj.date = currentTime
             planObj.latestEAS = None
+            planObj.origin = "crawler"
             planObj.save()
 
             # copy Experiment
@@ -376,6 +383,24 @@ def get_planned_exp_objects(d, folder):
             easObj.experiment = expObj
             easObj.isEditable = True
             easObj.date = currentTime
+
+            default_selected_plugins = models.Plugin.objects.filter(active=True, selected=True, defaultSelected=True).order_by("name")
+
+            if default_selected_plugins:
+                plugins = {}
+                pluginUserInput = {}
+                for plugin_to_add in default_selected_plugins:
+                    pluginDict = {
+                              "id": plugin_to_add.id,
+                              "name": plugin_to_add.name,
+                              "version": plugin_to_add.version,
+                              "userInput": pluginUserInput,
+                              "features": []
+                              }
+                    plugins[plugin_to_add.name] = pluginDict
+
+                easObj.selectedPlugins = plugins
+
             easObj.save()
 
             planObj.latestEAS = easObj
@@ -454,11 +479,11 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
             continue
         elif old != value:
             setattr(expObj, key, value)
-            if key not in ['unique','expDir','log','date','rawdatastyle']:
+            if key not in ['unique', 'expDir', 'log', 'date', 'rawdatastyle']:
                 plan_log[key] = [old, value]
 
     expObj.save()
-    logger.info("Updated experiment=%s, pk=%s, expDir=%s" % (expObj.expName, expObj.pk, expObj.expDir) )
+    logger.info("Updated experiment=%s, pk=%s, expDir=%s" % (expObj.expName, expObj.pk, expObj.expDir))
 
 
     # *** Update Plan ***
@@ -467,7 +492,7 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
         old = getattr(planObj, key)
         if old != kwargs[key]:
             setattr(planObj, key, kwargs[key])
-            plan_log[key] = [old, kwargs[key] ] 
+            plan_log[key] = [old, kwargs[key]]
 
     planObj.planStatus = 'run'
     planObj.planExecuted = True # this should've been done by instrument already
@@ -478,7 +503,7 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
     if projectName and projectName not in planProjects:
         try:
             planObj.projects.add(models.Project.objects.get(name=projectName))
-            plan_log['projects'] = [', '.join(planProjects), ', '.join(planProjects+[projectName]) ]
+            plan_log['projects'] = [', '.join(planProjects), ', '.join(planProjects+[projectName])]
         except:
             logger.warn("Couldn't add project %s to %s plan: project does not exist" % (projectName, planObj.planName))
 
@@ -492,7 +517,7 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
         old = getattr(easObj, key)
         if old != kwargs[key]:
             setattr(easObj, key, kwargs[key])
-            plan_log[key] = [old, kwargs[key] ]
+            plan_log[key] = [old, kwargs[key]]
 
     #do not replace plan's EAS value if explog does not have a value for it
     eas_keys = ['libraryKitName', 'libraryKitBarcode']
@@ -500,7 +525,7 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
         old = getattr(easObj, key)
         if kwargs.get(key) and old != kwargs[key]:
             setattr(easObj, key, kwargs[key])
-            plan_log[key] = [old, kwargs[key] ]
+            plan_log[key] = [old, kwargs[key]]
 
     easObj.status = 'run'
     easObj.save()
@@ -523,46 +548,47 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
             # otherwise need to dissociate the original sample and add a new one
             if sample.name != sampleName:
                 plan_log['sample'] = [sample.name, sampleName]
-                sample_found = models.Sample.objects.filter(name = sampleName)
+                sample_found = models.Sample.objects.filter(name=sampleName)
                 if sample_found:
                     sample.experiments.remove(expObj)
                     sample_found[0].experiments.add(expObj)
-                    logger.info("Replaced sample=%s; sample.id=%s" %(sampleName, sample_found[0].pk))
+                    logger.info("Replaced sample=%s; sample.id=%s" % (sampleName, sample_found[0].pk))
                 elif sample.experiments.count() == 1:
                     sample.name = sampleName
                     sample.displayedName = sampleName
                     sample.save()
-                    logger.info("Updated sample=%s; sample.id=%s" %(sampleName, sample.pk))
+                    logger.info("Updated sample=%s; sample.id=%s" % (sampleName, sample.pk))
                 else:
                     sample.experiments.remove(expObj)
                     need_new_sample = True
 
         if sampleCount == 0 or need_new_sample:
             sample_kwargs = {
-                            'name' : sampleName,
-                            'displayedName' : sampleName,
-                            'date' : expObj.date,
+                            'name': sampleName,
+                            'displayedName': sampleName,
+                            'date': expObj.date,
                             }
             try:
                 (sample, created) = models.Sample.objects.get_or_create(name=sampleName, defaults=sample_kwargs)
                 sample.experiments.add(expObj)
                 sample.save()
-                logger.info("Added sample=%s; sample.id=%s" %(sampleName, sample.pk))
+                logger.info("Added sample=%s; sample.id=%s" % (sampleName, sample.pk))
             except:
-                logger.debug("Failed to add sample=%s to experiment=%s" %(sampleName, expObj.expName))
+                logger.debug("Failed to add sample=%s to experiment=%s" % (sampleName, expObj.expName))
                 logger.debug(traceback.format_exc())
 
     # update status for all samples
     for sample in expObj.samples.all():
         sample.status = expObj.status
         sample.save()
-        
+
     # add log entry if any Plan/Exp/EAS parameters changed after updating from explog
     if plan_log:
         models.EventLog.objects.add_entry(planObj, json.dumps(plan_log), 'system')
         models.EventLog.objects.add_entry(planObj, 'Updated Planned Run from explog: %s (%s).' % (planObj.planName, planObj.pk), 'system')
 
     return expObj
+
 
 def save_serialized_json(folder, planObj, expObj, easObj):
     # Saves a snapshot of plan, experiment and eas objects in a json file
@@ -571,7 +597,7 @@ def save_serialized_json(folder, planObj, expObj, easObj):
     serialize_objs = [planObj, expObj, easObj]
     try:
         obj_json = serializers.serialize('json', serialize_objs, indent=2, use_natural_keys=True)
-        with open(sfile,'wt') as f:
+        with open(sfile, 'wt') as f:
             f.write(obj_json)
     except:
         logger.error("Unable to save serialized.json for experiment %s(%d)" % (expObj.expName, expObj.pk))

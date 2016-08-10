@@ -42,7 +42,7 @@ void MultiBook::ResetCounter(){
   }
 }
 
-void MultiBook::AssignPositionFromEndToHardClassifiedReads(vector<int> &read_id, vector<int> &left, vector<int> &right)
+void MultiBook::AssignPositionFromEndToHardClassifiedReads(const vector<int> &read_id, const vector<int> &left, const vector<int> &right)
 {
   // record position in read for each read with a valid allele
   to_left.resize(read_id.size());
@@ -64,7 +64,7 @@ void MultiBook::AssignPositionFromEndToHardClassifiedReads(vector<int> &read_id,
   allele_index.resize(count);
 }
 
-void MultiBook::AssignStrandToHardClassifiedReads(vector<bool> &strand_id, vector<int> &read_id)
+void MultiBook::AssignStrandToHardClassifiedReads(const vector<bool> &strand_id, const vector<int> &read_id)
 {
   // reset counter
   ResetCounter();
@@ -188,9 +188,9 @@ double VariantAssist::MannWhitneyU(vector<float> &ref, vector<float> &var, bool 
    double U = maxU - VariantAssist::partial_sum(both, ref.size());
    if ((U < 0) || (U > maxU)) {
      fprintf(stdout, "Warning: overflow in VariantAssist::MannWhitneyU; ");
-     fprintf(stdout, "ref.size()=%lu; ", ref.size());
-     fprintf(stdout, "var.size()=%lu; ", var.size());
-     fprintf(stdout, "both.size()=%lu; ", both.size());
+     fprintf(stdout, "ref.size()=%zu; ", ref.size());
+     fprintf(stdout, "var.size()=%zu; ", var.size());
+     fprintf(stdout, "both.size()=%zu; ", both.size());
      fprintf(stdout, "partial_sum=%f; ", VariantAssist::partial_sum(both, ref.size()));
      double newU = (U < 0) ? 0 : maxU;
      fprintf(stdout, "U=%f is set to %f\n", U, newU);

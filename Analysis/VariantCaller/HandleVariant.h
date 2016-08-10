@@ -44,6 +44,7 @@
 #include "ExtendParameters.h"
 
 #include "StackEngine.h"
+#include "ShortStack.h"
 #include "DiagnosticJson.h"
 
 
@@ -55,8 +56,8 @@ using namespace ion;
 // ----------------------------------------------------------------------
 
 
-void EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantCallerContext& vc,
-    VariantCandidate &current_variant, const PositionInProgress& bam_position);
-
+bool EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantCallerContext& vc,
+    VariantCandidate &current_variant, const PositionInProgress& bam_position,
+	vector< vector< MolecularFamily<Alignment*> > > &molecular_families_one_strand, int sample_index = -1);
 
 #endif //HANDLEVARIANT_H

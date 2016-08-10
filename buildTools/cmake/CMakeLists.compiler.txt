@@ -15,59 +15,70 @@ if(LSB_RELEASE_COMMAND)
 endif(LSB_RELEASE_COMMAND)
 
 # Common compiler flags
-if (${LSB_RELEASE_CODENAME} STREQUAL "lucid" OR ${LSB_RELEASE_CODENAME} STREQUAL "trusty")
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -fPIC")
+# char is per default signed on x86_64 systems but unsigned on ARM, use signed-char
+if (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -fPIC -fsigned-char")
 else()
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC -fsigned-char")
 endif()
 
-# can be removed with 2.8.10, use CMAKE_C_COMPILER_VERSION instead
-execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_C_VERSION)
-execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_CXX_VERSION)
-
-# http://gcc.gnu.org/onlinedocs/gcc-4.7.0/gcc/i386-and-x86_002d64-Options.html#i386-and-x86_002d64-Options
-# GCC depresses SSEx instructions when -mavx is used. Instead, it generates new AVX instructions or AVX equivalence for all SSEx instructions when needed.
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-    if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4) AND NOT CMAKE_SSE_ONLY)
-        if (${LSB_RELEASE_CODENAME} STREQUAL "lucid" OR ${LSB_RELEASE_CODENAME} STREQUAL "trusty")
-            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
-        else()
+    # http://gcc.gnu.org/onlinedocs/gcc-4.8.4/gcc/i386-and-x86-64-Options.html#i386-and-x86-64-Options
+    # GCC depresses SSEx instructions when -mavx is used.
+    # Instead it generates new AVX instructions or AVX equivalence for all SSEx instructions when needed.
+    if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+        if (ION_AVX)
             set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -mavx")
-#            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -fdiagnostics-color=always") # with 4.9
+        else()
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
         endif()
+    endif()
+#    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -mfloat-abi=softfp -mfpu=neon")
+
+    if(CMAKE_C_COMPILER_VERSION VERSION_EQUAL 4.9 OR (CMAKE_C_COMPILER_VERSION VERSION_GREATER 4.9))
+        set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -fdiagnostics-color=always")
 #        set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wvla")
 #        set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -O3 -ftree-vectorize -ftree-vectorizer-verbose=0")
-    else()
-        # e.g.  CentOS release 5.9 (Final) with gcc version 4.1.2 20080704 (Red Hat 4.1.2-54)
-        set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
     endif()
-# http://software.intel.com/sites/products/documentation/doclib/stdxe/2013/composerxe/compiler/cpp-lin/index.htm
-# http://software.intel.com/sites/products/documentation/doclib/stdxe/2013/composerxe/compiler/cpp-lin/GUID-B4670EED-D317-46D4-9635-618B36C827C3.htm # Code Generation Options
-# If you specify both the -ax and -m options, the baseline code will execute on non-Intel processors compatible with the setting specified for the -m option.
 elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -axAVX,SSE4.2 -msse3 -opt-report0")
+    # https://software.intel.com/en-us/intel-cplusplus-compiler-16.0-user-and-reference-guide
+    # https://software.intel.com/en-us/node/581723 # Code Generation Options
+    # If you specify both the -ax and -m options, the baseline code will execute on non-Intel processors
+    # compatible with the setting specified for the -m option.
+    if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+        if (ION_AVX)
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -axAVX,SSE4.2 -msse3")
+        else()
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
+        endif()
+    endif()
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -opt-report0")
 elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
+    # http://clang.llvm.org/docs/CommandGuide/clang.html
+    if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+        if (ION_AVX)
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -mavx")
+        else()
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
+        endif()
+    endif()
 else()
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
+    if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+        if (ION_AVX)
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -mavx")
+        else()
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
+        endif()
+    endif()
 endif()
 
-message(STATUS "C compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
-message(STATUS "CXX compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "common compiler flags: ${ION_COMMON_FLAGS}")
 
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
-if (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
-    # ,\"-Wall\",\"-Wextra\",\"-Werror\",\"-fPIC\",\"-mavx\",\"-O3\",\"-g\"
-    # ,\"-Wno-unused-parameter\",\"-Wno-write-strings\",\"-Wno-unused-variable\",\"-Wno-error=unused-but-set-variabl$
-    # ,\"-std=gnu++11\",\"-fpermissive\",\"-Wno-error=narrowing\",\"-Wno-unused-function\"
-    #SET( CUDA_NVCC_FLAGS "-std=c++11")
-endif()
-
 
 ## NOTE: -O2 enables strict-aliasing, and code is not clean
 SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
-                     "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
+                     "-std=c++11" "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
                      "-gencode=arch=compute_20,code=sm_20"
                      "-gencode=arch=compute_30,code=sm_30"
                      "-gencode=arch=compute_35,code=sm_35"
@@ -88,63 +99,35 @@ endif()
 
 
 # Add any C specific flags here
-set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter")
+set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11 -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter")
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     # https://gcc.gnu.org/wiki/C11Status
-
-    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-result") # -ansi -pedantic
-    if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4 AND GCC_C_VERSION VERSION_LESS 4.6))
-        set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu99")
-    endif()
-    if(GCC_C_VERSION VERSION_EQUAL 4.6 OR (GCC_C_VERSION VERSION_GREATER 4.6 AND GCC_C_VERSION VERSION_LESS 4.7))
-        set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu99")
-        set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
-    endif()
-    if(GCC_C_VERSION VERSION_EQUAL 4.7 OR (GCC_C_VERSION VERSION_GREATER 4.7))
-        set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11")
-        set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
-    endif()
+#    set(ION_C_FLAGS "${ION_C_FLAGS} -ansi -pedantic)
+    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-result")
+    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
 endif()
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-    set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11")
     set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-function")
 endif()
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
-    set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11")
 endif()
 
 
 # Add any C++ specific flags here
-set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-parameter")
+set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11 -Wno-unused-parameter")
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-variable") # -ansi -pedantic
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Woverloaded-virtual")
-
-    if(GCC_CXX_VERSION VERSION_EQUAL 4.4 OR (GCC_CXX_VERSION VERSION_GREATER 4.4 AND GCC_CXX_VERSION VERSION_LESS 4.6))
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++98")
-    endif()
-    if(GCC_CXX_VERSION VERSION_EQUAL 4.6 OR (GCC_CXX_VERSION VERSION_GREATER 4.6 AND GCC_CXX_VERSION VERSION_LESS 4.7))
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++98")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
-    endif()
-    if(GCC_CXX_VERSION VERSION_EQUAL 4.7 OR (GCC_CXX_VERSION VERSION_GREATER 4.7))
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
-    endif()
-    if(GCC_CXX_VERSION VERSION_EQUAL 5.0 OR (GCC_CXX_VERSION VERSION_GREATER 5.0))
-    endif()
+#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -ansi -pedantic")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-variable")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11")
 #    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-gnu")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-private-field")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-value")
@@ -153,7 +136,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-mismatched-tags")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-sign-compare")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-char-subscripts")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-c++11-narrowing")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-format")
 endif()
 
@@ -161,7 +143,6 @@ endif()
 # /usr/include/c++/4.8$ sudo ln -s /usr/include/x86_64-linux-gnu/c++/4.8 x86_64-linux-gnu
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd239")   # 239: floating point underflow
 endif()
 
@@ -179,6 +160,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG} ${ION_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE} ${ION_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE} ${ION_CXX_FLAGS}")
 
-#message("DEBUG CXXFLAGS ${CMAKE_CXX_FLAGS_DEBUG}")
-#message("RELEASE CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE}")
+message("DEBUG CXXFLAGS ${CMAKE_CXX_FLAGS_DEBUG}")
+message("RELEASE CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE}")
 

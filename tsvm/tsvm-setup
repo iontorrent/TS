@@ -8,7 +8,7 @@ DEBUG=false      # Set to false for deployment
 #Defines $LATEST and $VER_AVAIL
 WHERE=$(dirname $(readlink -f $0))
 source ${WHERE}/tsvm-versions > /dev/null
-SELECTMAX=${#VER_AVAIL}
+SELECTMAX=${#VER_AVAIL[@]}
 INTERACTIVE=true
 DO_IMPORT=true
 BASIC_SERVER=false
@@ -198,15 +198,6 @@ if ! $DEBUG; then
         enable_nfs_rule
     fi
     
-    #=============================================================================
-    # Create secure key
-    #=============================================================================
-    KEY_FILE=.vagrant_key_rsa
-    if [ -r $KEY_FILE ]; then
-        rm -f ${KEY_FILE} ${KEY_FILE}.pub
-    fi
-    ssh-keygen -t rsa -N "" -f $KEY_FILE 2>/dev/null 1>&2
-
     #=============================================================================
     # Create secure key
     #=============================================================================

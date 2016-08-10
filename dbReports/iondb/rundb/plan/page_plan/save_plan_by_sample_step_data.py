@@ -13,6 +13,7 @@ import uuid
 import logging
 logger = logging.getLogger(__name__)
 
+
 class SavePlanBySampleFieldNames():
 
     TEMPLATE_NAME = 'templateName'
@@ -24,17 +25,18 @@ class SavePlanBySampleFieldNames():
     LIMS_META = 'LIMS_meta'
     META = 'meta'
 
+
 class MonitoringFieldNames():
     QC_TYPES = 'qcTypes'
 
-    
+
 class SavePlanBySampleStepData(AbstractStepData):
 
     def __init__(self, sh_type):
         super(SavePlanBySampleStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_save_plan.html'
         self.savedFields = OrderedDict()
-        
+
         self.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME] = None
         self.savedFields[SavePlanBySampleFieldNames.ERROR_MESSAGES] = None
         self.savedFields[SavePlanBySampleFieldNames.WARNING_MESSAGES] = None
@@ -43,9 +45,9 @@ class SavePlanBySampleStepData(AbstractStepData):
         self.savedFields[SavePlanBySampleFieldNames.LIMS_META] = None
         self.savedFields[SavePlanBySampleFieldNames.META] = {}
 
-        self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = "" 
-        self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = ""     
-        
+        self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = ""
+        self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = ""
+
         self.sh_type = sh_type
 
         # Monitoring
@@ -56,7 +58,6 @@ class SavePlanBySampleStepData(AbstractStepData):
             self.savedFields[qc_type.qcName] = qc_type.defaultThreshold
             self.qcNames.append(qc_type.qcName)
 
-
     def getStepName(self):
         return StepNames.SAVE_PLAN_BY_SAMPLE
 
@@ -66,8 +67,8 @@ class SavePlanBySampleStepData(AbstractStepData):
         if field_name == SavePlanBySampleFieldNames.NOTE:
             errors = validate_notes(new_field_value)
             if errors:
-                self.validationErrors[field_name] = '\n'.join(errors)    
-        
+                self.validationErrors[field_name] = '\n'.join(errors)
+
         '''
         All qc thresholds must be positive integers
         '''

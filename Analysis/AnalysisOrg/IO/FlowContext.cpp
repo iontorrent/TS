@@ -144,6 +144,11 @@ void FlowContext::SetOpts(OptArgs &opts, Json::Value& json_params)
 	{
 		if ( flowOrder )
 			free ( flowOrder );
+    // upgrade floworder to all-caps(!)
+    // otherwise problems as the code does direct char compares
+    for (unsigned int i=0; i<fo.size(); i++){
+      fo.at(i) = toupper(fo.at(i));
+    }
 		
 		flowOrder = strdup ( fo.c_str() );
 		numFlowsPerCycle = strlen ( flowOrder );

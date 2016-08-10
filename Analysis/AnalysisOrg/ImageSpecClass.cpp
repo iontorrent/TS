@@ -1,6 +1,5 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "ImageSpecClass.h"
-#include "SynchDatSerialize.h"
 #include "IonH5File.h"
 
 ImageSpecClass::ImageSpecClass()
@@ -99,8 +98,8 @@ void ImageSpecClass::ReadFirstImage(Image &img, SystemContext &sys_context, Imag
   img.SetNumAcqFiles ( 1 );
   img.SetIgnoreChecksumErrors ( img_control.ignoreChecksumErrors );
   char *firstAcqFile = ( char * ) malloc ( strlen ( sys_context.dat_source_directory ) + strlen (
-                         img_control.acqPrefix ) + 10 );
-  sprintf ( firstAcqFile, "%s/%s%04d.dat", sys_context.dat_source_directory, img_control.acqPrefix, 0 );
+                         img_control.acqPrefix ) + strlen(img_control.datPostfix) + 10 );
+  sprintf ( firstAcqFile, "%s/%s%04d.%s", sys_context.dat_source_directory, img_control.acqPrefix, 0,img_control.datPostfix );
   if ( !img.LoadRaw ( firstAcqFile, 0, true, false ) )
     {
       exit ( EXIT_FAILURE );
@@ -112,7 +111,7 @@ void ImageSpecClass::ReadFirstImage(Image &img, SystemContext &sys_context, Imag
     loc_context.SetRegionXYSize(50, 50);
   }
 
-  img.SetDir ( sys_context.results_folder );
+  img.SetDir ( sys_context.results_folder , img_control.acqPrefix, img_control.datPostfix);
   img.SetFlowOffset ( img_control.flowTimeOffset );
 }
 

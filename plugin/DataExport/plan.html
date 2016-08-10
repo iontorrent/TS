@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- java script required for interacting with the RESTful API -->
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+    <!-- page style -->
+    <style type='text/css'>
+    #formwrap {
+        line-height: 2em;
+        background: #eef;
+        margin: 10px;
+        padding: 10px;
+        height: 170px;
+        text-align: center;
+    }
+    body {
+        font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+        font-size: 14px;
+    }
+    </style>
+
+    <script type='text/javascript'>
+	$(document).ready(function(){
+		
+		var a1 = $.ajax({
+			url:"/rundb/api/v1/plugin/Backup/extend/backupDevices/?format=json",
+			dataType:"json",
+			type: "GET",
+			async: true,
+			success:function(data){
+				var upval = "";
+				upval = $("#upload_path").val();
+				//$("#destination_folders").append(data);
+				//console.log("Extend output:");
+				//console.log(data);
+				$("#upload_json").append(data);
+				document.getElementById("upload_json").value = upval;
+				//getSavedConfig();
+				//document.getElementById("upload_path").value = "test";
+				},
+			});
+		
+		$("#upload_json").change(function() {
+			var upval = "";
+			upval = $("#upload_json option:selected").val();
+			if (upval) {
+				document.getElementById("upload_path").value = upval;
+			}
+		});
+    });
+
+    </script>
+</head>
+
+  <!-- set up the html page that the user interacts with -->
+<body>
+    
+        <!-- this form id, in this case "pluginconfig", should match the one called in PUT java script -->
+        <form id="pluginconfig" align="center">
+            <div class="page-header">
+              <h1 align="center">Data Backup - Global Settings</h1></center>
+            </div>
+			<div id="formwrap">
+            <center><table align="center">
+			<tr>
+              <td align=right>Destination Path: </td><td align=left>
+				<select name="upload_json" id="upload_json"></select>
+			  </td>
+            </tr>
+            <tr>
+              <td align=right>Signal Processing Input: </td><td><input type="checkbox" size="50" id="sigproc" name="sigproc" unchecked/> <i>DAT Files</i></td>
+            </tr>
+            <tr>
+              <td align=right>Basecalling Input: </td><td><input type="checkbox" size="50" id="basecalling" name="basecalling" unchecked/> <i>WELLS Files</i></td>
+            </tr>
+            <tr>
+              <td align=right>Output Files: </td><td><input type="checkbox" size="50" id="output" name="output" unchecked/> <i>BAMS, deliverables and plugin outputs</i></td>
+            </tr>
+            <tr>
+              <td align=right>Intermediate Files: </td><td><input type="checkbox" size="50" id="intermediate" name="intermediate" unchecked/> <i>Files used for debugging only</i></td>
+            </tr>
+            </table></center>
+			
+        </div>
+		<input type="hidden" name="upload_path" id="upload_path">
+		 <input type="hidden" id="launch_mode" name="launch_mode" value="Autostart with plan plugin configuration"/>
+		</form><p>
+</body>
+</html>

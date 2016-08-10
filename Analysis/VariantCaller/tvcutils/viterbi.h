@@ -7,6 +7,8 @@
 
 using namespace std;
 
+#define MAX_STATE_VALUE 100000
+
 struct markov_state {
   double value, prev, current;
   boost::math::poisson dist;
@@ -14,7 +16,14 @@ struct markov_state {
   markov_state() : value(0), prev(0), current(0), dist(0) { }
   markov_state(double value) : value(value), prev(0), current(0), dist(value) { }
 
-  double cost(double v);
+  double cost(double v) {
+    // cost of being in the state under Poisson distribution log pdf to make is additive
+    double rounded_v = min(v, (double)MAX_STATE_VALUE);
+    // increase cost of small values to report spikes down in gvcf
+    //return rounded_v < 0.75 * dist.mean() ? -numeric_limits<double>::infinity() : log(boost::math::pdf(dist, rounded_v));
+	//to prevent overflow use alternate math solution using Stirling's approximation.
+    return rounded_v < 0.75 * dist.mean() ? -numeric_limits<double>::infinity() : rounded_v * log(value) - value - (rounded_v * log(rounded_v) - rounded_v + sqrt(log(2 * 3.14159265359 * rounded_v)));
+  }
 
   double cost(const markov_state& st) { return st.value == value ? 0 : -5E2; }
 
@@ -25,7 +34,15 @@ struct markov_chain_comparator {
   markov_state * current;
   markov_chain_comparator() : current(NULL) { }
   markov_chain_comparator(markov_state& current) : current(&current) { }
-  bool operator()(const markov_state& lhs, const markov_state& rhs);
+  bool operator()(const markov_state& lhs, const markov_state& rhs) {
+    // special comparator functor to implement state selection in building markov chain
+    if (current) {
+      double lhs_cost = lhs.prev + current->cost(lhs),
+          rhs_cost = rhs.prev + current->cost(rhs);
+      return lhs_cost > rhs_cost;
+    }
+    return lhs.current > rhs.current;
+  }
 };
 
 template<typename T>

@@ -22,18 +22,18 @@ void NNAvg::Alloc(int n_rows, int n_cols, int n_frames) {
   /* Data cube for cumulative sum for calculating averages fast. 
      Note the padding by 1 row and colum for easy code flow */
   m_cum_sum_size = (size_t)(m_num_cols +1) * (m_num_rows + 1) * m_num_frames;
-  m_cum_sum = (double *__restrict)memalign(VEC8F_SIZE_B, sizeof(double) * m_cum_sum_size);
+  m_cum_sum = (double *)memalign(VEC8F_SIZE_B, sizeof(double) * m_cum_sum_size);
   assert(m_cum_sum);
   memset(m_cum_sum, 0, sizeof(double) * m_cum_sum_size); // zero out
   int cs_frame_stride = (m_num_cols + 1) * (m_num_rows + 1);
   
   /* Mask of the cumulative number of good wells so we know denominator of average also padded. */
-  m_num_good_wells = (int *__restrict) memalign(VEC8F_SIZE_B, sizeof(int) * cs_frame_stride);
+  m_num_good_wells = (int *) memalign(VEC8F_SIZE_B, sizeof(int) * cs_frame_stride);
   assert(m_num_good_wells);
   memset(m_num_good_wells, 0, sizeof(int) * cs_frame_stride);
   
   /* Data cube for our averages */
-  m_nn_avg = (float *__restrict) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) frame_stride * m_num_frames);
+  m_nn_avg = (float *) memalign(VEC8F_SIZE_B, sizeof(float) * (size_t) frame_stride * m_num_frames);
   assert(m_nn_avg);
 }
 

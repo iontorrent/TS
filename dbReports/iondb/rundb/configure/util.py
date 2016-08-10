@@ -40,6 +40,7 @@ def plupload_file_upload(request, dest_dir, request_filename_attr='name', reques
     else:
         return render_to_json({"method": "only POST here"})
 
+
 def readTimezone(request):
     # read /etc/timezone into the string timezone
     timezone = ''

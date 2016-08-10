@@ -1,9 +1,8 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 """This script must be run in the Torrent Server environment and takes a
-barcode set name and the path to a barcode csv file in the same format 
+barcode set name and the path to a barcode csv file in the same format
 uploaded to the Torrent Server.
 """
-
 
 
 __author__ = "Brian Kennedy"
@@ -13,17 +12,18 @@ from iondb.rundb.configure.views import _validate_barcode
 
 import sys
 
+
 def command_line_add_barcode(name, dest_path):
     """add the barcodes, with CSV validation"""
 
-    #name = request.POST.get('name', '')
-    #postedfile = request.FILES['postedfile']
-    #destination = tempfile.NamedTemporaryFile(delete=False)
-    #for chunk in postedfile.chunks():
+    # name = request.POST.get('name', '')
+    # postedfile = request.FILES['postedfile']
+    # destination = tempfile.NamedTemporaryFile(delete=False)
+    # for chunk in postedfile.chunks():
     #    destination.write(chunk)
-    #postedfile.close()
-    #destination.close()
-    #check to ensure it is not empty
+    # postedfile.close()
+    # destination.close()
+    # check to ensure it is not empty
     headerCheck = open(dest_path, "rU")
     firstCSV = []
     for firstRow in csv.reader(headerCheck):
@@ -31,12 +31,13 @@ def command_line_add_barcode(name, dest_path):
     headerCheck.close()
     if not firstRow:
         print("Error: Barcode file is empty")
-        return 
-    expectedHeader = ["id_str", "type", "sequence", "floworder", "index", "annotation", "adapter", "score_mode", "score_cutoff"]
+        return
+    expectedHeader = ["id_str", "type", "sequence", "floworder",
+        "index", "annotation", "adapter", "score_mode", "score_cutoff"]
     if sorted(firstCSV[0]) != sorted(expectedHeader):
         print("Barcode csv header is not as expected. Please try again starting with the provided example")
         return
-    #test if the barcode set name has been used before
+    # test if the barcode set name has been used before
     barCodeSet = dnaBarcode.objects.filter(name=name)
     if barCodeSet:
         print("Error: Barcode set with the same name already exists")
@@ -67,9 +68,10 @@ def command_line_add_barcode(name, dest_path):
         newBarcode.length = len(newBarcode.sequence)  # now set a default
         barCodes.append(newBarcode)  # append to our list for later saving
 
-    #destination.close()  # now close and remove the temp file
+    # destination.close()  # now close and remove the temp file
     if index == 0:
-        print("Error: There must be at least one barcode! Please reload the page and try again with more barcodes.")
+        print(
+            "Error: There must be at least one barcode! Please reload the page and try again with more barcodes.")
         return
     usedID = []
     for barCode in barCodes:
@@ -88,7 +90,7 @@ def command_line_add_barcode(name, dest_path):
     if failed:
         print("Barcodes validation failed. The barcode set has not been saved.")
         return
-    #saving to db needs to be the last thing to happen
+    # saving to db needs to be the last thing to happen
     for barCode in barCodes:
         try:
             barCode.save()
@@ -110,4 +112,3 @@ if __name__ == "__main__":
     else:
         print("Failed")
         sys.exit(1)
-

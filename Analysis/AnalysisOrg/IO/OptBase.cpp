@@ -197,59 +197,57 @@ int RetrieveParameterVectorInt(OptArgs &opts, Json::Value& json, char short_name
 	  ret_vector.clear();
 	  size_t sz = json[long_name_underscores].size();
 	  char buf[1000];
-	  if(sz == 0)
+      if(sz > 0)
 	  {
-	      cout << "Error setting: there is no value set for option: " + long_name_hyphens << endl;
-		  return 1;
-	  }
-	  else if(sz == 1)
-	  {
-		  if(json[long_name_underscores][0].isString())
-		  {
-			  ret_vector.push_back(atoi(json[long_name_underscores][0].asCString()));
-			  value = json[long_name_underscores][0].asCString();
-		  }
-		  else
-		  {
-			  ret_vector.push_back(json[long_name_underscores][0].asInt());
-			  sprintf(buf, "%d", ret_vector[0]);
-			  value = buf;
-		  }
-	  }
-	  else
-	  {
-		  value = "";
-		  for(int i = 0; i < (int)sz - 1; i++)
-		  {
-			  if(json[long_name_underscores][i].isString())
-			  {
-				  ret_vector.push_back(atoi(json[long_name_underscores][i].asCString()));
-				  value += json[long_name_underscores][i].asCString();
-				  value += ",";
-			  }
-			  else
-			  {
-				  ret_vector.push_back(json[long_name_underscores][i].asInt());
-				  sprintf(buf, "%d,", ret_vector[i]);
-				  string ss = buf;
-				  value += ss;
-			  }
-		  }
+          if(sz == 1)
+          {
+              if(json[long_name_underscores][0].isString())
+              {
+                  ret_vector.push_back(atoi(json[long_name_underscores][0].asCString()));
+                  value = json[long_name_underscores][0].asCString();
+              }
+              else
+              {
+                  ret_vector.push_back(json[long_name_underscores][0].asInt());
+                  sprintf(buf, "%d", ret_vector[0]);
+                  value = buf;
+              }
+          }
+          else
+          {
+              value = "";
+              for(int i = 0; i < (int)sz - 1; i++)
+              {
+                  if(json[long_name_underscores][i].isString())
+                  {
+                      ret_vector.push_back(atoi(json[long_name_underscores][i].asCString()));
+                      value += json[long_name_underscores][i].asCString();
+                      value += ",";
+                  }
+                  else
+                  {
+                      ret_vector.push_back(json[long_name_underscores][i].asInt());
+                      sprintf(buf, "%d,", ret_vector[i]);
+                      string ss = buf;
+                      value += ss;
+                  }
+              }
 
-		  if(json[long_name_underscores][(int)sz - 1].isString())
-		  {
-			  ret_vector.push_back(atoi(json[long_name_underscores][(int)sz - 1].asCString()));
-			  value += json[long_name_underscores][(int)sz - 1].asCString();
-		  }
-		  else
-		  {
-			  ret_vector.push_back(json[long_name_underscores][(int)sz - 1].asInt());
-			  sprintf(buf, "%d", ret_vector[(int)sz - 1]);
-			  string ss = buf;
-			  value += ss;
-		  }
-	  }
-      source = "parameters json file";
+              if(json[long_name_underscores][(int)sz - 1].isString())
+              {
+                  ret_vector.push_back(atoi(json[long_name_underscores][(int)sz - 1].asCString()));
+                  value += json[long_name_underscores][(int)sz - 1].asCString();
+              }
+              else
+              {
+                  ret_vector.push_back(json[long_name_underscores][(int)sz - 1].asInt());
+                  sprintf(buf, "%d", ret_vector[(int)sz - 1]);
+                  string ss = buf;
+                  value += ss;
+              }
+          }
+          source = "parameters json file";
+      }
   }
 
   if (opts.HasOption(short_name, long_name_hyphens)) {
@@ -314,59 +312,57 @@ int RetrieveParameterVectorFloat(OptArgs &opts, Json::Value& json, char short_na
 	  ret_vector.clear();
 	  size_t sz = json[long_name_underscores].size();
 	  char buf[1000];
-	  if(sz == 0)
+      if(sz > 0)
 	  {
-	      cout << "Error setting: there is no value set for option: " + long_name_hyphens << endl;
-		  return 1;
-	  }
-	  else if(sz == 1)
-	  {
-		  if(json[long_name_underscores][0].isString())
-		  {
-			  ret_vector.push_back(atof(json[long_name_underscores][0].asCString()));
-			  value = json[long_name_underscores][0].asCString();
-		  }
-		  else
-		  {
-			  ret_vector.push_back(json[long_name_underscores][0].asFloat());
-			  sprintf(buf, "%f", ret_vector[0]);
-			  value = buf;
-		  }
-	  }
-	  else
-	  {
-		  value = "";
-		  for(int i = 0; i < (int)sz - 1; i++)
-		  {
-			  if(json[long_name_underscores][i].isString())
-			  {
-				  ret_vector.push_back(atof(json[long_name_underscores][i].asCString()));
-				  value += json[long_name_underscores][i].asCString();
-				  value += ",";
-			  }
-			  else
-			  {
-				  ret_vector.push_back(json[long_name_underscores][i].asFloat());
-				  sprintf(buf, "%f,", ret_vector[i]);
-				  string ss = buf;
-				  value += ss;
-			  }
-		  }
+          if(sz == 1)
+          {
+              if(json[long_name_underscores][0].isString())
+              {
+                  ret_vector.push_back(atof(json[long_name_underscores][0].asCString()));
+                  value = json[long_name_underscores][0].asCString();
+              }
+              else
+              {
+                  ret_vector.push_back(json[long_name_underscores][0].asFloat());
+                  sprintf(buf, "%f", ret_vector[0]);
+                  value = buf;
+              }
+          }
+          else
+          {
+              value = "";
+              for(int i = 0; i < (int)sz - 1; i++)
+              {
+                  if(json[long_name_underscores][i].isString())
+                  {
+                      ret_vector.push_back(atof(json[long_name_underscores][i].asCString()));
+                      value += json[long_name_underscores][i].asCString();
+                      value += ",";
+                  }
+                  else
+                  {
+                      ret_vector.push_back(json[long_name_underscores][i].asFloat());
+                      sprintf(buf, "%f,", ret_vector[i]);
+                      string ss = buf;
+                      value += ss;
+                  }
+              }
 
-		  if(json[long_name_underscores][(int)sz - 1].isString())
-		  {
-			  ret_vector.push_back(atof(json[long_name_underscores][(int)sz - 1].asCString()));
-			  value += json[long_name_underscores][(int)sz - 1].asCString();
-		  }
-		  else
-		  {
-			  ret_vector.push_back(json[long_name_underscores][(int)sz - 1].asFloat());
-			  sprintf(buf, "%f", ret_vector[(int)sz - 1]);
-			  string ss = buf;
-			  value += ss;
-		  }
-	  }
-      source = "parameters json file";
+              if(json[long_name_underscores][(int)sz - 1].isString())
+              {
+                  ret_vector.push_back(atof(json[long_name_underscores][(int)sz - 1].asCString()));
+                  value += json[long_name_underscores][(int)sz - 1].asCString();
+              }
+              else
+              {
+                  ret_vector.push_back(json[long_name_underscores][(int)sz - 1].asFloat());
+                  sprintf(buf, "%f", ret_vector[(int)sz - 1]);
+                  string ss = buf;
+                  value += ss;
+              }
+          }
+          source = "parameters json file";
+      }
   }
 
   if (opts.HasOption(short_name, long_name_hyphens)) {
@@ -436,59 +432,57 @@ int RetrieveParameterVectorDouble(OptArgs &opts, Json::Value& json, char short_n
 	  ret_vector.clear();
 	  size_t sz = json[long_name_underscores].size();
 	  char buf[1000];
-	  if(sz == 0)
+      if(sz > 0)
 	  {
-	      cout << "Error setting: there is no value set for option: " + long_name_hyphens << endl;
-		  return 1;
-	  }
-	  else if(sz == 1)
-	  {
-		  if(json[long_name_underscores][0].isString())
-		  {
-			  ret_vector.push_back(atof(json[long_name_underscores][0].asCString()));
-			  value = json[long_name_underscores][0].asCString();
-		  }
-		  else
-		  {
-			  ret_vector.push_back(json[long_name_underscores][0].asDouble());
-			  sprintf(buf, "%f", ret_vector[0]);
-			  value = buf;
-		  }
-	  }
-	  else
-	  {
-		  value = "";
-		  for(int i = 0; i < (int)sz - 1; i++)
-		  {
-			  if(json[long_name_underscores][i].isString())
-			  {
-				  ret_vector.push_back(atof(json[long_name_underscores][i].asCString()));
-				  value += json[long_name_underscores][i].asCString();
-				  value += ",";
-			  }
-			  else
-			  {
-				  ret_vector.push_back(json[long_name_underscores][i].asDouble());
-				  sprintf(buf, "%f,", ret_vector[i]);
-				  string ss = buf;
-				  value += ss;
-			  }
-		  }
+          if(sz == 1)
+          {
+              if(json[long_name_underscores][0].isString())
+              {
+                  ret_vector.push_back(atof(json[long_name_underscores][0].asCString()));
+                  value = json[long_name_underscores][0].asCString();
+              }
+              else
+              {
+                  ret_vector.push_back(json[long_name_underscores][0].asDouble());
+                  sprintf(buf, "%f", ret_vector[0]);
+                  value = buf;
+              }
+          }
+          else
+          {
+              value = "";
+              for(int i = 0; i < (int)sz - 1; i++)
+              {
+                  if(json[long_name_underscores][i].isString())
+                  {
+                      ret_vector.push_back(atof(json[long_name_underscores][i].asCString()));
+                      value += json[long_name_underscores][i].asCString();
+                      value += ",";
+                  }
+                  else
+                  {
+                      ret_vector.push_back(json[long_name_underscores][i].asDouble());
+                      sprintf(buf, "%f,", ret_vector[i]);
+                      string ss = buf;
+                      value += ss;
+                  }
+              }
 
-		  if(json[long_name_underscores][(int)sz - 1].isString())
-		  {
-			  ret_vector.push_back(atof(json[long_name_underscores][(int)sz - 1].asCString()));
-			  value += json[long_name_underscores][(int)sz - 1].asCString();
-		  }
-		  else
-		  {
-			  ret_vector.push_back(json[long_name_underscores][(int)sz - 1].asDouble());
-			  sprintf(buf, "%f", ret_vector[(int)sz - 1]);
-			  string ss = buf;
-			  value += ss;
-		  }
-	  }
-      source = "parameters json file";
+              if(json[long_name_underscores][(int)sz - 1].isString())
+              {
+                  ret_vector.push_back(atof(json[long_name_underscores][(int)sz - 1].asCString()));
+                  value += json[long_name_underscores][(int)sz - 1].asCString();
+              }
+              else
+              {
+                  ret_vector.push_back(json[long_name_underscores][(int)sz - 1].asDouble());
+                  sprintf(buf, "%f", ret_vector[(int)sz - 1]);
+                  string ss = buf;
+                  value += ss;
+              }
+          }
+          source = "parameters json file";
+      }
   }
 
   if (opts.HasOption(short_name, long_name_hyphens)) {

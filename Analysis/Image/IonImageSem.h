@@ -13,7 +13,7 @@ typedef struct ion_semaphore {
 
 class IonImageSem {
  public:
-  static void Take();
+  static void Take(int fast=0);
   static void Give();
   static void LockWriter();
   static void UnLockWriter();

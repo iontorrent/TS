@@ -17,6 +17,7 @@ urlpatterns = patterns(
     url(r'^latex/(\d+).pdf/$', 'views.get_report_pdf'),
     url(r'^analyze/(?P<exp_pk>\d+)/(?P<report_pk>\d+)/$', 'views.analyze', name="report_analyze"),
 
-	url(r'^(?P<pk>\d+)/getZip/$', 'views.getZip', name="getZip"),
-	url(r'^(?P<pk>\d+)/getVCF/$', 'views.getVCF', name="getVCF"),
-	)
+    url(r'^(?P<pk>\d+)/getZip/$', 'views.getZip', name="getZip"),
+    url(r'^(?P<pk>\d+)/getVCF/$', 'views.getVCF', name="getVCF"),
+)
+

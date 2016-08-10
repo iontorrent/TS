@@ -3,7 +3,7 @@
 #define DATAHDR_H
 
 #ifdef GNUC
-#include <inttypes.h>
+#include <cinttypes>
 #define UINT32 uint32_t
 #define UINT16 uint16_t
 #else

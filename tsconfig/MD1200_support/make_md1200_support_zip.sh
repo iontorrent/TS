@@ -11,13 +11,24 @@ function download_prerequisites()
 {
     destdir=$1
     sudo apt-get clean   # Need to clean the cache in order to get the uris
-    required=( libdevmapper-event1.02.1 watershed megacli dkms megaraid-sas-dkms lvm2 xfsprogs lsscsi )
-
+    required=( $(get_required_pkgs) )
+    
     for pkgname in ${required[@]}; do
 
-        URL=$(apt-get install --reinstall --assume-yes --force-yes --print-uris $pkgname|tail -1|awk -F"'" '{print $2}')
+        URL=$(apt-get install --reinstall --assume-yes --force-yes --print-uris $pkgname|tail -1|awk -F\' '{print $2}')
         wget --directory-prefix=./${destdir} $URL
     done
+}
+#==============================================================================
+# Return list of required packages based on distribution
+#==============================================================================
+function get_required_pkgs()
+{
+    if [ "$(lsb_release -cs)" == "trusty" ]; then
+        echo "libdevmapper-event1.02.1 watershed megacli dkms lvm2 xfsprogs lsscsi"
+    else
+        echo "libdevmapper-event1.02.1 watershed megacli dkms lvm2 xfsprogs lsscsi megaraid-sas-dkms"
+    fi
 }
 
 # Clear the deck and repopulate from scratch everytime
@@ -34,8 +45,9 @@ cp -vp ./README.txt ${builddir}
 cp -vp ./stresstest.tgz ${builddir}
 cp -vp ./driver_update ${builddir}
 
-zip -r md1200_support_$date.zip ${builddir}/
+ZIPFILE=md1200_support_$(lsb_release -cs)_$date.zip
+zip -r $ZIPFILE ${builddir}/
 
-md5sum md1200_support_$date.zip > md1200_support_$date.checksum
+md5sum $ZIPFILE > ${ZIPFILE%.*}.checksum
 
 exit 0

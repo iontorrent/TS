@@ -1,8 +1,12 @@
 /* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 
+//////////////////////////////////////////////////////////////////////////////
+// Derived from QSimScan project, released under MIT license
+// (https://github.com/abadona/qsimscan)
+//////////////////////////////////////////////////////////////////////////////
 
-#ifndef SEQUTIL_H
-#define SEQUTIL_H
+#ifndef __sequtil_h__
+#define __sequtil_h__
 
 
 extern const char number2base [];
@@ -19,4 +23,4 @@ inline unsigned get_base (const char *seq, unsigned pos)
     return (seq[pos >> 2] >> ((pos & 3) << 1)) & 3;
 }
 
-#endif // SEQUTIL_H
+#endif // __sequtil_h__

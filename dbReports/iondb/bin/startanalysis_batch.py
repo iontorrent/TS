@@ -1,37 +1,19 @@
 #!/usr/bin/env python
-# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
 
 """
-Look for existing experiments and analysis them again
+Look for existing experiment and analyze with latest parameters
 """
 
 import os
-import sys
 import time
 import urllib
 import re
-import getopt
+import argparse
 
 # Django related import
 os.environ['DJANGO_SETTINGS_MODULE'] = "iondb.settings"
 from iondb.rundb import models
-
-
-def get_default_analysis(exp):
-    """analysis args from Chip"""
-
-    chip_type = exp.chipType
-    args = models.AnalysisArgs.objects.filter(
-        chipType=chip_type, chip_default=True)
-
-    if not args:
-        # could be old chip_type -> "314R", 316D, ...
-        chip_type = chip_type.strip('"')[0:3]
-        args = models.AnalysisArgs.objects.filter(
-            chipType=chip_type, chip_default=True)
-        return args[0].analysisargs
-    else:
-        return 'Analysis'
 
 
 def get_build_number(analysis_arg):
@@ -78,57 +60,68 @@ def get_exp_from_name(name):
     return exp[0]
 
 
-def generate_post(run_name, timestamp, ebrOpt, gpu, note):
+def generate_post(run_name, timestamp, ebr_opt, gpu_opt, note_opt):
     """mirror this functions from crawler.py"""
 
     exp = get_exp_from_name(run_name)
 
-    if ebrOpt.lower() == 'no_recal':
-        ebrStr = 'noebr'
+    if ebr_opt.lower() == 'no_recal':
+        ebr_str = 'noebr'
+    elif ebr_opt.lower() == 'double':
+        ebr_opt = 'standard_recal'
+        ebr_str = 'doubleCal_ebr'
     else:
-        ebrStr = 'ebr'
+        ebr_str = 'ebr'
 
-    if int(gpu) == 0:
-        gpuArgs = ' --gpuWorkLoad 0'
-        gpuStr = 'noGPU'
-    elif int(gpu) == 1:
-        gpuArgs = ' --gpuWorkLoad 1'
-        gpuStr = 'GPU'
-    elif int(gpu) == 2:
-        gpuArgs = ' --sigproc-compute-flow 20,20:1 --gpu-flow-by-flow true --gpuWorkLoad 1'
-        gpuStr = 'GPU_newPipeline'
+    if int(gpu_opt) == 0:
+        gpu_arg = ' --gpuWorkLoad 0'
+        gpu_str = 'noGPU'
+    elif int(gpu_opt) == 1:
+        gpu_arg = ' --gpuWorkLoad 1'
+        gpu_str = 'GPU'
+    elif int(gpu_opt) == 2:
+        gpu_arg = ' --sigproc-compute-flow 20,20:1 --gpu-flow-by-flow true --num-regional-samples 200 --gpuWorkLoad 1'
+        gpu_str = 'GPU_newPipeline'
     else:
-        gpuArgs = ''
-        gpuStr = ''
+        gpu_arg = ''
+        gpu_str = ''
 
-    if note.lower() == 'tn':
-        doThumbnail = "True"
+    if note_opt.lower() == 'tn':
+        is_thumbnail = True
     else:
-        doThumbnail = "False"
+        is_thumbnail = False
 
-    if note.lower() == 'fcwells':
-        blockArgs = "fromWells"
+    if note_opt.lower() == 'fcwells':
+        block_args = "fromWells"
     else:
-        blockArgs = "fromRaw"
+        block_args = "fromRaw"
 
     # source the args
-    args = exp.plan.get_default_cmdline_args()
+    plan_args = exp.plan.get_default_cmdline_args()
     eas, eas_created = exp.get_or_create_EAS(reusable=True)
     if exp.plan and exp.plan.latestEAS:
         exp.plan.latestEAS = eas
         exp.plan.save()
 
     # reset the args to latest values
-    for key, value in args.items():
+    for key, value in plan_args.items():
         setattr(eas, key, value)
 
     # set analysis args
-    if doThumbnail == 'False':
-        beadfindargs = args['beadfindargs']
-        analysisargs = args['analysisargs']
+    if is_thumbnail:
+        beadfindargs = plan_args['thumbnailbeadfindargs']
+        analysisargs = plan_args['thumbnailanalysisargs']
+        prebasecallerargs = plan_args['prethumbnailbasecallerargs']
+        calibrateargs = plan_args['thumbnailcalibrateargs']
+        basecallerargs = plan_args['thumbnailbasecallerargs']
+        alignmentargs = plan_args['thumbnailalignmentargs']
     else:
-        beadfindargs = args['thumbnailbeadfindargs']
-        analysisargs = args['thumbnailanalysisargs']
+        beadfindargs = plan_args['beadfindargs']
+        analysisargs = plan_args['analysisargs']
+        prebasecallerargs = plan_args['prebasecallerargs']
+        calibrateargs = plan_args['calibrateargs']
+        basecallerargs = plan_args['basecallerargs']
+        alignmentargs = plan_args['alignmentargs']
 
     # replace binary
     """
@@ -145,26 +138,39 @@ def generate_post(run_name, timestamp, ebrOpt, gpu, note):
     # replace Analysis args
     m = re.search("--gpuWorkLoad.{2}", analysisargs)
     if m:
-        newArgs = re.sub(m.group(0), gpuArgs, analysisargs)
+        amended_analysisargs = re.sub(m.group(0), gpu_arg, analysisargs)
     else:
-        newArgs = analysisargs + gpuArgs
+        amended_analysisargs = analysisargs + gpu_arg
 
-    # save the analysis back
-    if doThumbnail == "False":
-        eas.beadfindargs = beadfindargs
-        eas.analysisargs = newArgs
-    else:
+    if ebr_str == 'doubleCal_ebr':
+        calibrateargs = calibrateargs + ' --double-fit true'
+        prebasecallerargs = prebasecallerargs + ' --linear-hp-thres 0'
+        basecallerargs = basecallerargs + ' --linear-hp-thres 0'
+
+    # save the args back
+    if is_thumbnail:
         eas.thumbnailbeadfindargs = beadfindargs
-        eas.thumbnailanalysisargs = newArgs
+        eas.thumbnailanalysisargs = amended_analysisargs
+        eas.prethumbnailbasecallerargs = prebasecallerargs
+        eas.thumbnailcalibrateargs = calibrateargs
+        eas.thumbnailbasecallerargs = basecallerargs
+        eas.thumbnailalignmentargs = alignmentargs
+    else:
+        eas.beadfindargs = beadfindargs
+        eas.analysisargs = amended_analysisargs
+        eas.prebasecallerargs = prebasecallerargs
+        eas.calibrateargs = calibrateargs
+        eas.basecallerargs = basecallerargs
+        eas.alignmentargs = alignmentargs
     eas.save()
 
-    report_name = generate_report_name(exp, timestamp, ebrStr, gpuStr, note, newArgs)
+    report_name = generate_report_name(exp, timestamp, ebr_str, gpu_str, note_opt, amended_analysisargs)
 
     params = urllib.urlencode({'report_name': report_name,
                                'path': exp.expDir,
-                               'do_thumbnail': doThumbnail,
-                               'do_base_recal': ebrOpt,
-                               'blockArgs': blockArgs,
+                               'do_thumbnail': str(is_thumbnail),
+                               'do_base_recal': ebr_opt,
+                               'blockArgs': block_args,
                                'realign': 'False'})
 
     # start analysis with urllib
@@ -184,46 +190,22 @@ def generate_post(run_name, timestamp, ebrOpt, gpu, note):
 
 
 if __name__ == '__main__':
-    argv = sys.argv[1:]
-    run_name = ""
-    timestamp = ""
-    ebr = "True"
-    gpu = 1
-    note = ""
+    # commandline arg parsing
+    parser = argparse.ArgumentParser(description="batch start analysis from CLI")
 
-    usage = "startanalysis_batch.py" + \
-            " -r experimentName" + \
-            " -t timestamp (if empty, use the launch time)" + \
-            " -e ebr (true/false)" + \
-            " -g gpu (1/0)" + \
-            " -n note (tn/fcwells)"
-    try:
-        opts, args = getopt.getopt(
-            argv,
-            "hr:t:e:g:n:",
-            ["experiment=", "timestamp=", "ebr=", "gpu=", "note="])
-    except getopt.GetoptError:
-        print usage
-        sys.exit(2)
+    parser.add_argument("--run-name", "-r", required=True,
+                        help='run name, a.k.a. expName')
+    parser.add_argument("--timestamp", "-t",
+                        default=time.strftime("%Y%m%d%H%M%S", time.localtime()),
+                        help='timestamp of the analysis. If empty, use the launch time')
+    parser.add_argument("--ebr", "-e", default="standard_recal",
+                        help='enable basecaller recalibration, i.e. no_recal will disable calibration process')
+    parser.add_argument("--gpu", "-g", type=int, default=1,
+                        help='enable GPU for pipeline. This is often use to modify the analysis arguments')
+    parser.add_argument("--note", "-n", default="",
+                        help='distinguish thumbnail vs fullchip analysis, i.e. tn, fcwells, ...')
+    cmd_args = vars(parser.parse_args())
 
-    if opts.__len__() == 0:
-        print usage
-        sys.exit(2)
-
-    for opt, arg in opts:
-        if opt == '-h':
-            print usage
-            sys.exit(2)
-        elif opt == "-r":
-            run_name = arg
-            print ("runName is %s" % run_name)
-        elif opt == "-t":
-            timestamp = arg
-        elif opt == "-e":
-            ebr = arg
-        elif opt == "-g":
-            gpu = arg
-        elif opt == "-n":
-            note = arg
-
-    generate_post(run_name, timestamp, ebr, gpu, note)
+    # begin the main function
+    generate_post(cmd_args['run_name'], cmd_args[
+                  'timestamp'], cmd_args['ebr'], cmd_args['gpu'], cmd_args['note'])

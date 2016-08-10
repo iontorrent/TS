@@ -1,3 +1,4 @@
+// Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
 // feature test for kill()
 #define _POSIX_SOURCE
 

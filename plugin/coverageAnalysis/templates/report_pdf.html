@@ -74,7 +74,7 @@
 {% else %}
 <h3>&nbsp;</center></h3>
 {% endif %}
-<h3><center>{{run_name}}<center></h3>
+<h3><center>{{run_name}}</center></h3>
 
 <table class="center">
 <tr><td><h4>
@@ -255,7 +255,6 @@
       <td class="inright">{{Genome_base_coverage_at_500x}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Genome_bases_with_no_strand_bias}}">Genome bases with no strand bias</span></td>
       <td class="inright">{{Genome_bases_with_no_strand_bias}}</td></tr>
-  <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
  </table></div></td>
 {% elif bas_stats %}
   <td><div class="statsdata"> <table>
@@ -295,10 +294,8 @@
 {% if trg_stats or chr_stats or wgn_stats %}
 <div id='TargetCoverageChart' amplicons={{trg_type}} datafile='{{output_dir}}/{{finecov_tsv}}' hidelegend initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
-{% if not rna_stats %}
-{% endif %}
 {% if bas_stats %}
-<div id='ReferenceCoverageChart' {% if wgn_stats %}genome{% endif %} showoptions outlieroffscale bbcfile='{{output_dir}}/{{aux_bbc}}' cbcfile='{{output_dir}}/{{aux_cbc}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
+<div id='ReferenceCoverageChart' {% if wgn_stats %}genome{% endif %} showoptions outlieroffscale bbcfile='{{output_dir}}/{{aux_bbc}}' annofile='{{output_dir}}/{{bed_anno}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
 
 {% if rep_pool_png or rep_gc_png or rep_len_png or scat_gc_png or scat_len_png %}
@@ -323,7 +320,7 @@
 <div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
   <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
   <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
-  <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
+  <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
   <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
 </div> </div> </div> </div>
 <br/>

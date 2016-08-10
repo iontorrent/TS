@@ -190,7 +190,7 @@ check_paths() {
         create_default_dir "$CELERYD_PID_DIR"
     fi
     # Touch a tracking file in the /results directory.
-    touch /results/.headnode_$HOSTNAME || true
+    touch /results/.headnode_$(cat /etc/hostname) || true
 }
 
 create_paths() {

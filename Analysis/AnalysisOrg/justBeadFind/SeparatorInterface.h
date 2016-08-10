@@ -55,7 +55,7 @@ void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<f
 
 //void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<float> &smooth_t0_est, std::vector<RegionTiming>& region_timing, std::vector<Region>& region_list, ImageSpecClass &my_image_spec, Mask *maskPtr, bool doSmoothing, int numThreads);
 
-void IsolatedBeadFind (SlicedPrequel &my_prequel_setup, ImageSpecClass &my_image_spec, Region &wholeChip, CommandLineOpts &inception_state, char *results_folder, string &analysisLocation, SeqListClass &my_keys, TrackProgress &my_progress);
+void IsolatedBeadFind (SlicedPrequel &my_prequel_setup, ImageSpecClass &my_image_spec, Region &wholeChip, CommandLineOpts &inception_state, char *results_folder, string &analysisLocation, SeqListClass &my_keys, TrackProgress &my_progress, string& chipTpye);
 
 
 #endif // SEPARATORINTERFACE_H

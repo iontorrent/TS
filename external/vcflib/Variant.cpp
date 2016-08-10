@@ -13,6 +13,11 @@ namespace vcf {
 
     // #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT [SAMPLE1 .. SAMPLEN]
     vector<string> fields = split(line, '\t');
+    if (fields.size() < 7) {
+        cerr << "error: invalid variant format" << endl;
+        cerr << "line: " << line << endl;
+        throw std::out_of_range("invalid variant format");
+    }
 
     sequenceName = fields.at(0);
     char* end; // dummy variable for strtoll

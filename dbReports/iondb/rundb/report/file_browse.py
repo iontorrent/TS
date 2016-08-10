@@ -24,7 +24,7 @@ def format_units(quantity, unit="B", base=1000):
         magnitude = base ** (i + 2)
         if quantity < magnitude:
             return '%.1f %s%s' % ((base * quantity / float(magnitude)),
-                suffix, unit)
+                                  suffix, unit)
 
     return '%.1f %s%s' % ((base * quantity / float(magnitude)), suffix, unit)
 
@@ -37,7 +37,7 @@ def list_directory(path):
     dirs, files = [], []
     for name in os.listdir(path):
         full = os.path.join(path, name)
-        try :
+        try:
             stats = os.stat(full)
         except OSError as e:
             if e.errno == errno.ENOENT and os.path.islink(full):

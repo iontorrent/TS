@@ -7,15 +7,15 @@ IONREPORTER.workflow_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/work
 //this the REST API url for retrieving all IR Accounts and their configuration
 IONREPORTER.ion_accounts_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/configs/";
 
+IONREPORTER.workflows = [];
 IONREPORTER.ir_rel_type_to_sample_group_map = {};
 IONREPORTER.sample_group_to_pk_map = {};
-IONREPORTER.workflow_to_sample_group_map = {};
-IONREPORTER.ir_rel_type_pk_map = {};
-IONREPORTER.sample_group_to_workflow_map = {};
 IONREPORTER.default_sample_grouping = [];
 IONREPORTER.default_iruUploadMode = [];
-IONREPORTER.workflow_to_application_type_map = {};
 IONREPORTER.$none_input;
+
+var SEPARATOR = " | ";
+var ION_PRELOADED_LABEL = "Ion Torrent";
 
 /**
     This function creates the None Radio Option for the IR Accounts.
@@ -39,7 +39,6 @@ function create_none_ir_account() {
         $("#selectedWorkflow").text('');
         $("#selectedGroup").text('');
         $("#selectedUploadMode").text('');
-        IONREPORTER.existing_iruUploadMode = "";
         $("input[name=irVersion]").val('0');
         $("#workflows").hide();
         $("#iruUploadMode").hide();
@@ -60,15 +59,12 @@ function create_none_ir_account() {
             });
             $label.append($input);
             $div.append($label);
-
         });
-
     }).click();
 
     $none_lbl.append(IONREPORTER.$none_input);
     $div.append($none_lbl);
     return $div;
-
 }
 
 /**
@@ -83,30 +79,30 @@ function get_workflow_url() {
 
     var myURL = IONREPORTER.workflow_url;
 
-	myURL += "?format=json";
-	var isFilterSet = false;
+    myURL += "?format=json";
+    var isFilterSet = false;
 
-	if (runType_nucleotideType.toLowerCase() == "dna" ||  (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
-		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-		myURL += "DNA";
+    if (runType_nucleotideType.toLowerCase() == "dna" ||  (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
+        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+        myURL += "DNA";
 
-		isFilterSet = true;
-	}
-	else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
-		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-		myURL += "RNA";
+        isFilterSet = true;
+    }
+    else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
+        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+        myURL += "RNA";
 
-		isFilterSet = true;
-	}
+        isFilterSet = true;
+    }
 
     if (applicationGroupName == "DNA + RNA") {
         /*for mixed single & paired type support  
-    	if (runType_nucleotideType.toLowerCase() == "dna_rna") {
-    		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-    		myURL += "DNA_RNA";
+        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
+            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+            myURL += "DNA_RNA";
 
-    		isFilterSet = true;
-    	}
+            isFilterSet = true;
+        }
         */
         //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
         
@@ -121,39 +117,56 @@ function get_workflow_url() {
                 myURL += "&filterKey=Onconet_Workflow&filterValue=true";
             }
             else {
-            	myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";  
+                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";  
             }
         }
     }
     else {
-    	if (runType_name.toLowerCase() != "amps") {    		
-    		if (!isFilterSet) {
-        		myURL += "&filterKey=Onconet_Workflow&filterValue=false";
-    		}
-    	    myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
-    	}
-    	else {
+    	if (runType_name.toLowerCase() != "amps") {
+            if (!isFilterSet) {
+                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
+            }
+			if (applicationGroupName == "onco_liquidBiopsy") {
+				myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+			}
+			else {
+            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
+           	}
+        }
+        else {
             if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
                 myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
             }
             else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
                 myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-            }    	   
-    	}
+            }
+        }
     }
-
     return myURL;
 }
 
+function getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow){
+    // find workflow by matching workflow name + tag_isFactoryProvidedWorkflow
+    // if no match found then find by matching just the workflow name
+    if (!workflow) return null;
+
+    var match = $.grep(IONREPORTER.workflows, function(obj){ return obj.Workflow == workflow && obj.tag_isFactoryProvidedWorkflow == tag_isFactoryProvidedWorkflow });
+    if (match.length == 0){
+        match = $.grep(IONREPORTER.workflows, function(obj){ return obj.Workflow == workflow });
+    }
+    console.log('getWorkflowObj', workflow, tag_isFactoryProvidedWorkflow, match)
+    return (match.length > 0) ? match[0] : null;
+}
 
 /**
     This function retrieves the workflows, relationship type, and application types for a given IR Account
     by its given ID.  It receives the account id and creates a workflow drop down list
     and creates radio buttons for the Sample Grouping (Relationship Types) based on a TSS to IR Mapping of names
 */
-function get_workflow_and_sample_groupings(id, fullName) {
+function get_workflow_and_meta_data(id, fullName) {
+    $.blockUI();
     var myURL = get_workflow_url();
-    var all_workflows = [];
+    var found_workflow = null;
     $('input[name="irAccountId"]').val(id);
     $('input[name="irAccountName"]').val(fullName);
     $("#selectedIR").text(fullName);
@@ -172,10 +185,10 @@ function get_workflow_and_sample_groupings(id, fullName) {
                     }
                 }
             }).then(function(data, textStatus, jqXHR) {
-                IONREPORTER.sample_group_to_workflow_map = {};
 
                 var workflows = data["userWorkflows"];
                 var all_relationship_types = [];
+                var all_ir_references = [];
 
                 //clear the workflow select drop down list
                 var $select = $("select[name=irworkflow]");
@@ -183,42 +196,45 @@ function get_workflow_and_sample_groupings(id, fullName) {
                 $select.append($("<option>Upload Only</option>"));
 
                 if (typeof workflows != 'undefined') {
+                    IONREPORTER.workflows = workflows;
                     //loop through the workflows
                     $.each(workflows, function(i){
-                        //add an empty option
-                        var $opt = $("<option></option>");
                         var workflowName = workflows[i]["Workflow"];
-                        //add the application type that is coupled with this workflow
-                        //to an object
-                        IONREPORTER.workflow_to_application_type_map[workflowName] = workflows[i]["ApplicationType"];
-                        //add the workflow to a list of all workflows
-                        all_workflows.push(workflowName);
-                        //add the relationship type (i.e. the Sample Grouping) that is coupled with this workflow
-                        //to an object
-                        IONREPORTER.workflow_to_sample_group_map[workflowName] = workflows[i]["RelationshipType"];
-                        //create a SET of all workflows by checking if the workflow is already in the array
+                        var ir_reference = workflows[i]["irReference"] || "";
+                        var isfactory = workflows[i]["tag_isFactoryProvidedWorkflow"] || "";
+
+                        //create a SET of all RelationshipType
                         if ($.inArray(workflows[i]["RelationshipType"], all_relationship_types) == -1) {
                             all_relationship_types.push(workflows[i]["RelationshipType"]);
                         }
-                        //create an MAP between the relationship type (Sample Group) and the workflows
-                        //a relationship type can have more than one workflow
-                        if (typeof IONREPORTER.sample_group_to_workflow_map[workflows[i]["RelationshipType"]] == 'undefined') {
-                            IONREPORTER.sample_group_to_workflow_map[workflows[i]["RelationshipType"]] = [];
+                        //create a SET of all References
+                        if ($.inArray(ir_reference, all_ir_references) == -1) {
+                            all_ir_references.push(ir_reference);
                         }
-                        if ($.inArray(workflowName, IONREPORTER.sample_group_to_workflow_map[workflows[i]["RelationshipType"]]) == -1) {
-                            IONREPORTER.sample_group_to_workflow_map[workflows[i]["RelationshipType"]].push(workflowName);
-                        }
-                        if (workflowName == IONREPORTER.existing_workflow){
-                            $opt.attr('selected', 'selected');
-                        }
-                        $opt.attr('value', workflowName);
-                        $opt.text(workflowName);
-                        $select.append($opt);
-                    });
 
+                        // create workflow option
+                        workflows[i]['display'] = get_decorated_workflow_name(workflows[i], workflowName, ir_reference, ION_PRELOADED_LABEL, SEPARATOR);
+                        workflows[i]['option_id'] = 'workflow' + i;
+
+                        var opt = $('<option/>', {
+                            id: workflows[i]['option_id'],
+                            value: workflowName,
+                            text: workflows[i]['display']
+                        });
+                        $(opt).data('isfactory', isfactory);
+                        $select.append(opt);
+                    });
                 } else {
-                    //The API call errored out and we have to inform the user thusly
-                    $("#error").text("Error connecting to IR Server");
+                    //The API call errored out and we have to inform the user
+                    var message = "Internal error at IonReporterUploader when fetching workflow information";
+                    if (typeof data["error"] != 'undefined') {
+                        console.log("ionreporter - data[status]=", data["status"]);
+                        console.log("ionreporter - data[error]=", data["error"]);
+                        message += ".   ";
+                        message += data["error"];
+                    }
+
+                    $("#error").text(message);
                     $("#loading").hide();
                     $('#selectedWorkflow').text('');
                     //$("#sample_grouping").hide();
@@ -228,21 +244,19 @@ function get_workflow_and_sample_groupings(id, fullName) {
                     return;
                 }
 
+                // select existing workflow
+                found_workflow = getWorkflowObj(IONREPORTER.existing_workflow, IONREPORTER.existing_isfactory);
+                if (found_workflow){
+                    $("select[name=irworkflow]").children('option[id="'+found_workflow.option_id+'"]').attr("selected", "selected");
+                } else {
+                    if (IONREPORTER.existing_workflow.length > 0 && IONREPORTER.prev_account_id != "-1" ) {
+                        $("#error").text("The previous workflow for this plan is no longer available.  Please select another workflow");
+                    }
+                }
+
                 $("#workflows").show();
                 $('#selectedWorkflow').text($('select[name=irworkflow]').val());
 
-                found_workflow = false;
-                $.each(all_workflows, function(i){
-                    if (all_workflows[i] == IONREPORTER.existing_workflow) {
-                        found_workflow = true;
-                    }
-                });
-
-                //we have to check if the user has selected a new worflow that's different from the template
-                //or has selected a new IR account
-                if (!found_workflow && IONREPORTER.existing_workflow.length > 0 && IONREPORTER.prev_account_id != "-1" ) {
-                    $("#error").text("The previous workflow for this plan is no longer available.  Please select another workflow");
-                }
                 //Enable IRU QC/Upload Mode when IR is selected
                 //IRU Upload Mode is displayed as QC mode in UI
                 var iru_QC_JSONString = $('input[name="iru_QC_UploadModes"]').val();
@@ -251,46 +265,33 @@ function get_workflow_and_sample_groupings(id, fullName) {
                 var $div = $(".iruUploadModeContent");
                 $div.html('');
                 $.each(iru_upload_modes, function(key, value){
-	                iru_upload_mode = value;
-	                tooltip = "";
-	                if (key == 'None') {
-	                	tooltip = "Automatically upload run data from Torrent Suite to Ion Reporter";
-	                }
-	                else {
-	                	tooltip = "User must review the completed run, then launch the Ion Reporter Uploader plugin if desired";
-	                }
-	                var $label = $("<label></label>", {'class' : 'radio', 'width' : '150px', 'rel' : 'tooltip' , 'data-original-title' : tooltip});
-	                $div.append($label);
-	                $label.text(key);
-	                var $input = $("<input/>", {'type' : 'radio', 'name' : 'iru_UploadMode', 'value' : iru_upload_mode});
-	                $label.append($input);
-	                if ((IONREPORTER.existing_iruUploadMode == 'None' || IONREPORTER.existing_iruUploadMode == '') && fullName) {
-	                	if (iru_upload_mode == 'no_check') {
-	                    	$input.attr('checked', true);
-	                        $("#selectedUploadMode").text(key);
-	                        $input.click();
-	                    }
-	                }
-	                if (iru_upload_mode == IONREPORTER.existing_iruUploadMode) {
-	                	$input.attr('checked', true);
-	                    $input.click();
-	                }
-                });
+                    iru_upload_mode = value;
+                    var $label = $("<label></label>", {'class' : 'radio', 'width' : '410px'})
+                    $div.append($label);
+                    $label.text(key);
+                    var $input = $("<input/>", {'type' : 'radio', 'name' : 'iru_UploadMode', 'value' : iru_upload_mode});
+                    $label.append($input);
 
-                //now we do the mapping between IR and TSS Sample Group Names
-                var sample_groups = [];
-                var $div = $(".sampleGroupOptionsContent");
-                $div.html('');
-                $.each(all_relationship_types, function(i){
-                    var term = all_relationship_types[i];
-                    if ($.inArray(term, sample_groups) == -1) {
-                        sample_groups.push(term);
+                    if ((IONREPORTER.existing_iruUploadMode == 'Automatically upload to Ion Reporter after run completion' || IONREPORTER.existing_iruUploadMode == '') && fullName) {
+                        if (iru_upload_mode == 'no_check') {
+                            $input.attr('checked', true);
+                            $("#selectedUploadMode").text(key);
+                            $input.click();
+                        }
+                    }
+                    if (iru_upload_mode == IONREPORTER.existing_iruUploadMode) {
+                        $input.attr('checked', true);
+                        $("#selectedUploadMode").text(key);
+                        $input.click();
                     }
                 });
                 
-                //now we loop through the samples groups and create radio buttons for each of them
-                $.each(sample_groups, function(i){
-                    sample_group = sample_groups[i];
+                //create radio buttons for sample groups
+                var $div = $(".sampleGroupOptionsContent");
+                $div.html('');
+
+                $.each(all_relationship_types, function(i, term){
+                    var sample_group = IONREPORTER.ir_rel_type_to_sample_group_map[term];
                     var $label = $("<label></label>", {'class' : 'radio', 'width' : '150px'});
                     $div.append($label);
                     $label.text(sample_group);
@@ -307,19 +308,18 @@ function get_workflow_and_sample_groupings(id, fullName) {
                             var $select = $("select[name=irworkflow]");
                             $select.empty();
                             $select.append($("<option>Upload Only</option>"));
-                            $.each(IONREPORTER.ir_rel_type_pk_map, function(term, pk){
-                                if (pk == self.val()) {
-                                    var workflows = IONREPORTER.sample_group_to_workflow_map[term];
-                                    if (typeof workflows != 'undefined') {
-                                        $.each(workflows, function(i){
-                                            var workflow = workflows[i];
-                                            var $opt = $("<option></option>", {'value' : workflow, 'text' : workflow});
-                                            if (workflow == IONREPORTER.existing_workflow) {
-                                                $opt.attr('selected', true);
-                                            }
-                                            $select.append($opt);
-                                        });
+                            $.each(IONREPORTER.workflows, function(i,workflowObj){
+                                if (term == workflowObj['RelationshipType']){
+                                    var opt = $('<option/>', {
+                                        id: workflowObj['option_id'],
+                                        value: workflowObj['Workflow'],
+                                        text: workflowObj['display']
+                                    });
+                                    $(opt).data('isfactory', workflowObj['tag_isFactoryProvidedWorkflow']);
+                                    if (workflowObj == found_workflow){
+                                        opt.attr('selected', true);
                                     }
+                                    $select.append(opt);
                                 }
                             });
                             $select.change();
@@ -330,7 +330,6 @@ function get_workflow_and_sample_groupings(id, fullName) {
                         $input.click();
                     }
                 });
-
                 $("#sample_grouping").show();
                 $("#loading").hide();
             })
@@ -346,7 +345,6 @@ function get_ir_accounts() {
     $div = create_none_ir_account();
 
     var jqhxhr = $.ajax({
-
         type : "get",
         url : IONREPORTER.ion_accounts_url+"?format=json",
         timout: 6000, //in milliseconds
@@ -359,7 +357,10 @@ function get_ir_accounts() {
                 //or part of a previous step in the plan run phase    
                 var matched_prev = false;
 
-
+                //Sort IR accounts alphabetically
+                accounts = accounts.sort(function(a, b) {
+                    return a.name.localeCompare(b.name);
+                });
                 //loop through all accounts and create radio buttons for each
                 $.each(accounts, function(i){
                     var account = accounts[i];
@@ -367,7 +368,6 @@ function get_ir_accounts() {
                     var version = account["version"];
                     var checked = account["default"];
                     var name = account["name"];
-
                     if (IONREPORTER.prev_account_id == id){
                         matched_prev = true;
                     }
@@ -377,13 +377,10 @@ function get_ir_accounts() {
                     version = version.substring(0, 1) + "." + version.substring(1, version.length);
 
                     var fullName = name + " ";
-
                     //add orgname, firstname, lastname  and version if they are there.
-
                     var detailsStr = "";
                     if ('details' in account){
                         detailsStr += " (";
-
                         detailsStr += "Version: " + version;
 
                         if ('firstname' in account['details'] && 'lastname' in account['details']){
@@ -391,23 +388,22 @@ function get_ir_accounts() {
                         } else {
                             detailsStr = detailsStr.substring(0, detailsStr.length-2);
                         }
-
                         if ('orgname' in account['details']){
                             detailsStr += " | Org: " + account['details']['orgname'];
                         }
-
-
                         detailsStr += ")";
-                    }
-
-                    if (detailsStr != " ()") {
-                        fullName += detailsStr;
                     }
 
                     //create a radio button for the account 
                     var $lbl = $("<label></label>");
                     $lbl.addClass('radio');
                     $lbl.text(fullName);
+                    if (detailsStr != " ()") {
+                        $lbl.append($('<span></span>')
+                                .addClass('label_iru_details')
+                                .text(detailsStr)
+                        )
+                    }
 
                     var $input = $("<input type='radio'/>");
                     $input.attr({'name' : 'irOptions', 'value' : version});
@@ -420,21 +416,19 @@ function get_ir_accounts() {
                         $('input[name="irAccountName"]').val(fullName);
                         $('input[name=irVersion]').val(version);
                         //fire API CALL
-                        get_workflow_and_sample_groupings(id, fullName);
+                        get_workflow_and_meta_data(id, fullName);
                         if (version == "1.6") {
                             $("#new_workflow").hide();
                         } else {
                             $("#new_workflow").show();
                         }
                         if (version != '0') {
-                        	$("#iruUploadMode").show();
-                            
+                            $("#iruUploadMode").show();
                         } else {
-                        	$("#iruUploadMode").hide();
+                            $("#iruUploadMode").hide();
                         }
                     });
                     $lbl.append($input);
-
                     $div.append($lbl);
 
                     //now we check if this account was selected in the template or a previous step
@@ -444,7 +438,6 @@ function get_ir_accounts() {
                         $('input[name="irAccountName"]').val(fullName);
                         $("#selectedIR").text(fullName);
                         $input.click();
-
                     } else {
                         //now we know this is the default account
                         if (checked && !matched_prev) {
@@ -456,13 +449,10 @@ function get_ir_accounts() {
                             if (IONREPORTER.prev_account_id == "-1") {
                                 $input.click();
                             }
-
                         } else {
                             $input.attr('checked', false);
                         }
-
                     }
-
                 });
 
                 //this checks if the previously selected IR account
@@ -476,8 +466,7 @@ function get_ir_accounts() {
                     $("#selectedIR").text('None');
                     if (IONREPORTER.prev_account_id != "0" && IONREPORTER.prev_account_id != "-1"){$("#irAccountDoesNotExistError").show();}
                 }
-
-                }
+            }
             $("#loading").hide();
         } ,
         error: function() {
@@ -486,11 +475,9 @@ function get_ir_accounts() {
             $('input[name="irAccountName"]').val('None');
             $("#selectedIR").text('None');
             $("#loading").hide();
-          	$("#iruUploadMode").hide();
+            $("#iruUploadMode").hide();
         }
-
     });
-
 }
 
 /**
@@ -505,7 +492,6 @@ function goToCreateWorkflowUrl() {
             "format": "json",
             "id": $("input[name=irAccountId]").val()
         },
-
         success: function (data) {
             if (data["status"] != "false") {
                 if (data["method"] == "get") {
@@ -531,35 +517,29 @@ function goToCreateWorkflowUrl() {
         error: function () {
             alert("Failed to retrieve the workflow creation url, make sure you are able to connect to IR.");
         }
-
     });
 }
 
 $(document).ready(function () {
     //we block the UR and show the spinner until Ajax calls are complete
-    $(document).ajaxStart($.blockUI).ajaxStop($.unblockUI);
+    $(document).ajaxStop($.unblockUI);
 
     $("#loading").parent().parent().css('overflow', 'auto');
     //retrieve all IR accounts and their workflows/application types/relationship types    
     get_ir_accounts();
 
-    //attach event to the workflow drop down list to show
-    //the name of the workflow in the summary box 
-    $('select[name=irworkflow]').click(function(){
-    	var irworkflow = $(this).val() ? $(this).val() : 'Upload Only';
-        $('#selectedWorkflow').text(irworkflow);
-    });
-
     //attach event to the iru QC/Upload Mode to show in the summary box
     $("#iruUploadMode").on('change', 'input:radio[name^="iru_UploadMode"]', function (event) {
-        var iruUploadMode = $(this).val() ? $(this).val() : 'None';
-        var qc_mode = iruUploadMode == "no_check" ? 'None' : 'Manual';
+        var none_option = "Automatically upload to Ion Reporter after run completion";
+        var manual_option = "Review results after run completion, then upload to Ion Reporter"
+        var iruUploadMode = $(this).val() ? $(this).val() : none_option;
+        var qc_mode = iruUploadMode == "no_check" ? none_option : manual_option;
         $('#selectedUploadMode').text(qc_mode);
     });
     
     //refresh button which retrieves the workflows, etc for the selected account
     $("#ir_refresh").on('click', function(){
-        get_workflow_and_sample_groupings($('input[name="irAccountId"]').val(), $('input[name="irAccountName"]').val());
+        get_workflow_and_meta_data($('input[name="irAccountId"]').val(), $('input[name="irAccountName"]').val());
     });
 
     //let stuff be configed
@@ -578,25 +558,33 @@ $(document).ready(function () {
 
     $('.closeIRU').on('click', function () {
         $("#ir_accounts").html("");
-        $(document).ajaxStart($.blockUI).ajaxStop($.unblockUI);
         $("#loading").parent().parent().css('overflow', 'auto');
         get_ir_accounts();
     });
 
-    //attach change even to the workflow that auto selects the sample group
+    //attach change event to the workflow that auto selects the sample group
     //that corresponds to that workflow
     $("select[name=irworkflow]").on('change', function(e){
-        $("input[name=applicationType]").val(IONREPORTER.workflow_to_application_type_map[$(this).val()]);
-        $("#selectedWorkflow").text($(this).val());
-        if ($(this).val().length > 0) {
-            var pk = IONREPORTER.sample_group_to_pk_map[IONREPORTER.workflow_to_sample_group_map[$(this).val()]];
-                $.each($("input[name=sampleGrouping]"), function(){
-                    if ($(this).val() == pk) {
-                        $(this).attr('checked', true);
-                        $("#selectedGroup").text($(this).parent().text().trim());
-                    }
-                });
-            }
-        });
+        var irworkflow = $(this).val();
+        if (irworkflow && irworkflow != "Upload Only"){
+            var workflowObj = getWorkflowObj(irworkflow, $(this).find(':selected').data('isfactory'));
+            var pk = IONREPORTER.sample_group_to_pk_map[workflowObj['RelationshipType']];
+            $.each($("input[name=sampleGrouping]"), function(){
+                if ($(this).val() == pk) {
+                    $(this).attr('checked', true);
+                    $("#selectedGroup").text($(this).parent().text().trim());
+                    return;
+                }
+            });
 
+            $("input[name=applicationType]").val(workflowObj['ApplicationType']);
+            $("input[name=tag_isFactoryProvidedWorkflow]").val(workflowObj['tag_isFactoryProvidedWorkflow']);
+            $("#selectedWorkflow").text(irworkflow);
+        } else {
+            $("input[name=applicationType]").val('');
+            $("input[name=tag_isFactoryProvidedWorkflow]").val('');
+            $("#selectedWorkflow").text('Upload Only');
+        }
     });
+
+});

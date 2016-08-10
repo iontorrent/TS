@@ -15,6 +15,7 @@ public:
   static fit_descriptor fit_well_ampl_descriptor[];
   static fit_descriptor fit_well_ampl_buffering_descriptor[];
   static fit_descriptor fit_well_post_key_descriptor[];
+  static fit_descriptor fit_well_all_descriptor[];
   static fit_descriptor fit_well_post_key_descriptor_nodmult[];
 
   // region
@@ -37,11 +38,11 @@ public:
   static fit_descriptor fit_region_init2_taue_NoRDR_NoD_descriptor[];
   static fit_descriptor fit_region_full_taue_NoD_descriptor[];
   static fit_descriptor fit_region_full_taue_NoRDR_NoD_descriptor[];
+
+  static int GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_block_size);
+  static int GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd);
 };
 
-
-int GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_block_size);
-int GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd);
 
 //#define NUMERIC_PartialDeriv_CALC
 void BuildMatrix(BkgFitMatrixPacker *fit, bool accum, bool debug);

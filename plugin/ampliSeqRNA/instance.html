@@ -24,9 +24,6 @@
   $(function() {
     // NOTE: barcode-specific targets option hidden from as not apropriate, although supported by plugin if needed again.
     // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
-    $('#barcodebeds').attr('checked',false);
-    $('#uniquemaps').attr('checked',false);
-    $('#ercc').attr('checked',false);
     $("#uniquereads").hide();
     $('.bcbed-shy').hide();
     // turn off async JavaScript so we can easily get/set var names
@@ -334,7 +331,7 @@
      <td><span class="help"
        title="Assign target regions based on assigned barcodes.">
        Barcode-specific Targets:</span></td>
-     <td><input type="checkbox" id="barcodebeds" name="barcodebeds" checked="checked" value="Yes" style="float:left"/>
+     <td><input type="checkbox" id="barcodebeds" name="barcodebeds" value="Yes" style="float:left"/>
        <div class="bcbed-shy" style="margin-left:25px">
          Use the text box below to specify barcode to target regions mappings.<br/>
          Hint: Use the 'Add' button and barcode/target selectors for initial set up.<br/>
@@ -360,12 +357,12 @@
      <td><span class="help"
        title="Check if this AmpliSeq-RNA library employed ERCC amplicons for performance tracking.">
        ERCC Tracking:</span></td>
-     <td><input type="checkbox" id="ercc" name="ercc" checked="checked" value="Yes"/></td> </tr>
+     <td><input type="checkbox" id="ercc" name="ercc" value="Yes"/></td> </tr>
     <tr id="uniquereads">
      <td><span class="help"
        title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
        Use Only Uniquely Mapped Reads:</span></td>
-     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes" checked="checked"/></td> </tr>
+     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes"/></td> </tr>
    </table>
    <br/>
    <div align="center" id="json_result">

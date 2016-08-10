@@ -1,10 +1,35 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+
 {% block extra_head_styles %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
+
+<style>
+    .filter-item {
+        padding: 0px 10px;
+    }
+
+    #modal_configure_plugins_plugin_configure iframe {
+        margin: 0;
+        padding: 0;
+        border: none;
+        width: 100%;
+        height: 300px;
+        max-height:none;
+    }
+
+    .form-horizontal .control-label {
+        width:120px;
+    }
+    .form-horizontal .controls {
+        margin-left: 140px;
+    }
+
+</style>
 {% endblock extra_head_styles %}
+
 {% block extra_head_js %}
 <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
@@ -17,27 +42,22 @@
 
 <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
 {% endblock extra_head_js %}
+
 {% block tab-configure-plugins %}
     <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
 {% endblock tab-configure-plugins %}
+
 {% block content %}
     <div class="content clearfix">
         <div class="clearfix">
             <h1 class="pull-left">Plugins</h1>
-            <a href="{% url "configure_plugins_plugin_install" %}" class="btn pull-right install_upgrade_plugin">Install or Upgrade Plugin</a>
+            <button id="modal_show" style="font-size: 12px;font-weight: 700;outline: none" type="button" class="btn pull-right" data-toggle="modal" data-target="#modal_configure_plugins_plugin_install">Install or Upgrade Plugin</button>
         </div>
         <form class="well well-small clearfix">
             <div class="filter-item">
                 <div id="id_selected" class="btn-group filter-btn-group" data-toggle="buttons-radio">
-                    <a class="btn" data-value="true">Enabled</a>
-                    <a class="btn" data-value="false">Disabled</a>
-                    <a class="btn active" data-toggle="button">Either</a>
-                </div>
-            </div>
-            <div class="filter-item">
-                <div id="id_autorun" class="btn-group filter-btn-group" data-toggle="buttons-radio">
-                    <a class="btn" data-value="true">Autorun</a>
-                    <a class="btn" data-value="false">Manual</a>
+                    <a class="btn" data-value="True">Enabled</a>
+                    <a class="btn" data-value="False">Disabled</a>
                     <a class="btn active" data-toggle="button">Either</a>
                 </div>
             </div>
@@ -74,9 +94,11 @@
                         <div class="btn-group">
                             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
                             <ul class="dropdown-menu pull-right">
+                              {% if p.uploadLink %}
                                 <li>
                                     <a href="/rundb/publish/{{p.name}}" class="publisher_upload">Upload</a>
                                 </li>
+                              {% endif %}
                                 <li>
                                     <a href="/rundb/published/?from={{p.name}}">History</a>
                                 </li>
@@ -91,29 +113,151 @@
             <div class="centered_message">No Publishers are installed.</div>
         {% endif %}
     </div>
-<style>
-.filter-item {
-    padding: 0px 10px;
-}
-</style>
-<style>
-#modal_configure_plugins_plugin_configure iframe {
-    margin: 0;
-    padding: 0;
-    border: none;
-    width: 100%;
-    height: 300px;
-    max-height:none;
-}
-</style>
-<style>
-    .form-horizontal .control-label {
-        width:120px;
-    }
-    .form-horizontal .controls {
-        margin-left: 140px;
-    }
-</style>
+
+    <div id="modal_configure_plugins_plugin_install" title="" class="modal modal-750 fade hide">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
+            <h3>Install or Upgrade Plugin</h3>
+        </div>
+        <div class="modal-body" id="modal_configure_plugins_plugin_install_body">
+            <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+                <form class="form-horizontal">
+                    <fieldset>
+                        <div id="upload-plugin-file" class="control-group">
+                            <label for="pickfile" class="control-label">Upload a Plugin</label>
+                            <div class="controls">
+                                <a id="pickfile" name="pickfile" class="btn">Select File</a><br />
+                                <span id="filelist">------</span>
+                                <div id="upload-help" class="help-block" >
+                                    In order to provide a better uploading experience either Microsoft Silverlight
+                                    plugin or an HTML5 compatible browser are required for file uploading.
+                                    <ul>
+                                        <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/"> microsoft.com </a></li>
+                                    </ul>
+                                    You may need to contact your local system administrator for assistance.
+                                </div>
+                                <div id="file_info" class="help-block"></div>
+                            </div>
+                            <div class="controls">
+                                <div id="upload-progress" class="progress progress-striped active hide">
+                                    <div class="bar" style="width: 0%">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+                    <div id="update"></div>
+                    <input name="target_file" id="target_file" type="hidden"/>
+                    <input name="reported_file_size" id="reported_file_size" type="hidden"/>
+                </form>
+            <form id="modal_configure_plugins_plugin_install_form" method="POST" action="{% url "configure_plugins_plugin_install" %}" enctype="multipart/form-data">
+          </form>
+        </div>
+        <div class="modal-footer" id="tab-2-footer">
+            <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+            <a id="uploadfile" class="btn btn-primary">Upload file</a>
+        </div>
+    </div>
+    <script>
+        $('#modal_show').on('click', function() {
+            $('#pickfile').show();
+            $("#uploadfile").removeAttr('disabled');
+            $('#upload-progress').hide();
+            $('#filelist').text('-----');
+            $("#update").hide();
+            $('#upload-progress .bar').css('width', '0%');
+            uploader.splice();
+            uploader.refresh();
+        });
+
+        var uploader = new plupload.Uploader({
+            runtimes: 'html5, silverlight',
+            filters : [
+                {title : "Debian Package", extensions : "deb"},
+                {title : "Zip File", extensions : "zip"}
+            ],
+            browse_button: 'pickfile',
+            url: '{% url "configure_plugins_plugin_zip_upload" %}',
+            chunk_size: '15mb',
+            unique_names: true,
+            multi_selection: false,
+            multiple_queues: false,
+            silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}'
+        });
+
+        uploader.bind('FilesAdded', function (up, files) {
+            // check for one and only one file
+            if(files.length != 1){
+                return;
+            }
+
+            $('#upload-plugin-file').removeClass('invalid alert alert-error').addClass('valid');
+            $("#file_info").html("");
+            $(".file_item").remove();
+            var file = files[0];
+            $("#filelist").text(file.name + ' (' + plupload.formatSize(file.size) + ')');
+            $("#reported_file_size").val(file.size);
+        });
+
+        uploader.bind('UploadProgress', function (up, file) {
+            $('#' + file.id + " b").html(file.percent + "%");
+            $('#upload-progress .bar').css('width', ''+file.percent + '%');
+            $("#file_info").html("");
+        });
+
+        uploader.bind('UploadComplete', function(up, file){
+            $('#' + file.id + " b").html("100%");
+            $('#upload-progress .bar').css('width', '100%');
+            $("#file_info").html("");
+            var file_name = uploader.files[0].target_name;
+            $("#target_file").val(file_name.split(' ').join(''));
+            $("#update").show();
+            $("#update").addClass('alert-success alert-error').addClass('alert alert-info').html("Attempting to install plugin");
+            target_file = $("#target_file").val();
+            dataFile = {"file": target_file};
+            dataFile = JSON.stringify(dataFile);
+
+            $.ajax({
+                type: 'POST',
+                url: "/rundb/api/v1/plugin/install/",
+                contentType: "application/json; charset=utf-8",
+                data: dataFile,
+                dataType: "json",
+                async: false,
+                success: function () {
+                    $("#update").removeClass('alert-info alert-error').addClass('alert-success').html("Plugin success installing");
+                    setTimeout(function () {
+                        $('#grid').data('kendoGrid').dataSource.read();
+                        $('#grid').data('kendoGrid').refresh();
+                        $('#modal_configure_plugins_plugin_install').modal('hide');
+                    }, 2000);
+                },
+                error:function(jqXHR, textStatus, errorThrown){
+                    $("#update").removeClass('alert-info alert-success').addClass('alert-error').html(jqXHR.responseText);
+                }
+            });
+        });
+
+        $('#uploadfile').click(function (e) {
+            //don't allow them to upload a big file if they are using Flash, it will fail.
+            e.preventDefault();
+            $("#upload-plugin-file").addClass('invalid alert alert-error');
+            if (uploader.files.length == 1) {
+                $('#upload-plugin-file').removeClass('invalid alert alert-error').addClass('valid');
+                uploader.start();
+                $('#pickfile').hide();
+                $("#uploadfile").attr('disabled','disabled');
+                $('#upload-progress').show();
+            }
+            else {
+                $('#upload-plugin-file').addClass('invalid alert alert-error');
+                // $("#file_info").addClass('alert-error').html("You must select at a plugin file to upload.").show();
+            }
+        });
+
+        uploader.init();
+    </script>
+
 <!--[if (gte IE 6)&(lte IE 8)]>
 <script type="text/javascript">
     $(document).ready(function() {
@@ -123,6 +267,7 @@
     });
     </script>
 <![endif]-->
+
 <div class="modal container hide" id="modal-window" data-modal-Overflow="true">
     <div class="modal-header">
         <button data-dismiss="modal" class="close" type="button">&times;</button>
@@ -144,51 +289,68 @@
     # } #
     >
 </script>
-<script id="AutorunTemplate" type="text/x-kendo-template">
-    # if (data.autorunMutable) { #
-    <input id='autorunPlugin-#=id#' name='autorun' type='checkbox' class="autorunPlugin" data-pk="#=id#"
-    # if (!data.selected) { #
-        disabled="true"
-    # } #
-    # if (data.autorun) { #
-        checked="checked"
-    # } # >
+<script id="IsSupportedColumnTemplate" type="text/x-kendo-template">
+    <span>
+    # if (data.isSupported) { #
+        Yes
     # } else { #
-    &nbsp;
+        No
     # } #
+    </span>
+</script>
+<script id="DefaultSelectedTemplate" type="text/x-kendo-template">
+    <input id='defaultSelectedPlugin-#=id#' name='defaultSelected' type='checkbox' class="defaultSelectedPlugin" data-pk="#=id#"
+    # if (data.defaultSelected) { #
+        checked="checked"
+    # } #
+     />
 </script>
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
-<div class="btn-group">
-    # var _id = id;#
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
-    <ul class="dropdown-menu pull-right">
-        # if (data.isConfig) { #
-        <li>
-            <a href="#= '{% url "configure_plugins_plugin_configure" 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
-        </li>
-        # } #
-        <li>
-            <a href="#= '{% url "configure_plugins_plugin_usage" 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
-        </li>
-        <li>
-            <a href="#= '{% url "configure_plugins_plugin_refresh" 999999 %}'.replace('999999',_id)#" class="refresh-plugin">Refresh</a>
-        </li>
-        <li>
-            <a href="#= '{% url "configure_plugins_plugin_uninstall" 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">Uninstall</a>
-        </li>
-    </ul>
-</div>
-</script>
-<script id="NameColumnTemplate" type="text/x-kendo-template">
-    # var _id = id;#
-    # if (data.hasAbout) { #
-        <a class='about-plugin' href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#"> #= data.name # </a>
-    # } else { #
-        #= data.name #
-    # } #
+    <div class="btn-group">
+        # var _id = id;#
+        <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#">
+            <img src="{% static "resources/img/gear-active.png"%}" border="0" />
+            <span class="caret" />
+        </a>
+        <ul class="dropdown-menu pull-right">
+            <li>
+                <a href="#= '{% url "configure_plugins_plugin_usage" 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
+            </li>
+            # if (data.isConfig) { #
+            <li>
+                <a href="#= '{% url "configure_plugins_plugin_configure" 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
+            </li>
+            # } #
+            {% if can_upgrade %}
+                # if (data.isSupported) { #
+                    # if (data.isUpgradable) { #
+            <li>
+                <a href="#= '{% url "configure_plugins_plugin_upgrade" 999999 %}'.replace('999999',_id)#" class="upgrade-plugin">Upgrade to Latest</a>
+            </li>
+                    # } #
+                    #for (index = 0; index < data.availableVersions.length; ++index) {#
+                        # if (data.availableVersions[index] != data.CurrentVersion) { #
+                            # var _version = data.availableVersions[index] #
+            <li>
+                <a href="#= '{% url "configure_plugins_plugin_install_to_version" 999999 888888 %}'.replace('999999',_id).replace('888888',_version)#" class="install-to-version-plugin">Install #= _version#</a>
+            </li>
+                        # } #
+                    # } #
+                # } #
+                #if (data.CurrentVersion != 'None'){ #
+            <li>
+                <a href="#= '{% url "configure_plugins_plugin_uninstall" 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">Uninstall</a>
+            </li>
+                # } #
+            {% endif %}
+        </ul>
+    </div>
 </script>
 
+<script id="NameColumnTemplate" type="text/x-kendo-template">
+    #= data.name #
 </script>
+
 <script type="text/javascript">
 $(document).ready(function(){
     function initialize_search () {
@@ -201,14 +363,6 @@ $(document).ready(function(){
                 field: "selected",
                 operator: "",
                 value: $("#id_selected .active").data('value')
-            });
-
-        }
-        if ($("#id_autorun .active").data('value') !== undefined)    {
-            filter.push({
-                field: "autorun",
-                operator: "",
-                value: $("#id_autorun .active").data('value')
             });
         }
         return filter;
@@ -224,16 +378,9 @@ $(document).ready(function(){
         $('.filter-btn-group').button();
         $("#id_selected a").removeClass('active');
         $("#id_selected a:last-child").addClass('active');
-        $("#id_autorun a").removeClass('active');
-        $("#id_autorun a:last-child").addClass('active');
     }
 
     $('#id_selected a').click(function (e) {
-        e.preventDefault();
-        $(this).parent().children('a').removeClass('active');
-        $(this).addClass('active'); filter(e);
-    });
-    $('#id_autorun a').click(function (e) {
         e.preventDefault();
         $(this).parent().children('a').removeClass('active');
         $(this).addClass('active'); filter(e);
@@ -254,7 +401,7 @@ $(document).ready(function(){
             type: "json"
             , transport: {
                 read: {
-                    url: "/rundb/api/v1/plugin/"
+                    url: "/rundb/api/v1/plugin/lineage/"
                     , contentType: 'application/json; charset=utf-8'
                     , type: 'GET'
                     , dataType: 'json'
@@ -267,60 +414,58 @@ $(document).ready(function(){
             , schema: {
                 data: "objects"
                 , total: "meta.total_count"
-                , model: {
-                    fields: {
-                        id: { type: "number" }
-                        , active: { type: "boolean" }
-                        , autorun: { type: "boolean" }
-                        , selected: { type: "boolean" }
-                        , name: { type: "string" }
-                        , path: { type: "string" }
-                        , version: { type: "string" }
-                        , project: { type: "string" }
-                        , url: { type: "string" }
-                        , date: { type: "string" }
-                    }
-                }
             }
-            , serverSorting: true
+            , serverSorting: false
+            , serverFiltering: true
             , sort: { field: "date", dir: "desc" }
-            , serverPaging: true
-            , pageSize: 100
-            , filter: _filter()
         }
         , height: '446'
         , groupable: false
-        , scrollable: { virtual: true }
+        , scrollable: { virtual: false }
         , selectable: false
         , sortable: true
         , pageable: false
         , columns: [
             {
-                field: "selected"
-                , title: "Enabled"
-                , template: kendo.template($("#EnabledTemplate").html())
+                field: "selected",
+                title: "Enabled",
+                template: kendo.template($("#EnabledTemplate").html())
             } , {
-                field: "autorun"
-                , title: "Autorun"
-                , template: kendo.template($("#AutorunTemplate").html())
+                field: "name",
+                title: "Name",
+                sortable: true,
+                template: kendo.template($("#NameColumnTemplate").html())
             } , {
-                field: "name"
-                , title: "Name"
-                , sortable: true
-                , template: kendo.template($("#NameColumnTemplate").html())
+                field: "defaultSelected",
+                sortable: false,
+                template: kendo.template($("#DefaultSelectedTemplate").html()),
+                headerTemplate: // Use Bootstrap's tooltip: TS-12264
+                    '<span data-toggle="tooltip" data-placement="top"'
+                    + 'data-container="body" data-original-title="Checked '
+                    + 'plugins shall be automatically selected to run when a '
+                    + 'new run plan is created and executed. You may uncheck '
+                    + 'one or more of these in the plugins chevron of the run '
+                    + 'plan wizard before executing">Selected by Default</span>'
             } , {
-                field: "version"
-                ,title: "Version"
-                ,sortable: true
+                field: "CurrentVersion",
+                title: "Version",
+                sortable: true
             } , {
-                field: "date"
-                ,title: "Date"
-                ,template: '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
+                field: "date",
+                title: "Installed Date",
+                template: '#= date != "NA" ? kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") : "NA" #'
+
             } , {
-                title: "Manage"
-                , width: '100px'
-                ,sortable: false
-                ,template: kendo.template($("#ActionColumnTemplate").html())
+                field: "isSupported",
+                title: "Ion Supported",
+                width: '100px',
+                sortable: true,
+                template: kendo.template($("#IsSupportedColumnTemplate").html())
+            }, {
+                title: "Manage",
+                width: '100px',
+                sortable: false,
+                template: kendo.template($("#ActionColumnTemplate").html())
             }
         ]
         , dataBound: function(e) {
@@ -328,42 +473,72 @@ $(document).ready(function(){
             $(".enablePlugin").change(function () {
                 var checkBox = $($(this));
                 var key = $(this).data("pk");
-                var state = checkBox.is(':checked')
+                var state = checkBox.is(':checked');
                 var enableUrl = "/configure/plugins/plugin/enable/" + key + "/" + (state ? "1" : "0");
-
-                // Disable autorun input field if plugin is not enabled
-                var autorunSelector = '#autorunPlugin-' + key
-                $(autorunSelector).each(function () {
-                    $(this).prop('disabled', !state)
-                });
 
                 $.ajax({
                     type: "GET",
                     url: enableUrl
                 });
-
             });
-            $(".autorunPlugin").change(function () {
+            $(".defaultSelectedPlugin").change(function () {
                 var checkBox = $($(this));
                 var key = $(this).data("pk");
-                var autorunUrl = "/configure/plugins/plugin/autorun/" + key;
+                var state = checkBox.is(':checked');
+                var enableUrl = "/configure/plugins/plugin/defaultSelected/" + key + "/" + (state ? "1" : "0");
 
                 $.ajax({
-                    type: "POST",
-                    beforeSend: function () {
-                        //checkBox.parent().activity({segments: 10, width:3, space:2, length: 3, color: '#252525', speed: 1.5, padding: '3', align: 'left'});
-                    },
-                    success: function () {
-                        //checkBox.parent().activity(false);
-                    },
-                    data: "checked=" + checkBox.is(':checked'),
-                    url: autorunUrl
+                    type: "GET",
+                    url: enableUrl
                 });
-
             });
             $(source + ' .configure-plugin').click(function(e){
                 e.preventDefault();
                 openModal(this, "Configure");
+            });
+
+            $(source + " .install-to-version-plugin").click(function (e) {
+                e.preventDefault();
+                $('#error-messages').hide().empty();
+                url = $(this).attr('href');
+                $('body #modal_confirm_plugin_version_to_install').remove();
+                $.get(url, function(data) {
+                    $('body').append(data);
+                    $( "#modal_confirm_plugin_version_to_install" ).data('source', source);
+                    $( "#modal_confirm_plugin_version_to_install" ).modal("show");
+                    return false;
+                }).done(function(data) {
+                    console.log("success:",  url);
+                })
+                .fail(function(data) {
+                    $('#error-messages').empty().show();
+                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                    console.log("error:", data);
+                })
+                .always(function(data) {
+                    $('#grid').data('kendoGrid').dataSource.read();
+                    $('#grid').data('kendoGrid').refresh();
+                });
+            });
+
+            $(source + " .upgrade-plugin").click(function (e) {
+                e.preventDefault();
+                $('#error-messages').hide().empty();
+                url = $(this).attr('href');
+                $('body #modal_confirm_plugin_upgrade').remove();
+                $.get(url, function(data) {
+                    $('body').append(data);
+                    $( "#modal_confirm_plugin_upgrade" ).data('source', source);
+                    $( "#modal_confirm_plugin_upgrade" ).modal("show");
+                    return false;
+                }).done(function(data) {
+                    console.log("success:",  url);
+                })
+                .fail(function(data) {
+                    $('#error-messages').empty().show();
+                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                    console.log("error:", data);
+                })
             });
 
             $(source + " .uninstall-plugin").click(function (e) {
@@ -384,7 +559,6 @@ $(document).ready(function(){
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
-                .always(function(data) { /*console.log("complete:", data);*/ });
             });
             $(source + " .refresh-plugin").click(function (e) {
                 e.preventDefault();
@@ -404,7 +578,6 @@ $(document).ready(function(){
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
-                .always(function(data) { /*console.log("complete:", data);*/ });
             });
 
             $(source + ' .about-plugin').click(function(e) {
@@ -432,29 +605,6 @@ $(document).ready(function(){
         });
     }
 
-    $('.install_upgrade_plugin').click(function (e) {
-        var source = '#grid';
-        e.preventDefault();
-        $('#error-messages').hide().empty();
-
-        url = $(this).attr('href');
-        // alert(url);
-        $.get(url, function(data) {
-            return false;
-        }).done(function(data) {
-            console.log("success:",  url);
-            $('body').append(data);
-            $( "#modal_configure_plugins_plugin_install" ).data('source', source);
-            $('#modal_configure_plugins_plugin_install').modal("show");
-        })
-        .fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-        })
-        .always(function(data) { /*console.log("complete:", data);*/ });
-    });
-
     $('.install_upgrade_publisher').click(function (e) {
         e.preventDefault();
         $('#error-messages').hide().empty();
@@ -473,9 +623,8 @@ $(document).ready(function(){
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
         })
-        .always(function(data) { /*console.log("complete:", data);*/ });
     });
-    
+
     $('.publisher_upload').click(function(e) {
         e.preventDefault();
         var url = $(this).attr('href');
@@ -485,16 +634,9 @@ $(document).ready(function(){
            $("#modal_publisher_upload").modal("show");
         });
     });
-    
-    $(document).bind('modal_confirm_plugin_uninstall_done modal_confirm_plugin_configure_done modal_configure_plugins_plugin_install_done', function(e) {
-        console.log(e.target, e.relatedTarget);
-        refreshKendoGrid($(e.target).data('source'));
-    });
 
-    $(document).bind('modal_configure_publisher_install_done', function(e) {
-        console.log(e.target, e.relatedTarget);
-        setTimeout(function(){ window.location.reload(true); }, 1000);
-    });
+    // We'll use Bootstrap's tooltips on this page:
+    $('[data-toggle="tooltip"]').tooltip()
 
 });
 </script>

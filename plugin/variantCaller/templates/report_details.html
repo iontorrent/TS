@@ -22,7 +22,11 @@
 <script src="slickgrid/slick.dataview.js"></script>
 <script src="lifegrid/lifegrid.js"></script>
 
+{% if options.library_type == "tagseq" %}
+<script src="lifegrid/allelesTableTagSeq.js"></script>
+{% else %}
 <script src="lifegrid/allelesTable.js"></script>
+{% endif %}
 <script src="bootstrap-select.js"></script>
 <script src="bootbox.min.js"></script>
 
@@ -146,7 +150,11 @@
                     <span class="headvc">Library Type</span>
                 </div>
                 <div class="span4 movedown5">
+                    {% if options.library_type == "tagseq" %}
+                    Tag Sequencing
+                    {% else %}
                     {{options.library_type}}
+                    {% endif %}
                 </div>
             </div>
 
@@ -276,6 +284,8 @@
                 </div>
             </div>
 
+            {% if options.library_type == "tagseq" %}
+			{% else %}
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
                     <span class="headvc">Variants + Non-Variant Coverage</span>
@@ -285,6 +295,7 @@
                     <a class="btn" href="{{genome_tbi_link}}">gVCF.GZ.TBI</a>
                 </div>
             </div>
+			{% endif %}
 
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
@@ -298,6 +309,38 @@
                 </div>
             </div>
 
+	        {% if options.library_type == "tagseq" %}
+            <div class="row-fluid minibump">
+                <div class="span3 movedown5">
+                    <span class="headvc">Library Performance</span>
+                </div>
+            </div>
+			<div class="row-fluid minibump">
+                <div class="span3 movedown5">
+                    Median Read Coverage
+                </div>
+                <div class="span3 movedown5">
+                    <div class="help" title="Median number of reads covering on target position">{{summary.median_depth}}</div>
+                </div>
+            </div>
+						<div class="row-fluid minibump">
+                <div class="span3 movedown5">
+                    Median Molecular Coverage
+                </div>
+                <div class="span3 movedown5">
+                    <div class="help" title="Median number of Molecules per target">{{summary.median_num_fam3}}</div>
+                </div>
+            </div>
+						<div class="row-fluid minibump">
+                <div class="span3 movedown5">
+                    Targets passing 80% Median Molecular Coverage 
+                </div>
+                <div class="span3 movedown5">
+                    <div class="help" title="Targets with Molecular coverage above 80% of Median">{{summary.fm3_pass80}}</div>
+                </div>
+            </div>
+            {% else %}
+
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
                     <span class="headvc">Deprecated Features</span>
@@ -306,7 +349,8 @@
                     <a class="btn" href="deprecated.htm">Classic</a>
                 </div>
             </div>
-
+           {% endif %}
+		   
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
                     <span class="headvc">Ion Community</span>
@@ -398,7 +442,7 @@
                 <div class="filter-wrap">Var Freq
                     <input type="text" id="AL-txtSearchFreqMin" class="input-small" size=4 value="">
                             to <input type="text" id="AL-txtSearchFreqMax" class="input-small"
-                                      size=4 value=""></div>
+                                      size=4 value=""> % </div>
 
                 <div class="filter-wrap">Total Cov &ge; <input type="text" id="AL-txtSearchCovMin"
                                                           class="input-small" size=7 value=""></div>
@@ -414,9 +458,12 @@
                   <li>
                       <a id="coverage">View Coverage Metrics</a>
                   </li>
+	              {% if options.library_type == "tagseq" %}
+			      {% else %}
                   <li>
                       <a id="quality">View Quality Metrics</a>
                   </li>
+				  {% endif %}
               </ul>
           </div>
 
@@ -429,6 +476,7 @@
 </div>
 
 
+{% if options.library_type != "tagseq" %}
 <div class="content clearfix">
 
   <div class="clearfix">
@@ -551,6 +599,7 @@
   </div>
 
 </div>
+{% endif %}
 
 <script type="text/javascript">
 

@@ -21,6 +21,7 @@ static int
 tmap_usage(int argc, char *argv[]);
 
 static tmap_command_t commands[] = {
+      {tmap_refseq_fasta2maskedfasta_main, "mask", "create a masked genome with bases not in bed region changed to N", TMAP_COMMAND_PREPROCESSING},
       {tmap_index, "index", "creates the packed FASTA, BWT string, and SA files", TMAP_COMMAND_PREPROCESSING},
       {tmap_server_main, "server", "creates a mapping server", TMAP_COMMAND_SERVER},
       {tmap_map1_main, "map1", "mapping procedure #1 (bwa-short variant)", TMAP_COMMAND_MAPPING},

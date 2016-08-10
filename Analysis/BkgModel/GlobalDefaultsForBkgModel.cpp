@@ -22,20 +22,20 @@ LocalSigProcControl::LocalSigProcControl()
 
 // a set of relevant parameters for allowing the krate to vary
 
-  ssq_filter = 0.0f;
+  copy_stringency = 2.0f;
+  min_high_quality_beads = 10;
+
   choose_time = 0; // normal time compression
 
 
-  var_kmult_only = false;
-  projection_search_enable = false;
-  fit_alternate = false;
   fit_gauss_newton = true;
+  fit_region_kmult = false;
 
   do_clonal_filter = true;
   enable_dark_matter = true;
   use_vectorization = true;
   enable_well_xtalk_correction = false;
-  single_flow_fit_max_retry = 0;
+
   per_flow_t_mid_nuc_tracking = false;
   exp_tail_fit = false;
   pca_dark_matter = false;
@@ -44,13 +44,17 @@ LocalSigProcControl::LocalSigProcControl()
   no_RatioDrift_fit_first_20_flows = false;
   use_alternative_etbR_equation =false;
 
-
+  suppress_copydrift = false;
   fitting_taue = false;
+  safe_model= false;
   hydrogenModelType = 0;
   prefilter_beads = false;
   amp_guess_on_gpu = false;
   recompress_tail_raw_trace = false;
   max_frames = 0;
+  barcode_flag = false;
+  double_tap_means_zero = true;
+  num_regional_samples = 200;
 }
 
 void LocalSigProcControl::PrintHelp()
@@ -59,13 +63,14 @@ void LocalSigProcControl::PrintHelp()
     printf ("     --bkg-kmult-adj-low-hi  FLOAT             setup krate adjust limit [2.0]\n");
     printf ("     --kmult-low-limit       FLOAT             setup kmult low limit [0.65]\n");
     printf ("     --kmult-hi-limit        FLOAT             setup kmult high limit [1.75]\n");
-    printf ("     --bkg-ssq-filter-region FLOAT             setup ssq filter region [0.0]\n");
     printf ("     --bkg-ampl-lower-limit  FLOAT             setup ampl lower limit [-0.5 for Proton; 0.001 for PGM]\n");
 
     printf ("     --bkg-exp-tail-fit      BOOL              enable exp tail fitting [true for Proton; false for PGM]\n");
     printf ("     --time-half-speed       BOOL              reduce choose time by half [false]\n");
     printf ("     --bkg-pca-dark-matter   BOOL              enable pca dark matter [true for Proton; false for PGM]\n");
     printf ("     --regional-sampling     BOOL              enable regional sampling [true for Proton; false for PGM]\n");
+    printf ("     --num_regional-samples  INT               number of regional samples used for multi flow fitting\n");
+    printf ("     --skip-first-flow-block-regional-fitting   BOOL  skip multi flow regional fitting in first flow block if a regional parameters json file is provided [false]\n");
     printf ("     --bkg-prefilter-beads   BOOL              use prefilter beads [false]\n");
     printf ("     --vectorize             BOOL              use vectorization [true]\n");
     printf ("     --limit-rdr-fit         BOOL              use no ratio drift fit first 20 flows [false]\n");
@@ -92,44 +97,34 @@ void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 	single_flow_master.krate_adj_limit = RetrieveParameterFloat(opts, json_params, '-', "bkg-kmult-adj-low-hi", 2.0);
 	single_flow_master.kmult_low_limit = RetrieveParameterFloat(opts, json_params, '-', "kmult-low-limit", 0.65);
 	single_flow_master.kmult_hi_limit = RetrieveParameterFloat(opts, json_params, '-', "kmult-hi-limit", 1.75);
-	ssq_filter = RetrieveParameterFloat(opts, json_params, '-', "bkg-ssq-filter-region", 0.0);
 
-	bool do_clonal_filter_def = true;
-	bool enable_well_xtalk_correction_def = false;
-	bool per_flow_t_mid_nuc_tracking_def = false;
+
+  copy_stringency = RetrieveParameterFloat(opts, json_params, '-', "bkg-copy-stringency", 1.0);
+  min_high_quality_beads = RetrieveParameterInt(opts,json_params, '-',"bkg-min-sampled-beads", 100); // half-regional-sampling
+  max_rank_beads = RetrieveParameterInt(opts,json_params, '-',"bkg-max-rank-beads", 100000); // effective infinity: cut off no beads for being too bright
+  post_key_train = RetrieveParameterInt(opts,json_params, '-',"bkg-post-key-train", 2);
+  post_key_step = RetrieveParameterInt(opts,json_params, '-',"bkg-post-key-step", 2);
 
   //ugly parameters because exp-tail fit jams multiple routines into one 'module'
-  bool exp_tail_fit_def = false; // gates the whole constellation, because of history
   exp_tail_bkg_adj = true; // do background adjust per flow using the shifted background
   exp_tail_tau_adj = true; // add a taub modifier based on the fit in the first 20 flows
   exp_tail_bkg_limit = 0.2f; // 20% of background adjustment should be enough - typical values are <<5%
   exp_tail_bkg_lower = 10.0f;  // guess what happens when the pH step becomes 0?  we divide by zero and blow up
   // end ugly
 
-	bool pca_dark_matter_def = false;
-	bool regional_sampling_def = false;
-	float AmplLowerLimit_def = 0.001f;
-	int defaultSffmr = 0;
-	if(ChipIdDecoder::IsProtonChip())
-	{
-		do_clonal_filter_def = false;
-		enable_well_xtalk_correction_def = true;
-		per_flow_t_mid_nuc_tracking_def = true;
-		exp_tail_fit_def = true;
-		pca_dark_matter_def = true;
-		regional_sampling_def = true;
-		AmplLowerLimit_def = -0.5f;
-		if(!fit_gauss_newton)
-		{
-			defaultSffmr = 4;
-		}
-	}
-	do_clonal_filter = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", do_clonal_filter_def);
-	enable_well_xtalk_correction = RetrieveParameterBool(opts, json_params, '-', "bkg-use-proton-well-correction", enable_well_xtalk_correction_def);
-	per_flow_t_mid_nuc_tracking = RetrieveParameterBool(opts, json_params, '-', "bkg-per-flow-time-tracking", per_flow_t_mid_nuc_tracking_def);
+  do_clonal_filter = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", true);
+  barcode_flag = RetrieveParameterBool(opts, json_params, '-', "barcode-flag", false);
+  barcode_debug = RetrieveParameterBool(opts, json_params, '-', "barcode-debug", false);
+  barcode_radius = RetrieveParameterFloat(opts, json_params,'-',"barcode-radius", 0.75f);
+  barcode_tie    = RetrieveParameterFloat(opts, json_params,'-',"barcode-tie", 0.5f);
+  barcode_penalty = RetrieveParameterFloat(opts, json_params,'-',"barcode-penalty", 2000.0f);
+  kmult_penalty = RetrieveParameterFloat(opts, json_params,'-',"kmult-penalty", 100.0f);
+
+  enable_well_xtalk_correction = RetrieveParameterBool(opts, json_params, '-', "bkg-use-proton-well-correction", false);
+  per_flow_t_mid_nuc_tracking = RetrieveParameterBool(opts, json_params, '-', "bkg-per-flow-time-tracking", false);
 
   //ugly family of parameters due to history
-	exp_tail_fit = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-fit", exp_tail_fit_def);
+  exp_tail_fit = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-fit", false);
   exp_tail_tau_adj = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-tau-adj", exp_tail_tau_adj);
   exp_tail_bkg_adj = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-bkg-adj", exp_tail_bkg_adj);
   exp_tail_bkg_limit = RetrieveParameterFloat(opts, json_params, '-', "bkg-exp-tail-limit", exp_tail_bkg_limit);
@@ -140,28 +135,39 @@ void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 	}
   // too many things packed into 'exp-tail-fit'
 
-	pca_dark_matter = RetrieveParameterBool(opts, json_params, '-', "bkg-pca-dark-matter", pca_dark_matter_def);
-	regional_sampling = RetrieveParameterBool(opts, json_params, '-', "regional-sampling", regional_sampling_def);
-	regional_sampling_type = RetrieveParameterInt(opts, json_params, '-', "regional_sampling_type", 1);
+    pca_dark_matter = RetrieveParameterBool(opts, json_params, '-', "bkg-pca-dark-matter", false);
+    regional_sampling = RetrieveParameterBool(opts, json_params, '-', "regional-sampling", false);
+    regional_sampling_type = RetrieveParameterInt(opts, json_params, '-', "regional-sampling-type", 1);
+    revert_regional_sampling = RetrieveParameterBool(opts, json_params, '-',"revert-regional-sampling", false);
+
 	enable_dark_matter = RetrieveParameterBool(opts, json_params, '-', "dark-matter-correction", true);
 	prefilter_beads = RetrieveParameterBool(opts, json_params, '-', "bkg-prefilter-beads", false);
 	use_vectorization = RetrieveParameterBool(opts, json_params, '-', "vectorize", true);
-	AmplLowerLimit = RetrieveParameterFloat(opts, json_params, '-', "bkg-ampl-lower-limit", AmplLowerLimit_def);
-	projection_search_enable = RetrieveParameterBool(opts, json_params, '-', "single-flow-projection-search", false);
+    AmplLowerLimit = RetrieveParameterFloat(opts, json_params, '-', "bkg-ampl-lower-limit", 0.001);
 
 	// from OverrideDefaultsForBkgModel//changed
 	no_RatioDrift_fit_first_20_flows = RetrieveParameterBool(opts, json_params, '-', "limit-rdr-fit", false);
 	use_alternative_etbR_equation = RetrieveParameterBool(opts, json_params, '-', "use-alternative-etbr-equation", false);
 
-
 	fitting_taue = RetrieveParameterBool(opts, json_params, '-', "fitting-taue", false);
-	hydrogenModelType = RetrieveParameterInt(opts, json_params, '-', "incorporation-type", 0);
-//jz	generic_test_flag = RetrieveParameterBool(opts, json_params, '-', "generic-test-flag", false);
-	fit_alternate = RetrieveParameterBool(opts, json_params, '-', "bkg-single-alternate", false);
+
+
+  safe_model = RetrieveParameterBool(opts, json_params, '-', "use-safe-buffer-model", false);
+  suppress_copydrift = RetrieveParameterBool(opts, json_params, '-', "suppress-copydrift", false);
+  hydrogenModelType = RetrieveParameterInt(opts, json_params, '-', "incorporation-type", 0);
+
+   stop_beads = RetrieveParameterBool(opts, json_params, '-', "stop-beads", false);
+
 	fit_gauss_newton = RetrieveParameterBool(opts, json_params, '-', "bkg-single-gauss-newton", true);
-	single_flow_fit_max_retry = RetrieveParameterInt(opts, json_params, '-', "bkg-single-flow-retry-limit", defaultSffmr);
-	var_kmult_only = RetrieveParameterBool(opts, json_params, '-', "var-kmult-only", false);
+
+  fit_region_kmult = RetrieveParameterBool(opts, json_params, '-', "fit-region-kmult", false);
+  always_start_slow = RetrieveParameterBool(opts, json_params, '-', "always-start-slow", true);
+
+
 	recompress_tail_raw_trace = RetrieveParameterBool(opts, json_params, '-', "bkg-recompress-tail-raw-trace", false);
+    double_tap_means_zero = RetrieveParameterBool(opts, json_params, '-', "double-tap-means-zero", true);
+    num_regional_samples = RetrieveParameterInt(opts, json_params, '-', "num-regional-samples", 400);
+    skipFirstFlowBlockRegFitting = RetrieveParameterBool(opts, json_params, '-', "skip-first-flow-block-regional-fitting", false);
 }
 
 void GlobalDefaultsForBkgModel::SetChipType ( const char *name )
@@ -201,66 +207,6 @@ void GlobalDefaultsForBkgModel::GoptDefaultsFromJson(char *fname){
 }
 
 
-#define MAX_LINE_LEN    2048
-#define MAX_DATA_PTS    80
-
-void GlobalDefaultsForBkgModel::GoptDefaultsFromPoorlyStructuredFile(char *fname){
-  struct stat fstatus;
-  int         status;
-  FILE *param_file;
-  char *line;
-  int nChar = MAX_LINE_LEN;
-  float d[10];
-
-  int num = 0;
-
-  line = new char[MAX_LINE_LEN];
-
-  status = stat ( fname,&fstatus );
-  printf("You are trying to use an obsolete format:  please use json files instead!!!!\n");
-  printf("Continue loading the old format file for now...");
-  //exit(1);  // If I don't force failure, will never be used
-
-  if ( status == 0 )
-  {
-    // file exists
-    printf ( "GOPT: loading parameters from %s\n",fname );
-
-
-    param_file=fopen ( fname,"rt" );
-
-    bool done = false;
-
-    while ( !done )
-    {
-      int bytes_read = getline ( &line, ( size_t * ) &nChar,param_file );
-
-      if ( bytes_read > 0 )
-      {
-        if ( bytes_read >= MAX_LINE_LEN || bytes_read < 0 )
-        {
-          ION_ABORT ( "Read: " + ToStr ( bytes_read ) + " into a buffer only: " +
-                      ToStr ( MAX_LINE_LEN ) + " long for line: '" + ToStr ( line ) + "'" );
-        }
-        line[bytes_read]='\0';
-
-        region_param_start.FromCharacterLine(line);
-        data_control.FromCharacterLine(line);
-        fitter_defaults.FromCharacterLine(line);
-      }
-      else
-        done = true;
-    }
-
-    fclose ( param_file );
-  }
-  else{
-    printf ( "GOPT: parameter file %s does not exist, Aborting\n",fname );
-    exit(1);
-  }
-
-  delete [] line;
-}
 
 // Load optimized defaults from GeneticOptimizer runs
 void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
@@ -276,8 +222,9 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
   if(isJson){
     GoptDefaultsFromJson(fname);
   } else{
-      //old way
-    GoptDefaultsFromPoorlyStructuredFile(fname);
+
+    printf("Abort: %s not a json file", fname);
+    exit(1);
 
   }
   region_param_start.BadIdeaComputeDerivedInput();
@@ -296,328 +243,24 @@ void GlobalDefaultsForBkgModel::DumpExcitingParameters(const char *fun_string)
     printf ( "\n" );
 }
 
-// This function is used during GeneticOptimizer runs in which case the above SetGoptDefaults is disabled
-//@TODO: 300 line redundant function - why do we do things in badly structured ways?
-void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentName )
-{
-  char fname[512];
-  FILE *evect_file;
-  char *line = new char[MAX_LINE_LEN];
-  float read_data[MAX_DATA_PTS];
-  int nChar = MAX_LINE_LEN;
-  int pset=0;
-
-  struct stat fstatus;
-  sprintf ( fname,"%s/emphasis_vector.txt", experimentName );
-  int status = stat ( fname,&fstatus );
-  if ( status == 0 )    // file exists
-  {
-    printf ( "loading emphasis vector parameters from %s\n",fname );
-
-    evect_file=fopen ( fname,"rt" );
-
-    // first line contains the number of points
-    int bytes_read = getline ( &line, ( size_t * ) &nChar,evect_file );
-
-    if ( bytes_read > 0 )
-    {
-      int evect_size;
-      sscanf ( line,"%d",&evect_size );
-      printf ("nps=%d",evect_size);
-
-
-      for (int i=0; ( i < evect_size ) && ( i < MAX_DATA_PTS );i++ )
-      {
-        bytes_read = getline ( &line, ( size_t * ) &nChar,evect_file );
-        sscanf ( line,"%f",&read_data[i] );
-        printf ("\t%f",read_data[i]);
-      }
-      printf ("\n");
-
-      // pick 3 gopt parameter sets:
-      // 0 = all params, 1 - no nuc-dep factors, 2 - no nuc-dep factors plus no emphasis, 3 - only emphasis params
-      if ( evect_size == 13 ) pset = 2;
-      else if ( evect_size == 23 ) pset = 1;
-      else if ( evect_size == 43 ) pset = 0;
-      else if ( evect_size == 44 ) pset = 11;
-      else if ( evect_size == 46 ) pset = 12;   // min_tauB, max_tauB
-      else if ( evect_size == 47 ) pset = 13;   // mid_tauB
-      else if ( evect_size == 10 ) pset = 3;
-      else if ( evect_size == 4 ) pset = 4;
-      else if ( evect_size == 6 ) pset = 5;
-      else if ( evect_size == 7 ) pset = 6;
-      else if ( evect_size == 8 ) pset = 7;
-      else if ( evect_size == 11 ) pset = 8;
-      else if ( evect_size == 12 ) pset = 9;
-      else if ( evect_size == 38 ) pset = 10;
-      else
-      {
-        fprintf ( stderr, "Unrecognized number of points (%d) in %s\n", evect_size, fname );
-        exit ( 1 );
-      }
-    }
-    fclose ( evect_file );
-
-    // copy the configuration values into the right places
-    int dv = 0;
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-    // first value scales add km terms
-    region_param_start.kmax_default[TNUCINDEX] *= read_data[dv];
-    region_param_start.kmax_default[ANUCINDEX] *= read_data[dv];
-    region_param_start.kmax_default[CNUCINDEX] *= read_data[dv];
-    region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
-    }
-    // 2-5 values scale individual terms
-    if ( pset == 0 || pset>=11)
-    {
-      region_param_start.kmax_default[TNUCINDEX] *= read_data[dv++];
-      region_param_start.kmax_default[ANUCINDEX] *= read_data[dv++];
-      region_param_start.kmax_default[CNUCINDEX] *= read_data[dv++];
-      region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-      region_param_start.krate_default[TNUCINDEX] *= read_data[dv];
-      region_param_start.krate_default[ANUCINDEX] *= read_data[dv];
-      region_param_start.krate_default[CNUCINDEX] *= read_data[dv];
-      region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset>=11)
-    {
-      region_param_start.krate_default[TNUCINDEX] *= read_data[dv++];
-      region_param_start.krate_default[ANUCINDEX] *= read_data[dv++];
-      region_param_start.krate_default[CNUCINDEX] *= read_data[dv++];
-      region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-      region_param_start.d_default[TNUCINDEX] *= read_data[dv];
-      region_param_start.d_default[ANUCINDEX] *= read_data[dv];
-      region_param_start.d_default[CNUCINDEX] *= read_data[dv];
-      region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset>=11)
-    {
-      region_param_start.d_default[TNUCINDEX] *= read_data[dv++];
-      region_param_start.d_default[ANUCINDEX] *= read_data[dv++];
-      region_param_start.d_default[CNUCINDEX] *= read_data[dv++];
-      region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-      region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv];
-      region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv];
-      region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv];
-      region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset>=11)
-    {
-      region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv++];
-      region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv++];
-      region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv++];
-      region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-      region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
-      region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
-      region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv];
-      region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset>=11)
-    {
-      region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv++];
-      region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv++];
-      region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv++];
-      region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-      region_param_start.sens_default *= read_data[dv++];
-      region_param_start.tau_R_m_default *= read_data[dv++];
-      region_param_start.tau_R_o_default *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset==1 || pset==3 || pset>=11)
-    {
-      for ( int vn=0;vn < 8;vn++ )
-        data_control.emp[vn] *= read_data[dv++];
-
-      data_control.emphasis_ampl_default *= read_data[dv++];
-      data_control.emphasis_width_default *= read_data[dv++];
-    }
-
-    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
-    {
-      fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
-      fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
-      fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
-      fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
-      fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
-    }
-    if ( pset>=11)
-    {
-      // taue
-      region_param_start.tau_E_default *= read_data[dv++];
-    }
-    if ( pset>=12)
-    {
-      region_param_start.min_tauB_default *= read_data[dv++];
-      region_param_start.max_tauB_default *= read_data[dv++];
-    }
-    if ( pset>=13)
-    {
-      region_param_start.mid_tauB_default *= read_data[dv++];
-    }
-
-    if (pset >= 4 && pset <= 9)
-    {
-        // kmax
-        region_param_start.kmax_default[TNUCINDEX] *= read_data[dv];
-        region_param_start.kmax_default[ANUCINDEX] *= read_data[dv];
-        region_param_start.kmax_default[CNUCINDEX] *= read_data[dv];
-        region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
-        // sigma_mult
-        region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv];
-        region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv];
-        region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv];
-        region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
-        // t_mid_nuc_delay
-        region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
-        region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
-        region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv];
-        region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
-        // sens
-        region_param_start.sens_default *= read_data[dv++];
-    }
-    else if (pset == 10)
-    {
-        // kmax[4]
-        region_param_start.kmax_default[TNUCINDEX] *= read_data[dv++];
-        region_param_start.kmax_default[ANUCINDEX] *= read_data[dv++];
-        region_param_start.kmax_default[CNUCINDEX] *= read_data[dv++];
-        region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
-        // krate[4]
-        region_param_start.krate_default[TNUCINDEX] *= read_data[dv++];
-        region_param_start.krate_default[ANUCINDEX] *= read_data[dv++];
-        region_param_start.krate_default[CNUCINDEX] *= read_data[dv++];
-        region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
-        // d_coeff[4]
-        region_param_start.d_default[TNUCINDEX] *= read_data[dv++];
-        region_param_start.d_default[ANUCINDEX] *= read_data[dv++];
-        region_param_start.d_default[CNUCINDEX] *= read_data[dv++];
-        region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
-        // sigma_mult[4]
-        region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv++];
-        region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv++];
-        region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv++];
-        region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
-        // t_mid_nuc_delay[4]
-        region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv++];
-        region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv++];
-        region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv++];
-        region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
-        // sens
-        region_param_start.sens_default *= read_data[dv++];
-
-    }
-
-    if (pset >= 5 && pset <=10)
-    {
-        data_control.emphasis_ampl_default *= read_data[dv++];
-        data_control.emphasis_width_default *= read_data[dv++];
-        switch (pset)
-        {
-        case 6:
-            fitter_defaults.clonal_call_scale[0] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[1] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[2] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[3] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
-            break;
-        case 7:
-            fitter_defaults.clonal_call_scale[0] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[1] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[2] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[3] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
-            for ( int vn=0;vn < 7;vn++ )
-                data_control.emp[vn] *= read_data[dv];
-            data_control.emp[7] *= read_data[dv++];
-            break;
-        case 8:
-            fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
-            break;
-        case 9:
-            for ( int vn=0;vn < 7;vn++ )
-                data_control.emp[vn] *= read_data[dv];
-            data_control.emp[7] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[0] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[1] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[2] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[3] *= read_data[dv];
-            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
-            region_param_start.tau_R_m_default *= read_data[dv++];
-            region_param_start.tau_R_o_default *= read_data[dv++];
-            break;
-        case 10:
-            for ( int vn=0;vn < 8;vn++ )
-                data_control.emp[vn] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
-            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
-            region_param_start.tau_R_m_default *= read_data[dv++];
-            region_param_start.tau_R_o_default *= read_data[dv++];
-            break;
-        default:
-            break;
-        }
-    }
- }
-  else
-  {
-    fprintf ( stderr, "emphasis file: %s \tstatus: %d\n",fname,status );
-    exit ( 1 );
-  }
-
-  delete [] line;
-  region_param_start.BadIdeaComputeDerivedInput();
-
-  DumpExcitingParameters("GOPT");
-}
 
 void GlobalDefaultsForBkgModel::PrintHelp()
 {
-	printf ("     GlobalDefaultsForBkgModel\n");
-	printf ("     --bkg-well-xtalk-name   FILE              well xtalk file name []\n");
-    printf ("     --gopt                  STRING            setup gopte [default]\n");
-    printf ("     --xtalk                 STRING            setup xtalk [disable]\n");
+    printf ("     GlobalDefaultsForBkgModel\n");
+    printf ("     --bkg-well-xtalk-name   FILE              specify well xtalk parameter filename []\n");
+    printf ("     --xtalk                 STRING            specify trace xtalk parameter filename [disable]\n");
+    printf ("     --gopt                  STRING            specify gopt parameter filename [default]\n");
     printf ("     --bkg-dont-emphasize-by-compression BOOL  not empasized by compression [false]\n");
     printf ("\n");
 
-	signal_process_control.PrintHelp();
+    signal_process_control.PrintHelp();
 }
 
 void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
 	// from SetBkgModelGlobalDefaults
 	chipType = GetParamsString(json_params, "chipType", "");
+        if((!chipType.empty()) && chipType[0] == 'P') chipType[0] = 'p';
 	string results_folder = GetParamsString(json_params, "results_folder", "");
 
 	string gopt = RetrieveParameterString(opts, json_params, '-', "gopt", "default");
@@ -656,18 +299,11 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 			if (tmp_config_file)
 			  free(tmp_config_file);
 
-			ReadEmphasisVectorFromFile ((char*)(results_folder.c_str()));   //GeneticOptimizer run - load its vector
 		}
 		else
 		{
 		    SetGoptDefaults ((char*)(gopt.c_str())); //parameter file provided cmd-line
-			// still do opt if the emphasis_vector.txt file exists
-			char fname[512];
-			sprintf ( fname,"%s/emphasis_vector.txt", results_folder.c_str() );
-			struct stat fstatus;
-			int status = stat ( fname,&fstatus );
-			if ( status == 0 )    // file exists
-				ReadEmphasisVectorFromFile ((char*)(results_folder.c_str()));   //GeneticOptimizer run - load its vector
+
 		}
 	}
 
@@ -729,4 +365,18 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 	{
 		well_xtalk_master.DefaultPI();
 	}
+
+  // read master file containing barcodes
+  // set up barcodes in each region as copied from master
+
+  string barcode_file_name = RetrieveParameterString(opts, json_params,'-', "barcode-spec-file","");
+  if (barcode_file_name.length()>0)
+  {
+    barcode_master.ReadFromFile(barcode_file_name);
+
+  }
+  else
+  {
+    // nothing: no barcodes, don't do anything
+  }
 }

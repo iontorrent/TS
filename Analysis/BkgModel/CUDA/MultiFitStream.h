@@ -37,12 +37,14 @@ class SimpleMultiFitStream : public cudaSimpleStreamExecutionUnit
   WorkSet _myJob;
 
   float _lambda_start[CUDA_MULTIFLOW_NUM_FIT];
+  int _fit_training_level[CUDA_MULTIFLOW_NUM_FIT];
   int _fit_iterations[CUDA_MULTIFLOW_NUM_FIT];
   int _clonal_restriction[CUDA_MULTIFLOW_NUM_FIT];
   float _restrict_clonal[CUDA_MULTIFLOW_NUM_FIT];
 
-
-  int _fitIter; 
+  // number of different fits performed in this multifit stream
+  int _fitNum; 
+  int _curFitLevel;
 
   int _maxEmphasis;
   unsigned int _partialDerivMask; // mask to find out which params to compute partial derivative for
@@ -60,7 +62,7 @@ class SimpleMultiFitStream : public cudaSimpleStreamExecutionUnit
   TMemSegPair<BeadParams> _hdBeadParams;
 
   TMemSegPair<FG_BUFFER_TYPE> _hdFgBuffer;  //former _pHostFgBuffer and _pDevObservedTrace
-  TMemSegPair<float> _hdNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F
+  TMemSegPair<float> _hdCoarseNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F
   TMemSegPair<float> _hdSbg; // FLxF
   TMemSegPair<float> _hdEmphasis; // MAX_HPLEN+1 xF // needs precomputation
   TMemSegPair<float> _hdNon_integer_penalty; // MAX_HPLEN+1
@@ -131,7 +133,7 @@ public:
 
   static size_t getMaxHostMem(int global_max_flow_key, int global_max_flow_block_size);
                                //if no params given returns absolute or defined worst case size
-  static size_t getMaxDeviceMem(int global_max_flow_key, int global_max_flow_block_size, int numFrames /*= 0*/, int numBeads /*= 0*/);
+  static size_t getMaxDeviceMem(int global_max_flow_key, int global_max_flow_block_size, int numFrames /*= 0*/, int numBeads /*= 0*/, WorkSet *job = NULL);
 
   int getBeadsPerBlockMultiFit();
   int getL1SettingMultiFit();
@@ -163,6 +165,9 @@ private:
   // some inputs being calculated for fitting
   void CalculateClonalityRestriction(int fit_index);
   void CalculateNonIntegerPenalty();
+
+  void preFitCpuSteps();
+  void postFitProcessing();
 
 
 };

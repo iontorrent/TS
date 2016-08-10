@@ -90,12 +90,10 @@ public:
 	void SetUpProcessing(); 
 	void SetSysContextLocations();
     void SetFlowContext(string explog_path);
-    void SetGlobalChipID(string dat_source_directory);  // only do this >once<
 
     // CHIP DEFAULTS WHICH SHOULD BE CONFIGURATION FILES
 	void PrintHelp();
 	void SetOpts(OptArgs &opts, Json::Value& json_params);
-	void PostProcessArgs(OptArgs &opts);
 
     /*---   options variables       ---*/
     // how the overall program flow will go

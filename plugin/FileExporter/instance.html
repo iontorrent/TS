@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 	<link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
-	<link rel="stylesheet" media="all" href="pluginMedia/jquery-ui-1.11.4.custom/jquery-ui.min.css"></script>
+	<link rel="stylesheet" media="all" href="pluginMedia/jquery-ui-1.11.4.custom/jquery-ui.min.css"/>
 	<link rel="stylesheet" media="all" href="pluginMedia/bootstrap-3.3.5-dist/css/bootstrap.min.css"/>
 
 	<script type="text/javascript" src="pluginMedia/jquery-1.11.3.js"></script>
@@ -107,13 +107,6 @@
 				delete pluginGET.resource_uri;
 
 				$.each(pluginGET.config, function(key,val){
-					//set the value of the html object
-					if (key == "sffCreate"){
-						if (val == "on"){
-							document.getElementById("sffCreate").checked = true;
-							document.getElementById("zipSFF").disabled = false;
-						}
-					}
 					if(key == "fastqCreate"){
 						if (val == "on"){
 							document.getElementById("fastqCreate").checked = true;
@@ -136,11 +129,6 @@
 						if (val == "on"){
 							document.getElementById("bamCreate").checked = true;
 							document.getElementById("zipBAM").disabled = false;
-						}
-					}
-					if(key == "zipSFF"){
-						if (val == "on"){
-							document.getElementById("zipSFF").checked = true;
 						}
 					}
 					if(key == "zipFASTQ"){
@@ -287,14 +275,6 @@
     		document.getElementById("zipXLS").disabled = true;
     		document.getElementById("zipXLS").checked = false;
     	}
-    	if (document.getElementById("sffCreate").checked == true) {
-    		document.getElementById("zipSFF").disabled = false;
-    		readyToSubmit = true;
-    	} 
-    	else {
-    		document.getElementById("zipSFF").disabled = true;
-    		document.getElementById("zipSFF").checked = false;
-    	}
     	if (document.getElementById("fastqCreate").checked == true) {
     		document.getElementById("zipFASTQ").disabled = false;
     		readyToSubmit = true;
@@ -365,8 +345,6 @@
     			obj["vcfCreate"] = 'off'
     		if (!document.getElementById("xlsCreate").checked)
     			obj["xlsCreate"] = 'off'
-    		if (!document.getElementById("sffCreate").checked)
-    			obj["sffCreate"] = 'off'
     		if (!document.getElementById("fastqCreate").checked)
     			obj["fastqCreate"] = 'off'
     		if (!document.getElementById("zipBAM").checked)
@@ -375,8 +353,6 @@
     			obj["zipVCF"] = 'off'
     		if (!document.getElementById("zipXLS").checked)
     			obj["zipXLS"] = 'off'
-    		if (!document.getElementById("zipSFF").checked)
-    			obj["zipSFF"] = 'off'
     		if (!document.getElementById("zipFASTQ").checked)
     			obj["zipFASTQ"] = 'off'
 
@@ -461,18 +437,6 @@
 					</div>
 					<td><div class="row-fluid" style="text-align: center;"> 
 						<input type="checkbox"id="zipXLS" name="zipXLS" disabled="disabled"/>
-					</div>
-				</tr>
-
-				<tr class="zebra">
-					<td><div class="row-fluid" style="text-align: center;"> 
-						<span class="helpLeft" title="Standard Flowgram Format (SFF) is a formatted file that contains flow space data.This is where the bases called in a run are stored. This file also contains the nucleotide calls and associated quality values and signal values in flow space and a mapping between sequence and flow spaces. The data are organized on a per flow basis, and contain information about nucleotide flows that both did and did not result in base incorporation. ">Standard Flowgram Format (SFF)</span>
-					</div></td>
-					<td><div class="row-fluid" style="text-align: center;"> 
-						<input type="checkbox" id="sffCreate" name="sffCreate" onchange="updateTable()"/></td>
-					</div>
-					<td><div class="row-fluid" style="text-align: center;"> 
-						<input type="checkbox" id="zipSFF" name="zipSFF" disabled="disabled"/></td>
 					</div>
 				</tr>
 

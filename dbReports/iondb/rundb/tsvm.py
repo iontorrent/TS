@@ -8,6 +8,7 @@ from celery import task
 from celery.result import AsyncResult
 from celery.utils.log import get_task_logger
 
+
 @task
 def _do_celery_subprocess(command):
     response_obj = {}
@@ -98,6 +99,7 @@ def versions():
         versions = response_obj['state']
     return versions
 
+
 @task
 def check_for_new_tsvm():
     '''Check if there is an updated version of ion-tsvm package'''
@@ -139,6 +141,7 @@ def check_for_new_tsvm():
 
     return response_obj
 
+
 @task
 def install_new_tsvm():
     '''Installs new ion-tsvm package'''
@@ -166,8 +169,8 @@ def install_new_tsvm():
                 pkg.markInstall()
 
         apt_cache.commit()
-        response_obj.update({'state':'Success', 'msg': "ion-tsvm updated"})
+        response_obj.update({'state': 'Success', 'msg': "ion-tsvm updated"})
     except Exception as e:
-        response_obj.update({'state': 'Error', 'msg': str(e) })
+        response_obj.update({'state': 'Error', 'msg': str(e)})
 
     return response_obj

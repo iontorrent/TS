@@ -14,7 +14,7 @@
 # sigproc_results/Bead_density_contour.png
 # sigproc_results/avgNukeTrace_*.txt
 #
-################################################################################
+#
 import os
 import sys
 import json
@@ -33,6 +33,7 @@ from iondb.bin.crawler import generate_updateruninfo_post
 
 
 class fakelog(object):
+
     def __init__(self):
         self.errors = logging.getLogger(__name__)
         self.errors.propagate = True
@@ -68,36 +69,38 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
         base_recalibration_mode = "no_recal"
         mark_duplicates = False
         realign = False
-    
-    #instead of relying on globalConfig, user can now set isDuplicateReads for the experiment
+
+    # instead of relying on globalConfig, user can now set isDuplicateReads for the experiment
     eas = exp.get_EAS()
     if (eas):
-        ##logger.errors.info("from_well_analysis.generate_http_post() exp.name=%s; id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk), str(eas.isDuplicateReads)))
+        # logger.errors.info("from_well_analysis.generate_http_post() exp.name=%s;
+        # id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk),
+        # str(eas.isDuplicateReads)))
         mark_duplicates = eas.isDuplicateReads
 
-    #default_args = get_default_cmdline_args(exp.chipType)
-    #if thumbnail_analysis:
+    # default_args = get_default_cmdline_args(exp.chipType)
+    # if thumbnail_analysis:
     #    analysisArgs = default_args['thumbnailAnalysisArgs']
-    #else:
+    # else:
     #    analysisArgs = default_args['analysisArgs']
 
     # Force the from-wells option here
-    #analysisArgs = analysisArgs + " --from-wells %s" % os.path.join(data_path,"1.wells")
+    # analysisArgs = analysisArgs + " --from-wells %s" % os.path.join(data_path,"1.wells")
 
     _report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
 
-    params = urllib.urlencode({'report_name':_report_name,
-                            'tf_config':'',
-                            'path':exp.expDir,
-                            'submit': ['Start Analysis'],
-                            'do_thumbnail':"%r" % thumbnail_analysis,
-                            'blockArgs':'fromWells',
-                            'previousReport':os.path.join(data_path),
-                            'previousThumbReport':os.path.join(data_path),  # defined in case its a thumby, innocuous otherwise
-                            'do_base_recal':base_recalibration_mode,
-                            'realign': realign,
-                            'mark_duplicates': mark_duplicates,
-                            })
+    params = urllib.urlencode({'report_name': _report_name,
+                               'tf_config': '',
+                               'path': exp.expDir,
+                               'submit': ['Start Analysis'],
+                               'do_thumbnail': "%r" % thumbnail_analysis,
+                               'blockArgs': 'fromWells',
+                               'previousReport': os.path.join(data_path),
+                               'previousThumbReport': os.path.join(data_path),  # defined in case its a thumby, innocuous otherwise
+                               'do_base_recal': base_recalibration_mode,
+                               'realign': realign,
+                               'mark_duplicates': mark_duplicates,
+                               })
 
     status_msg = _report_name
     try:
@@ -117,8 +120,9 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
     if f:
         error_code = f.getcode()
         if error_code is not 200:
-            print(" !! Failed to start analysis. URL failed with error code %d for %s" % (error_code, f.geturl()))
-            #for line in f.readlines():
+            print(" !! Failed to start analysis. URL failed with error code %d for %s" %
+                  (error_code, f.geturl()))
+            # for line in f.readlines():
             #    print(line.strip())
             status_msg = "Failure to generate POST"
 
@@ -141,7 +145,8 @@ def newExperiment(_explog_path, _plan_json=''):
         # Parse the explog.txt file
         text = load_log_path(_explog_path)
         explog = parse_log(text)
-        explog["planned_run_short_id"] = '' # don't allow getting plan by shortId - other plans may exist with that id
+        explog[
+            "planned_run_short_id"] = ''  # don't allow getting plan by shortId - other plans may exist with that id
         try:
             ret_val = generate_updateruninfo_post(folder, logger)
             if ret_val == "Generated POST":
@@ -154,7 +159,7 @@ def newExperiment(_explog_path, _plan_json=''):
                 print "ERROR: Could not update/generate new Experiment record in database"
                 print ret_val
                 return None
-            
+
             # Append to expName to indicate imported dataset.
             _newExp.expName += "_foreign"
             _newExp.save()
@@ -169,12 +174,13 @@ def newExperiment(_explog_path, _plan_json=''):
 
     return _newExp
 
+
 def update_plan_info(_plan_json, planObj, easObj):
     # update Plan and EAS fields
     eas_params = {"barcodeId": 'barcodeKitName',
-        "barcodedSamples": 'barcodedSamples',
-        "librarykitname": 'libraryKitName',
-        "threePrimeAdapter": 'threePrimeAdapter'}
+                  "barcodedSamples": 'barcodedSamples',
+                  "librarykitname": 'libraryKitName',
+                  "threePrimeAdapter": 'threePrimeAdapter'}
     plan_params = ["controlSequencekitname", "planName", "runType", "samplePrepKitName", "templatingKitName"]
     try:
         for key in _plan_json.keys():
@@ -188,6 +194,7 @@ def update_plan_info(_plan_json, planObj, easObj):
         planObj.save()
     except:
         print traceback.format_exc()
+
 
 def getReportURL(_report_name):
     URLString = None
@@ -204,7 +211,8 @@ def getReportURL(_report_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Initiate from-wells analysis Report")
-    parser.add_argument("--thumbnail-only", dest="thumbnail_only", action="store_true", default=False, help="Flag indicating thumbnail analysis only")
+    parser.add_argument("--thumbnail-only", dest="thumbnail_only",
+                        action="store_true", default=False, help="Flag indicating thumbnail analysis only")
     parser.add_argument("directory", metavar="directory", help="Path to data to analyze")
 
     # If no arguments, print help and exit
@@ -230,13 +238,14 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if os.path.exists(os.path.join(src_dir, 'onboard_results', 'sigproc_results')):
-        os.symlink(os.path.join(src_dir, 'onboard_results', 'sigproc_results'),os.path.join(src_dir, 'sigproc_results'))
+        os.symlink(os.path.join(src_dir, 'onboard_results', 'sigproc_results'),
+                   os.path.join(src_dir, 'sigproc_results'))
         is_fullchip = True
     else:
         is_fullchip = False
 
     test_dir = os.path.join(src_dir, 'sigproc_results')
-    #TODO: this test modified to support Proton
+    # TODO: this test modified to support Proton
 
     if is_fullchip:
         pass
@@ -256,7 +265,7 @@ if __name__ == '__main__':
                 print "Cannot basecall without bfmask.bin from signal processing"
                 print "STATUS: Error"
                 sys.exit(1)
-    
+
         testpath = os.path.join(test_dir, 'analysis.bfmask.stats')
         if not os.path.isfile(testpath):
             testpath = os.path.join(test_dir, 'bfmask.stats')

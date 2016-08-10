@@ -1,43 +1,44 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
+{% load static from staticfiles %}
+{% load pagetools %}
 
-{% block main-title %}Select plugins to execute, then click Next.{% endblock main-title %}
+{% block main-title %}
+<div class="row-fluid">
+    <div class="clearfix">
+        Select plugins to execute, then click Next.
+        <div class="pull-right" style="margin-right:10px;">
+            <a href="#" id="selectAllPlugins" class="btn ">Select All</a>
+            <a href="#" id="clearPluginSelections" class="btn ">Clear</a>
+        </div>
+    </div>
+</div>
+{% endblock main-title %}
 
 {% block page-plan-content %}
 <div class="row-fluid">
-    <a style="margin-right:20px;" href="#" id="selectAllPlugins" class="btn ">Select All</a>
-    <a href="#" id="clearPluginSelections" class="btn ">Clear Selections</a>
-    <br />
-    <br />
-</div>
-{% for plugin_id, values in step.savedObjects.plugins.items %}
-    {% if forloop.counter0|divisibleby:"3" %}
-        <div class="row-fluid">
-    {% endif %}
+{% for column in step.savedObjects.plugins.items|makeColumns:3 %}
     <div class="span4">
-        {% if values.plugin.autorun %}
-            {% if values.selected %}
-                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" checked="checked" data-autorun="selected" style="opacity: 1;" value="{{plugin_id}}"> {{values.plugin.name}}
-            {% else %}
-                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" checked="checked" data-autorun="auto" style="opacity: 0.3;" value="{{plugin_id}}" title="Plugin is set to auto-run"> {{values.plugin.name}}
+    {% for plugin_id, values in column %}
+        <label class="checkbox">
+        <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" value="{{plugin_id}}"
+            {% if helper.isParentSystem and values.plugin.defaultSelected %}checked{% endif %}
+            {% if helper.isTemplateBySample and values.plugin.defaultSelected %}checked{% endif %} 
+            {% if helper.isParentSystem and helper.isCreate and values.plugin.defaultSelected %}checked{% endif %}
+            {% if helper.isFromScratch and helper.isCreate and values.plugin.defaultSelected %}checked{% endif %}                     
+            {% if values.selected %}checked{% endif %}> {{values.plugin.name}} 
+            {%if values.plugin.isPlanConfig %}
+                <a id="configure_plugin_{{plugin_id}}" href="#configModal" 
+                data-plugin-id="{{plugin_id}}" 
+                data-href="/configure/plugins/plugin/{{plugin_id}}/configure/plan/?applicationGroup={{helper.getStepDict.Application.getCurrentSavedFieldDict.applicationGroupName}}&runTypeId={{helper.getStepDict.Application.getCurrentSavedFieldDict.runType}}" 
+                data-toggle="modal" style="display: none;">Configure</a>
+                <input id="plugin_config_{{plugin_id}}" name="plugin_config_{{plugin_id}}" style="display: none;" value="{{values.config|default_if_none:""}}"/>
             {% endif %}
-        {% else %}
-            {% if values.selected %}
-                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" checked="checked" value="{{plugin_id}}"> {{values.plugin.name}}
-            {% else %}
-                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" value="{{plugin_id}}"> {{values.plugin.name}}
-            {% endif %}
-        {% endif %}
-        
-        {%if values.plugin.isPlanConfig %}
-            <a id="configure_plugin_{{plugin_id}}" href="#configModal" data-plugin-id="{{plugin_id}}" data-href="/configure/plugins/plugin/{{plugin_id}}/configure/plan/" data-toggle="modal" style="display: none;">Configure</a>
-            <input id="plugin_config_{{plugin_id}}" name="plugin_config_{{plugin_id}}" style="display: none;" value="{{values.config|default_if_none:""}}"/>
-        {% endif %}
+        </label>
+    {% endfor %}
     </div>
-    {% if forloop.counter|divisibleby:"3" or forloop.last %}
-        </div>
-    {% endif %}
 {% endfor %}
+</div>
 <input id="pluginIds" name="pluginIds" value="" class="hide" type="hidden"/>
 <div id="configModal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="configModalLabel" aria-hidden="true">
      <div class="modal-header">
@@ -72,7 +73,7 @@
 
 {% block post-raw %}
 {{ block.super }}
-<script type="text/javascript" src="/site_media/resources/scripts/planplugins_common.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/planplugins_common.js"%}"></script>
 <script type="text/javascript">
     TB.namespace('TB.page_plan.plugins');
 
@@ -81,6 +82,9 @@
         var pluginIdsStr = '';
         $("a[id^='configure_plugin_']").hide();
         $("input[name='non_export_plugin']:checked").each(function(){
+            //20160406kchoi
+            //$(this).attr('data-applicationGroup', 'fake_applicationGroup');
+            //$(this).attr('data-runType', 'fake_runType');            
             var autorun = $(this).attr('data-autorun');
             if (!autorun || (autorun && autorun == 'selected')) {
                 var pluginId = $(this).val();

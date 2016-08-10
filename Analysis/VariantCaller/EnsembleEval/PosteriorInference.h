@@ -13,6 +13,7 @@
 #include <iterator>
 #include <math.h>
 #include <vector>
+#include <assert.h>
 
 #include "ExtendedReadInfo.h"
 #include "CrossHypotheses.h"
@@ -58,6 +59,7 @@ public:
   vector<int> freq_pair;
   float freq_pair_weight;
   bool scan_done;
+  unsigned int min_detail_level_for_fast_scan;
 
   ScanSpace();
   float LogDefiniteIntegral(float alpha, float beta);
@@ -65,6 +67,36 @@ public:
   void UpdatePairedFrequency(vector <float > &tmp_freq, FreqMaster &base_clustering, float local_freq);
   unsigned int ResizeToMatch(ShortStack &total_theory, unsigned max_detail_level = 0);
   void  DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref, int max_detail_level = 0);
+  void SetDebug(bool debug){ debug_ = debug;};
+
+private:
+  //  Calculate the posterior for just one hyp frequency
+  void DoPosteriorFrequencyScanOneHypFreq_(unsigned int i_eval);
+  // functions for fast scan
+  void DoFastScan_();
+  void DoFineScan_(unsigned int i_left, unsigned int i_right, unsigned int i_middle);
+  void DoInterpolation_();
+  void LinearInterpolation_(unsigned int i_1, unsigned int i_2, unsigned int i_intp);
+  unsigned int FibonacciSearchMax_(unsigned int i_left, unsigned int i_right);
+  unsigned int FibonacciSearchMax_(unsigned int i_left, unsigned int i_right, unsigned int i_middle);
+
+  // variables for fast scan
+  vector<bool> is_scanned_;
+  unsigned int argmax_log_posterior_scanned_;
+  float max_log_posterior_scanned_;
+  float coarse_freq_resolution_;
+  unsigned int num_of_fibonacci_blocks;
+  float fine_log_posterior_cutoff_gap_;
+  float fine_freq_search_increment_;
+  float min_fine_log_posterior_gap_;
+  float fine_scan_penalty_order_;
+
+  // pointers for DoPosteriorFrequencyScanOneHypFreq_
+  ShortStack *ptr_total_theory_ = NULL;
+  FreqMaster *ptr_base_clustering_ = NULL;
+  int *ptr_strand_key_ = NULL;
+  bool *ptr_scan_ref_ = NULL;
+  bool debug_ = false;
 };
 
 class PosteriorInference{
@@ -92,6 +124,11 @@ class PosteriorInference{
 //  void DetailedUpdateStep(ShortStack &total_theory, bool update_frequency);
   float ReturnMaxLL(){ return(ref_vs_all.max_ll+params_ll);};
   float ReturnJustLL(){return(ref_vs_all.max_ll);};
+
+  void SetDebug(bool debug){
+	  ref_vs_all.SetDebug(debug);
+	  gq_pair.SetDebug(debug);
+  };
 };
 
 

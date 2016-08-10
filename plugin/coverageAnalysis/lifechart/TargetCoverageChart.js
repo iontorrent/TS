@@ -76,6 +76,7 @@ document.write('\
   </div>\
 </div>\
 <div id="TC-helptext" class="helpblock" style="display:none"></div>\
+<input type="hidden" id="TC-ViewRequest"/>\
 ');
 
 $(function () {
@@ -347,6 +348,7 @@ $(function () {
     resetYScale: false,
     logAxis : true,
     showLegend : true,
+    autoJumpToGene : autoJumpToGene,
     numPoints : def_numPoints,
     aveBase : 1,
     barAxis : 0,
@@ -773,10 +775,12 @@ $(function () {
   });
 
   $('#TC-tooltip-zoomout').click( function() {
+    // NOTE: zoom-out from filtered target not possible, as neighbors not loaded/predictable
     if( zoomViewOnBin( lastHoverBar.binNum, false ) ) hideTooltip();
   });
 
   $('#TC-tooltip-center').click( function() {
+    // NOTE: zoom-out from filtered target not possible, as neighbors not loaded/predictable
     if( centerViewOnBin( lastHoverBar.binNum ) ) hideTooltip();
   });
 
@@ -838,9 +842,9 @@ $(function () {
 
   function tooltipMessage(id,bin) {
     $('#TC-tooltip-close').show();
-    $('#TC-tooltip-zoomout').show();
-    $('#TC-tooltip-center').show();
-    $('#TC-tooltip-zoomin').show();
+    $('#TC-tooltip-zoomout').toggle(plotStats.targetsSelected > plotStats.targetsRepresented);
+    $('#TC-tooltip-center').toggle(plotStats.targetsSelected > plotStats.targetsRepresented);
+    $('#TC-tooltip-zoomin').toggle(plotStats.targetsRepresented > plotParams.numPoints);
     var targLen = binBar(bin) ? dataTable[bin][DataField.bin_length] :
       dataTable[bin][DataField.pos_end]-dataTable[bin][DataField.pos_start]+1;
     var lenCov = dataTable[bin][DataField.cov_length];  // or number of read overlaps with target
@@ -994,6 +998,25 @@ $(function () {
     var bin = lastHoverBar.binNum;
     if( bin < 0 ) return;
     window.open( linkIGV( getDisplayRegion(bin,50) ) );
+  });
+
+  // grab update request from external source (to TC)
+  $('#TC-ViewRequest').change(function() {
+    // ignore request if widget currently disabled
+    if( disableTitleBar ) return;
+    // force chart into view when request recieved - circumvents display issues if newly ploted while collapsed
+    if( !$('#TC-plotspace').is(":visible") ) {
+      $("#TC-collapsePlot").click();
+    }
+    if( $('#TC-filterGeneSym').val() == this.value ) {
+      // if already in focus just force tooltip to be shown
+      renderTooltip( null, 0, 0, true, 203, 1195 );
+    } else {
+      // disable sending back focus to RC Chart
+      autoJumpToGene = false;
+      $('#TC-filterGeneSym').val(this.value).change();
+      autoJumpToGene = plotParams.autoJumpToGene;
+    }
   });
 
   function getDisplayRegion(bin,viewBuffer,binEnd) {
@@ -1248,6 +1271,12 @@ $(function () {
   });
 
   $("#TC-unzoomToggle").click(function() {
+    // remove specific Gene/Attribute to allow zoom out
+    if( tsvFilter.gene != '' ) {
+      $('#TC-filterGeneSym').val(tsvFilter.gene = '');
+      tsvFilter.numrec = 0;
+      plotStats.zoom = true;
+    }
     if( plotStats.zoom ) unzoomData();
   });
 
@@ -1351,7 +1380,7 @@ $(function () {
 
     var numRep = 0.01 * plotStats.targetsSelected * (tsvFilter.clipright - tsvFilter.clipleft);
     plotStats.targetBinSize = numRep / tsvFilter.maxrows;
-    plotStats.targetsRepresented = numRep.toFixed(0);
+    plotStats.targetsRepresented = parseInt(numRep+0.5);
     plotStats.binnedData = (plotStats.targetBinSize > 1.0000001);
     if( !plotStats.binnedData ) plotStats.targetBinSize = 1;
 

@@ -6,17 +6,10 @@ set -e
 case "$1" in
     upgrade|remove)
 
-    # Ensure these plugins are no longer present in any system
-    rm -rf @ION_INSTALL_PREFIX@/plugins/IonReporterUploader
-    rm -rf @ION_INSTALL_PREFIX@/plugins/combineAlignments
+    find @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@ -name \*.pyc -exec rm -f {} \; || true
 
-    # Clean up auto generated files
-    if [ -d @ION_INSTALL_PREFIX@/plugins ]; then
-        find @ION_INSTALL_PREFIX@/plugins -name \*.pyc -exec rm -f {} \;
-    fi
-
-    # Only remove if it is empty!
-    rmdir @ION_INSTALL_PREFIX@/plugins/scratch || true
+    # force the plugin media removal
+    rm -f /results/pluginMedia/@PLUGIN_NAME@
 
     ;;
 esac

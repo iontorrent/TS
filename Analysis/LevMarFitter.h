@@ -191,7 +191,7 @@ protected:
 	      }
             }
             //catch (LaException le) {
-	    catch (std::runtime_error le) {
+	    catch (std::runtime_error& le) {
                 delta.set_size(nparams);
                 delta.zeros(nparams);
             }

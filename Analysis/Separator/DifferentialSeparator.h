@@ -8,8 +8,9 @@
 #include <fstream>
 #include <armadillo>
 #include "Mask.h"
-#include "Separator.h"
+#include "DualGaussMixModel.h"
 #include "RegionAvgKeyReporter.h"
+#include "AvgKeyIncorporation.h"
 #include "TraceStore.h"
 #include "IonH5File.h"
 #include "RawWells.h"
@@ -36,12 +37,14 @@ class DifSepOpt
       maxMad = 30;         // maximum mean abs dev to allow
       bfThreshold = .5;    // responsibiltiy threshold from clustering to be called empty
       minBfGoodWells = 100; // minimum number of wells in region to proceed
-      bfMeshStep = 50;      // step size of mesh processing for beadfind buffering 
-      clusterMeshStep = 50; // step size of mesh processing for beadfind clustering
+      clusterMeshStepX = 50; // step size of mesh processing for beadfind clustering
+      clusterMeshStepY = 50; // step size of mesh processing for beadfind clustering
       clusterFineMeshStep = 10; // finer mesh step for averaging
-      t0MeshStep = 50;      // step size of mesh processing for t0 estimation
+      t0MeshStepX = 50;      // step size of mesh processing for t0 estimation
+      t0MeshStepY = 50;      // step size of mesh processing for t0 estimation
       useMeshNeighbors = 1; // width of smoothing to be used for regions
-      tauEEstimateStep = 50; // step size of mesh processing for tauE
+      tauEEstimateStepX = 50; // step size of mesh processing for tauE
+      tauEEstimateStepY = 50; // step size of mesh processing for tauE
       nCores = -1;           // number of cores to use for processing
 
       minTauESnr = 6;  // threshold of "good" snr beads to use for estimation
@@ -69,7 +72,9 @@ class DifSepOpt
       useSeparatorRef = false; // just mark wells used fo reference in separator as Maskreference for analysis
       isThumbnail = false; // is this a thumbnail set of dats (implicitly aligned to 100x100 regions)
       doComparatorCorrect = false; // should we be doing comparator noise correction
-      doGainCorrect = true; // should we be using gain correction
+      doGainCorrect = true;
+      useBeadfindGainCorrect = true; // should we be using gain correction using beadfind step
+      useDataCollectGainCorrect = false; // should we be using gain correction from datacollect using Gain.lsr
       sdAsBf = true; // should we use the sd signal for clustering
       bfMult = 1.0; // multiply the bf signal
       aggressive_cnc = false;
@@ -79,6 +84,10 @@ class DifSepOpt
       filterNoisyCols = "none";
       col_pair_pixel_xtalk_correct = false;
       pair_xtalk_fraction = 0;
+      corr_noise_correct = true;
+
+      acqPrefix = "acq_";
+      datPostfix = "dat";
     }
 
     Mask *mask;
@@ -86,6 +95,9 @@ class DifSepOpt
     string signalBf;
     string analysisDir;
     string resultsDir;
+    string nucStepDir;
+    string acqPrefix;
+    string datPostfix;
     string flowOrder;
     string wellsReportFile;
     string outData;
@@ -93,12 +105,14 @@ class DifSepOpt
     double maxMad;
     double bfThreshold;
     size_t minBfGoodWells;
-    int bfMeshStep;
-    int clusterMeshStep;
+    int clusterMeshStepX;
+    int clusterMeshStepY;
     int clusterFineMeshStep;
-    int t0MeshStep;
+    int t0MeshStepX;
+    int t0MeshStepY;
     int useMeshNeighbors;
-    int tauEEstimateStep;
+    int tauEEstimateStepX;
+    int tauEEstimateStepY;
     int nCores;
     int minTauESnr;
     int referenceStep;
@@ -130,6 +144,9 @@ class DifSepOpt
     bool useSeparatorRef;
     bool isThumbnail;
     bool doGainCorrect;
+    bool useBeadfindGainCorrect;
+    bool useDataCollectGainCorrect;
+    bool doDataCollectGainCorrect;
     bool doComparatorCorrect;
     float bfMult;
     bool sdAsBf;
@@ -144,6 +161,7 @@ class DifSepOpt
     string  filterNoisyCols;
     bool col_pair_pixel_xtalk_correct;
     float pair_xtalk_fraction;
+    bool corr_noise_correct;
 };
 
 /**
@@ -318,7 +336,6 @@ class DifferentialSeparator : public AvgKeyIncorporation
     void OutputStats(DifSepOpt &opts, Mask &bfMask);
     void DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, const std::string &bfFile);
     int Run(DifSepOpt opts);
-    void CalculateFrames(SynchDat &sdat, int &minFrame, int &maxFrame); 
     void FilterRegionBlobs(Mask &mask, int rowStart, int rowEnd, int colStart, int colEnd, int chipWidth,
                            arma::Col<float> &metric, vector<char> &filteredWells, int smoothWindow,
                            int filtWindow, float filtThreshold);

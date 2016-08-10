@@ -28,7 +28,7 @@
 						<table class="table table-striped table-condensed">
 							<tr>
 								<td><b>Application Group:</b></td>
-								<td>{{ plan.applicationGroup.name }}</td>
+								<td>{{ plan.applicationGroup.description }}</td>
 							</tr>
 							<tr>
 								<td><b>Sample Grouping:</b></td>
@@ -73,6 +73,10 @@
 								<td><b>3' Adapter:</b></td>
 								<td class="word-break-all"><small>{{ eas.threePrimeAdapter }}</small></td>
 							</tr>
+                            <tr>
+                                <td><b>Flow Order:</b></td>
+                                <td class="word-break-all"><small>{% if plan.experiment.flowsInOrder %}{{ plan.experiment.flowsInOrder }}{%else%}(use instrument settings){%endif%}</small></td>
+                            </tr>							
 							<tr>
 								<td><b>Template Kit:</b></td>
 								<td>{{ templatingKit.0.description }}</td>
@@ -223,6 +227,27 @@
                         </table>
                     </div>
                 </div>
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#tsVersion"><i class="openclose icon-minus"></i></a>Plan Meta Data:
+					</h3>
+					<div class="collapse in" id="tsVersion">
+						<table class="table table-striped table-condensed">
+							<tr>
+								<td><b>TS version when created:</b></td>
+								<td>
+									{{tsVersion}}
+								</td>
+							</tr>
+							<tr>
+								<td><b>Plan created via:</b></td>
+								<td>
+									{{origin}}
+								</td>
+							</tr>
+						</table>
+					</div>
+				</div>
 			</div>
 		</div>
 		{% if not plan.isReusable %}
@@ -320,68 +345,69 @@
 				</div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>Analysis Parameters ({{eas.custom_args|yesno:"Custom,Default"}})
+						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>
+						Analysis Parameters {% if from_report  %}Used{%endif%} ({{eas.custom_args|yesno:"Custom,Default"}})
 					</h3>
 					<div class="collapse" id="args">
 						<table class="table table-striped table-condensed">
 							{% if not thumbnail %}
 							<tr>
 								<td><b>BeadFind Args:</b></td>
-								<td>{{ eas.beadfindargs }}</td>
+								<td>{{ args.beadfindargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Analysis Args:</b></td>
-								<td>{{ eas.analysisargs }}</td>
+								<td>{{ args.analysisargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Pre-BaseCaller Args for calibration:</b></td>
-								<td>{{ eas.prebasecallerargs }}</td>
+								<td>{{ args.prebasecallerargs }}</td>
 							</tr>
 							<tr>
 							    <td><b>Calibration Args:</b></td>
-							    <td>{{ eas.calibrateargs }}</td>
+							    <td>{{ args.calibrateargs }}</td>
 							</tr>
 							<tr>
 								<td><b>BaseCaller Args:</b></td>
-								<td>{{ eas.basecallerargs }}</td>
+								<td>{{ args.basecallerargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Alignment Args:</b></td>
-								<td>{{ eas.alignmentargs }}</td>
+								<td>{{ args.alignmentargs }}</td>
 							</tr>
 							<tr>
 								<td><b>IonStats Args:</b></td>
-								<td>{{ eas.ionstatsargs }}</td>
+								<td>{{ args.ionstatsargs }}</td>
 							</tr>
 							{% endif %}
 							{% if thumbnail or show_thumbnail %}
 							<tr>
 								<td><b>Thumbnail BeadFind Args:</b></td>
-								<td>{{ eas.thumbnailbeadfindargs }}</td>
+								<td>{{ args.thumbnailbeadfindargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Thumbnail Analysis Args:</b></td>
-								<td>{{ eas.thumbnailanalysisargs }}</td>
+								<td>{{ args.thumbnailanalysisargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Thumbnail pre-BaseCaller Args for calibration:</b></td>
-								<td>{{ eas.prethumbnailbasecallerargs }}</td>
+								<td>{{ args.prethumbnailbasecallerargs }}</td>
 							</tr>
 							<tr>
 							    <td><b>Thumbnail Calibration Args:</b></td>
-							    <td>{{ eas.thumbnailcalibrateargs }}</td>
+							    <td>{{ args.thumbnailcalibrateargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Thumbnail BaseCaller Args:</b></td>
-								<td>{{ eas.thumbnailbasecallerargs }}</td>
+								<td>{{ args.thumbnailbasecallerargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Thumbnail Alignment Args:</b></td>
-								<td>{{ eas.thumbnailalignmentargs }}</td>
+								<td>{{ args.thumbnailalignmentargs }}</td>
 							</tr>
 							<tr>
 								<td><b>Thumbnail IonStats Args:</b></td>
-								<td>{{ eas.thumbnailionstatsargs }}</td>
+								<td>{{ args.thumbnailionstatsargs }}</td>
 							</tr>
 							{% endif %}
 						</table>

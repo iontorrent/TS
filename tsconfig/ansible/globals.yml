@@ -1,18 +1,26 @@
 ---
 # file: globals.yml
 #Define the S5_virtual_guest variable
-- name: 
+- name:
   stat: path=/etc/init.d/mountExternal
   register: p
 
 - name: set_fact S5_virtual_guest
   set_fact:
     S5_virtual_guest: "{{p.stat.exists|bool}}"
-  
-- debug: var={{S5_virtual_guest}}
+
+- debug: var=S5_virtual_guest
+
+# Test if this install is off a USB
+# Define temporary extension used by tsusb/runme script
+- stat: path=/etc/apt/TS_USB_INSTALLATION
+  register: result
+- name:
+  set_fact: FUNKYEXT=.backup.usb.hiding
+  when: result.stat.exists|bool == True
 
 # Load the platform-specific variables, if the file exists
-- name: 
+- name:
   stat: path='group_vars/{{ansible_product_name}}'
   register: p
 - include_vars: 'group_vars/{{ansible_product_name}}'
@@ -20,6 +28,12 @@
 # ...or if its an S5, load the S5 variables
 - include_vars: 'group_vars/S5'
   when: S5_virtual_guest
+
+# set docker variables
+# include statement will be enabled by Dockerfile
+- name:
+  set_fact: docker_image="false"
+  #include: 'dockerparams.yml'
 
 # Define the default_interface
 # By design, it is first slot on the PCI network card for T7500 or first on-board NIC for all others
@@ -34,4 +48,16 @@
   set_fact: default_interface={{ansible_default_ipv4.interface|default(default_interface)}}
 - debug: var=default_interface
 
-- debug: var=default_interface
+# Define CIDR variable needed when exporting directories via /etc/exports
+# Default netmask is needed when current network settings are unavailable
+- name: Determine CIDR from network netmask
+  cidr: netmask={{ansible_default_ipv4.netmask|default("255.255.0.0")}}
+  register: cidr_response
+  ignore_errors: yes
+
+- name: set fact CIDR
+  set_fact: CIDR="{{cidr_response.maskbit}}"
+  when: cidr_response|success
+
+- debug: var=CIDR
+

@@ -42,7 +42,6 @@
 #include "EmptyTraceTracker.h"
 #include "TikhonovSmoother.h"
 #include "PinnedInFlow.h"
-#include "SynchDat.h"
 
 #include "ImageLoaderQueue.h"
 
@@ -56,14 +55,12 @@ class ImageTracker
     int flow_buffer_size;
     
     Image *img;
-    SynchDat *sdat;
     unsigned int *CurRead;
     unsigned int *CurProcessed;
 
-    bool doingSdat;
     ImageLoadWorkInfo master_img_loader;
 
-    ImageTracker (int _flow_buffer_size, int ignoreChecksumErrors, bool _doingSdat, int total_timeout);
+    ImageTracker (int _flow_buffer_size, int ignoreChecksumErrors, int total_timeout);
     void FinishFlow (int flow);
     void WaitForFlowToLoad (int flow);
     void FireUpThreads();
@@ -80,11 +77,9 @@ class ImageTracker
   private:
     void NothingInit();
     void DeleteImageBuffers();
-    void DeleteSdatBuffers();
     void DeleteFlags();
     void AllocateReadAndProcessFlags();
     void AllocateImageBuffers(int ignoreChecksumErrors, int total_timeout);
-    void AllocateSdatBuffers();
 };
 
 

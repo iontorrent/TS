@@ -34,8 +34,6 @@
 #include "DataCube.h"
 #include "XtalkCurry.h"
 #include "SpatialCorrelator.h"
-#include "SynchDat.h"
-#include "TraceChunk.h"
 
 #include "DebugWriter.h"
 #include "GlobalWriter.h"
@@ -55,6 +53,7 @@ class Axion;
 class RefineFit;
 class SpatialCorrelator;
 class RefineTime;
+class ExpTailDecayFit;
 class TraceCorrector;
 
 /*
@@ -81,6 +80,7 @@ class SignalProcessingMasterFitter
     friend class RefineFit;
     friend class SpatialCorrelator;
     friend class RefineTime;
+    friend class ExpTailDecayFit;
     friend class TraceCorrector;
     friend class debug_collection;
 
@@ -131,7 +131,6 @@ class SignalProcessingMasterFitter
     // ProcessImage had to be broken into two function, before and after GPUGenerateBeadTraces.
     bool InitProcessImageForGPU ( Image *img, int raw_flow, int flow_buffer_index );
     bool FinalizeProcessImageForGPU ( int flow_block_size );
-    bool ProcessImage (SynchDat &data, int raw_flow, int flow_buffer_index, int flow_block_size);
 
 
     // allow GPU code to trigger PCA Dark Matter Calculation on CPU
@@ -292,10 +291,8 @@ class SignalProcessingMasterFitter
   private:
 
     bool LoadOneFlow (Image *img, int flow);
-    bool LoadOneFlow (SynchDat &data, int flow);
 
-    void AllocateRegionDataIfNeeded(Image *img);
-    void AllocateRegionDataIfNeeded(SynchDat &data);
+    void AllocateRegionData();
 
     bool TriggerBlock (bool last);
     bool NeverProcessRegion();
@@ -341,8 +338,10 @@ class SignalProcessingMasterFitter
     void RefineAmplitudeEstimates (double &elapsed_time, Timer &fit_timer, int flow_block_size, int flow_block_start );
     void ApproximateDarkMatter( const LevMarBeadAssistant & post_key_state, bool isSampled, int flow_block_size, int flow_block_start);
     void FitAmplitudeAndDarkMatter (MultiFlowLevMar & lev_mar_fit, double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, int flow_block_start );
-    void PostKeyFit (MultiFlowLevMar &post_key_fit, double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, int flow_block_start);
+    void PostKeyFitWithRegionalSampling (MultiFlowLevMar &post_key_fit, double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, int flow_block_start);
+    void PostKeyFitNoRegionalSampling (MultiFlowLevMar &post_key_fit, double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, int flow_block_start);
     void PostKeyFitAllWells(double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
+     void SetupAllWellsFromSample(int flow_block_size);
     void FitWellParametersConditionalOnRegion ( MultiFlowLevMar & lev_mar_fit, double &elapsed_time, Timer &fit_timer);
     void BootUpModel (double &elapsed_time,Timer &fit_timer, int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start);
     void FirstPassSampledRegionParamFit( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
@@ -385,6 +384,8 @@ class SignalProcessingMasterFitter
     // corrector for proton
     RefineTime *refine_time_fit;
     TraceCorrector *trace_bkg_adj;
+    // buffering corrector for proton
+    ExpTailDecayFit *refine_buffering;
 
     // optimizers for generating fits to data
     SearchAmplitude my_search; // crude/quick guess at amplitude

@@ -9,17 +9,18 @@ addressable_fraction = {
     '7680,5328': 0.88,
 }
 
+
 def main_merge(stats_list, stats_file, verbose):
 
     process_parameter_file = 'processParameters.txt'
 
     # Output file
     config_out = ConfigParser.RawConfigParser()
-    config_out.optionxform = str # don't convert to lowercase
+    config_out.optionxform = str  # don't convert to lowercase
     config_out.add_section('global')
 
-    for i,maskstats in enumerate(stats_list):
- 
+    for i, maskstats in enumerate(stats_list):
+
         if verbose:
             print "Reading", maskstats
 
@@ -47,18 +48,18 @@ def main_merge(stats_list, stats_file, verbose):
                 'Lib Filtered Beads (poor signal fit)',
                 'Lib Validated Beads']
 
-        if i==0:
+        if i == 0:
             head, tail = os.path.split(maskstats)
             config_pp = ConfigParser.RawConfigParser()
             config_pp.read(os.path.join(head, process_parameter_file))
             chip = config_pp.get('global', 'Chip')
             size = chip.split(',')
-            config_out.set('global','Start Row', '0')
-            config_out.set('global','Start Column', '0')
-            config_out.set('global','Width', int(size[0]))
-            config_out.set('global','Height', int(size[1]))
-            config_out.set('global','Total Wells', int(size[0])*int(size[1]))
-            config_out.set('global','Percent Template-Positive Library Beads', '0') # TODO
+            config_out.set('global', 'Start Row', '0')
+            config_out.set('global', 'Start Column', '0')
+            config_out.set('global', 'Width', int(size[0]))
+            config_out.set('global', 'Height', int(size[1]))
+            config_out.set('global', 'Total Wells', int(size[0])*int(size[1]))
+            config_out.set('global', 'Percent Template-Positive Library Beads', '0')  # TODO
 
             for key in keys:
                 config_out.set('global', key, '0')
@@ -78,12 +79,12 @@ def main_merge(stats_list, stats_file, verbose):
     sum_wells += config_out.getint('global', 'Bead Wells')
     sum_wells += config_out.getint('global', 'Excluded Wells')
 
-    if config_out.get('global','Total Wells') != sum_wells:
-        print "ERROR: StatsMerge: Total Wells: %s (sum) != %s (expected)" % (sum_wells, config_out.get('global','Total Wells'))
+    if config_out.get('global', 'Total Wells') != sum_wells:
+        print "ERROR: StatsMerge: Total Wells: %s (sum) != %s (expected)" % (sum_wells, config_out.get('global', 'Total Wells'))
 
     # adjust total wells by the addressable fraction if specified
     if (chip in addressable_fraction) and (config_out.getint('global', 'Excluded Wells') == 0):
-        config_out.set('global','Adjusted Addressable Wells', int(addressable_fraction[chip]*config_out.getint('global', 'Total Wells')) )
+        config_out.set('global', 'Adjusted Addressable Wells', int(addressable_fraction[chip]*config_out.getint('global', 'Total Wells')))
 
     with open(stats_file, 'wb') as configfile:
         if verbose:
@@ -92,7 +93,7 @@ def main_merge(stats_list, stats_file, verbose):
         config_out.write(configfile)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', dest='verbose', action='store_true')

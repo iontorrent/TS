@@ -8,9 +8,7 @@
 void BasicSigmaGenerator::GenerateSigmaByRegression(vector<float> &prediction, vector<int> &test_flow, vector<float> &sigma_estimate){
      // use latent variable to predict sigma by predicted signal
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
-     
-     sigma_estimate[j_flow] = InterpolateSigma(prediction[j_flow]);  // it's a prediction! always positive
+     sigma_estimate[t_flow] = InterpolateSigma(prediction[t_flow]);  // it's a prediction! always positive
      //cout << "sigma " << prediction.at(j_flow) << "\t" << sigma_estimate.at(j_flow) << endl;
   }
 }
@@ -110,18 +108,18 @@ float BasicSigmaGenerator::RetrieveApproximateWeight(float x_val){
   return(x_weight);
 }
 
+// Notice that now prediction and residuals contain only test flows!
 void BasicSigmaGenerator::AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals){
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
-     float y_val =residuals[j_flow]*residuals[j_flow];
+     float y_val =residuals[t_flow]*residuals[t_flow];
      // handle skew
      // note that this is >opposite< t-dist formula
-     if (residuals[j_flow]>0)
+     if (residuals[t_flow]>0)
        y_val = y_val/(skew_estimate*skew_estimate);
      else
        y_val = y_val * skew_estimate*skew_estimate;
      
-     float x_val = prediction[j_flow];
+     float x_val = prediction[t_flow];
      PushLatent(responsibility,x_val,y_val, true);
   }
 }
@@ -130,11 +128,10 @@ void BasicSigmaGenerator::AddOneUpdateForHypothesis(vector<float> &prediction, f
 void BasicSigmaGenerator::AddShiftUpdateForHypothesis(vector<float> &prediction, vector<float> &mod_prediction, 
                                                       float discount, float responsibility, float skew_estimate, vector<int> &test_flow){
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow[t_flow];
-     float y_val =prediction[j_flow]-mod_prediction[j_flow]; // how much did I shift my prediction?
+     float y_val =prediction[t_flow]-mod_prediction[t_flow]; // how much did I shift my prediction?
      y_val = y_val * y_val;
 
-     float x_val = mod_prediction[j_flow];
+     float x_val = mod_prediction[t_flow];
      float local_weight = RetrieveApproximateWeight(x_val);
 
      // k_zero * n/(k_zero+n) * (y_mean-u_mean)*(y_mean-u_mean)
@@ -162,11 +159,12 @@ void BasicSigmaGenerator::AddCrossUpdate(CrossHypotheses &my_cross){
 
 void BasicSigmaGenerator::AddNullUpdate(CrossHypotheses &my_cross){
   unsigned int i_hyp =0;
-  
+  /*
   vector<int> all_flows;
   all_flows.assign(my_cross.mod_predictions[0].size(), 0.0f);
   for (unsigned int i_flow=0; i_flow<all_flows.size(); i_flow++)
     all_flows[i_flow] = i_flow;
+  */
   AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], 1.0f, 1.0f, my_cross.test_flow, my_cross.residuals[i_hyp]);
 
 }

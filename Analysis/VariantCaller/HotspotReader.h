@@ -45,6 +45,7 @@ public:
   ~HotspotReader();
 
   void Initialize(const ReferenceReader &ref_reader, const string& hotspot_vcf_filename);
+  void Initialize(const ReferenceReader &ref_reader);
 
   bool HasMoreVariants() const { return has_more_variants_; }
   void FetchNextVariant();
@@ -63,6 +64,7 @@ public:
   void hint_start() { hint_cur_ = hint_header_;}
   bool hint_more() { return hint_cur_ < hint_vec.size();}
 
+  void MakeHintQueue(const string& hotspot_vcf_filename);
 
 private:
   const ReferenceReader * ref_reader_;
@@ -78,8 +80,6 @@ private:
   //ifstream                hotspot_vcf_;
 
   int                     line_number_;
-
-  void MakeHintQueue(const string& hotspot_vcf_filename);
 
 };
 

@@ -1,3 +1,4 @@
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 /*
  * RegionParamsGPU.h
  *
@@ -8,9 +9,17 @@
 #ifndef REGIONPARAMSGPU_H_
 #define REGIONPARAMSGPU_H_
 
+#include <iostream>
+#include <cstring>
+#include <sstream>
+#include "cuda_runtime.h"
+#include "cuda_error.h"
+#include "Utils.h"
+#include "CudaDefines.h"
 #include "CudaDefines.h"
 #include "BkgMagicDefines.h"
 #include "EnumDefines.h"
+
 
 
 //LDG LOADER
@@ -30,6 +39,7 @@
     (*(ptr))
 #endif
 
+#define MY_STD_DELIMITER ','
 
 
 struct SampleCoordPair{
@@ -42,6 +52,7 @@ struct SampleCoordPair{
   SampleCoordPair(unsigned short _x, unsigned short _y ):x(_x),y(_y){};
 
 };
+
 
 
 //XTALK DEFINES
@@ -232,8 +243,8 @@ public:
   __host__ __device__
   void print(){
     printf("XTalkNeighbourStatsConst\n initial Phase: %d\n hex packed: %s\n three series: %s\n", initialPhase, hexPacked?("true"):("false"),threeSeries?("true"):("false"));
-    printf(" num Neighbours: %lu\n  n, nx, ny, mult\n", numN);
-    for(size_t n=0; n<numN; n++) printf("%3lu,%3d,%3d, %f\n",n,cx[n],cy[n],multiplier[n]);
+    printf(" num Neighbours: %zu\n  n, nx, ny, mult\n", numN);
+    for(size_t n=0; n<numN; n++) printf("%3zu,%3d,%3d, %f\n",n,cx[n],cy[n],multiplier[n]);
   }
 
 
@@ -255,7 +266,8 @@ class ConfigParams {
     ConfMaskPerformRecompressTailRawTrace = (1 << 7),
     ConfMaskPerformWellsLevelXTalk = ( 1 << 8),
     ConfMaskPerformTraceLevelXTalk = ( 1 << 9),
-    ConfMaskPerformPolyClonalFilter = ( 1 << 10)
+    ConfMaskPerformPolyClonalFilter = ( 1 << 10),
+    ConfMaskFitTmidNucShift = ( 1 << 11)
   };
 
   unsigned short maskvalue;
@@ -284,7 +296,7 @@ public:
     maskvalue = maskvalue | ConfMaskPerformExpTailFitting;
   }
   __host__ void setPerformBkgAdjInExpTailFit() {
-      maskvalue = maskvalue | ConfMaskPerformBkgAdjInExpTailFit;
+    maskvalue = maskvalue | ConfMaskPerformBkgAdjInExpTailFit;
   }
   __host__ void setPerformRecompressTailRawTrace() {
     maskvalue = maskvalue | ConfMaskPerformRecompressTailRawTrace;
@@ -297,6 +309,9 @@ public:
   }
   __host__ void setPerformPolyClonalFilter() {
     maskvalue = maskvalue | ConfMaskPerformPolyClonalFilter;
+  }
+  __host__ void setFitTmidNucShift() {
+    maskvalue = maskvalue | ConfMaskFitTmidNucShift;
   }
 
 
@@ -326,7 +341,7 @@ public:
     return maskvalue & ConfMaskPerformExpTailFitting;
   }
   __host__ __device__ inline
-    bool PerformBkgAdjInExpTailFit() const {
+  bool PerformBkgAdjInExpTailFit() const {
     return maskvalue & ConfMaskPerformBkgAdjInExpTailFit;
   }
   __host__ __device__ inline
@@ -345,10 +360,14 @@ public:
   bool PerformPolyClonalFilter() const {
     return maskvalue & ConfMaskPerformPolyClonalFilter;
   }
+  __host__ __device__ inline
+  bool FitTmidNucShift() const {
+    return maskvalue & ConfMaskFitTmidNucShift;
+  }
 
   __host__ __device__ inline
   void print(){
-    printf("ConfigParams\n FitTauE %s\n FitKmult %s\n UseDarkMatterPCA %s\n UseDynamicEmphasis %s\n UseAlternativeEtbRequation %s\n PerformExpTailFitting %s\n PerformBkgAdjInExpTailFit %s\n PerformRecompressTailRawTrace %s\n PerformWellsLevelXTalk %s\n PerformTraceLevelXTalk %s\n PerfromPolyClonalFilter %s\n",
+    printf("ConfigParams\n FitTauE %s\n FitKmult %s\n UseDarkMatterPCA %s\n UseDynamicEmphasis %s\n UseAlternativeEtbRequation %s\n PerformExpTailFitting %s\n PerformBkgAdjInExpTailFit %s\n PerformRecompressTailRawTrace %s\n PerformWellsLevelXTalk %s\n PerformTraceLevelXTalk %s\n PerfromPolyClonalFilter %s\n FitTmidNucShift %s\n",
         (FitTauE())?("true"):("false"),
             (FitKmult())?("true"):("false"),
                 (UseDarkMatterPCA())?("true"):("false"),
@@ -359,8 +378,13 @@ public:
                                     (PerformRecompressTailRawTrace())?("true"):("false"),
                                         (PerformWellsLevelXTalk())?("true"):("false"),
                                             (PerformTraceLevelXTalk())?("true"):("false"),
-                                                (PerformPolyClonalFilter())?("true"):("false"));
+                                                (PerformPolyClonalFilter())?("true"):("false"),
+                                                    (FitTmidNucShift())?("true"):("false"));
+
   }
+
+  friend ostream& operator<<(ostream& os, const ConfigParams& obj);
+
 };
 
 
@@ -480,13 +504,13 @@ public:
     return min_tauB;
   }
   __host__ __device__ inline
-   float getScaleLimit() {
-     return this->scaleLimit;
-   }
-   __host__ __device__ inline
-   float getTailDClowerBound() {
-     return tailDClowerBound;
-   }
+  float getScaleLimit() const {
+    return scaleLimit;
+  }
+  __host__ __device__ inline
+  float getTailDClowerBound() const {
+    return tailDClowerBound;
+  }
   __host__ __device__ inline
   float getMinAmpl() const {
     return minAmpl;
@@ -541,6 +565,8 @@ public:
         minAmpl, minKmult, maxKmult, adjKmult, min_tauB, max_tauB);
   }
 
+  friend ostream& operator<<(ostream& os, const ConstantParamsGlobal& obj);
+
 };
 
 
@@ -593,7 +619,21 @@ public:
   __host__ __device__ inline
   void print(){
     printf("ConstantFrameParams\n GPU raw Image frames: %d, uncomp frames: %d, maxBkgFrames: %d \n", rawFrames, uncompFrames, maxCompFrames);
+    printf("interpolatedFrames:");
+    for(int i=0; i < uncompFrames; i++)
+      printf("%d,",interpolatedFrames[i]);
+    printf("\n");
+    printf("interpolatedMult:");
+    for(int i=0; i < uncompFrames; i++)
+      printf("%f,",interpolatedMult[i]);
+    printf("\n");
+    printf("interpolatedDiv:");
+    for(int i=0; i < uncompFrames; i++)
+      printf("%f,",interpolatedDiv[i]);
+    printf("\n");
   }
+
+  friend ostream& operator<<(ostream& os, const ConstantFrameParams& obj);
 
 };
 
@@ -667,7 +707,7 @@ public:
 
 class PerFlowParamsGlobal {
 
-  int flowIdx; //ToDo: remove as soon as data is only copied by flow
+  //int flowIdx; //ToDo: remove as soon as data is only copied by flow
   int realFnum;
   int NucId;
 
@@ -677,10 +717,10 @@ public:
   void setRealFnum(int realFnum) {
     this->realFnum = realFnum;
   }
-  __host__
-  void setFlowIdx(int flowIdx) {
-    this->flowIdx = flowIdx;
-  }
+  //__host__
+  //void setFlowIdx(int flowIdx) {
+  //  this->flowIdx = flowIdx;
+  //}
 
   __host__
   void setNucId(int nucId) {
@@ -689,10 +729,10 @@ public:
 
 
 
-  __host__ __device__ inline
-  int getFlowIdx() const {
-    return flowIdx;
-  }
+  //__host__ __device__ inline
+  //int getFlowIdx() const {
+  //  return flowIdx;
+  //}
 
   __host__ __device__ inline
   int getNucId() const {
@@ -707,8 +747,11 @@ public:
 
   __host__ __device__ inline
   void print() const {
-    printf("PerFlowParamsGlobal\n flowIdx %d realFnum %d NucId %d\n", flowIdx, realFnum, NucId );
+    //printf("PerFlowParamsGlobal\n flowIdx %d realFnum %d NucId %d\n", flowIdx, realFnum, NucId );
+    printf("PerFlowParamsGlobal\n realFnum %d NucId %d\n", realFnum, NucId );
   }
+
+  friend ostream& operator<<(ostream& os, const PerFlowParamsGlobal& obj);
 
 };
 
@@ -870,12 +913,17 @@ public:
         getSens(), getTauRM(), getTauRO(), getTauE(), getMoleculesToMicromolarConversion(),getTimeStart(), getT0Frame(), getMinTmidNuc(), getMaxTmidNuc(), getMinRatioDrift(), getMaxRatioDrift(), getMinCopyDrift(), getMaxCopyDrift());
   }
 
+  friend ostream& operator<<(ostream& os, const ConstantParamsRegion& obj);
+
 };
+
 
 
 //ToDO: load with ldg?
 class PerFlowParamsRegion {
-  int start; //[MAX_NUM_FLOWS_IN_BLOCK_GPU];
+
+  int fineStart; //[MAX_NUM_FLOWS_IN_BLOCK_GPU];
+  int coarseStart; //[MAX_NUM_FLOWS_IN_BLOCK_GPU];
   float sigma;
   float tshift;
   float CopyDrift;
@@ -883,8 +931,7 @@ class PerFlowParamsRegion {
   float t_mid_nuc; //updated per block of 20 only use [0] of host buffer
   float t_mid_nuc_shift;
   float darkness; //[MAX_NUM_FLOWS_IN_BLOCK_GPU] only [0] was used now single value
-  //float Ampl; //[MAX_NUM_FLOWS_IN_BLOCK_GPU]; //currently not used after first 20
-  //float copy_multiplier; //[MAX_NUM_FLOWS_IN_BLOCK_GPU];//currently not used after first 20
+
 public:
 
   __host__ __device__ inline
@@ -908,8 +955,12 @@ public:
     RatioDrift = ratioDrift;
   }
   __host__ __device__ inline
-  void setStart(int start) {
-    this->start = start;
+  void setFineStart(int start) {
+    this->fineStart = start;
+  }
+  __host__ __device__ inline
+  void setCoarseStart(int start) {
+    this->coarseStart = start;
   }
   __host__ __device__ inline
   void setTMidNuc(float tMidNuc) {
@@ -935,9 +986,12 @@ public:
     return RatioDrift;
   }
   __host__ __device__ inline
-  int getStart() const {
-    //return LDG_MEMBER(start);
-    return start;
+  int getFineStart() const {
+    return fineStart;
+  }
+  __host__ __device__ inline
+  int getCoarseStart() const {
+    return coarseStart;
   }
   __host__ __device__ inline
   float getTMidNuc() const {
@@ -961,12 +1015,32 @@ public:
   }
   __host__ __device__ inline
   void print() const {
-    printf("PerFlowParamsRegion start %d sigma %f tshift %f CopyDrift %f RatioDrift %f t_mid_nuc %f t_mid_nuc_shift %f darkness %f\n",
-        getStart(), getSigma(), getTshift(), getCopyDrift(), getRatioDrift(), getTMidNuc(), getTMidNucShift(), getDarkness());
+    printf("PerFlowParamsRegion fineStart %d coarseStart %d sigma %f tshift %f CopyDrift %f RatioDrift %f t_mid_nuc %f t_mid_nuc_shift %f darkness %f\n",
+        getFineStart(), getCoarseStart(), getSigma(), getTshift(), getCopyDrift(), getRatioDrift(), getTMidNuc(), getTMidNucShift(), getDarkness());
   }
 
+  friend ostream& operator<<(ostream& os, const PerFlowParamsRegion& obj);
+
+private:
+
+  friend class boost::serialization::access;
+  template<typename Archive>
+  void serialize(Archive& ar, const unsigned int version) {
+
+    ar &
+    fineStart &
+    coarseStart &
+    sigma &
+    tshift &
+    CopyDrift &
+    RatioDrift &
+    t_mid_nuc &
+    t_mid_nuc_shift &
+    darkness;
+  }
 
 };
+
 
 
 //store as plane of regions per nuc
@@ -1049,7 +1123,9 @@ public:
         getD(), getKmax(), getKrate(), getTMidNucDelay(), getNucModifyRatio(), getC(), getSigmaMult());
   }
 
+  friend ostream& operator<<(ostream& os, const PerNucParamsRegion& obj);
 };
+
 
 
 /*

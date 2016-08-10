@@ -10,6 +10,7 @@ except ImportError:
 import logging
 logger = logging.getLogger(__name__)
 
+
 class PluginFieldNames():
 
     PL_ID = 'id'
@@ -29,6 +30,7 @@ class PluginFieldNames():
     ACCOUNT_NAME = 'accountName'
     IRU_QC_OPTIONS = 'iru_qc_option'
 
+
 class PluginsStepData(AbstractStepData):
 
     def __init__(self, sh_type):
@@ -40,17 +42,16 @@ class PluginsStepData(AbstractStepData):
             info = p.info()
             if info:
                 if PluginFieldNames.FEATURES in info:
-                    #watch out: "Export" was changed to "export" recently!
-                    #we now need to show all non-IRU export plugins on the Plugins chevron
-                    ##if (PluginFieldNames.EXPORT in (feature.lower() for feature in info[PluginFieldNames.FEATURES])):
+                    # watch out: "Export" was changed to "export" recently!
+                    # we now need to show all non-IRU export plugins on the Plugins chevron
+                    # if (PluginFieldNames.EXPORT in (feature.lower() for feature in info[PluginFieldNames.FEATURES])):
                     if "ionreporter" in p.name.lower():
                         pass
                     else:
                         self.non_ir_plugins.append(p)
                 else:
                     self.non_ir_plugins.append(p)
-        
-        
+
         self.prepopulatedFields[PluginFieldNames.PLUGINS] = self.non_ir_plugins
         for plugin in self.prepopulatedFields[PluginFieldNames.PLUGINS]:
             if plugin.isPlanConfig:
@@ -63,49 +64,49 @@ class PluginsStepData(AbstractStepData):
         self.updateSavedObjectsFromSavedFields()
 
         self.sh_type = sh_type
-        
+
     def getStepName(self):
         return StepNames.PLUGINS
 
     def updateSavedObjectsFromSavedFields(self):
         self.savedObjects[PluginFieldNames.PLUGINS].clear()
         self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] = []
-        
+
         if self.savedFields[PluginFieldNames.PLUGIN_IDS]:
             self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] = self.savedFields[PluginFieldNames.PLUGIN_IDS].split(', ')
-        
+
         for plugin in self.prepopulatedFields[PluginFieldNames.PLUGINS]:
             selected = False
             if self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] and (str(plugin.id) in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] or
-                                                plugin.id in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]):
+                                                                       plugin.id in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]):
                 selected = True
-            
+
             config = None
             if plugin.isPlanConfig and self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]:
                 config = json.dumps(json.loads(self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]))
-                
+
             self.savedObjects[PluginFieldNames.PLUGINS][plugin.id] = {
-                                        PluginFieldNames.PLUGIN    : plugin, 
-                                        PluginFieldNames.SELECTED  : selected, 
-                                        PluginFieldNames.CONFIG    : config
-                                        }
-    
+                PluginFieldNames.PLUGIN: plugin,
+                PluginFieldNames.SELECTED: selected,
+                PluginFieldNames.CONFIG: config
+                }
+
     def updateFromStep(self, updated_step):
         pass
-    
+
     def getSelectedPluginsValue(self):
         retval = {}
-        
+
         if not self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]:
             return retval
-        
+
         for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
             if values[PluginFieldNames.SELECTED]:
                 retval[values[PluginFieldNames.PLUGIN].name] = {
-                                        PluginFieldNames.PL_ID     : plugin_id,
-                                        PluginFieldNames.NAME      : values[PluginFieldNames.PLUGIN].name,
-                                        PluginFieldNames.VERSION   : values[PluginFieldNames.PLUGIN].version,
-                                        PluginFieldNames.FEATURES  : []}
+                    PluginFieldNames.PL_ID: plugin_id,
+                    PluginFieldNames.NAME: values[PluginFieldNames.PLUGIN].name,
+                    PluginFieldNames.VERSION: values[PluginFieldNames.PLUGIN].version,
+                    PluginFieldNames.FEATURES: []}
 
                 if values[PluginFieldNames.CONFIG]:
                     retval[values[PluginFieldNames.PLUGIN].name][PluginFieldNames.USER_INPUT] = json.loads(values[PluginFieldNames.CONFIG])
@@ -115,12 +116,12 @@ class PluginsStepData(AbstractStepData):
 
     def isVariantCallerSelected(self):
         for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
-            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.SELECTED]: 
+            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.SELECTED]:
                 return True
         return False
 
     def isVariantCallerConfigured(self):
         for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
-            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.CONFIG]: 
+            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.CONFIG]:
                 return True
         return False

@@ -34,8 +34,8 @@ void copySymbolsToDevice(const XTalkNeighbourStatsConst<MAX_XTALK_NEIGHBOURS> & 
   cudaMemcpyToSymbol( ConstTraceXTalkP, (void*) &cTlXtP, sizeof(XTalkNeighbourStatsConst<MAX_XTALK_NEIGHBOURS>), 0, cudaMemcpyHostToDevice);
 }
 
-void copySymbolsToDevice(const SampleCollectionConst& smplCol ){
-  cudaMemcpyToSymbol(ConstSmplCol, (void*) &smplCol, sizeof(SampleCollectionConst), 0, cudaMemcpyHostToDevice);
+void copySymbolsToDevice(const HistoryCollectionConst& histConst ){
+  cudaMemcpyToSymbol(ConstHistCol, (void*) &histConst, sizeof(HistoryCollectionConst), 0, cudaMemcpyHostToDevice);
 }
 
 

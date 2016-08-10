@@ -2,7 +2,9 @@
 #ifndef DOTPRODUCT_H
 #define DOTPRODUCT_H
 
+#if defined( __SSE__ )
 #include <x86intrin.h>
+#endif
 
 #if defined(__SSE4_1__)
 inline float DotProduct( int N, float* X, float* Y )

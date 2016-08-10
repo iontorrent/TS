@@ -4,7 +4,8 @@
 Utilities for working with DNA template strings.
 """
 
-#from ion.analysis import cafie
+# from ion.analysis import cafie
+
 
 def seqify(flowgram, floworder):
     """
@@ -15,10 +16,11 @@ def seqify(flowgram, floworder):
     """
     nflows = len(floworder)
     ret = []
-    for ndx,ext in enumerate(flowgram):
-        ret.append(floworder[ndx%nflows]*ext)
+    for ndx, ext in enumerate(flowgram):
+        ret.append(floworder[ndx % nflows]*ext)
     return ''.join(ret)
- 
+
+
 def deseqify(seq, floworder):
     """
     Turns the string of bases into a flowgram.
@@ -39,7 +41,7 @@ def deseqify(seq, floworder):
         else:
             ret.append(seen)
             for i in range(nflows):
-                nucIndex = (nucIndex + 1)%nflows
+                nucIndex = (nucIndex + 1) % nflows
                 nuc = floworder[nucIndex]
                 if nuc == base:
                     break
@@ -47,13 +49,14 @@ def deseqify(seq, floworder):
                     ret.append(0)
             if nuc != base:
                 raise ValueError, ("Invalid base: %s in template '%s'."
-                        % (base, seq))
+                                   % (base, seq))
             seen = 1
     ret.append(seen)
     while len(ret) % nflows:
         ret.append(0)
     return ret
-    
+
+
 def scale_fit(expected, observed, **kwargs):
     """
     @TODO: jhoon
@@ -63,29 +66,30 @@ def scale_fit(expected, observed, **kwargs):
     if len(expected) == 0:
         raise ValueError, "Cannot scale 0-length lists."
     if sum(expected) == 0:
-        return 0,0.0
+        return 0, 0.0
     phi = kwargs.pop('phi', None)
     sq = lambda x: x*x
     top = 0.0
     bot = 0.0
-    for pair in zip(expected,observed):
-        pair = map(float,pair)
+    for pair in zip(expected, observed):
+        pair = map(float, pair)
         if phi is not None:
-            e,o = map(phi, pair)
+            e, o = map(phi, pair)
         else:
-            e,o = pair
+            e, o = pair
         top += 2.0*e*o
         bot += 2.0*e*e
     s = top/bot
-    residuals = map(lambda (a,b): a - s*b, zip(observed,expected))
-    r2 = 1.0 - reduce(lambda acc,x: acc + sq(x), residuals, 0.0)/sum(map(sq,observed))
-    return s,r2
-    
+    residuals = map(lambda (a, b): a - s*b, zip(observed, expected))
+    r2 = 1.0 - reduce(lambda acc, x: acc + sq(x), residuals, 0.0)/sum(map(sq, observed))
+    return s, r2
+
+
 def match_flowgram_to_template(fgram, templates, floworder, allow_lib=False):
     """
     @TODO: jhoon
     """
-    targets = map(lambda tmpl: deseqify(tmpl,floworder), templates)
+    targets = map(lambda tmpl: deseqify(tmpl, floworder), templates)
     max_length = max(map(len, targets + [fgram]))
     adjusted_targets = []
     make_extension = lambda t: map(int, '0'*(max_length - len(t)))
@@ -95,6 +99,7 @@ def match_flowgram_to_template(fgram, templates, floworder, allow_lib=False):
     fgram.extend(make_extension(fgram))
     return match_flowgram_to_flowgram(fgram, adjusted_targets, allow_lib)
 
+
 def match_flowgram_to_flowgram(fgram, targets, allow_lib=False, lib_cut=0.70):
     """
     @TODO: jhoon
@@ -102,10 +107,10 @@ def match_flowgram_to_flowgram(fgram, targets, allow_lib=False, lib_cut=0.70):
     best = None
     bestFit = 0.0
     lenfg = len(fgram)
-    for ndx,targ in enumerate(targets):
-        scale,fit = scale_fit(targ[:len(fgram)]
-                + [0 for i in range(max([0, lenfg - len(targ)]))],
-                fgram)
+    for ndx, targ in enumerate(targets):
+        scale, fit = scale_fit(targ[:len(fgram)]
+                               + [0 for i in range(max([0, lenfg - len(targ)]))],
+                               fgram)
         if best is None or fit > bestFit:
             best = ndx
             bestFit = fit
@@ -113,8 +118,9 @@ def match_flowgram_to_flowgram(fgram, targets, allow_lib=False, lib_cut=0.70):
         return None
     return best
 
+
 def key_nmer_flows(nmer, expected, floworder,
-        nkeyflows=None, nuc=None, as_mask=False):
+                   nkeyflows=None, nuc=None, as_mask=False):
     """
     @TODO: jhoon
     """
@@ -124,8 +130,8 @@ def key_nmer_flows(nmer, expected, floworder,
         key_expected = expected[:nkeyflows]
     else:
         key_expected = expected
-    for ndx,exp in enumerate(key_expected):
-        current_nuc = floworder[ndx%forder_len]
+    for ndx, exp in enumerate(key_expected):
+        current_nuc = floworder[ndx % forder_len]
         if exp == nmer and (nuc is None or nuc == current_nuc):
             ret.append(ndx)
     if as_mask:
@@ -133,35 +139,40 @@ def key_nmer_flows(nmer, expected, floworder,
         return mask
     return ret
 
+
 def key_nmer_flows_from_seq(nmer, seq, floworder, **kwargs):
     """
     @TODO: jhoon
     """
-    expected = deseqify(seq,floworder)
+    expected = deseqify(seq, floworder)
     return key_nmer_flows(nmer, expected, floworder, **kwargs)
-    
+
+
 def match_to_keys(raw_fgram, keys, floworder):
     """
     @TODO: jhoon
     """
-    return match_to_key_fgrams(raw_fgram, [deseqify(k,floworder) for k in keys])
+    return match_to_key_fgrams(raw_fgram, [deseqify(k, floworder) for k in keys])
 
 import random
+
+
 def match_to_key_fgrams(raw_fgram, key_fgrams):
     """
     @TODO: jhoon
     """
     from scipy import stats
     pvals = []
-    for ndx,kf in enumerate(key_fgrams):
-        populations = [[],[]]
-        for val,expected in zip(raw_fgram,kf):
+    for ndx, kf in enumerate(key_fgrams):
+        populations = [[], []]
+        for val, expected in zip(raw_fgram, kf):
             populations[int(expected)].append(val)
-        t,pval2side = stats.ttest_ind(*populations)
-        pvals.append((pval2side/2,ndx))
+        t, pval2side = stats.ttest_ind(*populations)
+        pvals.append((pval2side/2, ndx))
     pvals.sort()
     return pvals[0][-1]
-    
+
+
 def match_to_key_fgrams_paired(raw_fgram, key_fgrams, floworder):
     """
     @TODO: jhoon
@@ -170,26 +181,27 @@ def match_to_key_fgrams_paired(raw_fgram, key_fgrams, floworder):
     pvals = []
     key_pairings = []
     n_nucs = len(floworder)
-    for keyindex,kf in enumerate(key_fgrams):
+    for keyindex, kf in enumerate(key_fgrams):
         pairs = {}
         for nuc in floworder:
-            pairs[nuc] = [None,None]
-        for ndx,expected in enumerate(kf):
-            nuc = floworder[ndx%n_nucs]
+            pairs[nuc] = [None, None]
+        for ndx, expected in enumerate(kf):
+            nuc = floworder[ndx % n_nucs]
             pairs[nuc][int(expected)] = ndx
-        topop = [k for k,v in pairs.iteritems() if None in v]
+        topop = [k for k, v in pairs.iteritems() if None in v]
         for k in topop:
             pairs.pop(k)
         diffs = []
-        for k,v in pairs.iteritems():
-            #random.shuffle(v)
+        for k, v in pairs.iteritems():
+            # random.shuffle(v)
             diffs.append(raw_fgram[v[1]] - raw_fgram[v[0]])
-        t,pval2side = stats.ttest_1samp(diffs, 0.0)
+        t, pval2side = stats.ttest_1samp(diffs, 0.0)
         pval2side /= 2
-        pvals.append((pval2side,keyindex))
+        pvals.append((pval2side, keyindex))
     pvals.sort()
     return pvals[0][-1]
-    
+
+
 def grid_estimate_cafie(expected, observed, floworder, onemersOnly=False, ie_range=None,
                         cf_range=None, droop_range=None):
     """
@@ -212,7 +224,7 @@ def grid_estimate_cafie(expected, observed, floworder, onemersOnly=False, ie_ran
         teststr = expected[0] + 'a'
     except TypeError:
         # we probably got a flowgram, so we convert to string
-        expected = seqify(expected, floworder)  
+        expected = seqify(expected, floworder)
     observed = numpy.array(observed)
     expectedFlowgram = numpy.array(deseqify(expected, floworder)[:len(observed)])
 
@@ -233,12 +245,12 @@ def grid_estimate_cafie(expected, observed, floworder, onemersOnly=False, ie_ran
         droopFactors = [(1.0 - droop)**c for c in xrange(len(observed))]
         for cf in cf_range:
             for ie in ie_range:
-                #predicted = numpy.array(cafie.simulate(expected, len(observed),
+                # predicted = numpy.array(cafie.simulate(expected, len(observed),
                 #                                      floworder, cf, ie))
                 if onemersOnly: predicted *= (expectedFlowgram <= 1)
                 predicted *= droopFactors
-                scale_factor,success = optimize.leastsq(scale_l2, 1.0,
-                                                        warning=False)
+                scale_factor, success = optimize.leastsq(scale_l2, 1.0,
+                                                         warning=False)
                 error = numpy.sum(numpy.square(scale_l2(scale_factor)))
                 if bestError is None or error < bestError:
                     bestError = error
@@ -249,7 +261,7 @@ def grid_estimate_cafie(expected, observed, floworder, onemersOnly=False, ie_ran
     print "best cf,ie,dr:", bestCf, bestIe, bestDroop
     return bestCf, bestIe, bestDroop
 
+
 def shorten_to_n_cycles(seq, floworder, n):
     nflows = len(floworder)
     return seqify(deseqify(seq, floworder)[:nflows*n], floworder)
-                

@@ -12,10 +12,8 @@ class TraceCorrector
 
       TraceCorrector (SignalProcessingMasterFitter &);
     ~TraceCorrector();
-        // abuse the trace buffers
-    void BackgroundCorrectAllBeadsInPlace (int flow_block_size, int flow_block_start);
-    void BackgroundCorrectBeadInPlace (int ibd, int flow_block_size, int flow_block_start);
-    void ReturnBackgroundCorrectedSignal(float *block_signal_corrected, int ibd, int flow_block_size,
+
+    void ReturnBackgroundCorrectedSignal(float *block_signal_corrected, float *block_signal_original, float *block_signal_sbg, int ibd, int flow_block_size,
         int flow_block_start );
 };
 

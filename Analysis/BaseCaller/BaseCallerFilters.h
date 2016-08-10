@@ -20,6 +20,7 @@ class  DPTreephaser;
 struct BasecallerRead;
 struct ProcessedRead;
 struct ReadFilteringHistory;
+class  MolecularTagTrimmer;
 
 using namespace std;
 
@@ -40,11 +41,15 @@ public:
   //! @brief    Constructor.
   //!
   //! @param    opts                Command line options
+  //! @param    comments_json       basecaller bam comments json
   //! @param    flow_order          Flow order object, also stores number of flows
   //! @param    keys                Key sequences in use
   //! @param    mask                Mask object
-  BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments, const string & run_id,
-         const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask);
+  BaseCallerFilters(OptArgs& opts,
+                    Json::Value &comments_json,
+                    const ion::FlowOrder& flow_order,
+                    const vector<KeySequence>& keys,
+                    const Mask& mask);
 
   //! @brief    Print usage
   static void PrintHelp();
@@ -107,6 +112,27 @@ public:
   //! @param    opts                User options for how filters work
   void FilterHighPPFAndPolyclonal   (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& measurements, const PolyclonalFilterOpts & opts);
 
+  //! @brief    Trim key sequence and initialize filtered read length
+  //! @param    key_length          Length of key sequence
+  //! @param    filter_history      Filter history and accounting for this read
+  void TrimKeySequence(const int key_length, ReadFilteringHistory& filter_history);
+
+  //! @brief    Trim tag at read start
+  //! @param    read_index          Read index
+  //! @param    read_class          Read class, 0=library, 1=TFs
+  //! @param    processed_read      Called read metadata
+  //! @param    sequence            Called base seqeunce
+  //! @param    TagTrimmer          pointer to mol tag trimmer object
+  void TrimPrefixTag(int read_index, int read_class, ProcessedRead &processed_read, const vector<char> &sequence, const MolecularTagTrimmer* TagTrimmer);
+
+  //! @brief    Trim tag at read end
+  //! @param    read_index          Read index
+  //! @param    read_class          Read class, 0=library, 1=TFs
+  //! @param    processed_read      Called read metadata
+  //! @param    sequence            Called base seqeunce
+  //! @param    TagTrimmer          pointer to mol tag trimmer object
+  void TrimSuffixTag(int read_index, int read_class, ProcessedRead &processed_read, const vector<char> &sequence, const MolecularTagTrimmer* TagTrimmer);
+
   //! @brief    Apply zero-length filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
@@ -131,19 +157,28 @@ public:
   //! @param    residual            Vector of phasing residuals
   void FilterHighResidual           (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& residual);
 
-  //! @brief    Apply Beverly trimmer and filter to a valid read.
+  //! @brief    ABOLISHED IN 5.2 - Apply Beverly trimmer and filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    read                Signals for this read
   //! @param    sff_entry           Basecalling results for this read
-  void FilterBeverly                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& scaled_residual,
-                                     const vector<int>& base_to_flow);
+  //void FilterBeverly                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& scaled_residual,
+  //                                  const vector<int>& base_to_flow);
 
   //! @brief    Entry point for quality trimmer to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
   void FilterQuality                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+
+  //! @brief    Trim a fixed amount of extra bases on the 5' end of the template portion of the read (after key/barcode/tag)
+  //! @param    read_class          Read class, 0=library, 1=TFs
+  void TrimExtraLeft                (int read_class, ProcessedRead& processed_read, const vector<char> & sequence);
+
+  //! @brief    Trim a fixed amount of extra bases on the 3' end of the template portion of the read (before tag/adapter, if found)
+  //! @param    read_index          Read index
+  //! @param    read_class          Read class, 0=library, 1=TFs
+  void TrimExtraRight               (int read_index, int read_class, ProcessedRead& processed_read, const vector<char> & sequence);
 
   //! @brief    Entry point for quality trimmer to a valid read.
   //! @param    read_index          Read index
@@ -170,16 +205,6 @@ public:
   void TrimAdapter                  (int read_index, int read_class, ProcessedRead& processed_read, const vector<float>& scaled_residual,
                                      const vector<int>& base_to_flow, DPTreephaser& treephaser, const BasecallerRead& read);
 
-  //! @brief    setup Avalanche trimmer parameters
-  //! @param    maxflows            max num flows
-  void TrimAvalanche_setup          (int maxflows);
-
-  //! @brief    Apply Avalanche trimmer to a valid read.
-  //! @param    read_index          Read index
-  //! @param    read_class          Read class, 0=library, 1=TFs
-  //! @param    sff_entry           Basecalling results for this read
-  void TrimAvalanche                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
-
   //! @brief    Check if a read is marked as valid.
   //! @param    read_index          Read index
   bool IsValid(int read_index) const;
@@ -191,8 +216,8 @@ public:
 
 protected:
 
-  // Write the bead adapters to comments for BAM header
-  void WriteAdaptersToBamComments(vector<string> &comments, const string & run_id);
+  // Write the bead adapters to a json
+  void WriteAdaptersToJson(Json::Value &json);
 
   //! @brief    Check input strings from non-ACGT characters
   void ValidateBaseStringVector(vector<string>& string_vector);
@@ -222,7 +247,6 @@ protected:
   bool                filter_clonal_enabled_tfs_;         //!< Is polyclonal filter enabled for TFs?
   int                 filter_clonal_maxreads_;            //!< Number of reads to be used for clonal filter training
   clonal_filter       clonal_population_;                 //!< Object implementing clonal filter
-  int                 extra_trim_right_;                  //!< Make quality trimming delete some extra bases
 
   // Beverly filter
   bool                filter_beverly_enabled_;            //!< Is Beverly filter enabled?
@@ -253,28 +277,10 @@ protected:
   double              trim_qual_offset_;                  //!< Offset for expected errors to allow for variation in expected qv trimmer
   double              trim_qual_quadr_;                   //!< Extra  expected errors to allow for variation in expected qv trimmer
 
-  // Avalanche filter (sort readlength filter, higher QV on shorter reads, and lower QV for longer reads)
-  bool                filter_avalanche_enabled_;          //!< Is Avalanche filter enabled?
-  int                 avalanche_max_pos_;                 //!< max QV threshold pos
-  int                 avalanche_mid_pos_;                 //!< mid QV threshold pos
-  int                 avalanche_min_pos_;                 //!< min QV threshold pos
-  int                 avalanche_win_;                     //!< Avalanche window used by avalanche trimmer
-  double              trim_qual_avalanche_max_;           //!< Quality cutoff used by avalanche trimmer
-  double              trim_qual_avalanche_hi_;            //!< Quality cutoff used by avalanche trimmer
-  double              trim_qual_avalanche_lo_;            //!< Quality cutoff used by avalanche trimmer
-  double              avalanche_sum_delta_;              //!<delta subtracted from minimum_sum before avalanche_mid_pos_
-  double              avalanche_ava_delta_;              //!<delta subtracted from minimum_ava after avalanche_mid_pos_
-  double              avalanche_min_delta_;              //!<delta subtracted from minimum_min after avalanche_min_pos_
-  double              delta_ava_;                        //!<delta between avalanche_ava_delta_ & avalanche_sum_delta_
-  double              delta_min_;                        //!<delta between avalanche_min_delta_ & avalanche_ava_delta_
-  int                 trim_min_read_len_avalanch_;       //!< diff from trim_min_read_len_
-  int                 qv_sum_thresh_max;                 //!< threshold on the sum of QV for pos < trim_qual_avalanche_max_
-  int                 qv_sum_thresh_min;                 //!< threshold on the sum of QV for pos >= trim_qual_avalanche_lo_
-  int                 min_bases_passed_test;            //!< min number of bases that the reads have to pass the qv test
-  vector<double>      qv_sum_thresh;                     //!< threshold on the sum of QV
-  //long                count_filtered;                    //!<counter mainly for debugging
-  //long                count_trimmed;                     //!<counter mainly for debugging
-  //long                count_passed;                      //!<counter mainly for debugging
+  bool                trim_barcodes_;                     //!< Switch indicating whether barcode trimming is turned on.
+  int                 extra_trim_left_;                   //!< Delete a fixed number of bases on the 5' end of the read
+  int                 extra_trim_right_;                  //!< Delete a fixed number of bases on the 3' end of the read
+  bool                save_extra_trim_;                   //!< Save extra trimming in BAM tags (left: ZE; right: YE)
 
 };
 

@@ -66,7 +66,7 @@ def sample_relationship_fields():
     restrictionRules_list.append(entree3)
 
     jsonfile["restrictionRules"] = restrictionRules_list
-    ##20120730-orig print json.dumps(jsonfile, sort_keys=True, indent=4)
+    # 20120730-orig print json.dumps(jsonfile, sort_keys=True, indent=4)
     return jsonfile
 
 

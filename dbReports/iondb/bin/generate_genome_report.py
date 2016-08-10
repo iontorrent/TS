@@ -9,24 +9,25 @@ import djangoinit
 from django.db import models
 from iondb.rundb import models
 
+
 def getResults():
     # calculate the date range to generate the report
     # the intent is to auto-generate a weekly report for the 'prior' week, no matter when the script is run
     # week ends Friday at midnight.  So for example, if run on a Friday, will generate the report for the prior week,
     # but run on a Sat will generate the current report for the week just ended.
-    #today = datetime.date.today()
-    #timeStart = datetime.datetime(today.year, today.month, today.day)
-    #daysFromMonday = timeStart.weekday() # Monday is 0, so if its Thursday (3), we need to go back 3 days
-    #lengthOfReport = 7 # report for 7 days, with Monday being the first day included in a report
-    #if daysFromMonday < lengthOfReport: # we want to go back to the start of the full week, if we are in the middle of a week, need to go back to the start of last week
-        #daysFromMonday = daysFromMonday + 7
-    #timeStart = timeStart - datetime.timedelta(days=daysFromMonday)
-    #print 'TimeStart is %s' % timeStart
-    #timeEnd = timeStart + datetime.timedelta(days=lengthOfReport) # technically this is one second too much but who really will notice
-    #print 'TimeEnd is %s' % timeEnd
+    # today = datetime.date.today()
+    # timeStart = datetime.datetime(today.year, today.month, today.day)
+    # daysFromMonday = timeStart.weekday() # Monday is 0, so if its Thursday (3), we need to go back 3 days
+    # lengthOfReport = 7 # report for 7 days, with Monday being the first day included in a report
+    # if daysFromMonday < lengthOfReport: # we want to go back to the start of the full week, if we are in the middle of a week, need to go back to the start of last week
+        # daysFromMonday = daysFromMonday + 7
+    # timeStart = timeStart - datetime.timedelta(days=daysFromMonday)
+    # print 'TimeStart is %s' % timeStart
+    # timeEnd = timeStart + datetime.timedelta(days=lengthOfReport) # technically this is one second too much but who really will notice
+    # print 'TimeEnd is %s' % timeEnd
 
     # and now we have a date range to query on, grab all 'new' runs, sum their 100AQ17 values, and track the best weekly 100Q17 run also
-    #exp = models.Experiment.objects.filter(date__range=(timeStart,timeEnd))
+    # exp = models.Experiment.objects.filter(date__range=(timeStart,timeEnd))
     library = "hg19"
     exp = models.Experiment.objects.filter(library=library)
     print 'Found %s experiments for library %s' % (len(exp), library)
@@ -39,7 +40,8 @@ def getResults():
         bestResult = None
         for r in rep:
             try:
-                libmetrics = r.libmetrics_set.all()[0] # ok, there's really only one libmetrics set per result, but we still need to get at it
+                libmetrics = r.libmetrics_set.all()[
+                                                  0]  # ok, there's really only one libmetrics set per result, but we still need to get at it
             except IndexError:
                 libmetrics = None
 
@@ -57,14 +59,17 @@ def getResults():
 
     return res
 
+
 class topRecord:
+
     def __init__(self):
         self.r = None
         self.reads = 0
 
 
 def byReads(a, b):
-    return cmp(b.reads, a.reads) # compare the integer reads values in each topRecord instance
+    return cmp(b.reads, a.reads)  # compare the integer reads values in each topRecord instance
+
 
 def generateReport():
     # get the web root path for building an html link
@@ -72,7 +77,7 @@ def generateReport():
     web_root = gc.web_root
     if len(web_root) > 0:
         if web_root[-1] == '/':
-            web_root = web_root[:len(web_root)-1]
+            web_root = web_root[:len(web_root) - 1]
     if gc.site_name:
         print 'Cumulative Report for %s' % gc.site_name
     else:
@@ -95,7 +100,8 @@ def generateReport():
 
     for r in res:
         try:
-            libmetrics = r.libmetrics_set.all()[0] # ok, there's really only one libmetrics set per result, but we still need to get at it
+            libmetrics = r.libmetrics_set.all()[
+                                              0]  # ok, there's really only one libmetrics set per result, but we still need to get at it
         except IndexError:
             libmetrics = None
 
@@ -123,7 +129,7 @@ def generateReport():
 
     print 'Totals  100Q17 reads: %s 100Q17 bases: %s in %s runs' % (sum_100Q17Reads, sum_Q17Bases, sum_Runs)
     if bestRun:
-        print 'Best run: %s' % (web_root + bestRun.reportLink) # need to handle bestRun = None case?
+        print 'Best run: %s' % (web_root + bestRun.reportLink)  # need to handle bestRun = None case?
         print 'Best run 100Q17 reads: %s 100Q17 bases: %s' % (curBestReads, curBestBases)
     else:
         print 'There were no best runs for this report.'
@@ -131,8 +137,7 @@ def generateReport():
     # top 5
     top5 = sorted(topN, byReads)[:5]
     for i, top in enumerate(top5):
-        print 'Run: %s 100Q17 reads: %s link: %s' % (i+1, top.reads, web_root + top.r.reportLink)
+        print 'Run: %s 100Q17 reads: %s link: %s' % (i + 1, top.reads, web_root + top.r.reportLink)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     generateReport()
-

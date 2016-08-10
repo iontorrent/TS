@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="RC-chart" class="unselectable" style="border:2px solid #666;page-break-inside:avoid;display:none">\
+<div id="RC-chart" class="unselectable" style="border:2px solid #666;display:none">\
   <div id="RC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="RC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse View"></span>\
     <span class="table-title" style="float:none">Reference Coverage Chart</span>\
@@ -29,12 +29,14 @@ document.write('\
 </div>\
 <div id="RC-controlpanel" class="filter-panel" style="display:none">\
   <table><tr>\
-    <td class="nwrap">Viewing Options:</td>\
+    <td class="nwrap">View Options:</td>\
     <td class="nwrap" id="RC-offScaleOutlierControl" style="display:none">\
       <span class="flyhelp" id="RC-offScaleOutlierLabel">Plot Outlier Off-scale</span>:\
       <input type="checkbox" id="RC-offScaleOutlier" checked="unchecked"></td>\
     <td class="nwrap"><span class="flyhelp" id="RC-showLegendLabel">Show Legend</span>:\
       <input type="checkbox" id="RC-showLegend" checked="checked"></td>\
+    <td class="nwrap" id="RC-showTargetsOption"><span class="flyhelp" id="RC-showTargetsLabel">Show Targets</span>:\
+      <input type="checkbox" id="RC-showTargets" checked="checked"></td>\
     <td class="nwrap"><span class="flyhelp" id="RC-numPointsLabel">Bars/Points</span>:\
       <input type="text" class="numSearch" id="RC-numPoints" value=200 size=4>&nbsp;<span id="RC-numBars"></span></td>\
     <td><input id="RC-export" type="button" value="Export"></td>\
@@ -115,8 +117,8 @@ $(function () {
     return;
   }
   var cbcsize = 1000; // coarse binning size
-  var cbcFile = $("#ReferenceCoverageChart").attr("cbcfile");
-  if( cbcFile == undefined ) cbcFile = '';
+  var annoFile = $("#ReferenceCoverageChart").attr("annofile");
+  if( annoFile == undefined ) annoFile = '';
   var wgncovFile = $("#ReferenceCoverageChart").attr("wgncovfile");
   if( wgncovFile == undefined ) wgncovFile = '';
 
@@ -164,9 +166,6 @@ $(function () {
 
   var dblclickUnzoomFac = 10;
 
-  // Necessary to load data w/o PHP call for rendering to PDF
-  var directLoadTSV = true;
-
   var resiz_def = {
     alsoResize: "#RC-placeholder",
     minWidth:def_minWidth,
@@ -175,6 +174,13 @@ $(function () {
     resize:function(e,u){ updatePlot(); }
   };
   $('#RC-chart').resizable(resiz_def);
+
+  function disableShowTargets() {
+    $('#RC-showTargetsOption').hide();
+    $('#RC-showTargets').prop('checked',false);
+    plotParams.showTargets = false;
+    baseRangeParam.annofile = '';
+  }
 
   placeholder.bind("mouseleave", function() {
     if( !lastHoverBar.sticky ) hideTooltip();
@@ -271,6 +277,9 @@ $(function () {
       "of other data curently in view. This option only becomes available when the maximum value (height) of any "+
       "data point (bar) is at least "+def_outlierFactor+" times greater than all others in view." );
     $("#RC-showLegendLabel").attr( "title", "Select whether the legend is displayed over the plot area." );
+    $("#RC-showTargetsLabel").attr( "title", "Select whether the target coverage bar is displayed over the plots. "+
+      "Clicking on one of these bars may be used to bring a single target into view in the Amplicon/Target Coverage Chart. "+
+      "Target coverage bars do not appear in the whole chromomsome/contig view (at maximum zoom out)." );
     $("#RC-numPointsLabel").attr( "title",
       "This value specifies the maximum number of data bars and overlay points to display. Typically each bar (or point) "+
       "plotted will represent the binned totals and averages of many individual base regions along the genome. If there is "+
@@ -303,7 +312,7 @@ $(function () {
     minNumPoints : def_minPoints,
     maxNumPoints : 1000,
     maxSideBars : 500,
-    maxXaxisLabels : 25,
+    maxXaxisLabels : 30,
     multiChrom : false,
     zoomInOption : false,
     zoomInActive : false,
@@ -341,6 +350,7 @@ $(function () {
   var plotParams = {
     resetYScale: false,
     showLegend : true,
+    showTargets : true,
     offScaleOutlier : false,
     numPoints : def_numPoints,
     aveBase : 1,
@@ -354,7 +364,10 @@ $(function () {
     outfile : '',
     options : '',
     bbcfile : bbcFile,
-    cbcfile : cbcFile,
+    annofile : annoFile,
+    annonumflds : 1,
+    annofields : '3',
+    annotitles : 'targets',
     chrom : '',
     pos_srt : 0,
     pos_end : 0,
@@ -427,7 +440,7 @@ $(function () {
     var txt;
     if( zoomin ) {
       txt = "Zoom in to a special view of coverage over the reference as a single sequence with all chromsomes\n"+
-      "(or contigs) laid end-to-end. This view is only available for references with 2 to 25 contigs.\n"+
+      "(or contigs) laid end-to-end. This view is only available for references with 2 to 30 contigs.\n"+
       "Coverage across each is distributed over a number of bins that is apportioned by relative sizes of\n"+
       "the chromsomes, with each chromsome represented by at least one bin.";
     } else {
@@ -610,13 +623,15 @@ $(function () {
     }
     // item not passed for 0-width bars: if passed check for overlay points
     var isRev = pos.y < 0;
+    var trgbar = pos.trgbar ? true : false;
     var label = '', bgColor;
-    if( item )
-    {
+    if( item ) {
       var tmp = item.series.label;
       if( tmp == LegendLabels.fwdBias || tmp == LegendLabels.percentOntarg ) label = tmp;
     }
-    if( label != '' ) {
+    if( trgbar ) {
+      bgColor = "#FF8";
+    } else if( label != '' ) {
       bgColor = item.series.color;
     } else if( plotParams.barAxis == 0 ) {
       label = LegendLabels.allReads;
@@ -629,11 +644,11 @@ $(function () {
     var binNum = Math.floor(pos.x);
     if( binNum < plotStats.minX ) binNum = plotStats.minX;
     if( binNum >= plotStats.maxX ) binNum = plotStats.maxX-1;
-    if( lastHoverBar.binNum == binNum && lastHoverBar.sticky == sticky &&
-        lastHoverBar.isRev == isRev && lastHoverBar.label == label ) return;
+    if( !trgbar && lastHoverBar.binNum == binNum && lastHoverBar.sticky == sticky &&
+      lastHoverBar.isRev == isRev && lastHoverBar.label == label ) return;
     hideTooltip();
     // correct for over-approximate bin selection for point hover with missing data points
-    var clickBar = dataBar(label);
+    var clickBar = trgbar || dataBar(label);
     if( !clickBar ) {
       // if item is available try to map points throu
       if( item != null && pointMap.length > 0 ) binNum = pointMap[item.dataIndex];
@@ -643,14 +658,23 @@ $(function () {
     lastHoverBar.isRev = isRev;
     lastHoverBar.sticky = sticky;
     lastHoverBar.label = label;
-    $('#RC-tooltip-body').html( sticky ? tooltipMessage(label,binNum) : tooltipHint(label,binNum));
-
+    if( trgbar ) {
+      $('#RC-tooltip-body').html( resolveTargetBar(binNum) );
+    } else if( sticky ) {
+      $('#RC-tooltip-body').html( tooltipMessage(label,binNum) );
+    } else {
+      $('#RC-tooltip-body').html( tooltipHint(label,binNum) );
+    }
     var whiteText = (label === LegendLabels.fwdBias || label === LegendLabels.percentOntarg);
     var posx = pos.pageX+10;
     var posy = pos.pageY-10;
     var minTipWidth = 0;
     if( sticky ) {
-      if( clickBar ) minTipWidth = plotParams.barAxis ? 230 : 210;
+      if( trgbar ) {
+        minTipWidth = 240;
+      } else if( clickBar ) {
+        minTipWidth = plotParams.barAxis ? 230 : 210;
+      }
       var cof = $('#RC-chart').offset();
       var ht = $('#RC-tooltip').height();
       var ymax = cof.top + $('#RC-chart').height() - ht;
@@ -671,6 +695,48 @@ $(function () {
       timeout = setTimeout( function() { hideTooltip(); }, 200 );
     }
   }
+
+  function resolveTargetBar(bin) {
+    $('#RC-tooltip-close').show();
+    var zoomOut = !noZoomOut();
+    $('#RC-tooltip-zoomout').toggle(zoomOut);
+    $('#RC-tooltip-center').toggle(zoomOut);
+    $('#RC-tooltip-zoomin').toggle( plotStats.baseBinSize > 1 );
+    var trg = dataTable[bin][7];
+    var targets = trg.split(",");
+    var br = "<br/>";
+    var msg = "Resolve&nbsp;Multiple&nbsp;Targets:"+br;
+    msg += "<div style='text-align:center'>";
+    for( var i = 0; i < targets.length; ++i ) {
+       var tx = targets[i];
+       var ti = tx.startsWith('...(') ? "Zoom in on region" : "View target in Amplicon/Target Coverage Chart";
+       msg += "<a bin='"+bin+"' class='RC-targetResolve' title='"+ti+
+         "'style='color:black;text-decoration:underline;cursor:pointer'>"+tx+"</a>"+br;
+    }
+    return msg+"</div>";
+  }
+
+  function targetBarClick(e) {
+    var bin = $(this).attr("bin");
+    var trg = dataTable[bin][7];
+    if( trg.indexOf(',') < 0 ) {
+      $("#TC-ViewRequest").val(trg).change();
+    } else {
+      showTooltip( null, { 'x':bin,'y':0,'pageX':e.pageX,'pageY':e.pageY,'trgbar':true }, true );
+    }
+  }
+
+  // bind the on-click event to body once for later use with class
+  $('body').on( 'click', 'a.RC-targetResolve', function() {
+    var bin = $(this).attr("bin");
+    var trg = this.text;
+    hideTooltip();
+    if( trg.startsWith('...(') ) {
+      zoomViewOnBin( bin, true );
+    } else {
+      $("#TC-ViewRequest").val(trg).change();
+    }
+  });
 
   $('#RC-tooltip-close').click( function() {
     hideTooltip();
@@ -720,14 +786,14 @@ $(function () {
 
   function tooltipMessage(id,bin) {
     $('#RC-tooltip-close').show();
-    $('#RC-tooltip-zoomout').show();
-    $('#RC-tooltip-center').show();
-    $('#RC-tooltip-zoomin').show();
+    var zoomOut = !noZoomOut();
+    $('#RC-tooltip-zoomout').toggle(zoomOut);
+    $('#RC-tooltip-center').toggle(zoomOut);
+    $('#RC-tooltip-zoomin').toggle( plotStats.baseBinSize > 1 );
     var br = "<br/>";
     var i = id.indexOf(' ');
     var dirStr = id.substr(0,i+1);
     var dir = dirStr.charAt(0);
-    //var binChrom = dataTable[bin][DataField.pos_start] < 0;
     var regionLen = dataTable[bin][DataField.pos_end];
     var numReads = dataTable[bin][DataField.fwd_reads]+dataTable[bin][DataField.rev_reads];
     var msg = "(Bin#"+(bin+1-plotStats.minX)+")"+br;
@@ -827,6 +893,7 @@ $(function () {
     $('#RC-numPoints').val(plotParams.numPoints);
     $('#RC-offScaleOutlier').attr('checked',plotParams.offScaleOutlier);
     $('#RC-showLegend').attr('checked',plotParams.showLegend);
+    $('#RC-showTargets').attr('checked',plotParams.showTargets);
     $('#RC-selectChrom').val(baseRangeParam.chrom);
   }
 
@@ -838,6 +905,25 @@ $(function () {
   $('#RC-showLegend').change(function() {
     plotParams.showLegend = ($(this).attr("checked") == "checked");
     updatePlot();
+  });
+
+  $('#RC-showTargets').change(function() {
+    plotParams.showTargets = ($(this).attr("checked") == "checked");
+    // show targets not implemented for whole contig view (stil using public file for view)
+    if( baseRangeParam.chrom === '' && !plotStats.zoomInActive ) return;
+    if( plotParams.showTargets ) {
+      if( plotStats.zoomInActive ) {
+        updatePlot();
+      } else {
+        // reload data to get anotation - last load range is dynamic and has to be recalculated
+        baseRangeParam.annofile = annoFile;
+        setContigRange( $('#RC-chromRange').val() );
+        zoomData();
+      }
+    } else {
+      baseRangeParam.annofile = '';
+      updatePlot();
+    }
   });
 
   $('#RC-numPoints').change(function() {
@@ -954,8 +1040,6 @@ $(function () {
         srt = swp;
       }
     }
-    // correct for typical 1-off numbering
-    if( srt % 1000 == 0 ) ++srt;
     // expand range if insufficient
     if( (end-srt+1) < plotStats.numPoints ) {
       srt = Math.floor(0.5*(end+srt+1-plotStats.numPoints));
@@ -1079,7 +1163,7 @@ $(function () {
           }
         }
       });
-    }).error(function(){
+    }).error(function(xhr,status,error){
       $('#RC-message').text('Failed to load from contig summary file.');
     }).success(function(){
       setChromSearch();
@@ -1210,7 +1294,6 @@ $(function () {
         binSrt = plotStats.minX;
         binEnd = plotStats.maxX - 1;
       }
-      plotStats.baseBinSize = 1;
       // determine if re-load is not required - true overzoom mode
       if( plotStats.zoomInActive || binEnd-binSrt+1 < plotParams.numPoints ) {
         setViewXtitle();
@@ -1285,14 +1368,17 @@ $(function () {
     updatePlot();
   }
 
+  function noZoomOut() {
+    if( plotStats.multiChrom ) {
+      return plotStats.chromsInView == plotStats.totalChroms && !plotStats.minX;
+    }
+    return !plotStats.zoomChrom;
+  }
+
   function updateScrollBar() {
     if( plotStats.sliderMotive ) return;
     var slider = $('#RC-slider');
-    if( plotStats.multiChrom ) {
-      if( plotStats.chromsInView == plotStats.totalChroms ) return slider.hide();
-    } else if( !plotStats.zoomChrom ) {
-      return slider.hide();
-    }
+    if( noZoomOut() ) return slider.hide();
     // if looking at a window of the whole view (formally overzoom mode) then this is the slide window
     plotStats.sliderShift = 0;
     if( plotStats.maxX - plotStats.minX < plotStats.numPoints ) {
@@ -1337,19 +1423,19 @@ $(function () {
 
   function loadTSV() {
     var noTargets = false;
+    var maxNumFields = 0;
     var pspvars = baseRangeParam;
     var srcf = 'lifechart/region_coverage.php3';
-    if( directLoadTSV ) {
-      srcf = chrcovFile;
-    } else if( plotStats.zoomInActive ) {
+    if( plotStats.zoomInActive ) {
       srcf = wgncovFile;
     } else if( baseRangeParam.chrom === '' ) {
       var nlt = parseInt(0.5+plotStats.chromLbins*contigRangeParam.binsize);
       var nrt = parseInt(0.5+plotStats.chromRbins*contigRangeParam.binsize);
       contigRangeParam.startline = plotStats.chromSrtNum - nlt;
       contigRangeParam.numlines = plotStats.chromsInView + nlt + nrt;
-      srcf = "lifechart/fileslice.php3";
       pspvars = contigRangeParam;
+      // use whole contig file if available - for initial PDF conversion (not performance)
+      srcf = (chrcovFile !== "" && nlt+nrt == 0) ? chrcovFile : "lifechart/fileslice.php3";
     }
     dataTable = [];
     $('#RC-message').text('Loading...');
@@ -1361,6 +1447,14 @@ $(function () {
         if( n == 0 ) {
           fieldIds = fields;
           noTargets = fields.length <= 6;
+          if( noTargets && plotParams.showTargets ) {
+            if( plotParams.showTargets ) disableShowTargets();
+            maxNumFields = fields.length;
+          } else {
+            // always load targets from file for zoomIn mode (as no reload for showTargets toggle)
+            maxNumFields = (plotStats.zoomInActive || plotParams.showTargets) && fields.length > 7
+              ? fields.length - baseRangeParam.annonumflds : fields.length;
+          }
           if( fields.length < 3 ) {
             $('#RC-message').text('An error occurred while loading from server.');
             return false;
@@ -1368,7 +1462,8 @@ $(function () {
           if( fields[0].substr(0,5).toLowerCase() == 'error' ) alert(row);
         } else if( fields[0] != "" ) {
           // important to convert numeric fields to numbers for performance
-          for( var i = 1; i < fields.length; ++i ) { fields[i] = +fields[i]; }
+          var nf = fields.length < maxNumFields ? fields.length : maxNumFields;
+          for( var i = 1; i < nf; ++i ) { fields[i] = +fields[i]; }
           if( noTargets ) fields[5] = fields[6] = 0;
           dataTable.push( fields );
         }
@@ -1608,8 +1703,12 @@ $(function () {
         plotData.push( { label: LegendLabels.revReads, color: ColorSet.revOffReads, data: d4 } );
       }
     }
+    // show targets option disabled for whole contigs view (max zoom out)
+    var showTargets = (baseRangeParam.chrom === '' && !plotStats.zoomInActive) ? false : plotParams.showTargets;
+    // add (7%) margin to top of plot (for annotation)
+    var cspy = showTargets ? 0.07*(ymax-ymin) : 0;
     var ytitle = plotParams.aveBase ? "Base Read Depth" : "Total Base Reads";
-    options.yaxes.push( {position:"left", axisLabel:ytitle, min:ymin, max:ymax} );
+    options.yaxes.push( {position:"left", axisLabel:ytitle, min:ymin, max:ymax+cspy} );
     options.legend.show = plotParams.showLegend;
     plotStats.tooltipZero = 0.01*(ymax-ymin);
     ++nplot;
@@ -1658,7 +1757,66 @@ $(function () {
     hideTooltip();
     plotObj = $.plot(placeholder, plotData, options);
     canvas = plotObj.getCanvas();
+
+    // add targets annotation bars
+    if( showTargets ) {
+      var font = "10px Times New Roman";
+      var af = 7;  // query allows for any number of annotation fields but just target ID is implemented here
+      // use physical view range for annotation
+      xSrt = plotStats.minX + plotStats.sliderShift;
+      xEnd = plotStats.maxX + plotStats.sliderShift;
+      var cpos = plotObj.pointOffset( {x:xSrt,y:ymin} );
+      var dx = cpos.left - 1;
+      var cy = cpos.top - plotObj.height();
+      var lx = dx + plotObj.getAxes().xaxis.p2c(xSrt);
+      var ltxt = dataTable[xSrt].length <= af ? '' : dataTable[xSrt][af];
+      var rdot = (ltxt !== '');
+      var binClick = xSrt;
+      for( var bin = ++xSrt; bin <= xEnd; ++bin ) {
+        var atxt = (bin == xEnd || dataTable[bin].length <= af) ? '' : dataTable[bin][af];
+        if( atxt !== ltxt ) {
+          var cx = dx + plotObj.getAxes().xaxis.p2c(bin);
+          if( ltxt !== '' ) {
+            var wd = cx-lx;
+            var tx = shortenTxtToWidth(wd,ltxt,font,rdot);
+            var col = targetBarColorByTxt(ltxt);
+            rdot = false;
+            var elm = $("<div bin='"+binClick+"' title='"+ltxt+"' style='" +
+              "position:absolute;border:1px solid #880;z-index:10;text-align:center;cursor:pointer;" +
+              "left:"+lx+"px;top:"+cy+"px;width:"+wd+"px;background:"+col+";font:"+font+"'>"+tx+"</div>");
+            placeholder.append(elm);
+            elm.click(targetBarClick);
+          }
+          lx = cx;
+          ltxt = atxt;
+          binClick = bin;
+        }
+      }
+    }
     updateScrollBar();
+  }
+
+  function getTextWidth(txt,font) {
+    var fnt = font || '10px arial';
+    var elm = $("<div style='position:absolute;white-space:nowrap;visibility:hidden;font:"+fnt+"'>"+txt+"</div>");
+    elm.appendTo($('body'));
+    var w = elm.width();
+    elm.remove();
+    return w;
+  }
+
+  function shortenTxtToWidth(width,txt,font,rdot) {
+    var tw = getTextWidth(txt,font);
+    if( tw <= width ) return txt;
+    var ln = parseInt(txt.length * width / tw) - 1;
+    if( ln < 0 ) return ".";
+    return rdot ? ".."+txt.substr(txt.length-ln) : txt.substr(0,ln)+"..";
+  }
+
+  function targetBarColorByTxt(txt) {
+    var ncom = (txt.match(/,/g)||[]).length;
+    if( ncom > 2 ) ncom = 2;
+    return ["#FF0","#EC2","#DA4"][ncom]+";opacity:0.7";
   }
 
   $('#RC-export').click( function() {
@@ -1799,10 +1957,10 @@ $(function () {
         end_bin = plotStats.maxX;
       }
       window.open( "lifechart/region_coverage.php3"+
-        "?bbcfile="+baseRangeParam.bbcfile+"&cbcfile="+baseRangeParam.cbcfile+"&maxrows="+maxrows+
+        "?bbcfile="+baseRangeParam.bbcfile+"&annofile="+baseRangeParam.annofile+"&maxrows="+maxrows+
         "&chrom="+baseRangeParam.chrom+"&pos_srt="+pos_srt+"&pos_end="+pos_end+
         "&outfile="+outfile+"&srt_bin="+srt_bin+"&end_bin="+end_bin+
-        "&options="+(toTable ? "" : "-r") );
+        "&options="+(toTable ? "" : "-bl") );
     }
   }
 
@@ -1811,26 +1969,23 @@ $(function () {
     $('#RC-controlpanel').show();
   if( startOutlierOffScale )
     $('#RC-offScaleOutlier').attr('checked', (plotParams.offScaleOutlier = true) );
+  if( annoFile == '' )
+    disableShowTargets();
   loadContigs();
   autoHideLegend();
 
   // automatically change initial view to full contig if only one
-  if( plotStats.totalChroms == 1 || plotStats.totalChroms > plotStats.maxXaxisLabels ) {
-    chrcovFile = wgncovFile;
-    wgncovFile = '';
-  }
-  setUnzoomTitle( wgncovFile !== '' );
-
   // done this way to plot only once (for sake of auto PDF)
   if( plotStats.totalChroms == 1 ) {
-    $("#RC-unzoomToggle").click(); // calls unzoomData()
+    $("#RC-unzoomToggle").click();
   } else {
     unzoomData();
   }
-  // enable full widget functionality
-  directLoadTSV = false;
-
-  // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
+  if( plotStats.totalChroms == 1 || plotStats.totalChroms > plotStats.maxXaxisLabels ) {
+    wgncovFile = '';
+  }
+  setUnzoomTitle( wgncovFile !== '' );
+  // collapse view after EVERYTHING has been drawn in open chart (to avoid flot issues)
   if( startCollapsed ) {
     $("#RC-collapsePlot").attr("class","ui-icon ui-icon-triangle-1-s");
     $("#RC-collapsePlot").attr("title","Expand view");

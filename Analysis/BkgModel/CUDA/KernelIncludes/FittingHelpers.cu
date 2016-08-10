@@ -59,7 +59,8 @@ float ComputeETBR(
     const PerNucParamsRegion * perNucRegP,
     const float RatioDrift,
     const float R,
-    float copies
+    float copies,
+    const int realFlowNum
 ) {
 
   float etbR;
@@ -68,18 +69,18 @@ float ComputeETBR(
     etbR = R;
     if (etbR)
       etbR = perNucRegP->getNucModifyRatio() /(perNucRegP->getNucModifyRatio() +
-          (1.0f - (RatioDrift * (ConstFlowP.getRealFnum())/SCALEOFBUFFERINGCHANGE))*
+          (1.0f - (RatioDrift * (realFlowNum)/SCALEOFBUFFERINGCHANGE))*
           (1.0f / etbR - 1.0f));
   }
   else {
     if ( !ConfigP.UseAlternativeEtbRequation()) {
       etbR = R*perNucRegP->getNucModifyRatio() +
           (1.0f - R*perNucRegP->getNucModifyRatio())*
-          RatioDrift*(ConstFlowP.getRealFnum())/SCALEOFBUFFERINGCHANGE;
+          RatioDrift*(realFlowNum)/SCALEOFBUFFERINGCHANGE;
     }
     else {
       etbR = R*perNucRegP->getNucModifyRatio() +
-          RatioDrift*copies*(ConstFlowP.getRealFnum())/(6.0*SCALEOFBUFFERINGCHANGE);
+          RatioDrift*copies*(realFlowNum)/(6.0*SCALEOFBUFFERINGCHANGE);
     }
   }
   return etbR;
@@ -106,9 +107,10 @@ float ComputeTauB(
 __device__
 float ComputeSP(
     const float copyDrift,
-    const float copies
+    const float copies,
+    const int realFlowNum
 ) {
-  return ((float)(COPYMULTIPLIER * copies) * powf(copyDrift, ConstFlowP.getRealFnum()));
+  return ((float)(COPYMULTIPLIER * copies) * powf(copyDrift, (float)realFlowNum));
 }
 
 
@@ -220,7 +222,7 @@ float ProjectionSearch(
       den += tmp_fval[j]*tmp_fval[j]*emphasisVal;
     }
     Ampl *= (num/den);
-    if (isnan(Ampl))
+    if (::isnan(Ampl))
       Ampl = 1.0f;
     else
       clampT(Ampl, 0.001f, (float)LAST_POISSON_TABLE_COL);

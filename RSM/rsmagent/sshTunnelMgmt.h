@@ -1,3 +1,4 @@
+// Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
 #ifndef SSH_TUNNEL_MGMT_H
 #define SSH_TUNNEL_MGMT_H
 

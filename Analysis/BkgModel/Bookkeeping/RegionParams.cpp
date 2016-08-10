@@ -1,4 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+
+#include <sstream>
 #include "RegionParams.h"
 #include <math.h>
 
@@ -29,6 +31,8 @@ void reg_params::ApplyUpperBound(const reg_params *bound, int flow_block_size)
   MAX_BOUND_CHECK(RatioDrift);
   MAX_BOUND_CHECK(CopyDrift);
   MAX_BOUND_CHECK(tau_R_m);
+  if ((-tau_R_o>tau_R_m) & bounded_buffering)
+    tau_R_o = -tau_R_m; // increase tau_R_o if needed
   MAX_BOUND_CHECK(tau_R_o);
   MAX_BOUND_CHECK(tauE);
 }
@@ -57,8 +61,10 @@ void reg_params::ApplyLowerBound(const reg_params *bound, int flow_block_size)
   MIN_BOUND_CHECK(nuc_shape.sigma);
   MIN_BOUND_CHECK(RatioDrift);
   MIN_BOUND_CHECK(CopyDrift);
-  MIN_BOUND_CHECK(tau_R_m);
   MIN_BOUND_CHECK(tau_R_o);
+  if ((-tau_R_m>tau_R_o) & bounded_buffering)
+    tau_R_m = -tau_R_o; // decrease tau_R_m
+  MIN_BOUND_CHECK(tau_R_m);
   MIN_BOUND_CHECK(tauE);
 }
 
@@ -80,8 +86,44 @@ float xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(float tauE,float etbR,
   return (tauB);
 }
 
+// note: extreme precautions not required if we used a sensible model rather than this distorted one, or had fitters that didn't lock at 0 derivatives
+float xSafeTauBFromRegionLinearModel(float tau_R_m,float tau_R_o, float etbR, float min_tauB, float max_tauB)
+{
+  float safe_tau_R_o = tau_R_o;
+  float safe_tau_R_m = tau_R_m;
+  // added good bounds on tau_R_o and tau_R_m
+  // so no need for weird if/thens in inner loop.
+
+  float tauB = (safe_tau_R_m*etbR+safe_tau_R_o);
+  if (tauB>max_tauB){
+    tauB = 2*(max_tauB*tauB)/(max_tauB+tauB); // soft rise to at most 2*maxtauB
+  }
+  if (tauB<min_tauB){
+    // soft decrease to zero
+    float delta = min_tauB-tauB; //non-negative
+    float target = min_tauB*0.75f; // don't go all the way to zero, but softly decrease - mintauB = 4 -> real limit is "3"
+    tauB =(min_tauB+target*delta)/(1+delta); // limit is target, mintauB is starting threshold
+  }
+  return (tauB);
+}
+
+float xSafeEmptyToBeadRatioForFlow(float etbR_original, float NucModifyRatio, float RatioDrift, int flow){
+  float TimeAdjust, etbR, gammaT,gammaB;
+  TimeAdjust = 0.5*RatioDrift*flow/SCALEOFBUFFERINGCHANGE;  // check bounds on this for craziness?
+  gammaT = 1.0f-TimeAdjust; // PADE approximate for exponential change
+  gammaB = 1.0f+TimeAdjust;
+  etbR = etbR_original*NucModifyRatio;
+  // cannot be larger than 1.0, ever
+  etbR = etbR/(etbR + (gammaT/gammaB)*(1-etbR_original));
+  return(etbR);
+}
+
+
 float reg_params::ComputeTauBfromEmptyUsingRegionLinearModel(float etbR) const
 {
+  if (safe_model){
+    return(xSafeTauBFromRegionLinearModel(tau_R_m,tau_R_o, etbR, min_tauB, max_tauB));
+  }
   if (fit_taue)
     return(xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(tauE,etbR,min_tauB,max_tauB));
   else
@@ -120,7 +162,9 @@ float xAdjustEmptyToBeadRatioForFlowWithAdjR(float etbR_original, float NucModif
 
 float reg_params::AdjustEmptyToBeadRatioForFlow(float etbR_original, float Ampl, float Copy, float phi, int nuc_id, int flow) const
 {
-
+  if (safe_model){
+    return(xSafeEmptyToBeadRatioForFlow(etbR_original,NucModifyRatio[nuc_id],RatioDrift,flow));
+   }
   if (fit_taue)
     return(xAdjustEmptyToBeadRatioForFlowWithAdjR(etbR_original,NucModifyRatio[nuc_id],RatioDrift,flow));
   else 
@@ -143,6 +187,9 @@ void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
   fit_taue = false;
   use_alternative_etbR_equation = false; 
 
+  suppress_copydrift = false;
+  safe_model = false;
+  bounded_buffering=false;
 
   tshift    = 3.5f;
   nuc_shape.sigma = 8.5f; // increase for super slow project
@@ -165,16 +212,21 @@ void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
   d[CNUCINDEX] =  1000.0f;
   d[GNUCINDEX] =  1000.0f;
 
-  kmax[TNUCINDEX] = 20000.0f;
-  kmax[ANUCINDEX] = 20000.0f;
-  kmax[CNUCINDEX] = 20000.0f;
-  kmax[GNUCINDEX] = 20000.0f;
+  kmax[TNUCINDEX] = 200.0f;
+  kmax[ANUCINDEX] = 200.0f;
+  kmax[CNUCINDEX] = 200.0f;
+  kmax[GNUCINDEX] = 200.0f;
   tau_R_m = 100.0f;
-  tau_R_o = 400.0f;
+  tau_R_o = 100.0f;
+  if (bounded_buffering){
+    tau_R_m = -4.0f; // at most min-tauB in the negative direction
+    tau_R_o = 32.0f; // (1+R)*tauB - tauB between 4 and 20, R typically .7
+  }
+
   tauE = 20.0f;
   min_tauB = 4.0f;
   max_tauB = 65.0f;
-  mid_tauB = 12.0f;
+
 
   NucModifyRatio[TNUCINDEX] = 1.1f;
   NucModifyRatio[ANUCINDEX] = 1.1f;
@@ -198,7 +250,7 @@ void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
     nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
 }
 
-void reg_params::SetStandardLow(float t0_start, int flow_block_size)
+void reg_params::SetStandardLow(float t0_start, int flow_block_size, bool _suppress_copydrift)
 {
   // per-region parameters
   for (int j=0;j<flow_block_size;j++)
@@ -212,16 +264,21 @@ void reg_params::SetStandardLow(float t0_start, int flow_block_size)
   fit_taue = false;
   use_alternative_etbR_equation = false; 
 
+  suppress_copydrift= _suppress_copydrift;
+  safe_model = false;
+  bounded_buffering= false;
 
   tshift    = -1.5f;
   nuc_shape.sigma  = 0.4f;
   RatioDrift    = 0.0f;
   CopyDrift    = 0.99f;
+  if (suppress_copydrift) // allow no changes
+    CopyDrift = 1.0f;
 
-  krate[TNUCINDEX] = 0.01f;
-  krate[ANUCINDEX] = 0.01f;
-  krate[CNUCINDEX] = 0.01f;
-  krate[GNUCINDEX] = 0.01f;
+  krate[TNUCINDEX] = 0.1f;
+  krate[ANUCINDEX] = 0.1f;
+  krate[CNUCINDEX] = 0.1f;
+  krate[GNUCINDEX] = 0.1f;
   sens =  0.5f;
 
   d[TNUCINDEX] =  0.1f;
@@ -235,6 +292,10 @@ void reg_params::SetStandardLow(float t0_start, int flow_block_size)
   kmax[GNUCINDEX] = 5.0f;
   tau_R_m = -100.0f;
   tau_R_o = -100.0f;
+  if (bounded_buffering){
+    tau_R_m = -20.0f; // ~ -tauB, tauB runs from 4-20
+    tau_R_o = 6.0f;  // (1+R)*tauB, mintaub= 4
+  }
   tauE = 1.0f;
   min_tauB = 4.0f;
   max_tauB = 65.0f;
@@ -257,6 +318,45 @@ void reg_params::SetStandardLow(float t0_start, int flow_block_size)
     nuc_shape.valve_open = 15.0f; // frames(!)
     nuc_shape.nuc_flow_span = 15.0f; // frames = 15.0f per second
     nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
+}
+
+void reg_params::ToJson(Json::Value &params_json)
+{
+  for (int nuc=0; nuc<NUMNUC; ++nuc) {
+    params_json["krate"][nuc] = krate[nuc];
+    params_json["d"][nuc] = d[nuc];
+    params_json["kmax"][nuc] = kmax[nuc];
+    params_json["NucModifyRatio"][nuc] = NucModifyRatio[nuc];
+  }
+ 
+  params_json["tshift"] = tshift;
+  params_json["tau_R_m"] = tau_R_m;
+  params_json["tau_R_o"] = tau_R_o;
+  params_json["min_tauB"] = min_tauB;
+  params_json["max_tauB"] = max_tauB;
+  params_json["RatioDrift"] = RatioDrift;
+  params_json["CopyDrift"] = CopyDrift;
+
+  nuc_shape.ToJson(params_json); 
+}
+
+void reg_params::FromJson(const Json::Value &json_params) {
+  for (int nuc=0; nuc<NUMNUC; ++nuc) {
+    krate[nuc] = json_params["krate"][nuc].asDouble();
+    d[nuc] = json_params["d"][nuc].asDouble();
+    kmax[nuc] = json_params["kmax"][nuc].asDouble();
+    NucModifyRatio[nuc] = json_params["NucModifyRatio"][nuc].asDouble();
+  }
+
+  tshift = json_params["tshift"].asDouble();
+  tau_R_m = json_params["tau_R_m"].asDouble();
+  tau_R_o = json_params["tau_R_o"].asDouble();
+  min_tauB = json_params["min_tauB"].asDouble();
+  max_tauB = json_params["max_tauB"].asDouble();
+  RatioDrift = json_params["RatioDrift"].asDouble();
+  CopyDrift = json_params["CopyDrift"].asDouble();
+
+  nuc_shape.FromJson(json_params);
 }
 
 void reg_params_setKrate(reg_params *cur, float *krate_default)
@@ -324,11 +424,10 @@ void reg_params_setBuffModel(reg_params *cur, float tau_E_default)
   cur->RatioDrift = 2.5f;
 }
 
-void reg_params_setBuffRange(reg_params *cur, float min_tauB_default, float max_tauB_default, float mid_tauB_default)
+void reg_params_setBuffRange(reg_params *cur, float min_tauB_default, float max_tauB_default)
 {
   cur->min_tauB = min_tauB_default;
   cur->max_tauB = max_tauB_default;
-  cur->mid_tauB = mid_tauB_default;
 }
 
 void reg_params_setNoRatioDriftValues(reg_params *cur)
@@ -354,7 +453,8 @@ void reg_params::SetTshift(float _tshift){
 
 //@TODO: can this be exported to a sensible JSON file?
 void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start, 
-        float *dntp_concentration_in_uM, bool _fit_taue, bool _use_alternative_etbR_equation,
+        float *dntp_concentration_in_uM, bool _fit_taue,
+                                  bool _use_alternative_etbR_equation, bool _suppress_copydrift, bool _safe_model,
         int _hydrogenModelType, int flow_block_size)
 {
   // per-region parameters
@@ -374,6 +474,10 @@ void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start,
   use_alternative_etbR_equation = _use_alternative_etbR_equation;
 
   hydrogenModelType = _hydrogenModelType;
+  suppress_copydrift = _suppress_copydrift;
+  safe_model = _safe_model;
+  bounded_buffering=false;
+
 
   tshift = 0.4f;
   nuc_shape.sigma  = sigma_start;
@@ -382,6 +486,8 @@ void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start,
   //nuc_shape.nuc_flow_span = 16.5f;
   nuc_shape.nuc_flow_span = 22.5f;
   CopyDrift    = 0.9987f;
+  if (suppress_copydrift)
+    CopyDrift = 1.0f;
 
   RatioDrift    = 2.0f;
 
@@ -444,6 +550,33 @@ float GetTypicalMidNucTime(nuc_rise_params *cur)
     return(cur->AccessTMidNuc()[0]);
 }
 
+void nuc_rise_params::ToJson(Json::Value &nucparams_json)
+{
+  nucparams_json["sigma"] = sigma;
+  for (int nuc=0; nuc<NUMNUC; ++nuc) {
+   nucparams_json["t_mid_nuc_delay"][nuc] = t_mid_nuc_delay[nuc];
+   nucparams_json["sigma_mult"][nuc] = sigma_mult[nuc];
+  }
+
+  for (int flow=0; flow<MAX_NUM_FLOWS_IN_BLOCK_GPU; ++flow) {
+    nucparams_json["t_mid_nuc"][flow] = t_mid_nuc[flow];
+    nucparams_json["t_mid_nuc_shift_per_flow"][flow] = t_mid_nuc_shift_per_flow[flow];
+  } 
+}
+
+void nuc_rise_params::FromJson(const Json::Value &json_params)
+{
+  sigma = json_params["sigma"].asDouble();  
+  for (int nuc=0; nuc<NUMNUC; ++nuc) {
+    t_mid_nuc_delay[nuc] = json_params["t_mid_nuc_delay"][nuc].asDouble();
+    sigma_mult[nuc] = json_params["sigma_mult"][nuc].asDouble();
+  }
+  for (int flow=0; flow<MAX_NUM_FLOWS_IN_BLOCK_GPU; ++flow) {
+    t_mid_nuc[flow] = json_params["t_mid_nuc"][flow].asDouble();
+    t_mid_nuc_shift_per_flow[flow] = json_params["t_mid_nuc_shift_per_flow"][flow].asDouble();
+  }
+}
+
 void nuc_rise_params::ResetPerFlowTimeShift(int flow_block_size)
 {
   for (int fnum=0; fnum<flow_block_size; fnum++)
@@ -473,9 +606,13 @@ float GetModifiedSigma(nuc_rise_params *cur, int NucID)
     return(cur->sigma*cur->sigma_mult[NucID]);  // to make sure we knwo that this is modified
 }
 
+// note: everyone should use this routine and never use pow independently to have  a single change point
 float reg_params::CalculateCopyDrift(int absolute_flow) const
 {
+  if (!suppress_copydrift)
     return pow (CopyDrift,absolute_flow);
+  else
+    return(1.0f);
 }
 
 void SetAverageDiffusion(reg_params &rp)
@@ -542,7 +679,7 @@ void reg_params_copyTo_reg_params_H5 ( reg_params &rp, reg_params_H5 &rp5 )
   rp5.tau_R_o = rp.tau_R_o;
   rp5.tauE = rp.tauE;
   rp5.min_tauB = rp.min_tauB;
-  rp5.mid_tauB = rp.mid_tauB;
+
   rp5.max_tauB = rp.max_tauB;
   rp5.RatioDrift = rp.RatioDrift;
   rp5.CopyDrift = rp.CopyDrift;
@@ -569,7 +706,7 @@ void reg_params_H5_copyTo_reg_params ( reg_params_H5 &rp5, reg_params &rp )
   rp.tau_R_o = rp5.tau_R_o;
   rp.tauE = rp5.tauE;
   rp.min_tauB = rp5.min_tauB;
-  rp.mid_tauB = rp5.mid_tauB;
+
   rp.max_tauB = rp5.max_tauB;
   rp.RatioDrift = rp5.RatioDrift;
   rp.CopyDrift = rp5.CopyDrift;

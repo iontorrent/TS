@@ -140,7 +140,12 @@ background: #dbdbdb;
 </script>
 
 <script id="sample_nucleotideType_kendo_template" type="text/x-kendo-template">
-    #= data.nucleotideType.toUpperCase() #
+    # var nucleotideType = data.nucleotideType.toUpperCase() #
+    # if ((nucleotideType == "RNA") && (data.sampleSetGroupType.indexOf('Fusions') > -1)) { #
+        #= "Fusions" #
+    # } else { #
+        #= data.nucleotideType.toUpperCase() #
+    # } #
 </script>
 
 <script id="LibPrepTypeColumnTemplate" type="text/x-kendo-template">

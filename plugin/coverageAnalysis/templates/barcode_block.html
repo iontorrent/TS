@@ -20,7 +20,7 @@
 {% load humanize %}
 
 <style type="text/css">
-    body {background:white}
+   body {background:white}
   .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
 </style>
 
@@ -45,7 +45,6 @@
 
 <script type="text/javascript">
   function numberWithCommas(x) {
-    if( !x ) return "NA";
     var parts = x.toString().split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
@@ -84,11 +83,11 @@ $(document).ready(function() {
           sample_target: {type:"float"},
 {% endif %}
 {% if bas_stats %}
-          mean_depth: {type:"number"},
+          mean_depth: {type:"float"},
           uniformity: {type:"float"}
 {% endif %}
         } } },
-        pageSize: 10
+        pageSize: 20
       },
       columns: [
         {field:"barcode_name"},

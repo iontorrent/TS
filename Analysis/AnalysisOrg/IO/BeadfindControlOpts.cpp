@@ -30,22 +30,28 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   bfOutputDebug = 1;
   bfMult = 1.0;
   sdAsBf = true;
-  gainCorrection = true;
+  useBeadfindGainCorrection = true;
+  useDatacollectGainCorrectionFile = false;
   useSignalReference = 4;
   useSignalReferenceSet = false;
   blobFilter = false;
-  if (isInternalServer()) {
-    bfOutputDebug = 2;
-  }
+  bfOutputDebug = 2;
   beadfindType = "differential";
   predictFlowStart = -1;
   predictFlowEnd = -1;
+  meshStepX = 100;
+  meshStepY = 100;
 }
 
 BeadfindControlOpts::~BeadfindControlOpts()
 {
   if (beadMaskFile)
     free (beadMaskFile);
+}
+
+void BeadfindControlOpts::SetThumbnail(bool tn)
+{
+    beadfindThumbnail = tn ? 1 : 0;
 }
 
 void BeadfindControlOpts::PrintHelp()
@@ -69,18 +75,19 @@ void BeadfindControlOpts::PrintHelp()
 	printf ("     --beadfind-lib-filt     DOUBLE            beadfind lib filter quantile [1.0]\n");
 	printf ("     --beadfind-tf-filt      DOUBLE            beadfind tf filter quantile [1.0]\n");
 	printf ("     --beadfind-skip-sd-recover          INT   beadfind skip beadfind sd recover [1]\n");
-	printf ("     --beadfind-thumbnail    INT               beadfind thumbnail [0]\n");
 	printf ("     --beadfind-sep-ref      BOOL              beadfind use seperated ref [false]\n");
 	printf ("     --beadfind-smooth-trace BOOL              beadfind lagone filt [0]\n");
 	printf ("     --beadfind-diagnostics  INT               beadfind output debug [0]\n");
 	printf ("     --beadfind-washout      BOOL              beadfind washout [false]\n");
 	printf ("     --beadfind-gain-correction          BOOL  beadfind gain correction [true]\n");
+	printf ("     --datacollect-gain-correction       BOOL  datacollect gain correction from Gain.lsr file[false]\n");
 	printf ("     --beadfind-blob-filter  BOOL              beadfind blob filter [false]\n");
 	printf ("     --beadfind-predict-start            INT   beadfind predict flow start [-1]\n");
 	printf ("     --beadfind-predict-end  INT               beadfind predict flow end [-1]\n");
 	printf ("     --beadfind-sig-ref-type INT               beadfind use signal reference []\n");
 	printf ("     --beadfind-zero-flows   STRING            beadfind double tap flows []\n");
 	printf ("     --beadfind-num-threads  INT               beadfind number of threads [-1]\n");
+	printf ("     --beadfind-mesh-step    VECTOR_INT        beadfind mesh steps for differntial separator [100,100]\n");
 	printf ("     --bfold                 BOOL              BF_ADVANCED [true]\n");
 	printf ("     --noduds                BOOL              noduds [false]\n");
     printf ("\n");
@@ -117,25 +124,20 @@ void BeadfindControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	bfMult = RetrieveParameterFloat(opts, json_params, '-', "beadfind-bfmult", 1.0);
 	bfMinLiveRatio = RetrieveParameterDouble(opts, json_params, '-', "beadfind-minlive", 0.0001);
 	bfMinLiveLibSnr = RetrieveParameterDouble(opts, json_params, '-', "beadfind-minlivesnr", 4.0);
-	bfMinLiveTfSnr = RetrieveParameterDouble(opts, json_params, '-', "beadfind-min-tf-snr", -1);
+    bfMinLiveTfSnr = RetrieveParameterDouble(opts, json_params, '-', "beadfind-min-tf-snr", 7);
 	minTfPeakMax = RetrieveParameterFloat(opts, json_params, '-', "beadfind-tf-min-peak", 40.0);
 	minLibPeakMax = RetrieveParameterFloat(opts, json_params, '-', "beadfind-lib-min-peak", 10.0);
 	bfLibFilterQuantile = RetrieveParameterDouble(opts, json_params, '-', "beadfind-lib-filt", 1.0);
 	bfTfFilterQuantile = RetrieveParameterDouble(opts, json_params, '-', "beadfind-tf-filt", 1.0);
 	skipBeadfindSdRecover = RetrieveParameterInt(opts, json_params, '-', "beadfind-skip-sd-recover", 1);
-	beadfindThumbnail = RetrieveParameterInt(opts, json_params, '-', "beadfind-thumbnail", 0);
-  filterNoisyCols = RetrieveParameterString(opts, json_params, '-', "beadfind-filt-noisy-col", "none");
+    filterNoisyCols = RetrieveParameterString(opts, json_params, '-', "beadfind-filt-noisy-col", "none");
 	beadfindUseSepRef = RetrieveParameterBool(opts, json_params, '-', "beadfind-sep-ref", false);
 	beadfindSmoothTrace = RetrieveParameterBool(opts, json_params, '-', "beadfind-smooth-trace", false);
-	int defaultVal = 1;
-	if (isInternalServer())
-	{
-		defaultVal = 2;
-	}
-	bfOutputDebug = RetrieveParameterInt(opts, json_params, '-', "beadfind-diagnostics", defaultVal);
+    bfOutputDebug = RetrieveParameterInt(opts, json_params, '-', "beadfind-diagnostics", 2);
 	bool b1 = RetrieveParameterBool(opts, json_params, '-', "bead-washout", false);
 	SINGLEBF = !b1;
-	gainCorrection = RetrieveParameterBool(opts, json_params, '-', "beadfind-gain-correction", true);
+	useBeadfindGainCorrection = RetrieveParameterBool(opts, json_params, '-', "beadfind-gain-correction", true);
+	useDatacollectGainCorrectionFile = RetrieveParameterBool(opts, json_params, '-', "datacollect-gain-correction", false);
 	blobFilter = RetrieveParameterBool(opts, json_params, '-', "beadfind-blob-filter", false);
 	predictFlowStart = RetrieveParameterInt(opts, json_params, '-', "beadfind-predict-start", -1);
 	predictFlowEnd = RetrieveParameterInt(opts, json_params, '-', "beadfind-predict-end", -1);
@@ -161,4 +163,11 @@ void BeadfindControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
         bfFileBase[0] = '\0';
         SINGLEBF = true;
 	}
+        vector<int> vec;
+        RetrieveParameterVectorInt(opts, json_params, '-', "beadfind-mesh-step", "", vec);
+        if(vec.size() == 2)
+        {
+            meshStepX = vec[0];
+            meshStepY = vec[1];
+        }
 }

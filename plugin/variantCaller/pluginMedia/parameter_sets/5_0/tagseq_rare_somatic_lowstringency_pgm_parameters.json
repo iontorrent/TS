@@ -1,0 +1,73 @@
+{
+    "meta":{
+        "name"          : "Oncomine 0.1% LOD cfDNA - PGM (3xx) or S5/S5XL (520/530)",
+        "tooltip"       : "Parameters optimized using TagSeq Tagging with AcroMetrix Oncology Hotspot Control AF at 0.1% at depth >20000, minimizing FP with donor cfDNA",
+        "configuration" : "tagseq_cfdna_pgm",
+        "ts_version"    : "5.0",
+        "compatibility" : {
+          "chip"        : ["520","530","pgm"],
+          "library"     : ["tag_sequencing"],
+          "frequency"   : ["rare_somatic","somatic","germline"],
+          "stringency"  : ["low"],
+          "panel"       : true
+        },
+
+        "tmapargs"      : "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4"
+    },
+    "torrent_variant_caller":{
+        "prefix_barcode_format": "NNNACTNNNTGA",
+        "suffix_barcode_format": "TCANNNAGTNNN",
+        "a_handle": "CTGTACGGTGACAAGGCG",
+        "min_fam_size":3,
+        "use_strict_barcode_classifier":0,
+        "read_rejection_threshold":0.8,
+        "cfdna":1,
+
+        "data_quality_stringency":0.9,
+        "hp_max_length":5,
+        "barcode_max_hp_len":6,
+        "filter_unusual_predictions":0.12,
+        "filter_insertion_predictions": 0.2,
+        "filter_deletion_predictions": 0.2,
+        
+        "snp_min_cov_each_strand":0,
+        "snp_min_var_coverage":2,
+        "snp_min_coverage":1500,
+        "snp_min_variant_score":8,
+        "snp_min_allele_freq":0.0005,
+        "snp_strand_bias":0.9,
+        "snp_strand_bias_pval":0.01,
+
+        "mnp_min_var_coverage":2,
+        "mnp_strand_bias":0.9,
+        "mnp_strand_bias_pval":0.01,
+        
+        "indel_min_cov_each_strand":0,
+        "indel_min_var_coverage":2,
+        "indel_min_coverage":1500,
+        "indel_min_variant_score":8,
+        "indel_min_allele_freq":0.0005,
+        "indel_strand_bias":0.9,
+        "indel_strand_bias_pval":1.0,
+        
+        "hotspot_min_cov_each_strand":0,
+        "hotspot_min_var_coverage":2,
+        "hotspot_min_coverage":1500,
+        "hotspot_min_variant_score":8,
+        "hotspot_min_allele_freq":0.0005,
+        "hotspot_strand_bias":0.9,
+        "hotspot_strand_bias_pval":0.01,
+
+        "downsample_to_coverage":100000
+    },
+    "long_indel_assembler":{
+    },
+    "freebayes":{
+        "use_input_allele_only":1,
+        "allow_complex":1,
+        "min_mapping_qv":3,
+        "read_snp_limit":30,
+        "gen_min_alt_allele_freq":0.0005,
+        "gen_min_indel_alt_allele_freq":0.0005
+    }
+}

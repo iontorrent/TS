@@ -72,6 +72,8 @@ extern int
 bcftools_main(int argc, char *argv[]); 
 extern int
 tmap_sw_main(int argc, char *argv[]);
+extern int
+tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[]);
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
 extern int
 tmap_fsw_main(int argc, char *argv[]);

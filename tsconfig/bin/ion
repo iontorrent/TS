@@ -13,6 +13,7 @@ ion-publishers
 ion-rsmts
 ion-sampledata
 ion-torrentr
+ion-torrentpy
 ion-tsconfig
 )
 DIR=/opt/ion/bin

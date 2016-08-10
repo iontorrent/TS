@@ -119,9 +119,9 @@ struct Reference {
 
 class junction_chr {
    public:
-        junction_chr() {last = -1; start.clear(); end.clear();}
+        junction_chr() {last = -1; start.clear(); end.clear();ampl_start.clear(); ampl_end.clear();}
     	void add(int b, int e) {
-	    if (last == -1) { beg = b; last = e; return;}
+	    if (last == -1) { beg = b; last = e; ampl_start.push_back(b); ampl_end.push_back(e);return;}
 	    if (b < beg) { // error
 		fprintf(stderr, "unmerged bed file not in order\n");
 		exit(1);
@@ -130,6 +130,9 @@ class junction_chr {
 		    //fprintf(stderr, "%d %d\n", b-1, last+1);
 		    start.push_back(b-1);
 		    end.push_back(last+1);
+		}
+		if (e > last) { // removed amplicon completed contained in other
+		    ampl_start.push_back(b); ampl_end.push_back(e);
 		}
 	    }
 	    beg = b; last = e;
@@ -155,10 +158,41 @@ class junction_chr {
 	   }
 	   if (e >= end[r]) return true;
 	   return false;
+	   // alternative implementation
+	   if (start.size() == 0) return false;
+	   int ind = find_before(end, e);
+	   if (ind == -1) return false;
+	   if (start[ind] >= b) return true;
+	   return false;
+	}
+	int find_before(vector<int> & arr, int val) {
+	    if (arr[0] > val) return -1;
+	    int l = 0, r = arr.size()-1;
+	    if (arr[r] <= val) return r;
+	    while (l < r-1) {
+                int m = (l+r)/2;
+                int x = arr[m];
+                if (x == val) { return m;}
+                if (x < val) {
+                    l = m;
+                } else {
+                    r = m;
+                }
+            }
+	    return l;
+	}
+	bool contained_in_ampl(int b, int e) {
+	    if (ampl_start.size() == 0) return false;
+	    int ind = find_before(ampl_start, b);
+	    if (ind == -1) return false;
+	    if (ampl_end[ind] >= e) return true;
+	    return false;
 	}
    protected:
     	vector<int> start;
  	vector<int> end;
+	vector<int> ampl_start;
+	vector<int> ampl_end;
 	int last, beg;
 };
 
@@ -173,6 +207,12 @@ class junction {
 	    if (id >= (int) junc_.size()) return false;
 	    return junc_[id].contain(pos, pos+len-1);
 	}
+	bool contained_in_ampl(int id, int pos, unsigned len) {
+	    if (junc_.size() == 0) return true;
+	    if (id < 0) return false;
+            if (id >= (int) junc_.size()) return false;
+	    return junc_[id].contained_in_ampl(pos, pos+len-1);
+        }
 	void add(int id, int beg, int end) {
 	    if (id  >= (int) junc_.size()) return;
 	    junc_[id].add(beg, end);
@@ -369,6 +409,11 @@ int PrepareHotspots(int argc, const char *argv[])
       if (junc.contain(allele.chr_idx, allele.pos, (unsigned int) allele.ref.size())) {
 	line_status.push_back(LineStatus(line_number));
         line_status.back().filter_message_prefix = "hotspot BED line contain the complete overlapping region of two amplicon, the variant cannot be detected by tvc";
+        continue;
+      }
+      if (not junc.contained_in_ampl(allele.chr_idx, allele.pos, (unsigned int) allele.ref.size())) {
+        line_status.push_back(LineStatus(line_number));
+        line_status.back().filter_message_prefix = "hotspot BED line is not contained in any amplicon, the variant cannot be detected by tvc";
         continue;
       }
 
@@ -659,7 +704,7 @@ int PrepareHotspots(int argc, const char *argv[])
       ref_end -= ref_start;
       alt_end -= ref_start;
       // Left align
-      if (left_alignment) {
+      if (left_alignment && A->custom_tags.find("BSTRAND") == A->custom_tags.end()) { // black list variant not to be left aligned.
 	string trailing;
 	int can_do = 0, need_do = 0;
 	int ref_end_orig= ref_end, alt_end_orig = alt_end;
@@ -859,10 +904,14 @@ int PrepareHotspots(int argc, const char *argv[])
             */
           }
 
-          for (map<string,map<string,string> >::iterator Q = unique_alts_and_tags.begin(); Q != unique_alts_and_tags.end(); ++Q) {
+          for (deque<Allele>::iterator I = A; I != B; ++I) {
+            if (I->filtered)
+              continue;
+            map<string,map<string,string> >::iterator Q = unique_alts_and_tags.find(I->alt);
             if (comma)
               fprintf(output_vcf, ",");
             comma = true;
+            if (Q == unique_alts_and_tags.end()) {fprintf(output_vcf, "."); continue;}
             fprintf(output_vcf, "%s", Q->first.c_str());
           }
 
@@ -924,10 +973,14 @@ int PrepareHotspots(int argc, const char *argv[])
           for (set<string>::iterator S = unique_tags.begin(); S != unique_tags.end(); ++S) {
             fprintf(output_vcf, ";%s=", S->c_str());
             comma=false;
-            for (map<string,map<string,string> >::iterator Q = unique_alts_and_tags.begin(); Q != unique_alts_and_tags.end(); ++Q) {
+            for (deque<Allele>::iterator I = A; I != B; ++I) {
+              if (I->filtered)
+                continue;
+              map<string,map<string,string> >::iterator Q = unique_alts_and_tags.find(I->alt);
               if (comma)
                 fprintf(output_vcf, ",");
               comma = true;
+              if (Q == unique_alts_and_tags.end()) {fprintf(output_vcf, "."); continue;}
               map<string,string>::iterator W = Q->second.find(*S);
               if (W == Q->second.end())
                 fprintf(output_vcf, ".");

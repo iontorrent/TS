@@ -16,7 +16,26 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 
 
 	<table>
-  	  <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
+
+      {% if options.configurations %}
+        <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
+	  {% else %}
+	    <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
+	    <tr><td>Reference genome:</td>             <td>{{options.reference_genome_name}}</td></tr>
+
+	    {% if options.has_targets %}
+	      <tr><td>Targeted regions:</td>    <td>{{options.targets_name}}</td></tr>
+	    {% else %}
+	      <tr><td>Targeted regions:</td>    <td>None</td></tr>
+	    {% endif %}
+	    {% if options.has_hotspots %}
+	      <tr><td>Hotspot regions:</td>     <td>{{options.hotspots_name}}</td></tr>
+	    {% else %}
+	      <tr><td>Hotspot regions:</td>     <td>None</td></tr>
+	    {% endif %}
+	    <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
+  	    <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
+	  {% endif %}
       <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
                                               <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
                                               <a class="btn" href="{{options.run_name}}.xls">XLS</a>
@@ -34,6 +53,11 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
       <tr>
         <th class="k-header"><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
         <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
+        {% if options.library_type == "tagseq" %}
+			<th class="k-header"><span class="help" title="Median number of reads covering on target position">Median Read Cov</span></th>
+			<th class="k-header"><span class="help" title="Median number of Molecules per target">Median Mol Cov</span></th>
+            <th class="k-header"><span class="help" title="Targets with Molecular coverage above 80% of Median">Targets >0.8MM Cov</span></th>
+        {% endif %}
         <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
         {% if options.has_hotspots %}
         <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
@@ -50,6 +74,11 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 
           <td>{{barcode.summary.sample_name}}</td>
 
+          {% if options.library_type == "tagseq" %}
+			<td>{{barcode.summary.median_depth}}</td>
+			<td>{{barcode.summary.median_num_fam3}}</td>
+			<td>{{barcode.summary.fm3_pass80}}</td>
+          {% endif %}
           <td>{{barcode.summary.variants_total.variants}}</td>
 
           {% if options.has_hotspots %}
@@ -58,8 +87,10 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 
           <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
               <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
+              {% if options.library_type != "tagseq" %}
               <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz">gVCF.GZ</a>
               <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz.tbi">gVCF.GZ.TBI</a>
+			  {% endif %}
               <a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a></td>
         </tr>
       {% endif %}

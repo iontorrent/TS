@@ -34,9 +34,9 @@ def runcmd( cmd, log, fatal=True ):
 
 if __name__ == '__main__':
   nargs = len(sys.argv)-1
-  if nargs != 10:
+  if nargs != 11:
     sys.stderr.write( "run_rnaseqanalysis.py: Incorrect number of arguments (%d).\n" % nargs )
-    sys.stderr.write( "Usage: run_rnaseqanalysis.py <genome name> <reference.fasta> <reads.bam> <sampleid> <adapter> <frac_reads> <fpkm_thres> <output dir> <output file prefix> <run log>\n" )
+    sys.stderr.write( "Usage: run_rnaseqanalysis.py <genome name> <reference.fasta> <reads.bam> <sampleid> <adapter> <frac_reads> <fpkm_thres> <output dir> <output file prefix> <run log> <ref index folder>\n" )
     sys.exit(1)
 
   genome = sys.argv[1]
@@ -49,12 +49,13 @@ if __name__ == '__main__':
   output_dir = sys.argv[8]
   output_prefix = sys.argv[9]
   run_log = sys.argv[10]
+  ref_idxfolder = sys.argv[11]
   
   stem = os.path.join(output_dir,output_prefix)
   runlog = os.path.join(output_dir,run_log)
 
   # check to see if script will have to generate indexing files for warning message in arch log
-  indexfolder = os.path.join("/results/plugins/scratch/RNASeqAnalysis/",genome)
+  indexfolder = os.path.join(ref_idxfolder,genome)
   misindex = ""
   misindex = "" if os.path.exists( os.path.join(indexfolder,"STAR") ) else "STAR"
   if not os.path.exists( os.path.join(indexfolder,"bowtie2") ):
@@ -66,8 +67,8 @@ if __name__ == '__main__':
     printtime( "Indexing reference and aligning reads..." )
   else:
     printtime( "Aligning reads..." )
-  runcmd( "%s/RNASeq_2step.sh -A '%s' -D '%s' -F '%s' -L '%s' -P '%s' '%s' '%s' >> '%s' 2>&1" % (
-    curdir,adapter,output_dir,output_prefix,genome,fracreads,reference,bamfile,runlog), runlog )
+  runcmd( "%s/RNASeq_2step.sh -A '%s' -D '%s' -F '%s' -L '%s' -P '%s' -S '%s' '%s' '%s' >> '%s' 2>&1" % (
+    curdir,adapter,output_dir,output_prefix,genome,fracreads,ref_idxfolder,reference,bamfile,runlog), runlog )
 
   printtime( "Creating summary plots and collecting statistics..." )
   statsfile = stem + ".stats.txt"

@@ -8,6 +8,7 @@
 #include "BkgControlOpts.h"
 #include "IonErr.h"
 #include "Utils.h"
+#include "BkgMagicDefines.h"
 
 using namespace std;
 
@@ -92,6 +93,9 @@ void BkgModelControlOpts::DefaultBkgModelControl()
   unfiltered_library_random_sample = 100000;
   nokey = false;
 
+  washout_threshold = WASHOUT_THRESHOLD;
+  washout_flow_detection = WASHOUT_FLOW_DETECTION;
+
   // Regional smoothing defaults.
   regional_smoothing.alpha = 1.f;
   regional_smoothing.gamma = 1.f;
@@ -167,6 +171,7 @@ void BkgModelControlOpts::PrintHelp()
     printf ("     --filter-extreme-ppf-only           BOOL  Skip polyclonal filter training and filter for extreme ppf only \n");
     printf ("     --sigproc-regional-smoothing-alpha  FLOAT sigproc regional smoothing alpha [1.0]\n");
     printf ("     --sigproc-regional-smoothing-gamma  FLOAT sigproc regional smoothing gamma [1.0]\n");
+    printf ("     --restart-reg-params-file STRING json file to input/output regional parameters\n");
     printf ("\n");
 
     signal_chunks.PrintHelp();
@@ -187,13 +192,16 @@ void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	emphasize_by_compression = RetrieveParameterInt(opts, json_params, '-', "bkg-dont-emphasize-by-compression", 1);
 	nokey = RetrieveParameterBool(opts, json_params, '-', "nokey", false);
 
+    washout_threshold = RetrieveParameterFloat(opts, json_params, '-', "bkg-washout-threshold", WASHOUT_THRESHOLD);
+    washout_flow_detection = RetrieveParameterInt(opts, json_params, '-', "bkg-washout-flow-detection", WASHOUT_FLOW_DETECTION);
+
 	polyclonal_filter.enable = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", true);
 	polyclonal_filter.mixed_first_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-first-flow", 12);
 	polyclonal_filter.mixed_last_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-last-flow", 72);
 	polyclonal_filter.max_iterations = RetrieveParameterInt(opts, json_params, '-', "max-iterations", 30);
 	polyclonal_filter.mixed_model_option = RetrieveParameterInt(opts, json_params, '-', "mixed-model-option", 0);
 	polyclonal_filter.verbose = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-debug", false);
-	polyclonal_filter.use_last_iter_params = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-use-last-iter-params", false);
+	polyclonal_filter.use_last_iter_params = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-use-last-iter-params", true);
 	polyclonal_filter.filter_extreme_ppf_only = RetrieveParameterBool(opts, json_params, '-', "filter-extreme-ppf-only", false);
 	double stringency = RetrieveParameterDouble(opts, json_params, '-', "mixed-stringency", 0.5);
 	if(stringency < 0)
@@ -220,4 +228,6 @@ void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 
 	regional_smoothing.alpha = RetrieveParameterFloat(opts, json_params, '-', "sigproc-regional-smoothing-alpha", 1.0f);
 	regional_smoothing.gamma = RetrieveParameterFloat(opts, json_params, '-', "sigproc-regional-smoothing-gamma", 1.0f);
+
+	restartRegParamsFile = RetrieveParameterString(opts, json_params, '-', "restart-region-params-file", "");
 }

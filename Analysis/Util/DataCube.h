@@ -47,7 +47,7 @@ public:
               y >= mYStart && y < mYEnd && 
                 z >= mZStart && z < mZEnd)){
 	    printf("mXStart>=x<mXEnd : y>=mYEnd<mZStart : mZStart>=z<mZEnd \n");
-      printf("%ld %ld %ld : %ld %ld %ld : %ld %ld %ld \n", mXStart,x,mXEnd,mYStart,y,mYEnd,mZStart,z,mZEnd);
+      printf("%zu %zu %zu : %zu %zu %zu : %zu %zu %zu \n", mXStart,x,mXEnd,mYStart,y,mYEnd,mZStart,z,mZEnd);
       Breakpoint();
     }
     // assert nearly useless as the error message doesn't give any hint as to the problem

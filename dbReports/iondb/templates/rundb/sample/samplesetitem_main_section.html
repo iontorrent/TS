@@ -85,7 +85,7 @@
 			<option value="" >.....</option>
 			{% if intent == "edit" %}
 				{% for kit in barcodeKits %}
-					{% ifequal selectedBarcodeKitName kit.name %}
+					{% ifequal sampleSetItem.dnabarcode.name kit.name %}
 						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
 					{% else %}
 						<option value="{{kit.name}}" >{{kit.name}}</option>
@@ -118,7 +118,7 @@
 			<option value="" >.....</option>
 			{% if intent == "edit" %}
 				{% for barcode in barcodeInfo %}
-					{% ifequal selectedBarcodeKitName barcode.name %}                           
+					{% ifequal sampleSetItem.dnabarcode.name barcode.name %}
 						{% ifequal sampleSetItem.dnabarcode.id_str barcode.id_str %}
 							<option SELECTED value="{{sampleSetItem.dnabarcode.id_str}}">{{sampleSetItem.dnabarcode.id_str}}</option>
 						{% else %}
@@ -151,4 +151,4 @@
 		<option value="{{barcode.name}}|{{barcode.id_str}}" >{{barcode.id_str}}</option>
 	{% endfor %}
 	</select>
-</div>       
+</div>

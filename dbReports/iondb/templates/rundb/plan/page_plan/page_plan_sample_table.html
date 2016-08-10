@@ -1,13 +1,21 @@
+{% load static from staticfiles %}
+<script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.web.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.editable.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.dropdownlist.js"%}"></script>
+
+<style>
+.k-dirty{
+    border-width:0;
+}
+.k-tooltip{
+    min-width: 300px;
+    max-width: 400px;
+}
+</style>
 
 <input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
 <input type="hidden" id="isPlanBySample" name="isPlanBySample" value="{{helper.isPlanBySample}}" />
 <input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
-
-<input type="hidden" id="isReferenceSupported" name="isTargetBEDFileSupported" value="{{helper.getApplProduct.isReferenceSelectionSupported}}" />
-<input type="hidden" id="isTargetBEDFileSupported" name="isTargetBEDFileSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileSupported}}" />
-<input type="hidden" id="isHotSpotBEDFileSupported" name="isHotSpotBEDFileSupported" value="{{helper.getApplProduct.isHotspotRegionBEDFileSuppported}}" />
-<input type="hidden" id="isTargetBEDFileBySampleSupported" name="isTargetBEDFileBySampleSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" />
-<input type="hidden" id="isHotSpotBEDFileBySampleSupported" name="isHotSpotBEDFileBySampleSupported" value="{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" />
 
 <input type="hidden" name="planCategories" value="{{helper.getStepDict.Application.getPrePopulatedFieldDict.categories}}"/>
 
@@ -21,7 +29,7 @@
 		</label>
 
 		<label class="checkbox inline" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>
-			<input type="checkbox" id="isOncoSameSample" name="isOncoSameSample" style="vertical-align:top;" {% if step.getCurrentSavedFieldDict.isOncoSameSample %}checked{%endif%}>Same sample for DNA and RNA?
+			<input type="checkbox" id="isOncoSameSample" name="isOncoSameSample" style="vertical-align:top;" {% if step.getCurrentSavedFieldDict.isOncoSameSample %}checked{%endif%}>Same sample for DNA and Fusions?
 		</label>
 	</div>
 	</br>
@@ -34,20 +42,7 @@
 	</div>
 </div>
 
-<div class="row-fluid nonbarcoded" {%if helper.isBarcoded%}style="display: none;"{%endif%}>
-	<div class="form-label">
-		Enter a sample name for each plan (require at least one sample)
-		{% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
-			<a title="Refresh IonReporter Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
-			<img src="/site_media/img/loading.gif" width="35" height="35" id="loading" class="hide"/>
-		{% endifnotequal %}
-
-		{% if helper.isReferenceBySample %}
-			<a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample"><i class="icon-eye-open"></i></a>
-		{% endif %}
-	</div>
-</div>
-<div class="row-fluid barcoded" {%if not helper.isBarcoded or not helper.isPlanBySample %}style="display: none;"{%endif%}>
+<div class="row-fluid" {%if not helper.isBarcoded or not helper.isPlanBySample %}style="display: none;"{%endif%}>
 	<div class="form-inline">
 		<label class="span3 control-label" for="barcodingKit">Barcoding Kit</label>
 		<select id="barcodeSet" name="barcodeSet" class="span4">
@@ -65,7 +60,7 @@
 	<div class="form-inline">
 		<label for="barcodeSampleTubeLabel" class="span3 control-label">Sample Tube Label</label>
 		<input class="span4" style="width: 300px;" id="barcodeSampleTubeLabel" name="barcodeSampleTubeLabel" 
-			   value="{{step.getCurrentSavedFieldDict.barcodeSampleTubeLabel|default_if_none:""}}" {% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus "reserved" %} disabled="disabled" {% endifequal %}
+			   value="{{step.getCurrentSavedFieldDict.barcodeSampleTubeLabel|default_if_none:""}}" {% ifequal helper.getStepDict.Application.prepopulatedFields.planStatus "reserved" %} disabled="disabled" {% endifequal %}
 			   />
 	</div>
 	<div id="tubeerror" style="color:red;"></div>
@@ -75,19 +70,17 @@
 <div class="row-fluid barcoded" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
 	<div class="form-inline">
 		<label for="chipBarcodeLabel" class="span3 control-label">Chip ID</label>
-		<input class="span4" style="width: 300px;" id="chipBarcodeLabel" name="chipBarcodeLabel"
-			value="{{step.getCurrentSavedFieldDict.chipBarcodeLabel|default_if_none:""}}" {% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus  "reserved"%} disabled="disabled"
-                                                                                                      {% endifequal %}
-                                                                                                      {% ifnotequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus  "reserved"%}
-                                                                                                          {% if helper.isEditRun %}
-                                                                                                              disabled="disabled"
-                                                                                                          {% endif %}
-                                                                                                      {% endifnotequal %}
+        <input class="span4" style="width: 300px;" id="chipBarcodeLabel" name="chipBarcodeLabel"
+            value="{{step.getCurrentSavedFieldDict.chipBarcodeLabel|default_if_none:""}}"
+            {% if helper.getStepDict.Application.prepopulatedFields.planStatus == "reserved" or helper.isEditRun %}
+               disabled="disabled"
+            {% endif %}
 			/>
 	</div>
 </div>
 
-<div class="form-label" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
+<div class="row-fluid barcoded" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
+    <div class="form-label">
 	Enter a sample name for each barcode used (require at least one sample)
 	{% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
 		<a title="Refresh IonReporter Information" class="refresh-uploader-information" ><i class="icon-refresh"></i></a>
@@ -105,6 +98,20 @@
 	{% if helper.isReferenceBySample %}
 		<a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample_bc"><i class="icon-eye-open"></i></a>
 	{% endif %}
+    </div>
+</div>
+<div class="row-fluid nonbarcoded" {%if helper.isBarcoded%}style="display: none;"{%endif%}>
+    <div class="form-label">
+        Enter a sample name for each plan (require at least one sample)
+        {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                <a title="Refresh IonReporter Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
+                <img src="/site_media/img/loading.gif" width="35" height="35" id="loading" class="hide"/>
+        {% endifnotequal %}
+
+        {% if helper.isReferenceBySample %}
+                <a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample"><i class="icon-eye-open"></i></a>
+        {% endif %}
+    </div>
 </div>
 
 <div class="row-fluid products"  {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId == "0" or not helper.isPlan %} style="display: none;"{%endif%}>
@@ -116,251 +123,129 @@
     </div>
 </div>
 
-
-
 <div class="row-fluid">
     <div class="span12">
-        <div class="k-widget" style="height: 370px;overflow:auto;">
-            <table id="chipsets" data-role="grid" cellspacing="0" role="grid">
-                <thead class="k-grid-header">
-                    <tr>
-                        <th width="30" class="k-header">#</th>
-                        <th class="k-header barcoded input-large" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>Barcode</th>
-                        <th class="k-header input-xlarge">Sample Name (required)</th>
-                        <th class="k-header input-medium">Sample ID</th>
-                        <th class="k-header sampleAnnotation input-large">Sample Description</th>
-                        <th class="k-header hideable_sampleAnnotation_nt nucleotideType input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>DNA/RNA</th>                         
-                        <th class="k-header nonbarcoded input-medium" {%if helper.isBarcoded%}style="display: none;"{%endif%}>Sample Tube Label</th>
-                        <th class="k-header nonbarcoded input-medium" {%if helper.isBarcoded%}style="display: none;"{%endif%}>Chip ID</th>
-
-                        <th class="k-header hideable_referenceBySample hideable_referenceBySample_ref input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>Reference</th>  
-                        <th class="k-header hideable_referenceBySample hideable_referenceBySample_targetRegion input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isTargetRegionBEDFileSupported or not helper.getApplProduct.isTargetRegionBEDFileBySampleSupported %} style="display: none;"{%endif%}>Target Regions</th>
-                        <th class="k-header hideable_referenceBySample hideable_referenceBySample_hotSpot input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isHotspotRegionBEDFileSuppported or not helper.getApplProduct.isHotSpotBEDFileBySampleSupported%} style="display: none;"{%endif%}>Hotspot Regions</th>  
-                        <th class="k-header controlSeqTypeBySample input-medium" {%if not helper.isControlSeqTypeBySample %} style="display: none;"{%endif%}>Control Seq Type (optional)</th>  
-
-                        <th class="k-header hideable_sampleAnnotation_onco cancerType input-large" name="ircancerType_header" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" or not helper.hasOncoData %} style="display: none;"{%endif%}>Cancer Type</th> 
-                        <th class="k-header hideable_sampleAnnotation_onco cellularityPct input-small" name="ircellularityPct_header" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" or not helper.hasOncoData %} style="display: none;"{%endif%}>Cellularity %</th>
-                        <th class="k-header hideable_sampleAnnotation_pgs biopsyDays input-small" name="irbiopsyDays_header" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" or not helper.hasPgsData %} style="display: none;"{%endif%}>Biopsy Days</th> 
-                        <th class="k-header hideable_sampleAnnotation_pgs coupleId input-small" name="ircoupleId_header" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" or not helper.hasPgsData %} style="display: none;"{%endif%}>Couple ID</th>     
-                        <th class="k-header hideable_sampleAnnotation_pgs embryoId input-small" name="irembryoId_header" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" or not helper.hasPgsData %} style="display: none;"{%endif%}>Embryo ID</th>     
-
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in step.savedObjects.samplesTableList %}
-                    <tr id='row{{forloop.counter0}}'>
-                        <td><input type="text" name="row" value="{{forloop.counter}}" style="width:30px;" disabled></td>
-                        <td class="barcoded input-large" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
-                            <select class="input-xlarge barcodeId" name="barcode">
-                            {%for barcodeitem in step.prepopulatedFields.planned_dnabarcodes %}
-                                <option value="{{forloop.counter0}}" data-id_str="{{barcodeitem.id_str}}" {%ifequal barcodeitem.id_str row.barcodeId%}selected {%endifequal%}>
-                                    {{barcodeitem.id_str}} ({{barcodeitem.sequence}})
-                                </option>
-                            {%endfor%}
-                            </select>
-                        </td>
-                        {% if helper.isPlanBySample %}
-                        <td class="input-xlarge">
-                            <select class="input-xlarge irSampleName" name="sampleName">
-                            {%for item in step.prepopulatedFields.samplesetitems %}
-                                <option value="{{item.sample.displayedName}}" {%ifequal item.sample.displayedName row.sampleName%}selected {%endifequal%}>
-                                    {{item.sample.displayedName}} {% if step.prepopulatedFields.showSampleSetInfo %}({{item.sampleSet.displayedName}}){% endif %}
-                                </option>
-                            {%endfor%}
-                            </select>
-                            <td><input type="text" class="input-medium" value="{{row.sampleExternalId}}" name="sampleExternalId" readonly></td>
-                            <td><input type="text" class="sampleAnnotation input-large" value="{{row.sampleDescription}}" name="sampleDescription" readonly></td>
-                        </td>
-                        {% else %}
-                        <td><input type="text" class="input-xlarge irSampleName" value="{{row.sampleName}}" name="sampleName"></td>
-                        <td><input type="text" class="input-medium" value="{{row.sampleExternalId}}" name="sampleExternalId"></td>
-                        <td><input type="text" class="sampleAnnotation input-large" value="{{row.sampleDescription}}" name="sampleDescription"></td>
-                        {% endif %}
-
-                        <td class="hideable_sampleAnnotation_nt input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>
-                            <select class="input-small nucleotideType" name="nucleotideType">
-                                                        
-                            {%for nucleotideType in helper.getNucleotideTypeList %}
-                                {% if row.nucleotideType != "" %}
-                                    {%if nucleotideType == row.nucleotideType.upper or helper.getRunTypeObject.nucleotideType == row.nucleotideType.upper %} 
-                                        <option SELECTED value="{{nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{nucleotideType}}"> 
-                                    {% else %}
-                                        {%if helper.getRunTypeObject.nucleotideType.upper == nucleotideType %}
-                                            <option SELECTED value="{{nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{nucleotideType}}"> 
-                                        {% else %}
-                                            {%if helper.getApplicationGroupName.upper == nucleotideType %}
-                                                <option SELECTED value="{{nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{nucleotideType}}"> 
-                                            {% else %}                                    
-                                                <option value="{{nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{nucleotideType}}">   
-                                            {% endif %}                                  
-                                        {% endif %}    
-                                    {% endif %}
-                                {% else %}
-                                    <option value="{{nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{nucleotideType}}">                                                                                                                                                                     
-                                {% endif %}
-                                {{nucleotideType}}
-                                </option>
-                            {%endfor%}
-                            </select>
-                        </td> 
-                                                
-                        <td class="nonbarcoded" {%if helper.isBarcoded%}style="display: none;"{%endif%}>
-                            <input type="text" class="input-medium" value="{{row.tubeLabel}}" name="tubeLabel" {% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus "reserved" %} disabled="disabled" {% endifequal %} />
-                        </td>
-			<td class="nonbarcoded" {%if helper.isBarcoded%}style="display: none;"{%endif%}>
-				<input type="text" class="input-medium" value="{{row.chipBarcode}}" name="chipBarcode" {% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus "reserved" %} disabled="disabled" 
-                                                                                                                       {% endifequal %} 
-                                                                                                                       {% ifnotequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus  "reserved"%}
-                                                                                                                         {% if helper.isEditRun %}
-                                                                                                                           disabled="disabled"
-                                                                                                                         {% endif %}
-                                                                                                                       {% endifnotequal %}
-                                                                                                                       />
-			</td>
-
-			<!-- REFERENCE and BED FILES -->
-			{% if helper.getApplProduct.isReferenceSelectionSupported %}
-
-			<!-- once the barcoded sample's reference is set, do not try to cascade plan's BED files to the barcoded sample -->
-                        <td class="hideable_referenceBySample hideable_referenceBySample_ref input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isReferenceSelectionSuported %} style="display: none;"{%endif%}>
-                            <select class="input-large reference" name="reference">
-                            
-                            <option value="">None</option>
-
-                                {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.referenceMissing and helper.isCreate %}
-                                    <option class="entryNotFound" value="{{step.getCurrentSavedFieldDict.reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);" {%if not row.reference %}SELECTED {% endif %}>(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.reference}}</option>
-                                {% endif %}
-
-                            
-                            {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
-                                {% ifequal ref.short_name row.reference %}
-                                    <option SELECTED value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
-                                {% else %}
-                                    {% ifequal ref.name row.reference %}
-                                        <option SELECTED value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
-                                    {% else %}
-                                        {% if helper.isDualNucleotideTypeBySample %}
-                                            {% if forloop.parentloop.first %}                           
-                                                <option value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}" {%if ref.short_name == helper.getStepDict.Reference.getCurrentSavedFieldDict.reference and helper.isCreate %}SELECTED {%endif%}>{{ref.short_name}}({{ref.name}})</option>
-                                            {% else %}
-                                                <option value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>                                            
-                                            {% endif %}
-                                        {% else %}
-                                                <option value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}" {%if ref.short_name == helper.getStepDict.Reference.getCurrentSavedFieldDict.reference and not row.reference and helper.isCreate %}SELECTED {%endif%}>{{ref.short_name}}({{ref.name}})</option>                                         
-                                        {% endif %}
-                                    {% endifequal %}
-                                {% endifequal %}
-                            {% endfor %}
-                            
-                            </select>
-                        </td> 
-                       
-                        <td class="hideable_referenceBySample hideable_referenceBySample_targetRegion input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isTargetRegionBEDFileSupported or not helper.getApplProduct.isTargetRegionBEDFileBySampleSupported %} style="display: none;"{%endif%}>
-                            <select class="input-large targetRegionBedFile" name="targetRegionBedFile">
-                             <option value="">None</option>
-                            {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
-                                {% ifequal bedFile.file row.targetRegionBedFile %}
-                                    <option SELECTED value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-targetBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
-                                {% else %}
-                                    <option value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-targetBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile and not row.reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
-                                {% endifequal %}
-                            {%endfor%}
-                            </select>
-                        </td>
-
-                        <td class="hideable_referenceBySample hideable_referenceBySample_hotSpot input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isHotspotRegionBEDFileSuppported or not helper.getApplProduct.isHotSpotBEDFileBySampleSupported %} style="display: none;"{%endif%}>
-                            <select class="input-large hotSpotRegionBedFile" name="hotSpotRegionBedFile">
-                             <option value="">None</option>
-                             {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles %}
-                                {% ifequal bedFile.file row.hotSpotRegionBedFile %}
-                                    <option SELECTED value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-hotSpotBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
-                                {% else %}
-                                    <option value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-hotSpotBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile and not row.reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
-                                {% endifequal %}                                                                              
-                            {%endfor%}                           
-                            </select>
-                        </td>
-
-			{% else %}
-			    <input type="hidden" name="reference" value="">
-			    <input type="hidden" name="targetRegionBedFile" value="">
-			    <input type="hidden" name="hotSpotRegionBedFile" value="">
-			{% endif %}
-			<!-- END REFERENCE and BED FILES -->
-
-                        <td class="controlSeqTypeBySample input-medium" {%if not helper.isControlSeqTypeBySample %} style="display: none;"{%endif%}>
-                            <select class="input-large controlSequenceType" name="controlSequenceType">
-                            <option value=""></option>
-                            {%for controlSeq in step.prepopulatedFields.controlSeqTypes %}
-                                <option value="{{controlSeq.name}}" data-counter="{{forloop.counter0}}" data-controlSeq="{{controlSeq.name}}" {%ifequal controlSeq.name row.controlSequenceType%}SELECTED {%endifequal%}>
-                                {{controlSeq.description}}</option>                                
-                            {%endfor%}
-                            </select>
-                        </td>    
-
-                        <td class="hideable_sampleAnnotation_onco cancerType input-large" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" or not helper.hasOncoData %} style="display: none;"{%endif%}>
-                            <select class="input-large ircancerType" name="ircancerType">
-                            <option value=""></option>
-                            {%for annotation in step.prepopulatedFields.sampleAnnotations %}
-                                {% ifequal annotation.annotationType "cancerType" %}
-                                    {% ifequal annotation.iRValue row.ircancerType %}
-                                        <option SELECTED value="{{annotation.iRValue}}" data-counter="{{forloop.counter0}}" data-cancerType="{{annotation.iRValue}}">
-                                        {{annotation.iRValue}}</option>
-                                    {% else %}
-                                        <option value="{{annotation.iRValue}}" data-counter="{{forloop.counter0}}" data-cancerType="{{annotation.iRValue}}" {%ifequal annotation.value row.ircancerType %}SELECTED {%endifequal%}>
-                                        {{annotation.iRValue}}</option>                                           
-                                    {% endifequal %}                            
-                                {% endifequal %}   
-                            {%endfor%}
-                            </select>
-                        </td> 
-
-                        <td class="hideable_sampleAnnotation_onco cellularityPct input-small" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None"  or not helper.hasOncoData  %}  style="display: none;" {%endif%}>
-                            <input type="text" class="input-small integer ircellularityPct" value="{{row.ircellularityPct| default_if_none:""}}" name="ircellularityPct">
-                        </td>
-                              
-                        <td class="hideable_sampleAnnotation_pgs biopsyDays input-small integer" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None"  or not helper.hasPgsData %}  style="display: none;" {%endif%}>
-                            <input type="text" class="input-small integer irbiopsyDays" value="{{row.irbiopsyDays| default_if_none:""}}" name="irbiopsyDays">
-                        </td>
-                                     
-                        <td class="hideable_sampleAnnotation_pgs coupleId input-small" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None"  or not helper.hasPgsData %}  style="display: none;" {%endif%}>
-                            <input type="text" class="input-small ircoupleId" value="{{row.ircoupleID| default_if_none:""}}" name="ircoupleID">
-                        </td>
-                                     
-                        <td class="hideable_sampleAnnotation_pgs embryoId input-small" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None"  or not helper.hasPgsData %}  style="display: none;" {%endif%}>
-                            <input type="text" class="input-small irembryoId" value="{{row.irembryoID| default_if_none:""}}" name="irembryoID">
-                        </td>
-
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <div id="grid"></div>
     </div>
 </div>
+
+<script type="text/javascript">
+    var samplesTableInit = {{step.savedFields.samplesTable|safe}};
+    var samplesTableValidationErrors = [];
+    var planCategories = $("input[name='planCategories']").val();
+    
+    var planOpt = {
+        "isDualNucleotideType" : "{{helper.isDualNucleotideTypeBySample}}" === "True",
+        "isDNAandFusions" : "{{helper.getApplicationGroupName}}" == "DNA + RNA",
+        "isReferenceSupported" : "{{helper.getApplProduct.isReferenceSelectionSupported}}" == "True",
+        "isTargetBEDFileSupported": ("{{helper.getApplProduct.isTargetRegionBEDFileSupported}}" == "True") &&  ("{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" == "True"),
+        "isHotspotBEDFileSupported": ("{{helper.getApplProduct.isHotspotRegionBEDFileSuppported}}" == "True") &&  ("{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" == "True"),
+        "isPlanBySample": "{{helper.isPlanBySample}}" == "True",
+        "isControlSeqTypeBySample": "{{helper.isControlSeqTypeBySample}}" == "True",
+        "isReserved": "{{ helper.getStepDict.Application.prepopulatedFields.planStatus }}" == "reserved",
+        "isEditRun": "{{helper.isEditRun}}" == "True",
+        "isOCAv2" : planCategories.toLowerCase().indexOf("ocav2") >= 0,
+        "isBarcodesDefaultCount" : planCategories.toLowerCase().indexOf("barcodes_") >= 0
+    };
+
+    var references = [];
+    {% for obj in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
+        references.push({
+            "short_name": "{{obj.short_name}}",
+            "name": "{{obj.name}}", 
+            "display": "{{obj.short_name}} ({{obj.name}})"
+        });
+    {% endfor %}
+
+    var targetBedFiles = [];
+    {% for obj in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
+        targetBedFiles.push({
+            "file": "{{obj.file}}",
+            "reference": "{{obj.meta.reference}}", 
+            "display": "{{obj.file}}".split("/").pop()
+        });
+    {% endfor %}
+    
+    var hotSpotBedFiles = [];
+    {% for obj in helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles %}
+        hotSpotBedFiles.push({
+            "file": "{{obj.file}}",
+            "reference": "{{obj.meta.reference}}", 
+            "display": "{{obj.file}}".split("/").pop()
+        });
+    {% endfor %}
+
+    var controlSeqTypes = [];
+    {% for obj in step.prepopulatedFields.controlSeqTypes %}
+        controlSeqTypes.push({
+           "name": "{{obj.name}}",
+           "display": "{{obj.description}}"
+        });
+    {% endfor %}
+
+    var USERINPUT = USERINPUT || {};
+    USERINPUT.validate = USERINPUT.is_by_sample = "{{helper.isPlanBySample}}" == "True";
+    USERINPUT.account_id = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}";
+    USERINPUT.account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}";
+    USERINPUT.is_ir_connected = false;
+
+    USERINPUT.workflow = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}";
+    USERINPUT.tag_isFactoryProvidedWorkflow = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.tag_isFactoryProvidedWorkflow}}";
+
+    USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
+    USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
+    USERINPUT.iruUploadMode ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode}}";
+
+    USERINPUT.ir_sample_to_tss_sample = {};
+    {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
+        var ir_term = "{{sample_annotation.iRValue}}";
+        var ir_terms = ir_term.split("|");
+        $.each(ir_terms, function(i) {
+            var term = ir_terms[i];
+            if (typeof USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"] == 'undefined') {
+                USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"] = [];
+            }
+            USERINPUT.ir_sample_to_tss_sample["{{sample_annotation.value}}"].push(term);
+        });
+    {%endfor%}
+</script>
+
+<script id="referenceColumnTemplate" type="text/x-kendo-template">
+    # var ref = references.filter(function(obj){ return (obj.short_name==data.reference); })[0] #
+    #=ref ? ref.display : "" #
+</script>
+
+<script id="barcodeColumnTemplate" type="text/x-kendo-template">
+    # var selected_barcodes = BARCODES[$('\#barcodeSet').val()] || [] #
+    # var barcode = selected_barcodes.filter(function(obj){ return (obj.id_str==data.barcodeId); })[0] #
+    #=barcode ? barcode.id_str + ' (' + barcode.sequence + ')' : "" #
+</script>
+
+<script id="sampleForSamplesetColumnTemplate" type="text/x-kendo-template">
+    #   var samplesetItem = SAMPLESETITEMS.filter(function(obj){ return (obj.sampleName==data.sampleName); })[0] #
+    #=  samplesetItem ? samplesetItem.display : "" #
+</script>
+
+<script id="irWorkflowColumnTemplate" type="text/x-kendo-template">
+    # var workflowObj = getWorkflowObj(irWorkflow, irtag_isFactoryProvidedWorkflow) #
+    # if (workflowObj) { #
+        #= workflowObj.display #
+    # } else { #
+        #= irWorkflow #
+    # } #
+</script>
+
+<script id="validationErrorTemplate" type="text/x-kendo-template">
+    <div class="k-widget k-tooltip k-tooltip-validation k-invalid-msg field-validation-error" style="margin:0.5em; display:none; font-weight:bold;">
+        <span class="k-icon k-warning"> </span>#=message#<div class="k-callout k-callout-sw"></div>
+    </div>
+</script>
 
 <div class="row-fluid">
         <div id="error" style="color:red;font-weight:bold;"></div>
 </div>
 <input id="samplesTable" name="samplesTable" type="hidden" value="{{self.getCurrentSavedFieldDict.samplesTable}}">
 
-
-<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
-<script type="text/javascript">
-    var onco_pgs_radio = $('[name="isOnco_Pgs"]')
-    var checkedRadio;
-    var x = 0;
-    for(x = 0; x < onco_pgs_radio.length; x++){
-         onco_pgs_radio[x].onclick = function() {
-            if(checkedRadio == this){
-                this.checked = false;
-                checkedRadio = null;
-            }else{
-                checkedRadio = this;
-            }
-        };
-    }
-</script>
 
 <div id="modal_load_samples_table" title="" class="modal hide">
     <div class="modal-header">

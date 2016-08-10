@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class ApplicationFieldNames():
 
     APPL_PRODUCT = 'applProduct'
+    APPL_PRODUCTS = 'applProducts'   #this is for all applProduct definitions for the selected application and target technique
     RUN_TYPE = 'runType'
     APPLICATION_GROUP_NAME = "applicationGroupName"
     SAMPLE_GROUPING = 'sampleGrouping'
@@ -30,7 +31,8 @@ class ApplicationFieldNames():
     PLAN_STATUS = "planStatus"
     UPDATE_KITS_DEFAULTS = 'updateKitsDefaults'
     CATEGORIES = "categories"
-    
+
+
 class ApplicationStepData(AbstractStepData):
 
     def __init__(self, sh_type):
@@ -38,16 +40,17 @@ class ApplicationStepData(AbstractStepData):
         self.resourcePath = 'rundb/plan/page_plan/page_plan_application.html'
 
         # self._dependsOn = [StepNames.IONREPORTER]
-        
+
         self.savedFields[ApplicationFieldNames.RUN_TYPE] = None
         self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = ""
         self.savedFields[ApplicationFieldNames.SAMPLE_GROUPING] = None
         self.prepopulatedFields[ApplicationFieldNames.PLAN_STATUS] = ""
-        
+
         self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
         self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
+        self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
-        self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.all().order_by('nucleotideType', 'runType'))
+        self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.filter(isActive=True).order_by('nucleotideType', 'runType'))
 
         self.prepopulatedFields[ApplicationFieldNames.CATEGORIES] = ''
 
@@ -58,7 +61,7 @@ class ApplicationStepData(AbstractStepData):
 #            self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).exclude(name = "DNA + RNA").order_by('uid')
 
         self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).order_by('uid')
-                                                                                                                                                             
+
         # self.prepopulatedFields[ApplicationFieldNames.SAMPLE_GROUPINGS] = SampleGroupType_CV.objects.filter(isActive=True).order_by('uid')
         # self._dependsOn = [StepNames.EXPORT]
 
@@ -67,32 +70,48 @@ class ApplicationStepData(AbstractStepData):
     def getStepName(self):
         return StepNames.APPLICATION
 
-    def updateSavedObjectsFromSavedFields(self):      
-        #logger.debug("ENTER application_step_data.updateSavedObjectsFromSavedFields() self.savedFields=%s" %(self.savedFields))
+    def updateSavedObjectsFromSavedFields(self):
+        # logger.debug("ENTER application_step_data.updateSavedObjectsFromSavedFields() self.savedFields=%s" %(self.savedFields))
         previous_run_type = self.savedObjects[ApplicationFieldNames.RUN_TYPE]
-        
+
         if self.savedFields[ApplicationFieldNames.RUN_TYPE]:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = RunType.objects.get(pk=self.savedFields[ApplicationFieldNames.RUN_TYPE])
 
             if self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]:
-                #for applicationGroup-specific applProduct, only one should be visible 
+                # for applicationGroup-specific applProduct, only one should be visible
                 applProducts = ApplProduct.objects.filter(isActive=True, isVisible=True,
-                                                              applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
-                                                              applicationGroup__name = self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
+                                                          applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                                                          applicationGroup__name=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
                 if applProducts:
                     self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = applProducts[0]
                 else:
                     self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
-                                                                       applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
+                                                                                                    applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
+
+                moreApplProducts = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
+                                                          applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                                                          applicationGroup__name=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
+                
+                # moreApplProducts cannot filtered purely by runType alone since runType and applicationGroup has many-to-many relationship
+                if moreApplProducts:
+                    self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = moreApplProducts
+                else:
+                    self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
+                                                                                                    applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                                                                                                    applicationGroup = None)
             else:
                 self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
-                                                                       applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
+                                                                                                applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
+                self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
+                                                                                                applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                                                                                                applicationGroup = None)
         else:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
             self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
-        
+            self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
+
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = previous_run_type != self.savedObjects[ApplicationFieldNames.RUN_TYPE]
-                        
+
     def updateFromStep(self, step_depended_on):
         pass
     #     if step_depended_on.getStepName() != StepNames.EXPORT:
@@ -116,7 +135,7 @@ class ApplicationStepData(AbstractStepData):
 
     def validateField(self, field_name, new_field_value):
         self.validationErrors.pop(field_name, None)
-        
+
         if field_name == ApplicationFieldNames.RUN_TYPE:
             if not new_field_value:
                 self.validationErrors[field_name] = 'Please select Target Technique'

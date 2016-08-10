@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 
 import os.path
-#from mimetypes import guess_type
+# from mimetypes import guess_type
 
 """
 Serve up local content via wsgi Location redirect
@@ -14,6 +14,7 @@ But then uses apache to serve content
 
 Approach adapted from: https://github.com/johnsensible/django-sendfile/
 """
+
 
 @login_required
 def serve_wsgi_location(request, urlpath, **kwargs):
@@ -29,7 +30,7 @@ def serve_wsgi_location(request, urlpath, **kwargs):
         return HttpResponsePermanentRedirect("/%s/" % urlpath)
 
     # Propagate query_string (to php scripts in output)
-    args = request.META.get('QUERY_STRING','')
+    args = request.META.get('QUERY_STRING', '')
     if args:
         urlpath = "%s?%s" % (urlpath, args)
 
@@ -54,9 +55,9 @@ def serve_wsgi_location(request, urlpath, **kwargs):
     del response['Content-Encoding']
 
     # If omitted entirely, apache/wsgi is not setting a correct one either.
-    #mimetype, encoding = guess_type(filename)
-    #response['Content-Type'] = mimetype or 'application/octet-stream'
-    #if encoding:
+    # mimetype, encoding = guess_type(filename)
+    # response['Content-Type'] = mimetype or 'application/octet-stream'
+    # if encoding:
     #    response['Content-Encoding'] = encoding
 
     return response

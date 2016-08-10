@@ -1376,7 +1376,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
               {
                  bams [low] = tmap_map_bams_init (1); 
                  bams [low]->bams [0] = tmap_map_sams_print (seqs_buffer [low]->seqs [0], index->refseq, records [low]->sams [0], 
-                                                           0, NULL, driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len);
+                                                           0, NULL, driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len, driver->opt->min_al_cov, driver->opt->min_identity, driver->opt->score_match, &(stat->num_filtered_als));
               }
               else 
               {
@@ -1386,7 +1386,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                      bams [low]->bams [j] = tmap_map_sams_print(seqs_buffer [low]->seqs [j], index->refseq, records [low]->sams [j],
                                                                (0 == j) ? 1 : ((seqs_buffer [low]->n-1 == j) ? 2 : 0),
                                                                records [low]->sams[(j+1) % seqs_buffer [low]->n], 
-                                                               driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len);
+                                                               driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len, driver->opt->min_al_cov, driver->opt->min_identity, driver->opt->score_match, &(stat->num_filtered_als));
                  }
               }
               // free alignments, for space
@@ -2188,11 +2188,11 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
                   tmap_file_printf ("      per fully clipped read: %.1f\n", ((double) stat->bases_fully_tailclipped) / stat->num_fully_tailclipped);
           }
       }
-      if (!driver->opt->min_al_len)
-          tmap_file_printf ("No filtering by alignment length performed\n");
+      if (!driver->opt->min_al_len && !driver->opt->min_al_cov && !driver->opt->min_identity)
+          tmap_file_printf ("No alignment filtering performed\n");
       else
       {
-          tmap_file_printf (  "  Filtered out by length: %llu\n", stat->num_len_filtered_als);
+          tmap_file_printf (  "  Filtered alignments: %llu\n", stat->num_filtered_als);
       }
   }
   

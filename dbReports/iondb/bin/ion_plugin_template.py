@@ -7,7 +7,7 @@ from optparse import OptionParser
 import json
 from glob import glob
 
-#Import settings, so TEMPLATE_DIRS can be overridden
+# Import settings, so TEMPLATE_DIRS can be overridden
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -19,10 +19,11 @@ def parseJsonFile(jsonFile):
         result = json.loads(content)
     return result
 
+
 def generateHTML(template, context):
         content = render_to_string(template, context)
         output = os.path.join(pluginparams['runinfo']['results_dir'], template)
-        ##.rstrip(".tmpl")) ## tmpl is optional, best to omit it.
+        # .rstrip(".tmpl")) ## tmpl is optional, best to omit it.
         with open(output, "w") as f:
             f.write(content)
 
@@ -31,22 +32,26 @@ if __name__ == "__main__":
 
     parser = OptionParser()
     parser.add_option("-v", dest="version", action="count", help="print version and exit")
-    parser.add_option("-j", dest="json_file", help="specify startplugin.json file that contains plugin directory path")
+    parser.add_option("-j", dest="json_file",
+                      help="specify startplugin.json file that contains plugin directory path")
     parser.add_option("-n", dest="plugin_name", help="specify plugin name without any white spaces")
-    parser.add_option("-t", dest="template_dir", help="specify template directory that stores django templates")
-    parser.add_option("-r", dest="results_json_file", help="specify the results.json file that stores the output of plugin to be displayed")
-    parser.add_option("-i", dest="plugin_report_html", help="specify template html file rendering the results.json ")
+    parser.add_option("-t", dest="template_dir",
+                      help="specify template directory that stores django templates")
+    parser.add_option("-r", dest="results_json_file",
+                      help="specify the results.json file that stores the output of plugin to be displayed")
+    parser.add_option("-i", dest="plugin_report_html",
+                      help="specify template html file rendering the results.json ")
     (opt, args) = parser.parse_args()
-    
+
     logging.basicConfig(level=logging.INFO)
     log = logging.getLogger(opt.plugin_name)
     log.propagate = False
 
     # TO DO - Instead of json_file, take the plugin directory path as input
-    if opt.json_file: 
+    if opt.json_file:
         pluginparams = parseJsonFile(opt.json_file)
     else:
-        #log.fatal("No Plugin JSON file specified")
+        # log.fatal("No Plugin JSON file specified")
         pluginparams = {}
 
     """
@@ -60,13 +65,13 @@ if __name__ == "__main__":
     else:
         settings.TEMPLATE_DIRS += (opt.template_dir,)
 
-    data=[]
-    # results.json is assumed to be the output file for plugin. 
+    data = []
+    # results.json is assumed to be the output file for plugin.
     # TO DO: context.json
     if opt.results_json_file:
-        myResults = parseJsonFile(opt.results_json_file) 
+        myResults = parseJsonFile(opt.results_json_file)
     else:
         myResults = {}
 
     log.info("Generating Plugin Report")
-    generateHTML(opt.plugin_report_html, { 'data' : myResults })
+    generateHTML(opt.plugin_report_html, {'data': myResults})

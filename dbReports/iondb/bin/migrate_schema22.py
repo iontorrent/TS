@@ -13,10 +13,12 @@ import logging
 
 # (ab)use South internals to run non-migration from a fixed schema
 logging.basicConfig(level=logging.INFO)
-logging.disable(logging.DEBUG) # hide south DEBUG messages
+logging.disable(logging.DEBUG)  # hide south DEBUG messages
 log = logging.getLogger('LegacyMigration')
 
+
 class LegacyMigration(SchemaMigration):
+
     def forwards(self, orm):
         from django.db import models
         try:
@@ -53,7 +55,8 @@ class LegacyMigration(SchemaMigration):
                 ('storageHost', models.fields.CharField(max_length=128, null=True, blank=True)),
                 ('barcodeId', models.fields.CharField(max_length=128, null=True, blank=True)),
                 ('reverse_primer', models.fields.CharField(max_length=128, null=True, blank=True)),
-                ('rawdatastyle', models.fields.CharField(default='single', max_length=24, null=True, blank=True)),
+                ('rawdatastyle', models.fields.CharField(
+                    default='single', max_length=24, null=True, blank=True)),
                 ('sequencekitname', models.fields.CharField(max_length=512, null=True, blank=True)),
                 ('sequencekitbarcode', models.fields.CharField(max_length=512, null=True, blank=True)),
                 ('librarykitname', models.fields.CharField(max_length=512, null=True, blank=True)),
@@ -89,7 +92,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("ReportStorage table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -158,8 +160,6 @@ class LegacyMigration(SchemaMigration):
             log.info("Location table already exists")
             db.clear_deferred_sql()
 
-
-
         try:
             db.start_transaction()
             # Adding model 'Rig'
@@ -189,7 +189,6 @@ class LegacyMigration(SchemaMigration):
             log.info("Rig table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'FileServer'
@@ -208,7 +207,6 @@ class LegacyMigration(SchemaMigration):
             log.info("FileServer table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'RunScript'
@@ -224,7 +222,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("RunScript table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -243,7 +240,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("Cruncher table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -288,7 +284,6 @@ class LegacyMigration(SchemaMigration):
         except DatabaseError:
             db.rollback_transaction()
             log.info("AnalysisMetrics table already exists")
-
 
         try:
             db.start_transaction()
@@ -545,7 +540,6 @@ class LegacyMigration(SchemaMigration):
             log.info("LibMetrics table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'QualityMetrics'
@@ -582,7 +576,6 @@ class LegacyMigration(SchemaMigration):
             log.info("QualityMetrics table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'Template'
@@ -602,7 +595,6 @@ class LegacyMigration(SchemaMigration):
             log.info("Template table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'Backup'
@@ -621,7 +613,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("Backup table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -649,7 +640,6 @@ class LegacyMigration(SchemaMigration):
             log.info("BackupConfig table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'Chip'
@@ -666,7 +656,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("Chip table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -701,7 +690,6 @@ class LegacyMigration(SchemaMigration):
             log.info("GlobalConfig table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'EmailAddress'
@@ -717,7 +705,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("EmailAddress table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -737,7 +724,6 @@ class LegacyMigration(SchemaMigration):
             log.info("RunType table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'Plugin'
@@ -745,7 +731,8 @@ class LegacyMigration(SchemaMigration):
                 ('id', models.fields.AutoField(primary_key=True)),
                 ('name', models.fields.CharField(max_length=512)),
                 ('version', models.fields.CharField(max_length=256)),
-                ('date', models.fields.DateTimeField(default=datetime.datetime(2012, 4, 2, 15, 40, 11, 877988))),
+                ('date', models.fields.DateTimeField(
+                    default=datetime.datetime(2012, 4, 2, 15, 40, 11, 877988))),
                 ('selected', models.fields.BooleanField(default=False)),
                 ('path', models.fields.CharField(max_length=512)),
                 ('project', models.fields.CharField(default='', max_length=512, blank=True)),
@@ -766,7 +753,6 @@ class LegacyMigration(SchemaMigration):
             log.info("Plugin table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'PluginResult'
@@ -784,7 +770,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("PluginResult table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -810,7 +795,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("dnaBarcode table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -838,7 +822,6 @@ class LegacyMigration(SchemaMigration):
             log.info("ReferenceGenome table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'ThreePrimeadapter'
@@ -860,7 +843,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("ThreePrimeadapter table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -921,7 +903,6 @@ class LegacyMigration(SchemaMigration):
             log.info("PlannedExperiment table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'Publisher'
@@ -941,7 +922,6 @@ class LegacyMigration(SchemaMigration):
             log.info("Publisher table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'ContentUpload'
@@ -960,14 +940,15 @@ class LegacyMigration(SchemaMigration):
             log.info("ContentUpload table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'Content'
             db.create_table('rundb_content', (
                 ('id', models.fields.AutoField(primary_key=True)),
-                ('publisher', models.fields.related.ForeignKey(related_name='contents', to=orm['rundb.Publisher'])),
-                ('contentupload', models.fields.related.ForeignKey(related_name='contents', to=orm['rundb.ContentUpload'])),
+                ('publisher', models.fields.related.ForeignKey(
+                    related_name='contents', to=orm['rundb.Publisher'])),
+                ('contentupload', models.fields.related.ForeignKey(
+                    related_name='contents', to=orm['rundb.ContentUpload'])),
                 ('file', models.fields.CharField(max_length=255)),
                 ('path', models.fields.CharField(max_length=255)),
                 ('meta', models.fields.TextField(default='{}', blank=True)),
@@ -980,7 +961,6 @@ class LegacyMigration(SchemaMigration):
             log.info("Content table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'UserEventLog'
@@ -988,7 +968,8 @@ class LegacyMigration(SchemaMigration):
                 ('id', models.fields.AutoField(primary_key=True)),
                 ('text', models.fields.TextField(blank=True)),
                 ('timeStamp', models.fields.DateTimeField(auto_now_add=True, blank=True)),
-                ('upload', models.fields.related.ForeignKey(related_name='logs', to=orm['rundb.ContentUpload'])),
+                ('upload', models.fields.related.ForeignKey(
+                    related_name='logs', to=orm['rundb.ContentUpload'])),
             ))
             db.send_create_signal('rundb', ['UserEventLog'])
             db.execute_deferred_sql()
@@ -997,7 +978,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("UserEventLog table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -1018,7 +998,6 @@ class LegacyMigration(SchemaMigration):
             log.info("UserProfile table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'SequencingKit'
@@ -1035,7 +1014,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("SequencingKit table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -1054,7 +1032,6 @@ class LegacyMigration(SchemaMigration):
             log.info("LibraryKit table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'VariantFrequencies'
@@ -1070,7 +1047,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("VariantFrequencies table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -1090,7 +1066,6 @@ class LegacyMigration(SchemaMigration):
             log.info("KitInfo table already exists")
             db.clear_deferred_sql()
 
-
         try:
             db.start_transaction()
             # Adding model 'KitPart'
@@ -1106,7 +1081,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("KitPart table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -1126,7 +1100,6 @@ class LegacyMigration(SchemaMigration):
             db.rollback_transaction()
             log.info("LibraryKey table already exists")
             db.clear_deferred_sql()
-
 
         try:
             db.start_transaction()
@@ -1948,9 +1921,10 @@ class LegacyMigration(SchemaMigration):
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '512', 'blank': 'True'})
         }
-}
+    }
 
 complete_apps = ['rundb']
+
 
 def install_missing_tables():
     f = Forwards()

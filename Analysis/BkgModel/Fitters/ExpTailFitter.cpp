@@ -4,107 +4,8 @@
 #include "BkgMagicDefines.h"
 #include "MathUtil.h"
 #include "ExpTailFitter.h"
-#include "FitExpDecay.h"
 
-#define MIN_VALID_FLOWS 6
-
-bool ExpTailFitter::ComputeAverageValidTrace(float *avg_trc, float *incorporation_traces,
-    BeadParams *p, int npts, float low_A, float hi_A,
-    int flow_block_size
-  )
-{
-  int navg = 0;
-  memset(avg_trc,0,sizeof(float[npts]));
-   for (int fnum=0;fnum < flow_block_size;fnum++)
-   {
-      // keep out long HPs in order to prevent pollution of data
-      // points with additional generated protons
-      // keep out non-incorporating flows because they don't contain
-      // exponential decay information
-      if ((p->Ampl[fnum] > low_A) && (p->Ampl[fnum] < hi_A))
-      {
-         AccumulateVector(avg_trc,&incorporation_traces[fnum*npts],npts);
-          navg++;
-      }
-   }
-   if (navg>MIN_VALID_FLOWS){
-    MultiplyVectorByScalar(avg_trc,1.0f/navg,npts);
-    return(true);
-   }
-   return(false);
-}
-
-int SetWeightVector(float *weight_vect, int npts, std::vector<float> &ftimes, float fi_end){
-  int i_start = -1;
-  for (int i=0;i < npts;i++)
-    {
-       if (ftimes[i] < fi_end)
-          weight_vect[i] = 0.0f;
-       else
-       {
-          weight_vect[i] = 1.0f;
-          if (i_start < 0)
-             i_start = i;
-       }
-    }
-  return(i_start);
-}
-
-void  ExpTailFitter::FitTauAdj(float *incorporation_traces, float *bkg_traces, BeadParams *p, reg_params *rp, FlowBufferInfo *my_flow, TimeCompression &time_c, int flow_block_size, int flow_block_start
-  )
-{
-  int npts = time_c.npts();
-   float tau_adj = p->tau_adj;
-
-  std::vector<float> ftimes = time_c.frameNumber;
-
-  if ( flow_block_start == 0 )    // First block ever.
-   {
-      // create average trace across all flows and process it
-      float avg_trc[npts];
-      const float LOW_AMPLITUDE = 0.5f;
-      const float HI_AMPLITUDE = 3.0f;
-      const float AVG_AMPLITUDE = 1.5f;
-      bool find_adj = ComputeAverageValidTrace(avg_trc, incorporation_traces, p, npts,LOW_AMPLITUDE, HI_AMPLITUDE, flow_block_size);
-
-      if (find_adj)
-      {
-
-         float fi_end = GetModifiedIncorporationEnd(&rp->nuc_shape,my_flow->flow_ndx_map[0],0, AVG_AMPLITUDE);
-         float weight_vect[npts];
-         int i_start = SetWeightVector(weight_vect,npts,ftimes, fi_end);
-
-          float my_etbR = rp->AdjustEmptyToBeadRatioForFlow(p->R, p->Ampl[0],  p->Copies, p->phi, my_flow->flow_ndx_map[0], flow_block_start );
-         float my_tauB = rp->ComputeTauBfromEmptyUsingRegionLinearModel(my_etbR);
-
-         FitExpDecayParams min_params,max_params;
-         min_params.Signal = 0.0f;
-         min_params.tau = my_tauB*0.9f;
-         min_params.dc_offset = -50.0f;
-         max_params.Signal = 500.0f;
-         max_params.tau = my_tauB*1.1f;
-         max_params.dc_offset =  50.0f;
-         FitExpDecay exp_fitter(npts,&ftimes[0]);
-
-         exp_fitter.SetWeightVector(weight_vect);
-         exp_fitter.SetLambdaStart(1.0E-20f);
-         exp_fitter.SetLambdaThreshold(100.0f);
-         exp_fitter.SetParamMax(max_params);
-         exp_fitter.SetParamMin(min_params);
-         exp_fitter.params.Signal = 20.0f;
-         exp_fitter.params.tau = my_tauB;
-         exp_fitter.params.dc_offset = 0.0f;
-         exp_fitter.SetStartAndEndPoints(i_start,npts);
-         exp_fitter.Fit(false, 200, avg_trc);
-
-         tau_adj = exp_fitter.params.tau/my_tauB;
-      }
-   }
-
-  p->tau_adj = tau_adj;
-}
-
-void ExpTailFitter::AdjustBackground(float *incorporation_traces,float *bkg_traces,
+void ExpTailBkgFitter::AdjustBackground(float *incorporation_traces,float *bkg_leakage_fraction, float *bkg_traces,
     BeadParams *p,reg_params *rp,FlowBufferInfo *my_flow,TimeCompression &time_c,
     int flow_block_size, int flow_block_start
   )
@@ -118,25 +19,12 @@ void ExpTailFitter::AdjustBackground(float *incorporation_traces,float *bkg_trac
      float my_tauB = rp->ComputeTauBfromEmptyUsingRegionLinearModel(my_etbR)*p->tau_adj;
      float my_t_mid_nuc = GetModifiedMidNucTime(&rp->nuc_shape,my_flow->flow_ndx_map[fnum],fnum);
 
-     float bkg_leakage_fraction = generic_exp_tail_fit(&incorporation_traces[fnum*npts],&bkg_traces[fnum*npts],time_c,my_tauB,p->Ampl[fnum],my_t_mid_nuc);
-     AddScaledVector(&incorporation_traces[fnum*npts],&bkg_traces[fnum*npts],-bkg_leakage_fraction,npts);
+     bkg_leakage_fraction[fnum] = generic_exp_tail_fit(&incorporation_traces[fnum*npts],&bkg_traces[fnum*npts],time_c,my_tauB,p->Ampl[fnum],my_t_mid_nuc);
+     AddScaledVector(&incorporation_traces[fnum*npts],&bkg_traces[fnum*npts],-bkg_leakage_fraction[fnum],npts);
   }
 
 }
 
-/*
-// this routine inappropriately combines two separate fitting processes that happen to use the same data
-// do not call it if avoidable
-float ExpTailFitter::CorrectTraces(float *incorporation_traces,float *bkg_traces,BeadParams *p,reg_params *rp,FlowBufferInfo *my_flow,TimeCompression &time_c, int flow_block_size, int flow_block_start )
-{
-  // only happens in first block of compute
-  FitTauAdj(incorporation_traces, bkg_traces, p,rp,my_flow, time_c, flow_block_size, flow_block_start);
-  
-  // adjusts in all compute flows
-  AdjustBackground(incorporation_traces,bkg_traces,p,rp,my_flow, time_c, flow_block_size, flow_block_start);
-
-  return(p->tau_adj);
-}*/
 
 bool FindNonIncorporatingInterval(int &t_start, int &t_end, std::vector<float> &ftimes, float t_mid_nuc, float mer_guess, int npts){
   float fi_end = t_mid_nuc + MIN_INCORPORATION_TIME_PI + MIN_INCORPORATION_TIME_PER_MER_PI_VERSION_TWO* mer_guess;
@@ -163,6 +51,26 @@ t_end = -1;
    return(false);
  return(true);
 }
+
+void smooth_kern(float *out, float *in, float *kern, int dist, int npts)
+{
+   float sum;
+   float scale;
+
+   for (int i = 0; i < npts; i++) {
+      sum = 0.0f;
+      scale = 0.0f;
+
+      for (int j = i - dist, k = 0; j <= (i + dist); j++, k++) {
+         if ((j >= 0) && (j < npts)) {
+            sum += kern[k] * in[j];
+            scale += kern[k];
+         }
+      }
+      out[i] = sum / scale;
+   }
+}
+
 
 void GenerateSmoothIncTrace(float *smooth_inc_trace, float *inc_trc, std::vector<float> &ftimes, int t_start, int t_end, float tau, int npts){
   // 7 = 2*3+1
@@ -198,7 +106,7 @@ float IntegratedBackgroundScale(float *bkg_trace, int t_start, int t_end){
 }
 
 
-float ExpTailFitter::generic_exp_tail_fit(float *inc_trc, float *bkg_trace, TimeCompression& time_c, float tau, float mer_guess, float t_mid_nuc, bool debug)
+float ExpTailBkgFitter::generic_exp_tail_fit(float *inc_trc, float *bkg_trace, TimeCompression& time_c, float tau, float mer_guess, float t_mid_nuc, bool debug)
 {
   if (tau <= 0.0f) return 0.0f;
    int npts = time_c.npts();
@@ -214,9 +122,8 @@ float ExpTailFitter::generic_exp_tail_fit(float *inc_trc, float *bkg_trace, Time
    GenerateSmoothIncTrace(smooth_inc_trace,inc_trc, ftimes, t_start, t_end, tau, npts);
 
 
-   float exp_amp;
-   float mse_err;
-   float integrated_delta = fit_exp_tail_to_data(smooth_inc_trace,t_start,t_end, ftimes, tau, &exp_amp, &mse_err, debug);
+
+   float integrated_delta = fit_exp_tail_to_data(smooth_inc_trace,t_start,t_end, ftimes, tau,  debug);
    float bkg_scale = IntegratedBackgroundScale(bkg_trace, t_start, t_end);
 //@TODO: note potential divide by zero error here - fixed?
    // @TODO: this is simply decomposing SI = signal*exp(-t/tau) + alpha*bkg  - but we're ignoring the actual bkg shape and substituting an averaage dc value
@@ -236,28 +143,41 @@ float ExpTailFitter::generic_exp_tail_fit(float *inc_trc, float *bkg_trace, Time
    return (tmp_fraction);
 }
 
-float ExpTailFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> &ftimes, float tau, float *exp_amp, float *mse_err, bool debug)
+void ExpTailBkgFitter::ResetMat(){
+  // initialize matricies
+  lhs(0, 0) = 0.0;
+  lhs(0, 1) = 0.0;
+  lhs(1, 0) = 0.0;
+  lhs(1, 1) = 0.0;
+  rhs(0) = 0.0;
+  rhs(1) = 0.0;
+}
+
+void ExpTailBkgFitter::SetupXtX(float *trc, int start_pt, int end_pt, std::vector<float> &ftimes, float tau){
+  // XtX = v*v, exp*v, exp*v exp*exp
+  // Xt*y = v*y, exp*y
+
+  for (int i = start_pt; i < end_pt; i++) {
+     lhs(0, 0) += 1.0;
+
+     float dt = (ftimes[i] - ftimes[start_pt]);
+     float expval = ExpApprox(-dt / tau);
+     lhs(0, 1) += expval;
+     lhs(1, 1) += expval * expval;
+
+     rhs(0) += trc[i];
+     rhs(1) += trc[i] * expval;
+  }
+  lhs(1, 0) = lhs(0, 1);
+}
+
+
+
+float ExpTailBkgFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> &ftimes, float tau, bool debug)
 {
-   // initialize matricies
-   lhs(0, 0) = 0.0;
-   lhs(0, 1) = 0.0;
-   lhs(1, 0) = 0.0;
-   lhs(1, 1) = 0.0;
-   rhs(0) = 0.0;
-   rhs(1) = 0.0;
+  ResetMat();
+  SetupXtX(trc, start_pt, end_pt, ftimes,tau);
 
-   for (int i = start_pt; i < end_pt; i++) {
-      lhs(0, 0) += 1.0;
-
-      float dt = (ftimes[i] - ftimes[start_pt]);
-      float expval = ExpApprox(-dt / tau);
-      lhs(0, 1) += expval;
-      lhs(1, 1) += expval * expval;
-
-      rhs(0) += trc[i];
-      rhs(1) += trc[i] * expval;
-   }
-   lhs(1, 0) = lhs(0, 1);
    // I'm not sure if the solve method leaves the original matricies intact or not, some I'm saving rhs(0)
    // for later use just in case
    double old_rhs_0 = rhs(0);
@@ -272,58 +192,10 @@ float ExpTailFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, 
    // so we revert to assuming that there was no incorporation signal
    // and just use the dc average of the trace as the dc offset
    if (vals(1) < -20.0) {
-      if (exp_amp != NULL) *exp_amp = 0.0f;
-
-      if (mse_err != NULL)
-      {
-         float msesum = 0.0f;
-         for (int i=start_pt;i < end_pt;i++)
-         {
-            float err = trc[i]-old_rhs_0;
-            msesum += err*err;
-         }
-         *mse_err = msesum/(end_pt-start_pt);
-      }
-
       return ((float)old_rhs_0 / (end_pt - start_pt));
-   }
-
-   if (exp_amp != NULL) *exp_amp = vals(1);
-
-   if (mse_err != NULL)
-   {
-      float msesum = 0.0f;
-      for (int i=start_pt;i < end_pt;i++)
-      {
-         float dt = (ftimes[i] - ftimes[start_pt]);
-         float expval = vals(1)*ExpApprox(-dt / tau);
-         float err = trc[i]-(expval+vals(0));
-         msesum += err*err;
-      }
-      *mse_err = msesum/(end_pt-start_pt);
    }
 
    return ((float)vals(0));
 }
-
-void smooth_kern(float *out, float *in, float *kern, int dist, int npts)
-{
-   float sum;
-   float scale;
-
-   for (int i = 0; i < npts; i++) {
-      sum = 0.0f;
-      scale = 0.0f;
-
-      for (int j = i - dist, k = 0; j <= (i + dist); j++, k++) {
-         if ((j >= 0) && (j < npts)) {
-            sum += kern[k] * in[j];
-            scale += kern[k];
-         }
-      }
-      out[i] = sum / scale;
-   }
-}
-
 
 

@@ -33,7 +33,6 @@
 #include "IonErr.h"
 
 #include "PinnedInFlow.h"
-#include "SynchDat.h"
 #include "IonImageSem.h"
 #include "PCACompression.h"
 
@@ -55,6 +54,10 @@ Image::Image()
 //  sgFilter = new SGFilter();
 //  sgFilter->SetFilterParameters (sgSpread, sgCoeff);
   results_folder = NULL;
+  // revise when we have command line values
+  acqPrefix = strdup("acq_");
+  datPostfix = strdup("dat");
+
   flowOffset = 1000;
   noFlowTime = 1350;
   bkg = NULL;
@@ -106,6 +109,14 @@ void Image::Close()
     delete [] results;
   results = NULL;
 
+  if (acqPrefix!=NULL){
+    free(acqPrefix);
+    acqPrefix = NULL;
+  }
+  if (datPostfix!=NULL){
+    free(datPostfix);
+    datPostfix = NULL;
+  }
   if ( bkg )
     free ( bkg );
   bkg = NULL;
@@ -149,12 +160,20 @@ void Image::cleanupRaw()
 }
 
 
-void Image::SetDir ( const char *directory )
+void Image::SetDir ( const char *directory, const char *_acqPrefix, const char *_datPostfix )
 {
   if ( results_folder )
     free ( results_folder );
   results_folder = ( char * ) malloc ( strlen ( directory ) + 1 );
   strncpy ( results_folder, directory, strlen ( directory ) + 1 );
+
+  if (acqPrefix!=NULL)
+    free(acqPrefix);
+  acqPrefix = strdup(_acqPrefix);
+  if (datPostfix!=NULL)
+    free(datPostfix);
+  datPostfix = strdup(_datPostfix);
+
   return;
 }
 //
@@ -165,7 +184,7 @@ void Image::SetDir ( const char *directory )
 //    If beadfind_post_0000 exists, index file can be loaded
 //    for a given file's index, if the index+1 file exists, then the index file can be loaded
 //
-bool Image::ReadyToLoad ( const char *filename )
+bool Image::ReadyToLoad ( const char *filename , const char *_acqPrefix, const char * _datPostfix)
 {
 
   char thisFileName[PATH_MAX] = {'\0'};
@@ -176,7 +195,8 @@ bool Image::ReadyToLoad ( const char *filename )
   free ( path );
   // This method is only for acq image files
   strcpy ( thisFileName, filename );
-  if ( strncmp ( basename ( thisFileName ), "acq", 3 ) != 0 )
+  // this should probably be acqPrefix length
+  if ( strncmp ( basename ( thisFileName ), _acqPrefix, 3 ) != 0 )
   {
     return true;
   }
@@ -203,7 +223,7 @@ bool Image::ReadyToLoad ( const char *filename )
   }
   */
   // If beadfind_post_0000.txt exists, the run is done and all files should load
-  sprintf ( nextFileName, "%s/beadfind_post_0000.dat", thisPath );
+  sprintf ( nextFileName, "%s/beadfind_post_0000.%s", thisPath, _datPostfix );
   if ( isFile ( nextFileName ) )
   {
     return true;
@@ -213,9 +233,12 @@ bool Image::ReadyToLoad ( const char *filename )
   //--- Get the index of this file
   int idxThisFile = -1;
   strncpy ( thisFileName, filename, strlen ( filename ) );
-  sscanf ( basename ( thisFileName ), "acq_%d.dat", &idxThisFile );
+  char format_dat[1024];
+  // note %%d writes %d to the format string, which is waht we want
+  sprintf(format_dat, "%s%%d.%s", _acqPrefix, _datPostfix);
+  sscanf ( basename ( thisFileName ), format_dat, &idxThisFile );
   assert ( idxThisFile >= 0 );
-  sprintf ( nextFileName, "%s/acq_%04d.dat", thisPath, idxThisFile + 1 );
+  sprintf ( nextFileName, "%s/%s%04d.%s", thisPath, _acqPrefix, idxThisFile + 1, _datPostfix );
   if ( isFile ( nextFileName ) )
   {
     return true;
@@ -441,32 +464,6 @@ void Image::SmoothMeTikhonov ( TikhonovSmoother *tikSmoother, bool dont_smooth_m
   }
 }
 
-void Image::InitFromSdat(SynchDat *sdat) {
-  cleanupRaw();
-  delete raw;
-  raw = new RawImage();
-  vector<int> timestamps;
-  raw->rows = sdat->NumRow();
-  raw->cols = sdat->NumCol();
-  raw->compFrames = raw->frames = sdat->GetMaxFrames(timestamps);
-  raw->uncompFrames = sdat->GetOrigUncompFrames();
-  raw->chip_offset_y = 0;
-  raw->chip_offset_x = 0;
-  raw->channels = -1;
-  raw->interlaceType = -1;
-  raw->frameStride = raw->rows * raw->cols;
-  raw->image = (short *)malloc(raw->rows * raw->cols * raw->frames * sizeof(short));
-  raw->timestamps = (int *) malloc(raw->frames * sizeof(int));
-  copy(timestamps.begin(), timestamps.end(), &raw->timestamps[0]);
-  for (int row = 0; row < raw->rows; row++) {
-    for (int col = 0; col < raw->cols; col++) {
-      for (int frame = 0; frame < raw->frames; frame++) {
-        At(row,col,frame) = sdat->AtWell(row,col,frame);
-      }
-    }
-  }
-}
-
 int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly, bool timeTransform )
 {
   int rc;
@@ -532,9 +529,9 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
     	raw->imageState = saved_ImageState;
     	char newFname[2048];
     	strcpy(newFname,rawFileName);
-    	char *ptr = strstr(newFname,".dat");
+      char *ptr = strstr(newFname,datPostfix);
     	if(ptr)
-    		sprintf(ptr,"_testPCA.dat");
+        sprintf(ptr,"_testPCA.%s", datPostfix);
         rc = deInterlace_c ( ( char * ) newFname,&raw->image,&raw->timestamps,
                              &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
                              0,0,
@@ -633,7 +630,8 @@ bool Image::WaitForMyFileToWakeMeFromSleep ( const char *rawFileName )
     while ( timeOut > 0 )
     {
       //--- Is the file we want available?
-      if ( ReadyToLoad ( rawFileName ) )
+      // why is this a 'static' function?
+      if ( ReadyToLoad ( rawFileName , acqPrefix,datPostfix) )
       {
         //--- Open the file we want
         fopen_s ( &fp, rawFileName, "rb" );
@@ -647,7 +645,9 @@ bool Image::WaitForMyFileToWakeMeFromSleep ( const char *rawFileName )
       //      fprintf ( stdout, "Waited to %u load %s\n", timeWaited, rawFileName );
       timeOut -= timeWaited;
     }
-
+    if (timeOut <= 0) {
+        fprintf ( stdout, "Waiting to load %s (timed out)\n", rawFileName );
+    }
   }
   if ( fp == NULL )
   {
@@ -1033,7 +1033,7 @@ void Image::SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed
 	      imagePtr = &raw->image[i];
 	      for ( frame=0;frame<nframes;frame++ )
 	      {
-	    	imgV = (v8s16_t * __restrict)  imagePtr;
+	    	imgV = (v8s16_t *)  imagePtr;
 	        *imgV -= refA.V;
 	        imagePtr += raw->frameStride;
 	      }
@@ -2657,7 +2657,9 @@ bool Image::LoadSlice (
       {
         ChipIdDecoder::SetGlobalChipId ( chipID );
         const char *rawDir = dirname ( ( char * ) rawFileName[iDat].c_str() );
-        ImageTransformer::CalibrateChannelXTCorrection ( rawDir,"lsrowimage.dat" );
+        char lsrow[1024];
+        sprintf(lsrow,"lsrowimage.%s",datPostfix);
+        ImageTransformer::CalibrateChannelXTCorrection ( rawDir,lsrow );
         // XTChannelCorrect (&tempMask);
         ImageTransformer::XTChannelCorrect ( raw,results_folder );
       }

@@ -110,9 +110,14 @@ class BkgParamH5
                             int flow_block_id );
 
     void Close();
+    //bead_param.h5
     void CloseBeads();
+    //region_param.h5
     void CloseRegion();
-    void CloseTraceXYFlow();
+    // trace.h5
+    void CloseBestRegion();
+    void CloseRegionSamples();
+       void CloseTraceXYFlow();
 
 
     void TryInitBeads ( H5File &h5_local_ref, int verbosity );
@@ -173,8 +178,11 @@ class BkgParamH5
 //  beads in the bestRegion
     MatchedCubeInt beads_bestRegion_location;
     MatchedCubeInt beads_bestRegion_fittype;
+    MatchedCubeInt beads_bestRegion_converged;
     MatchedCube beads_bestRegion_predicted;
     MatchedCube beads_bestRegion_corrected;
+    MatchedCube beads_bestRegion_original;
+    MatchedCube beads_bestRegion_sbg;
     MatchedCube beads_bestRegion_amplitude;
     MatchedCube beads_bestRegion_residual;
     MatchedCube beads_bestRegion_kmult;
@@ -184,13 +192,19 @@ class BkgParamH5
     MatchedCube beads_bestRegion_gainSens;
     MatchedCube beads_bestRegion_timeframe;
     MatchedCube beads_bestRegion_taub;
-
+    MatchedCube beads_bestRegion_etbR;
+    MatchedCube beads_bestRegion_bkg_leakage;
+    MatchedCube beads_bestRegion_initAk;
+    MatchedCube beads_bestRegion_tms;
 
     //  beads in the regionSamples
     MatchedCubeInt beads_regionSamples_location;
     MatchedCubeInt beads_regionSamples_fittype;
+    MatchedCubeInt beads_regionSamples_converged;
     MatchedCube beads_regionSamples_predicted;
     MatchedCube beads_regionSamples_corrected;
+    MatchedCube beads_regionSamples_original;
+    MatchedCube beads_regionSamples_sbg;
     MatchedCube beads_regionSamples_amplitude;
     MatchedCube beads_regionSamples_residual;
     MatchedCube beads_regionSamples_kmult;
@@ -200,7 +214,11 @@ class BkgParamH5
     MatchedCube beads_regionSamples_gainSens;
     MatchedCube beads_regionSamples_timeframe;
     MatchedCube beads_regionSamples_taub;
-    MatchedCube beads_regionSamples_regionParams;
+    MatchedCube beads_regionSamples_bkg_leakage;
+    MatchedCube beads_regionSamples_initAk;
+    MatchedCube beads_regionSamples_tms;
+    MatchedCube beads_regionSamples_etbR;
+     MatchedCube beads_regionSamples_regionParams;
 
 //  beads specified in the sse/xyflow/rcflow file
     void InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_hash);

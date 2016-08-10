@@ -48,6 +48,7 @@ def model_event_post(domain, name, sender_model, instance, producer, consumer):
 
 def listen_created(domain, name, sender_model, producer, consumer):
     logger.info("Registering %s %s %s" % (sender_model, producer, consumer))
+
     def handler(sender, instance, created, **kwargs):
         logger.warning("testing chandler %s" % sender)
         if created:
@@ -59,6 +60,7 @@ def listen_created(domain, name, sender_model, producer, consumer):
 
 def listen_saved(domain, name, sender_model, producer, consumer):
     logger.info("Registering %s %s %s" % (sender_model, producer, consumer))
+
     def handler(sender, instance, created, **kwargs):
         logger.warning("calling shandler %s" % sender)
         model_event_post(domain, name, sender, instance, producer, consumer)
@@ -68,6 +70,7 @@ def listen_saved(domain, name, sender_model, producer, consumer):
 
 def listen_deleted(domain, name, sender_model, producer, consumer):
     logger.info("Registering %s %s %s" % (sender_model, producer, consumer))
+
     def handler(sender, instance, **kwargs):
         logger.warning("calling dhandler %s" % sender)
         model_event_post(domain, name, sender, instance, producer, consumer)
@@ -83,6 +86,7 @@ def logging_omni_handler(*args, **kwargs):
 
 def api_serializer(model_resource):
     resource = model_resource()
+
     def producer(sender, instance):
         logger.debug("Running %s producer" % resource)
         bundle = resource.build_bundle(obj=instance)
@@ -101,7 +105,7 @@ event_when = {
 
 
 event_senders = {
-    'Experiment': (models.Experiment, api_serializer(api.ExperimentResource)), 
+    'Experiment': (models.Experiment, api_serializer(api.ExperimentResource)),
     'Result': (models.Results, api_serializer(api.ResultsResource)),
     'Plan': (models.PlannedExperiment, api_serializer(api.PlannedExperimentResource)),
     'Rig': (models.Rig, api_serializer(api.RigResource)),

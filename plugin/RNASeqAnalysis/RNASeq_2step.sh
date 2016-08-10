@@ -20,6 +20,7 @@ OPTION="OPTIONS:
   -L <name> Reference Library name, e.g. hg19. Defaults to <reference> if not supplied.
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMNAME>.stats.cov.txt.
   -P <real> Proportion of reads to use in analysis as a fraction. Default: 1.
+  -S <dirpath> Path to location where genome indexing/annotation file exist or will be created. Default: -D target.
   -l Log progress to STDERR. (A few primary progress messages will always be output.)
   -h --help Report full description, usage and options."
 
@@ -31,8 +32,9 @@ GENOME=""
 REF_NAME=""
 STATSTEM=""
 FRACREADS=1
+SCRATCH=""
 
-while getopts "hlA:D:F:G:L:O:P:" opt
+while getopts "hlA:D:F:G:L:O:P:S:" opt
 do
   case $opt in
     A) ADAPTER=$OPTARG;;
@@ -42,6 +44,7 @@ do
     L) REF_NAME=$OPTARG;;
     O) STATSTEM=$OPTARG;;
     P) FRACREADS=$OPTARG;;
+    S) SCRATCH=$OPTARG;;
     l) SHOWLOG=1;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
        exit 0;;
@@ -92,6 +95,10 @@ if [ -z "$STATSTEM" ]; then
 fi
 STATSFILE="$WORKDIR/$STATSTEM"
 
+if [ -z "$SCRATCH" ];then
+  SCRATCH=$WORKDIR
+fi
+
 #--------- End command arg parsing ---------
 
 run ()
@@ -114,6 +121,7 @@ if [ $SHOWLOG -eq 1 ]; then
   fi
   echo "RUNDIR:    $RUNDIR" >&2
   echo "WORKDIR:   $WORKDIR" >&2
+  echo "SCRATCH:   $SCRATCH" >&2
   echo "FILESTEM:  $FILESTEM" >&2
   echo >&2
 fi
@@ -127,7 +135,8 @@ STAR=$RUNDIR/bin/STAR
 PICARD=/opt/picard/picard-tools-current
 
 ANNOTATION=$RUNDIR/annotations/$REF_NAME
-SCRATCH=/results/plugins/scratch/RNASeqAnalysis/$REF_NAME
+#SCRATCH=/results/plugins/scratch/RNASeqAnalysis/$REF_NAME
+SCRATCH="$SCRATCH/$REF_NAME"
 
 REF_FLAT=$ANNOTATION/refFlat
 RNA_INT=$ANNOTATION/rRNA.interval

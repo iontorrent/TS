@@ -156,7 +156,6 @@ class BFReference {
   bool GetDoRegional() { return mDoRegionalBgSub; }
   void SetIqrOutlierMult(float mult) { mIqrOutlierMult = mult; }
   void SetNumEmptiesPerRegion( int num ) { ION_ASSERT(num > 0, "Must specify positive number of empties.");  mNumEmptiesPerRegion = num; }
-  void SetDoSdat(bool _doSdat) { doSdat = _doSdat; }
   void SetT0(std::vector<float> &t0) { mT0 = t0; }
   void SetDebugH5(const std::string &file) { mDebugH5File = file; }
   float GetTraceSd(size_t wIx) { return mTraceSd[wIx]; }
@@ -177,8 +176,7 @@ class BFReference {
 	      const std::vector<int> &colStarts,
 	      int span);
   void GetNEigenScatter(arma::Mat<float> &YY, arma::Mat<float> &E, int nEigen);  
-  void GetEigenProjection(arma::Mat<float> &data, arma::Col<unsigned int> &goodRows, size_t nEigen, arma::Mat<float> &proj);
-  bool doSdat;
+  void GetEigenProjection(arma::Mat<float> &data, arma::Col<arma::uword> &goodRows, size_t nEigen, arma::Mat<float> &proj);
   bool mDoRegionalBgSub;
   float mIqrOutlierMult;
   arma::fmat mTraces;

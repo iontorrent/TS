@@ -2,7 +2,7 @@
 #include "SpatialContext.h"
 #include "HandleExpLog.h"
 #include "ImageTransformer.h"
-
+#include "ChipIdDecoder.h"
 
 void SpatialContext::DefaultSpatialContext()
 {
@@ -47,7 +47,7 @@ SpatialContext::~SpatialContext()
 void SpatialContext::FindDimensionsByType (char *explog_path)
 {
   int dims[2];
-  GetChipDim (ChipIdDecoder::GetChipType(), dims, explog_path); // @what if we're doing from wells and there are no dats?
+  GetChipDim (chipType.c_str(), dims, explog_path); // @what if we're doing from wells and there are no dats?
   chip_len_x = dims[0];
   chip_len_y = dims[1];
 }
@@ -107,6 +107,7 @@ void SpatialContext::PrintHelp()
 
 void SpatialContext::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
+    chipType = GetParamsString(json_params, "chipType", "");
 	vector<int> vec1;
 	RetrieveParameterVectorInt(opts, json_params, '-', "region-size", "", vec1);
 	if(vec1.size() > 0)

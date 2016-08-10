@@ -196,7 +196,7 @@ void ClonalFilterUpdate(  float * PolyClonalCube,
     *pPPF = ppf;
   }
 
-  float x = tmpAmpl - round(tmpAmpl);
+  float x = tmpAmpl - ::round(tmpAmpl);
   *pSSQ  = *pSSQ + x * x;
 
   if(tmpAmpl >POLYCLONAL_BAD_READ_THRESHOLD)
@@ -216,7 +216,7 @@ void EffectiveAmplitudeForRawWells(
     float copies,
     float copyDrift)
 {
-  float copyMultiplier = pow(copyDrift, ConstFlowP.getRealFnum());
+  float copyMultiplier = ::pow(copyDrift, (float)ConstFlowP.getRealFnum());
   //*AmpOut = (*AmplIn) * copies * copyMultiplier;
 
   // Copies are written separately in the new format

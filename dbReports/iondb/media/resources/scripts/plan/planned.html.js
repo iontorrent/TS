@@ -1,7 +1,6 @@
 //models.PlannedExperiment.objects.filter(isReusable=False, planExecuted=False).order_by("-date", "planName")
 
 function onDataBinding(arg) {
-	console.log("at planned.html.js onDataBinding...");
 	//20130707-TODO - does not work!!
     var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
     $('body').prepend(busyDiv);
@@ -9,7 +8,6 @@ function onDataBinding(arg) {
 }
 
 function onDataBound(arg) {
-	console.log("at planned.html.js onDataBound...");
     $('body').css("cursor", "default");
     $('.myBusyDiv').empty();
     $('body').remove('.myBusyDiv');

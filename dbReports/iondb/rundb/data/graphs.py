@@ -34,11 +34,14 @@ def bargraph():
     ax.set_yticks([])
     return fig, ax
 
+
 def bar_text(ax, text, position):
     if position > 0.003:
         position = position if position > 0.03 else 0.03
-        ax.text(position, 0.5, text, transform=ax.transAxes, fontsize=10, verticalalignment='center', horizontalalignment='center')
+        ax.text(position, 0.5, text, transform=ax.transAxes, fontsize=10,
+                verticalalignment='center', horizontalalignment='center')
     return ax
+
 
 def archive_graph_bar(request):
     ''' Generates a bar graph to display the percentage of runs
@@ -105,9 +108,10 @@ def fs_statusbar(request, percentFull, percentKeep):
 
     full = float(percentFull)
     keep = float(percentKeep)
-    
+
     try:
-        dmfilesets = models.DMFileSet.objects.exclude(auto_trigger_usage=None).filter(version=settings.RELVERSION)
+        dmfilesets = models.DMFileSet.objects.exclude(
+            auto_trigger_usage=None).filter(version=settings.RELVERSION)
         thresholds = dmfilesets.values_list('auto_trigger_usage', 'type')
         min_threshold = min([t[0] for t in thresholds]) or 0.01
     except:
@@ -117,7 +121,7 @@ def fs_statusbar(request, percentFull, percentKeep):
     # Define colors for the used disk space area based on threshold setting
     if full <= min_threshold * 0.85:
         color = IONGREEN
-    #elif full <= min_threshold * 0.90:
+    # elif full <= min_threshold * 0.90:
     #    color = IONYELLOW
     elif full < min_threshold:
         color = IONORANGE
@@ -132,29 +136,29 @@ def fs_statusbar(request, percentFull, percentKeep):
 
     # Fill in bar graph with colors representing disk capacity use and add text
     ax.barh(bottom=0, width=keep, height=0.2, left=0, color=IONYELLOW)
-    bar_text(ax, 'Keep', keep/200)
+    bar_text(ax, 'Keep', keep / 200)
 
-    if full-keep > 0:
-        ax.barh(bottom=0, width=full-keep, height=0.2, left=keep, color=color)
-        bar_text(ax, 'Used', (keep+full)/200)
+    if full - keep > 0:
+        ax.barh(bottom=0, width=full - keep, height=0.2, left=keep, color=color)
+        bar_text(ax, 'Used', (keep + full) / 200)
 
-    ax.barh(bottom=0, width=100-full, height=0.2, left=full, color=IONBLUE)
-    bar_text(ax, 'Free', (100+full)/200)
+    ax.barh(bottom=0, width=100 - full, height=0.2, left=full, color=IONBLUE)
+    bar_text(ax, 'Free', (100 + full) / 200)
 
     # Place vertical bar indicating threshold level for each dmfileset
     types = {}
-    for threshold,fileset_type in thresholds:
+    for threshold, fileset_type in thresholds:
         ax.axvline(threshold, 0, 1, color='#000000', linewidth=3, marker='d', markersize=14)
         if types.has_key(threshold):
-            types[threshold]+= ','+fileset_type[0]
+            types[threshold] += ',' + fileset_type[0]
         else:
-            types[threshold]= fileset_type[0]
+            types[threshold] = fileset_type[0]
 
-    for threshold,text in types.items():
+    for threshold, text in types.items():
         textHoriz = float(threshold) / 100
         halign = 'center'
         if len(text) > 1:
-            text = '('+text+')'
+            text = '(' + text + ')'
         if threshold <= min_threshold:
             text = 'Thresholds: ' + text
             halign = 'left' if threshold < 10 else 'right'
@@ -177,7 +181,7 @@ def fs_statusbar(request, percentFull, percentKeep):
 def archive_drivespace_bar(request):
     '''Displays as a horizontal bar chart, the free vs used space
     on the archive drive.  Will only display if it is mounted'''
-    
+
     try:
         directory = request.GET.get('path')
         # create figure
@@ -193,7 +197,7 @@ def archive_drivespace_bar(request):
             used_frac = 1
             free_frac = 0
             title = '%s' % directory
-            labels = ["Error: Could not get drive statistics",""]
+            labels = ["Error: Could not get drive statistics", ""]
 
         frac = [used_frac * 100, free_frac * 100]
 

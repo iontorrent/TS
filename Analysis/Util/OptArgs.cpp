@@ -71,10 +71,6 @@ void OptArgs::GetOption(std::string &value, const std::string &defaultValue,
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
   }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
-  }
   value = opt->mValues[0];
 }
 
@@ -85,11 +81,6 @@ void OptArgs::GetOption(std::string &value, const std::string &defaultValue,
 void OptArgs::GetOption(bool &value, const std::string &defaultValue,
 			char shortOption, const std::string &longOption) {
   OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
-  // 
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
-  }
 
   if (opt->mValues.size() == 0 || 
       opt->mValues[0] == "TRUE" || 
@@ -119,10 +110,6 @@ void OptArgs::GetOption(double &value, const std::string &defaultValue,
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
   }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
-  }
   char *end;
   int err = errno;
   errno = 0;
@@ -139,10 +126,6 @@ void OptArgs::GetOption(long &value, const std::string &defaultValue,
 	OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
 	if (opt->mValues.size() == 0) {
 		Abort("No argument specified for option: " + longOption);
-	}
-	if (opt->mValues.size() > 1) {
-		Abort("Multiple arguments specified for option: " + longOption + 
-			  " use different api or specify single option");
 	}
 	char *end;
 	int err = errno;
@@ -161,10 +144,6 @@ void OptArgs::GetOption(std::vector<double> &value, const std::string &defaultVa
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
   }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
-  }
   if(opt->mValues[0] == "")
     return;
 
@@ -178,10 +157,6 @@ void OptArgs::GetOption(std::vector<int> &value, const std::string &defaultValue
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
   }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
-  }
   if(opt->mValues[0] == "")
     return;
 
@@ -194,10 +169,6 @@ void OptArgs::GetOption(std::vector<unsigned int> &value, const std::string &def
   OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
-  }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
   }
   vector<string> words;
   value.clear();
@@ -222,10 +193,6 @@ void OptArgs::GetOption(std::vector<std::string> &value, const std::string &defa
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
   }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
-  }
   value.clear();
   if(opt->mValues[0] == "")
     return;
@@ -241,10 +208,6 @@ void OptArgs::GetOption(int &value, const std::string &defaultValue,
   OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
-  }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
   }
   char *end = NULL;
   int err = errno;
@@ -264,10 +227,6 @@ void OptArgs::GetOption(unsigned int &value, const std::string &defaultValue,
   OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
   if (opt->mValues.size() == 0) {
     Abort("No argument specified for option: " + longOption);
-  }
-  if (opt->mValues.size() > 1) {
-    Abort("Multiple arguments specified for option: " + longOption + 
-	  " use different api or specify single option");
   }
   char *end = NULL;
   int err = errno;
@@ -437,6 +396,175 @@ std::vector<int> OptArgs::GetFirstIntVector(char shortOption, const std::string 
   return (values);
 }
 
+/**
+ * Get a boolean option value for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+bool OptArgs::GetLastBoolean(char shortOption, const std::string &longOption, bool defaultValue)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue ? "true" : "false");
+
+  if (opt->mValues.size() == 0)
+    return true;
+
+  size_t n = opt->mValues.size() - 1;
+  if (opt->mValues[n] == "TRUE" or opt->mValues[n] == "true" or opt->mValues[n] == "ON" or opt->mValues[n] == "on")
+    return true;
+  if (opt->mValues[n] == "FALSE" or opt->mValues[n] == "false" or opt->mValues[n] == "OFF" or opt->mValues[n] == "off")
+    return false;
+
+  Abort("Don't recognize value: " + opt->mValues[n] + " for boolean");
+  return false; // Never actually reached
+}
+
+
+/**
+ * Get a boolean option value for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+bool OptArgs::GetLastBoolean(char shortOption, const std::string &longOption, const char * defaultValue)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+
+  if (opt->mValues.size() == 0)
+    return true;
+
+  size_t n = opt->mValues.size() - 1;
+  if (opt->mValues[n] == "TRUE" or opt->mValues[n] == "true" or opt->mValues[n] == "ON" or opt->mValues[n] == "on")
+    return true;
+  if (opt->mValues[n] == "FALSE" or opt->mValues[n] == "false" or opt->mValues[n] == "OFF" or opt->mValues[n] == "off")
+    return false;
+
+  Abort("Don't recognize value: " + opt->mValues[n] + " for boolean");
+  return false; // Never actually reached
+}
+
+
+/**
+ * Get a string option value for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+std::string OptArgs::GetLastString(char shortOption, const std::string &longOption, const std::string &defaultValue)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0)
+    Abort("No argument specified for option: " + longOption);
+
+  size_t n = opt->mValues.size() - 1;
+  return opt->mValues[n];
+}
+
+
+/**
+ * Get a string vector option value for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+std::vector<std::string> OptArgs::GetLastStringVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0) {
+    Abort("No argument specified for option: " + longOption);
+  }
+
+  size_t n = opt->mValues.size() - 1;
+  vector<string> value;
+  split(opt->mValues[n],sep,value);
+  return value;
+}
+
+
+/**
+ * Get a double option value for the givent short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+double OptArgs::GetLastDouble(char shortOption, const std::string &longOption, double defaultDouble)
+{
+  char defaultValue[64];
+  snprintf(defaultValue, 64, "%lf", defaultDouble);
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0) {
+    Abort("No argument specified for option: " + longOption);
+  }
+
+  size_t n = opt->mValues.size() - 1;
+  char *end;
+  int err = errno;
+  errno = 0;
+  double value = strtod(opt->mValues[n].c_str(), &end);
+  if (errno != 0 || *end != '\0') {
+    Abort("Error converting: " + opt->mValues[n] + " to an double for option: " + longOption);
+  }
+  errno = err;
+  return value;
+}
+
+
+/**
+ * Get a vector of 'sep' separated double option values for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+std::vector<double> OptArgs::GetLastDoubleVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0) {
+      Abort("No argument specified for option: " + longOption);
+  }
+
+  size_t n = opt->mValues.size() - 1;
+  vector<double> values;
+  if(opt->mValues[n] == "")
+    return (values);
+
+  StringToDoubleVector(values, opt->mValues[n], longOption, sep);
+  return (values);
+}
+
+
+/**
+ * Get a int option value for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+int OptArgs::GetLastInt(char shortOption, const std::string &longOption, int defaultInt)
+{
+  char defaultValue[64];
+  snprintf(defaultValue, 64, "%d", defaultInt);
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0) {
+    Abort("No argument specified for option: " + longOption);
+  }
+
+  size_t n = opt->mValues.size() - 1;
+  char *end = NULL;
+  int err = errno;
+  errno = 0;
+  int value = strtol(opt->mValues[n].c_str(), &end, 10);
+  if (errno != 0 || *end != '\0') {
+    Abort("Error converting: " + opt->mValues[n] + " to an integer for option: " + longOption);
+  }
+  errno = err;
+  return value;
+}
+
+
+/**
+ * Get a vector of 'sep' separated double option values for the given short/long key
+ * If the option appears multiple times, use the last occurrence
+ */
+std::vector<int> OptArgs::GetLastIntVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0) {
+    Abort("No argument specified for option: " + longOption);
+  }
+
+  size_t n = opt->mValues.size() - 1;
+  vector<int> values;
+  if (opt->mValues[n] == "")
+    return (values);
+
+  StringToIntVector(values, opt->mValues.at(n), longOption, sep);
+  return (values);
+}
 
 /*
  * Convert a string into a vector of integer values

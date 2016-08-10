@@ -43,11 +43,13 @@ public:
   // @brief   Resets all member variables for data collection
   void   Reset();
 
-  void   AccumulateTraingData(const LinearFitCell& other);
+  void   AccumulateTrainingData(const LinearFitCell& other);
+  void   CopyTrainingData(const LinearFitCell& other);
 
   void   GetSlopeAndInterceptFit(double &gain, double &offset) const;
   void   GetSafeSlopeAndInterceptFit(double &gain, double &offset, double safety_frac) const;
-
+  void   Prior(float center, float var, int xamples);
+  void   ReduceStrength(int xamples);
   void   GetSlopeOnlyFit(double &gain) const;
 
   double GetSlopeOnlyFitWithOffset(double offset) const;
@@ -55,10 +57,12 @@ public:
   double GetOffsetOnly() const;
 
   // @brief   Variable update for adding one more data point
-  void AddDataPoint(float prediction, float measured);
+  void   AddDataPoint(float prediction, float measured);
 
   // Varaible access functions
-  unsigned long GetNSamples() const { return nsamples_; };
+  unsigned long NumSamples() const { return nsamples_; };
+  unsigned long NumReads()   const { return nreads_; };
+  void          SetActive(bool active) { active_ = active; };
   Json::Value   DataToJson() const;
 
 private:
@@ -69,7 +73,8 @@ private:
   double            M2meas_;            //!< Centered sum of squares, measurements:  sum(m_i-E[m])
   double            Cn_;                //!< Centered co-moment sum: sum((p_i-E[p])*(m_i-E[m]))
   unsigned long     nsamples_;          //!< Number of data points collected
-
+  unsigned long     nreads_;            //!< Number of reads actually used for this
+  bool              active_;            //!< do I update number reads, or is this another data point  from the same read
 
 
 };
@@ -87,11 +92,13 @@ public:
   void  SetModelGainsAndOffsets(int num_flows, int flow_window_size);
 
   void  AddDataPoint(int flow_window, int nuc, int hp, float prediction, float measured);
+  void  FreshReadData();
 
   void  AccumulateTrainingData(const LinCalModelRegion& other);
+  void  CopyTrainingData(const LinCalModelRegion& other);
 
-  int   CreateCalibrationModel(int region_idx, unsigned long min_nsamples);
-  int   CreateOldStyleCalibrationModel(int region_idx, unsigned long min_nsamples);
+  int   CreateCalibrationModel(int region_idx, unsigned long min_nsamples, float max_gain_shift, bool verbose);
+  int   CreateOldStyleCalibrationModel(int region_idx, unsigned long min_nsamples, bool verbose);
 
   void  CoefficientZeroOrderHold(int start_hp);
 
@@ -140,18 +147,32 @@ public:
   // Constructor for calibration training
   LinearCalibrationModel(OptArgs& opts, const CalibrationContext& calib_context);
 
+  void Defaults(); // shared default assumptions for all constructors
+
   bool  InitializeModelFromJson(Json::Value &json, const int num_flows=0);
 
   bool  InitializeModelFromTxtFile(string model_file_name, int hp_threshold, const int num_flows=0);
 
   void  CleanSlate();
 
-  bool  AddTrainingRead(const ReadAlignmentInfo& read_alignment);
+  bool  AddTrainingRead(const ReadAlignmentInfo& read_alignment,  LinearCalibrationModel &linear_sim);
+  bool  AddBlindTrainingRead(const ReadAlignmentInfo& read_alignment, LinearCalibrationModel &linear_model_cal_sim);
+  bool  FilterBlindReads(const ReadAlignmentInfo& read_alignment, LinearCalibrationModel &linear_model_cal_sim,
+                                                int my_region, int iHP, float &yobs, float &xobs, int &governing_hp);
+  bool  FilterBlindReadsOld(const ReadAlignmentInfo& read_alignment, LinearCalibrationModel &linear_model_cal_sim,
+                                                int my_region, int iHP, float &yobs, float &xobs, int &governing_hp);
+  bool  FilterTrainingReads(const ReadAlignmentInfo& read_alignment, LinearCalibrationModel &linear_model_cal_sim,
+                                                int my_region, int iHP, float &yobs, float &xobs, int &governing_hp);
 
   void  AccumulateTrainingData(const LinearCalibrationModel& other);
+  void  CopyTrainingData(const LinearCalibrationModel& other);
 
-  bool  CreateCalibrationModel();
+  bool  CreateCalibrationModel(bool verbose=true);
+  void  SetModelGainsAndOffsets(); // need to transfer model gains to expanded form if using trained model directly
 
+  // helper function for polishing after linear model
+  float ReturnLocalInterval(float original_step, float local_prediction, float called_hp, float finish_hp,
+                                                    int my_region, int my_flow_window, int my_nuc_idx);
 
   // @brief   Writing model information to a json structure
   void  ExportModelToJson(Json::Value &json, string run_id) const;
@@ -172,6 +193,7 @@ public:
   // Variant caller interface
   void  getAB(MultiAB &multi_ab, int x, int y) const;
 
+  bool DoTraining() const { return do_training_; };
   bool is_enabled() const { return is_enabled_; };
   void disable() { is_enabled_=false; };
 
@@ -191,6 +213,7 @@ private:
   int                            max_hp_calibrated_;       //!< Maximum HP value for which we could accumulate significant amount of training data
 
   unsigned long                  min_num_samples_;         //!< Minimum number of required samples to compute parameters
+  unsigned long                  min_num_reads_;           //!< minimum number of reads to escalate training: don't want all data from one read
   float                          min_state_inphase_;       //!<
   double                         max_scaled_residual_;     //!<
 
@@ -198,9 +221,13 @@ private:
   bool                           is_enabled_;
   bool                           do_training_;
   int                            training_mode_;
+  bool                           multi_train_;
+  int                            multi_weight_;
+  float                          max_gain_shift_;          //!< control change between models as we increase, useful for partial training
   string                         training_method_;
   bool                           verbose_;
   bool                           debug_;
+  bool                            spam_debug_;
 
 };
 

@@ -20,7 +20,9 @@ from selenium.common.exceptions import NoSuchElementException
 
 from iondb.rundb.tests.selenium.webdriver import CustomWebDriver
 
+
 class SeleniumTestCase(LiveServerTestCase):
+
     """
     A base test case for selenium, providing hepler methods for generating
     clients and logging in profiles.
@@ -32,14 +34,14 @@ class SeleniumTestCase(LiveServerTestCase):
     @classmethod
     def setUpClass(cls):
         LOGGER.setLevel(logging.WARNING)
-        
+
         # Instantiating the WebDriver will load your browser
         cls.wd = CustomWebDriver()
         cls.server_url = settings.TEST_SERVER_URL
         ##cls.server_url = 'http://ts-sandbox.itw'
         cls.wd.get("%s%s" % (cls.server_url, '/login'))
         ##the login now persists between tests
-        ##so we only need to login with the username/password if the page 
+        ##so we only need to login with the username/password if the page
         ##has the username fields
         try:
             #enter the username and password
@@ -54,25 +56,25 @@ class SeleniumTestCase(LiveServerTestCase):
 
 
     def delete_planned_experiment(self, pk):
-        logger.info(">>>> Going to delete_planned_experiment... pk=%s" %(str(pk)))
-        
+        logger.info(">>>> Going to delete_planned_experiment... pk=%s" % (str(pk)))
+
         self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/{0}/'.format(pk)
-        
+
         host = settings.TEST_SERVER_URL
         url = host + self.latest_pe_api_url
         request = urllib2.Request(url)
-        
-        base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
-        request.add_header("Authorization", "Basic %s" %(base64String))
-        request.get_method = lambda : 'DELETE'
+
+        base64String = base64.encodestring("%s:%s" % ("ionadmin", "ionadmin")).replace("\n", "")
+        request.add_header("Authorization", "Basic %s" % (base64String))
+        request.get_method = lambda: 'DELETE'
         response = urllib2.urlopen(request)
 
         #logger.info(">>>> delete_planned_experiment... DELETE response=%s" %(response))
-        
+
 #        json = simplejson.loads(response.read())
 #        return json['objects'][0]
 
-        
+
 
     def get_latest_planned_experiment(self):
         try:
@@ -82,9 +84,9 @@ class SeleniumTestCase(LiveServerTestCase):
             url = host + self.latest_pe_api_url
             request = urllib2.Request(url)
 
-            base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
-            request.add_header("Authorization", "Basic %s" %(base64String))
-            
+            base64String = base64.encodestring("%s:%s" % ("ionadmin", "ionadmin")).replace("\n", "")
+            request.add_header("Authorization", "Basic %s" % (base64String))
+
             response = urllib2.urlopen(request)
             json = simplejson.loads(response.read())
             return json['objects'][0]

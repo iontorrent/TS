@@ -24,8 +24,8 @@ from iondb.rundb.data import dmactions_types
 
 DM_FILE_SETS = [
     {
-        'type' : dmactions_types.SIG,
-        'description':'Required input files for signal processing',
+        'type': dmactions_types.SIG,
+        'description': 'Required input files for signal processing',
         'include': [
             '.[^/]*\.dat',
             'X\d+_Y\d+.*\.dat',
@@ -54,7 +54,7 @@ DM_FILE_SETS = [
             '.*?histo\.dat',
             ],
         'keepwith':{
-            dmactions_types.BASE:[
+            dmactions_types.BASE: [
                 '.[^/]*?xplog\.txt',
             ],
         },
@@ -65,8 +65,8 @@ DM_FILE_SETS = [
         'del_empty_dir': True,
     },
     {
-        'type' : dmactions_types.BASE,
-        'description':'Required input files for basecalling',
+        'type': dmactions_types.BASE,
+        'description': 'Required input files for basecalling',
         'include': [
             'sigproc_results/1\.wells',
             'sigproc_results/.[^/]*?\.bin',
@@ -98,9 +98,9 @@ DM_FILE_SETS = [
         'exclude':[
             ],
         'keepwith':{
-            dmactions_types.OUT:[
-            'sigproc_results/analysis\.bfmask\.stats',
-            'sigproc_results/Bead_density_.*?\.png',
+            dmactions_types.OUT: [
+                'sigproc_results/analysis\.bfmask\.stats',
+                'sigproc_results/Bead_density_.*?\.png',
             ],
             dmactions_types.SIG:[
                 '.[^/]*?xplog\.txt',
@@ -113,8 +113,8 @@ DM_FILE_SETS = [
         'del_empty_dir': True,
     },
     {
-        'type' : dmactions_types.OUT,
-        'description':'Report rendering, deliverables, plugins output',
+        'type': dmactions_types.OUT,
+        'description': 'Report rendering, deliverables, plugins output',
         'include': [
             'alignment.*?\.summary',
             'rawlib.alignment.summary',
@@ -165,11 +165,11 @@ DM_FILE_SETS = [
             '.*?unfiltered.trimmed.*?',
             ],
         'keepwith':{
-            dmactions_types.BASE:[
+            dmactions_types.BASE: [
                 'sigproc_results/analysis.bfmask.stats',
                 'sigproc_results/Bead_density_.*?\.png',
             ],
-                },
+        },
         'version': settings.RELVERSION,
         'auto_trigger_age': '180',
         'auto_trigger_usage': '90',
@@ -177,8 +177,8 @@ DM_FILE_SETS = [
         'del_empty_dir': True,
     },
     {
-        'type' : dmactions_types.INTR,
-        'description':'Files used for debugging only',
+        'type': dmactions_types.INTR,
+        'description': 'Files used for debugging only',
         'include': [
             '.*?',
             '.*?bcfiles',
@@ -296,7 +296,7 @@ DM_FILE_SETS = [
             '.*dcOffset/.*',
             ],
         'keepwith':{
-            dmactions_types.BASE:[
+            dmactions_types.BASE: [
                 'sigproc_results/analysis.bfmask.stats',
                 'sigproc_results/Bead_density_.*?\.png',
             ],
@@ -306,7 +306,7 @@ DM_FILE_SETS = [
                 'plugin_out.*?',
                 'pdf.*?',
             ],
-                },
+        },
         'version': settings.RELVERSION,
         'auto_trigger_age': '7',
         'auto_trigger_usage': '20',
@@ -316,8 +316,8 @@ DM_FILE_SETS = [
 
     # Filesets for reports created with TS2.2
     {
-        'type' : dmactions_types.SIG,
-        'description':'Required input files for signal processing',
+        'type': dmactions_types.SIG,
+        'description': 'Required input files for signal processing',
         'include': [
             '.[^/]*\.dat',
             'X\d+_Y\d+.*\.dat',
@@ -352,8 +352,8 @@ DM_FILE_SETS = [
         'del_empty_dir': True,
     },
     {
-        'type' : dmactions_types.BASE,
-        'description':'Required input files for basecalling',
+        'type': dmactions_types.BASE,
+        'description': 'Required input files for basecalling',
         'include': [
             '1\.wells',
             '.[^/]*?\.bin',
@@ -369,11 +369,11 @@ DM_FILE_SETS = [
         'exclude':[
             ],
         'keepwith':{
-            dmactions_types.OUT:[
-            'analysis\.bfmask\.stats',
-            'Bead_density_.*?\.png',
+            dmactions_types.OUT: [
+                'analysis\.bfmask\.stats',
+                'Bead_density_.*?\.png',
             ],
-                },
+        },
         'version': '2.2',
         'auto_trigger_age': '60',
         'auto_trigger_usage': '90',
@@ -381,8 +381,8 @@ DM_FILE_SETS = [
         'del_empty_dir': True,
     },
     {
-        'type' : dmactions_types.OUT,
-        'description':'Report rendering, deliverables, plugins output',
+        'type': dmactions_types.OUT,
+        'description': 'Report rendering, deliverables, plugins output',
         'include': [
             'alignment.*?\.summary',
             'rawlib.alignment.summary',
@@ -426,11 +426,11 @@ DM_FILE_SETS = [
             '.*?unfiltered.trimmed.*?',
             ],
         'keepwith':{
-            dmactions_types.BASE:[
+            dmactions_types.BASE: [
                 'analysis.bfmask.stats',
                 'Bead_density_.*?\.png',
             ],
-                },
+        },
         'version': '2.2',
         'auto_trigger_age': '180',
         'auto_trigger_usage': '90',
@@ -438,8 +438,8 @@ DM_FILE_SETS = [
         'del_empty_dir': True,
     },
     {
-        'type' : dmactions_types.INTR,
-        'description':'Files used for debugging only',
+        'type': dmactions_types.INTR,
+        'description': 'Files used for debugging only',
         'include': [
             '.*?',
             '.*?bcfiles',
@@ -532,7 +532,7 @@ DM_FILE_SETS = [
             '.[^/]*?\.fastq\.zip',
             ],
         'keepwith':{
-            dmactions_types.BASE:[
+            dmactions_types.BASE: [
                 'analysis.bfmask.stats',
                 'Bead_density_.*?\.png',
             ],
@@ -542,7 +542,7 @@ DM_FILE_SETS = [
                 'plugin_out.*?',
                 'pdf.*?',
             ],
-                },
+        },
         'version': '2.2',
         'auto_trigger_age': '7',
         'auto_trigger_usage': '20',
@@ -551,11 +551,13 @@ DM_FILE_SETS = [
     },
 ]
 
+
 def main():
 
     for dmfileset in DM_FILE_SETS:
         try:
-            dmfileset_obj, created = models.DMFileSet.objects.get_or_create(type=dmfileset['type'], version=dmfileset['version'])
+            dmfileset_obj, created = models.DMFileSet.objects.get_or_create(
+                type=dmfileset['type'], version=dmfileset['version'])
             if created:
                 # New object at this version
                 # apply these values to new object
@@ -570,7 +572,8 @@ def main():
                 # Check for previous version objects
                 try:
                     # Apply previous version object's values for auto age and usage
-                    olddm = models.DMFileSet.objects.filter(type=dmfileset['type']).exclude(version=dmfileset['version'])
+                    olddm = models.DMFileSet.objects.filter(
+                        type=dmfileset['type']).exclude(version=dmfileset['version'])
                     olddm = olddm[0]
                     dmfileset_obj.auto_trigger_age = olddm.auto_trigger_age
                     dmfileset_obj.auto_trigger_usage = olddm.auto_trigger_usage

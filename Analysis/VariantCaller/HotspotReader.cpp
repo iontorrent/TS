@@ -53,6 +53,14 @@ void HotspotReader::Initialize(const ReferenceReader &ref_reader, const string& 
   // }
 }
 
+void HotspotReader::Initialize(const ReferenceReader &ref_reader)
+{
+  ref_reader_ = &ref_reader;
+  line_number_ = 0;
+
+  hotspot_vcf_.parseSamples = false;
+  has_more_variants_ = false;
+}
 
 void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 {
@@ -111,7 +119,7 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
       }
     }
   }
-  // std::cout << "BL size: " << hint_vec.size() << endl; 
+   //std::cout << "BL size: " << hint_vec.size() << endl; 
 }
 		  
   
@@ -125,7 +133,13 @@ void HotspotReader::FetchNextVariant()
   vcf::Variant current_hotspot(hotspot_vcf_);
 
   while (has_more_variants_) {
-    has_more_variants_ = hotspot_vcf_.getNextVariant(current_hotspot);
+    try {
+        has_more_variants_ = hotspot_vcf_.getNextVariant(current_hotspot);
+    }
+    catch (...) {
+        cerr << "FATAL ERROR: invalid variant in hotspot file. Check the file format " << current_hotspot.sequenceName << endl;
+        exit(1);
+    }
     if (not has_more_variants_)
       return;
 

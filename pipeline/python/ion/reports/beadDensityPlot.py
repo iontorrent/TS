@@ -7,7 +7,7 @@ import tempfile
 # matplotlib/numpy compatibility
 os.environ['HOME'] = tempfile.mkdtemp()
 from matplotlib import use
-use("Agg",warn=False)
+use("Agg", warn=False)
 from matplotlib import pyplot
 import matplotlib.cm as cm
 
@@ -30,7 +30,6 @@ def imresize(arr, size, interp='bilinear', mode=None):
     return scipy.misc.fromimage(imnew)
 
 
-
 def reasonable_shrink(scores, bound=1000, threshold=2000):
     """Perform a smooth downsampling of the data if it is too large."""
     h, w = scores.shape
@@ -46,37 +45,37 @@ def reasonable_shrink(scores, bound=1000, threshold=2000):
 def makeContourMap(arr, HEIGHT, WIDTH, outputId, maskId, plt_title, average, outputdir, barcodeId=-1, vmaxVal=100):
     # downsample P2 bfmask data
     H, W = arr.shape
-    if max(H,W)>20000 and (H % 2 == 0) and (W % 2 == 0):
-        h=H/2
-        w=W/2
-        arr = arr.reshape((h,H/h,w,W/w)).mean(3).mean(1)
+    if max(H, W) > 20000 and (H % 2 == 0) and (W % 2 == 0):
+        h = H/2
+        w = W/2
+        arr = arr.reshape((h, H/h, w, W/w)).mean(3).mean(1)
         HEIGHT, WIDTH = arr.shape
 
     # Compute an array whose values are the sum [0-100] of a 10x10 well area around each well in bfmask_data.
-    scores = scipy.ndimage.correlate(arr, numpy.ones((10,10), dtype=numpy.int16), mode='reflect')
+    scores = scipy.ndimage.correlate(arr, numpy.ones((10, 10), dtype=numpy.int16), mode='reflect')
     del arr
     scores = reasonable_shrink(scores)
     makeContourPlot(scores, average, HEIGHT, WIDTH, outputId, maskId, plt_title, outputdir, barcodeId, vmaxVal)
-    pil_transposed_scores =numpy.flipud(scores)
+    pil_transposed_scores = numpy.flipud(scores)
     makeRawDataPlot(pil_transposed_scores, outputId, outputdir)
     makeFullBleed(pil_transposed_scores, outputId, outputdir)
 
 
 def getFormatForVal(value):
-    if(numpy.isnan(value)): value = 0 #Value here doesn't really matter b/c printing nan will always result in -nan
-    if(value==0): value=0.01
+    if(numpy.isnan(value)): value = 0  # Value here doesn't really matter b/c printing nan will always result in -nan
+    if(value == 0): value = 0.01
     precision = 2 - int(math.ceil(math.log10(value)))
-    if(precision>4): precision=4;
+    if(precision > 4): precision = 4;
     frmt = "%%0.%df" % precision
     return frmt
 
 
-def getTicksForMaxVal (maxVal):
-    #Note, function is only effective for maxVal range between 5 and 100
-    ticksVal = [0,10,20,30,40,50,60,70,80,90,100]
-    if(maxVal<=10): ticksVal = map(lambda x:x/10.0,ticksVal)
-    elif(maxVal<=20): ticksVal = map(lambda x:x/5.0,ticksVal)
-    elif(maxVal<=50): ticksVal = map(lambda x:x/2.0,ticksVal)
+def getTicksForMaxVal(maxVal):
+    # Note, function is only effective for maxVal range between 5 and 100
+    ticksVal = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    if(maxVal <= 10): ticksVal = map(lambda x: x/10.0, ticksVal)
+    elif(maxVal <= 20): ticksVal = map(lambda x: x/5.0, ticksVal)
+    elif(maxVal <= 50): ticksVal = map(lambda x: x/2.0, ticksVal)
     return ticksVal
 
 
@@ -131,11 +130,11 @@ def makeContourPlot(scores, average, HEIGHT, WIDTH, outputId, maskId, plt_title,
     ax = fig.add_subplot(111)
     ax.set_xlabel(str(WIDTH) + ' wells')
     ax.set_ylabel(str(HEIGHT) + ' wells')
-    if(barcodeId!=-1):
-        if(barcodeId==0): maskId = "No Barcode Match,"
+    if(barcodeId != -1):
+        if(barcodeId == 0): maskId = "No Barcode Match,"
         else:             maskId = "Barcode Id %d," % barcodeId
     if plt_title != '':
-        maskId = '%s\n%s' % (plt_title,maskId)
+        maskId = '%s\n%s' % (plt_title, maskId)
     ax.set_title('%s Loading Density (Avg ~ %0.f%%)' % (maskId, average))
     ax.autoscale_view()
     color_axis = ax.imshow(scores, vmin=0, vmax=vmaxVal, origin='lower', cmap=cm.jet)
@@ -164,9 +163,9 @@ def extractMaskInfo(filename):
 
 def makeBarcodeArr(qBcId, row, col, bcIds, HEIGHT, WIDTH):
     # TODO: x/y are reversed from what is typical
-    #print "makeBarcodeArr", qBcId, row, col, bcIds, HEIGHT, WIDTH
+    # print "makeBarcodeArr", qBcId, row, col, bcIds, HEIGHT, WIDTH
     counts = 0
-    arr = numpy.zeros((HEIGHT,WIDTH))
+    arr = numpy.zeros((HEIGHT, WIDTH))
     for i in range(len(row)):
         if qBcId == bcIds[i]:
             arr[row[i], col[i]] = 1
@@ -175,27 +174,27 @@ def makeBarcodeArr(qBcId, row, col, bcIds, HEIGHT, WIDTH):
 
 
 def extractBarcodeMaskInfo(filePath):
-    INPUTFILE=filePath
+    INPUTFILE = filePath
     print "Reading", INPUTFILE
-    beadlist = numpy.loadtxt(INPUTFILE,dtype='int',comments='#')
-    WIDTH=int(beadlist[0,0])
-    HEIGHT=int(beadlist[0,1])
-    bcbead_row = (beadlist[1:,0])  #really y, but is first column
-    bcbead_col = (beadlist[1:,1])  #really x, but is the second column
-    bcbead_bcIds = (beadlist[1:,2])
-    
+    beadlist = numpy.loadtxt(INPUTFILE, dtype='int', comments='#')
+    WIDTH = int(beadlist[0, 0])
+    HEIGHT = int(beadlist[0, 1])
+    bcbead_row = (beadlist[1:, 0])  # really y, but is first column
+    bcbead_col = (beadlist[1:, 1])  # really x, but is the second column
+    bcbead_bcIds = (beadlist[1:, 2])
+
     unique_barcodeIds = dict.fromkeys(bcbead_bcIds).keys();
     print "Unique barcode ids found: ", unique_barcodeIds
-    
+
     return unique_barcodeIds, HEIGHT, WIDTH, bcbead_row, bcbead_col, bcbead_bcIds
 
 
 def genHeatmap(filePath, bfmaskstatspath, outputdir, plot_title):
     #
-    #Called from TLScript.py
+    # Called from TLScript.py
     #
 
-    #provide loading density(average) and overwrite internal calculation
+    # provide loading density(average) and overwrite internal calculation
     statsparser = ConfigParser.RawConfigParser()
     statsparser.read(bfmaskstatspath)
     total_wells = float(statsparser.get('global', 'Total Wells'))
@@ -213,9 +212,9 @@ def genHeatmap(filePath, bfmaskstatspath, outputdir, plot_title):
     makeContourMap(beadarr, HEIGHT, WIDTH, outputId, maskId, plot_title, average, outputdir)
 
 
-#MaskBead.mask contains all well coordinations with Beads (Bead Wells = NUMBER), see bfmask.stats
+# MaskBead.mask contains all well coordinations with Beads (Bead Wells = NUMBER), see bfmask.stats
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('maskfile', default='bfmask.bin', help='e.g. bfmask.bin')

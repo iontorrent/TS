@@ -10,6 +10,8 @@ from ion.utils.timeout import timeout
 
 # Times out after 60 seconds
 #@timeout(60,None)
+
+
 def disk_attributes(directory):
     '''returns disk attributes'''
     try:
@@ -25,18 +27,37 @@ def disk_attributes(directory):
     return (totalSpace, availSpace, freeSpace, blocksize)
 
 
+def get_disk_attributes_gb(directory):
+    ''' returns disk attributes in GB '''
+    stats = {
+        'disksize': 0,
+        'diskfree': 0,
+        'percentfull': 0,
+    }
+    try:
+        total, availSpace, freeSpace, bsize = disk_attributes(directory)    # bytes
+        stats['disksize'] = float(total*bsize)/(1024*1024*1024)
+        stats['diskfree'] = float(availSpace*bsize)/(1024*1024*1024)
+        # free_gb = float(freeSpace*bsize)/(1024*1024*1024)
+        stats['percentfull'] = 100-(float(availSpace)/float(total)*100) if total > 0 else 0
+    except:
+        raise
+
+    return stats
+
+
 def percent_full(directory):
     '''returns percentage of disk in-use'''
     try:
-        totalSpace, availSpace, f, b = disk_attributes(directory)
+        totalSpace, availSpace, _, _ = disk_attributes(directory)
     except:
         raise
     else:
-        if not (totalSpace > 0):
-            return (name, 0)
-        percent_full = 100-(float(availSpace)/float(totalSpace)*100)
+        if not totalSpace > 0:
+            return 0
+        percentFull = 100-(float(availSpace)/float(totalSpace)*100)
 
-    return percent_full
+    return percentFull
 
 
 def test_sigproc_infinite_regression(directory):
@@ -47,7 +68,7 @@ def test_sigproc_infinite_regression(directory):
     infinite regression.
     We detect this situation and delete the link file.
     '''
-    testfile = os.path.join(directory,'sigproc_results')
+    testfile = os.path.join(directory, 'sigproc_results')
     if os.path.islink(testfile):
         if os.path.samefile(directory, testfile):
             os.unlink(testfile)
@@ -76,13 +97,13 @@ def getdeviceid(dirpath):
 def getdiskusage(directory):
     # Try an all-python solution here - in case the suprocess spawning is causing grief.  We could be opening
     # hundreds of instances of shells above.
-    def dir_size (start):
+    def dir_size(start):
         if not start or not os.path.exists(start):
             return 0
 
         file_walker = (
             os.path.join(root, f)
-            for root, _, files in os.walk( start )
+            for root, _, files in os.walk(start)
             for f in files
         )
         total = 0L
@@ -145,10 +166,10 @@ def unzip_archive(root, data):
     zip_file = zipfile.ZipFile(data, 'r')
     namelist = zip_file.namelist()
     namelist = valid_files(namelist)
-    prefix, files = get_common_prefix(namelist)
+    _, files = get_common_prefix(namelist)
     make_relative_directories(root, files)
     out_names = [(n, f) for n, f in zip(namelist, files) if
-                                                    os.path.basename(f) != '']
+                 os.path.basename(f) != '']
     for key, out_name in out_names:
         if os.path.basename(out_name) != "":
             full_path = os.path.join(root, out_name)
@@ -157,16 +178,16 @@ def unzip_archive(root, data):
                 output_file = open(full_path, 'wb')
                 output_file.write(contents.read())
                 output_file.close()
-            except IOError as err:
-                print("For zip's '%s', could not open '%s'" % (key, full_path))
+            except IOError:
+                print "For zip's '%s', could not open '%s'" % (key, full_path)
     return [f for n, f in out_names]
 
 
 def ismountpoint(directory):
     '''shell command to run mountpoint tool'''
-    cmd = ['/bin/mountpoint',directory]
+    cmd = ['/bin/mountpoint', directory]
     p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = p1.communicate()
+    p1.communicate()
     return p1.returncode
 
 
@@ -184,8 +205,25 @@ def is_mounted(path):
 
 
 def get_inodes(partition):
-    #df -i partition|awk 'NR>1 {print $2, $3, $4}'
+    # df -i partition|awk 'NR>1 {print $2, $3, $4}'
     inodes_total = os.statvfs(partition).f_files
     inodes_available = os.statvfs(partition).f_favail
     inodes_used = inodes_total - inodes_available
     return (inodes_total, inodes_used, inodes_available)
+
+
+def rename_extension(path, old_ext, new_ext):
+    # the old and new extensions must contain the '.' when sent to this function
+    import fnmatch
+    exten = "*" + old_ext
+
+    # loops through all files in the given directory and all of its subdirectories
+    # returns only the files that have the extension "exten"
+    all_files = [os.path.join(dirpath, f)
+                 for dirpath, _, files in os.walk(os.path.join('/etc/apt'))
+                 for f in fnmatch.filter(files, exten)]
+    # this ensures that the installed packages will come from only the usb.
+    for filename in all_files:
+        newfile = filename[:-(len(old_ext))]
+        newfile = newfile + new_ext
+        os.rename(filename, newfile)

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstring>
 #include <boost/math/distributions/poisson.hpp>
+#include <boost/algorithm/string.hpp>
 #include "viterbi.h"
 #include "ReferenceReader.h"
 #include <Variant.h>
@@ -33,7 +34,73 @@
 #define MAX_DP "MAX_DP"
 #define MIN_DP "MIN_DP"
 
-void build_index(const string &path_to_gz);
+void build_index(const string &path_in) {
+  char buffer[33];
+  int return_code = 0;
+  string path = path_in;
+  string path_gz = path_in + ".gz";
+  // sort
+  vector<string> header;
+  map<string, string> lines;
+  string line;
+  ifstream fin(path.c_str());
+  string prev_chr = "";
+  int order = 0;
+  std::map<string, int> chr_order;
+  string chr_key = "";
+  string line_key = "";
+  if (fin.is_open())
+  {
+    while (getline(fin, line))
+    {
+      if ((line.length() > 0) and (line[0] == '#')) {header.push_back(line);}
+      else {
+        vector<string> strs;
+        boost::split(strs, line, boost::is_any_of("\t"));
+        if (strs.size() > 1) {
+          string chr = strs[0];
+		  std::map<string, int>::iterator iter = chr_order.find(chr);
+		  if (iter == chr_order.end()) {order++; chr_order[chr] = order;}
+		  sprintf(buffer, "%d", chr_order[chr]);
+		  chr_key = buffer;
+		  while (chr_key.length() < 3) {chr_key = "0" + chr_key;}
+          string position = strs[1];
+		  while (position.length() < 9) {position = "0" + position;}
+		  line_key = "";
+		  line_key.reserve(line.length());
+		  for (unsigned int index = 2; (index < strs.size()); ++index) {"\t" + line_key += strs[index];}
+		  string key = chr_key + ":" + position + line_key;
+          lines[key] = line;
+        }
+      }
+    }
+    fin.close();
+  }
+  ofstream fout;
+  fout.open(path.c_str());
+  for (vector<string>::iterator iter = header.begin(); (iter != header.end()); ++iter) {
+	  fout << *iter << endl;
+  }
+  for (map<string, string>::iterator iter = lines.begin(); (iter != lines.end()); ++iter) {
+    fout << iter->second << endl;
+  }
+  fout.close();
+  // compress
+  bgzf_stream* gvcf_out;
+  gvcf_out = new bgzf_stream(path_gz);
+  for (vector<string>::iterator iter = header.begin(); (iter != header.end()); ++iter) {
+	  *gvcf_out << *iter << "\n";
+  }
+  for (map<string, string>::iterator iter = lines.begin(); (iter != lines.end()); ++iter) {
+    *gvcf_out << iter->second << "\n";
+  }
+  if (gvcf_out) {delete gvcf_out;}
+  header.clear();
+  lines.clear();
+  // index
+  int tab = ti_index_build(path_gz.c_str(), &ti_conf_vcf);
+  if (tab == -1) {cerr << "build_index failed on tabix. " << return_code << endl;}
+}
 
 using namespace std;
 
@@ -119,9 +186,20 @@ bool PriorityQueue::get_next_variant(vcf::Variant* current) {
   if (current->vcf->_done) return false;
   bool has_next = current->vcf->getNextVariant(*current);
   if (!has_next) return false;
-  map<string, vector<string> >::iterator a = current->info.find("FR");
-  if (a == current->info.end()) {
-    current->info["FR"].push_back(".");
+  if (current->sampleNames.size() > 0) {
+    map<string, vector<string> >::iterator a = current->samples[current->sampleNames[0]].find("FR");
+    if (a == current->samples[current->sampleNames[0]].end()) {
+      a = current->info.find("FR");
+      if (a == current->info.end()) {
+        current->info["FR"].push_back(".");
+      }
+    }
+  }
+  else {
+    map<string, vector<string> >::iterator a = current->info.find("FR");
+    if (a == current->info.end()) {
+      current->info["FR"].push_back(".");
+    }
   }
   return has_next;
 }
@@ -186,11 +264,11 @@ VcfOrderedMerger::VcfOrderedMerger(string& novel_tvc,
                                    novel_queue(novel_tvc, *this, r, w, la, true),
                                    assembly_queue(assembly_tvc, *this, r, w, la, true),
                                    hotspot_queue(hotspot_tvc, *this, r, w, la),
-                                   bgz_out(output_tvc),
+                                   bgz_out(output_tvc.c_str()),
                                    current_cov_info(NULL) {
   if (!input_depth.empty()) {
     depth_in = (istream *)((input_depth == DEFAULT_STDIN_PARAM) ? &cin : new ifstream(input_depth.c_str()));
-    gvcf_out = new bgzf_stream(gvcf_output);
+    gvcf_out = new ofstream(gvcf_output.c_str());
     next_cov_entry();
   }
   write_header(novel_queue.variant_call_file(), path_to_json);
@@ -199,7 +277,7 @@ VcfOrderedMerger::VcfOrderedMerger(string& novel_tvc,
 
 VcfOrderedMerger::~VcfOrderedMerger() {
   if (depth_in && depth_in != &cin) delete depth_in;
-  if (gvcf_out) delete gvcf_out;
+  if (gvcf_out) {gvcf_out->close(); delete gvcf_out;}
 }
 
 template <typename T>
@@ -250,7 +328,8 @@ void VcfOrderedMerger::perform() {
     assembly_queue.next();
   }
   while (hotspot_queue.has_value()) {
-    blacklist_check();
+    blacklist_check(hotspot_queue.current());
+	hotspot_queue.next();
   }
   while (current_target != targets_manager.merged.end()) {
     gvcf_finish_region();
@@ -415,41 +494,41 @@ void VcfOrderedMerger::generate_novel_annotations(vcf::Variant* variant) {
 
 }
 
-void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry) {
+void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf::Variant* hotspot) {
   string annotation_ref_extension;
   long record_ref_extension = 0;
-  if (hotspot_queue.current()->ref.length() > merged_entry->ref.length()) {
-    record_ref_extension = hotspot_queue.current()->ref.length() - merged_entry->ref.length();
+  if (hotspot->ref.length() > merged_entry->ref.length()) {
+    record_ref_extension = hotspot->ref.length() - merged_entry->ref.length();
   }
-  if (hotspot_queue.current()->ref.length() < merged_entry->ref.length()) {
-    annotation_ref_extension = merged_entry->ref.substr(hotspot_queue.current()->ref.length());
+  if (hotspot->ref.length() < merged_entry->ref.length()) {
+    annotation_ref_extension = merged_entry->ref.substr(hotspot->ref.length());
   }
 
   // Form blacklist
   map<string, string> blacklist;
-  map<string, vector<string> >::iterator bstr = hotspot_queue.current()->info.find("BSTRAND");
-  if (bstr != hotspot_queue.current()->info.end())
-    for (vector<string>::iterator key = hotspot_queue.current()->alt.begin(), v = bstr->second.begin();
-         key != hotspot_queue.current()->alt.end() && v != bstr->second.end(); key++, v++) {
+  map<string, vector<string> >::iterator bstr = hotspot->info.find("BSTRAND");
+  if (bstr != hotspot->info.end())
+    for (vector<string>::iterator key = hotspot->alt.begin(), v = bstr->second.begin();
+         key != hotspot->alt.end() && v != bstr->second.end(); key++, v++) {
       blacklist[*key] = *v;
     }
 
   vector<string> filtered_oid;
 
-  for (vector<string>::iterator oid = hotspot_queue.current()->info["OID"].begin(),
-           opos = hotspot_queue.current()->info["OPOS"].begin(),
-           oref = hotspot_queue.current()->info["OREF"].begin(), oalt = hotspot_queue.current()->info["OALT"].begin(),
-           omapalt = hotspot_queue.current()->info["OMAPALT"].begin();
-       oid != hotspot_queue.current()->info["OID"].end() && opos != hotspot_queue.current()->info["OPOS"].end() &&
-       oref != hotspot_queue.current()->info["OREF"].end() && oalt != hotspot_queue.current()->info["OALT"].end() &&
-       omapalt != hotspot_queue.current()->info["OMAPALT"].end();
+  for (vector<string>::iterator oid = hotspot->info["OID"].begin(),
+           opos = hotspot->info["OPOS"].begin(),
+           oref = hotspot->info["OREF"].begin(), oalt = hotspot->info["OALT"].begin(),
+           omapalt = hotspot->info["OMAPALT"].begin();
+       oid != hotspot->info["OID"].end() && opos != hotspot->info["OPOS"].end() &&
+       oref != hotspot->info["OREF"].end() && oalt != hotspot->info["OALT"].end() &&
+       omapalt != hotspot->info["OMAPALT"].end();
        oid++, opos++, oref++, oalt++, omapalt++) {
     if (!blacklist.empty() && blacklist[*omapalt] != ".")
       continue;
     filtered_oid.push_back(*oid);
 
     if (record_ref_extension) {
-      if ((int)omapalt->length() < record_ref_extension || hotspot_queue.current()->ref.substr(hotspot_queue.current()->ref.length() - record_ref_extension) !=
+      if ((int)omapalt->length() < record_ref_extension || hotspot->ref.substr(hotspot->ref.length() - record_ref_extension) !=
           omapalt->substr(omapalt->length() - record_ref_extension)) {
         cout << UNIFY_VARIANTS << " Hotspot annotation " << merged_entry->sequenceName
         << ":" << merged_entry->position << ", allele " << *omapalt << " not eligible for shortening.\n";
@@ -586,7 +665,7 @@ vcf::Variant VcfOrderedMerger::generate_gvcf_entry(vcf::VariantCallFile& current
   gvcf_entry.filter = "PASS";
   gvcf_entry.sampleNames = current.sampleNames;
   gvcf_entry.quality = .0;
-  gvcf_entry.ref = reference_reader.base(chr, pos);
+  gvcf_entry.ref = reference_reader.base(chr, pos - 1);
 
   push_format_field(gvcf_entry, "0/0", gt);
 
@@ -614,30 +693,43 @@ void VcfOrderedMerger::next_cov_entry() {
 
 void VcfOrderedMerger::process_annotation(vcf::Variant* current) {
   int cmp;
+  if (hotspots_.size() > 0) {
+    for (vector<vcf::Variant>::iterator iter = hotspots_.begin(); (iter != hotspots_.end()); ++iter) {
+      cmp = variant_cmp(current, &(*iter));
+      if (cmp == 1) break;
+      if (cmp == 0) {
+        merge_annotation_into_vcf(current, &(*iter));
+		break;
+      }
+      //blacklist_check(&(*iter));
+    }	
+  }
+  if (hotspots_.size() > 100) {hotspots_.erase(hotspots_.begin());}
   if (hotspot_queue.has_value()) do {
     cmp = variant_cmp(current, hotspot_queue.current());
+	hotspots_.push_back(*hotspot_queue.current());
     if (cmp == 1) return;
     if (cmp == 0) {
-      merge_annotation_into_vcf(current);
+      merge_annotation_into_vcf(current, hotspot_queue.current());
       hotspot_queue.next();
       return;
     }
-      blacklist_check();
+      blacklist_check(hotspot_queue.current());
+      hotspot_queue.next();
     } while (cmp == -1 && hotspot_queue.has_value());
 }
 
-void VcfOrderedMerger::blacklist_check() {
-  map<string, vector<string> >::iterator bstr = hotspot_queue.current()->info.find("BSTRAND");
+void VcfOrderedMerger::blacklist_check(vcf::Variant* hotspot) {
+  map<string, vector<string> >::iterator bstr = hotspot->info.find("BSTRAND");
   bool is_chimera = true;
-  if (bstr != hotspot_queue.current()->info.end()) {
+  if (bstr != hotspot->info.end()) {
       vector<string>::iterator dot = find(bstr->second.begin(), bstr->second.end(), ".");
       if (dot != bstr->second.end())
         is_chimera = false;
     } else is_chimera = false;
-  if (!is_chimera)
-      cout << UNIFY_VARIANTS << " Hotspot annotation " << hotspot_queue.current()->sequenceName << ":"
-      << hotspot_queue.current()->position << " not found in merged variant file.\n";
-  hotspot_queue.next();
+	if (!is_chimera)
+		cout << UNIFY_VARIANTS << " Hotspot annotation " << hotspot->sequenceName << ":"
+			<< hotspot->position << " not found in merged variant file.\n";
 }
 
 void PriorityQueue::open_vcf_file(vcf::VariantCallFile& vcf, string filename, bool parse_samples) {
@@ -784,17 +876,12 @@ bool check_on_write(string filename, string param_name) {
   return true;
 }
 
-void build_index(const string &path_to_gz) {
-  int tab = ti_index_build(path_to_gz.c_str(), &ti_conf_vcf);
-  if (tab == -1) cerr << "Tabix index build failed.";
-}
-
 int UnifyVcf(int argc, const char *argv[]) {
   unsigned int DEFAULT_WINDOW_SIZE = 10;
   int DEFAULT_MIN_DP = 0;
   bool DEFAULT_LEFT_ALIGN_FLAG = true;
-  string DEFAULT_GZ_VCF_EXT = ".vcf.gz";
-  string DEFAULT_GVCF_EXT = ".genome.vcf.gz";
+  string DEFAULT_GZ_VCF_EXT = ".vcf";
+  string DEFAULT_GVCF_EXT = ".genome.vcf";
 
   OptArgs opts;
   opts.ParseCmdLine(argc, argv);
@@ -834,7 +921,6 @@ int UnifyVcf(int argc, const char *argv[]) {
     UnifyVcfHelp();
     exit(-1);
   }
-
   // prepare gvcf output path
   string output_gvcf;
   if (!input_depth.empty()) {
@@ -859,6 +945,7 @@ int UnifyVcf(int argc, const char *argv[]) {
 
     TargetsManager targets_namager;
     targets_namager.Initialize(reference_reader, bed_file);
+
 
     // Prepare merger object
     VcfOrderedMerger merger(novel_vcf, assembly_vcf, hotspot_vcf, output_vcf, json_path, input_depth, output_gvcf,

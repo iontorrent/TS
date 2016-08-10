@@ -3,7 +3,21 @@
 api_plugin_show_url = "/rundb/api/v1/plugin/show/";
 
 function htmlEscape(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>');
+  // color-friendly: do not remove this comment -- plugins may search for it to determine the capability
+  // The last two substitutions allow escaped span tags
+  // in this form: {span style=*...*} ... {/span}
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br/>')
+    .replace(/\{span([^}]+)\}/g, function (match, attrs) {
+      return '<span' + attrs.replace(/\*/g, '"') + '>';
+    })
+    .replace(/\{\/span\}/g, '</span>')
+    .replace(/\u001b?\[30;43m([^\u001b\n]+)\u001b?\[0?m/g, '<span style="background-color: #ffce54">$1</span>');
 }
 
 //string endswith
@@ -132,23 +146,25 @@ function progress_load() {
         async: false,
         success: function (data) {
             $("#progress_message").html(data.status);
-
-            if (data.status.indexOf("Completed") === 0) {
+            if (data.status.indexOf("Completed") === 0
+                || data.status === "No Live Beads") {
                 clearInterval($(document).data('report_progress'));
-                if (data.status === "Completed") {
-                    $("#progress_message").html("The report has been completed. The page will reload in 5 seconds");
-                    setTimeout(function () {
-                        location.reload();
-                    }, 10000);
-                }
+                var reload_interval_s = 5; // Seconds until a reload
+                $("#progress_message").html(
+                    "The report has been completed. "
+                    + "The page will reload in "
+                    + reload_interval_s + " seconds");
+                setTimeout(function () {
+                    location.reload();
+                }, reload_interval_s * 1000);
             }
         },
         error: function (msg) {
             $("#progress_message").html("Error checking status");
         }
     });
-
 }
+
 function start_iru(launchObj){
     //start the iru upload based on the upload type selection
     console.log(launchObj);
@@ -180,13 +196,24 @@ function start_iru(launchObj){
 }
 
 
-$(document).ready(function () {
-    plugin_status_template = kendo.template($("#pluginStatusTemplate").html());
-    plugin_major_template = kendo.template($("#pluginMajorBlockTemplate").html());
-    console.log("Get ready");
-    plugin_dropdown_template = kendo.template($("#pluginDropdownTemplate").html());
+function ktmpl(selector){
+    // Returns a kendo.template, even if the element is not found from the given
+    // selector. If the element is not found then an empty template is returned.
+    var el = $(selector);
+    return (el.length) ? kendo.template(el.html()): kendo.template("");
+}
 
-    //get the report PK so we can do stuff!    
+
+$(document).ready(function () {
+    plugin_status_template = ktmpl("#pluginStatusTemplate");
+    plugin_major_template = ktmpl("#pluginMajorBlockTemplate");
+    plugin_dropdown_template = ktmpl("#pluginDropdownTemplate");
+
+    $(".dropdown-menu > li.disabled > a").click(function(event) {
+      event.preventDefault();
+    });
+
+    //get the report PK so we can do stuff!
     djangoPK = $("#report").data("pk");
     webLink = $("#report").data("web");
     reportAPI = "/rundb/api/v1/results/" + djangoPK + "/";
@@ -198,7 +225,6 @@ $(document).ready(function () {
         url: "/rundb/api/v1/plugin/IonReporterUploader/extend/configs/?format=json",
         type: "GET"
     }).done(function (data) {
-
         var template = kendo.template($("#iru-list-tmpl").html());
 
         var result = template(data); //Execute the template
@@ -207,16 +233,16 @@ $(document).ready(function () {
         $('#iru-button').on("click", ".iru-account", function (event) {
             event.preventDefault();
             var id = $(this).data("id");
-
+            var isAsPlanned = $(this).data("value");
             var launchObj;
             $.each(data, function (k, v) {
                 if (v["id"] === id) {
                     launchObj = v;
                 }
             });
-
-            launchObj["launchoption"] = "upload_only";
             launchObj["iru_qc_option"] = "no_check";
+
+            console.log("launch obj" ,launchObj);
 
             //check to see if previous instance of plugin exists and still running
             var alreadyGoing = false;
@@ -254,40 +280,93 @@ $(document).ready(function () {
             }
 
             var upload = "";
-            bootbox.dialog(uploadMsg, [
-                {
-                    "label": "Upload just BAM",
-                    "class": "btn-primary",
-                    "callback": function () {
-                        launchObj["upload"] = "bam_only";
-                        start_iru(launchObj);
-                    }
-                },
-                {
-                    "label": "Upload just VCF",
-                    "class": "btn-primary",
-                    "callback": function () {
-                        launchObj["upload"] = "vcf_only";
-                        start_iru(launchObj);
-                    }
-                },
-                {
-                    "label": "Upload BAM & VCF",
-                    "class": "btn-primary",
-                    "callback": function () {
-                        launchObj["upload"] = "both";
-                        start_iru(launchObj);
-                    }
-                },
-                {
-                    "label": "Cancel",
-                    "callback": function () {
-                        upload = false;
-                    }
-                }
-            ]);
-        });
+            var uploadOptions = "";
+            if (isAsPlanned) {
+                launchObj["launchoption"] = "upload_and_launch";
+    			var irActName = $(this).data("iraccountname");
+                var report_uri = $(this).data("uri");
 
+                // Generate the IR short name, pattern match as much as possbile
+                irActName_short = irActName.replace(/(\(Version\: \d(.*?) \| User\: (.*?) \| Org\: (.*?)\)$)/, "");
+                uploadMsg = uploadMsg.replace(/\?/,"(" + $.trim(irActName_short) + ") ? ")
+                console.log("Report URI:", report_uri, "IR AccountName:", irActName);
+                uploadOptions = [
+                    {
+                        "label": "Yes",
+                        "callback": function () {
+                            launchObj["upload"] = "both";
+                            start_iru(launchObj);
+                        }
+                    },
+                    {
+                        "label": "No",
+                        "callback": function () {
+                            upload = false;
+                        }
+                    },
+                    {
+                        "label" : "Review-Plan",
+                        "callback": function () {
+                            upload = false;
+                            $('body #modal_review_plan').remove();
+                            bootbox.dialog(uploadMsg,uploadOptions);
+
+                            $.get(report_uri,function (data) {
+                                 $('body').append(data);
+                                 $("#modal_review_plan").modal("show");
+                                 return false;
+                            }).done(function (data) {
+                                 //consol.log("Review the plan");
+                            }).fail(function (data) {
+                                 $('#error-messages').empty().show();
+                                 responseText = "Unable to open the plan for review";
+                                 $('#error-messages').append('<p class="alert error">ERROR: ' + responseText + '</p>');
+                            }).always(function (data) {
+                                 /*console.log("complete:", data);*/
+                            });
+                         }
+                    }
+
+                ];
+            }
+            else {
+               launchObj["launchoption"] = "upload_only";
+               uploadOptions = [
+                    {
+                        "label": "Upload just BAM",
+                        "class": "btn-primary",
+                        "callback": function () {
+                            launchObj["upload"] = "bam_only";
+                            start_iru(launchObj);
+                        }
+                    },
+                    {
+                        "label": "Upload just VCF",
+                        "class": "btn-primary",
+                        "callback": function () {
+                            launchObj["upload"] = "vcf_only";
+                            start_iru(launchObj);
+                        }
+                    },
+                    {
+                        "label": "Upload BAM & VCF",
+                        "class": "btn-primary",
+                        "callback": function () {
+                            launchObj["upload"] = "both";
+                            start_iru(launchObj);
+                        }
+                    },
+                    {
+                        "label": "Cancel",
+                        "callback": function () {
+                            upload = false;
+                        }
+                    }
+                ];
+            }
+            bootbox.dialog(uploadMsg,uploadOptions);
+
+        });
     });
 
     //remove the focus from the report dropdown
@@ -310,7 +389,7 @@ $(document).ready(function () {
         location.reload();
     };
 
-    //remove and turn off the progres indicator 
+    //remove and turn off the progress indicator
     $("#close_progress").click(function () {
         $("#backdrop_progress, #progress").remove();
         clearInterval($(document).data('report_progress'));
@@ -453,6 +532,14 @@ $(document).ready(function () {
         $modal_plugin_log.find('.modal-header h3').text(title);
         $.get(url, function (responseText) {
             $modal_plugin_log.find('.modal-body').html('<pre class="log">' + htmlEscape(responseText) + '</pre>');
+            var keyupFunc = function (e) {
+              if (e.keyCode == 27) { // Escape key
+                 $('body').unbind('keyup', keyupFunc);
+                 $('.modal.in').modal('hide');
+                 $('.btn-group.open').removeClass('open');
+              }
+            };
+            $('body').bind('keyup', keyupFunc);
         })
             .fail(function (msg) {
                 $modal_plugin_log.find('.modal-body').html('<div class="log alert alert-error">Unable to read plugin log:' + htmlEscape(msg.statusText) + '</div>');
@@ -468,6 +555,8 @@ $(document).ready(function () {
 
     /* Click handler for button to terminate running SGE job */
     $('.pluginCancel').live("click", function (e) {
+        this.innerHTML = "Stopping";
+        this.disabled = true;
         e.preventDefault();
         var prpk = $(this).data('id');
         var jobid = $(this).data('jobid');
@@ -566,6 +655,8 @@ $(document).ready(function () {
         $(".plugin_input_class").die("click");
         $(".plugin_input_class").live("click", function () {
             $('#plugin-modal').modal('hide');
+            //Prevent background page scrolling
+            document.body.style.overflow = 'hidden';
         });
         $(".plugin_class").die("click");
         $(".plugin_class").live('click', function () {

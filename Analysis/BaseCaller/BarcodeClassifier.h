@@ -53,7 +53,7 @@ public:
   bool has_barcodes() const { return num_barcodes_ > 0; }
   int  num_barcodes() const { return num_barcodes_; }
 
-  void SetClassifiactionParams(int mode, double cutoff, double separation);
+  void SetClassificationParams(int mode, double cutoff, double separation);
 
   int  BaseSpaceClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors);
 
@@ -63,11 +63,15 @@ public:
   int  ProportionalSignalClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
                                  vector<float>& best_bias, int& filtered_zero_errors);
 
+  bool AdapterValidation(const BasecallerRead& basecaller_read, int& best_barcode, int& filtered_read_group);
+
   void ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read, const vector<int>& base_to_flow);
 
   bool MatchesBarcodeSignal(const BasecallerRead& basecaller_read);
 
   int  NoBarcodeReadGroup() const { return no_barcode_read_group_; };
+
+  bool TrimBarcodes() const { return trim_barcodes_; };
 
 
   void Close(BarcodeDatasets& datasets);
@@ -150,6 +154,7 @@ protected:
   double                    score_cutoff_;
   double                    score_separation_;
   bool                      score_auto_config_;
+  float                     adapter_cutoff_;              // Maximum allowed per-flow squared residual for the adapter
 
   vector<Barcode>           barcode_;
   int                       no_barcode_read_group_;       // Index of the non-barcoded read group

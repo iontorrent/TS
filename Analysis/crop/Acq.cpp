@@ -370,7 +370,7 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh, bool ver
 	offset += sizeof(expHdr);
 
     if (verbose)
-        printf("offset=%d %ld %ld\n",offset,sizeof(expHdr),sizeof(fileHdr));
+        printf("offset=%d %zu %zu\n",offset,sizeof(expHdr),sizeof(fileHdr));
 	// write each frame block (timestamp & frame data)
 	uint32_t frame;
 //	int offset;
@@ -596,7 +596,7 @@ bool Acq::WriteThumbnailVFC(const char *acqName, int cropx, int cropy, int kernx
     offset += sizeof(expHdr);
 
     if (verbose)
-        printf("offset=%d %ld %ld\n",offset,sizeof(expHdr),sizeof(fileHdr));
+        printf("offset=%d %zu %zu\n",offset,sizeof(expHdr),sizeof(fileHdr));
     // write each frame block (timestamp & frame data)
     uint32_t frame;
 //	int offset;
@@ -627,7 +627,7 @@ bool Acq::WriteThumbnailVFC(const char *acqName, int cropx, int cropy, int kernx
         offset += sizeof(timestampOut);
         if (verbose)
         {
-            printf("\nframe: %d\t timestamp offset: %d %ld",frame,offset,sizeof(timestampOut));
+            printf("\nframe: %d\t timestamp offset: %d %zu",frame,offset,sizeof(timestampOut));
         }
 
 //		printf("ts=%d ",sample_rate*(rframe+frameCnt+1));
@@ -664,7 +664,7 @@ bool Acq::WriteThumbnailVFC(const char *acqName, int cropx, int cropy, int kernx
             if(PrevFrameSubtract(ow,oh,frame_data,prev_data,results_data,&results_len,&comp) == 0)
             {
                 if (verbose)
-                    printf("\npfc worked %ld!!",results_len);
+                    printf("\npfc worked %" PRIu64 "!!",results_len);
                 comp = htonl(comp);
             }
             else
@@ -678,7 +678,7 @@ bool Acq::WriteThumbnailVFC(const char *acqName, int cropx, int cropy, int kernx
         offset += sizeof(comp);
         if (verbose)
         {
-            printf("\nframe: %d\t comp offset: %d %ld",frame,offset,sizeof(comp));
+            printf("\nframe: %d\t comp offset: %d %zu",frame,offset,sizeof(comp));
         }
 
         if(!comp)

@@ -3,19 +3,19 @@
 {% load static from staticfiles %}
 {% block extra_head %}
 {{ block.super }}
-{% load static %}
 <script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
-<script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/ionreporter.js"></script>
+<script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/ionreporter_util.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/ionreporter.js" %}"></script>
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 {%endblock%}
 {% block main-title %}
-<div style="float:left;">Select an IonReporter account and workflow to use:</div>
-<div style="float:left;">
+<div style="float:left;">Select an Ion Reporter account, workflow and sample grouping, then hit next.</div>
+<div style="float:right;">
     <img src="/site_media/img/loading.gif" width="35" height="35" id="loading"/>
-    <a title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information" id="refresh" href="#"><i class="icon-refresh"></i></a>
+    <a title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information btn" id="refresh" href="#"><i class="icon-refresh"></i> Refresh</a>
     {% if helper.getStepDict.Ionreporter.getIRU %}
-    <a title="Configure IonReporterUploader Information" id="iruConfig" href="{% url "configure_plugins_plugin_configure" helper.getStepDict.Ionreporter.getIRU.pk 'config' %}"><i class="icon-wrench"></i></a>
+    <a title="Configure IonReporterUploader Information" class="btn"  style="margin-right: 5px;" id="iruConfig" href="{% url "configure_plugins_plugin_configure" helper.getStepDict.Ionreporter.getIRU.pk 'config' %}"><i class="icon-wrench"></i> Configure</a>
     {% endif %}
 </div>
 {% endblock main-title %}
@@ -34,6 +34,11 @@
     .modal {
         top: 10%;
     }
+
+    .label_iru_details {
+		font-size:10px;
+		color: #666;
+	}
 
 </style>
 
@@ -55,6 +60,7 @@
     <div class="span6">
         <div class="span12" style="margin-bottom:25px;margin-left:10px;">
             <div class="controls irOptionsContent" id="ir_accounts">
+            <h4>Ion Reporter Account</h4>
             </div>
             
             <input type="hidden" name="irAccountId" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}"/>
@@ -67,6 +73,7 @@
             <input type="hidden" name="irAccountName" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}"/>
             <input type="hidden" name="planCategories" value="{{helper.getStepDict.Ionreporter.getPrePopulatedFieldDict.categories}}"/>
             <input type="hidden" name="iru_QC_UploadModes" value="{{helper.getIruQcUploadModeList}}"/>
+            <input type="hidden" name="tag_isFactoryProvidedWorkflow" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.tag_isFactoryProvidedWorkflow}}"/>
 
             <div id="irAccountDoesNotExistError" style="color:red;font-weight:bold; display: none;">
                 The IR account {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.
@@ -75,8 +82,7 @@
         <div id="error" style="color:red;font-weight:bold"></div>
         <div class="span12" id="workflows" style="display:none;">
             <label rel="tooltip" data-original-title="For Ion Reporter v5.0 or above, either all workflows, or only workflows that have been tagged for IRU in IR, will be available in TS.">
-            	<i class="icon-info-sign"></i>
-                Existing Workflow
+                <h4><i class="icon-info-sign"></i>Existing Workflow</h4>
             </label>
             <div style="overflow:auto;">
                 <div style="float:left;">
@@ -84,11 +90,11 @@
                     <select style="width : 300px;" name="irworkflow">
                         <option value=""></option>
                     </select>
-                    <a id="ir_refresh" style="cursor:pointer;" title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
                 </div>
             </div>
             <label id="new_workflow">
                 <a class="btn btn-100" href="#" onclick="goToCreateWorkflowUrl(); return false;">Create New Workflow</a>
+                <a id="ir_refresh" title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information btn" style="font-weight: bold; font-size: 90%;"><i class="icon-refresh"></i> Refresh List</a>
             </label>
         </div>
     </div>
@@ -102,15 +108,17 @@
         </div>
     </div>
     <!-- #TS-11365 - Below comment will be reverted in release 5.2 -->
-    <!--<div class="span6">
-    <div class="span6" id="iruUploadMode">
-    			<label><h4>Data Quality Check Before<br/> Upload to Ion Reporter</h4></label>
+    <div class="span6">
+    <div class="span4" id="iruUploadMode">
+    			<label style="width: 410px;"><h4>Ion Reporter Upload Options:</h4></label>
                 <div class="control-group offset1">
                     <div class="iruUploadModeContent">
                     </div>
+                    <br/>
+                    <label style="width: 410px; font: normal 12px calibri; font-style: italic;">*When you are ready to upload to Ion Reporter after manual review, click on "Upload to IR" --> "Upload as planned" option on the run report Navigation bar</label>
                 </div>
     </div>
-    </div>-->
+    </div>
 </div>
 
 
@@ -151,6 +159,7 @@
     IONREPORTER.prev_ir_account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irOptions}}";
     IONREPORTER.prev_account_id = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}";
     IONREPORTER.existing_workflow = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}";
+    IONREPORTER.existing_isfactory = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.tag_isFactoryProvidedWorkflow}}";
     IONREPORTER.existing_sample_grouping ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}";
     IONREPORTER.existing_iruUploadMode ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode}}";
     //loop through all the sample groupings and create a map 
@@ -158,15 +167,13 @@
     {%for sample_group in step.prepopulatedFields.sampleGroupings %}
         var ir_term = "{{sample_group.iRValue}}";
         var ir_terms = ir_term.split("|");
-        $.each(ir_terms, function(i) {
-            var term = ir_terms[i];
+        $.each(ir_terms, function(i, term) {
             IONREPORTER.ir_rel_type_to_sample_group_map[term] = "{{sample_group.displayedName}}";
-            IONREPORTER.ir_rel_type_pk_map[term] = "{{sample_group.pk}}";
-            IONREPORTER.sample_group_to_pk_map["{{sample_group.displayedName}}"] = "{{sample_group.pk}}";
-            if ($.inArray("{{sample_group.displayedName}}", IONREPORTER.default_sample_grouping) == -1) {
-                IONREPORTER.default_sample_grouping.push("{{sample_group.displayedName}}");
-            }
         });
+        IONREPORTER.sample_group_to_pk_map["{{sample_group.displayedName}}"] = "{{sample_group.pk}}";
+        if ($.inArray("{{sample_group.displayedName}}", IONREPORTER.default_sample_grouping) == -1) {
+            IONREPORTER.default_sample_grouping.push("{{sample_group.displayedName}}");
+        }
     {%endfor%}
 </script>
 {% endblock post-raw %}

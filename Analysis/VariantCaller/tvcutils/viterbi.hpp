@@ -12,25 +12,6 @@
 #include <boost/math/distributions/poisson.hpp>
 #include <boost/algorithm/minmax_element.hpp>
 
-#define MAX_STATE_VALUE 100000
-
-bool markov_chain_comparator::operator()(const markov_state& lhs, const markov_state& rhs) {
-  // special comparator functor to implement state selection in building markov chain
-  if (current) {
-    double lhs_cost = lhs.prev + current->cost(lhs),
-        rhs_cost = rhs.prev + current->cost(rhs);
-    return lhs_cost > rhs_cost;
-  }
-  return lhs.current > rhs.current;
-}
-
-double markov_state::cost(double v) {
-  // cost of being in the state under Poisson distribution log pdf to make is additive
-  double rounded_v = min(v, (double)MAX_STATE_VALUE);
-  // increase cost of small values to report spikes down in gvcf
-  return rounded_v < 0.75 * dist.mean() ? -numeric_limits<double>::infinity() : log(boost::math::pdf(dist, rounded_v));
-}
-
 template<typename T>
 template<typename _ForwardIterator>
 markov_chain<T>::markov_chain(_ForwardIterator begin, _ForwardIterator end) {
@@ -111,7 +92,7 @@ void markov_chain<T>::optimal_path() {
   markov_chain::reverse_iterator it = rbegin();
   typename vector<T>::reverse_iterator vit = values.rbegin();
   items.push_back(make_pair(depth_info<T>(*vit), size() - 1));
-  for (; it != rend(), vit != values.rend(); it++, vit++) {
+  for (; it != rend() && vit != values.rend(); it++, vit++) {
     mean += *vit;
     i++;
     if (vit == values.rend() - 1) {

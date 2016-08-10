@@ -1,5 +1,5 @@
 {% load url from future %}
-
+{% load static from staticfiles %}
 <div id="modal_batch_planning_upload" title="" class="modal modal-900 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -7,44 +7,60 @@
     </div>
     <div class="modal-body" style="max-height: 480px;">
         <div id="modal-error-messages" class="alert alert-error hide"></div>
-        <form class="form-horizontal" id="modalBatchPlanningUpload" method="POST" action="{% url "save_uploaded_plans_for_template" %}" enctype="multipart/form-data">
-            <fieldset>
-                <div class="control-group">
-                    <label for="postedfile" class="control-label">CSV File for Plans</label>
-                    <div class="controls">
-                        <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required">
-                        <p class="help-block error"></p>
-                        <p class="help-block">
-                            <br>
-                            One row for each plan.
-                            <br>
-                            Tips:
-                            <ul>
-                            <li>Plan values not included in the CSV file will default to values of the template you are planning from.
-                            </li>
-                            <li>To associate a Plan with multiple Plugins or Projects, <ul><li>use "<b>;</b>" as the separator</li>
-                            <li>Example: My Project1; My Project2</li></ul>
-                            </li>
-                            <li>To specify both sample name and sample ID during barcoded planning, <ul><li>use "<b>;</b>" as the separator and "<b>ID:</b>" as the sample ID key</li>
-                            <li>Example: sample 1;ID:ext 1</li></ul>
-                            </li>
-                            <li>To specify reference and/or BED files per barcoded sample during barcoded planning, <ul><li>use "<b>;</b>" as the separator</li>
-                            <li>use "<b>REF:</b>" as the reference key, "<b>TARGET:</b> as the target region BED file key, "<b>HOTSPOT:</b>" as the HotSpot BED file key</li>
-                            <li>Example: sample 1; REF:hg19; TARGET:/hg19/unmerged/detail/CCP.20131001.designed.bed; HOTSPOT:/hg19/unmerged/detail/CCP.20131001.hotspots.bed</li>
-                            <li>Example: sample 1;ID:ext 1;TYPE:DNA;REF:hg19;TARGET:/hg19/unmerged/detail/CCP.20131001.designed.bed;HOTSPOT:/hg19/unmerged/detail/CCP.20131001.hotspots.bed</li></ul>
-                            </li>                            
-                            <li>For DNA and Fusions barcoded planning, <ul><li>use "<b>;</b>" as the separator, "<b>TYPE:</b>" as the Nucleotide Type key. </li>
-                            <li>If you want to specify RNA reference or RNA target regions BED file different from the template defaults, use "<b>RNA REF:</b>" and "<b>RNA TARGET:</b>" as the keys</li>
-                            <li>Example: sample 1;ID:ext 1;TYPE:DNA</li>
-                            <li>Example: sample 1;ID:ext 1;TYPE:RNA;RNA REF:hg19_RNA;RNA TARGET:/hg19_RNA/unmerged/detail/BRCA.designed.bed</li>
-                            </ul>
-                            </li>
-                            </ul>
-                        </p>
-                    </div>
+        <form class="form-horizontal" id="modalBatchPlanningUpload" method="POST" action="{% url "save_uploaded_plans_for_template" %}" enctype="multipart/form-data" style="margin-bottom: 0px;">
+            <div class="control-group">
+                <label for="postedfile" class="control-label">Plan CSV or ZIP File</label>
+                <div class="controls">
+                    <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required">
+                    <p class="help-block error"></p>
                 </div>
-            </fieldset>
+            </div>
         </form>
+        <div>
+            Download example files:
+            <ul>
+                <li><a href="{% static "examples/batchPlanning_nonbarcoded_example.csv" %}">Non-barcoded planning CSV example</a></li>
+                <li><a href="{% static "examples/batchPlanning_barcoded_example_single.csv" %}">Barcoded planning single file CSV example</a><sup>&dagger;</sup></li>
+                <li><a href="{% static "examples/batchPlanning_barcoded_example.zip" %}">Barcoded planning multiple files ZIP example with separate CSV sample files</a></li>
+            </ul>
+        </div>
+        <div class="help-block">
+            Tips:
+            <ul>
+                <li>Plan values not included in the CSV file will default to values of the template you are planning from</li>
+                <li>To associate a Plan with multiple Plugins or Projects,
+                <ul>
+                    <li>use "<b>;</b>" as the separator</li>
+                    <li>Example: My Project1; My Project2</li>
+                </ul>
+            </ul>
+        </div>
+        <div class="help-block">
+            <sup>&dagger;</sup>Tips for barcoded planning with single CSV file:
+            <ul>
+                <li>To specify both sample name and sample ID during barcoded planning,
+                    <ul>
+                        <li>use "<b>;</b>" as the separator and "<b>ID:</b>" as the sample ID key</li>
+                        <li>Example: sample 1;ID:ext 1</li>
+                    </ul>
+                </li>
+                <li>To specify reference and/or BED files per barcoded sample during barcoded planning,
+                    <ul>
+                        <li>use "<b>;</b>" as the separator</li>
+                        <li>use "<b>REF:</b>" as the reference key, "<b>TARGET:</b> as the target region BED file key, "<b>HOTSPOT:</b>" as the HotSpot BED file key</li>
+                        <li>Example: sample 1; REF:hg19; TARGET:/hg19/unmerged/detail/target.bed; HOTSPOT:/hg19/unmerged/detail/hotspots.bed</li>
+                    </ul>
+                </li>
+                <li>For DNA and Fusions barcoded planning,
+                    <ul>
+                        <li>use "<b>;</b>" as the separator, "<b>TYPE:</b>" as the Nucleotide Type key. </li>
+                        <li>use "<b>RNA REF:</b>" and "<b>RNA TARGET:</b>" as the keys to specify RNA reference or RNA target regions BED file different from the template defaults</li>
+                        <li>Example: sample 1;ID:ext 1;TYPE:DNA</li>
+                        <li>Example: sample 1;ID:ext 1;TYPE:RNA;RNA REF:hg19_RNA;RNA TARGET:/hg19_RNA/unmerged/detail/BRCA.designed.bed</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
 
         <div class="bump">
             <div id="loadingstatus"></div>

@@ -436,23 +436,24 @@ class DRMAnalysis(Analysis):
     @tolerate_invalid_job
     def terminate(self):
         """Terminates the job by issuing a command to the grid."""
-        logger.debug("DRMAA terminate job")
+        logger.info("DRMAA terminate job %s" % self.jobid)
         if not self._running():
             return False
 
-        # todo, read joblist from database instead of a file
-        joblistfile = os.path.join(self.savePath, 'job_list.txt')
-        logger.debug("DRMA def terminate(self): %s " % joblistfile)
+        joblistfile = os.path.join(self.savePath, 'job_list.json')
         if os.path.exists(joblistfile):
-            fd = open(joblistfile)
-            for line in fd:
-                blockjobid = line.rstrip('\n')
-                try:
-                    logger.debug("terminate job %s in status %s" % (blockjobid, _session.jobStatus(blockjobid)))
-                    _session.control(blockjobid, drmaa.JobControlAction.TERMINATE)
-                except Exception as err:
-                    logger.error("Failed to terminate %s" % blockjobid)
-            fd.close()
+            try:
+                with open(joblistfile) as f:
+                    contents = json.load(f)
+                blocks = sum([block.values() for block in contents.values()], [])
+                for blockjobid in blocks:
+                    try:
+                        logger.debug("terminate job %s, status %s" % (blockjobid, _session.jobStatus(blockjobid)))
+                        _session.control(blockjobid, drmaa.JobControlAction.TERMINATE)
+                    except Exception as err:
+                        logger.error("Failed to terminate %s" % blockjobid)
+            except:
+                logger.error("DRMAA terminate error reading from %s" % joblistfile)
 
         _session.control(self.jobid, drmaa.JobControlAction.TERMINATE)
         return True

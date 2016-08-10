@@ -5,26 +5,33 @@ from __future__ import absolute_import
 import os
 import logging
 
+import iondb.celery
 from django.conf import settings
 from celery.task import task
+from celery.result import ResultSet
 from celery.utils.log import get_task_logger
 
 log = logging.getLogger(__name__)
 logger = get_task_logger(__name__)
 
 ## Helper common to all methods.
-def get_info_from_script(name, script, context=None):
+def get_info_from_script(name, script, context=None, add_to_store=True):
     from ion.plugin.loader import cache
     from ion.plugin.info import PluginInfo
-    mod = cache.load_module(name, script)
+    mod = cache.load_module(name, script, add_to_store)
+
+    # if the load module command returned a None object, then lets raise an exception based on what happened
+    if not mod:
+        if name in cache.module_errors:
+            raise cache.module_errors[name]
+        else:
+            raise Exception("Error loading the module.")
+
     cls = cache.get_plugin(name)
     if not cls:
-        return None
+        raise Exception("The python module loaded but no classes which extend 'IonPlugin' registered themselves with the framework.")
     plugin = cls()
-    ## TODO plugin = cls(**context)
-    info = PluginInfo.from_instance(plugin)
-    return info
-
+    return PluginInfo.from_instance(plugin)
 
 def find_pluginscript(pluginpath, pluginname=None):
     # Legacy Launch Script
@@ -77,61 +84,79 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
              pwd.getpwuid(final_uid)[0],
              grp.getgrgid(final_gid)[0])
 
-
-## Query all plugins for their info/inspect json block
 @task(queue="plugins")
-def scan_all_plugins(pluginlist):
+def scan_plugin(data, add_to_store=True):
     """
-    Pass in list of (plugin, scriptpath) pairs, and all will be instantiated an interrogated.
-    Note: They do not need to be installed yet. Just name, script pairs, or name, script, context tuples.
+    This method will interogate a specific plugin and get it's information
+    :parameter data: A tuple of type (name, path, context) to be interrogated. Note: They do not need to be installed yet. Just name, script pairs, or name, script, context tuples.
+    :parameter add_to_store: Add the plugins in the list to the store
+    :returns: A PluginInfo object type
     """
-    ret = {}
 
-    count = 0
-    for data in pluginlist:
-        if len(data) == 2:
-            (name, path) = data
-            context = None
-        else:
-            (name, path, context) = data
+    if len(data) == 2:
+        (name, path) = data
+        context = None
+    else:
+        (name, path, context) = data
 
-        if os.path.isdir(path):
-            path = find_pluginscript(path, name)
+    if os.path.isdir(path):
+        path = find_pluginscript(path, name)
+
+    info = get_info_from_script(name, path, context, add_to_store)
+
+    if info is not None:
+        info = info.todict()
+
+    if info is None:
+        logger.info("Failed to get plugininfo: '%s' from '%s'", name, path)
+
+    if info and context and 'plugin' in context:
+        ppk = context["plugin"].pk
         try:
-            info = get_info_from_script(name, path, context)
-            if info is not None:
-                info = info.todict()
+            from iondb.rundb.models import Plugin
+            p = Plugin.objects.get(pk=ppk)
+            p.updateFromInfo(info)
+            p.save()
+        except ValueError:
+            # plugin version mismatch
+            pass
         except:
-            logger.exception("Failed to load plugin '%s' from '%s'", name, path)
-            info = None
+            logger.exception("Failed to save info to plugin db cache")
 
-        if info is None:
-            logger.info("Failed to get plugininfo: '%s' from '%s'", name, path)
-        ret[path] = info
-        count += 1
+    return info
 
-        if info and context and 'plugin' in context:
-            ppk = context["plugin"].pk
-            try:
-                from iondb.rundb.models import Plugin
-                p = Plugin.objects.get(pk=ppk)
-                p.updateFromInfo(info)
-                p.save()
-            except ValueError:
-                # plugin version mismatch
-                pass
-            except:
-                logger.exception("Failed to save info to plugin db cache")
 
-    logger.info("Rescanned %d plugins", count)
-    return ret
+def scan_all_plugins(plugin_list, add_to_store=True):
+    """
+     Query all plugins for their info/inspect json block
+    :parameter plugin_list: Pass in list of (plugin, scriptpath) pairs, and all will be instantiated an interrogated.
+    Note: They do not need to be installed yet. Just name, script pairs, or name, script, context tuples.
+    :parameter add_to_store: Add the plugins in the list to the store
+    :returns: A dictionary of PluginInfo object for all of the successfully loaded modules keyed by their path
+    """
+    plugin_info = dict()
+    plugin_scan_tasks = dict()
+
+    # fire off a number of sub-tasks for each plugin to be scanned
+    for data in plugin_list:
+        plugin_scan_tasks[data[1]] = scan_plugin.apply_async(args=[data, add_to_store])
+
+    # wait for all of the tasks in the result set to finish and collect the results
+    for path, async_result in plugin_scan_tasks.iteritems():
+        try:
+            result = async_result.get(timeout=300, propagate=True)
+            plugin_info[path] = result
+        except Exception as exc:
+            logger.error("Error while scanning module at " + path + ": " + str(exc))
+
+    logger.info("Rescanned %d plugins", len(plugin_list))
+    return plugin_info
 
 # Helper task to invoke PluginManager rescan, used to rescan after a delay
 @task(queue="plugins", ignore_result=True)
 def add_remove_plugins():
     from iondb.plugins.manager import pluginmanager
     pluginmanager.rescan()
-
 
 @task(ignore_result=True)
 def backfill_pluginresult_diskusage():
@@ -255,4 +280,3 @@ def cleanup_pluginresult_state():
 
         log.debug("Cleaning orphan job: %s [%s] -- %s, %s (%s) -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.duration(), obj.size, obj.inodes)
         obj.save()
-

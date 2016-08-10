@@ -22,5 +22,6 @@ class SeqListClass{
 };
 
 void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_flowOrder, char *libKey, char *tfKey);
+void NullSeqItem(SequenceItem &my_item);
 
 #endif // SEQLIST_H

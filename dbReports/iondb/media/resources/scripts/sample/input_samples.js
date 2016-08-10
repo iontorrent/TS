@@ -311,7 +311,7 @@ function getColumns() {
          sortable: false,         
      } , {
          field: "nucleotideType",
-         title: "DNA/RNA",       
+         title: "DNA/ RNA/ Fusions",       
          sortable: true,
      } , {
          field: "gender",

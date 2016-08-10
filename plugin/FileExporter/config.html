@@ -107,13 +107,6 @@
 				delete pluginGET.resource_uri;
 
 				$.each(pluginGET.config, function(key,val){
-					//set the value of the html object
-					if (key == "sffCreate"){
-						if (val == "on"){
-							document.getElementById("sffCreate").checked = true;
-							document.getElementById("zipSFF").disabled = false;
-						}
-					}
 					if(key == "fastqCreate"){
 						if (val == "on"){
 							document.getElementById("fastqCreate").checked = true;
@@ -136,11 +129,6 @@
 						if (val == "on"){
 							document.getElementById("bamCreate").checked = true;
 							document.getElementById("zipBAM").disabled = false;
-						}
-					}
-					if(key == "zipSFF"){
-						if (val == "on"){
-							document.getElementById("zipSFF").checked = true;
 						}
 					}
 					if(key == "zipFASTQ"){
@@ -269,14 +257,6 @@
     	else {
     		document.getElementById("zipXLS").disabled = true;
     		document.getElementById("zipXLS").checked = false;
-    	}
-    	if (document.getElementById("sffCreate").checked == true) {
-    		document.getElementById("zipSFF").disabled = false;
-    		readyToSubmit = true;
-    	} 
-    	else {
-    		document.getElementById("zipSFF").disabled = true;
-    		document.getElementById("zipSFF").checked = false;
     	}
     	if (document.getElementById("fastqCreate").checked == true) {
     		document.getElementById("zipFASTQ").disabled = false;
@@ -414,18 +394,6 @@
 
 				<tr class="zebra">
 					<td><div class="row-fluid" style="text-align: center;"> 
-						<span class="helpLeft" title="Standard Flowgram Format (SFF) is a formatted file that contains flow space data.This is where the bases called in a run are stored. This file also contains the nucleotide calls and associated quality values and signal values in flow space and a mapping between sequence and flow spaces. The data are organized on a per flow basis, and contain information about nucleotide flows that both did and did not result in base incorporation. ">Standard Flowgram Format (SFF)</span>
-					</div></td>
-					<td><div class="row-fluid" style="text-align: center;"> 
-						<input type="checkbox" id="sffCreate" name="sffCreate" onchange="updateTable()"/></td>
-					</div>
-					<td><div class="row-fluid" style="text-align: center;"> 
-						<input type="checkbox" id="zipSFF" name="zipSFF" disabled="disabled"/></td>
-					</div>
-				</tr>
-
-				<tr class="zebra">
-					<td><div class="row-fluid" style="text-align: center;"> 
 						<span class="helpLeft" title='FASTQ-formatted file containing data organized in a per-base basis, including quality scores. The reads contained in the file are unaligned reads. It file contains a sequence header followed by a line of sequence then by a quality header and another line of quality metrics. The sequence header line always starts with a “@” directly followed by a unique identifier and the quality header always starts with a "+"'>FASTQ</span>
 					</div></td>
 				</div></td>
@@ -530,7 +498,6 @@
 <span id="previewplace"></span>
 <br><br>
 <h6 id="warn">Warning: The name you have choosen may be too long. You may encounter problems when downloading.</h6>
-<br><br>
 </form>
 <div class="container">
 	<input id="postbutton" type="submit" name="submit help" value="Save Configuration" >

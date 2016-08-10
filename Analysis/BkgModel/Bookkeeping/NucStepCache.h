@@ -25,6 +25,10 @@ class NucStep{
     int *i_start_coarse_step;
     int *i_start_fine_step;
 
+    // keep records of timing
+    float *t_mid_nuc_actual;
+    float *t_sigma_actual;
+
     NucStep();
     ~NucStep();
     void Alloc(int npts, int flow_block_size);

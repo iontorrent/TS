@@ -34,6 +34,8 @@ class SearchAmplitude{
     const FlowBufferInfo *my_flow;
     const EmphasisClass *emphasis_data;
     float negative_amplitude_limit;
+    float positive_amplitude_limit; // prevent blowups
+    int num_iterations;
     
     bool use_vectorization;
     
@@ -68,9 +70,6 @@ class SearchAmplitude{
     };
     void EvaluateAmplitudeFit(BeadParams *p, const float *avals, float *error_by_flow, int flow_block_size, int flow_block_start ) const;
 
-    void BinarySearchOneBead(BeadParams *p, float min_step, bool restart, int flow_block_size, int flow_block_start ) const;
-    void BinarySearchAmplitude(BeadTracker &my_beads, float min_step,bool restart, int flow_block_size,
-        int flow_block_start ) const;
     SearchAmplitude();
     ~SearchAmplitude();
     // second method

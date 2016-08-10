@@ -37,7 +37,7 @@ from ion.utils.TSversion import findUpdates, findOSversion
 logger = logging.getLogger(__name__)
 
 
-def script(script_text, shell_bool = True):
+def script(script_text, shell_bool=True):
     """run system commands"""
     p = Popen(args=script_text, shell=shell_bool, stdout=PIPE, stdin=PIPE)
     output, errors = p.communicate()
@@ -115,7 +115,7 @@ def ssh_status(dest_host, dest_port):
 
             if (len(user) > 0 and len(password) > 0): # TODO syntax with user and pass is untested
                 px_cmd = 'HTTP_PROXY_PASSWORD=' + password + ';'
-                px_cmd = px_cmd + 'ProxyCommand connect -H ' + user + '@' + px_host + ':' + str(px_port) + ' %h %p'	
+                px_cmd = px_cmd + 'ProxyCommand connect -H ' + user + '@' + px_host + ':' + str(px_port) + ' %h %p'
             else:
                 px_cmd = 'ProxyCommand connect -H ' + px_host + ':' + str(px_port) + ' %h %p'
 
@@ -123,14 +123,14 @@ def ssh_status(dest_host, dest_port):
         # www-data user doesn't own its home directory /var/www, and so can't create an .ssh directory.
         if (have_proxy):
             args = ['/usr/bin/ssh', '-p', str(dest_port),
-                '-o', 'PreferredAuthentications=publickey', 
+                '-o', 'PreferredAuthentications=publickey',
                 '-o', 'StrictHostKeyChecking no',
                 '-o', 'UserKnownHostsFile /dev/null',
                 '-o', px_cmd,                                 # include ProxyCommand
                 dest]
         else:
             args = ['/usr/bin/ssh', '-p', str(dest_port),
-                '-o', 'PreferredAuthentications=publickey', 
+                '-o', 'PreferredAuthentications=publickey',
                 '-o', 'StrictHostKeyChecking no',
                 '-o', 'UserKnownHostsFile /dev/null',
                 dest]
@@ -148,7 +148,7 @@ def ssh_status(dest_host, dest_port):
 
 
 def how_are_you(request, host, port):
-    """Attempt a connection to the given host and port, if we can :), if not :( 
+    """Attempt a connection to the given host and port, if we can :), if not :(
        Socket-to-socket connections fail in the presence of a network proxy, so use standard protocols.
        ionupdates.com gives a 403 Forbidden to wget, so fall back to socket test.
     """
@@ -183,7 +183,7 @@ def how_are_you(request, host, port):
             status = ":)"
         except Exception as complaint:
             logger.warn(complaint)
-            status  = ":("
+            status = ":("
 
     return http.HttpResponse('{"feeling":"%s"}' % status,
                              mimetype='application/javascript')
@@ -239,27 +239,28 @@ def network(request):
             form.save()
         else:
             logger.warning("User entered invalid network settings:\n%s" % str(form.errors))
+        return HttpResponseRedirect("/admin/network/")
     else:
         form = NetworkConfigForm(prefix="network")
 
-    return render_to_response("admin/network.html", RequestContext(request,
-        {"network": {"mac": mac_address(), "form": form} }))
+        return render_to_response("admin/network.html", RequestContext(request,
+            {"network": {"mac": mac_address(), "form": form}}))
 
 
 @staff_member_required
 def manage(request):
     """provide a simple interface to allow a few management actions of the Torrent Server"""
 
-    if request.method=="POST":
+    if request.method == "POST":
 
-        output, errors = script('sudo shutdown -P now',True)
+        output, errors = script('sudo shutdown -P now', True)
         return render_to_response(
             "admin/manage.html",
-            {"output": output, "errors" : errors, "post": True},
+            {"output": output, "errors": errors, "post": True},
             RequestContext(request, {}),
         )
 
-    if request.method=="GET":
+    if request.method == "GET":
 
         return render_to_response(
             "admin/manage.html",
@@ -328,9 +329,9 @@ def get_zip_logs(request):
 
     zipPath = '/tmp/logs.zip'
     zipfile = zipfile.ZipFile(zipPath, mode='w', allowZip64=True)
-    files = ['tsconfig_gui.log','django.log','celery_w1.log']
+    files = ['tsconfig_gui.log', 'django.log', 'celery_w1.log']
     for afile in files:
-        fullpath = os.path.join('/var/log/ion',afile)
+        fullpath = os.path.join('/var/log/ion', afile)
         if os.path.exists(fullpath):
             zipfile.write(fullpath, arcname=afile, compress_type=compression)
     zipfile.close()
@@ -346,6 +347,7 @@ def get_zip_logs(request):
 def run_update_check(request):
     tasks.check_updates.delay()
     return http.HttpResponse()
+
 
 def run_update():
     """Run the update.sh script, that will run update.sh
@@ -369,11 +371,11 @@ def run_update():
 def update(request):
     """provide a simple interface to allow Torrent Suite to be updated"""
 
-    if request.method=="POST":
+    if request.method == "POST":
         updateLocked = run_update()
-        data = json.dumps({"lockBlocked" : updateLocked })
+        data = json.dumps({"lockBlocked": updateLocked})
         return http.HttpResponse(data, content_type="application/json")
-    elif request.method=="GET":
+    elif request.method == "GET":
         about, meta_version = findUpdates()
         config = GlobalConfig.objects.filter()[0]
         config_dict = model_to_dict(config)
@@ -395,6 +397,7 @@ def update(request):
              "show_available": config.ts_update_status not in ['No updates', 'Finished installing'],
              "legacy_OS": findOSversion().get('RELEASE') == '10.04',
              "global_config_json": json.dumps(config_dict),
+             "maintenance_mode": maintenance_action("check")['maintenance_mode'],
              "allow_update": allow_update},
             RequestContext(request, {}),
         )
@@ -419,6 +422,24 @@ def version_lock(request, enable):
     return render_to_response("admin/update.html")
 
 
+def maintenance_action(action):
+    cmd = ["/opt/ion/iondb/bin/sudo_utils.py", "maintenance_mode", action]
+    if action != "check":
+        cmd = ["sudo"] + cmd
+    try:
+        p = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = p.communicate()
+        ret = { 'maintenance_mode':output.strip(), 'error':error }
+    except Exception as err:
+        ret = { 'maintenance_mode':'unknown', 'error':str(err) }
+    return ret
+
+@staff_member_required
+def maintenance(request, action):
+    result = maintenance_action(action)
+    return http.HttpResponse(json.dumps(result), mimetype='application/json') 
+
+
 def tsvm_control(request, action=''):
 
     if request.method == 'GET':
@@ -426,7 +447,7 @@ def tsvm_control(request, action=''):
         versions = tsvm.versions()
         log_files = []
         for logfile in ["provisioning.log", "running.log"]:
-            if os.path.exists(os.path.join("/var/log/ion/",logfile)):
+            if os.path.exists(os.path.join("/var/log/ion/", logfile)):
                 log_files.append(logfile)
 
         ctxd = {
@@ -436,12 +457,12 @@ def tsvm_control(request, action=''):
             'log_files': log_files
         }
         return render_to_response("admin/tsvm_control.html", RequestContext(request, ctxd))
-    
+
     elif request.method == 'POST':
         if "setup" in action:
-            version = request.REQUEST.get('version','')
+            version = request.REQUEST.get('version', '')
             response_object = tsvm.setup(version)
-        elif action in ["start","stop","suspend","destroy"]:
+        elif action in ["start", "stop", "suspend", "destroy"]:
             response_object = tsvm.ctrl(action)
         elif "status" in action:
             response_object = tsvm.status()
@@ -453,7 +474,7 @@ def tsvm_control(request, action=''):
             response_object = async_result.get()
         else:
             return http.HttpResponseBadRequest('Error: unknown action type specified: %s' % action)
-    
+
         return http.HttpResponse(json.dumps(response_object), content_type='application/json')
 
 
@@ -467,7 +488,7 @@ def tsvm_get_log(request, logfile):
         log = str(e)
     response = http.HttpResponse(log, content_type="text/plain;charset=utf-8")
     return response
-    
+
 
 def ot_log(request):
     """provide a way to output the log to the admin page"""
@@ -495,14 +516,14 @@ def updateOneTouch(request):
     """provide a simple interface to allow one touch updates"""
 
     #TODO: OT update does not provide useful log into in the case of found OTs
-    if request.method=="POST":
+    if request.method == "POST":
 
         if not os.path.exists("/tmp/OTlock"):
-            otLockFile = open("/tmp/OTlock",'w')
+            otLockFile = open("/tmp/OTlock", 'w')
             otLockFile.write("Update Started")
             otLockFile.close()
             try:
-                otStatusFile = open("/tmp/OTstatus",'w')
+                otStatusFile = open("/tmp/OTstatus", 'w')
                 otStatusFile.write("STARTED")
                 otStatusFile.close()
             except:
@@ -514,11 +535,11 @@ def updateOneTouch(request):
 
         return render_to_response(
             "admin/updateOneTouch.html",
-                {"post": True , "state" : state },
+                {"post": True, "state": state},
             RequestContext(request, {}),
             )
 
-    if request.method=="GET":
+    if request.method == "GET":
 
         return render_to_response(
             "admin/updateOneTouch.html",
@@ -530,10 +551,10 @@ def updateOneTouch(request):
 class ExperimentAdmin(admin.ModelAdmin):
     list_display = ('expName', 'date', 'status', 'plan')
     list_filter = ('status',)
-    search_fields = ['expName' ]
+    search_fields = ['expName']
     ordering = ('-date', 'expName', )
     actions = ['redo_from_scratch']
-    raw_id_fields = ('plan','repResult',)
+    raw_id_fields = ('plan', 'repResult',)
 
     def has_add_permission(self, request):
         return False
@@ -545,17 +566,18 @@ class ExperimentAdmin(admin.ModelAdmin):
 
     redo_from_scratch.short_description = "Delete and restart with Plan info"
 
+
 @staff_member_required
 def exp_redo_from_scratch(request):
-    pks = list( request.GET.get('ids').split(',') )
+    pks = list(request.GET.get('ids').split(','))
     exps = Experiment.objects.filter(id__in=pks)
 
-    if request.method=="GET":
+    if request.method == "GET":
 
         deletable_objects = []
         for exp in exps:
-            results_names = ['Results: %s' % result for result in exp.results_set.values_list('resultsName',flat=True)]
-            deletable_objects.append( ['Experiment: %s' % exp, results_names ] )
+            results_names = ['Results: %s' % result for result in exp.results_set.values_list('resultsName', flat=True)]
+            deletable_objects.append(['Experiment: %s' % exp, results_names])
 
         opts = Experiment._meta
         context = {
@@ -566,12 +588,12 @@ def exp_redo_from_scratch(request):
         }
         return render_to_response("admin/experiment_redo_from_scratch.html", RequestContext(request, context))
 
-    if request.method=="POST":
+    if request.method == "POST":
         results = Results.objects.filter(experiment__in=pks)
         results.delete()
         # modify experiment to make crawler pick it up again
         for exp in exps:
-            exp.unique = exp.plan.planGUID
+            exp.unique = 'redo_from_scratch_' + exp.unique
             exp.ftpStatus = ''
             exp.status = 'planned'
             exp.save()
@@ -588,7 +610,8 @@ def exp_redo_from_scratch(request):
 
 
 class PluginResultAdmin(admin.ModelAdmin):
-    def total_size(self,obj):
+
+    def total_size(self, obj):
         if obj.size < 0:
             return "N/A"
         return filesizeformat(obj.size)
@@ -599,11 +622,13 @@ class PluginResultAdmin(admin.ModelAdmin):
     list_filter = ('state',)
     search_fields = ('result__resultsName', 'plugin__name')
     readonly_fields = ('result', 'plugin', 'duration', 'path', 'total_size')
-    fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path','total_size'), 'store',)
-    ordering = ( "-id", )
+    fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path', 'total_size'), 'store',)
+    ordering = ("-id", )
+
 
 class PluginResultsInline(admin.StackedInline):
-    def total_size(self,obj):
+
+    def total_size(self, obj):
         if obj.size < 0:
             return "N/A"
         return filesizeformat(obj.size)
@@ -616,17 +641,19 @@ class PluginResultsInline(admin.StackedInline):
     fields = (('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path', 'total_size'), 'store')
     readonly_fields = ('duration', 'total_size', 'plugin', 'path')
     radio_fields = {'state': admin.HORIZONTAL}
-    ordering = ( "endtime", "-id", )
+    ordering = ("endtime", "-id", )
+
 
 class ResultsAdmin(admin.ModelAdmin):
-    list_display = ('resultsName','experiment','timeStamp','diskusage','status')
+    list_display = ('resultsName', 'experiment', 'timeStamp', 'diskusage', 'status')
     date_hierarchy = 'timeStamp'
     search_fields = ['resultsName']
     filter_horizontal = ('projects',)
-    inlines = [ PluginResultsInline, ]
+    inlines = [PluginResultsInline, ]
     readonly_fields = ('analysismetrics', 'libmetrics', 'qualitymetrics')
-    raw_id_fields = ('experiment','eas',)
-    ordering = ( "-id", )
+    raw_id_fields = ('experiment', 'eas', 'parentResult',)
+    ordering = ("-id", )
+
 
 class TFMetricsAdmin(admin.ModelAdmin):
     list_display = ('name', 'report')
@@ -637,19 +664,20 @@ class TemplateAdmin(admin.ModelAdmin):
 
 
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('name','defaultlocation')
+    list_display = ('name', 'defaultlocation')
 
 
 class PluginAdmin(admin.ModelAdmin):
-    list_display = ('name','selected','version','date','active','path','url')
-    list_filter = ('active','selected')
+    list_display = ('name', 'selected', 'version', 'date', 'active', 'defaultSelected', 'path', 'url')
+    list_filter = ('active', 'selected', 'defaultSelected')
+
 
 class EmailAddressAdmin(admin.ModelAdmin):
-    list_display = ('email','selected')
+    list_display = ('email', 'selected')
 
 
 class GlobalConfigAdmin(admin.ModelAdmin):
-    list_display = ('name','web_root',
+    list_display = ('name', 'web_root',
                     'site_name',
                     'plugin_folder',
                     'records_to_display',
@@ -660,45 +688,52 @@ class GlobalConfigAdmin(admin.ModelAdmin):
                     'default_storage_options',
                     )
     formfield_overrides = {
-        models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
+        models.CharField: {'widget': Textarea(attrs={'size': '512', 'rows': 4, 'cols': 80})}
     }
 
 
 class ChipAdmin(admin.ModelAdmin):
-    list_display = ('name','description','instrumentType', 'isActive', 'slots')
+    list_display = ('name', 'description', 'instrumentType', 'isActive', 'slots')
     ordering = ("name",)
     formfield_overrides = {
-        models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
+        models.CharField: {'widget': Textarea(attrs={'size': '512', 'rows': 4, 'cols': 80})}
     }
 
 
 class dnaBarcodeAdmin(admin.ModelAdmin):
-    list_display = ('name','id_str','sequence','adapter','annotation','score_mode','score_cutoff','type','length','floworder','index')
-    list_filter  = ('name',)
+    list_display = ('name', 'id_str', 'sequence', 'adapter', 'annotation', 'score_mode', 'score_cutoff', 'type', 'length', 'floworder', 'index')
+    list_filter = ('name',)
 
 
 class RunTypeAdmin(admin.ModelAdmin):
-    list_display = ('runType','description','application_groups')
-    
+    list_display = ('runType', 'description', 'application_groups')
+    readonly_fields = ('applicationGroups',)
+
     def application_groups(self, obj):
         return ", ".join([applicationGroup.name for applicationGroup in obj.applicationGroups.all()])
 
 
 class ReferenceGenomeAdmin(admin.ModelAdmin):
-    list_display = ('short_name','name')
+    list_display = ('short_name', 'name')
     # delete action doesn't remove ref files, disable it
     actions = None
 
 
 class ThreePrimeadapterAdmin(admin.ModelAdmin):
-    list_display = ('direction', 'chemistryType', 'name','sequence','description', 'isDefault')
+    list_display = ('direction', 'chemistryType', 'name', 'sequence', 'description', 'isDefault')
+
+
+class FlowOrderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description', 'flowOrder', 'isActive', 'isDefault', 'isSystem')
 
 
 class LibraryKeyAdmin(admin.ModelAdmin):
-    list_display = ('direction', 'name','sequence','description', 'isDefault')
+    list_display = ('direction', 'name', 'sequence', 'description', 'isDefault')
+
 
 class ProjectAdmin(admin.ModelAdmin):
     list_display = ('name', 'creator', 'public', 'modified')
+
 
 class PlannedExperimentQCInline(admin.TabularInline):
     model = PlannedExperiment.qcValues.through
@@ -712,16 +747,17 @@ class PlannedExperimentQCInline(admin.TabularInline):
 
 
 class PlannedExperimentAdmin(admin.ModelAdmin):
-    list_display = ('planName','planShortID','date', 'planExecuted', 'isReusable','isSystem', 'username', 'planStatus', 'isReverseRun')
+    list_display = ('planName', 'planShortID', 'date', 'planExecuted', 'isReusable', 'isSystem', 'username', 'planStatus', 'isReverseRun')
     list_filter = ('planExecuted',)
-    search_fields = ['planShortID',]
+    search_fields = ['planShortID', ]
     filter_horizontal = ('projects',)
-    raw_id_fields = ('latestEAS','parentPlan',)
+    raw_id_fields = ('latestEAS', 'parentPlan',)
 
-    inlines = [PlannedExperimentQCInline,]
+    inlines = [PlannedExperimentQCInline, ]
 
     def has_add_permission(self, request):
         return False
+
 
 class PlannedExperimentQCAdmin(admin.ModelAdmin):
     ##pass
@@ -729,75 +765,114 @@ class PlannedExperimentQCAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+
 class QCTypeAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
 
+
 class ReportStorageAdmin(admin.ModelAdmin):
     list_display = ("name", "default", "webServerPath", "dirPath")
+
 
 class FileServerAdmin(admin.ModelAdmin):
     list_display = ("name", "filesPrefix", "percentfull")
 
+
 class SampleAdmin(admin.ModelAdmin):
     list_display = ("name", "displayedName", "externalId", "status")
+
 
 class ExperimentAnalysisSettingsAdmin(admin.ModelAdmin):
     list_display = ("experiment", "isEditable", "isOneTimeOverride", "date", "status")
     list_filter = ('status',)
-    search_fields = ['experiment__expName' ]
-    ordering = ( "-id", )
+    search_fields = ['experiment__expName']
+    ordering = ("-id", )
     raw_id_fields = ('experiment',)
-    formfield_overrides = { models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})} }
+    formfield_overrides = {models.CharField: {'widget': Textarea(attrs={'size': '512', 'rows': 4, 'cols': 80})}}
+
 
 class DMFileSetAdmin(admin.ModelAdmin):
-    list_display = ('type','include','exclude','version')
+    list_display = ('type', 'include', 'exclude', 'version')
+
 
 class DMFileStatAdmin(admin.ModelAdmin):
-    list_display = ('result','dmfileset', 'diskspace', 'action_state', 'created')
+    list_display = ('result', 'dmfileset', 'diskspace', 'action_state', 'created')
     list_filter = ('action_state',)
     date_hierarchy = 'created'
     search_fields = ['result__resultsName']
 
+
 class EventLogAdmin(admin.ModelAdmin):
-    list_display = ('content_type','text','created')
+    list_display = ('content_type', 'text', 'created')
     list_filter = ('username',)
     date_hierarchy = 'created'
     search_fields = ['text']
 
+
 class AnalysisArgsAdmin(admin.ModelAdmin):
-    list_display = ('name','description', 'chipType', 'chip_default', 'sequenceKitName', 'templateKitName', 'libraryKitName', 'samplePrepKitName', "applType", "applGroup", 'active', 'isSystem', )
-    ordering = ( "chipType", "-chip_default", "name")
+    list_display = ('name', 'description', 'chipType', 'chip_default', 'active', 'sequenceKitName', 'templateKitName', 'libraryKitName', 'samplePrepKitName', "applType", "applGroup", 'isSystem', )
+    ordering = ("chipType", "-chip_default", "name")
     formfield_overrides = {
-        models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
+        models.CharField: {'widget': Textarea(attrs={'size': '512', 'rows': 4, 'cols': 80})}
     }
 
+
 class CruncherAdmin(admin.ModelAdmin):
-    list_display = ('name','state','date','comments')
+    list_display = ('name', 'state', 'date', 'comments')
     list_filter = ('state',)
 
+
 class KitInfoAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description', 'kitType', 'templatingSize', 'flowCount','uid', 'categories', 'isActive', 'instrumentType', 'samplePrep_instrumentType')
-    ordering = ( "kitType", "name",)
+    list_display = ('name', 'description', 'kitType', 'templatingSize', 'flowCount', 'uid', 'categories', 'isActive', 'instrumentType', 'samplePrep_instrumentType', 'applicationType', 'chipTypes')
+    ordering = ("kitType", "name",)
     list_filter = ('kitType',)
-    
+
+
 class RigAdmin(admin.ModelAdmin):
     list_display = ('name', 'ftpserver', 'location', 'state', 'serial')
     list_filter = ('ftpserver', 'location')
 
+
 class SharedServerAdmin(admin.ModelAdmin):
     list_display = ('name', 'address', 'username', 'active')
+
+
+class SampleSetItemInline(admin.StackedInline):
+    model = SampleSetItem
+    extra = 0
+    max_num = 1
+    verbose_name = "Sample Set Item"
+    fields = [('sample', 'dnabarcode', 'description', 'creator'), ('nucleotideType', 'pcrPlateColumn', 'pcrPlateRow'),
+        ('gender', 'relationshipRole', 'relationshipGroup'), ('cancerType', 'cellularityPct', 'biopsyDays', 'coupleId', 'embryoId')]
+    formfield_overrides = {models.CharField: {'widget': TextInput(attrs={'size': '25'})}, }
+
+
+class SampleSetAdmin(admin.ModelAdmin):
+    list_display = ('displayedName', 'description', 'status')
+    list_filter = ('status',)
+    exclude = ('libraryPrepInstrumentData', )
+    inlines = [SampleSetItemInline, ]
+
+
+class ApplProductAdmin(admin.ModelAdmin):
+    list_display = ('productName', 'applicationGroup', 'applType', 'isDefault', 'instrumentType', 'defaultChipType', 
+                    'isDefaultForInstrumentType', 'defaultLibraryKit', 'defaultTemplateKit', 'defaultIonChefPrepKit',
+                    'defaultSequencingKit', 'defaultIonChefSequencingKit', 'defaultFlowCount', 
+                    'isActive', 'isVisible', 'productCode')
+    ordering = ("applType", "applicationGroup", "productName",)
+    list_filter = ('applType',)
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
 admin.site.register(Message)
-admin.site.register(Location,LocationAdmin)
+admin.site.register(Location, LocationAdmin)
 admin.site.register(Rig, RigAdmin)
-admin.site.register(FileServer,FileServerAdmin)
+admin.site.register(FileServer, FileServerAdmin)
 admin.site.register(TFMetrics, TFMetricsAdmin)
-admin.site.register(ReportStorage,ReportStorageAdmin)
-admin.site.register(Cruncher,CruncherAdmin)
+admin.site.register(ReportStorage, ReportStorageAdmin)
+admin.site.register(Cruncher, CruncherAdmin)
 admin.site.register(AnalysisMetrics)
 admin.site.register(LibMetrics)
 admin.site.register(QualityMetrics)
@@ -806,11 +881,12 @@ admin.site.register(GlobalConfig, GlobalConfigAdmin)
 admin.site.register(Plugin, PluginAdmin)
 admin.site.register(PluginResult, PluginResultAdmin)
 admin.site.register(EmailAddress, EmailAddressAdmin)
-admin.site.register(Chip,ChipAdmin)
-admin.site.register(dnaBarcode,dnaBarcodeAdmin)
-admin.site.register(RunType,RunTypeAdmin)
-admin.site.register(ThreePrimeadapter,ThreePrimeadapterAdmin)
-admin.site.register(PlannedExperiment,PlannedExperimentAdmin)
+admin.site.register(Chip, ChipAdmin)
+admin.site.register(dnaBarcode, dnaBarcodeAdmin)
+admin.site.register(RunType, RunTypeAdmin)
+admin.site.register(ThreePrimeadapter, ThreePrimeadapterAdmin)
+admin.site.register(FlowOrder, FlowOrderAdmin)
+admin.site.register(PlannedExperiment, PlannedExperimentAdmin)
 admin.site.register(Publisher)
 admin.site.register(ContentUpload)
 admin.site.register(Content)
@@ -818,16 +894,16 @@ admin.site.register(UserEventLog)
 admin.site.register(UserProfile)
 admin.site.register(VariantFrequencies)
 #ref genome
-admin.site.register(ReferenceGenome,ReferenceGenomeAdmin)
+admin.site.register(ReferenceGenome, ReferenceGenomeAdmin)
 
-admin.site.register(Project,ProjectAdmin)
+admin.site.register(Project, ProjectAdmin)
 
 admin.site.register(KitInfo, KitInfoAdmin)
 admin.site.register(KitPart)
 admin.site.register(LibraryKey, LibraryKeyAdmin)
 
 admin.site.register(QCType, QCTypeAdmin)
-admin.site.register(ApplProduct)
+admin.site.register(ApplProduct, ApplProductAdmin)
 
 admin.site.register(PlannedExperimentQC, PlannedExperimentQCAdmin)
 
@@ -840,11 +916,15 @@ admin.site.register(RemoteAccount)
 admin.site.register(FileMonitor)
 admin.site.register(SupportUpload)
 admin.site.register(NewsPost)
-admin.site.register(AnalysisArgs,AnalysisArgsAdmin)
-admin.site.register(SharedServer,SharedServerAdmin)
+admin.site.register(AnalysisArgs, AnalysisArgsAdmin)
+admin.site.register(SharedServer, SharedServerAdmin)
+admin.site.register(SampleSet, SampleSetAdmin)
 
 # Add sessions to admin
+
+
 class SessionAdmin(admin.ModelAdmin):
+
     def _session_data(self, obj):
         return obj.get_decoded()
     list_display = ['session_key', '_session_data', 'expire_date']

@@ -5,21 +5,23 @@ import requests
 import traceback
 import logging
 import json
-import socket
 import time
 
 from iondb.rundb.models import SharedServer, PlannedExperiment, PlannedExperimentQC, QCType, dnaBarcode, User, \
-        Sample, SampleSet, SampleSetItem, Content, Plugin, EventLog, SamplePrepData
+    Sample, SampleSet, SampleSetItem, Content, Plugin, EventLog, SamplePrepData
 from django.core.serializers.json import DjangoJSONEncoder
 
 from iondb.plugins.launch_utils import find_IRU_account
 from ion import version as TS_VERSION
+from iondb.utils.hostip import gethostname
 
 logger = logging.getLogger(__name__)
 
 debug = False
 
+
 class Status:
+
     def __init__(self):
         self.msg = ''
         self.error = ''
@@ -29,21 +31,22 @@ class Status:
             self.msg += '<p>%s</p>' % msg
         if error:
             self.error += '<p>%s</p>' % error
-    
+
     def to_dict(self):
         return {'msg': self.msg, 'error': self.error}
-    
+
     def add_plan_history(self, plan, username):
         # update plan History log
         if self.msg:
-            text = 'Plan Transfer: \n' + self.msg.replace('<p>','').replace('</p>','\n')
+            text = 'Plan Transfer: \n' + self.msg.replace('<p>', '').replace('</p>', '\n')
             EventLog.objects.add_entry(plan, text, username)
         if self.error:
-            text = 'Plan Transfer Errors: \n' + self.error.replace('<p>','').replace('</p>','\n')
+            text = 'Plan Transfer Errors: \n' + self.error.replace('<p>', '').replace('</p>', '\n')
             EventLog.objects.add_entry(plan, text, username)
 
 
 ''' Plan share Destination TS functions '''
+
 
 def create_associated_objects(status, plan, obj_dict, user):
 
@@ -54,12 +57,12 @@ def create_associated_objects(status, plan, obj_dict, user):
     if 'samples' in obj_dict:
         try:
             for sample_dict in obj_dict['samples']:
-                sample,created = Sample.objects.get_or_create(name=sample_dict['name'], externalId=sample_dict['externalId'], defaults=sample_dict)
+                sample, created = Sample.objects.get_or_create(name=sample_dict['name'], externalId=sample_dict['externalId'], defaults=sample_dict)
                 sample.experiments.add(plan.experiment)
-            
+
             status.update(msg='....processed Samples: '+', '.join(s['displayedName'] for s in obj_dict['samples']))
         except Exception as err:
-            logger.error('Error processing Samples for %s(%s)' % (plan.planName,plan.pk))
+            logger.error('Error processing Samples for %s(%s)' % (plan.planName, plan.pk))
             logger.error(traceback.format_exc())
             status.update(error='Error processing samples: %s' % err)
 
@@ -67,21 +70,21 @@ def create_associated_objects(status, plan, obj_dict, user):
     for set_dict in obj_dict['sampleSets']:
         try:
             set_dict['creator_id'] = set_dict['lastModifiedUser_id'] = user.pk
-            libraryPrep_dict = set_dict.pop('libraryPrepInstrumentData','')
-            samplesetitems = set_dict.pop('sampleSetItems',[])
+            libraryPrep_dict = set_dict.pop('libraryPrepInstrumentData', '')
+            samplesetitems = set_dict.pop('sampleSetItems', [])
 
-            sampleSet,created = SampleSet.objects.get_or_create(displayedName=set_dict['displayedName'], defaults=set_dict)
+            sampleSet, created = SampleSet.objects.get_or_create(displayedName=set_dict['displayedName'], defaults=set_dict)
             sampleSet.plans.add(plan)
 
             for setitem_dict in samplesetitems:
-                sample = plan.experiment.samples.get(name = setitem_dict.pop('sample__name'))
+                sample = plan.experiment.samples.get(name=setitem_dict.pop('sample__name'))
                 if 'dnabarcode' in setitem_dict:
                     barcode = setitem_dict.pop('dnabarcode')
-                    dnabarcode = dnaBarcode.objects.filter(name = barcode['name'], id_str = barcode['id_str'])
+                    dnabarcode = dnaBarcode.objects.filter(name=barcode['name'], id_str=barcode['id_str'])
                     setitem_dict['dnabarcode'] = dnabarcode[0] if dnabarcode else None
-               
+
                 setitem_dict['creator_id'] = setitem_dict['lastModifiedUser_id'] = user.pk
-                item,created = SampleSetItem.objects.get_or_create(sample=sample, sampleSet=sampleSet, defaults=setitem_dict)
+                item, created = SampleSetItem.objects.get_or_create(sample=sample, sampleSet=sampleSet, defaults=setitem_dict)
 
             if libraryPrep_dict:
                 if not sampleSet.libraryPrepInstrumentData:
@@ -91,10 +94,10 @@ def create_associated_objects(status, plan, obj_dict, user):
                     for field, value in libraryPrep_dict.items():
                         setattr(sampleSet.libraryPrepInstrumentData, field, value)
                     sampleSet.libraryPrepInstrumentData.save()
-            
+
             status.update(msg='....processed SampleSet: %s' % sampleSet.displayedName)
         except Exception as err:
-            logger.error('Error processing sampleSet for %s(%s)' % (plan.planName,plan.pk))
+            logger.error('Error processing sampleSet for %s(%s)' % (plan.planName, plan.pk))
             logger.error(traceback.format_exc())
             status.update(error='Error processing sampleSet: %s' % err)
 
@@ -109,16 +112,16 @@ def update_transferred_plan(plan, request):
     ''' This function that runs on destination TS to update plan-related objects '''
     if debug:
         starttime = time.time()
-    
+
     # update plan History log
     log = 'Transferred Planned Run: %s from %s.' % (plan.planDisplayedName, plan.metaData.get('origin'))
     EventLog.objects.add_entry(plan, log, request.user.username)
-    
+
     obj_dict = json.loads(request.body)
-    
+
     status = Status()
     eas = plan.latest_eas
-    
+
     # create Samples, etc.
     create_associated_objects(status, plan, obj_dict, request.user)
 
@@ -139,28 +142,29 @@ def update_transferred_plan(plan, request):
                     break
         except:
             pass
-        
+
         if accountId:
             userInput = eas.selectedPlugins['IonReporterUploader']['userInput']
             userInput['accountId'] = accountId
             if irname != accountName:
-                userInput['accountName'] = userInput['accountName'].replace(irname,accountName)
+                userInput['accountName'] = userInput['accountName'].replace(irname, accountName)
             status.update(msg='....found IR account %s' % userInput['accountName'])
         else:
             eas.selectedPlugins.pop('IonReporterUploader')
             status.update(error='Error: IonReporter account not found. Please add IR account on destination Server and update the Planned run.')
-    
+
     eas.save()
 
     status.add_plan_history(plan, request.user.username)
 
     if debug:
         logger.debug('%f s: Plan Transfer update_transferred_plan %s' % ((time.time()-starttime), plan.planDisplayedName))
-    
+
     return status.to_dict()
 
 
 ''' Plan share Origin TS functions '''
+
 
 def prepare_for_copy(bundle):
 
@@ -170,7 +174,7 @@ def prepare_for_copy(bundle):
     bundle.data.pop('sampleSets')
 
     # qcValues
-    qcValues = bundle.data.pop('qcValues',[])
+    qcValues = bundle.data.pop('qcValues', [])
     try:
         for qc in qcValues:
             bundle.data[qc.obj.qcType.qcName] = qc.obj.threshold
@@ -178,7 +182,8 @@ def prepare_for_copy(bundle):
         logger.error(traceback.format_exc())
 
     # indicate this plan's origin
-    bundle.data['metaData']['origin'] = socket.getfqdn()
+    bundle.data['origin'] = 'transfer'
+    bundle.data['metaData']['origin'] = gethostname()
     bundle.data['metaData']['uri'] = bundle.data.pop('resource_uri')
     return bundle
 
@@ -189,18 +194,18 @@ def get_associated_objects_json(plan):
         d = {}
         for field in obj._meta.fields:
             if field.get_internal_type() not in ['AutoField', 'ForeignKey', 'OneToOneField', 'ManyToManyField']:
-                d[field.name] = getattr(obj,field.name)
+                d[field.name] = getattr(obj, field.name)
         return d
 
     obj_dict = {}
-    
-    # Samples 
+
+    # Samples
     samples = plan.experiment.samples.all()
     obj_dict['samples'] = []
     for sample in samples:
         d = get_obj_dict(sample)
         obj_dict['samples'].append(d)
-    
+
     # SampleSet
     obj_dict['sampleSets'] = []
     for sampleSet in plan.sampleSets.all():
@@ -221,17 +226,16 @@ def get_associated_objects_json(plan):
 
         obj_dict['sampleSets'].append(sampleSet_dict)
 
-
     # Ion Reporter account
     eas = plan.latest_eas
     if 'IonReporterUploader' in eas.selectedPlugins:
         try:
-            accountId = eas.selectedPlugins['IonReporterUploader'].get('userInput',{}).get('accountId')
+            accountId = eas.selectedPlugins['IonReporterUploader'].get('userInput', {}).get('accountId')
             iru_config = Plugin.objects.get(name='IonReporterUploader', active=True).config
             obj_dict['IR_account'] = find_IRU_account(iru_config, accountId)
         except:
             logger.error(traceback.format_exc())
-    
+
     return json.dumps(obj_dict, cls=DjangoJSONEncoder)
 
 
@@ -243,8 +247,8 @@ def mark_plan_transferred(plan, location, username, status):
         'username': username,
         'date': time.strftime("%Y_%m_%d_%H_%M_%S"),
         'location': location,
-        'msg': status.msg.replace('<p>','').replace('</p>',' '),
-        'error': status.error.replace('<p>','').replace('</p>',' ')
+        'msg': status.msg.replace('<p>', '').replace('</p>', ' '),
+        'error': status.error.replace('<p>', '').replace('</p>', ' ')
     }
     plan.save()
     # also update status for experiment obj
@@ -258,7 +262,7 @@ def check_for_existing_plan(plan, session, status):
     '''
     r = session.get(session.api_url + 'plannedexperiment/?planGUID=%s' % plan.planGUID)
     r.raise_for_status()
-    
+
     exists = False
     ret = r.json()
     if len(ret['objects']) > 0:
@@ -267,7 +271,7 @@ def check_for_existing_plan(plan, session, status):
         if remote_plan['planStatus'] == 'transferred':
             # delete the plan so it can be re-transferred
             try:
-                r = session.delete('http://%s%s' % (session.address, remote_plan['resource_uri']) )
+                r = session.delete('http://%s%s' % (session.address, remote_plan['resource_uri']))
                 r.raise_for_status()
                 exists = False
             except Exception as e:
@@ -293,22 +297,22 @@ def setup_session(server_name):
 
 def transfer_plan(plan, serialized, server_name, username):
     ''' This function runs on origin TS to initiate plan transfer through the API '''
-    
+
     logger.debug('Transfer plan resource, planName= %s, to %s' % (plan.planDisplayedName, server_name))
 
     status = Status()
-    
+
     # Make sure transfer is allowed for this plan status
     if plan.planStatus == 'reserved' or plan.planStatus == 'run':
         status.update(error='Error: Planned run %s has status= %s and cannot be transferred.' % (plan.planDisplayedName, plan.planStatus))
         return status.to_dict()
-    
+
     # set up communication
     session, version = setup_session(server_name)
-    if version != TS_VERSION:
+    if version != TS_VERSION and not os.path.exists('/opt/ion/.ion-internal-server'):
         status.update(error='Unable to transfer plan: Torrent Suite version %s does not match %s software version %s.' % (TS_VERSION, server_name, version))
         return status.to_dict()
-    
+
     if debug:
         starttime = time.time()
 
@@ -319,18 +323,18 @@ def transfer_plan(plan, serialized, server_name, username):
         return status.to_dict()
 
     if debug:
-        logger.debug('%f s: Plan Transfer check_for_existing_plan' % (time.time()-starttime) )
+        logger.debug('%f s: Plan Transfer check_for_existing_plan' % (time.time()-starttime))
         starttime = time.time()
 
     # copy Plan/Experiment/EAS through plannedexperiment API
-    r = session.post(session.api_url + 'plannedexperiment/', data = serialized)
+    r = session.post(session.api_url + 'plannedexperiment/', data=serialized)
     # handle unsuccessful POST
     if not r.ok:
         try:
             status.update(error='Unable to transfer plan %s to Torrent Server %s.' % (plan.planDisplayedName, server_name))
             # parse validation errors
             errjson = json.loads(r.json()['error'][3:-2])
-            for k,v in errjson.items():
+            for k, v in errjson.items():
                 status.update(error='Error: %s' % (json.dumps(v)))
             return status.to_dict()
         except:
@@ -339,8 +343,8 @@ def transfer_plan(plan, serialized, server_name, username):
     new_plan_url = r.headers['location']
 
     if debug:
-        logger.debug('%f s: Plan Transfer POST %s/plannedexperiment/' % (time.time()-starttime, session.api_url) )
-    
+        logger.debug('%f s: Plan Transfer POST %s/plannedexperiment/' % (time.time()-starttime, session.api_url))
+
     planlink = 'http://%s/plan/planned/' % session.address
     status.update(msg='Successfully created %s on Torrent Server <a href="%s" target="_blank">%s</a>' % (plan.planDisplayedName, planlink, server_name))
 
@@ -349,26 +353,26 @@ def transfer_plan(plan, serialized, server_name, username):
 
     if debug:
         starttime = time.time()
-    
+
     try:
-        r = session.get(new_plan_url+'transfer/', data = objJson)
+        r = session.get(new_plan_url+'transfer/', data=objJson)
         r.raise_for_status()
         ret = r.json()
         errors = ret.get('error')
         if errors:
-            editlink='http://%s/plan/page_plan_edit_plan/%s/' % (session.address, new_plan_url.split('/')[-2])
-            status.update(error='Planned run data is incomplete, please <a href="%s" target="_blank">Edit %s</a> to fix the following errors' %(editlink, plan.planDisplayedName))
+            editlink = 'http://%s/plan/page_plan_edit_plan/%s/' % (session.address, new_plan_url.split('/')[-2])
+            status.update(error='Planned run data is incomplete, please <a href="%s" target="_blank">Edit %s</a> to fix the following errors' % (editlink, plan.planDisplayedName))
         status.update(ret.get('msg'), errors)
     except Exception as err:
-        status.update(error='Error: Unable to update plan on Torrent Server %s: %s' % (server_name,err))
+        status.update(error='Error: Unable to update plan on Torrent Server %s: %s' % (server_name, err))
         status.update(error='Planned run data is incomplete, please Edit %s on destination Server to complete the transfer' % plan.planDisplayedName)
-        logger.error('Failed to update plan for %s(%s)' % (plan.planName,plan.pk))
+        logger.error('Failed to update plan for %s(%s)' % (plan.planName, plan.pk))
         logger.error(traceback.format_exc())
 
     if debug:
         logger.debug('%f s: Plan Transfer GET %s' % (time.time()-starttime, new_plan_url+'transfer/'))
-    
+
     # update local plan
     mark_plan_transferred(plan, new_plan_url, username, status)
-    
+
     return status.to_dict()

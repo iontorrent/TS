@@ -4,7 +4,6 @@
 #include <iostream>
 #include "EmptyTrace.h"
 #include "BkgTrace.h"
-#include "TraceClassifier.h"
 #include "Stats.h"
 
 EmptyTrace::EmptyTrace ( const CommandLineOpts &clo )
@@ -406,8 +405,7 @@ void EmptyTrace::GenerateAverageEmptyTrace (
   float final_weight = total_weight;
   if ( do_ref_trace_trim )
     {
-      SynchDat *sdat = NULL;
-      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, sdat );
+      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img );
     }
 
   // if ( final_weight != total_weight )
@@ -437,7 +435,7 @@ int EmptyTrace::SecondsToIndex ( float seconds, std::vector<float>& time )
   return ( f-time.begin() -1 );
 }
 
-// given uniform traces, i.e. non-sdat, set up timePoints
+// given uniform traces, set up timePoints
 // generally treats the value v[i] as oberved at timePoints[i]
 // maybe only approximately consistent with uniform data
 void EmptyTrace::SetTime(float frames_per_second)
@@ -451,196 +449,6 @@ void EmptyTrace::SetTime(float frames_per_second)
   }
 }  
 
-// given traces, set up timePoints
-// assumes that the corresponding value v[i] matches the midpoint
-// of the interval [0, timePoints[0]] if i=0;
-// otherwise is    [timePoints[i-1], timePoints[i]], if i>0
-void EmptyTrace::SetTimeFromSdatChunk(Region& region, SynchDat &sdat) {
-  TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region.row, region.col);
-  int numUncompFrames = sdat.GetOrigUncompFrames();
-  int baseFrameRate = sdat.GetBaseFrameRate();
-  // copy the timing over
-  // needed for interpolation
-  timePoints.clear();
-  timePoints.resize(numUncompFrames);
-  for (int i = 0; i < numUncompFrames; i++) {
-    timePoints[i] = round(i * baseFrameRate / 1000.0f);
-  }
-  secondsPerFrame = chunk.FramesToSeconds(1.0f);
-}
-
-// sdat has compressed data by regions which may not match the regions
-// being passed in here.  Each sdat region is organized with an
-// associated timing vector that matches the frame data to the timing data
-// If reference traces in this region span multiple sdat regions then their
-// timing may be different and will be interpolated to match the timing of
-// the EmptyTrace
-void EmptyTrace::GenerateAverageEmptyTrace ( 
-    Region *region, 
-    const PinnedInFlow& pinnedInFlow, 
-    const Mask *bfmask, 
-    SynchDat &sdat, 
-    int flow_buffer_index,
-    int raw_flow
-  )
-{
-  // these are used by both the background and live-bead
-  bg_dc_offset[flow_buffer_index] = 0;  // zero out in each new block
-
-  memset ( &bg_buffers[flow_buffer_index*imgFrames],0,sizeof ( float [imgFrames] ) );
-  float *bPtr;
-  std::vector<float> tmp ( imgFrames, 0 );
-
-  float total_weight = 0.0001f;
-  bPtr = &bg_buffers[flow_buffer_index*imgFrames];
-
-  assert ( nRef >= 0 );
-
-  int iWell = 0;
-  int ix_t0 = 0, ix_t1 = 0, ix_t2 = 0;
-  std::vector<float>valsAtT0, valsAtT1, valsAtT2, samplingTimes;
-  if ( do_ref_trace_trim )
-    {
-      valsAtT0.resize ( nRef,0 );
-      valsAtT1.resize ( nRef,0 );
-      valsAtT2.resize ( nRef,0 );
-      ix_t0 = sampleIndex[0]; // t0
-      ix_t1 = sampleIndex[1]; // 1/2 way to the nuc_flow end
-      ix_t2 = sampleIndex[2];   //  nuc flow end
-    }
-  TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region->row, region->col);
-  assert(chunk.mRowStart == (size_t)region->row && chunk.mColStart == (size_t)region->col && 
-	 chunk.mHeight == (size_t)region->h && chunk.mWidth == (size_t)region->w);
-  for ( int ay=region->row;ay<region->row+region->h;ay++ )
-    {
-      for ( int ax=region->col;ax<region->col+region->w;ax++ )
-        {
-
-          int ix = bfmask->ToIndex ( ay, ax );
-          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( raw_flow, ix ) );
-          if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
-            {
-              float w=1.0f;
-              size_t idx = (ay - region->row) * chunk.mWidth + (ax - region->col);
-#ifdef LIVE_WELL_WEIGHT_BG
-              w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
-#endif
-              total_weight += w;
-              for ( size_t f = 0; f < ( size_t ) chunk.mDepth; f++ ) {
-                //tmp[f] += w * sdat.At ( ay, ax, f );
-                tmp[f] += w * chunk.mData[idx];
-                idx += chunk.mFrameStep;
-              }
-	      if ( do_ref_trace_trim )
-		{
-		  valsAtT0[iWell] = sdat.AtWell ( ay, ax, ix_t0);
-		  valsAtT1[iWell] = sdat.AtWell ( ay, ax, ix_t1);
-		  valsAtT2[iWell] = sdat.AtWell ( ay, ax, ix_t2);
-		  iWell++;
-		}
-            }
-        }
-    }
-  // fprintf(stdout, "GenerateAverageEmptyTrace: flow_buffer_index=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", flow_buffer_index, region->row, region->col, total_weight, flow);
-  float final_weight = total_weight;
-  if ( do_ref_trace_trim )
-    {
-      Image *img = NULL;
-      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, &sdat );
-    }
-
-  for ( int frame=0;frame < (int)chunk.mDepth;frame++ )
-    {
-      tmp[frame] = tmp[frame] / final_weight;
-      assert ( !isnan (tmp[frame]) );
-    }
-  int numUncompFrames = sdat.GetOrigUncompFrames();//GetOrigChipFrames();
-  int baseFrameRate = sdat.GetBaseFrameRate();
-  
-  for (int i = 0; i < numUncompFrames; i++) {
-    bPtr[i] = SynchDat::InterpolateValue(&tmp[0], chunk.mTimePoints, (i * baseFrameRate) / 1000.0f);
-  }
-
-}
-
-void EmptyTrace::GenerateAverageEmptyTraceUncomp ( 
-    TimeCompression &time_cp, 
-    Region *region,     
-    PinnedInFlow& pinnedInFlow,   
-    Mask *bfmask,   
-    SynchDat &sdat,   
-    int flow_buffer_index,
-    int raw_flow
-  )
-{
-  //  doingSdat = true;
-  // these are used by both the background and live-bead
-  bg_dc_offset[flow_buffer_index] = 0;  // zero out in each new block
-  memset ( &bg_buffers[flow_buffer_index*imgFrames],0,sizeof ( float [imgFrames] ) );
-  float *bPtr;
-  std::vector<float> tmp ( imgFrames, 0 );
-
-  float total_weight = 0.0001f;
-  bPtr = &bg_buffers[flow_buffer_index*imgFrames];
-
-  assert ( nRef >= 0 );
-
-  int iWell = 0;
-  int ix_t0 = 0, ix_t1 = 0, ix_t2 = 0;
-  std::vector<float>valsAtT0, valsAtT1, valsAtT2, samplingTimes;
-  if ( do_ref_trace_trim )
-    {
-      valsAtT0.resize ( nRef,0 );
-      valsAtT1.resize ( nRef,0 );
-      valsAtT2.resize ( nRef,0 );
-      ix_t0 = sampleIndex[0]; // t0
-      ix_t1 = sampleIndex[1]; // 1/2 way to the nuc_flow end
-      ix_t2 = sampleIndex[2];   //  nuc flow end
-    }
-
-  for ( int ay=region->row;ay<region->row+region->h;ay++ )
-    {
-      for ( int ax=region->col;ax<region->col+region->w;ax++ )
-        {
-
-          int ix = bfmask->ToIndex ( ay, ax );
-          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( raw_flow, ix ) );
-          if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
-            {
-              float w=1.0f;
-#ifdef LIVE_WELL_WEIGHT_BG
-              w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
-#endif
-              total_weight += w;
-              for ( size_t f = 0; f < ( size_t ) imgFrames; f++ ) {
-                tmp[f] = sdat.GetTimeVal ( ay, ax, f/time_cp.frames_per_second );
-              }
-        
-              AccumulateEmptyTrace ( bPtr, &tmp[0], w );
-              if ( do_ref_trace_trim )
-                {
-                  valsAtT0[iWell] = tmp[ix_t0];
-                  valsAtT1[iWell] = tmp[ix_t1];
-                  valsAtT2[iWell] = tmp[ix_t2];
-                  iWell++;
-                }
-            }
-        }
-    }
-  // fprintf(stdout, "GenerateAverageEmptyTrace: flow_buffer_index=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", flow_buffer_index, region->row, region->col, total_weight, flow);
-  float final_weight = total_weight;
-  if ( do_ref_trace_trim )
-    {
-      Image *img = NULL;
-      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, &sdat );
-    }
-
-  for ( int frame=0;frame < imgFrames;frame++ )
-    {
-      bPtr[frame] = bPtr[frame] / final_weight;
-      assert ( !isnan (bPtr[frame]) );
-    }
-}
 
 void EmptyTrace::T0EstimateToMap ( const std::vector<float>& sep_t0_est, const Region *region, const Mask *bfmask )
 {
@@ -725,7 +533,7 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
                                    std::vector<float>& valsAtT0,
                                    std::vector<float>& valsAtT1,
                                    std::vector<float>& valsAtT2, float total_weight,
-                                   const Mask *bfmask, Image *img, SynchDat *sdat )
+                                   const Mask *bfmask, Image *img )
 {
   // find anything really wild and trim it out
   // by adjusting values in the float array bPtr
@@ -806,24 +614,11 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
           bfmask->IndexToRowCol ( regionIndices[i], ay, ax );
           assert ( regionIndices[i] == bfmask->ToIndex ( ay, ax ) );
           
-          if ( sdat == NULL )  {
             TraceHelper::GetUncompressedTrace ( tmp,img,ax,ay, imgFrames );
             //if ( t0_map.size() > 0 )
               //TraceHelper::SpecialShiftTrace ( tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
             if ( t0_map.size() > 0 )
               TraceHelper::ShiftTraceBiDirect(tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
-          }
-          else {
-            //        if ( regionAndTimingMatchesSdat )
-            if(true) {
-              for ( size_t f = 0; f < ( size_t ) imgFrames; f++ ) {
-                tmp_shifted[f] = sdat->AtWell ( ay, ax, f );
-              }
-            }
-            else {
-              sdat->InterpolatedAt ( ay, ax, timePoints, tmp_shifted );
-            }
-          }
           // remove the wild trace
           RemoveEmptyTrace ( bPtr, &tmp_shifted[0], w );
           wt -= w;

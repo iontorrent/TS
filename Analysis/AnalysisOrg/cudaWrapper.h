@@ -1,7 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#ifndef CUDAWRAPPER_H 
-#define CUDAWRAPPER_H 
+#ifndef CUDAWRAPPER_H
+#define CUDAWRAPPER_H
 
 #include "WorkerInfoQueue.h"
 #include "BkgModel/MathModel/MathOptim.h"
@@ -15,25 +15,12 @@
 
 class BkgGpuPipeline;
 class BkgModelWorkInfo;
-class SampleCollection;
-/*
-bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, int use_all_gpus,
-  int &numBkgWorkers_gpu);
-void configureKernelExecution(GpuControlOpts opts, int global_max_flow_key, 
-                                                  int global_max_flow_max);
-void* BkgFitWorkerGpu(void* arg); 
-void InitConstantMemoryOnGpu(int device, PoissonCDFApproxMemo& poiss_cache);
 
-void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q, WorkerInfoQueue* errorQueue);
-bool TryToAddSingleFitStream(void * vpsM, WorkerInfoQueue* q);
+#ifdef ION_COMPILE_CUDA
+#include "SampleHistory.h"
+//class HistoryCollection;
+#endif
 
-bool ProcessProtonBlockImageOnGPU(
-    BkgModelWorkInfo* fitterInfo, 
-    int flowBlockSize,
-    int deviceId);
-
-void* flowByFlowHandshakeWorker(void *arg);
-*/
 
 
 /*************************************************
@@ -51,6 +38,7 @@ class gpuDeviceConfig
   //hardware configuration
   int maxComputeVersion;
   int minComputeVersion;
+  //int minDeviceMemory;
   std::vector<int> validDevices;
 
 
@@ -200,21 +188,18 @@ class cudaWrapper{
   bool useGpu;
   bool useAllGpus;
   gpuDeviceConfig deviceConfig;
-
   //old pipeline resources
   WorkerInfoQueue * workQueue;
   std::vector<gpuBkgFitWorker*> BkgWorkerThreads;
 
+  GpuControlOpts * configOpts;
+
 //new pipeline resources
 #ifdef ION_COMPILE_CUDA
-  SampleCollection * RegionalFitSampleHistory;
+  HistoryCollection * RegionalFitHistory;
   BkgGpuPipeline * GpuPipeline;
 #endif
   flowByFlowHandshaker * Handshaker;
-
-public:
-
-
 
 
 protected:
@@ -223,6 +208,7 @@ protected:
    void destroyQueue();
 
 public:
+
   cudaWrapper();
   ~cudaWrapper();
 
@@ -235,7 +221,9 @@ public:
   //check flags
   bool useGpuAcceleration() { return useGpu; }
 
-  void configureKernelExecution( GpuControlOpts opts, int global_max_flow_key, int global_max_flow_max );
+  void configureKernelExecution( int global_max_flow_key, int global_max_flow_max );
+
+
   void createQueue(int numRegions);
 
 
@@ -250,18 +238,50 @@ public:
                                                 std::vector<SignalProcessingMasterFitter*> * fitters,
                                                 SemQueue *packQueue,
                                                 SemQueue *writeQueue,
-                                                ChunkyWells *rawWells);
+                                                ChunkyWells *rawWells,
+                                                int startingFlow);
 
-  void collectSampleHistroyForRegionalFitting(BkgModelWorkInfo* bkinfo, int flowBlockSize, int extractNumFlows);
+  void collectHistroyForRegionalFitting(BkgModelWorkInfo* bkinfo, int flowBlockSize, int extractNumFlows);
+  void mirrorDeviceBuffersToHostForSerialization();
+
 
   void joinFlowByFlowHandshakeWorker();
 
+
+  int switchAtFlow() { return configOpts->switchToFlowByFlowAt; }
+  bool usePostFitHandshakeWorker() { return configOpts->postFitHandshakeWorker; }
   bool handshakeCreated() { return (Handshaker != NULL); }
+  bool useFlowByFlowExecution() { return configOpts->gpuFlowByFlowExecution; };
+  bool isCurrentFlowExecutedAsFlowByFlow(int currentFlow) { return ( useFlowByFlowExecution() && currentFlow >= switchAtFlow()); }
+  bool ampGuessOnGpu(){ return (configOpts->gpuSingleFlowFit && configOpts->gpuAmpGuess); }
 
-
-
-
+  bool checkIfInitFlowByFlow(int currentFlow, bool restart);
   bool fullBlockSignalProcessing(BkgModelWorkInfo* bkinfo);
+
+
+
+private:
+  // Serialization section
+ friend class boost::serialization::access;
+  template<typename Archive>
+   void load(Archive& ar, const unsigned version)
+   {
+#ifdef ION_COMPILE_CUDA
+    ar  & RegionalFitHistory;
+#endif
+
+
+   }
+ template<typename Archive>
+   void save(Archive& ar, const unsigned version) const
+   {
+#ifdef ION_COMPILE_CUDA
+     cout << "STORE STORE STORE cudaWrapper " <<  endl;
+     ar &  RegionalFitHistory;
+#endif
+   }
+
+ BOOST_SERIALIZATION_SPLIT_MEMBER()
 
 
 };

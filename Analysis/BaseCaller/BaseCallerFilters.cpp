@@ -21,6 +21,7 @@
 #include "BaseCallerUtils.h"
 #include "DPTreephaser.h"
 #include "OrderedDatasetWriter.h"
+#include "MolecularTagTrimmer.h"
 
 using namespace std;
 
@@ -34,13 +35,14 @@ enum FilteringOutcomes_t {
   kFilterHighPPF,               //!< Read filtered out, percent positive flows too large
   kFilterPolyclonal,            //!< Read filtered out, looks polyclonal
   kFilterHighResidual,          //!< Read filtered out, median residual too high
-  kFilterBeverly,               //!< Read filtered out, Beverly filter disapproved
+  //kFilterBeverly,               //!< Read filtered out, Beverly filter disapproved
+  kFilterQuality,               //!< Read filtered out, expected number of errors rose too high
   kBkgmodelHighPPF,             //!< Read filtered out by Analysis, percent positive flows too high
   kBkgmodelPolyclonal,          //!< Read filtered out by Analysis, looks polyclonal
   kBkgmodelFailedKeypass,       //!< Read filtered out by Analysis, key sequence not a perfect match
-  kFilteredShortAdapterTrim,    //!< Read filtered out, too short after adapter trimming
-  kFilteredShortQualityTrim,    //!< Read filtered out, too short after quality trimming
-  kFilteredAvalancheTrim        //!< Read filtered out, too short after Avalanche trimming
+  kFilterShortAdapterTrim,    //!< Read filtered out, too short after adapter trimming
+  kFilterShortQualityTrim,    //!< Read filtered out, too short after quality trimming
+  kFilterShortTagTrim         //!< Read filtered out, too short after suffix (tag/extr-trim-right) trimming
 };
 
 enum QualityTrimmingModes {
@@ -77,9 +79,13 @@ ReadFilteringHistory::ReadFilteringHistory()
   is_called   = false;
   n_bases     = -1;
 
-  n_bases_key    = 0;
-  n_bases_prefix = 0;
+  // refer to 5' positions
+  n_bases_key      = 0;
+  n_bases_barcode  = 0;
+  n_bases_tag      = 0;
+  n_bases_prefix   = 0;
 
+  // refer to 3' positions
   n_bases_after_bkgmodel_high_ppf   = -1;
   n_bases_after_bkgmodel_polyclonal = -1;
   n_bases_after_bkgmodel_bad_key    = -1;
@@ -88,9 +94,11 @@ ReadFilteringHistory::ReadFilteringHistory()
   n_bases_after_too_short           = -1;
   n_bases_after_bad_key             = -1;
   n_bases_after_high_residual       = -1;
-  n_bases_after_beverly_trim        = -1;
-  n_bases_after_quality_trim        = -1;
+  n_bases_after_quality_filter      = -1;
   n_bases_after_adapter_trim        = -1;
+  n_bases_after_tag_trim            = -1;
+  n_bases_after_extra_trim          = -1;
+  n_bases_after_quality_trim        = -1;
   n_bases_filtered                  = -1;
 
   adapter_type       = -1;
@@ -100,6 +108,7 @@ ReadFilteringHistory::ReadFilteringHistory()
 }
 
 // ----------------------------------------------------------------------------
+// Let's not modify the ZD vector
 
 void ReadFilteringHistory::GenerateZDVector(vector<int16_t>& zd_vector)
 {
@@ -113,7 +122,8 @@ void ReadFilteringHistory::GenerateZDVector(vector<int16_t>& zd_vector)
   zd_vector[6] = EncodeFilteringDetails(n_bases_after_too_short,           n_bases_prefix);
   zd_vector[7] = EncodeFilteringDetails(n_bases_after_bad_key,             n_bases_prefix);
   zd_vector[8] = EncodeFilteringDetails(n_bases_after_high_residual,       n_bases_prefix);
-  zd_vector[9] = EncodeFilteringDetails(n_bases_after_beverly_trim,        n_bases_prefix);
+  // This element unsed to store the Beverly filter details, now holds quality filter
+  zd_vector[9] = EncodeFilteringDetails(n_bases_after_quality_filter,      n_bases_prefix);
   zd_vector[10]= EncodeFilteringDetails(n_bases_after_adapter_trim,        n_bases_prefix);
   zd_vector[11]= EncodeFilteringDetails(n_bases_after_quality_trim,        n_bases_prefix);
   zd_vector[12]= EncodeFilteringDetails(n_bases_filtered,                  n_bases_prefix);
@@ -123,30 +133,39 @@ void ReadFilteringHistory::GenerateZDVector(vector<int16_t>& zd_vector)
 
 ReadFilteringStats::ReadFilteringStats()
 {
-  num_bases_initial_ = 0;
-  num_bases_removed_key_trim_ = 0;
-  num_bases_removed_barcode_trim_ = 0;
-  num_bases_removed_short_ = 0;
-  num_bases_removed_keypass_ = 0;
-  num_bases_removed_residual_ = 0;
-  num_bases_removed_beverly_ = 0;
-  num_bases_removed_adapter_trim_ = 0;
-  num_bases_removed_quality_trim_ = 0;
-  num_bases_final_ = 0;
+  // read start trimmming
+  num_bases_initial_                     = 0;
+  num_bases_removed_key_trim_            = 0;
+  num_bases_removed_barcode_trim_        = 0;
+  num_bases_removed_tag_trim_            = 0; // both 5' and 3' accounting
+  num_bases_removed_extra_trim_          = 0; // both 5' and 3' accounting
 
-  num_reads_initial_ = 0;
-  num_reads_removed_bkgmodel_keypass_ = 0;
-  num_reads_removed_bkgmodel_high_ppf_ = 0;
+  // Filters
+  num_bases_removed_short_               = 0;
+  num_bases_removed_keypass_             = 0;
+  num_bases_removed_residual_            = 0;
+  //num_bases_removed_beverly_ = 0;
+  num_bases_removed_quality_filt_        = 0;
+  num_bases_removed_adapter_trim_        = 0;
+  num_bases_removed_quality_trim_        = 0;
+  num_bases_final_                       = 0;
+
+  num_reads_initial_                     = 0;
+  num_reads_removed_bkgmodel_keypass_    = 0;
+  num_reads_removed_bkgmodel_high_ppf_   = 0;
   num_reads_removed_bkgmodel_polyclonal_ = 0;
-  num_reads_removed_high_ppf_ = 0;
-  num_reads_removed_polyclonal_ = 0;
-  num_reads_removed_short_ = 0;
-  num_reads_removed_keypass_ = 0;
-  num_reads_removed_residual_ = 0;
-  num_reads_removed_beverly_ = 0;
-  num_reads_removed_adapter_trim_ = 0;
-  num_reads_removed_quality_trim_ = 0;
-  num_reads_final_ = 0;
+  num_reads_removed_high_ppf_            = 0;
+  num_reads_removed_polyclonal_          = 0;
+  num_reads_removed_short_               = 0;
+  num_reads_removed_keypass_             = 0;
+  num_reads_removed_residual_            = 0;
+  //num_reads_removed_beverly_ = 0;
+  num_reads_removed_quality_filt_        = 0;
+  num_reads_removed_adapter_trim_        = 0;
+  num_reads_removed_tag_trim_            = 0;
+  num_reads_removed_extra_trim_          = 0;
+  num_reads_removed_quality_trim_        = 0;
+  num_reads_final_                       = 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -169,7 +188,6 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
 {
 
   // Step 1: Read accounting
-
   num_reads_initial_++;
 
   if (read_filtering_history.n_bases_after_bkgmodel_bad_key == 0)
@@ -196,11 +214,20 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
   if (read_filtering_history.n_bases_after_high_residual == 0)
     num_reads_removed_residual_++;
 
-  if (read_filtering_history.n_bases_after_beverly_trim == 0)
-    num_reads_removed_beverly_++;
+  //if (read_filtering_history.n_bases_after_beverly_trim == 0)
+  //  num_reads_removed_beverly_++;
+
+  if (read_filtering_history.n_bases_after_quality_filter == 0)
+    num_reads_removed_quality_filt_++;
 
   if (read_filtering_history.n_bases_after_adapter_trim == 0)
     num_reads_removed_adapter_trim_++;
+
+  if (read_filtering_history.n_bases_after_tag_trim == 0)
+    num_reads_removed_tag_trim_++;
+
+  if (read_filtering_history.n_bases_after_extra_trim == 0)
+    num_reads_removed_extra_trim_++;
 
   if (read_filtering_history.n_bases_after_quality_trim == 0)
     num_reads_removed_quality_trim_++;
@@ -215,10 +242,14 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
 
   // Step 2: Base accounting
 
+  // 5' trimming base accounting
   num_bases_initial_                += read_filtering_history.n_bases;
   num_bases_removed_key_trim_       += read_filtering_history.n_bases_key;
-  num_bases_removed_barcode_trim_   += min(read_filtering_history.n_bases_prefix,read_filtering_history.n_bases) - read_filtering_history.n_bases_key;
+  num_bases_removed_barcode_trim_   += read_filtering_history.n_bases_barcode - read_filtering_history.n_bases_key;
+  num_bases_removed_tag_trim_       += read_filtering_history.n_bases_tag - read_filtering_history.n_bases_barcode;
+  num_bases_removed_extra_trim_     += read_filtering_history.n_bases_prefix - read_filtering_history.n_bases_tag;
 
+  // Read filtering and 3' trimming base accounting
   int current_n_bases = max(0, read_filtering_history.n_bases - read_filtering_history.n_bases_prefix);
   if (read_filtering_history.n_bases_after_too_short >= 0) {
     int new_n_bases = max(0, read_filtering_history.n_bases_after_too_short - read_filtering_history.n_bases_prefix);
@@ -235,9 +266,14 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
     num_bases_removed_residual_ += current_n_bases - new_n_bases;
     current_n_bases = new_n_bases;
   }
-  if (read_filtering_history.n_bases_after_beverly_trim >= 0) {
-    int new_n_bases = max(0, read_filtering_history.n_bases_after_beverly_trim - read_filtering_history.n_bases_prefix);
-    num_bases_removed_beverly_ += current_n_bases - new_n_bases;
+  //if (read_filtering_history.n_bases_after_beverly_trim >= 0) {
+  //  int new_n_bases = max(0, read_filtering_history.n_bases_after_beverly_trim - read_filtering_history.n_bases_prefix);
+  //  num_bases_removed_beverly_ += current_n_bases - new_n_bases;
+  //  current_n_bases = new_n_bases;
+  //}
+  if (read_filtering_history.n_bases_after_quality_filter >= 0) {
+    int new_n_bases = max(0, read_filtering_history.n_bases_after_quality_filter - read_filtering_history.n_bases_prefix);
+    num_bases_removed_quality_filt_ += current_n_bases - new_n_bases;
     current_n_bases = new_n_bases;
   }
   if (read_filtering_history.n_bases_after_adapter_trim >= 0) {
@@ -245,6 +281,16 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
     num_bases_removed_adapter_trim_ += current_n_bases - new_n_bases;
     current_n_bases = new_n_bases;
   }
+  if (read_filtering_history.n_bases_after_tag_trim >= 0) {
+    int new_n_bases = max(0, read_filtering_history.n_bases_after_tag_trim - read_filtering_history.n_bases_prefix);
+    num_bases_removed_tag_trim_ += current_n_bases - new_n_bases;
+    current_n_bases = new_n_bases;
+  }
+  if (read_filtering_history.n_bases_after_extra_trim >= 0) {
+   int new_n_bases = max(0, read_filtering_history.n_bases_after_extra_trim - read_filtering_history.n_bases_prefix);
+   num_bases_removed_extra_trim_ += current_n_bases - new_n_bases;
+   current_n_bases = new_n_bases;
+ }
   if (read_filtering_history.n_bases_after_quality_trim >= 0) {
     int new_n_bases = max(0, read_filtering_history.n_bases_after_quality_trim - read_filtering_history.n_bases_prefix);
     num_bases_removed_quality_trim_ += current_n_bases - new_n_bases;
@@ -277,10 +323,13 @@ void ReadFilteringStats::MergeFrom(const ReadFilteringStats& other)
   num_bases_initial_                      += other.num_bases_initial_;
   num_bases_removed_key_trim_             += other.num_bases_removed_key_trim_;
   num_bases_removed_barcode_trim_         += other.num_bases_removed_barcode_trim_;
+  num_bases_removed_tag_trim_             += other.num_bases_removed_tag_trim_;
+  num_bases_removed_extra_trim_           += other.num_bases_removed_extra_trim_;
   num_bases_removed_short_                += other.num_bases_removed_short_;
   num_bases_removed_keypass_              += other.num_bases_removed_keypass_;
   num_bases_removed_residual_             += other.num_bases_removed_residual_;
-  num_bases_removed_beverly_              += other.num_bases_removed_beverly_;
+  //num_bases_removed_beverly_              += other.num_bases_removed_beverly_;
+  num_bases_removed_quality_filt_         += other.num_bases_removed_quality_filt_;
   num_bases_removed_adapter_trim_         += other.num_bases_removed_adapter_trim_;
   num_bases_removed_quality_trim_         += other.num_bases_removed_quality_trim_;
   num_bases_final_                        += other.num_bases_final_;
@@ -294,8 +343,11 @@ void ReadFilteringStats::MergeFrom(const ReadFilteringStats& other)
   num_reads_removed_short_                += other.num_reads_removed_short_;
   num_reads_removed_keypass_              += other.num_reads_removed_keypass_;
   num_reads_removed_residual_             += other.num_reads_removed_residual_;
-  num_reads_removed_beverly_              += other.num_reads_removed_beverly_;
+  //num_reads_removed_beverly_              += other.num_reads_removed_beverly_;
+  num_reads_removed_quality_filt_         += other.num_reads_removed_quality_filt_;
   num_reads_removed_adapter_trim_         += other.num_reads_removed_adapter_trim_;
+  num_reads_removed_tag_trim_             += other.num_reads_removed_tag_trim_;
+  num_reads_removed_extra_trim_           += other.num_reads_removed_extra_trim_;
   num_reads_removed_quality_trim_         += other.num_reads_removed_quality_trim_;
   num_reads_final_                        += other.num_reads_final_;
 
@@ -347,29 +399,38 @@ void ReadFilteringStats::PrettyPrint (const string& table_header)
   table << setw(25) << "BkgModel:    Bad key";
   table << setw(23) << -num_reads_removed_bkgmodel_keypass_ << setw(23) << "0" << endl;
 
-  table << setw(25) << "High PPF";
+  table << setw(25) << "High PPF:";
   table << setw(23) << -num_reads_removed_high_ppf_ << setw(23) << "0" << endl;
 
-  table << setw(25) << "Polyclonal";
+  table << setw(25) << "Polyclonal:";
   table << setw(23) << -num_reads_removed_polyclonal_ << setw(23) << "0" << endl;
 
-  table << setw(25) << "Key trim";
+  table << setw(25) << "Key trim:";
   table << setw(23) << "0" << setw(23) << -num_bases_removed_key_trim_ << endl;
 
-  table << setw(25) << "Barcode trim";
+  table << setw(25) << "Barcode trim:";
   table << setw(23) << "0" << setw(23) << -num_bases_removed_barcode_trim_ << endl;
+
+  table << setw(25) << "Tag trim:";
+  table << setw(23) << -num_reads_removed_tag_trim_ << setw(23) << -num_bases_removed_tag_trim_ << endl;
+
+  table << setw(25) << "Extra trim:";
+  table << setw(23) << -num_reads_removed_extra_trim_ << setw(23) << -num_bases_removed_extra_trim_ << endl;
 
   table << setw(25) << "Short read";
   table << setw(23) << -num_reads_removed_short_ << setw(23) << -num_bases_removed_short_ << endl;
 
-  table << setw(25) << "Bad key";
+  table << setw(25) << "Bad key:";
   table << setw(23) << -num_reads_removed_keypass_ << setw(23) << -num_bases_removed_keypass_ << endl;
 
-  table << setw(25) << "High residual";
+  table << setw(25) << "High residual:";
   table << setw(23) << -num_reads_removed_residual_ << setw(23) << -num_bases_removed_residual_ << endl;
 
-  table << setw(25) << "Beverly filter";
-  table << setw(23) << -num_reads_removed_beverly_ << setw(23) << -num_bases_removed_beverly_ << endl;
+  //table << setw(25) << "Beverly filter";
+  //table << setw(23) << -num_reads_removed_beverly_ << setw(23) << -num_bases_removed_beverly_ << endl;
+
+  table << setw(25) << "Quality filter:";
+  table << setw(23) << -num_reads_removed_quality_filt_ << setw(23) << -num_bases_removed_quality_filt_ << endl;
 
   table << setw(25) << "Adapter trim";
   table << setw(23) << -num_reads_removed_adapter_trim_ << setw(23) << -num_bases_removed_adapter_trim_ << endl;
@@ -427,16 +488,19 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
   json["Filtering"]["ReadDetails"][class_name]["high_residual"]       = (Json::Int64)num_reads_removed_residual_;
   json["Filtering"]["ReadDetails"][class_name]["adapter_trim"]        = (Json::Int64)num_reads_removed_adapter_trim_;
   json["Filtering"]["ReadDetails"][class_name]["quality_trim"]        = (Json::Int64)num_reads_removed_quality_trim_;
-  json["Filtering"]["ReadDetails"][class_name]["beverly_filter"]      = (Json::Int64)num_reads_removed_beverly_;
+  json["Filtering"]["ReadDetails"][class_name]["quality_filter"]      = (Json::Int64)num_reads_removed_quality_filt_;
+  json["Filtering"]["ReadDetails"][class_name]["tag_trim"]            = (Json::Int64)num_reads_removed_tag_trim_;
+  json["Filtering"]["ReadDetails"][class_name]["extra_trim"]          = (Json::Int64)num_reads_removed_extra_trim_ + num_reads_removed_extra_trim_;
   json["Filtering"]["ReadDetails"][class_name]["valid"]               = (Json::Int64)num_reads_final_;
 
   // BeadSummary - obsolete me!
   json["BeadSummary"][class_name]["polyclonal"]  = (Json::Int64)(num_reads_removed_bkgmodel_polyclonal_ + num_reads_removed_polyclonal_);
   json["BeadSummary"][class_name]["highPPF"]     = (Json::Int64)(num_reads_removed_bkgmodel_high_ppf_ + num_reads_removed_high_ppf_);
   json["BeadSummary"][class_name]["zero"]        = 0;
-  json["BeadSummary"][class_name]["short"]       = (Json::Int64)(num_reads_removed_short_ + num_reads_removed_adapter_trim_ + num_reads_removed_quality_trim_);
+  json["BeadSummary"][class_name]["short"]       = (Json::Int64)(num_reads_removed_short_ + num_reads_removed_adapter_trim_
+                                                        + num_reads_removed_quality_trim_ + num_reads_removed_tag_trim_);
   json["BeadSummary"][class_name]["badKey"]      = (Json::Int64)(num_reads_removed_bkgmodel_keypass_ + num_reads_removed_keypass_);
-  json["BeadSummary"][class_name]["highRes"]     = (Json::Int64)(num_reads_removed_residual_ + num_reads_removed_beverly_);
+  json["BeadSummary"][class_name]["highRes"]     = (Json::Int64)(num_reads_removed_residual_ + num_reads_removed_quality_filt_);
   json["BeadSummary"][class_name]["valid"]       = (Json::Int64)num_reads_final_;
 
   // Generate values specific to library reads
@@ -447,8 +511,10 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
     json["Filtering"]["BaseDetails"]["short"]               = (Json::Int64)num_bases_removed_short_;
     json["Filtering"]["BaseDetails"]["failed_keypass"]      = (Json::Int64)num_bases_removed_keypass_;
     json["Filtering"]["BaseDetails"]["high_residual"]       = (Json::Int64)num_bases_removed_residual_;
-    json["Filtering"]["BaseDetails"]["beverly_filter"]      = (Json::Int64)num_bases_removed_beverly_;
+    json["Filtering"]["BaseDetails"]["quality_filter"]      = (Json::Int64)num_bases_removed_quality_filt_;
     json["Filtering"]["BaseDetails"]["adapter_trim"]        = (Json::Int64)num_bases_removed_adapter_trim_;
+    json["Filtering"]["BaseDetails"]["tag_trim"]            = (Json::Int64)num_bases_removed_tag_trim_;
+    json["Filtering"]["BaseDetails"]["extra_trim"]          = (Json::Int64)num_bases_removed_extra_trim_;
     json["Filtering"]["BaseDetails"]["quality_trim"]        = (Json::Int64)num_bases_removed_quality_trim_;
     json["Filtering"]["BaseDetails"]["final"]               = (Json::Int64)num_bases_final_;
 
@@ -462,7 +528,9 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
                   num_reads_removed_keypass_ +
                   num_reads_removed_residual_ +
                   num_reads_removed_quality_trim_ +
-                  num_reads_removed_beverly_);
+                  num_reads_removed_quality_filt_ +
+                  num_reads_removed_tag_trim_ +
+                  num_bases_removed_extra_trim_);
     json["Filtering"]["LibraryReport"]["final_library_reads"]   = (Json::Int64)num_reads_final_;
 
     // (3') Bead Adapters
@@ -513,6 +581,9 @@ void BaseCallerFilters::PrintHelp()
   printf ("Read trimming options:\n");
   printf ("     --trim-min-read-len      INT        reads trimmed shorter than this are omitted from output [min-read-length]\n");
   printf ("     --trim-barcodes          BOOL       trim barcodes and barcode adapters [on]\n");
+  printf ("     --extra-trim-left        INT        Number of additional bases to remove from read start after prefix (key/barcode/tag) [0]\n");
+  printf ("     --extra-trim-right       INT        Number of additional bases to remove from read end before suffix (tag/adapter) [0]\n");
+  printf ("     --save-extra-trim        BOOL       Save extra trimmed bases to BAM tags (left ZE, right YE) [false]\n");
   printf (" Adapter trimming (turn off by supplying cutoff 0):\n");
   printf ("     --trim-adapter-mode      INT        0=use simplified metric, 1=use standard metric [1]\n");
   printf ("     --trim-adapter           STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
@@ -529,16 +600,12 @@ void BaseCallerFilters::PrintHelp()
   printf ("     --trim-qual-cutoff       FLOAT      cutoff for windowed quality trimming, 100=off [15]\n");
   printf ("     --trim-qual-offset       FLOAT      error threshold offset for expected error quality trimming [0.7]\n");
   printf ("     --trim-qual-slope        FLOAT      increase of expected errors allowed for expected error quality trimming [0.005]\n");
-  printf (" Avalanche trimming (does anybody use this?):\n"); // XXX
-  printf ("     --avalanche_start_pos    INT        Avalanche filter start base position\n");
-  printf ("     --avalanche_qual_hi      INT        Avalanche filter quality cutoff before the start position [15]\n");
-  printf ("     --avalanche_qual_lo      INT        Avalanche filter quality cutoff after the start position [5]\n");
   printf ("\n");
 }
 
 // ----------------------------------------------------------------------------
 
-BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments, const string & run_id,
+BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
     const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask)
 {
   flow_order_ = flow_order;
@@ -550,8 +617,8 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   // *** Retrieve filter command line options
 
   filter_keypass_enabled_      = opts.GetFirstBoolean('k', "keypass-filter", true);
-  filter_min_read_length_      = opts.GetFirstInt    ('-', "min-read-length", 25);
-  trim_min_read_len_           = opts.GetFirstInt    ('-', "trim-min-read-len", filter_min_read_length_);
+  filter_min_read_length_      = max(opts.GetFirstInt    ('-', "min-read-length", 25),1);
+  trim_min_read_len_           = max(opts.GetFirstInt    ('-', "trim-min-read-len", filter_min_read_length_),1);
 
   filter_clonal_enabled_tfs_   = opts.GetFirstBoolean('-', "clonal-filter-tf", false);
   filter_clonal_enabled_       = opts.GetFirstBoolean('-', "clonal-filter-solve", false);
@@ -582,7 +649,12 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   trim_qual_offset_            = opts.GetFirstDouble       ('-', "trim-qual-offset",0.7);
   trim_qual_slope_             = opts.GetFirstDouble       ('-', "trim-qual-slope",0.005);
   trim_qual_quadr_             = opts.GetFirstDouble       ('-', "trim-qual-quadr",0.00);
+
+  extra_trim_left_             = opts.GetFirstInt          ('-', "extra-trim-left", 0);
   extra_trim_right_            = opts.GetFirstInt          ('-', "extra-trim-right", 0);
+  save_extra_trim_             = opts.GetFirstBoolean      ('-', "save-extra-trim", true);
+  trim_barcodes_               = opts.GetFirstBoolean      ('-', "trim-barcodes", true);
+
 
   if      (trim_qual_mode_ == "off")             { trim_qual_mode_enum_ = kQvTrimOff; }
   else if (trim_qual_mode_ == "sliding-window")  { trim_qual_mode_enum_ = kQvTrimWindowed; }
@@ -602,7 +674,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   ValidateBaseStringVector(trim_adapter_);
   ValidateBaseStringVector(trim_adapter_tf_);
   if (trim_adapter_.size() > 0)
-    WriteAdaptersToBamComments(bam_comments, run_id);
+    WriteAdaptersToJson(comments_json);
 
   string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "off");
   bool disable_all_filters        = opts.GetFirstBoolean('d', "disable-all-filters", false);
@@ -620,28 +692,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
     filter_beverly_args = "off";
   }
 
-  avalanche_mid_pos_           = opts.GetFirstInt    ('-', "avalanche_start_pos", -1);
-  avalanche_min_pos_           = opts.GetFirstInt    ('-', "avalanche_stop_pos", -1);
-  avalanche_max_pos_           = opts.GetFirstInt    ('-', "avalanche_max_pos", -1);
-  trim_qual_avalanche_max_     = opts.GetFirstDouble ('-', "avalanche_qual_max", 25.0);
-  trim_qual_avalanche_hi_      = opts.GetFirstDouble ('-', "avalanche_qual_hi", 15.0);
-  trim_qual_avalanche_lo_      = opts.GetFirstDouble ('-', "avalanche_qual_lo", 1.0);
-  filter_avalanche_enabled_ = avalanche_mid_pos_ >= 0 ? true : false;
-
-  if (filter_avalanche_enabled_) { // force other filters off     
-      TrimAvalanche_setup(flow_order.num_flows());
-
-      filter_keypass_enabled_ = false;
-      filter_clonal_enabled_tfs_ = false;
-      filter_clonal_enabled_ = false;
-      filter_residual_enabled_ = false;
-      filter_residual_enabled_tfs_ = false;
-      filter_quality_enabled_ = false;
-      trim_qual_mode_enum_ = kQvTrimOff;
-      trim_adapter_cutoff_ = 0.0; // Zero means disabled for now
-      filter_beverly_args = "off";
-  }
-
+  // Print parameter settigns to log file
   printf("Filter settings:\n");
   printf("   --disable-all-filters %s\n", disable_all_filters ? "on (overrides other options)" : "off");
   printf("        --keypass-filter %s\n", filter_keypass_enabled_ ? "on" : "off");
@@ -656,7 +707,6 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   printf("    --qual-filter-offset %1.4f\n", filter_quality_offset_);
   printf("     --qual-filter-slope %1.4f\n", filter_quality_slope_ );
 
-
   printf("Adapter trimming settings\n");
   printf("          --trim-adapter ");
   if (!trim_adapter_.empty()) {
@@ -667,7 +717,6 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   else {
     cout << "off" << endl;
   }
-  //printf("       --trim-adapter-tf "); //%s\n", trim_adapter_tf_.empty() ? "off" : trim_adapter_tf_.c_str());
   printf("       --trim-adapter-tf ");
   if (!trim_adapter_tf_.empty()) {
     for (unsigned int adpt_idx=0; adpt_idx<trim_adapter_tf_.size()-1; adpt_idx++)
@@ -681,29 +730,19 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   printf("   --trim-adapter-cutoff %1.1f (0.0 means disabled)\n", trim_adapter_cutoff_);
   printf("--trim-adapter-min-match %d\n", trim_adapter_min_match_);
   printf("        --trim-qual-mode %s\n", trim_qual_mode_.c_str());
+
   printf("Quality trimming settings:\n");
   printf(" --trim-qual-window-size %d\n", trim_qual_window_size_);
   printf("      --trim-qual-cutoff %1.1f (100.0 means disabled)\n", trim_qual_cutoff_);
   printf("      --trim-qual-offset %1.4f\n", trim_qual_offset_);
   printf("       --trim-qual-slope %1.4f\n", trim_qual_slope_);
   printf("     --trim-min-read-len %d\n", trim_min_read_len_);
-
-
-  if (filter_avalanche_enabled_) { // force other filters off
-	  printf("Avalanche filter/trimming settings:\n");
-      printf("         --avalanche_max %d\n", avalanche_max_pos_);
-      printf("       --avalanche_start %d\n", avalanche_mid_pos_);
-      printf("        --avalanche_stop %d\n", avalanche_min_pos_);
-      printf("    --avalanche_qual_max %g\n", trim_qual_avalanche_max_);
-      printf("     --avalanche_qual_hi %g\n", trim_qual_avalanche_hi_);
-      printf("     --avalanche_qual_lo %g\n", trim_qual_avalanche_lo_);
-  }
   printf("\n");
 
 
   // Validate options
-  if (filter_min_read_length_ < 1) {
-    fprintf (stderr, "Option Error: min-read-length must specify a positive value (%d invalid).\n", filter_min_read_length_);
+  if (filter_min_read_length_<1 or trim_min_read_len_<1) {
+    fprintf (stderr, "Option Error: min-read-length must specify a positive value (%d invalid).\n", min(filter_min_read_length_,trim_min_read_len_));
     exit (EXIT_FAILURE);
   }
   if (filter_residual_max_value_ <= 0) {
@@ -758,13 +797,13 @@ void BaseCallerFilters::TransferFilteringResultsToMask(Mask &mask) const
       case kFilterHighPPF:              mask[idx] |= MaskFilteredBadPPF; break;
       case kFilterPolyclonal:           mask[idx] |= MaskFilteredBadPPF; break;
       case kFilterHighResidual:         mask[idx] |= MaskFilteredBadResidual; break;
-      case kFilterBeverly:              mask[idx] |= MaskFilteredBadResidual; break;
+      case kFilterQuality:              mask[idx] |= MaskFilteredBadResidual; break;
       case kBkgmodelFailedKeypass:      mask[idx] |= MaskFilteredBadKey; break;
       case kBkgmodelHighPPF:            mask[idx] |= MaskFilteredBadPPF; break;
       case kBkgmodelPolyclonal:         mask[idx] |= MaskFilteredBadPPF; break;
-      case kFilteredShortAdapterTrim:   mask[idx] |= MaskFilteredShort; break;
-      case kFilteredShortQualityTrim:   mask[idx] |= MaskFilteredShort; break;
-      case kFilteredAvalancheTrim:      mask[idx] |= MaskFilteredShort; break;
+      case kFilterShortAdapterTrim:     mask[idx] |= MaskFilteredShort; break;
+      case kFilterShortQualityTrim:     mask[idx] |= MaskFilteredShort; break;
+      case kFilterShortTagTrim:         mask[idx] |= MaskFilteredShort; break;
     }
   }
 }
@@ -803,6 +842,7 @@ bool BaseCallerFilters::IsPolyclonal(int read_index) const
 
 
 // ----------------------------------------------------------------------------
+// Set of function to do accounting for Analysis filters
 
 void BaseCallerFilters::SetFiltered(int read_index, int read_class, ReadFilteringHistory& filter_history)
 {
@@ -879,6 +919,93 @@ void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_cla
   }
 }
 
+// ----------------------------------------------------------------------------
+
+void BaseCallerFilters::TrimKeySequence(const int key_length, ReadFilteringHistory& filter_history)
+{
+  // Initialize the filtered length of the reads as the total length
+  if (filter_history.n_bases_filtered == -1)
+    filter_history.n_bases_filtered = filter_history.n_bases;
+
+  // Trim and propagate prefix length
+  filter_history.n_bases_key = min(key_length, filter_history.n_bases);
+  filter_history.n_bases_prefix = filter_history.n_bases_barcode = filter_history.n_bases_tag = filter_history.n_bases_key;
+}
+
+// ----------------------------------------------------------------------------
+// This function does all the BaseCaller accounting for 5' tag trimming
+
+void BaseCallerFilters::TrimPrefixTag(int read_index, int read_class, ProcessedRead &processed_read, const vector<char> & sequence, const MolecularTagTrimmer* TagTrimmer)
+{
+  if (processed_read.filter.is_filtered or processed_read.is_control_barcode or read_class != 0)
+    return;
+  if (not TagTrimmer->HasTags(processed_read.read_group_index))  // Nothing to do
+    return;
+
+  const char* tag_start = NULL;
+    if ((int)sequence.size() > processed_read.filter.n_bases_prefix)
+      tag_start = &sequence.at(processed_read.filter.n_bases_prefix);
+
+  int n_bases_trimmed_tag = TagTrimmer->TrimPrefixTag(processed_read.read_group_index,
+                                                      tag_start,
+                                                      processed_read.filter.n_bases-processed_read.filter.n_bases_prefix,
+                                                      processed_read.trimmed_tags);
+
+  // Read filtering or trimming
+  if(n_bases_trimmed_tag < 0) {
+    filter_mask_[read_index] = kFilterShortTagTrim;
+    processed_read.filter.n_bases_filtered = 0;
+    processed_read.filter.n_bases_after_tag_trim = 0;
+    processed_read.filter.is_filtered = true;
+  }
+  else if (n_bases_trimmed_tag > 0){
+    processed_read.filter.n_bases_tag = min(processed_read.filter.n_bases_barcode+n_bases_trimmed_tag, processed_read.filter.n_bases);
+    processed_read.filter.n_bases_prefix = processed_read.filter.n_bases_tag;
+
+    // Add BAM entry
+    processed_read.bam.AddTag("ZT", "Z", processed_read.trimmed_tags.prefix_mol_tag);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// This function does all the BaseCaller accounting for 3' tag trimming
+
+void BaseCallerFilters::TrimSuffixTag(int read_index, int read_class, ProcessedRead &processed_read, const vector<char> & sequence, const MolecularTagTrimmer* TagTrimmer)
+{
+  if (processed_read.filter.is_filtered or processed_read.is_control_barcode or read_class != 0)
+    return;
+  if (not TagTrimmer->HasTags(processed_read.read_group_index)) // Nothing to do
+    return;
+
+  //read_filtering_history.n_bases_after_adapter_trim
+
+  const char* adapter_start_base = NULL;
+  if (processed_read.filter.n_bases_after_adapter_trim > 0 and
+      processed_read.filter.n_bases_after_adapter_trim < processed_read.filter.n_bases)
+  {
+    adapter_start_base = &sequence.at(processed_read.filter.n_bases_after_adapter_trim);
+  }
+
+  int n_bases_trimmed_tag = TagTrimmer->TrimSuffixTag(processed_read.read_group_index,
+                                                      adapter_start_base,
+                                                      processed_read.filter.n_bases_after_adapter_trim-processed_read.filter.n_bases_prefix,
+                                                      processed_read.trimmed_tags);
+
+  // Read filtering or trimming
+  int trim_length = processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix - max(n_bases_trimmed_tag,0);
+
+  if(n_bases_trimmed_tag < 0 or trim_length < trim_min_read_len_) {
+    filter_mask_[read_index] = kFilterShortTagTrim;
+    processed_read.filter.n_bases_filtered = 0;
+    processed_read.filter.is_filtered = true;
+  }
+  else if (n_bases_trimmed_tag > 0){
+    processed_read.filter.n_bases_filtered -= n_bases_trimmed_tag;
+    processed_read.bam.AddTag("YT", "Z", processed_read.trimmed_tags.suffix_mol_tag);
+  }
+
+  processed_read.filter.n_bases_after_tag_trim = processed_read.filter.n_bases_filtered;
+}
 
 // ----------------------------------------------------------------------------
 
@@ -964,8 +1091,8 @@ void BaseCallerFilters::FilterHighResidual(int read_index, int read_class, ReadF
 }
 
 
-// ----------------------------------------------------------------------------
-
+// ---------------------------------------------------------------------------- XXX
+/*
 void BaseCallerFilters::FilterBeverly(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& scaled_residual,
     const vector<int>& base_to_flow)
 {
@@ -1029,10 +1156,10 @@ void BaseCallerFilters::FilterBeverly(int read_index, int read_class, ReadFilter
   } else {
     filter_history.n_bases_after_beverly_trim = filter_history.n_bases_filtered  = clip_qual_right;
   }
-}
+} //*/
 
 // ----------------------------------------------------------------------------
-// Filter entire reads based on their quality scores XXX
+// Filter entire reads based on their quality scores
 
 void BaseCallerFilters::FilterQuality(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
 {
@@ -1061,9 +1188,9 @@ void BaseCallerFilters::FilterQuality(int read_index, int read_class, ReadFilter
   //  is_filtered = true;
 
   if(is_filtered) {
-    filter_mask_[read_index] = kFilterHighResidual;
+    filter_mask_[read_index] = kFilterQuality;
     filter_history.n_bases_filtered = 0;
-    filter_history.n_bases_after_high_residual = 0;
+    filter_history.n_bases_after_quality_filter = 0;
     filter_history.is_filtered = true;
   }
 
@@ -1138,6 +1265,60 @@ void BaseCallerFilters::ValidateBaseStringVector(vector<string>& string_vector) 
   }
 }
 
+// ----------------------------------------------------------------------------
+// Trim extra bases at the start of the read
+
+void BaseCallerFilters::TrimExtraLeft (int read_class, ProcessedRead& processed_read, const vector<char> & sequence)
+{
+  if (processed_read.filter.is_filtered) // Already filtered out?
+    return;
+  if (read_class != 0)  // Don't trim TFs
+    return;
+  if (not trim_barcodes_) // Don't trim anything if barcodes aren't trimmed
+    return;
+
+  int new_prefix = min((processed_read.filter.n_bases_prefix + extra_trim_left_), processed_read.filter.n_bases_filtered);
+  // Add BAM entry
+  if (save_extra_trim_ and new_prefix > processed_read.filter.n_bases_prefix){
+    string left_trim(&(sequence.at(processed_read.filter.n_bases_prefix)), new_prefix - processed_read.filter.n_bases_prefix);
+    processed_read.bam.AddTag("ZE", "Z", left_trim);
+  }
+
+  processed_read.filter.n_bases_prefix = new_prefix;
+}
+
+// ----------------------------------------------------------------------------
+
+void BaseCallerFilters::TrimExtraRight (int read_index, int read_class, ProcessedRead& processed_read, const vector<char> & sequence)
+{
+  if (processed_read.filter.is_filtered) // Already filtered out
+    return;
+  if (read_class != 0)  // Don't trim TFs
+    return;
+
+  // Only trim if adapter was found
+  if (processed_read.filter.n_bases_after_adapter_trim > 0 and
+      processed_read.filter.n_bases_after_adapter_trim < processed_read.filter.n_bases){
+
+    // Trim desired amount of suffix bases if possible
+    int new_end = max(processed_read.filter.n_bases_prefix, processed_read.filter.n_bases_filtered-extra_trim_right_);
+    if (save_extra_trim_ and new_end < processed_read.filter.n_bases_filtered){
+      string right_trim(&(sequence.at(new_end)), processed_read.filter.n_bases_filtered - new_end);
+      processed_read.bam.AddTag("YE", "Z", right_trim);
+    }
+    processed_read.filter.n_bases_filtered = new_end;
+  }
+
+  // All of suffix trimming goes into the adapter trimming filter category since it's conditional on adapter trimming
+  if (processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix < trim_min_read_len_) {
+    filter_mask_[read_index] = kFilterShortRead;
+    processed_read.filter.n_bases_filtered = 0;
+    processed_read.filter.n_bases_after_extra_trim = 0;
+    processed_read.filter.is_filtered = true;
+  } else {
+    processed_read.filter.n_bases_after_extra_trim = processed_read.filter.n_bases_filtered;
+  }
+}
 
 // ----------------------------------------------------------------------------
 // Adapter detection based on adapter predicted signal
@@ -1345,8 +1526,10 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
   }
 
   // --- Save trimming results
-  processed_read.filter.adapter_type  = best_adapter;
-  processed_read.filter.adapter_score = best_metric;
+
+  processed_read.filter.adapter_type     = best_adapter;
+  processed_read.filter.adapter_score    = best_metric;
+
   if (second_best_metric != ((trim_adapter_mode_ == 2) ? -0.1 : -1e10)) {
     processed_read.filter.adapter_decision   = true;
     processed_read.filter.adapter_separation = (best_metric - second_best_metric);
@@ -1371,17 +1554,17 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
 
   int trim_length = best_start_base - processed_read.filter.n_bases_prefix;
 
-  if (trim_length < trim_min_read_len_) { // Adapter trimming led to filtering
-    filter_mask_[read_index] = kFilteredShortAdapterTrim;
+  if (trim_length < trim_min_read_len_) {
+    // Adapter trimming led to filtering - adapter dimer
+    filter_mask_[read_index] = kFilterShortAdapterTrim;
     processed_read.filter.n_bases_filtered = 0;
-    processed_read.filter.n_bases_after_adapter_trim = processed_read.filter.n_bases_filtered;
+    processed_read.filter.n_bases_after_adapter_trim = 0;
     processed_read.filter.is_filtered = true;
-
   } else {
+    // The actual adapter trimming happens in the line below
     processed_read.filter.n_bases_filtered = min(processed_read.filter.n_bases_filtered, best_start_base);
     processed_read.filter.n_bases_after_adapter_trim = processed_read.filter.n_bases_filtered;
   }
-
 }
 
 
@@ -1417,7 +1600,7 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
   int trim_length = clip_qual_right - filter_history.n_bases_prefix;
 
   if (trim_length < trim_min_read_len_) { // Quality trimming led to filtering
-    filter_mask_[read_index] = kFilteredShortQualityTrim;
+    filter_mask_[read_index] = kFilterShortQualityTrim;
     filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = 0;
     filter_history.is_filtered = true;
   } else {
@@ -1452,7 +1635,7 @@ int BaseCallerFilters::TrimQuality_Windowed(int read_index, ReadFilteringHistory
 
   // We reached the end of the read - nothing to trim here, besides if extra trim is explicitly set.
   if (window_end == filter_history.n_bases)
-    clip_qual_right = filter_history.n_bases - extra_trim_right_;
+    clip_qual_right = filter_history.n_bases;
 
   return clip_qual_right;
 }
@@ -1480,252 +1663,23 @@ int BaseCallerFilters::TrimQuality_ExpectedErrors(int read_index, ReadFilteringH
 
   // keep the dynamics of the old school clipper: To be removed in the future!
   if (clip_qual_right == filter_history.n_bases)
-    clip_qual_right = filter_history.n_bases - extra_trim_right_;
+    clip_qual_right = filter_history.n_bases;
 
   return clip_qual_right;
 }
 
-// ----------------------------------------------------------------------------
-
-void BaseCallerFilters::TrimAvalanche_setup(int maxflows)
-{
-    if (!filter_avalanche_enabled_) // not enabled?
-        return;
-
-    static int flows[] = {360,520,800,1000,1200,1600};
-    static int stops[] = {125,200,280,330,365,420};
-    static int starts[] = {100,170,230,275,300,345};
-    //static int starts[] = {25,45,85,145,170,200,240};
-    //static int starts[] = {10,15,40,110,130,160,210};
-    //static int starts[] = {10,10,10,15,15,15,20}; // P1.2??? So different from P1???
-    int nItems = sizeof(stops) / sizeof(stops[0]);
-    int nItemsF = sizeof(flows) / sizeof(flows[0]);
-    int nItemsS = sizeof(starts) / sizeof(starts[0]);
-    assert(nItems==nItemsF);
-    assert(nItems==nItemsS);
-
-    if (trim_qual_avalanche_lo_ < 0) {
-        printf("trim_qual_avalanche_lo_(%f) < 0: resetting trim_qual_avalanche_lo_ to 0\n",trim_qual_avalanche_lo_);
-        trim_qual_avalanche_lo_ = 0;
-    }
-    if (trim_qual_avalanche_hi_ < trim_qual_avalanche_lo_) {
-      printf("trim_qual_avalanche_hi_(%f) < trim_qual_avalanche_lo_(%f): resetting trim_qual_avalanche_hi_ to %f\n",trim_qual_avalanche_hi_,trim_qual_avalanche_lo_,trim_qual_avalanche_lo_+10);
-      trim_qual_avalanche_hi_ = trim_qual_avalanche_lo_ + 15;
-    }
-    if (trim_qual_avalanche_max_ < trim_qual_avalanche_hi_) {
-      printf("trim_qual_avalanche_max_(%f) < trim_qual_avalanche_hi_(%f): resetting trim_qual_avalanche_max_ to %f\n",trim_qual_avalanche_max_,trim_qual_avalanche_hi_,trim_qual_avalanche_hi_+15);
-      trim_qual_avalanche_max_ = trim_qual_avalanche_hi_ + 15;
-    }
-
-    // automatically reset avalanche_mid_pos_ according to maxflows
-    if (avalanche_mid_pos_ <= 0) {
-        avalanche_mid_pos_ = starts[nItems-1];
-        for (int i=0; i<nItems; i++)
-            if (maxflows <= flows[i]) {
-                avalanche_mid_pos_ = starts[i];
-                //cout << "TrimAvalanche_setup... maxflows=" << maxflows << " -> avalanche_mid_pos_=" << avalanche_mid_pos_ << endl << flush;
-                break;
-            }
-    }
-    else {
-        //assert (avalanche_mid_pos_> trim_qual_window_size_) ;
-        if (avalanche_mid_pos_<= trim_qual_window_size_) {
-            cerr << "TrimAvalanche_setup... avalanche_mid_pos_(" << avalanche_mid_pos_ << ") <= trim_qual_window_size_(" << trim_qual_window_size_ << ")..." << endl;
-            avalanche_mid_pos_ = starts[nItems-1];
-            for (int i=0; i<nItems; i++)
-                if (maxflows <= flows[i]) {
-                    avalanche_mid_pos_ = starts[i];
-                    cerr << "TrimAvalanche_setup... maxflows=" << maxflows << " -> avalanche_mid_pos_=" << avalanche_mid_pos_ << endl;
-                    break;
-                }
-            cerr << "reset avalanche_mid_pos_ = " << avalanche_mid_pos_ << endl << flush;
-        }
-    }
-    avalanche_win_ = 30;
-    if (avalanche_max_pos_ < 0) {
-        avalanche_max_pos_ = avalanche_mid_pos_ - avalanche_win_;
-    }
-
-    int stop_pos = stops[nItems-1];
-    if (avalanche_min_pos_ <= 0 && avalanche_mid_pos_ > 0)
-        avalanche_min_pos_ = avalanche_mid_pos_ + avalanche_win_;
-    if (avalanche_min_pos_ > 0 && avalanche_min_pos_ <= avalanche_mid_pos_) {
-        for (int i=0; i<nItems; i++)
-            if (maxflows <= flows[i]) {
-                stop_pos = stops[i];
-                if (stop_pos > avalanche_mid_pos_)
-                    break;
-            }
-        if (stop_pos > avalanche_mid_pos_) {
-            avalanche_min_pos_ = stop_pos;
-            avalanche_win_ = avalanche_min_pos_ - avalanche_mid_pos_;
-        }
-        else
-            avalanche_min_pos_ = avalanche_mid_pos_ + avalanche_win_;
-    }
-    // trim_min_read_len_ used to decide whether reads are to be filtered, default 8 is too short for Avalanche
-    //trim_min_read_len_avalanch_ = trim_min_read_len_;
-    //trim_min_read_len_avalanch_ = trim_qual_window_size_;
-    //trim_min_read_len_avalanch_ = max(trim_qual_window_size_,avalanche_mid_pos_-trim_qual_window_size_);
-    trim_min_read_len_avalanch_ = trim_min_read_len_;
-    /*
-    */
-    cout << "trim_min_read_len_avalanch_ = " << trim_min_read_len_avalanch_ << endl;
-    cout << "avalanche_win_ = " << avalanche_win_ << endl;
-    cout << "trim_qual_avalanche_max_ = " << trim_qual_avalanche_max_ << endl;
-    cout << "trim_qual_avalanche_hi_ = " << trim_qual_avalanche_hi_ << endl;
-    cout << "trim_qual_avalanche_lo_ = " << trim_qual_avalanche_lo_ << endl;
-    cout << "avalanche_max_pos_ = " << avalanche_max_pos_ << endl;
-    cout << "avalanche_mid_pos_ = " << avalanche_mid_pos_ << endl;
-    cout << "avalanche_min_pos_ = " << avalanche_min_pos_ << endl;
-    assert(avalanche_max_pos_ >= trim_qual_window_size_);
-    assert(avalanche_max_pos_ <= avalanche_mid_pos_);
-    assert(avalanche_mid_pos_ <= avalanche_min_pos_);
-
-    if (avalanche_mid_pos_>avalanche_max_pos_)
-        avalanche_sum_delta_ = trim_qual_window_size_ * (trim_qual_avalanche_max_ - trim_qual_avalanche_hi_) / double(avalanche_mid_pos_ - avalanche_max_pos_);
-    else
-        avalanche_sum_delta_ = 0;
-    if (avalanche_min_pos_ > avalanche_mid_pos_)
-        avalanche_ava_delta_ = trim_qual_window_size_ * (trim_qual_avalanche_hi_ - trim_qual_avalanche_lo_) / double(avalanche_min_pos_ - avalanche_mid_pos_);
-    else
-        avalanche_ava_delta_ = 0;
-    avalanche_min_delta_ = 0;
-    delta_ava_ = avalanche_ava_delta_ - avalanche_sum_delta_;
-    delta_min_ = avalanche_min_delta_ - avalanche_ava_delta_;
-
-    // setup qv_sum_thresh
-    qv_sum_thresh.resize(avalanche_min_pos_+trim_qual_window_size_);
-    double minimum_sum = trim_qual_window_size_ * trim_qual_avalanche_max_;
-    for (int i=0; i<avalanche_max_pos_+trim_qual_window_size_; i++)
-        qv_sum_thresh[i] = minimum_sum;
-    for (int i=avalanche_max_pos_+trim_qual_window_size_; i<avalanche_mid_pos_+trim_qual_window_size_; i++) {
-        qv_sum_thresh[i] = minimum_sum;
-        minimum_sum -= avalanche_sum_delta_;
-    }
-    for (int i=avalanche_mid_pos_+trim_qual_window_size_; i<avalanche_min_pos_+trim_qual_window_size_; i++) {
-        qv_sum_thresh[i] = minimum_sum;
-        minimum_sum -= avalanche_ava_delta_;
-    }
-    qv_sum_thresh_max = trim_qual_window_size_ * trim_qual_avalanche_max_;
-    qv_sum_thresh_min = trim_qual_window_size_ * trim_qual_avalanche_lo_;
-    min_bases_passed_test = 5;
-    //count_filtered = 0;
-    //count_trimmed = 0;
-    //count_passed = 0;
-}
-
-// ----------------------------------------------------------------------------
-
-void BaseCallerFilters::TrimAvalanche(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
-{
-  if (!filter_avalanche_enabled_) // not enabled?
-      return;
-
-  if (filter_history.is_filtered) // Already processed
-    return;
-
-  //if (read_class != 0)  // Hardcoded: Don't trim TFs
-  //  return;
-
-  int num_bases_passed_test = 0;
-  int window_start = 0;
-  int window_end = min(filter_history.n_bases,trim_qual_window_size_);
-  //int clip_qual_right = (window_end + window_start) / 2;
-  int clip_qual_right = 0;
-  int window_sum = 0;
-
-  // for long reads, check according to qv_sum_thresh
-  if (filter_history.n_bases >= avalanche_max_pos_) {
-      if (filter_history.n_bases < avalanche_mid_pos_)
-          window_end =  avalanche_max_pos_;
-      else if (filter_history.n_bases < avalanche_min_pos_)
-          window_end = avalanche_mid_pos_;
-      else
-          window_end =  avalanche_min_pos_;
-
-      window_end -= min_bases_passed_test;
-      window_start = window_end - trim_qual_window_size_;
-      assert (window_start>=0);
-      clip_qual_right = (window_end + window_start) / 2;
-      for (int w = window_start; w< window_end; w++)
-        window_sum += quality[w];
-
-      while (window_end < filter_history.n_bases) {
-          if (window_end >= avalanche_min_pos_+trim_qual_window_size_) {
-              if (window_sum < qv_sum_thresh_min) {
-                  break;
-              }
-              else
-                  num_bases_passed_test++;
-          }
-          else {
-              if (window_sum < qv_sum_thresh[window_end]) {
-                  break;
-              }
-              else
-                  num_bases_passed_test++;
-          }
-          window_sum += quality[window_end++] - quality[window_start++];
-          clip_qual_right++;
-      }
-  }
-  else { // for short reads, compare to qv_sum_thresh_max
-      window_end = min(filter_history.n_bases,trim_qual_window_size_);
-      for (int w = window_start; w< window_end; w++)
-        window_sum += quality[w];
-
-      clip_qual_right = window_sum >= qv_sum_thresh_max ? (window_end + window_start) / 2 : 0;
-      while (window_end < filter_history.n_bases) {
-          if (window_sum < qv_sum_thresh_max)
-              break;
-          else
-              num_bases_passed_test++;
-          window_sum += quality[window_end++] - quality[window_start++];
-          clip_qual_right++;
-      }
-  }
-
-  if (clip_qual_right >= filter_history.n_bases_filtered) { // pass the filter
-    return;
-  }
-
-  int trim_length = clip_qual_right - filter_history.n_bases_prefix;
-  if (trim_length < trim_min_read_len_avalanch_  || num_bases_passed_test < min_bases_passed_test) { // Quality trimming led to filtering
-    filter_mask_[read_index] = kFilteredAvalancheTrim;
-    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = 0;
-    filter_history.is_filtered = true;
-    //cout << count_filtered++ << " filtered: RL="  << filter_history.n_bases << " < trim_length=" << trim_length << endl << flush;
-  } else {
-    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = clip_qual_right;
-    //cout << count_trimmed++ << " trimmed: RL="  << filter_history.n_bases << " >= trim_length=" << trim_length << endl << flush;
-    //if (trim_length < avalanche_mid_pos_)
-    //    cout << "Error: trim_length(" << trim_length << ") < avalanche_mid_pos_(" <<  avalanche_mid_pos_ << ")" << endl << flush;
-    //assert(trim_length >= avalanche_mid_pos_);
-  }
-}
-
 // ----------------------------------------------------------------------------------
 
-void BaseCallerFilters::WriteAdaptersToBamComments(vector<string> &comments, const string & run_id) {
+void BaseCallerFilters::WriteAdaptersToJson(Json::Value &json) {
 
-  Json::Value json(Json::objectValue);
-  stringstream adapter_stream;
-  json["BeadAdapters"]["MasterKey"] = run_id;
+  json["BeadAdapters"] = Json::objectValue;
   json["BeadAdapters"]["NumAdapters"] = (Json::UInt64)trim_adapter_.size();
+
+  stringstream adapter_stream;
   for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
     adapter_stream.str(std::string());
     adapter_stream << "Adapter_" << adapter_idx;
     json["BeadAdapters"][adapter_stream.str()] = trim_adapter_.at(adapter_idx);
   }
-  Json::FastWriter writer;
-  string str = writer.write(json);
-  // trim unwanted newline added by writer
-  int last_char = str.size()-1;
-  if (last_char>=0 and str[last_char]=='\n') {
-    str.erase(last_char,1);
-  }
-  comments.push_back(str);
 }
-
 

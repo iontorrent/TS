@@ -27,4 +27,7 @@
     {% block tab-configure-accounts %}
         <li><a href="{% url "configure_account" %}">Accounts</a></li>
     {% endblock tab-configure-accounts %}
+    {% block tab-configure-updates %}
+        <li><a href="{% url "offcycle_updates" %}">Updates</a></li>
+    {% endblock tab-configure-updates %}
 {% endblock sub-nav %}

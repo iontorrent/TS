@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
+# NOTE: This plugin uses litle of barcodes.json as it makes its own alignments for sample tracking targets
+
 import sys
 import os
 import subprocess
@@ -21,8 +23,6 @@ global_settings.LOGGING_CONFIG=None
 
 #
 # ----------- custom tag additions -------------
-# Use template.base.add_to_builtins("django_tags") to add from django_tags.py (in cwd)
-# Below is an example - may not be used in the current coverageAnalysis templates
 #
 from django import template
 register = template.Library()
@@ -33,7 +33,12 @@ def toMega(value):
 
 template.builtins.append(register) 
 
+# defines exceptional barcode IDs to check for
+NONBARCODED = "nonbarcoded"
+NOMATCH = "nomatch"
+
 # global data collecters common to functions
+barcodeInput = {}
 pluginParams = {}
 pluginResult = {}
 pluginReport = {}
@@ -76,15 +81,14 @@ def printStartupMessage():
   printlog('')
   printtime('Started %s' % pluginParams['plugin_name'])
   config = pluginParams['config']
-  printlog('Plugin run parameters:')
+  printlog('Run configuration:')
   printlog('  Plugin version:   %s' % pluginParams['cmdOptions'].version)
   printlog('  Launch mode:      %s' % config['launch_mode'])
-  printlog('  Run is barcoded:  %s' % ('Yes' if pluginParams['barcoded'] else 'No'))
+  printlog('  Parameters:       %s' % pluginParams['jsonInput'])
+  printlog('  Barcodes:         %s' % pluginParams['barcodeInput'])
+  printlog('  Output folder:    %s' % pluginParams['results_dir'])
+  printlog('  Output file stem: %s' % pluginParams['prefix'])
   printlog('  Reference Name:   %s' % pluginParams['genome_id'])
-  printlog('Data files used:')
-  printlog('  Parameters:     %s' % pluginParams['jsonInput'])
-  printlog('  Reference:      %s' % pluginParams['reference'])
-  printlog('  Root Alignment: %s' % pluginParams['bamroot'])
   printlog('')
 
 
@@ -96,15 +100,20 @@ def run_plugin(skiprun=False,barcode=""):
   output_dir = pluginParams['output_dir']
   output_url = pluginParams['output_url']
   output_prefix = pluginParams['output_prefix']
-  bamfile = pluginParams['bamfile']
   config = pluginParams['config']
-  sample = sampleName(barcode,'None')
+  barcodeData = barcodeInput[barcode]
+  sample = barcodeData.get('sample','None')
+  reference = barcodeData.get('reference_fullpath','')
 
   # link from source BAM since pipeline uses the name as output file stem
   linkbam = os.path.join(output_dir,output_prefix+".bam")
-  createlink(bamfile,linkbam)
-  createlink(bamfile+'.bai',linkbam+'.bai')
+  createlink(barcodeData['bam_filepath'],linkbam)
+  createlink(barcodeData['bam_filepath']+'.bai',linkbam+'.bai')
   bamfile = linkbam
+
+  # for legacy createDetailReport() code
+  pluginParams['bamfile'] = bamfile
+  pluginParams['genome_id'] = barcodeData['reference']
 
   # Hard-coded path to sample ID target BED file - may be user definable later
   regionsBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_regions.bed')
@@ -118,7 +127,7 @@ def run_plugin(skiprun=False,barcode=""):
     printtime("Running coverage analysis pipeline...")
     runcmd = '%s %s -D "%s" -F "%s" -N "%s" "%s" "%s" "%s" "%s"' % (
         os.path.join(plugin_dir,'run_sampleid.sh'), pluginParams['logopt'], output_dir,
-        pluginParams['prefix'], sample, pluginParams['reference'], bamfile, regionsBed, lociBed )
+        pluginParams['prefix'], sample, reference, bamfile, regionsBed, lociBed )
     if logopt: printlog('\n$ %s\n'%runcmd)
     if( os.system(runcmd) ):
       raise Exception("Failed running run_coverage_analysis.sh. Refer to Plugin Log.")
@@ -158,6 +167,7 @@ def run_plugin(skiprun=False,barcode=""):
 def run_meta_plugin():
   '''Create barcode x target reads matrix and text version of barcode summary table (after analysis completes for individual barcodes).'''
   if pluginParams['cmdOptions'].cmdline: return
+  printlog("")
   printtime("Collating barcodes summary data...")
   bctable = []
   bcresults = pluginResult['barcodes']
@@ -188,7 +198,8 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
     resultData = pluginResult['barcodes'][barcode]
     reportData = pluginReport['barcodes'][barcode]
     errMsg = resultData.get('Error','')
-    sample = sampleName(barcode,'None')
+    sample = resultData['Sample Name']
+    if sample == '': sample = 'None'
     # barcodes_json dictionary is firm-coded in Kendo table template that we are using for main report styling
     if errMsg != "":
       detailsLink = "<span class='help' title='%s' style='color:red'>%s</span>" % ( errMsg, barcode )
@@ -226,10 +237,16 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
 
 def createIncompleteReport(errorMsg=""):
   '''Called to create an incomplete or error report page for non-barcoded runs.'''
+  if pluginParams['barcoded']:
+    sample = 'None'
+  else:
+    barcodeData = barcodeInput[NONBARCODED]
+    if barcodeData: sample = barcodeData.get('sample','None')
+    if sample == 'none': sample = 'None'
   render_context = {
     "autorefresh" : (errorMsg == ""),
     "run_name": pluginParams['prefix'],
-    "Sample_Name": sampleName(),
+    "Sample_Name": sample,
     "Error": errorMsg }
   createReport( os.path.join(pluginParams['results_dir'],pluginParams['report_name']), 'incomplete.html', render_context )
 
@@ -297,18 +314,28 @@ def createBlockReport():
   createReport( pluginParams['block_report'], tplate, render_context )
 
 
+def createProgressReport(progessMsg,last=False):
+  '''General method to write a message directly to the block report, e.g. when starting prcessing of a new barcode.'''
+  createReport( pluginParams['block_report'], "progress_block.html", { "progress_text" : progessMsg, "refresh" : "" if last else "refresh" } )
+
+
 #
 # --------------- Base code for standard plugin runs -------------
 #
+
+def getOrderedBarcodes():
+  if NONBARCODED in barcodeInput:
+    return []
+  barcodes = {}
+  for barcode in barcodeInput:
+    if barcode == NOMATCH: continue
+    barcodes[barcode] = barcodeInput[barcode]["barcode_index"]
+  return sorted(barcodes,key=barcodes.get)
 
 def parseCmdArgs():
   '''Process standard command arguments. Customized for additional debug and other run options.'''
   # standard run options here - do not remove
   parser = OptionParser()
-  parser.add_option('-B', '--bam', help='Filepath to root alignment BAM file. Default: rawlib.bam', dest='bamfile', default='')
-  parser.add_option('-P', '--prefix', help='Output file name prefix for output files. Default: '' => Use analysis folder name or "output".', dest='prefix', default='')
-  parser.add_option('-R', '--reference_fasta', help='Path to fasta file for the whole reference', dest='reference', default='')
-  parser.add_option('-U', '--results_url', help='URL for access to files in the output directory', dest='results_url', default='')
   parser.add_option('-V', '--version', help='Version string for tracking in output', dest='version', default='')
   parser.add_option('-X', '--min_bc_bam_size', help='Minimum file size required for barcode BAM processing', type="int", dest='minbamsize', default=0)
   parser.add_option('-c', '--cmdline', help='Run command line only. Reports will not be generated using the HTML templates.', action="store_true", dest='cmdline')
@@ -320,14 +347,17 @@ def parseCmdArgs():
   parser.add_option('-x', '--stop_on_error', help='Stop processing barcodes after one fails. Otherwise continue to the next.', action="store_true", dest='stop_on_error')
 
   (cmdOptions, args) = parser.parse_args()
-  if( len(args) != 1 ):
-    printerr('Takes only one argument (parameters.json file)')
-    raise TypeError(os.path.basename(__file__)+" takes exactly one argument (%d given)."%len(args))
+  if( len(args) != 2 ):
+    printerr('Takes two file arguments: startplugin.json barcodes.json')
+    raise TypeError(os.path.basename(__file__)+" takes exactly two arguments (%d given)."%len(args))
   with open(args[0]) as jsonFile:
     jsonParams = json.load(jsonFile)
-  global pluginParams
+  global pluginParams, barcodeInput
+  with open(args[1]) as jsonFile:
+    barcodeInput = json.load(jsonFile)
   pluginParams['cmdOptions'] = cmdOptions
   pluginParams['jsonInput'] = args[0]
+  pluginParams['barcodeInput'] = args[1]
   pluginParams['jsonParams'] = jsonParams
 
 def emptyResultsFolder():
@@ -420,50 +450,15 @@ def deleteTempFiles(tmpFiles):
       os.system('rm -f "%s"'%f)
 
 def createReport(reportName,reportTemplate,reportData):
+  # configure django to use the templates folder and various installed apps
+  if not settings.configured:
+    plugin_dir = pluginParams['plugin_dir'] if 'plugin_dir' in pluginParams else os.path.realpath(__file__)
+    settings.configure( DEBUG=False, TEMPLATE_DEBUG=False,
+      INSTALLED_APPS=('django.contrib.humanize',),
+      TEMPLATE_DIRS=(os.path.join(plugin_dir,'templates'),) )
+
   with open(reportName,'w') as bcsum:
     bcsum.write( render_to_string(reportTemplate,safeKeys(reportData)) )
-
-def sampleNames():
-  try:
-    if pluginParams['barcoded']:
-      samplenames = {}
-      bcsamps = pluginParams['jsonParams']['plan']['barcodedSamples']
-      if isinstance(bcsamps,basestring):
-        bcsamps = json.loads(bcsamps)
-      for bcname in bcsamps:
-        for bc in bcsamps[bcname]['barcodes']:
-          samplenames[bc] = bcname if bcname != 'Unknown' else ''
-    else:
-      samplenames = jsonParams['expmeta']['sample']
-  except:
-    return ""
-  return samplenames
-
-def sampleName(barcode='',default=''):
-  if not 'sample_names' in pluginParams:
-    return default
-  sample_names = pluginParams['sample_names']
-  if isinstance(sample_names,basestring):
-    return sample_names if sample_names else default
-  return sample_names.get(barcode,default) if barcode else default
-
-def targetFiles():
-  trgfiles = {}
-  try:
-    if pluginParams['barcoded']:
-      bcbeds = pluginParams['config']['barcodetargetregions']
-      if isinstance(bcbeds,basestring):
-        bcmaps = bcbeds.split(';')
-        for m in bcmaps:
-          kvp = m.split('=',1)
-          if kvp[0] and kvp[1]:
-            trgfiles[kvp[0]] = kvp[1]
-      else:
-        for bc in bcbeds:
-          trgfiles[bc] = bcbeds[bc]
-  except:
-    pass
-  return trgfiles
 
 def loadPluginParams():
   '''Process default command args and json parameters file to extract TSS plugin environment.'''
@@ -481,56 +476,49 @@ def loadPluginParams():
   pluginParams['results_dir'] = jsonParams['runinfo'].get('results_dir','.')
   pluginParams['logopt'] = '-l' if pluginParams['cmdOptions'].logopt else ''
 
-  # configure django to use the templates folder and various installed apps
-  # - done here in case of caught exceptions requiring error page rendering after this point
-  if not settings.configured:
-    settings.configure( DEBUG=False, TEMPLATE_DEBUG=False,
-      INSTALLED_APPS=('django.contrib.humanize',),
-      TEMPLATE_DIRS=(os.path.join(pluginParams['plugin_dir'],'templates'),) )
+  # get FILEPATH_OUTPUT_STEM or create old default if not available
+  pluginParams['prefix'] = jsonParams['expmeta'].get('output_file_name_stem','')
+  if not pluginParams['prefix']:
+    pluginParams['prefix'] = jsonParams['expmeta'].get('run_name','auto')
+    if 'results_name' in jsonParams['expmeta']:
+      pluginParams['prefix'] += "_" + jsonParams['expmeta']['results_name']
 
-  # some things not yet in startplugin.json are provided or over-writen by cmd args
-  copts = pluginParams['cmdOptions']
-  pluginParams['reference'] = copts.reference if copts.reference != "" else jsonParams['runinfo'].get('reference','')
-  pluginParams['bamroot']   = copts.bamfile   if copts.bamfile != "" else '%s/rawlib.bam' % pluginParams['analysis_dir']
-  pluginParams['prefix']    = copts.prefix    if copts.prefix != "" else pluginParams['analysis_name']
-  pluginParams['results_url'] = copts.results_url if copts.results_url != "" else os.path.join(
-  jsonParams['runinfo'].get('url_root','.'),'plugin_out',pluginParams['plugin_name']+'_out' )
+  # TODO: replace this with url_plugindir when available from startplugin.json
+  resurl = jsonParams['runinfo'].get('results_dir','.')
+  plgpos = resurl.find('plugin_out')
+  if plgpos >= 0:
+    resurl = os.path.join( jsonParams['runinfo'].get('url_root','.'), resurl[plgpos:] )
+  pluginParams['results_url'] = resurl
 
-  # check for non-supported de novo runs
-  if not pluginParams['genome_id'] or not pluginParams['reference']:
-    printerr("Requires a reference sequence for coverage analysis.")
-    raise Exception("CATCH:Do not know how to analyze coverage without reference sequence for library '%s'"%pluginParams.get('genome_id',""))
-
-  # set up for barcoded vs. non-barcodedruns
-  pluginParams['bamfile'] = pluginParams['bamroot']
-  pluginParams['output_dir'] = pluginParams['results_dir']
-  pluginParams['output_url'] = pluginParams['results_url']
-  pluginParams['output_prefix'] = pluginParams['prefix']
-  pluginParams['bamname'] = os.path.basename(pluginParams['bamfile'])
-  pluginParams['barcoded'] = os.path.exists(pluginParams['analysis_dir']+'/barcodeList.txt')
-  pluginParams['sample_names'] = sampleNames()
+  pluginParams['barcoded'] = NONBARCODED not in barcodeInput
 
   # disable run skip if no report exists => plugin has not been run before
   pluginParams['report_name'] = pluginParams['plugin_name']+'.html'
   pluginParams['block_report'] = os.path.join(pluginParams['results_dir'],pluginParams['plugin_name']+'_block.html')
   if not os.path.exists( os.path.join(pluginParams['results_dir'],pluginParams['report_name']) ):
-    if pluginParams['cmdOptions'].skip_analysis:
+    if pluginParams['cmdOptions'].skip_analysis and not pluginParams['cmdOptions'].cmdline:
       printlog("Warning: Skip analysis option ignorred as previous output appears to be missing.")
       pluginParams['cmdOptions'].skip_analysis = False
 
   # set up plugin specific options depending on auto-run vs. plan vs. GUI
   config = pluginParams['config'] = jsonParams['pluginconfig'].copy() if 'pluginconfig' in jsonParams else {}
-  if 'launch_mode' in config:
-    pass
+  launchmode = config.get('launch_mode','')
+  if launchmode == 'Manual':
+    furbishPluginParams()
   elif 'plan' in jsonParams:
-    config['launch_mode'] = 'Autostart with plan configuration'
+    # assume that either plan.html or config.html has partially defined the config if launch_mode is defined
+    if launchmode:
+      furbishPluginParams()
+    else:
+      config['launch_mode'] = 'Autostart with plan configuration'
     addAutorunParams(jsonParams['plan'])
   else:
     config['launch_mode'] = 'Autostart with default configuration'
     addAutorunParams()
 
-  # complete plugin customization
-  furbishPluginParams()
+  # check for non-supported reference alignments
+  if pluginParams['genome_id'] != "hg19":
+    printlog("WARNING: This plugin is intended to be used with reads compatible with an hg19 reference.")
 
   # plugin configuration becomes basis of results.json file
   global pluginResult, pluginReport
@@ -567,13 +555,6 @@ def safeKeys(indict):
     retdict[re.sub(r'[^0-9A-Za-z]','_',key)] = safeKeys(value)
   return retdict
   
-def testRun(outdir,prefix):
-  # default for testing framework
-  testout = os.path.join(outdir,prefix+"_test.out")
-  with open(testout,'w') as f:
-    f.write("This is a test file.\n")
-  printlog('Created %s'%testout)
-
 def ensureFilePrefix(prependLen=0):
   global pluginParams
   prefix = pluginParams['prefix']
@@ -589,69 +570,103 @@ def ensureFilePrefix(prependLen=0):
   printlog("WARNING: Output file name stem shortened to ensure output file name length <= %d characters.\nNew stem = %s\n" % (max_filename_len,prefix))
   pluginParams['prefix'] = prefix
 
-def runForBarcodes():
-  global pluginParams, pluginResult, pluginReport
-  # read barcode ids
-  barcodes = []
+def runNonBarcoded():
+  global pluginResult, pluginReport
   try:
-    bcfileName = pluginParams['analysis_dir']+'/barcodeList.txt'
-    with open(bcfileName) as bcfile:
-      for line in bcfile:
-        if line.startswith('barcode '):
-          barcodes.append(line.split(',')[1])
-  except:
-    printerr("Reading barcode list file '%s'" % bcfileName)
-    raise
+    ensureFilePrefix()
+    barcodeData = barcodeInput[NONBARCODED]
+    sample = barcodeData.get('sample','')
+    sampleTag = ' (%s)'%sample if sample else ''
+    printlog("\nProcessing nonbarcoded%s...\n" % sampleTag)
+    createIncompleteReport()
+    pluginParams['output_dir'] = pluginParams['results_dir']
+    pluginParams['output_url'] = pluginParams['results_url']
+    pluginParams['output_prefix'] = pluginParams['prefix']
+    (resultData,pluginReport) = run_plugin( pluginParams['cmdOptions'].skip_analysis, NONBARCODED )
+    pluginResult.update(resultData)
+    createDetailReport(pluginResult,pluginReport)
+  except Exception, e:
+    errMsg = str(e)
+    createIncompleteReport(errMsg)
+    if not errMsg.startswith("CATCH:"): raise
+  if pluginParams['cmdOptions'].scraper:
+    createScraperLinksFolder( pluginParams['output_dir'], pluginParams['output_prefix'] )
+
+def runForBarcodes():
   # iterate over listed barcodes to pre-test barcode files
+  global pluginParams, pluginResult, pluginReport
+  barcodes = getOrderedBarcodes()
+
   numGoodBams = 0
+  numAnalBams = 0
   maxBarcodeLen = 0
+  numInvalidBarcodes = 0
   minFileSize = pluginParams['cmdOptions'].minbamsize
-  (bcBamPath,bcBamRoot) = os.path.split(pluginParams['bamroot'])
-  bcBamFile = []
+  barcodeIssues = []
   for barcode in barcodes:
-    bcbam = os.path.join( bcBamPath, "%s_%s"%(barcode,bcBamRoot) )
-    if not os.path.exists(bcbam):
-      bcbam = ": BAM file not found"
+    barcodeData = barcodeInput[barcode]
+    bcbam = barcodeData['bam_filepath']
+    errMsg = ''
+    if not barcodeData['aligned']:
+      errMsg = "BAM file is not aligned (required for samtools pileup)"
+    elif barcodeData['filtered']:
+      errMsg = "Filtered (not enough reads)"
+    elif not os.path.exists(bcbam):
+      errMsg = "BAM file not found at " + bcbam
     elif os.stat(bcbam).st_size < minFileSize:
-      bcbam = ": BAM file too small"
+      errMsg = "BAM file too small"
     else:
       if( len(barcode) > maxBarcodeLen ):
         maxBarcodeLen = len(barcode)
       numGoodBams += 1
-    bcBamFile.append(bcbam)
+      # match former behavior of tracking whether BAM was aligned
+      if barcodeData.get('aligned',False):
+        numAnalBams += 1
+    barcodeIssues.append(errMsg)
 
   ensureFilePrefix(maxBarcodeLen+1)
-
-  printlog("Processing %d barcodes...\n" % numGoodBams)
   pluginReport['num_barcodes_processed'] = numGoodBams
+  pluginReport['num_barcodes_invalid'] = numInvalidBarcodes
   pluginReport['num_barcodes_failed'] = 0
 
-  # create initial (empty) barcodes summary report
-  updateBarcodeSummaryReport("",True)
-
-  # iterate over all barcodes and process the valid ones
   skip_analysis = pluginParams['cmdOptions'].skip_analysis
   stop_on_error = pluginParams['cmdOptions'].stop_on_error
   create_scraper = pluginParams['cmdOptions'].scraper
+
+  # create initial (empty) barcodes summary report
+  printlog("Processing %d barcodes...\n" % numGoodBams)
+  updateBarcodeSummaryReport("",True)
+
+  # iterate over all barcodes and process the valid ones
   postout = False; # just for logfile prettiness
+  barcodeProcessed = 0
   for barcode in barcodes:
-    sample = sampleName(barcode)
-    bamfile = bcBamFile.pop(0)
-    if bamfile[0] == ":":
+    barcodeData = barcodeInput[barcode]
+    sample = barcodeData.get('sample','')
+    sampleTag = ' (%s)'%sample if sample else ''
+    barcodeError = barcodeIssues.pop(0)
+    if barcodeError:
       if postout:
         postout = False
         printlog("")
-      printlog("Skipping %s%s%s" % (barcode,('' if sample == '' else ' (%s)'%sample),bamfile))
+      printlog("Skipping %s%s: %s" % (barcode,sampleTag,barcodeError))
+      # for error messages to appear in barcode table
+      perr = barcodeError.find('ERROR:')+6
+      if perr >= 6:
+        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : barcodeError[perr:].strip() }
+        pluginReport['barcodes'][barcode] = {}
+        updateBarcodeSummaryReport(barcode,True)
     else:
-      postout = True
-      printlog("\nProcessing %s%s...\n" % (barcode,('' if sample == '' else ' (%s)'%sample)))
-      pluginParams['bamfile'] = bamfile
-      pluginParams['output_dir'] = os.path.join(pluginParams['results_dir'],barcode)
-      pluginParams['output_url'] = os.path.join(pluginParams['results_url'],barcode)
-      pluginParams['output_prefix'] = barcode+"_"+pluginParams['prefix']
-      if not os.path.exists(pluginParams['output_dir']):
-         os.makedirs(pluginParams['output_dir'])
       try:
+        postout = True
+        printlog("\nProcessing %s%s...\n" % (barcode,sampleTag))
+        pluginParams['output_dir'] = os.path.join(pluginParams['results_dir'],barcode)
+        pluginParams['output_url'] = os.path.join(pluginParams['results_url'],barcode)
+        pluginParams['output_prefix'] = barcode+"_"+pluginParams['prefix']
+        if not os.path.exists(pluginParams['output_dir']):
+           os.makedirs(pluginParams['output_dir'])
+        barcodeProcessed += 1
+        createProgressReport( "Processing barcode %d of %d..." % (barcodeProcessed,numGoodBams) )
         (resultData,reportData) = run_plugin(skip_analysis,barcode)
         pluginResult['barcodes'][barcode] = resultData
         pluginReport['barcodes'][barcode] = reportData
@@ -659,35 +674,25 @@ def runForBarcodes():
         if create_scraper:
           createScraperLinksFolder( pluginParams['output_dir'], pluginParams['output_prefix'] )
       except Exception, e:
-        printerr('Analysis of barcode %s failed:'%barcode)
-        pluginReport['num_barcodes_failed'] += 1
-        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : str(e) }
+        errMsg = str(e)
+        if errMsg.startswith("CATCH:"): errMsg = errMsg[6:]
+        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : errMsg }
         pluginReport['barcodes'][barcode] = {}
-        if stop_on_error: raise
-        traceback.print_exc()
+        # Do not trace expected errors as failures
+        if str(e).startswith("CATCH:"):
+          printlog('Analysis of barcode %s failed: %s'%(barcode,errMsg))
+        else:
+          printerr('Analysis of barcode %s failed:'%barcode)
+          pluginReport['num_barcodes_failed'] += 1
+          if stop_on_error: raise
+          traceback.print_exc()
       updateBarcodeSummaryReport(barcode,True)
 
+  createProgressReport( "Compiling barcode summary report...", True )
   run_meta_plugin()
   updateBarcodeSummaryReport("")
   if create_scraper:
     createScraperLinksFolder( pluginParams['results_dir'], pluginParams['prefix'] )
-
-
-def runNonBarcoded():
-  global pluginResult, pluginReport
-  ensureFilePrefix()
-  try:
-    createIncompleteReport()
-    (resultData,pluginReport) = run_plugin( pluginParams['cmdOptions'].skip_analysis )
-    pluginResult.update(resultData)
-    createDetailReport(pluginResult,pluginReport)
-  except Exception, e:
-    printerr('Analysis failed')
-    pluginResult.update({ 'Error': str(e) })
-    createIncompleteReport(str(e))
-    raise
-  if pluginParams['cmdOptions'].scraper:
-    createScraperLinksFolder( pluginParams['output_dir'], pluginParams['output_prefix'] )
 
 def createScraperLinksFolder(outdir,rootname):
   '''Make links to all files matching <outdir>/<rootname>.* to <outdir>/scraper/link.*'''
@@ -722,6 +727,7 @@ def plugin_main():
       emsg = emsg[6:]
       printlog('ERROR: %s'%emsg)
       createIncompleteReport(emsg)
+      createProgressReport("Analysis failed.")
       return 0
     else:
       traceback.print_exc()
@@ -732,12 +738,16 @@ def plugin_main():
     if pluginParams['barcoded']:
       runForBarcodes()
       if pluginReport['num_barcodes_processed'] == 0:
-        printlog("WARNING: No barcode alignment files were found for this barcoded run.")
+        createIncompleteReport("No barcode alignment files were found for this barcoded run.")
+        createProgressReport("No barcode alignment files were found.")
+        return 1
       elif pluginReport['num_barcodes_processed'] == pluginReport['num_barcodes_failed']:
-        printlog("ERROR: Analysis failed for all barcode alignments.")
+        createIncompleteReport("Analysis failed for all barcode alignments.")
+        createProgressReport("Analysis failed for all barcodes.")
         return 1
     else:
       runNonBarcoded()
+    createProgressReport( "Analysis completed successfully." )
     wrapup()
   except Exception, e:
     traceback.print_exc()

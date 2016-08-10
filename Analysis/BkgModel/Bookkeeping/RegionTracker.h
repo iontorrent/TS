@@ -31,7 +31,7 @@ class RegionTracker{
     void ResetLocalRegionParams( int flow_block_size );
     void Delete();
     void InitHighRegionParams(float t_mid_nuc_start, int flow_block_size);
-    void InitLowRegionParams(float t_mid_nuc_start, int flow_block_size);
+    void InitLowRegionParams(float t_mid_nuc_start, GlobalDefaultsForBkgModel &global_defaults, int flow_block_size);
     void InitModelRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults, int flow_block_size);
     void InitRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults, int flow_block_size);
 

@@ -44,6 +44,13 @@ pluginReport = {}
 barcodeSummary = []
 barcodeReport = {}
 
+# ratio for minimal to maximum barcode BAM size for barcode to be ignored - 0 => disabled
+barcode_filter = 0.0
+
+# max plugin out file ext length for addressing max filename length (w/ barcode), e.g. ".STARTBowtie2.RNAmetrics.png"
+max_fileext_len = 33
+max_filename_len = 255
+
 #
 # -------------------- customize code for this plugin here ----------------
 #
@@ -125,12 +132,11 @@ def run_plugin(skiprun=False,barcode=""):
   output_url = pluginParams['output_url']
   output_prefix = pluginParams['output_prefix']
   config = pluginParams['config']
-  sample  = sampleName(barcode)
-  bamfile = bamFilepath(barcode)
+  barcodeData = barcodeSpecifics(barcode)
 
   # link from source BAM since pipeline uses the name as output file stem
   linkbam = os.path.join(output_dir,output_prefix+".bam")
-  createlink(bamfile,linkbam)
+  createlink(barcodeData['bamfile'],linkbam)
   bamfile = linkbam
 
   # user parameters
@@ -140,13 +146,17 @@ def run_plugin(skiprun=False,barcode=""):
   adapter   = config['cutadapt']
   fpkm_thres = config['fpkm_thres']
 
+  # scratch location
+  ref_idxdir = "/results/plugins/scratch/RNASeqAnalysis"
+
   # skip the actual and assume all the data already exists in this file for processing
   run_log = 'rnaseq.log'
   if skiprun:
     printlog("Skipped analysis - generating report on in situ data")
   else:
     runplugin = Popen( [ os.path.join(plugin_dir,'run_rnaseqanalysis.py'),
-      genome, reference, bamfile, sample, adapter, fracreads, fpkm_thres, output_dir, output_prefix, run_log ], stdout=PIPE )
+      genome, reference, bamfile, barcodeData['sample'], adapter, fracreads, fpkm_thres,
+      output_dir, output_prefix, run_log, ref_idxdir ], stdout=PIPE )
     runplugin.communicate()
     if runplugin.poll():
       raise Exception("Failed running run_rnaseqanalysis.py. See file %s."%run_log)
@@ -199,6 +209,7 @@ def run_plugin(skiprun=False,barcode=""):
 def run_meta_plugin():
   '''Wrapper for making command line calls to perform plugin meta-analyis. This is called after analysis has completed for individual barcodes.'''
   if pluginParams['cmdOptions'].cmdline: return
+  printlog("")
   printtime("Creating barcodes summary report...")
 
   bcresults = pluginResult['barcodes']
@@ -207,6 +218,7 @@ def run_meta_plugin():
   output_dir = pluginParams['results_dir']
 
   # collect barcode statistics from the barcode summary table data and lists of output files
+  warnMissingPlot = False
   bctable = []
   geneReadFiles = []
   distReadFiles = []
@@ -277,25 +289,27 @@ def run_meta_plugin():
     cpairsTitle = "log2 RPM pair correlation plots" if numReports > 1 else "log2 RPM density plot"
     rvalueMatrix = pluginParams['prefix']+".rvalues.xls"
     if os.system( '%s "%s" "%s" %d "%s" "%s" < %s' % ( runR,
-        rpmbcmatrix, cpairsPlot, len(geneReadFiles), cpairsTitle, os.path.join(output_dir,rvalueMatrix),
+        rpmbcmatrix, cpairsPlot, numReports, cpairsTitle, os.path.join(output_dir,rvalueMatrix),
         os.path.join(plugin_dir,'scripts','plot_cormatrix.R') ) ):
       # temporarily avoid htseq-count issue of not finding any genes
+      warnMissingPlot = True
       printlog("WARNING: Failed to create barcode RPM paired correlation plots using plot_cormatrix.R")
-      #raise Exception("Failed to create barcode RPM paired correlation plots using plot_cormatrix.R")
 
     # create overlaid transcript normalized coverage plot
     transcovPlot = pluginParams['prefix']+".transcov.png"
     if os.system( '%s "%s" %s < %s' % ( runR,
         os.path.join(output_dir,transcovPlot), " ".join(distReadFiles),
         os.path.join(plugin_dir,'scripts','plot_distcov.R') ) ):
-      raise Exception("Failed to create barcode transcript coverage plot using plot_distcov.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create barcode transcript coverage plot using plot_distcov.R")
 
     # create barchart of mapped reads
     alignmentPlot = pluginParams['prefix']+".mapreads.png"
     if os.system( '%s "%s" "%s" "Reads Alignment Summary" "Million Reads" 0.000001 < %s' % ( runR,
         os.path.join(output_dir,bctabfile), os.path.join(output_dir,alignmentPlot),
         os.path.join(plugin_dir,'scripts','plot_thbar.R') ) ):
-      raise Exception("Failed to create barcode read alignment plot using plot_thbar.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create barcode read alignment plot using plot_thbar.R")
 
     # create alignment distribution matrix and barchart plot of this
     featMatrix = pluginParams['prefix']+".feature_reads.xls"
@@ -303,13 +317,15 @@ def run_meta_plugin():
       runcmd = Popen( [os.path.join(plugin_dir,'scripts','featureMatrix.pl')] + featReadFiles, stdout=outfile )
       runcmd.communicate()
       if runcmd.poll():
-        raise Exception("Failed to create barcode x feature alignment distribution matrix.")
+        warnMissingPlot = True
+        printlog("WARNING: Failed to create barcode x feature alignment distribution matrix.")
 
     featPlot = pluginParams['prefix']+".feature_reads.png"
     if os.system( '%s "%s" "%s" "Alignment Distribution" "Million Base Reads" 0.000001 < %s' % ( runR,
         os.path.join(output_dir,featMatrix), os.path.join(output_dir,featPlot),
         os.path.join(plugin_dir,'scripts','plot_hbar.R') ) ):
-      raise Exception("Failed to create feature alignment distribution plot using plot_hbar.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create feature alignment distribution plot using plot_hbar.R")
 
     # create overlaid gene log10 distribution frequency curve (w/o genes with 0 reads)
     genepdfPlot = pluginParams['prefix']+".genepdf.png"
@@ -318,7 +334,6 @@ def run_meta_plugin():
         os.path.join(plugin_dir,'scripts','plot_multi_pdf.R') ) ):
       # temporarily avoid htseq-count issue of not finding any genes
       printlog("WARNING: Failed to create gene read pdf plot using plot_multi_pdf.R")
-      #raise Exception("Failed to create gene read pdf plot using plot_multi_pdf.R")
 
     # create cufflinks isoform FPKM matrix
     isofMatrix = pluginParams['prefix']+".isoforms.xls"
@@ -326,14 +341,16 @@ def run_meta_plugin():
       runcmd = Popen( [os.path.join(plugin_dir,'scripts','isoformMatrix.pl')] + cuffIsofFiles, stdout=outfile )
       runcmd.communicate()
       if runcmd.poll():
-        raise Exception("Failed to create barcode x isoforms representation matrix.")
+        warnMissingPlot = True
+        printlog("WARNING: Failed to create barcode x isoforms representation matrix.")
 
     # create isoform distribution matrix from cufflinks isoform FPKM matrix
     isofDistplot = pluginParams['prefix']+".isohist.png"
     if os.system( '%s "%s" "%s" "Distribution of Isoform Reads" %s < %s' % ( runR,
         os.path.join(output_dir,isofMatrix), os.path.join(output_dir,isofDistplot), fpkm_thres,
         os.path.join(plugin_dir,'scripts','plot_multi_isofrq.R') ) ):
-      raise Exception("Failed to create isoforms distribution plot using plot_multi_isofrq.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create isoforms distribution plot using plot_multi_isofrq.R")
 
   # the remaining plots require that there are at least 2 barcodes to compare
   rvalueHeatmap = ''
@@ -345,21 +362,24 @@ def run_meta_plugin():
     if os.system( '%s "%s" "%s" "Correlation Heatmap" "r-value" %s < %s' % ( runR,
         os.path.join(output_dir,rvalueMatrix), os.path.join(output_dir,rvalueHeatmap), minrvalue,
         os.path.join(plugin_dir,'scripts','plot_corbc_heatmap.R') ) ):
-      raise Exception("Failed to create barcode heatmap plots using plot_corbc_heatmap.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create barcode heatmap plots using plot_corbc_heatmap.R")
 
     # create heatmaplot of top hm_samples (250) variant genes vs. barcode
     genevarHeatmap = pluginParams['prefix']+".genebc.hm.png"
     if os.system( '%s "%s" "%s" "Gene Representation Heatmap" "Representation: log10(RPM+1)" %s %s %s < %s' % ( runR,
         os.path.join(output_dir,bcmatrix), os.path.join(output_dir,genevarHeatmap), hm_samples, hm_bcmrds, hm_minrpm,
         os.path.join(plugin_dir,'scripts','plot_genebc_heatmap.R') ) ):
-      raise Exception("Failed to create barcode heatmap plots using plot_genebc_heatmap.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create barcode heatmap plots using plot_genebc_heatmap.R")
 
     # create heatmap plot for hm_samples (250) isoforms showing largest BC variation from cufflinks isoform FPKM matrix
     isofHeatmap = pluginParams['prefix']+".isoheatmap.png"
     if os.system( '%s "%s" "%s" "Transcript Isoform Representation Heatmap" "Representation: log10(FPKM+1)" %s %s %s %s < %s' % ( runR,
         os.path.join(output_dir,isofMatrix), os.path.join(output_dir,isofHeatmap), hm_samples, fpkm_thres, hm_bcmexp, hm_minfpkm,
         os.path.join(plugin_dir,'scripts','plot_isobc_heatmap.R') ) ):
-      raise Exception("Failed to create isoforms representation heatmap plot using plot_isobc_heatmap.R")
+      warnMissingPlot = True
+      printlog("WARNING: Failed to create isoforms representation heatmap plot using plot_isobc_heatmap.R")
 
   # record output files for use in barcode summary report
   # (p_bcmatrix used for passing to php script for possible use with interactive utilities)
@@ -387,7 +407,8 @@ def run_meta_plugin():
       "rvalheatmap" : rvalueHeatmap,
       "geneheatmap" : genevarHeatmap,
       "isofheatmap" : isofHeatmap,
-      "cpairsplot" : cpairsPlot
+      "cpairsplot" : cpairsPlot,
+      "warning" : ("Some plots are unavailable due to insufficient assigned reads for one or more barcodes." if warnMissingPlot else "")
     })
 
   # create symlink for js/css - the (empty) tabs on report page will not appear until this exists
@@ -401,6 +422,8 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
   if barcode != "":
     resultData = pluginResult['barcodes'][barcode]
     reportData = pluginReport['barcodes'][barcode]
+    sample = resultData['Sample Name']
+    if sample == '': sample = 'None'
     # Populate the specific barcodes_json list as requied for the Kendo table code
     if 'Error' in resultData:
       detailsLink = "<span class='help' title='%s' style='color:red'>%s</span>" % ( resultData['Error'], barcode )
@@ -411,7 +434,7 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
         "index" : len(barcodeSummary),
         "barcode_name" : barcode,
         "barcode_details" : detailsLink,
-        "sample" : sampleName(barcode),
+        "sample" : sample,
         "total_reads": "NA",
         "aligned_reads": "NA",
         "pc_aliged_reads": "NA",
@@ -426,7 +449,7 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
         "index" : len(barcodeSummary),
         "barcode_name" : barcode,
         "barcode_details" : detailsLink,
-        "sample" : sampleName(barcode),
+        "sample" : sample,
         "total_reads": resultData.get("Total Reads","NA"),
         "aligned_reads": resultData.get("Aligned Reads","NA"),
         "pc_aliged_reads": resultData.get("Pct Aligned","NA"),
@@ -441,6 +464,8 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
     "ref_name" : config['genome'],
     "adapter" : config['cutadapt'],
     "sampreads" : str(100*float(config['fraction_of_reads']))+'%',
+    "num_barcodes_filtered" : pluginReport['num_barcodes_filtered'],
+    "barcode_filter" : pluginReport['barcode_filter'],
     "barcode_results" : simplejson.dumps(barcodeSummary)
   }
   # extra report items, e.g. file links from barcodes summary page
@@ -451,7 +476,12 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
 
 def createIncompleteReport(errorMsg=""):
   '''Called to create an incomplete or error report page for non-barcoded runs.'''
-  sample = sampleName('') if pluginParams['barcoded'] else ''
+  if pluginParams['barcoded']:
+    sample = 'None'
+  else:
+    barcodeData = barcodeSpecifics(NONBARCODED)
+    if barcodeData: sample = barcodeData.get('sample','None')
+    if sample == 'none': sample = 'None'
   config = pluginParams['config']
   render_context = {
     "autorefresh" : (errorMsg == ""),
@@ -512,20 +542,59 @@ def getOrderedBarcodes():
     if barcode == NOMATCH: continue
     barcodes[barcode] = barcodeInput[barcode]["barcode_index"]
   return sorted(barcodes,key=barcodes.get) 
-  
-def sampleName( barcode, default = '' ):
-  if not barcode: barcode = NONBARCODED
-  sample = default
-  if barcode in barcodeInput:
-    sample = barcodeInput[barcode].get('sample',default)
-  if sample == 'none': sample = default
-  return default
 
-def bamFilepath( barcode ):
-  if not barcode: barcode = NONBARCODED
-  if barcode in barcodeInput:
-    return barcodeInput[barcode].get('bam_filepath','')
-  return ''
+def barcodeSpecifics(barcode=""):
+  '''Process the part of the plan that customizes barcodes to different references.'''
+  if not barcode:
+    barcode = NOMATCH
+  if not barcode in barcodeInput:
+    return { "filtered" : True }
+
+  barcodeData = barcodeInput[barcode]
+  sample = barcodeData.get('sample','')
+  if sample == 'none': sample = ''
+  filtered = barcodeData.get('filtered',True)
+  if barcode == NOMATCH: filtered = True
+  reference = barcodeData['reference']
+  refPath = barcodeData['reference_fullpath']
+  genomeUrl = barcodeData.get('genome_urlpath','')
+  if not genomeUrl:
+    idx = refPath.find('referenceLibrary/')
+    if idx >= 0:
+      genomeUrl = os.path.join("/output",refPath[idx+17])
+
+  # special exception to allow full IGV annotation
+  if reference == 'hg19': genomeUrl = ''
+
+  bedfile = barcodeData['target_region_filepath']
+
+  return {
+    "filtered" : filtered,
+    "sample" : sample,
+    "reference" : reference,
+    "refpath" : refPath,
+    "nuctype" : barcodeData.get('nucleotide_type','DNA'),
+    "refurl" : '{http_host}'+genomeUrl if genomeUrl else reference,
+    "bedfile" : bedfile,
+    "bamfile" : barcodeData.get('bam_filepath','') }
+
+def checkBarcode(barcode,relBamSize=0):
+  '''Checks if a specific barcode is set up correctly for analysis.'''
+  # This plugin does not care about whether reads were mapped to a reference or targeted regions
+  barcodeData = barcodeSpecifics(barcode)
+  if barcodeData['filtered']:
+    return "Filtered (not enough reads)"
+  #if not barcodeData['reference']:
+  #  return "Analysis requires alignment to a reference"
+  if not os.path.exists(barcodeData['bamfile']):
+    return "BAM file not found at " + barcodeData['bamfile']
+  fileSize = os.stat(barcodeData['bamfile']).st_size
+  if fileSize < pluginParams['cmdOptions'].minbamsize:
+    return "BAM file too small"
+  if fileSize < relBamSize:
+    return "BAM file too small relative to largest"
+  #return checkTarget( barcodeData['bedfile'], barcodeData['bamfile'] )
+  return ""
 
 def emptyResultsFolder():
   '''Purge everything in output folder except for specifically named files.'''
@@ -634,10 +703,14 @@ def loadPluginParams():
   pluginParams['analysis_dir'] = jsonParams['runinfo'].get('analysis_dir','.')
   pluginParams['results_dir'] = jsonParams['runinfo'].get('results_dir','.')
 
-  # TODO: replace with run_prefix and url_plugindir when they become avaialble via startplugins.json
-  pluginParams['prefix'] = jsonParams['expmeta'].get('run_name','auto')
-  if 'results_name' in jsonParams['expmeta']:
-    pluginParams['prefix'] += "_" + jsonParams['expmeta']['results_name']
+  # get FILEPATH_OUTPUT_STEM or create old default if not available
+  pluginParams['prefix'] = jsonParams['expmeta'].get('output_file_name_stem','')
+  if not pluginParams['prefix']:
+    pluginParams['prefix'] = jsonParams['expmeta'].get('run_name','auto')
+    if 'results_name' in jsonParams['expmeta']:
+      pluginParams['prefix'] += "_" + jsonParams['expmeta']['results_name']
+
+  # TODO: replace this with url_plugindir when available from startplugin.json
   resurl = jsonParams['runinfo'].get('results_dir','.')
   plgpos = resurl.find('plugin_out')
   if plgpos >= 0:
@@ -711,14 +784,34 @@ def safeKeys(indict):
     retdict[re.sub(r'[^0-9A-Za-z]','_',key)] = safeKeys(value)
   return retdict
 
+def ensureFilePrefix(prependLen=0):
+  global pluginParams
+  prefix = pluginParams['prefix']
+  maxfn = prependLen + len(prefix) + max_fileext_len
+  if maxfn <= max_filename_len: return
+  # clip prefix to maximum size for allowed (before prepend/append)
+  prefix = prefix[:max_filename_len-maxfn]
+  maxfn = len(prefix)
+  # use nearest '_' if doesn't reduce the length of name by more than 70%
+  uslen = prefix.rfind('_')
+  if uslen >= 0.7*maxfn:
+    prefix = prefix[:uslen]
+  printlog("WARNING: Output file name stem shortened to ensure output file name length <= %d characters.\nNew stem = %s\n" % (max_filename_len,prefix))
+  pluginParams['prefix'] = prefix
+
 def runNonBarcoded():
   global pluginResult, pluginReport
   try:
+    ensureFilePrefix()
+    barcodeData = barcodeSpecifics(NONBARCODED)
+    sample = barcodeData.get('sample','')
+    sampleTag = ' (%s)'%sample if sample else ''
+    printlog("\nProcessing nonbarcoded%s...\n" % sampleTag)
     createIncompleteReport()
     pluginParams['output_dir'] = pluginParams['results_dir']
     pluginParams['output_url'] = pluginParams['results_url']
     pluginParams['output_prefix'] = pluginParams['prefix']
-    (resultData,pluginReport) = run_plugin( pluginParams['cmdOptions'].skip_analysis )
+    (resultData,pluginReport) = run_plugin( pluginParams['cmdOptions'].skip_analysis, NONBARCODED )
     pluginResult.update(resultData)
     createDetailReport(pluginResult,pluginReport)
   except Exception, e:
@@ -733,53 +826,83 @@ def runForBarcodes():
   # iterate over listed barcodes to pre-test barcode files
   global pluginParams, pluginResult, pluginReport
   barcodes = getOrderedBarcodes()
+
+  # scan for largest BAM file size to set relative minimum
+  relBamSize = 0
+  if barcode_filter > 0:
+    maxBamSize = 0
+    for barcode in barcodes:
+      bcbam = barcodeInput[barcode].get('bam_filepath','')
+      if os.path.exists(bcbam):
+        fsiz = os.stat(bcbam).st_size
+        if fsiz > maxBamSize: maxBamSize = fsiz
+    relBamSize = int(barcode_filter * maxBamSize)
+
   numGoodBams = 0
+  numBamSmall = 0
+  maxBarcodeLen = 0
   numInvalidBarcodes = 0
-  minFileSize = pluginParams['cmdOptions'].minbamsize
-  bcBamFile = []
+  barcodeIssues = []
   for barcode in barcodes:
-    bcbam = bamFilepath(barcode)
-    if barcode == NOMATCH or barcodeInput[barcode]['filtered']:
-      bcbam = ": Barcode excluded (not enough reads)"
-    elif not os.path.exists(bcbam):
-      bcbam = ": BAM file not found"
-    elif os.stat(bcbam).st_size < minFileSize:
-      bcbam = ": BAM file too small"
-    else:
+    errmsg = checkBarcode(barcode,relBamSize)
+    if not errmsg:
+      if( len(barcode) > maxBarcodeLen ):
+        maxBarcodeLen = len(barcode)
       numGoodBams += 1
-    bcBamFile.append(bcbam)
+    elif errmsg[:6] == "ERROR:":
+      errmsg = "\n"+errmsg
+      numInvalidBarcodes += 1
+      if errmsg.find('relative to largest'):
+        numBamSmall += 1
+    barcodeIssues.append(errmsg)
 
-  printlog("Processing %d barcodes..." % numGoodBams)
+  ensureFilePrefix(maxBarcodeLen+1)
   pluginReport['num_barcodes_processed'] = numGoodBams
-  pluginReport['num_barcodes_failed'] = 0
   pluginReport['num_barcodes_invalid'] = numInvalidBarcodes
+  pluginReport['num_barcodes_failed'] = 0
+  pluginReport['num_barcodes_filtered'] = numBamSmall
+  pluginReport['barcode_filter'] = 100*barcode_filter
+  pluginResult['Barcodes filtered'] = str(numBamSmall)
 
-  # create initial (empty) barcodes summary report
-  updateBarcodeSummaryReport("",True)
-
-  # iterate over all barcodes and process the valid ones
   skip_analysis = pluginParams['cmdOptions'].skip_analysis
   stop_on_error = pluginParams['cmdOptions'].stop_on_error
   create_scraper = pluginParams['cmdOptions'].scraper
+
+  # create initial (empty) barcodes summary report
+  if numBamSmall > 1:
+    printlog("WARNING: %d bamfiles discounted as too small compared to largest BAM file.\n"%numBamSmall)
+  printlog("Processing %d barcodes..." % numGoodBams)
+  updateBarcodeSummaryReport("",True)
+
+  # iterate over all barcodes and process the valid ones
   postout = False; # just for logfile prettiness
   barcodeProcessed = 0
   for barcode in barcodes:
-    sample = sampleName(barcode)
-    bamfile = bcBamFile.pop(0)  # bamfile now taken from barcodes.json in runplugin()
-    if bamfile[0] == ":":
+    barcodeData = barcodeSpecifics(barcode)
+    sample = barcodeData.get('sample','')
+    sampleTag = ' (%s)'%sample if sample else ''
+    barcodeError = barcodeIssues.pop(0)
+    if barcodeError:
       if postout:
         postout = False
         printlog("")
-      printlog("Skipping %s%s%s" % (barcode,('' if sample == '' else ' (%s)'%sample),bamfile))
+      printlog("Skipping %s%s: %s" % (barcode,sampleTag,barcodeError))
+      # for error messages to appear in barcode table
+      perr = barcodeError.find('ERROR:')+6
+      if perr >= 6:
+        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : barcodeError[perr:].strip() }
+        pluginReport['barcodes'][barcode] = {}
+        updateBarcodeSummaryReport(barcode,True)
     else:
-      postout = True
-      printlog("\nProcessing %s%s...\n" % (barcode,('' if sample == '' else ' (%s)'%sample)))
-      pluginParams['output_dir'] = os.path.join(pluginParams['results_dir'],barcode)
-      pluginParams['output_url'] = os.path.join(pluginParams['results_url'],barcode)
-      pluginParams['output_prefix'] = barcode+"_"+pluginParams['prefix']
-      if not os.path.exists(pluginParams['output_dir']):
-         os.makedirs(pluginParams['output_dir'])
       try:
+        postout = True
+        printlog("\nProcessing %s%s...\n" % (barcode,sampleTag))
+        printlog('Reference File: %s' % barcodeData['refpath'])
+        pluginParams['output_dir'] = os.path.join(pluginParams['results_dir'],barcode)
+        pluginParams['output_url'] = os.path.join(pluginParams['results_url'],barcode)
+        pluginParams['output_prefix'] = barcode+"_"+pluginParams['prefix']
+        if not os.path.exists(pluginParams['output_dir']):
+           os.makedirs(pluginParams['output_dir'])
         barcodeProcessed += 1
         createProgressReport( "Processing barcode %d of %d..." % (barcodeProcessed,numGoodBams) )
         (resultData,reportData) = run_plugin(skip_analysis,barcode)

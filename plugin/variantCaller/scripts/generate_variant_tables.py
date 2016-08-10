@@ -8,6 +8,7 @@ import bisect
 import json
 import traceback
 import copy
+import numpy
 from collections import defaultdict
 from optparse import OptionParser
 
@@ -15,7 +16,18 @@ from matplotlib import use
 use("Agg",warn=False)
 import matplotlib.pyplot as plt
 
-def write_alleles2_line(fid, **kwargs):
+def median(data):
+    data = sorted(data)
+    n = len(data)
+    if n == 0:
+        return 0
+    if n%2 == 1:
+        return data[n//2]
+    else:
+        i = n//2
+        return (data[i - 1] + data[i])/2
+        
+def write_alleles2_line(options, fid, **kwargs):
     header = kwargs.get('header', False)
     allele = kwargs.get('data',{})
 
@@ -28,6 +40,8 @@ def write_alleles2_line(fid, **kwargs):
     fid.write(('Frequency'              if header else allele['freq'])                  + '\t')
     fid.write(('Quality'                if header else allele['qual'])                  + '\t')
     fid.write(('Filter'                 if header else allele['qual_filter'])           + '\t')
+    if (options.library_type == "tagseq"):
+        fid.write(('LOD'                if header else allele['LOD'])                   + '\t')
 
     # Extra fields displayed only in Allele Search view
     fid.write(('Type'                   if header else allele['type'])                  + '\t')
@@ -43,13 +57,22 @@ def write_alleles2_line(fid, **kwargs):
     fid.write(('Original Coverage'      if header else allele['cov_total'])             + '\t')
     fid.write(('Coverage'               if header else allele['cov_total_downsampled']) + '\t')
     fid.write(('Filter'                 if header else allele['cov_total_filter'])      + '\t')
-    fid.write(('Coverage+'              if header else allele['cov_total_plus'])        + '\t')
-    fid.write(('Filter'                 if header else allele['cov_total_plus_filter']) + '\t')
-    fid.write(('Coverage-'              if header else allele['cov_total_minus'])       + '\t')
-    fid.write(('Filter'                 if header else allele['cov_total_minus_filter'])+ '\t')
-    fid.write(('Allele Cov'             if header else allele['cov_allele'])            + '\t')
-    fid.write(('Allele Cov+'            if header else allele['cov_allele_plus'])       + '\t')
-    fid.write(('Allele Cov-'            if header else allele['cov_allele_minus'])      + '\t')
+    if (options.library_type == "tagseq"):
+        fid.write(('Allele Read Cov'              if header else allele['cov_total_plus'])        + '\t')
+        fid.write(('Filter'                 if header else allele['cov_total_plus_filter']) + '\t')
+        fid.write(('Allele Read Freq'              if header else allele['cov_total_minus'])       + '\t')
+        fid.write(('Filter'                 if header else allele['cov_total_minus_filter'])+ '\t')
+        fid.write(('Mol Coverage'             if header else allele['cov_allele'])            + '\t')
+        fid.write(('Allele Mol Cov'            if header else allele['cov_allele_plus'])       + '\t')
+        fid.write(('Allele Mol Freq'        if header else allele['cov_allele_minus'])      + '\t')
+    else:    
+        fid.write(('Coverage+'              if header else allele['cov_total_plus'])        + '\t')
+        fid.write(('Filter'                 if header else allele['cov_total_plus_filter']) + '\t')
+        fid.write(('Coverage-'              if header else allele['cov_total_minus'])       + '\t')
+        fid.write(('Filter'                 if header else allele['cov_total_minus_filter'])+ '\t')
+        fid.write(('Allele Cov'             if header else allele['cov_allele'])            + '\t')
+        fid.write(('Allele Cov+'            if header else allele['cov_allele_plus'])       + '\t')
+        fid.write(('Allele Cov-'            if header else allele['cov_allele_minus'])      + '\t')
     fid.write(('Strand Bias'            if header else allele['strand_bias'])           + '\t')
     fid.write(('Filter'                 if header else allele['strand_bias_filter'])    + '\t')
 
@@ -74,7 +97,16 @@ def write_alleles2_line(fid, **kwargs):
     # More fields to aid dealing with multiple samples
     fid.write(('Sample Name'            if header else allele['sample'])                + '\t')
     fid.write(('Barcode'                if header else allele['barcode'])               + '\t')
-    fid.write(('Run Name'               if header else allele['run_name'])              + '\n')
+    fid.write(('Run Name'               if header else allele['run_name'])              + '\t')
+    fid.write(('Allele'                 if header else allele['gene'] + " " + allele['name']) + '\t')
+    if not header:
+        temp_chr = allele['chrom']
+        if temp_chr.startswith("chr") and len(temp_chr) == 4:
+            temp_chr = "chr0" + temp_chr[3:]
+        temp_pos = allele['pos'];
+        while len(temp_pos) < 9:
+            temp_pos = '0' + temp_pos
+    fid.write(('Location'               if header else temp_chr + ":" + temp_pos) + '\n')
 
 
                     
@@ -113,6 +145,7 @@ def main():
     parser.add_option('-c', '--concatenated-xls', help='Concatenated alleles table', dest='concatenated_xls')
     parser.add_option('-S', '--scatter-png',    help='Scatterplot of coverage vs. frequency for variants', dest='scatter_png')
     parser.add_option('-j', '--summary-json',   help='Variant summary in json file', dest='summary')
+    parser.add_option('-l', '--library-type',   help='Library type', dest='library_type')
     (options, args) = parser.parse_args()
 
     if options.input is None:
@@ -172,13 +205,13 @@ def main():
 
     if options.alleles2:
         alleles2_xls = open(options.alleles2,'w')
-        write_alleles2_line(alleles2_xls,header=True)
+        write_alleles2_line(options, alleles2_xls,header=True)
 
     if options.concatenated_xls:
         skip_header = os.path.exists(options.concatenated_xls)
         concatenated_xls = open(options.concatenated_xls,'a')
         if not skip_header:
-            write_alleles2_line(concatenated_xls,header=True)
+            write_alleles2_line(options, concatenated_xls,header=True)
 
     observed_chr_order = []
     chr_calls_total = {}
@@ -253,6 +286,10 @@ def main():
     }
     
     
+    dps = []
+    mdps = []
+    region_mdps = {}
+    
     for line in input_vcf:
         if not line:
             continue
@@ -260,7 +297,13 @@ def main():
         if line.startswith('#CHROM'):
             fields = line.split('\t')
             if len(fields) > 9:
-                summary_json['sample_name'] = fields[9].strip()
+                sample_name = ""
+                elements = fields[9].strip().split('.')
+                for index in range(0, max(1, len(elements) - 2)):
+                    if len(sample_name) > 0:
+                        sample_name += "."
+                    sample_name += elements[index]
+                summary_json['sample_name'] = sample_name
         if line[0]=='#':
             continue
 
@@ -323,64 +366,133 @@ def main():
             genotype1_int = None
             genotype2_int = None
 
-        # Coverages
-        RO  = num_get(info, 'RO', 0)
-        FRO = num_get(info, 'FRO', RO)
-        AO  = num_get_list(info, 'AO', [0]*len(alt))
-        FAO = num_get_list(info, 'FAO', AO)
-        SRF  = num_get(info, 'SRF', 0)
-        FSRF = num_get(info, 'FSRF', SRF)
-        SRR  = num_get(info, 'SRR', 0)
-        FSRR = num_get(info, 'FSRR', SRR)
-        SAF  = num_get_list(info, 'SAF', [0]*len(alt))
-        FSAF = num_get_list(info, 'FSAF', SAF)
-        SAR  = num_get_list(info, 'SAR', [0]*len(alt))
-        FSAR = num_get_list(info, 'FSAR', SAR)
+        # Coverages        RO  = num_get(info, 'RO', 0)
+        DP  = num_get(info, 'DP', 0)
+        MDP  = num_get(info, 'MDP', 0)
+        MAO  = num_get_list(info, 'MAO', [0]*len(alt))
+        MAF  = num_get_list(info, 'MAF', [0]*len(alt))
+        LOD  = num_get_list(info, 'LOD', [0]*len(alt))
+        if (options.library_type == "tagseq"):
+            AF  = num_get_list(info, 'AF', [0]*len(alt))
+            RO  = num_get(info, 'RO', 0)
+            FRO = num_get(info, 'FRO', RO)
+            AO  = num_get_list(info, 'AO', [0]*len(alt))
+            FAO = num_get_list(info, 'FAO', AO)
+            SRF  = num_get(info, 'SRF', 0)
+            FSRF = num_get(info, 'FSRF', SRF)
+            SRR  = num_get(info, 'SRR', 0)
+            FSRR = num_get(info, 'FSRR', SRR)
+            SAF  = num_get_list(info, 'SAF', [0]*len(alt))
+            FSAF = num_get_list(info, 'FSAF', SAF)
+            SAR  = num_get_list(info, 'SAR', [0]*len(alt))
+            FSAR = num_get_list(info, 'FSAR', SAR)
         
-        #Fiters
-        SSEN  = num_get_list(info, 'SSEN', [0]*len(alt))
-        SSEP  = num_get_list(info, 'SSEP', [0]*len(alt))
-        SSSB  = num_get_list(info, 'SSSB', [0]*len(alt))
-        STB  = num_get_list(info, 'STB', [0]*len(alt))
-        SXB  = num_get_list(info, 'SXB', [0]*len(alt))
-        RBI  = num_get_list(info, 'RBI', [0]*len(alt))
-        REFB = num_get_list(info, 'REFB', [0]*len(alt))
-        VARB = num_get_list(info, 'VARB', [0]*len(alt))
-        HRUN = num_get_list(info, 'HRUN', [0]*len(alt))
-        MLLD = num_get_list(info, 'MLLD', [0]*len(alt))
-        FR = info.get('FR','')
-        
+            #Fiters
+            SSEN  = num_get_list(info, 'SSEN', [0]*len(alt))
+            SSEP  = num_get_list(info, 'SSEP', [0]*len(alt))
+            SSSB  = num_get_list(info, 'SSSB', [0]*len(alt))
+            STB  = num_get_list(info, 'STB', [0]*len(alt))
+            SXB  = num_get_list(info, 'SXB', [0]*len(alt))
+            RBI  = num_get_list(info, 'RBI', [0]*len(alt))
+            REFB = num_get_list(info, 'REFB', [0]*len(alt))
+            VARB = num_get_list(info, 'VARB', [0]*len(alt))
+            HRUN = num_get_list(info, 'HRUN', [0]*len(alt))
+            MLLD = num_get_list(info, 'MLLD', [0]*len(alt))
+            FR = info.get('FR','')
 
-        total_cov = RO + sum(AO)
-        total_cov2 = FRO + sum(FAO)
+            total_cov = DP
+            total_cov2 = MDP
+            var_freq = []
+            for v in AO:
+                if total_cov > 0:
+                    var_freq.append(float(v)/float(total_cov)*100.0)
+                else:
+                    var_freq.append(0.0)
+            var_freq2 = []
+            for v in MAO:
+                if total_cov2 > 0:
+                    var_freq2.append(float(v)/float(total_cov2)*100.0)
+                else:
+                    var_freq2.append(0.0)
+            output_xls.write("%s\t%s\t" % (chr,pos)) # Chrom, Position
+            output_xls.write("%s\t%s\t" % (gene_name,region_id)) # Gene Sym, Target ID
+            output_xls.write("%s\t%s\t%s\t" % (variant_type,ploidy,genotype_actual)) # Type, Zygosity
+            output_xls.write("%s\t%s\t" % (fields[3],fields[4])) # Ref, Variant
+            output_xls.write("%s\t%s\t%s\t%s\t%s" % (sum(var_freq),qual,total_cov,total_cov-sum(AO),sum(AO)))
+
+            if options.hotspot:
+                hotspot_annotation = id
+                if hotspot_annotation != '.':
+                    output_xls.write("\t"+hotspot_annotation)
+                else:
+                    output_xls.write("\t---")
+
+            output_xls.write("\n")
+
+        else:
+            AF  = num_get_list(format, 'AF', [0]*len(alt))
+            RO  = num_get(format, 'RO', 0)
+            FRO = num_get(format, 'FRO', RO)
+            AO  = num_get_list(format, 'AO', [0]*len(alt))
+            FAO = num_get_list(format, 'FAO', AO)
+            SRF  = num_get(format, 'SRF', 0)
+            FSRF = num_get(format, 'FSRF', SRF)
+            SRR  = num_get(format, 'SRR', 0)
+            FSRR = num_get(format, 'FSRR', SRR)
+            SAF  = num_get_list(format, 'SAF', [0]*len(alt))
+            FSAF = num_get_list(format, 'FSAF', SAF)
+            SAR  = num_get_list(format, 'SAR', [0]*len(alt))
+            FSAR = num_get_list(format, 'FSAR', SAR)
         
-        var_freq = []
-        for v in AO:
-            if total_cov > 0:
-                var_freq.append(float(v)/float(total_cov)*100.0)
-            else:
-                var_freq.append(0.0)
-        var_freq2 = []
-        for v in FAO:
-            if total_cov2 > 0:
-                var_freq2.append(float(v)/float(total_cov2)*100.0)
-            else:
-                var_freq2.append(0.0)
+            #Fiters
+            SSEN  = num_get_list(info, 'SSEN', [0]*len(alt))
+            SSEP  = num_get_list(info, 'SSEP', [0]*len(alt))
+            SSSB  = num_get_list(info, 'SSSB', [0]*len(alt))
+            STB  = num_get_list(info, 'STB', [0]*len(alt))
+            SXB  = num_get_list(info, 'SXB', [0]*len(alt))
+            RBI  = num_get_list(info, 'RBI', [0]*len(alt))
+            REFB = num_get_list(info, 'REFB', [0]*len(alt))
+            VARB = num_get_list(info, 'VARB', [0]*len(alt))
+            MLLD = num_get_list(info, 'MLLD', [0]*len(alt))
+
+            HRUN = num_get_list(info, 'HRUN', [0]*len(alt))
         
-        output_xls.write("%s\t%s\t" % (chr,pos)) # Chrom, Position
-        output_xls.write("%s\t%s\t" % (gene_name,region_id)) # Gene Sym, Target ID
-        output_xls.write("%s\t%s\t%s\t" % (variant_type,ploidy,genotype_actual)) # Type, Zygosity
-        output_xls.write("%s\t%s\t" % (fields[3],fields[4])) # Ref, Variant
-        output_xls.write("%s\t%s\t%s\t%s\t%s" % (sum(var_freq2),qual,total_cov2,FRO,sum(FAO)))
+            FR = info.get('FR','')
+
+            total_cov = RO + sum(AO)
+            total_cov2 = FRO + sum(FAO)
         
-        if options.hotspot:
-            hotspot_annotation = id
-            if hotspot_annotation != '.':
-                output_xls.write("\t"+hotspot_annotation)
-            else:
-                output_xls.write("\t---")
+            var_freq = []
+            for v in AO:
+                if total_cov > 0:
+                    var_freq.append(float(v)/float(total_cov)*100.0)
+                else:
+                    var_freq.append(0.0)
+            var_freq2 = []
+            index = 0
+            for v in FAO:
+                if total_cov2 > 0:
+                    var_freq2.append(float(v)/float(total_cov2)*100.0)
+                else:
+                    var_freq2.append(0.0)
+                if var_freq2[index] == 0:
+                    var_freq2[index] = AF[index]
+                index += 1
         
-        output_xls.write("\n")
+            output_xls.write("%s\t%s\t" % (chr,pos)) # Chrom, Position
+            output_xls.write("%s\t%s\t" % (gene_name,region_id)) # Gene Sym, Target ID
+            output_xls.write("%s\t%s\t%s\t" % (variant_type,ploidy,genotype_actual)) # Type, Zygosity
+            output_xls.write("%s\t%s\t" % (fields[3],fields[4])) # Ref, Variant
+            output_xls.write("%s\t%s\t%s\t%s\t%s" % (sum(var_freq2),qual,total_cov2,FRO,sum(FAO)))
+    
+            if options.hotspot:
+                hotspot_annotation = id
+                if hotspot_annotation != '.':
+                    output_xls.write("\t"+hotspot_annotation)
+                else:
+                    output_xls.write("\t---")
+    
+            output_xls.write("\n")
 
                     
         all_oid     = info['OID'].split(',')
@@ -389,10 +501,35 @@ def main():
         all_oalt    = info['OALT'].split(',')
         all_omapalt = info['OMAPALT'].split(',')
     
+        oid_dict = {}
         for oid,opos,oref,oalt,omapalt in zip(all_oid,all_opos,all_oref,all_oalt,all_omapalt):
             if omapalt not in alt:
                 continue
             idx = alt.index(omapalt)
+            key = str(opos) + ":" + oref + ":" + oalt + ":" + str(idx)
+            if oid != ".":
+                if key in oid_dict:
+                    if oid_dict[key] != "":
+                        oid_dict[key] += "," + oid
+                    else:
+                        oid_dict[key] = oid
+                else:
+                    oid_dict[key] = oid
+            else:
+                oid_dict[key] = ""
+        
+        for oid,opos,oref,oalt,omapalt in zip(all_oid,all_opos,all_oref,all_oalt,all_omapalt):
+            if omapalt not in alt:
+                continue
+            idx = alt.index(omapalt)
+
+            key = str(opos) + ":" + oref + ":" + oalt + ":" + str(idx)
+            if key not in oid_dict:
+                continue
+            oid = oid_dict[key]
+            del oid_dict[key]
+            if oid == "":
+                oid = "."
 
             if (options.suppress_no_calls == "on"):
                 if oid == '.' and genotype1_int != (idx+1) and genotype2_int != (idx+1):
@@ -438,6 +575,8 @@ def main():
             if genotype1_int is None or genotype2_int is None:
                 allele['call'] = 'No Call'
                 summary_json['variants_by_call']['no_call'] += 1
+            elif genotype1_int == 0 and genotype2_int == 0:	
+                allele['call'] = 'Absent'				
             elif genotype1_int == (idx+1) and genotype2_int == (idx+1):
                 allele['call'] = 'Homozygous'
                 summary_json['variants_by_call']['homozygous'] += 1
@@ -453,14 +592,31 @@ def main():
             else:
                 summary_json['variants_by_source']['hotspot'] += 1
 
-            allele['freq']                      = '%1.1f'   % (100.0 * FAO[idx] / (FRO+sum(FAO)) if (FRO+sum(FAO)) > 0.0 else 0)
-            allele['cov_total']                 = '%d'      % (RO + sum(AO))
-            allele['cov_total_downsampled']     = '%d'      % (FRO+sum(FAO))
-            allele['cov_total_plus']            = '%d'      % (FSRF + sum(FSAF))
-            allele['cov_total_minus']           = '%d'      % (FSRR + sum(FSAR))
-            allele['cov_allele']                = '%d'      % (FAO[idx])
-            allele['cov_allele_plus']           = '%d'      % (FSAF[idx])
-            allele['cov_allele_minus']          = '%d'      % (FSAR[idx])
+            dps.append(DP)
+            mdps.append(MDP)
+            if not region_id in region_mdps:
+                region_mdps[region_id] = []
+            region_mdps[region_id].append(MDP)
+            if (options.library_type == "tagseq"):
+                allele['LOD']                       = '%1.2f'   % (100.0 * float(LOD[idx]))
+                allele['freq']                      = '%1.2f'   % (100.0 * float(MAF[idx]))
+                allele['cov_total']                 = '%d'      % (DP)
+                allele['cov_total_downsampled']     = '%d'      % (DP)
+                allele['cov_total_plus']            = '%d'      % (AO[idx])
+                allele['cov_total_minus']           = '%1.2f'      % (100.00*float(AF[idx]))
+                allele['cov_allele']                = '%d'      % (MDP)
+                allele['cov_allele_plus']           = '%d'      % (MAO[idx])
+                allele['cov_allele_minus']          = '%1.2f'      % (100.00*float(MAF[idx]))
+            else:
+                allele['LOD']                       = '%1.2f'   % (100.0 * float(LOD[idx]))
+                allele['freq']                      = '%1.1f'   % (100.0 * FAO[idx] / (FRO+sum(FAO)) if (FRO+sum(FAO)) > 0.0 else 0)
+                allele['cov_total']                 = '%d'      % (RO + sum(AO))
+                allele['cov_total_downsampled']     = '%d'      % (FRO+sum(FAO))
+                allele['cov_total_plus']            = '%d'      % (FSRF + sum(FSAF))
+                allele['cov_total_minus']           = '%d'      % (FSRR + sum(FSAR))
+                allele['cov_allele']                = '%d'      % (FAO[idx])
+                allele['cov_allele_plus']           = '%d'      % (FSAF[idx])
+                allele['cov_allele_minus']          = '%d'      % (FSAR[idx])
             allele['strand_bias']               = '%1.4f'   % (STB[idx])
             allele['beta_bias']                 = '%1.4f'   % (SXB[idx])
             allele['sse_plus']                  = '%1.4f'   % (SSEP[idx])
@@ -479,108 +635,126 @@ def main():
             else:
                 allele_prefix = 'INDEL'
 
-            # Filters:
-            allele['cov_total_filter']      = ('Minimum coverage ('+allele_prefix+')') if 'MINCOV' in FR or 'NODATA' in FR else '-'
-            allele['cov_total_plus_filter'] = ('Minimum coverage on either strand ('+allele_prefix+')') if 'PosCov' in FR or 'NODATA' in FR else '-'
-            allele['cov_total_minus_filter'] = ('Minimum coverage on either strand ('+allele_prefix+')')  if 'NegCov' in FR or 'NODATA' in FR else '-'
-            allele['strand_bias_filter'] = ('Maximum strand bias ('+allele_prefix+')')  if 'STDBIAS' in FR else '-'
+            allele['cov_total_filter']      = '-'
+            allele['cov_total_plus_filter'] = '-'
+            allele['cov_total_minus_filter'] = '-'
+            allele['strand_bias_filter'] = '-'
             allele['beta_bias_filter'] = '-'
-            allele['qual_filter'] = ('Minimum quality ('+allele_prefix+')')  if 'QualityScore' in FR else '-'
-            allele['hp_length_filter'] = 'Maximum homopolymer length' if 'HPLEN' in FR else '-'
-            allele['mlld_filter'] = 'Minimum relative read quality' if 'STRINGENCY' in FR else '-'
-            allele['varb_filter'] = 'Maximum reference/variant signal shift' if 'PREDICTIONHypSHIFT' in FR else '-'
-            allele['rbi_filter'] = 'Maximum common signal shift' if 'PREDICTIONSHIFT' in FR else '-'
+            allele['qual_filter'] = '-'
+            allele['hp_length_filter'] = '-'
+            allele['mlld_filter'] = '-'
+            allele['varb_filter'] = '-'
+            allele['rbi_filter'] = '-'
             allele['sse_plus_filter'] = '-'
             allele['sse_minus_filter'] = '-'
             allele['sssb_filter'] = '-'
-            if 'PositiveSSE' in FR:
+            allele['call_filter'] = '-'
+            
+            frs = FR.split(',')
+            if len(alt) == len(frs):
+                fr = frs[idx]
+            else:
+                fr = FR
+            # Filters:
+            allele['cov_total_filter']      = ('Minimum coverage ('+allele_prefix+')') if 'MINCOV' in fr or 'NODATA' in fr else '-'
+            allele['cov_total_plus_filter'] = ('Minimum coverage on either strand ('+allele_prefix+')') if 'PosCov' in fr or 'NODATA' in fr else '-'
+            allele['cov_total_minus_filter'] = ('Minimum coverage on either strand ('+allele_prefix+')')  if 'NegCov' in fr or 'NODATA' in fr else '-'
+            allele['strand_bias_filter'] = ('Maximum strand bias ('+allele_prefix+')')  if 'STDBIAS' in fr else '-'
+            allele['beta_bias_filter'] = '-'
+            allele['qual_filter'] = ('Minimum quality ('+allele_prefix+')')  if 'QualityScore' in fr else '-'
+            allele['hp_length_filter'] = 'Maximum homopolymer length' if 'HPLEN' in fr else '-'
+            allele['mlld_filter'] = 'Minimum relative read quality' if 'STRINGENCY' in fr else '-'
+            allele['varb_filter'] = 'Maximum reference/variant signal shift' if 'PREDICTIONHypSHIFT' in fr else '-'
+            allele['rbi_filter'] = 'Maximum common signal shift' if 'PREDICTIONSHIFT' in fr else '-'
+            allele['sse_plus_filter'] = '-'
+            allele['sse_minus_filter'] = '-'
+            allele['sssb_filter'] = '-'
+            if 'PositiveSSE' in fr:
                 allele['sse_plus_filter'] = 'Context error on one strand'
                 allele['sssb_filter'] = 'Context error on one strand'
-            if 'NegaitveSSE' in FR:
+            if 'NegaitveSSE' in fr:
                 allele['sse_minus_filter'] = 'Context error on one strand'
                 allele['sssb_filter'] = 'Context error on one strand'
-            if 'PredictedSSE' in FR:
+            if 'PredictedSSE' in fr:
                 allele['sse_plus_filter'] = 'Context error on both strands'
                 allele['sse_minus_filter'] = 'Context error on both strands'
-                
+        
             filter_list = ['-']
             for k,v in allele.iteritems():
                 if k.endswith('_filter') and v not in filter_list:
                     filter_list.append(v)
-            if 'REJECTION' in FR:
+            if 'REJECTION' in fr:
                 filter_list.append('Excess outlier reads')
-            
+    
             allele['call_filter'] = ','.join(filter_list[1:]) if len(filter_list) > 1 else '-'
 
-
-            
             # Filter stats:
             if allele_prefix == 'Hotspot':
-                if 'MINCOV' in FR or 'NODATA' in FR:
+                if 'MINCOV' in fr or 'NODATA' in fr:
                     summary_json['filters']['min_coverage']['filtered'] += 1
                 else:
                     summary_json['filters']['min_coverage']['present'] += 1
-    
-                if 'PosCov' in FR or 'NegCov' in FR or 'NODATA' in FR:
+
+                if 'PosCov' in fr or 'NegCov' in fr or 'NODATA' in fr:
                     summary_json['filters']['min_cov_each_strand']['filtered'] += 1
                 else:
                     summary_json['filters']['min_cov_each_strand']['present'] += 1
-                
-                if 'STDBIAS' in FR:
+        
+                if 'STDBIAS' in fr:
                     summary_json['filters']['strand_bias']['filtered'] += 1
                 else:
                     summary_json['filters']['strand_bias']['present'] += 1
-                
-                if 'XBIAS' in FR:
+        
+                if 'XBIAS' in fr:
                     summary_json['filters']['beta_bias']['filtered'] += 1
                 else:
                     summary_json['filters']['beta_bias']['present'] += 1
-                
-                if 'QualityScore' in FR:
+        
+                if 'QualityScore' in fr:
                     summary_json['filters']['min_variant_score']['filtered'] += 1
                 else:
                     summary_json['filters']['min_variant_score']['present'] += 1
-    
-                if 'HPLEN' in FR:
+
+                if 'HPLEN' in fr:
                     summary_json['filters']['hp_max_length']['filtered'] += 1
                 else:
                     summary_json['filters']['hp_max_length']['present'] += 1
-                
-                if 'STRINGENCY' in FR:
+        
+                if 'STRINGENCY' in fr:
                     summary_json['filters']['data_quality_stringency']['filtered'] += 1
                 else:
                     summary_json['filters']['data_quality_stringency']['present'] += 1
-                
-                if 'PositiveSSE' in FR or 'NegativeSSE' in FR:
+        
+                if 'PositiveSSE' in fr or 'NegativeSSE' in fr:
                     summary_json['filters']['sse_one_strand']['filtered'] += 1
                 else:
                     summary_json['filters']['sse_one_strand']['present'] += 1
 
-                if 'PredictedSSE' in FR:
+                if 'PredictedSSE' in fr:
                     summary_json['filters']['sse_both_strands']['filtered'] += 1
                 else:
                     summary_json['filters']['sse_both_strands']['present'] += 1
-    
-                if 'PREDICTIONHypSHIFT' in FR:
+
+                if 'PREDICTIONHypSHIFT' in fr:
                     summary_json['filters']['filter_x_predictions']['filtered'] += 1
                 else:
                     summary_json['filters']['filter_x_predictions']['present'] += 1
-    
-                if 'PREDICTIONSHIFT' in FR:
+
+                if 'PREDICTIONSHIFT' in fr:
                     summary_json['filters']['filter_unusual_predictions']['filtered'] += 1
                 else:
                     summary_json['filters']['filter_unusual_predictions']['present'] += 1
-                
-                if 'REJECTION' in FR:
+        
+                if 'REJECTION' in fr:
                     summary_json['filters']['rejection']['filtered'] += 1
                 else:
                     summary_json['filters']['rejection']['present'] += 1
-            
+                
             if options.alleles2:
-                write_alleles2_line(alleles2_xls,data=allele)
+                write_alleles2_line(options, alleles2_xls,data=allele)
             
             if options.concatenated_xls:
-                write_alleles2_line(concatenated_xls,data=allele)
+                write_alleles2_line(options, concatenated_xls,data=allele)
         
             
         
@@ -629,7 +803,20 @@ def main():
                     hotspot_total += 1
                     hotspot_other += 1
             
-            
+    summary_json['Median read counts per target'] = int(median(dps))
+    summary_json['median_num_fam3'] = int(median(mdps))
+    value_threshold = median(mdps) * 0.8
+    value_count = 0
+    value_size = 0
+    for region in region_mdps:
+        value_size += 1
+        if median(region_mdps[region]) > value_threshold:
+            value_count += 1
+    if value_size == 0:
+        summary_json['fm3_pass80'] = 0
+    else:
+        summary_json['fm3_pass80'] = str(round((float(value_count) / value_size) * 100.0, 1)) + "%"
+    
     input_vcf.close()
     output_xls.close()
     if options.alleles2:

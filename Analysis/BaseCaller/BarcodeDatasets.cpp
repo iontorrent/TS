@@ -21,7 +21,7 @@
 
 BarcodeDatasets::BarcodeDatasets(const string& run_id, const string input_datasets_file)
   : datasets_json_(Json::objectValue), num_barcodes_(0), num_datasets_(0), num_read_groups_(0),
-    barcode_max_flows_(0), dataset_in_use_(false),  control_dataset_(false)
+    barcode_max_flows_(0), dataset_in_use_(false),  control_dataset_(false), tf_dataset_(false)
 {
   if (not input_datasets_file.empty())
     LoadJsonFile(input_datasets_file);
@@ -372,7 +372,8 @@ void BarcodeDatasets::SaveJson(const string& filename_json)
 
 void BarcodeDatasets::SetTF(bool process_tfs)
 {
-	dataset_in_use_ = process_tfs;
+  tf_dataset_ = true;
+  dataset_in_use_ = process_tfs;
 	if (dataset_in_use_) {
 	  dataset(0)["file_prefix"] = "rawtf";
       dataset(0)["dataset_name"] = "Test Fragments";

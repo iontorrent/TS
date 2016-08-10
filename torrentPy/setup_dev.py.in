@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+# Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
+
+import site
+import os
+import os.path
+import os, fnmatch
+import distutils.sysconfig
+
+
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
+
+try:
+  path=site.getsitepackages()[0]
+except:
+  path = distutils.sysconfig.get_python_lib()
+
+path_to_module = os.path.join(path,'torrentPy')
+if os.path.exists(path_to_module):
+  raise Exception("torrentPy is already installed in %s. Delete before developer installation."%(path_to_module))
+os.symlink('${PROJECT_SOURCE_DIR}/torrentPy',path_to_module)
+
+path_to_lib = os.path.join(path,'torrentPyLib.so')
+if os.path.exists(path_to_lib):
+  raise Exception("torrentPyLib.so is already installed in %s. Delete before developer installation."%(path_to_lib))
+
+fname = find_files('${CMAKE_CURRENT_BINARY_DIR}','torrentPyLib.so').next()
+os.symlink(fname,path_to_lib)
+

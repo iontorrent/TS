@@ -42,7 +42,6 @@
 #include "EmptyTraceTracker.h"
 #include "TikhonovSmoother.h"
 #include "PinnedInFlow.h"
-#include "SynchDat.h"
 
 // queuing system may change for coprocessor environment
 // make separate module to clarify code
@@ -64,7 +63,6 @@ struct ImageLoadWorkInfo
   // cur_buffer must be within these bounds
   // array of Image objects shared with ImageTracker object
   Image *img;  // shared across ImageLoader worker threads
-  SynchDat *sdat;
   // the following two arrays also are shared with the ImageTracker object
   // these arrays are used to coordinate ongoing flow status across threads
   unsigned int *CurRead;      // CurRead[flow] is the image read in?
@@ -81,13 +79,13 @@ struct ImageLoadWorkInfo
   
   char *dat_source_directory;
   char *acqPrefix;
+  char *datPostfix; // multiple possible naming schemes
   Region *regions;
 
   int numRegions;
   int numFlowsPerCycle;
   int hasWashFlow;
   int lead;
-  bool doingSdat;
   bool finished;
   bool doRawBkgSubtract;
   bool doEmptyWellNormalization;
@@ -97,7 +95,6 @@ struct ImageLoadWorkInfo
 
 void *FileLoadWorker (void *arg);
 void *FileLoader (void *arg);
-void *FileSDatLoader (void *arg);
 
 
 void DumpStep (ImageLoadWorkInfo *info);

@@ -17,6 +17,7 @@ class FitControl_t
     BkgFitMatrixPacker *FitWellAmpl;
     BkgFitMatrixPacker *FitWellAmplBuffering;
     BkgFitMatrixPacker *FitWellPostKey;
+    BkgFitMatrixPacker *FitWellAll; // includes kmult
     BkgFitMatrixPacker *DontFitWells;
 
     // used for fitting tau, NucModifyRatio and oR to the whole region, not just individual wells

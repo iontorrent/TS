@@ -19,7 +19,10 @@ class GpuControlOpts{
     // commandline options for GPU for background model computation
     float gpuWorkLoad;
     int gpuNumStreams;
+    //int gpuSharedByNumProcs;
+    int gpuDevMemoryPerProc;
 
+    bool gpuForceMultiFlowFit;
     int gpuMultiFlowFit;
     int gpuThreadsPerBlockMultiFit;
     int gpuL1ConfigMultiFit;
@@ -34,7 +37,7 @@ class GpuControlOpts{
 
     int doGpuOnlyFitting;
 
-    int gpuAmpGuess; 
+    int gpuAmpGuess;
 
     bool gpuUseAllDevices;
     bool gpuVerbose;
@@ -44,8 +47,10 @@ class GpuControlOpts{
     bool gpuFlowByFlowExecution;
     bool postFitHandshakeWorker;
     int switchToFlowByFlowAt;
+    int gpuNumHistoryFlows;
 
     // hold the device ids for the gpus to be used for computation
+
     std::vector<int> gpuDeviceIds;
     void DefaultGpuControl(void);
     void PrintHelp();

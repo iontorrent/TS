@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <algorithm>
 #include <sstream>
 #include <sys/time.h>
 #ifndef ALIGNSTATS_IGNORE
@@ -79,7 +80,6 @@ void    split (const std::string& s, char c, std::vector<std::string>& v);
 void uintVectorToString (std::vector<unsigned int> &v, std::string &s, std::string &nullStr, char delim);
 /** Trim off any whitespace from either end of string. */
 void TrimString (std::string &str);
-bool isInternalServer();
 template <class T>
 std::vector<T> char2Vec (const char *s, char delim='*')
 {
@@ -274,7 +274,7 @@ T fast_median(T* start, size_t num_elements) {
   T *middle, *end;
   end = start + num_elements;
   middle = start + (num_elements >> 1);
-  partial_sort(start, middle, end);
+  std::partial_sort(start, middle, end);
   // Odd elements
   if (num_elements % 2 == 1) {
     return (*middle);

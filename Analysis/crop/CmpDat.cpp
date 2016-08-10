@@ -74,7 +74,7 @@ int main ( int argc, char *argv[] )
 	gettimeofday ( &tv, NULL );
 	startT = ( double ) tv.tv_sec + ( ( double ) tv.tv_usec/1000000 );
 
-	if(!loader_src.LoadRaw ( srcFile, 0, allocate, false ))
+	if(!loader_src.LoadRaw ( srcFile, 0, allocate, false, false ))
 	{
 		printf("failed to load file %s\n",srcFile);
 		return -1;
@@ -112,7 +112,7 @@ int main ( int argc, char *argv[] )
 
 	gettimeofday ( &tv, NULL );
 	startT = ( double ) tv.tv_sec + ( ( double ) tv.tv_usec/1000000 );
-	if(!loader_dst.LoadRaw ( dstFile, 0, allocate, false ))
+	if(!loader_dst.LoadRaw ( dstFile, 0, allocate, false, false ))
 	{
 		// spit out info on the loader_src
 

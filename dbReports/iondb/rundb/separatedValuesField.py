@@ -5,6 +5,7 @@ from django.db import models
 from south.modelsinspector import add_introspection_rules
 add_introspection_rules([], ["^iondb\.rundb\.separatedValuesField"])
 
+
 class SeparatedValuesField(models.TextField):
     __metaclass__ = models.SubfieldBase
 
@@ -18,7 +19,7 @@ class SeparatedValuesField(models.TextField):
             return value
         return value.split(self.token)
 
-    def get_db_prep_value(self, value, connection = None, prepared = False):
+    def get_db_prep_value(self, value, connection=None, prepared=False):
         if not value: return
         assert(isinstance(value, list) or isinstance(value, tuple))
         return self.token.join([unicode(s) for s in value])

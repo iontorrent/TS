@@ -63,7 +63,9 @@ $(function() {
         {% if archive_files %}
         <ul>
             <li><a href="{{archive_files.csa}}">Customer Support Archive</a></li>
+            {% if not no_live_beads %}{# TS-9782 #}
             <li><a href="{{archive_files.report_pdf}}">View Backup Report PDF</a></li>
+            {% endif %}
         </ul>
         {% endif %}
         {% if archive_restore %}

@@ -1,0 +1,9 @@
+---
+# file: iontorrent_auxiliary.yml
+- hosts: iontorrent_auxiliary
+  roles:
+    - iontorrent_auxiliary
+  tags:
+    - iontorrent_auxiliary
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]

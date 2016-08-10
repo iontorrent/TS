@@ -11,9 +11,10 @@ bool GpuMultiFlowFitControl::_gpuTraceXtalk = false;
 
 GpuMultiFlowFitControl::GpuMultiFlowFitControl()
 {
-   // create post key matrix config for gpu
-   _maxSteps = 0;
-   _maxParams = 0;
+   _maxSteps = 7;
+   _maxParams = 21;
+   _activeFlowKey = 7;
+   _activeFlowMax = 20;
 }
 
 void GpuMultiFlowFitControl::SetFlowParams( int flow_key, int flow_block_size )
@@ -21,10 +22,6 @@ void GpuMultiFlowFitControl::SetFlowParams( int flow_key, int flow_block_size )
   // Update the active matrix config.
   _activeFlowKey = flow_key;
   _activeFlowMax = flow_block_size;
-  if ( ! GetMatrixConfig( "FitWellPostKey" ) )
-    CreatePostKeyFitGpuMatrixConfig( flow_key, flow_block_size );
-  if ( ! GetMatrixConfig( "FitWellAmplBuffering" ) )
-    CreateFitInitialGpuMatrixConfig( flow_key, flow_block_size );
 }
 
 GpuMultiFlowFitControl::~GpuMultiFlowFitControl()
@@ -38,37 +35,25 @@ GpuMultiFlowFitControl::~GpuMultiFlowFitControl()
   }
 }
 
-void GpuMultiFlowFitControl::CreatePostKeyFitGpuMatrixConfig( int flow_key, int flow_block_size )
+GpuMultiFlowFitMatrixConfig* GpuMultiFlowFitControl::createConfig(
+  const string &fitName, 
+  const master_fit_type_table* levMarSparseMatrices)
 {
   // Build the configuration.
   GpuMultiFlowFitMatrixConfig* config = 
-    new GpuMultiFlowFitMatrixConfig( BkgFitStructures::fit_well_post_key_descriptor, 
+    new GpuMultiFlowFitMatrixConfig(levMarSparseMatrices->GetFitDescriptorByName(fitName.c_str()), 
                                      BkgFitStructures::Steps, BkgFitStructures::NumSteps, 
-                                     flow_key, flow_block_size);
+                                     _activeFlowKey, _activeFlowMax);
 
   // Accumulate maximum values.
   DetermineMaxSteps(config->GetNumSteps());
   DetermineMaxParams(config->GetNumParamsToFit());
 
   // Find the proper map to put it in.
-  _allMatrixConfig[ MatrixIndex( flow_key, flow_block_size, "FitWellPostKey" ) ] = config;
+  _allMatrixConfig[ MatrixIndex(_activeFlowKey, _activeFlowMax, fitName ) ] = config;
+  return config;
 }
 
-void GpuMultiFlowFitControl::CreateFitInitialGpuMatrixConfig( int flow_key, int flow_block_size )
-{
-  // Build the configuration.
-  GpuMultiFlowFitMatrixConfig* config = 
-    new GpuMultiFlowFitMatrixConfig( BkgFitStructures::fit_well_ampl_buffering_descriptor, 
-                                     BkgFitStructures::Steps, BkgFitStructures::NumSteps, 
-                                     flow_key, flow_block_size);
-
-  // Accumulate maximum values.
-  DetermineMaxSteps(config->GetNumSteps());
-  DetermineMaxParams(config->GetNumParamsToFit());
-
-  // Find the proper map to put it in.
-  _allMatrixConfig[ MatrixIndex( flow_key, flow_block_size, "FitWellAmplBuffering" ) ] = config;
-}
 
 void GpuMultiFlowFitControl::DetermineMaxSteps(int steps)
 {
@@ -80,4 +65,16 @@ void GpuMultiFlowFitControl::DetermineMaxParams(int params)
 {
   if (_maxParams < params)
     _maxParams = params; 
+}
+
+GpuMultiFlowFitMatrixConfig* GpuMultiFlowFitControl::GetMatrixConfig(
+  const std::string &name,
+  const master_fit_type_table *levMarSparseMatrices) { 
+     
+  GpuMultiFlowFitMatrixConfig *config =  _allMatrixConfig[MatrixIndex( _activeFlowKey, _activeFlowMax, name)];
+
+  if (config)
+    return config;
+  else
+    return createConfig(name, levMarSparseMatrices);
 }

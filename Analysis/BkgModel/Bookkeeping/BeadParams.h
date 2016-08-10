@@ -22,12 +22,33 @@
 #define POSTKEY 7
 
 // track error activity through code
+// CPU oriented:  fix up for GPU required to avoid too much data volume passed
 struct error_track{
   float mean_residual_error[MAX_NUM_FLOWS_IN_BLOCK_GPU];
-  error_track() {
+  float tauB[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output trace.h5
+  float etbR[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output trace.h5
+  float bkg_leakage[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output
+  int fit_type[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output
+  bool converged[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output
+  float initA[MAX_NUM_FLOWS_IN_BLOCK_GPU];
+  float initkmult[MAX_NUM_FLOWS_IN_BLOCK_GPU];
+  float t_sigma_actual[MAX_NUM_FLOWS_IN_BLOCK_GPU];
+  float t_mid_nuc_actual[MAX_NUM_FLOWS_IN_BLOCK_GPU];
+
+    error_track() {
     // Initialize to 0.f, in case we skip flows for some reason.
-    for( size_t i = 0 ; i < MAX_NUM_FLOWS_IN_BLOCK_GPU ; ++i )
+    for( size_t i = 0 ; i < MAX_NUM_FLOWS_IN_BLOCK_GPU ; ++i ){
       mean_residual_error[i] = 0.f;
+      tauB[i] = 6.0f;
+      etbR[i] = 1.0f;
+      fit_type[i] = 0;
+      converged[i] = false;
+      initA[i] = 1.0;
+      initkmult[i] = 1.0;
+      bkg_leakage[i] = 0.0f;
+      t_sigma_actual[i] = 0.f;
+      t_mid_nuc_actual[i] = 0.f;
+    }
   }
 };
 
@@ -132,8 +153,6 @@ struct BeadParams
   bead_state *my_state; // pointer to reduce the size of this structure
   int trace_ndx; // what trace do i correspond to
   int x,y;  // relative location within the region
-  float tauB[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output trace.h5
-  //float tauB_nuc[4];
 
   // Here we have some access routines for particular parameters of interest.
   // This is the C++ way to access arbitrary members, defined at run-time. In C, we'd use offsets.
@@ -165,8 +184,8 @@ struct BeadParams
     ar & trace_ndx;
     ar & my_state;
     ar & x & y;
-    ar & tauB;
-    //ar & tauB_nuc;
+
+
     // fprintf(stdout, "done\n");
   } 
   void LockKey(float *key, int keylen);
@@ -182,6 +201,8 @@ public:
   void ApplyUpperBound(bound_params *bound, int flow_block_size);
   void ApplyLowerBound(bound_params *bound, int flow_block_size);
   void ApplyAmplitudeZeros(const int *zero, int flow_block_size);
+  void ApplyAmplitudeDrivenKmultLimit(int flow_block_size, float min_threshold);
+
   bool FitBeadLogic();
   static void ComputeEmphasisOneBead(int *WhichEmphasis, float *Ampl, int max_emphasis, int flow_block_size);
 

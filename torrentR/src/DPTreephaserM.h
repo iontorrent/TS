@@ -153,12 +153,13 @@ protected:
   vector< TreephaserMultiPath > path_;                   //!< Preallocated space for partial path slots
 
   const static int    kNumPaths = 8;              //!< Maximum number of paths considered
-  const static float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
-  const static float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
-  const static float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
   const static int    kMaxHP = 11;                //!< Maximum callable homopolymer length
-  const static float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
   const static int    kMaxPathDelay = 40;         //!< Paths that are delayed more are killed
+
+  static constexpr float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
+  static constexpr float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
+  static constexpr float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
+  static constexpr float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
 
 };
 

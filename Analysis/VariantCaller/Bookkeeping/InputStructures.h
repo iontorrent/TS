@@ -38,31 +38,35 @@ class AlleleParser;
 class OrderedVCFWriter;
 class SampleManager;
 class MetricsManager;
+class IndelAssembly;
 
 // ==============================================================================
 
 struct VariantCallerContext {
 
-  ExtendParameters *  parameters;                   //! Raw parameters, retrieved from command line and json
-  InputStructures *   global_context;               //! Miscellaneous data structures
-  ReferenceReader *   ref_reader;                   //! Memory-mapped reference reader
-  TargetsManager *    targets_manager;              //! Manages target regions from BED file
-  BAMWalkerEngine *   bam_walker;                   //! Manages traversing reference and retrieving reads covering each position
-  AlleleParser *      candidate_generator;          //! Candidate variant generator
-  OrderedBAMWriter *  bam_writer;                   //! Container for reads ensuring ordering
-  OrderedVCFWriter *  vcf_writer;                   //! Sorting, threading friendly VCF writer
-  MetricsManager *    metrics_manager;              //! Keeps track of metrics to output in tvc_metrics.json
+  ExtendParameters *    parameters;                   //! Raw parameters, retrieved from command line and json
+  InputStructures *     global_context;               //! Miscellaneous data structures
+  ReferenceReader *     ref_reader;                   //! Memory-mapped reference reader
+  TargetsManager *      targets_manager;              //! Manages target regions from BED file
+  BAMWalkerEngine *     bam_walker;                   //! Manages traversing reference and retrieving reads covering each position
+  AlleleParser *        candidate_generator;          //! Candidate variant generator
+  OrderedBAMWriter *    bam_writer;                   //! Container for reads ensuring ordering
+  OrderedVCFWriter *    vcf_writer;                   //! Sorting, threading friendly VCF writer
+  MetricsManager *      metrics_manager;              //! Keeps track of metrics to output in tvc_metrics.json
+  SampleManager*        sample_manager;               //! Tracks the sample used in multi-sample analysis
+  IndelAssembly*        indel_assembly;               //! Outputs the indel_assembly.vcf for long indels
+  MolecularTagTrimmer*  tag_trimmer;                  //! Manager for molecular tags
 
-  pthread_mutex_t     bam_walker_mutex;             //! Mutex for state-altering bam_walker operations
-  pthread_mutex_t     read_loading_mutex;           //! Mutex for raw read retrieval
-  pthread_mutex_t     candidate_generation_mutex;   //! Mutex for candidate generation
-  pthread_mutex_t     read_removal_mutex;           //! Mutex for removal/write of used reads
-  pthread_cond_t      memory_contention_cond;       //! Conditional variable for preventing memory contention
-  pthread_cond_t      alignment_tail_cond;          //! Conditional variable for blocking until the final alignments are processed
+  pthread_mutex_t       bam_walker_mutex;             //! Mutex for state-altering bam_walker operations
+  pthread_mutex_t       read_loading_mutex;           //! Mutex for raw read retrieval
+  pthread_mutex_t       candidate_generation_mutex;   //! Mutex for candidate generation
+  pthread_mutex_t       read_removal_mutex;           //! Mutex for removal/write of used reads
+  pthread_cond_t        memory_contention_cond;       //! Conditional variable for preventing memory contention
+  pthread_cond_t        alignment_tail_cond;          //! Conditional variable for blocking until the final alignments are processed
 
-  int                 candidate_counter;            //! Number of candidates generated so far
+  int                   candidate_counter;            //! Number of candidates generated so far
   //int                 candidate_dot;                //! Number of candidates that will trigger printing next "."
-  time_t              dot_time;                     //! Time that will trigger printing next '.'
+  time_t                dot_time;                     //! Time that will trigger printing next '.'
 };
 
 // ==============================================================================
@@ -161,9 +165,6 @@ class RecalibrationHandler{
 class InputStructures {
 public:
 
-  // ols stuff to be replaced - one-by one
-  //ion::FlowOrder treePhaserFlowOrder;
-
 
   // Key and barcode sequence are read group specific
   // whereas flow order and recalibration are chip specific
@@ -173,7 +174,6 @@ public:
   map<string, string>       key_by_read_group;
 
   bool                      use_SSE_basecaller;
-  //bool                      apply_normalization;
   bool                      resolve_clipped_bases;
   int                       DEBUG;
 
@@ -196,13 +196,20 @@ class PersistingThreadObjects {
 public:
 
     PersistingThreadObjects(const InputStructures &global_context);
-    ~PersistingThreadObjects() { };
+    ~PersistingThreadObjects() {
+#ifdef __SSE3__
+        for (vector<TreephaserSSE*>::iterator iter = treephaserSSE_vector.begin(); (iter != treephaserSSE_vector.end()); ++iter) {
+            delete *iter;
+            *iter = NULL;
+        } 
+#endif
+    };
 
     //@brief Interface for setting the phasing model parameters
     void SetModelParameters(const int & flow_order_index, const vector<float> & phase_params) {
 #ifdef __SSE3__
       if (use_SSE_basecaller)
-        treephaserSSE_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1));
+        treephaserSSE_vector.at(flow_order_index)->SetModelParameters(phase_params.at(0), phase_params.at(1));
       else
 #endif
         dpTreephaser_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1), phase_params.at(2));
@@ -213,7 +220,7 @@ public:
     {
 #ifdef __SSE3__
        if (use_SSE_basecaller)
-         treephaserSSE_vector.at(flow_order_index).DisableRecalibration();
+         treephaserSSE_vector.at(flow_order_index)->DisableRecalibration();
        else
 #endif
          dpTreephaser_vector.at(flow_order_index).DisableRecalibration();
@@ -224,7 +231,7 @@ public:
     {
 #ifdef __SSE3__
       if (use_SSE_basecaller)
-        return (treephaserSSE_vector.at(flow_order_index).SetAsBs(As, Bs));
+        return (treephaserSSE_vector.at(flow_order_index)->SetAsBs(As, Bs));
       else
 #endif
         return (dpTreephaser_vector.at(flow_order_index).SetAsBs(As, Bs));
@@ -234,7 +241,7 @@ public:
     void SolveRead(const int & flow_order_index, BasecallerRead& read, const int & begin_flow, const int & end_flow){
 #ifdef __SSE3__
       if (use_SSE_basecaller)
-        treephaserSSE_vector.at(flow_order_index).SolveRead(read, begin_flow, end_flow);
+        treephaserSSE_vector.at(flow_order_index)->SolveRead(read, begin_flow, end_flow);
       else
 #endif
         dpTreephaser_vector.at(flow_order_index).Solve(read, end_flow, begin_flow);
@@ -246,7 +253,7 @@ public:
     Realigner              realigner;             // realignment tool
     vector<DPTreephaser >  dpTreephaser_vector;   // c++ treephaser
 #ifdef __SSE3__
-    vector<TreephaserSSE>  treephaserSSE_vector;  // vectorized treephaser
+    vector<TreephaserSSE*>  treephaserSSE_vector;  // vectorized treephaser
 #endif
 
 

@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 USER = "ionadmin"
 
+
 def connect_nodetest(node):
     '''
     # Runs /usr/sbin/grp_connect_nodetest to test node connection
@@ -47,7 +48,7 @@ def config_nodetest(node, head_versions):
     def parse_to_dict(result):
         '''helper function'''
         result = result.split(',')
-        return dict([(v.split('=')[0], v.split('=')[1]) for v in result if len(v.split('='))==2])
+        return dict([(v.split('=')[0], v.split('=')[1]) for v in result if len(v.split('=')) == 2])
 
     script = '/usr/sbin/grp_config_nodetest'
     command = ['sudo', '-u', USER, script, node]
@@ -59,7 +60,7 @@ def config_nodetest(node, head_versions):
         'config_tests': [],
         'error': stderr
     }
-    
+
     for line in stdout.splitlines():
         try:
             test_name, test_result = line.split(':')
@@ -73,8 +74,8 @@ def config_nodetest(node, head_versions):
                         version_test_status = 'failure'
                         version_test_errors.append((key, version, head_versions[key]))
                         status_dict['status'] = 'warning'
-    
-                status_dict['version_test_errors'] = '\n'.join(['%s %s (%s)'%(v[0], v[1], v[2]) for v in sorted(version_test_errors)])
+
+                status_dict['version_test_errors'] = '\n'.join(['%s %s (%s)' % (v[0], v[1], v[2]) for v in sorted(version_test_errors)])
                 status_dict['config_tests'].append((test_name, version_test_status))
                 if version_test_status == 'failure':
                     status_dict['error'] += 'Software versions do not match headnode\n'
@@ -85,8 +86,9 @@ def config_nodetest(node, head_versions):
         except:
             status_dict['status'] = 'warning'
             status_dict['error'] += 'Unable to get status from: ' + line + '\n'
-    
+
     return status_dict
+
 
 def queue_info():
     info = {}
@@ -112,7 +114,7 @@ def queue_info():
                 info[name]['used'] += int(used)
                 info[name]['total'] += int(total)
 
-                state = l[5] if len(l)>5 else ''
+                state = l[5] if len(l) > 5 else ''
                 if state == 'E':
                     info[name]['error'] += int(total)
                 if state == 'd':
@@ -122,6 +124,7 @@ def queue_info():
         logger.error(err)
 
     return info
+
 
 def sge_ctrl(action, node):
     ''' Run command and return error '''

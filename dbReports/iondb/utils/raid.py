@@ -19,15 +19,16 @@ GOOD = 'good'
 def get_raid_status(raidinfojson):
     '''Wrapper'''
     # Ignore the passed in values for now and use test json file
-    #f = open("/tmp/raidinfo_juicebox.json", "r")
-    #drive_status = get_raid_status_json(f.read())
-    #return drive_status
+    # f = open("/tmp/raidinfo_juicebox.json", "r")
+    # drive_status = get_raid_status_json(f.read())
+    # return drive_status
 
     # Uncomment this for final version
     if raidinfojson:
         return get_raid_status_json(raidinfojson)
     else:
         return None
+
 
 def load_raid_status_json(filename='/var/spool/ion/raidstatus.json'):
     '''debug function'''
@@ -39,6 +40,7 @@ def load_raid_status_json(filename='/var/spool/ion/raidstatus.json'):
     except:
         pass
     return contents
+
 
 def get_raid_status_json(raidinfojson):
     '''
@@ -126,11 +128,11 @@ def get_raid_status_json(raidinfojson):
                 # build drives array
                 drive_status.append(
                     {
-                    'name':             drive.get('Inquiry Data', 'NONE'),
-                    'firmware_state':   drive.get('Firmware state', 'Empty'),
-                    'slot':             drive.get('Slot', ''),
-                    'status':           status,
-                    'info':             info,
+                        'name':             drive.get('Inquiry Data', 'NONE'),
+                        'firmware_state':   drive.get('Firmware state', 'Empty'),
+                        'slot':             drive.get('Slot', ''),
+                        'status':           status,
+                        'info':             info,
                     }
                 )
                 if enclosure_status != ERROR and status != GOOD:
@@ -139,20 +141,20 @@ def get_raid_status_json(raidinfojson):
             for drive in enclosure.get('logical_drives', []):
                 logical_drive_status.append(
                     {
-                    'name':     drive.get('lv_name', 'unknown'),
-                    'status':   drive.get('lv_status', 'unknown'),
-                    'size':     drive.get('lv_size', 0),
+                        'name':     drive.get('lv_name', 'unknown'),
+                        'status':   drive.get('lv_status', 'unknown'),
+                        'size':     drive.get('lv_size', 0),
                     }
                 )
 
             # status array for an adapter/enclosure pair
             status_summary = \
                 {
-                "adapter_id":       adapter['id'],
-                "enclosure_id":     enclosure['id'],
-                "status":           enclosure_status,
-                "drives":           drive_status,
-                "logical_drives":   logical_drive_status
+                    "adapter_id":       adapter['id'],
+                    "enclosure_id":     enclosure['id'],
+                    "status":           enclosure_status,
+                    "drives":           drive_status,
+                    "logical_drives":   logical_drive_status
                 }
 
             # list primary storage first, so it shows up in display first
@@ -184,14 +186,14 @@ def get_raid_stats_json():
         raid_stats = stdout
     else:
         raid_stats = None
-        print('There was an error executing %s' % raid_cmd[0])
+        print 'There was an error executing %s' % raid_cmd[0]
     return raid_stats
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='''Parse raid info from ion_raidinfo_json script''')
-    parser.add_argument(dest = 'filename',
-                        help = 'specify input file')
+    parser.add_argument(dest='filename',
+                        help='specify input file')
     args = parser.parse_args()
 
     f = open(args.filename, "r")

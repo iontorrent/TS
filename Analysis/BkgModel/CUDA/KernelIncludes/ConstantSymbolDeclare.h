@@ -25,7 +25,7 @@ __constant__ ConstantParamsGlobal ConstGlobalP;
 __constant__ PerFlowParamsGlobal ConstFlowP;
 
 
-__constant__ SampleCollectionConst ConstSmplCol;
+__constant__ HistoryCollectionConst ConstHistCol;
 
 //__constant__ ConstantRegParamBounds ConstBoundRegP;
 

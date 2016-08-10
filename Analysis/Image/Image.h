@@ -10,7 +10,6 @@
 #include "datahdr.h"
 #include "ByteSwapUtils.h"
 #include "Region.h"
-#include "ChipIdDecoder.h"
 #include "ChannelXTCorrection.h"
 #include "TikhonovSmoother.h"
 #include "RawImage.h"
@@ -31,7 +30,6 @@ enum InterlaceType {
 
 class Image;
 class ImageCropping; // forward declaration of this global state
-class SynchDat;
 
 class AcqMovie {
  public:
@@ -55,8 +53,6 @@ public:
     bool LoadRaw_noWait_noSem(const char *rawFileName, int frames=0, bool allocate=true, bool headerOnly=false );
     int ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly, bool timeTransform=true);
     int ActuallyLoadRaw_noSem ( const char *rawFileName, int frames,  bool headerOnly );
-    /** Not perfect as sdat has a particular time compression per region but good workaround for some use cases. */
-    void InitFromSdat(SynchDat *sdat);
     int GetRows() const {
         return raw->rows;
     }
@@ -131,7 +127,7 @@ public:
     );
 
     void Close(); //Frees image memory only
-    void SetDir ( const char* directory );
+    void SetDir ( const char* directory , const char *acqPrefix, const char *datPostfix);
     int  FilterForPinned ( Mask *mask, MaskType these, int markBead = 0 );
 
     void SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed_frame_nums=0 );
@@ -222,7 +218,7 @@ public:
     }
     bool    BeadfindType();
 
-    static bool ReadyToLoad ( const char * );
+    static bool ReadyToLoad ( const char * rawFileName, const char *_acqPrefix, const char *_datPostfix);
     void SetNumAcqFiles ( int num ) {
         numAcqFiles = num;
     }
@@ -267,6 +263,9 @@ public:
 
     RawImage *raw;    // the raw image
     char   *results_folder;  // really the directory
+    // naming structure for dat files
+    char   *acqPrefix;
+    char   *datPostfix;
 
     double CacheAccessTime;  // how long it took to load the file from disk
     double SemaphoreWaitTime;// how long it took to get the file semaphore

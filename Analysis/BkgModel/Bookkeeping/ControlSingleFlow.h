@@ -14,7 +14,7 @@
 
 struct ControlSingleFlow{
   float krate_adj_limit;
-  float dampen_kmult;
+
   float kmult_low_limit;
   float kmult_hi_limit;
 
@@ -26,7 +26,6 @@ private:
   void serialize(Archive& ar, const unsigned int version)
   {
     ar
-      & dampen_kmult
       & krate_adj_limit
       & kmult_low_limit
       & kmult_hi_limit;
