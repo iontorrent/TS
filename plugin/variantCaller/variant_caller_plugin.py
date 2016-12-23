@@ -1318,26 +1318,30 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
             traceback.print_exc()
             for bam in configuration['bams']:
                 bam['status'] = 'error'
+                
+        for bam in configuration['bams']:
+            try:
+                bam['summary'] = process_results(barcoded_run, configuration, bam)
+                load_results_json(barcoded_run, configuration, bam, results_json)
+                bam['status'] = 'completed'
+                bams_processed.append(bam)
+            except:
+                traceback.print_exc()
+                bam['status'] = 'error'
+                bams_processed.append(bam)
     else:
         for bam in configuration['bams']:
             bams = []
             bams.append(bam)
             try:
                 variant_caller_pipeline(barcoded_run, multisample, bam['name'], configuration, bams)
+                bam['summary'] = process_results(barcoded_run, configuration, bam)
+                load_results_json(barcoded_run, configuration, bam, results_json)
+                bam['status'] = 'completed'
+                bams_processed.append(bam)
             except:
                 traceback.print_exc()
                 bam['status'] = 'error'
-
-    for bam in configuration['bams']:
-        try:
-            bam['summary'] = process_results(barcoded_run, configuration, bam)
-            load_results_json(barcoded_run, configuration, bam, results_json)
-            bam['status'] = 'completed'
-            bams_processed.append(bam)
-        except:
-            traceback.print_exc()
-            bam['status'] = 'error'
-            bams_processed.append(bam)
         
 def plugin_main():
     global PLUGIN_DEV_SKIP_VARIANT_CALLING
