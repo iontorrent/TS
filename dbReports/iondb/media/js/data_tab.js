@@ -495,7 +495,8 @@ $(function () {
             'click #clear_filters': 'clear_filters',
             'click #live_button': 'toggle_live_update',
             'click #download_csv': 'csv_download',
-            'click .sort_link': 'sort'
+            'click .sort_link': 'sort',
+            'change #id_data_source': 'data_source_update'
         },
 
         initialize: function () {
@@ -654,26 +655,6 @@ $(function () {
         },
 
         _get_query: function (isLocalDataSource) {
-            //Side effects to disable some dropdowns on remote
-            [
-                $("#id_project"),
-                $("#id_sample"),
-                $("#id_reference"),
-                $("#id_pgm"),
-            ].map(function (field) {
-                if (isLocalDataSource != undefined && !isLocalDataSource) {
-                    field.attr("disabled", "disabled").val("");
-                } else {
-                    field.removeAttr("disabled");
-                }
-                field.trigger("liszt:updated");
-            });
-            if (isLocalDataSource != undefined && !isLocalDataSource) {
-                $("#download_csv").hide();
-            }else{
-                $("#download_csv").show();
-            }
-
             //Date requires extra formatting
             var params = {
                 'all_date': $("#rangeA").val(),
@@ -711,6 +692,29 @@ $(function () {
             }
 			return query;
 		},
+
+        data_source_update: function() {
+            var isLocalDataSource = $("#id_data_source").val() == "local";
+            // disable some dropdowns on remote
+            [
+                $("#id_project"),
+                $("#id_sample"),
+                $("#id_reference"),
+                $("#id_pgm"),
+            ].map(function (field) {
+                if (isLocalDataSource != undefined && !isLocalDataSource) {
+                    field.attr("disabled", "disabled").val("");
+                } else {
+                    field.removeAttr("disabled");
+                }
+                field.trigger("liszt:updated");
+            });
+            if (isLocalDataSource != undefined && !isLocalDataSource) {
+                $("#download_csv").hide();
+            }else{
+                $("#download_csv").show();
+            }
+        },
 
 		csv_download: function() {
 			var q = this._get_query();

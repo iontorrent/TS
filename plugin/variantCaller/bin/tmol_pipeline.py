@@ -92,10 +92,17 @@ def main():
         if not os.path.exists(options.hotspot_vcf):
             printtime('ERROR: No hotspots vcf file found at: ' + options.hotspot_vcf)
             sys.exit(1)
+    else:
+        printtime('ERROR: Hotspot file is not provided. Analysis requires hotspot file.')
+        sys.exit(1)
+
     if options.bedfile:
         if not os.path.exists(options.bedfile):
             printtime('ERROR: No target regions bed file found at: ' + options.bedfile)
             sys.exit(1)
+    else:
+        printtime('ERROR: Target regions file is not provided. Analysis requires target regions file.')
+        sys.exit(1)
 
     parameters = {}
     if options.paramfile:
@@ -123,9 +130,9 @@ def main():
     tvc_command +=      '   --fasta %s' % options.reference
     tvc_command += 		'   --bam %s' % (options.bamfile)
     tvc_command += 		'   --target %s' % options.bedfile
-    if int(parameters['torrent_variant_caller'].get('hotspots_only',1) or 0) == 1:
-        if options.hotspot_vcf:
-            tvc_command +=  '   --hotspot %s' % options.hotspot_vcf
+    tvc_command += 		'   --hotspot %s' % options.hotspot_vcf
+    if int(parameters['torrent_variant_caller'].get('hotspots_only',1) or 0) == 0:
+        tvc_command +=  '   --hs-mask-only'
     tvc_command +=  '   --oALT %s/tmol.stats.txt' % options.outdir
     tvc_command +=  '   --ofamily %s/tmol.family.txt' % options.outdir
     tvc_command +=  '   --oglobal %s/tmol.consensus.txt' % options.outdir

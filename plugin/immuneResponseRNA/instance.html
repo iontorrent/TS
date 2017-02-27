@@ -1,0 +1,486 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<head>
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+    <style type="text/css">
+        #formwrap {
+            line-height: 2em;
+            background: #eef;
+            margin: 10px;
+            padding: 10px;
+            height: 500px;
+        }
+        body {
+            font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+            font-size: 14px;
+        }
+        table.center {
+            margin-left:auto;
+            margin-right:auto;
+        }
+        div.container {
+            width:98%;
+            margin:10px;
+        }
+        div#sample_barcode_table_html {
+            text-align:center;
+            margin-left:auto;
+            margin-right:auto;
+            width:50%;
+        }
+        .center { margin-left:auto; margin-right:auto; }
+        .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+        .button {
+            background-color: #4CAF50; /* Green */
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 12px;
+        }
+    </style>
+
+    <script>
+    $(function() {
+        // NOTE: barcode-specific targets option hidden from as not apropriate, although supported by plugin if needed again.
+        // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
+        $('#barcode_beds').attr('checked',false);
+        $('#uniquemaps').attr('checked',false);
+        $('#ercc').attr('checked',false);
+        $('#filterbarcodes').attr('checked', false);
+        $("#uniquereads").hide();
+        $('#erccid').hide();
+        $('.bcbed-shy').hide();
+
+        // turn off async JavaScript so we can easily get/set var names
+        $.ajaxSetup({async: false});
+
+        // get the reference for the current report - TB_result is defined in run verison of this script
+        var reportUrl = '/rundb/api/v1/results/' + TB_result  + '/?format=json&noplugin=True';
+        var referenceID;
+        var experimentUrl;
+        var analysisUrl;
+        var easUrl;
+        $.get( reportUrl, function(data) {
+            analysisUrl = data.reportLink;
+            experimentUrl = data.experiment;
+            referenceID = data.reference;
+            easUrl = data.eas;
+            $.each( data.config, function(key,val) {
+                if( key != 'launch_mode' ) {
+                    try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+                    catch(e) {}
+                }
+            });
+        });
+        // attempt to get Plan details for autosetting of GUIs
+        // - although there is only one run type currently, the code is left in for future expansion, etc.
+        var planLibType = "";
+        var planBedFile = "";
+        if( experimentUrl != undefined && experimentUrl != null && experimentUrl != "" ) {
+            var planUrl;
+            $.get( experimentUrl+"?format=json", function(data) { planUrl = data.plan; } );
+            if( planUrl != undefined && planUrl != null && planUrl != "" ) {
+                $.get( planUrl+"?format=json", function(data) { planLibType = data.runType; });
+            }
+        }
+        // set up plan.html plan settings (ignoring barcode-specific stuff)
+        try {
+            $.get( easUrl+"?format=json", function(data) {
+                planBedFile = data.targetRegionBedFile;
+                $.each( data.selectedPlugins.immuneResponseRNA.userInput, function(key,val) {
+                    if( key != 'launch_mode' ) {
+                        try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+                        catch(e) {}
+                    }
+                });
+            });
+        }
+        catch(e) {}
+
+        document.getElementById('referenceid').innerHTML = referenceID;
+
+        // following code is to support barcode-specific target selection, if later required
+        var populateBarcodeTargets = 1;
+        var hideMappedBedOption = true;
+        if( hideMappedBedOption ) {
+            $('#multibed').hide();
+            //$('#filter_barcodes').hide();
+        } else {
+            // check/get barcodes
+            var barcodeUrl = analysisUrl + 'barcodeList.txt';
+            $.get( barcodeUrl, function(mem) {
+                var lines = mem.split("\n");
+                $.each(lines, function(n,row) {
+                    var fields = $.trim(row).split(',');
+                    if( fields[0].substr(0,7) == "barcode" ) {
+                        $("#barcodeids").append("<option value='" + fields[1] + "'>" +  fields[1] + "</option>");
+                        ++populateBarcodeTargets;
+                    }
+                });
+                if( populateBarcodeTargets < 2 ) {
+                    $('#multibed').hide();
+                } else {
+                    // sort the list (for old reports)
+                    var lst = $('#barcodeids option');
+                    lst.sort(function(a,b) {
+                        if( a.text > b.text ) return 1;
+                        if( a.text < b.text ) return -1;
+                        return 0
+                    });
+                    $("#barcodeids").empty().append(lst);
+                    $('#barcodeids option')[0].selected = true;
+                }
+            }).error(function() {
+                $('#multibed').hide();
+            });
+        }
+
+        //-------------------------------
+        //- bed files for the panel region
+        // First to see if there is one defined in the plan. If true, use it as default selection
+        // Check to see if there are other bed file associated with the reference and populate the list,
+        // so that one can select alternative bed target for analysis.
+        var ref_bed_type = '/unmerged/detail/';
+        var ref_bed_URL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/'+referenceID+ref_bed_type;
+
+        //var plan_bed_filename = planBedFile.substr(planBedFile.lastIndexOf(ref_bed_type) + ref_bed_type.length)
+        //$("#target_regions").empty().append("<option value=''>None</option>");
+        //$("#target_regions").append("<option value='" + plan_bed_filename + "'>" + plan_bed_filename + "</option>");
+        //$('#target_regions option')[0].selected = true;
+
+        $.get( ref_bed_URL, function(data) {
+            $.each( data.objects, function(intIndex, result) {
+                var tgt_bed_file = result.file;
+                var i = tgt_bed_file.lastIndexOf(ref_bed_type);
+                if( i < 0 ) return true;
+                var tgt_bed_name = tgt_bed_file.substr(i + ref_bed_type.length)
+                if( tgt_bed_name.substr(0,7) == 'example' ) return true;
+                var j = tgt_bed_name.lastIndexOf('.bed');
+                if( j > 0 && !result.meta.hotspot ) {
+                    sub_name = tgt_bed_name.substr(0, j);
+                    if( planBedFile != "" && planBedFile == tgt_bed_file) {
+                        $("#target_regions").append("<option selected value='" + tgt_bed_file + "'>" +  sub_name + "</option>");
+                    } else {
+                        $("#user_target_regions").append("<option value='" + tgt_bed_file + "'>" +  sub_name + "</option>");
+                        $("#target_regions").append("<option selected value='" + tgt_bed_file + "'>" +  sub_name + "</option>");
+                    }
+
+                    //$("#target_regions").append("<option value='" + tgt_bed_file + "'>" +  sub_name + "</option>");
+                    //if (tgt_bed_file != planBedFile) {
+                    //    $("#user_target_regions").append("<option value='" + tgt_bed_file + "'>" +  sub_name + "</option>");
+                    //}
+                    if( populateBarcodeTargets > 0 ) {
+                        $("#barcode_target_regions").append("<option value='" + tgt_bed_file + "'>" +  sub_name + "</option>");
+                    }
+                }
+            });
+            //var lst = $('#target_regions option');
+            //lst.sort(function(a,b) {
+            //    if( a.text > b.text ) return 1;
+            //    if( a.text < b.text ) return -1;
+            //    return 0
+            //});
+
+            $("#user_target_regions").append("<option value=''>None</option>");
+            //$("#target_regions").append(lst);
+            //$("#user_target_regions").append(lst);
+            //$('#target_regions option')[0].selected = true;
+            $('#user_target_regions option')[0].selected = true;
+            if( populateBarcodeTargets > 0 ) {
+                // have to repeat operation with new list to prevent issues with sharing objects(?)
+                lst = $('#barcode_target_regions option');
+                lst.sort(function(a,b) {
+                    if( a.text > b.text ) return 1;
+                    if( a.text < b.text ) return -1;
+                    return 0
+                });
+                $("#barcode_target_regions").empty().append(lst);
+                $('#barcode_target_regions option')[0].selected = true;
+            }
+        });
+
+        // make the Plan auto-selections
+        if( planLibType != "" && planLibType != "AMPS_RNA" ) {
+            alert("Warning: The current Plan runType ('"+planLibType+"') is not supported by this plugin.\n\n"+
+                "Library Type 'AmpliSeq RNA' will be employed.");
+        }
+        planLibType = "AMPS_RNA";
+        var pluginLibType = "ampliseq-rna";
+        if( planBedFile != "" ) {
+            $("#target_regions").val(planBedFile);
+            if( populateBarcodeTargets > 0 ) {
+                $("#barcode_target_regions").val(planBedFile);
+            }
+        }
+
+        //---------------------------------------------------------------------------------
+        //- get barcode sample info for user to choose grouping
+        //- removed for scaling back features
+        //---------------------------------------------------------------------------------
+
+        function setOptionDefaults(libType,refID) {
+            $("#librarytype").val(libType);
+        }
+
+        // Set default options according to Library type selected (and reference for scope limiting)
+        setOptionDefaults(pluginLibType,referenceID);
+
+        $("#librarytype").change(function() {
+            var libType = $("#librarytype option:selected").val();
+            setOptionDefaults(libType);
+        });
+
+        $('#barcode_beds').change(function() {
+            if( $(this).attr("checked") ) {
+                $('.bcbed-shy').show();
+            } else {
+                $('.bcbed-shy').hide();
+            }
+        });
+
+        $('#addbcbutton').click(function() {
+            var bcID = $('#barcodeids option:selected').text();
+            var trgID = $('#barcode_target_regions option:selected').text();
+            var box = $("#bctextarea");
+            // clean current input by removing duplicates and blank lines
+            var lines = box.val().split("\n");
+            var text = "";
+            $.each(lines, function(n,row) {
+                var fields = $.trim(row).split(/\s+/);
+                if( fields.length >= 2 && fields[0] != "" && fields[0] != bcID ) {
+                    text += fields[0]+'\t'+fields[1]+'\n';
+                }
+            });
+            box.val(text+bcID+'\t'+trgID+'\n');
+            var bcIndex = document.immuneResponseRNA.barcodeids.selectedIndex + 1;
+            var numOptions = $('#barcodeids option').size();
+            if( bcIndex >= numOptions ) bcIndex = 0;
+            $('#barcodeids option')[bcIndex].selected = true;
+        });
+
+        // Check (user) NPVs are correctly formated and available
+        // Return a compressed list of mappings or error message "Error at line ..."
+        function checkBarcodeTargets(txtList) {
+            var lines = txtList.split("\n");
+            var text = "";
+            $.each(lines, function(n,row) {
+                var fields = $.trim(row).split(/\s+/);
+                if( fields.length == 1 && fields[0] == "" ) {
+                    return true;  // blank lines ok
+                } else if( fields.length != 2 || fields[1] == "" ) {
+                    text = "Error at line "+n+": Invalid number of fields. Must be '<barcode> <targets>'.";
+                    return false;
+                } else if( $('#barcodeids option[value='+fields[0]+']').length == 0 ) {
+                    text = "Error at line "+n+": Barcode ID "+fields[0]+" is unavailable to this run analysis.";
+                    return false;
+                }
+                var trgIndex = 0;
+                var inList = false;
+                $('#barcode_target_regions option').each(function() {
+                    if( this.text == fields[1] ) {
+                        inList = true;
+                        return false;
+                    }
+                    ++trgIndex;
+                });
+                if( !inList ) {
+                    text = "Error at line "+n+": Target Regions "+fields[1]+" is unavailable to this reference.";
+                    return false;
+                }
+                // collect the actual file path to the bed file
+                text += fields[0]+'='+document.getElementById('barcode_target_regions')[trgIndex].value+';';
+            });
+            return text;
+        }
+
+        $.fn.serializeObject = function() {
+            var o = {};
+            var a = this.serializeArray();
+            $.each(a, function() {
+                if (o[this.name] != null) {
+                    if (!o[this.name].push) {
+                        o[this.name] = [o[this.name]];
+                    }
+                    o[this.name].push(this.value || '');
+                } else {
+                    o[this.name] = this.value || '';
+                }
+            });
+            return o;
+        };
+
+        $(function() {
+            $('#postbutton').click(function() {
+                var libn = document.immuneResponseRNA.librarytype.selectedIndex;
+                var libType = document.getElementById('librarytype')[libn].value;
+                var libName = document.getElementById('librarytype')[libn].text;
+                var tarn = document.immuneResponseRNA.target_regions.selectedIndex;
+                var idx_user_target_regions = document.immuneResponseRNA.user_target_regions.selectedIndex;
+                var useBcTargets = $('#barcode_beds').attr("checked");
+                var bcTargetList = "";
+                if( useBcTargets ) {
+                    bcTargetList = checkBarcodeTargets( $("#bctextarea").val() );
+                    if( bcTargetList == "" ) {
+                        var msg = "Barcode-specific Targets was specified but no mappings were defined."
+                        msg += "\n\nDo you wish to continue?";
+                        if( !confirm(msg) ) return false;
+                    } else if( bcTargetList.substr(0,5) == "Error" ) {
+                        alert("Barcode target mapping is invalid.\n"+bcTargetList);
+                        return false;
+                    }
+                }
+                // pass user selections to variables exported (via name attribute)
+                document.immuneResponseRNA.librarytype_id.value = document.getElementById('librarytype')[libn].text;
+                document.immuneResponseRNA.target_regions_name.value = document.getElementById('target_regions')[tarn].text;
+                document.immuneResponseRNA.user_target_regions_name.value = document.getElementById('user_target_regions')[idx_user_target_regions].text;
+                document.immuneResponseRNA.barcode_target_regions.value = bcTargetList;
+                obj = $('#immuneResponseRNA').serializeObject();
+                pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+                pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+
+                console.log(pluginAPIJSON);
+
+                pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+
+                $.ajax({
+                    type: 'POST',
+                    url: pluginURL,
+                    async: false,
+                    contentType: "application/json; charset=utf-8",
+                    success: function(data) {
+                        $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"> </img><p>Running the Plugin... Check immuneResponseRNA.html in the Plugin Summary</p></div>');
+                        setTimeout("parent.$.fn.colorbox.close()", 2000);
+                    },
+                    data: pluginAPIJSON,
+                    dataType: "json"
+                });
+
+            });
+        });
+    });
+
+    </script>
+</head>
+
+<body>
+<form id="immuneResponseRNA" name="immuneResponseRNA">
+    <div style="text-align:center"><h1>ImmuneResponseRNA Plugin</h1>
+    </div>
+    <div style="...">
+        <table class="center" cellpadding="5px">
+            <tr>
+                <td style="background-color:lightgrey"><span class="help" title="The short name of the reference genome.">Reference Genome:</span></td>
+                <td>
+                    <div id="referenceid"></div>
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color:lightgrey"><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
+                <td><select id="librarytype" name="librarytype">
+                    <option value="ampliseq-rna">AmpliSeq RNA</option>
+                </select></td>
+            </tr>
+
+            <tr>
+                <td style="background-color:lightgrey"><span class="help" title="Select the target regions matching your reference.">Targeted Regions:</span></td>
+                <td><select id="target_regions" name="target_regions"></select></td>
+            </tr>
+            <tr>
+                <td style="background-color:lightgrey"><span class="help" title="Select the bed file containing genes of interest">Genes of interests</span></td>
+                <td><select id="user_target_regions" name="user_target_regions"></select></td>
+            </tr>
+            <tr>
+                <td style="background-color:lightgrey"><span class="help" title="Add a new bed file as genes of interest.">Add new gene list</span></td>
+                <td><a class="button" title="Upload new bed file with genes of interests."
+                       href="/rundb/content/targetregions/add/" target="_blank">Add genes of interest ...</a></td>
+            </tr>
+            <tr id="multibed" style="display:none">
+                <td><span class="help" title="Assign target regions based on assigned barcodes.">Barcode-specific Targets:</span>
+                </td>
+                <td><input type="checkbox" id="barcode_beds" name="barcode_beds" checked="checked" value="Yes"
+                           style="float:left"/>
+                    <div class="bcbed-shy" style="margin-left:25px">Use the text box below to specify barcode to target
+                        regions mappings.<br/>
+                        Hint: Use the 'Add' button and barcode/target selectors for initial set up.<br/>
+                        Copy the text generated and then use copy/paste for quick entry next time.<br/></div>
+                    <div class="bcbed-shy">
+                        <input id="addbcbutton" type="button" value="Add" style="font-size:13px">
+                        <select id="barcodeids" style="font-size:13px"></select>
+                        <select id="barcode_target_regions" style="font-size:13px"></select>
+                    </div>
+                    <div class="bcbed-shy">
+                        <textarea id="bctextarea" rows=17 cols="60"
+                                  style="font-size:13px;border:5px double #C0C0C0"></textarea>
+                    </div>
+                    <div class="bcbed-shy" style="font-style:italic;max-width:540px">Un-assigned barcodes will use the
+                        Targeted Regions selected when the Submit button is clicked.
+                        (Set to 'None' to ignore un-assigned barcodes.)
+                    </div>
+                </td>
+            </tr>
+            <tr id="filter_barcodes">
+                <td style="background-color:lightgrey"><span class="help"
+                          title="Check to filter 'phantom' barcodes, those with low relaively low numbers of reads.">Filter Barcodes:</span>
+                </td>
+                <td><input type="checkbox" id="filterbarcodes" name="filterbarcodes" checked="checked" value="Yes"/>
+                </td>
+            </tr>
+            <tr id="erccid" style="...">
+                <td style="background-color:lightgrey"><span class="help"
+                          title="Check if this AmpliSeq-RNA library employed ERCC amplicons for performance tracking.">ERCC Tracking:</span>
+                </td>
+                <td><input type="checkbox" id="ercc" name="ercc" checked="checked" value="Yes"/></td>
+            </tr>
+            <tr id="uniquereads">
+                <td style="background-color:lightgrey"><span class="help" title="Check to analyze only reads mapped to a specific sequence in the genome.">Use Only Uniquely Mapped Reads:</span>
+                </td>
+                <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes" checked="checked"/></td>
+            </tr>
+        </table>
+    </div>
+
+    <br/>
+
+
+    <div align="center" id="json_result">
+        <input id="postbutton" type="submit" value="Submit">
+    </div>
+    <input type="hidden" id="librarytype_id" name="librarytype_id"/>
+    <input type="hidden" id="target_regions_name" name="target_regions_name"/>
+    <input type="hidden" id="user_target_regions_name" name="user_target_regions_name"/>
+    <input type="hidden" id="barcode_target_regions" name="barcode_target_regions" value=""/>
+    <input type="hidden" id="launch_mode" name="launch_mode" value="Manual"/>
+
+    <br/>
+    <div align="left">
+        <h3>Description and Usage Notes</h3>
+        <p>
+            This plugin generates statistics, downloadable data files and interactive visualization of representation of
+            immune response RNA transcripts.</p>
+        <p>
+            This plugin should be used with runs aligned to the hg19_rna_ImmuneResponsePanelv2 reference (or subsequent
+            version) and immune response targets panel.
+        <p>
+            The Filter Barcodes option may be checked to indicate to remove whole barcodes
+            from the subsequent analysis if they have relatively low number of reads, e.g. as might result from barcode
+            contamination.
+            A warning will be issued to the barcode summary report if any barcodes were discounted from the analysis.
+            This option is ignored for runs not employing barcodes.</p>
+        <p>
+            The ERCC Tracking option is recommended if your targets (amplicons) were 'spiked' with ERCC tracking
+            targets. This will inform the analysis to produce an extra statistic for reads mapped to these targets so
+            that
+            the true level of 'off-target' reads is accurately represented. Your reference does not have to include ERCC
+            references for
+            this to work but whether such reads are included with the fraction of reads considered 'on-target' will
+            depend on this.</p>
+    </div>
+</form>
+</body>
+</html>
+

@@ -1,6 +1,6 @@
 /* Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved */
-#ifndef READFAMILY_H
-#define READFAMILY_H
+#ifndef MOLECULARTAG_H
+#define MOLECULARTAG_H
 
 
 #include <iostream>
@@ -84,43 +84,6 @@ private:
 	bool is_func_family_;
 };
 
-// The task of this class is done by MolecularTagTrimmer object whihc is being shared by BaseCaller and TVC
-// XXX ======== REMOVE ME! ===============
-class MolecularTagClassifier {
-public:
-	MolecularTagClassifier();
-	//void PropagateTagParameters(const MolecularBarcodeParameters &my_tag_params);
-	void InitializeTag(const string &a_handle_fwd, const string &prefix_barcode_format_fwd, const string &suffix_barcode_format_fwd);
-	bool ClassifyOneRead(string &prefix_barcode, string &suffix_barcode, int &len_prefix_base, int &len_suffix_bases, const string &read_seq);
-	bool IsStratsWithAHandle(unsigned int &barcode_start_index, const string &base_seq);
-	bool StrictBarcodeClassifier(string &prefix_barcode, string &suffix_barcode, int &prefix_base_len, int &suffix_base_len, const string &base_seq, unsigned int prefix_barcode_start_index);
-	bool SloppyBarcodeClassifier(string &prefix_barcode, string &suffix_barcode, int &prefix_base_len, int &suffix_base_len, const string &base_seq, unsigned int prefix_barcode_start_index);
-
-private:
-	string a_handle_;
-	string prefix_barcode_format_;
-	string suffix_barcode_format_;
-	unsigned int allow_a_handle_error_num_ = 2;
-	bool is_use_strict_barcode_classifier = true;
-
-	// Heal Hp indel related
-	bool use_heal_hp_indel_ = false;
-	vector<int> heal_indel_len_ = {-1, 1, 2}; // Must be in ascending order! -x means x-mer hp deletion, +x means x-mer hp insertion.
-	void SetUseHealHpIndel_();
-	bool HealHpIndelOneSegment_(const string &base_segment, const string &flag_segment, int random_base_len, string &barcode_segment, int &indel_len);
-	bool HealHpIndel_(string base_seq, string barcode_format, bool is_reverse_mode, string &barcode, int &total_offset);
-
-    // Smith-Waterman related.
-	float matchScore_ = 19.0f;
-    float mismatchScore_ = -9.0f;
-    float gapOpenPenalty_ = 15.0f;
-    float gapExtendPenalty_ = 6.66f;
-    float entropyGapOpenPenalty_ = 0.0f;
-    bool useRepeatGapExtendPenalty_ = false;
-    float repeatGapExtendPenalty_ = 1.0f;
-};
-// =============================================
-
 void GenerateMyMolecularFamilies(PositionInProgress &bam_position,
 		                         vector< vector< MolecularFamily<Alignment*> > > &my_molecular_families,
 								 const ExtendParameters &parameters,
@@ -128,4 +91,4 @@ void GenerateMyMolecularFamilies(PositionInProgress &bam_position,
 
 void RemoveNonFuncFamilies(vector< MolecularFamily<Alignment*> > &my_molecular_families, unsigned int min_fam_size);
 
-#endif /* READFAMILY_H */
+#endif /* MOLECULARTAG_H */

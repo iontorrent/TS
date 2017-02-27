@@ -140,6 +140,7 @@ num_adp=$(MegaCli64 -adpCount $MEGALOG| grep "Controller Count" | cut -f2 -d: | 
 
 echo {    # Open json
 echo \"hostname\": \"$(hostname -f)\",
+echo \"system_name\": \"$(dmidecode -s system-product-name)\",
 echo \"username\": \"$USER\",
 echo \"num_adapters\": \"$num_adp\",
 #------------------------------------------------------------------------------

@@ -151,6 +151,9 @@ json["strand"] = my_cross.strand_key;
    for(unsigned int i_hyp = 0; i_hyp< my_cross.delta_state.delta.size(); ++i_hyp)
      json["testdelta"][i_hyp][i_test] = my_cross.delta_state.delta[i_hyp][i_test];
  }
+ for (unsigned int i_hyp = 0; i_hyp < my_cross.responsibility.size(); i_hyp++) {
+   json["responsibility"][i_hyp] = my_cross.responsibility[i_hyp];
+ }
 }
 
 // DiagnosticJson for mol tag

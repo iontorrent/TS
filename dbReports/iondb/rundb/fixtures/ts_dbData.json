@@ -1,5 +1,117 @@
 [
 
+{
+    "pk": 1,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Default forward adapter",
+      "direction": "Forward",
+      "isDefault": true,
+      "name": "Ion P1B",
+      "runMode": "single",
+      "sequence": "ATCACCGACTGCCCATAGAGAGGCTGAGAC",
+      "chemistryType": "",
+      "uid": "FWD_0001"
+    }
+  },
+  {
+    "pk": 2,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Default reverse adapter",
+      "direction": "Reverse",
+      "isDefault": true,
+      "name": "Ion Paired End Rev",
+      "runMode": "pe",
+      "sequence": "CTGAGTCGGAGACACGCAGGGATGAGATGG",
+      "chemistryType": "",
+      "uid": "REV_0001"
+    }
+  },
+  {
+    "pk": 3,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Ion B",
+      "direction": "Forward",
+      "isDefault": false,
+      "name": "Ion B",
+      "runMode": "single",
+      "sequence": "CTGAGACTGCCAAGGCACACAGGGGATAGG",
+      "chemistryType": "",
+      "uid": "FWD_0002"
+    }
+  },
+  {
+    "pk": 4,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Ion Truncated Fusion",
+      "direction": "Forward",
+      "isDefault": false,
+      "name": "Ion Truncated Fusion",
+      "runMode": "single",
+      "sequence": "ATCACCGACTGCCCATCTGAGACTGCCAAG",
+      "chemistryType": "",
+      "uid": "FWD_0003"
+    }
+  },
+  {
+    "pk": 5,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Ion Paired End Fwd",
+      "direction": "Forward",
+      "isDefault": false,
+      "name": "Ion Paired End Fwd",
+      "runMode": "pe",
+      "sequence": "GCTGAGGATCACCGACTGCCCATAGAGAGG",
+      "chemistryType": "",
+      "uid": "FWD_0004"
+    }
+  },
+  {
+    "pk": 6,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "MuSeek/P1B adapter",
+      "direction": "Forward",
+      "isDefault": false,
+      "name": "MuSeek/P1B adapter",
+      "runMode": "single",
+      "sequence": "TGAACTGACGCACGAAATCACCGACTGCCCATAGAGAGGCTGAGAC",
+      "chemistryType": "",
+      "uid": "FWD_0005"
+    }
+  },
+  {
+    "pk": 7,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Ion P1 3 prime adapter used with Avalanche templating",
+      "direction": "Forward",
+      "isDefault": true,
+      "name": "Ion P1",
+      "runMode": "single",
+      "sequence": "ATCACCGACTGCCCATAGAGAGGAAAGCGG",
+      "chemistryType": "avalanche",
+      "uid": "FWD_0006"
+    }
+  },
+  {
+    "pk": 8,
+    "model": "rundb.threeprimeadapter",
+    "fields": {
+      "description": "Ion Xpress MuSeek adapter",
+      "direction": "Forward",
+      "isDefault": false,
+      "name": " Ion Xpress MuSeek adapter",
+      "runMode": "single",
+      "sequence": "TGCACTGAAGCACACAATCACCGACTGCCC",
+      "chemistryType": "",
+      "uid": "FWD_0007"
+    }
+  },
   {
     "pk": 1,
     "model": "rundb.applicationgroup",
@@ -68,6 +180,16 @@
       "name": "onco_liquidBiopsy",
       "isActive": true,
       "description": "Oncology - Liquid Biopsy"
+    }
+  },
+  {
+    "pk": 8,
+    "model": "rundb.applicationgroup",
+    "fields": {
+      "uid": "APPLGROUP_0008",
+      "name": "HID",
+      "isActive": true,
+      "description": "Human Identification"
     }
   },
 
@@ -640,7 +762,7 @@
       "flowCount": 0,
       "uid": "SPREP0004",
       "instrumentType": "",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion TargetSeq Exome Kit (48 rxn)",
       "applicationType" : "TARS"
     }
@@ -1051,7 +1173,10 @@
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",
       "isActive": true,
-      "description": "Ion PGM Template IA 500 Kit"
+      "description": "Ion PGM Template IA 500 Kit",
+      "defaultThreePrimeAdapter": [
+        "FWD_0006"
+      ]
     }
   },  
  {
@@ -1281,7 +1406,7 @@
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion PGM Hi-Q Chef Kit",
-      "categories" : "multipleTemplatingSize;supportLibraryReadLength"
+      "categories" : "multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;hidSamplePrep"
     }
   },
   {
@@ -1300,7 +1425,7 @@
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion PI Hi-Q Chef Kit",
-      "categories" : "multipleTemplatingSize;supportLibraryReadLength"
+      "categories" : "multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep"
     }
   },
   {
@@ -1521,7 +1646,7 @@
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion 540 Kit-Chef",
-      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;",
+      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5RnaWTSamplePrep",
       "chipTypes" : "540"
     }
   },
@@ -1753,7 +1878,7 @@
       "isActive": false,
       "description": "Ion 520 & Ion 530 ExT Kit-Chef",
       "categories" : "s5ExTKit",
-      "chipTypes" : "530"
+      "chipTypes" : "520;521;530"
     }
   },
   {
@@ -1771,7 +1896,7 @@
       "isActive": false,
       "description": "Ion S5 ExT Sequencing Kit",
       "categories" : "s5ExTKit",
-      "chipTypes" : "530",
+      "chipTypes" : "520;521;530",
       "defaultFlowOrder" : 4
     }
   },
@@ -1840,7 +1965,7 @@
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "",
       "isActive": true,
-      "description": "HID Early Access Sequencing Kit",
+      "description": "HID S5 Sequencing Kit",
       "categories" : "s5HidKit",
       "chipTypes" : "530",
       "defaultFlowOrder" : 2
@@ -1874,11 +1999,63 @@
       "flowCount": 0,
       "uid": "LIB0024",
       "instrumentType": "",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion Xpress MuSeek Library Preparation Kit"
     }
   },
-    
+   {
+    "pk": 20104,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Precision ID Library Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0025",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Precision ID Library Kit",
+      "categories" : "samplePrepProtocol;hidSamplePrep"
+    }
+  },
+  {
+    "pk": 20105,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryPrepKit",
+      "name": "Ion Chef HID Library V2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LPREP0003",
+      "instrumentType": "",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Precision ID Chef Reagents DL8 for HID",
+      "categories" : "s5HidKit",      
+      "applicationType" : "AMPS_ANY"
+    }
+  },
+  {
+    "pk": 20106,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion Chef HID S530 V2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "ICPREP0011",
+      "instrumentType": "S5",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Precision ID 530 Chef Reagents for HID",
+      "categories" : "s5HidKit",
+      "chipTypes" : "530"
+    }
+  },
+          
   {
     "pk": 20001,
     "model": "rundb.kitpart",
@@ -4292,7 +4469,69 @@
       ]
     }
   },
- 
+  {
+    "pk": 20244,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26435",
+      "kit": [
+        "LIB0025"
+      ]
+    }
+  },
+  {
+    "pk": 20245,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A32926C",
+      "kit": [
+        "LPREP0003"
+      ]
+    }
+  },
+  {
+    "pk": 20246,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A32882C",
+      "kit": [
+        "ICPREP0011"
+      ]
+    }
+  },
+    
+  {
+    "pk": 1,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "samplePrepProtocol",
+      "value": "anneal62no10xab",
+      "displayedValue": "Ion PGM Hi-Q Chef for STR",
+      "description": "Use Ion Chef script protocol optimized for HID",
+      "isDefault": false,
+      "isActive": true,
+      "categories": "hidSamplePrep",
+      "samplePrep_instrumentType": "IC",
+      "sequencing_instrumentType": "",
+      "uid": "CV0001"
+    }
+  },
+  {
+    "pk": 2,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "samplePrepProtocol",
+      "value": "no10xab",
+      "displayedValue": "Whole Transcriptome RNA",
+      "description": "Use Ion Chef script protocol optimized for Whole Transcriptome RNA",
+      "isDefault": false,
+      "isActive": true,
+      "categories": "protonRnaWTSamplePrep;s5RnaWTSamplePrep",
+      "samplePrep_instrumentType": "IC",
+      "sequencing_instrumentType": "",
+      "uid": "CV0002"
+    }
+  },
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -4315,6 +4554,7 @@
       "applType": [
         "AMPS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4353,7 +4593,8 @@
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4378,6 +4619,7 @@
       "applType": [
         "TARS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "TARS_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4399,7 +4641,7 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -4416,7 +4658,8 @@
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,      
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4441,6 +4684,7 @@
       "applType": [
         "WGNM"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],      
       "productName": "WGNM_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4462,24 +4706,25 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,       
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
-        "AVTEMP0001"      
+        "AVTEMP0001"
       ],
       "defaultAvalancheSequencingKit" : [
-        "SEQ0010"      
+        "SEQ0010"
       ],
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4504,6 +4749,7 @@
       "applType": [
         "RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0002"],
       "productName": "RNA_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4528,24 +4774,25 @@
       "isReferenceSelectionSupported" : false,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : false,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : true,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : false,
-      "isHotSpotBEDFileBySampleSupported" : false,       
+      "isHotSpotBEDFileBySampleSupported" : false,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
-        "AVTEMP0001"      
+        "AVTEMP0001"
       ],
       "defaultAvalancheSequencingKit" : [
-        "SEQ0010"      
+        "SEQ0010"
       ],
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "rna",
-      "isSamplePrepKitSupported" : false,      
+      "isSamplePrepKitSupported" : false,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4570,6 +4817,7 @@
       "applType": [
         "AMPS_RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0002"],
       "productName": "AMPS_RNA_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4593,24 +4841,25 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,       
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : false,       
+      "isHotSpotBEDFileBySampleSupported" : false,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
-        "AVTEMP0001"      
+        "AVTEMP0001"
       ],
       "defaultAvalancheSequencingKit" : [
-        "SEQ0010"      
+        "SEQ0010"
       ],
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : false,     
+      "isSamplePrepKitSupported" : false,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4635,6 +4884,7 @@
       "applType": [
         "GENS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "GENS_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4656,24 +4906,25 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,   
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
-        "AVTEMP0001"      
+        "AVTEMP0001"
       ],
       "defaultAvalancheSequencingKit" : [
-        "SEQ0010"      
+        "SEQ0010"
       ],
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,         
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4698,6 +4949,7 @@
       "applType": [
         "AMPS_EXOME"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_EXOME_default",
       "defaultFlowCount": 520,
       "defaultPairedEndSequencingKit": null,
@@ -4717,7 +4969,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -4728,9 +4980,10 @@
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4755,6 +5008,7 @@
       "applType": [
         "TARS_16S"
       ],
+      "applicationGroup": ["APPLGROUP_0003"],
       "productName": "TARS_16S_default",
       "defaultFlowCount": 850,
       "defaultPairedEndSequencingKit": null,
@@ -4778,24 +5032,25 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
-        "AVTEMP0001"      
+        "AVTEMP0001"
       ],
       "defaultAvalancheSequencingKit" : [
-        "SEQ0010"      
+        "SEQ0010"
       ],
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4820,6 +5075,7 @@
       "applType": [
         "AMPS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_proton_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4837,20 +5093,21 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4875,6 +5132,7 @@
       "applType": [
         "AMPS_RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0002"],
       "productName": "AMPS_RNA_proton_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -4894,22 +5152,23 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : false,       
-      "isDualNucleotideTypeBySampleSupported" : false,      
+      "isHotSpotBEDFileBySampleSupported" : false,
+      "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "rna",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
-  },  
+  },
   {
     "pk": 20011,
     "model": "rundb.applproduct",
@@ -4932,6 +5191,7 @@
       "applType": [
         "AMPS_DNA_RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0005"],
       "productName": "AMPS_DNA_RNA_default",
       "defaultFlowCount": 400,
       "defaultPairedEndSequencingKit": null,
@@ -4953,24 +5213,25 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : true,
       "defaultAvalancheTemplateKit" : [
-        "AVTEMP0001"      
+        "AVTEMP0001"
       ],
       "defaultAvalancheSequencingKit" : [
-        "SEQ0010"      
+        "SEQ0010"
       ],
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : true,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,     
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -4995,6 +5256,7 @@
       "applType": [
         "RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0002"],
       "productName": "RNA_proton_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5012,23 +5274,24 @@
       "defaultBarcodeKitName" : "RNA_Barcode_None",
       "defaultIonChefPrepKit" : null,
       "defaultIonChefSequencingKit" : null,
-      "isReferenceSelectionSupported" : false,      
+      "isReferenceSelectionSupported" : false,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : false,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : true,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : false,
       "isHotSpotBEDFileBySampleSupported" : false,
-      "isDualNucleotideTypeBySampleSupported" : false,      
+      "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "rna",
-      "isSamplePrepKitSupported" : false,      
+      "isSamplePrepKitSupported" : false,
       "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
 
@@ -5054,6 +5317,7 @@
       "applType": [
         "AMPS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_proton_Hi-Q",
       "defaultFlowCount": 520,
       "defaultPairedEndSequencingKit": null,
@@ -5064,7 +5328,7 @@
         "SEQ0020"
       ],
       "defaultSamplePrepKit": [
-        "SPREP0010"      
+        "SPREP0010"
       ],
       "defaultControlSeqKit": null,
       "isVisible": false,
@@ -5073,7 +5337,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -5084,8 +5348,9 @@
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
-      "instrumentType": "proton"
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "proton",
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5110,6 +5375,7 @@
       "applType": [
         "AMPS_EXOME"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_EXOME_proton_Hi-Q",
       "defaultFlowCount": 520,
       "defaultPairedEndSequencingKit": null,
@@ -5129,7 +5395,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -5140,8 +5406,9 @@
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
-      "instrumentType": "proton"
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "proton",
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5158,7 +5425,7 @@
       "productCode": "PGx_0",
       "defaultChipType": "318",
       "isPairedEndSupported": false,
-      "isDefault": false,
+      "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
       "applType": [
@@ -5202,7 +5469,8 @@
       "instrumentType": "pgm",
       "defaultBarcodeKitName": "IonXpress",
       "isDefaultBarcoded" : true,
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol":null
     }
   },
   {
@@ -5258,10 +5526,11 @@
       "instrumentType": "s5",
       "defaultBarcodeKitName": "IonXpress",
       "isDefaultBarcoded" : true,
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
-  
+
   {
     "pk": 20017,
     "model": "rundb.applproduct",
@@ -5282,6 +5551,7 @@
       "applType": [
         "AMPS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_S5_S5XL_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5299,22 +5569,23 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "s5",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
-  },  
+  },
   {
     "pk": 20018,
     "model": "rundb.applproduct",
@@ -5335,6 +5606,7 @@
       "applType": [
         "AMPS_EXOME"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_EXOME_S5_S5XL_HiQ",
       "defaultFlowCount": 520,
       "defaultPairedEndSequencingKit": null,
@@ -5350,7 +5622,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -5361,8 +5633,9 @@
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
-      "instrumentType": "s5"
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5385,6 +5658,7 @@
       "applType": [
         "AMPS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "AMPS_S5_S5XL_Hi-Q",
       "defaultFlowCount": 520,
       "defaultPairedEndSequencingKit": null,
@@ -5400,7 +5674,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -5411,10 +5685,11 @@
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
-      "instrumentType": "s5"
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "defaultSamplePrepProtocol": null
     }
-  },   
+  },
   {
     "pk": 20020,
     "model": "rundb.applproduct",
@@ -5435,6 +5710,7 @@
       "applType": [
         "RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0002"],
       "productName": "RNA_S5_S5XL_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5450,23 +5726,24 @@
       "defaultBarcodeKitName" : "RNA_Barcode_None",
       "defaultIonChefPrepKit" : null,
       "defaultIonChefSequencingKit" : null,
-      "isReferenceSelectionSupported" : false,     
+      "isReferenceSelectionSupported" : false,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : false,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : true,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : false,
       "isHotSpotBEDFileBySampleSupported" : false,
-      "isDualNucleotideTypeBySampleSupported" : false,      
+      "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "rna",
-      "isSamplePrepKitSupported" : false,      
+      "isSamplePrepKitSupported" : false,
       "instrumentType": "s5",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5487,6 +5764,7 @@
       "applType": [
         "AMPS_RNA"
       ],
+      "applicationGroup": ["APPLGROUP_0002"],
       "productName": "AMPS_RNA_S5_S5XL_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5504,20 +5782,21 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
-      "isDualNucleotideTypeBySampleSupported" : false,      
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "rna",
-      "isSamplePrepKitSupported" : true,      
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "s5",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol":null
     }
   },
   {
@@ -5576,7 +5855,8 @@
       "instrumentType": "proton",
       "defaultBarcodeKitName": "IonXpress",
       "isDefaultBarcoded" : true,
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5585,7 +5865,9 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultPairedEndAdapterKit": null,
-      "defaultTemplateKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0010"
+       ],
       "defaultPairedEndLibraryKit": null,
       "defaultLibraryKit": [
         "LPREP0002"
@@ -5599,6 +5881,7 @@
       "applType": [
         "AMPS"
       ],
+      "applicationGroup": ["APPLGROUP_0008"],
       "productName": "AMPS_HID_S5_521",
       "defaultFlowCount": 1000,
       "defaultPairedEndSequencingKit": null,
@@ -5618,7 +5901,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -5629,34 +5912,38 @@
       "defaultFlowOrder" : 2,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
-      "instrumentType": "s5"
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "defaultSamplePrepProtocol": null
     }
-  },  
+  },
   {
     "pk": 20024,
     "model": "rundb.applproduct",
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultPairedEndAdapterKit": null,
-      "defaultTemplateKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0010"
+       ],
       "defaultPairedEndLibraryKit": null,
       "defaultLibraryKit": [
         "LPREP0002"
       ],
-      "productCode": "AMPS_HID_530",
+      "productCode": "AMPS_HID_S5_530_EA",
       "defaultChipType": 530,
       "isPairedEndSupported": false,
       "isDefault": false,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
+      "applicationGroup": ["APPLGROUP_0008"],      
       "applType": [
         "AMPS"
       ],
-      "productName": "AMPS_HID_S5_530",
+      "productName": "AMPS_HID_S5_530_EA",
       "defaultFlowCount": 1000,
       "defaultPairedEndSequencingKit": null,
-      "isActive": true,
+      "isActive": false,
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit":  [
@@ -5672,7 +5959,7 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
@@ -5683,8 +5970,10 @@
       "defaultFlowOrder" : 2,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,      
-      "instrumentType": "s5"
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5722,7 +6011,7 @@
       "isVisible": true,
       "isDefaultPairedEnd": false,
       "isDefaultBarcoded" : true,
-      "defaultBarcodeKitName": "IonCode - TagSequencing", 
+      "defaultBarcodeKitName": "IonCode - TagSequencing",
       "defaultTemplateKit" : [
         "ICPREP0005"
        ],
@@ -5745,7 +6034,8 @@
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
       "instrumentType": "s5",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5762,7 +6052,7 @@
         "LIB0008"
       ],
       "productCode": "GENS_1",
-      "defaultChipType": "P1.1.17",      
+      "defaultChipType": "P1.1.17",
       "isPairedEndSupported": false,
       "isDefault": false,
       "description": "",
@@ -5770,6 +6060,7 @@
       "applType": [
         "GENS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "GENS_proton_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5787,20 +6078,21 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,   
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,         
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5817,7 +6109,7 @@
         "LIB0008"
       ],
       "productCode": "TARS_1",
-      "defaultChipType": "P1.1.17",      
+      "defaultChipType": "P1.1.17",
       "isPairedEndSupported": false,
       "isDefault": false,
       "description": "",
@@ -5825,6 +6117,7 @@
       "applType": [
         "TARS"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "TARS_proton_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5842,20 +6135,21 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,   
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,         
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
     }
   },
   {
@@ -5872,7 +6166,7 @@
         "LIB0008"
       ],
       "productCode": "WGNM_1",
-      "defaultChipType": "P1.1.17",      
+      "defaultChipType": "P1.1.17",
       "isPairedEndSupported": false,
       "isDefault": false,
       "description": "",
@@ -5880,6 +6174,7 @@
       "applType": [
         "WGNM"
       ],
+      "applicationGroup": ["APPLGROUP_0001"],
       "productName": "WGNM_proton_default",
       "defaultFlowCount": 500,
       "defaultPairedEndSequencingKit": null,
@@ -5897,23 +6192,410 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
-      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,   
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
       "isTargetRegionBEDFileBySampleSupported" : true,
-      "isHotSpotBEDFileBySampleSupported" : true,       
+      "isHotSpotBEDFileBySampleSupported" : true,
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
       "defaultFlowOrder" : null,
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
-      "isSamplePrepKitSupported" : true,         
+      "isSamplePrepKitSupported" : true,
       "instrumentType": "proton",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20029,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "TEMPLT0012"
+      ],     
+      "applType": [
+        "AMPS"
+      ],
+      "applicationGroup": ["APPLGROUP_0008"],
+      "defaultTemplateKit": [
+        "ICPREP0003"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0025"
+      ],
+      "productCode": "AMPS_HID_pgm_STR_default",
+      "defaultChipType": "318",
+      "isPairedEndSupported": false,
+      "isDefault": false,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "productName": "AMPS_HID_pgm_STR",
+      "defaultFlowCount": 850,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": false,
+      "categories": "hidSamplePrep",
+      "defaultSamplePrepProtocol": [
+        "CV0001"
+      ],
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0018"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultPairedEnd": false,
+      "defaultIonChefPrepKit" : [
+        "ICPREP0003"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0009"
+      ],
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "defaultFlowOrder" : 2,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "pgm",
+      "isDefaultForInstrumentType" : false
+    }
+  },
+  {
+    "pk": 20030,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0004"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0010"
+      ],
+      "productCode": "RNA_3_RnaWT",
+      "defaultChipType": "P1.1.17",
+      "isPairedEndSupported": false,
+      "isDefault": false,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "RNA"
+      ],
+      "applicationGroup": ["APPLGROUP_0002"],      
+      "productName": "RNA_proton_RnaWT",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "categories": "protonRnaWTSamplePrep",
+      "defaultSamplePrepProtocol": [
+        "CV0002"
+      ],
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName":  "",
+      "defaultSequencingKit": [
+        "SEQ0020"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultPairedEnd": false,
+      "isDefaultBarcoded" : true,
+      "defaultBarcodeKitName" : "IonXpressRNA",
+      "defaultIonChefPrepKit" : [
+        "ICPREP0004"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0014"
+      ],
+      "isReferenceSelectionSupported" : false,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : false,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
+      "isControlSeqTypeBySampleSupported" : true,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : false,
+      "isHotSpotBEDFileBySampleSupported" : false,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "rna",
+      "isSamplePrepKitSupported" : false,
+      "instrumentType": "proton",
+      "isDefaultForInstrumentType" : false
+    }
+  },
+  {
+    "pk": 20031,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0006"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0010"
+      ],
+      "productCode": "RNA_4_RnaWT",
+      "defaultChipType": "540",
+      "isPairedEndSupported": false,
+      "isDefault": false,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "RNA"
+      ],
+      "applicationGroup": ["APPLGROUP_0002"],      
+      "productName": "RNA_S5_S5XL_RnaWT",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "categories": "s5RnaWTSamplePrep",
+      "defaultSamplePrepProtocol": [
+        "CV0002"
+      ],   
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName":  "",
+      "defaultSequencingKit": [
+        "SEQ0023"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultPairedEnd": false,
+      "isDefaultBarcoded" : true,
+      "defaultBarcodeKitName" : "IonXpressRNA",
+      "defaultIonChefPrepKit" : [
+        "ICPREP0006"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0023"
+      ],
+      "isReferenceSelectionSupported" : false,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : false,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,
+      "isControlSeqTypeBySampleSupported" : true,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : false,
+      "isHotSpotBEDFileBySampleSupported" : false,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "rna",
+      "isSamplePrepKitSupported" : false,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false
+    }
+  },
+  {
+    "pk": 20032,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "TEMPLT0003"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0013"
+      ],
+      "productCode": "AMPS_RNA_fusions",
+      "defaultChipType": "318",
+      "isPairedEndSupported": false,
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "AMPS_RNA"
+      ],
+      "applicationGroup": ["APPLGROUP_0005"],
+      "productName": "AMPS_RNA_fusions",
+      "defaultFlowCount": 400,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0009"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": [
+      	"CONSEQ0001"
+      ],
+      "isVisible": true,
+      "isDefaultPairedEnd": false,
+      "isDefaultBarcoded" : true,
+      "defaultBarcodeKitName" : "IonXpress",
+      "defaultIonChefPrepKit" : null,
+      "defaultIonChefSequencingKit" : null,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : false,
+      "instrumentType": "pgm",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20033,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "TEMPLT0012"
+      ],     
+      "applType": [
+        "AMPS"
+      ],
+      "applicationGroup": ["APPLGROUP_0008"],
+      "defaultTemplateKit": [
+        "ICPREP0003"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0025"
+      ],
+      "productCode": "AMPS_HID_pgm_default",
+      "defaultChipType": "318",
+      "isPairedEndSupported": false,
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "productName": "AMPS_HID_pgm",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "categories": "hidSamplePrep",
+      "defaultSamplePrepProtocol": null,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0018"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultPairedEnd": false,
+      "defaultIonChefPrepKit" : [
+        "ICPREP0003"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0009"
+      ],
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "defaultFlowOrder" : 1,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "pgm",
       "isDefaultForInstrumentType" : true
     }
   },
-        
+  {
+    "pk": 20034,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0005"
+       ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0025"
+      ],
+      "productCode": "AMPS_HID_S5_default",
+      "defaultChipType": 530,
+      "isPairedEndSupported": false,
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applicationGroup": ["APPLGROUP_0008"],      
+      "applType": [
+        "AMPS"
+      ],
+      "productName": "AMPS_HID_S5_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit":  [
+        "SEQ0023"
+       ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false,
+      "defaultIonChefPrepKit" : [
+        "ICPREP0011"
+       ],
+      "defaultIonChefSequencingKit" : null,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "defaultFlowOrder" : 1,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+    
   {
     "pk": 1,
     "model": "rundb.chip",
@@ -6678,7 +7360,7 @@
       "libraryKitName" : "IonPicoPlex",
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_314_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_314_analysis.json --mixed-first-flow 51 --mixed-last-flow 111",
-      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "calibrateargs"              : "Calibration",
       "basecallerargs"             : "BaseCaller  --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "alignmentargs"              : "tmap mapall ... stage1 map4",
@@ -6698,7 +7380,7 @@
       "libraryKitName" : "IonPicoPlex",
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_316_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_316_analysis.json --mixed-first-flow 51 --mixed-last-flow 111",
-      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "calibrateargs"              : "Calibration",
       "basecallerargs"             : "BaseCaller  --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "alignmentargs"              : "tmap mapall ... stage1 map4",
@@ -6718,7 +7400,7 @@
       "libraryKitName" : "IonPicoPlex",
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_316v2_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_316v2_analysis.json --mixed-first-flow 51 --mixed-last-flow 111",
-      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "calibrateargs"              : "Calibration",
       "basecallerargs"             : "BaseCaller  --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "alignmentargs"              : "tmap mapall ... stage1 map4",
@@ -6738,7 +7420,7 @@
       "libraryKitName" : "IonPicoPlex",
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_318_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_318_analysis.json --mixed-first-flow 51 --mixed-last-flow 111",
-      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "calibrateargs"              : "Calibration",
       "basecallerargs"             : "BaseCaller  --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
       "alignmentargs"              : "tmap mapall ... stage1 map4",
@@ -6802,16 +7484,16 @@
       "chip_default": true,
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_550_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_550_analysis.json",
-      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --max-phasing-levels 2 --barcode-separation 2.0 --barcode-cutoff 2.0",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --max-phasing-levels 2",
       "calibrateargs"              : "Calibration",
-      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --max-phasing-levels 2 --num-unfiltered 1000 --barcode-separation 2.0 --barcode-cutoff 2.0 --barcode-filter-postpone 1 --barcode-bam-tag",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --max-phasing-levels 2 --num-unfiltered 1000 --barcode-filter-postpone 1",
       "alignmentargs"              : "tmap mapall ... stage1 map4",
       "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --args-json /opt/ion/config/args_550_beadfind.json --thumbnail true",
       "thumbnailanalysisargs"      : "Analysis --args-json /opt/ion/config/args_550_analysis.json --thumbnail true",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --barcode-separation 2.0 --barcode-cutoff 2.0",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0",
       "thumbnailcalibrateargs"     : "Calibration",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --barcode-separation 2.0 --barcode-cutoff 2.0 --barcode-bam-tag",
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0",
       "thumbnailalignmentargs"     : "tmap mapall ... stage1 map4",
       "thumbnailionstatsargs"      : "ionstats alignment"
     }
@@ -8061,6 +8743,34 @@
     }
   },
   {
+    "pk": 77,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "ion_520_ExT",
+      "description" : "Ion 520 ExT Kit-Chef panel analysis arguments",
+      "active": false,
+      "isSystem" : true,
+      "chipType": "520",
+      "chip_default": false,
+      "sequenceKitName": "Ion S5 ExT Sequencing Kit",
+      "templateKitName": "Ion 521/530 ExT Kit-Chef V1",
+      "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_520_beadfind.json",
+      "analysisargs"               : "Analysis --args-json /opt/ion/config/args_520_analysis.json --gopt /opt/ion/config/gopt_520_ExT.param.json --always-start-slow false",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --wells-normalization on",
+      "calibrateargs"              : "Calibration --num-calibration-regions 1,1",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --qual-filter true --qual-filter-slope 0.080 --qual-filter-offset 1.0 --wells-normalization on",
+      "alignmentargs"              : "tmap mapall -q 50000 ... stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
+      "thumbnailbeadfindargs"      : "justBeadFind --args-json /opt/ion/config/args_520_beadfind.json --thumbnail true",
+      "thumbnailanalysisargs"      : "Analysis --args-json /opt/ion/config/args_520_analysis.json --thumbnail true --gopt /opt/ion/config/gopt_520_ExT.param.json --always-start-slow false",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --wells-normalization on",
+      "thumbnailcalibrateargs"     : "Calibration",
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --qual-filter true --qual-filter-slope 0.080 --qual-filter-offset 1.0 --wells-normalization on",
+      "thumbnailalignmentargs"     : "tmap mapall -q 50000 ... stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
+    }
+  },
+  {
     "pk": 79,
     "model": "rundb.analysisargs",
     "fields": {
@@ -8290,16 +9000,16 @@
       "chip_default": false,
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_550_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_550_analysis.json",
-      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --max-phasing-levels 2 --barcode-separation 2.0 --barcode-cutoff 2.0 --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --max-phasing-levels 2 --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
       "calibrateargs"              : "Calibration",
-      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --max-phasing-levels 2 --num-unfiltered 1000 --barcode-separation 2.0 --barcode-cutoff 2.0 --barcode-filter-postpone 1 --barcode-bam-tag --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --max-phasing-levels 2 --num-unfiltered 1000 --barcode-filter-postpone 1 --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
       "alignmentargs"              : "tmap mapall -g 0 ... stage1 map4",
       "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --args-json /opt/ion/config/args_550_beadfind.json --thumbnail true",
       "thumbnailanalysisargs"      : "Analysis --args-json /opt/ion/config/args_550_analysis.json --thumbnail true",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --barcode-separation 2.0 --barcode-cutoff 2.0 --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
       "thumbnailcalibrateargs"     : "Calibration",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --barcode-separation 2.0 --barcode-cutoff 2.0 --barcode-bam-tag --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --prefix-mol-tag=NNNACTNNNTGN --suffix-mol-tag=NCANNNAGTNNN --tag-filter-method=need-prefix",
       "thumbnailalignmentargs"     : "tmap mapall -g 0 ... stage1 map4",
       "thumbnailionstatsargs"      : "ionstats alignment"
     }
@@ -8441,13 +9151,13 @@
     "pk": 99,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "ion_521_HID_early_access",
-      "description" : "HID Early Access Sequencing on 521",
+      "name": "ion_521_HID",
+      "description" : "HID Sequencing on S5 521 chip",
       "active": false,
       "isSystem" : true,
       "chipType": "521",
       "applType" : ["AMPS"],
-      "applGroup": ["APPLGROUP_0001"],
+      "applGroup": ["APPLGROUP_0008"],
       "chip_default": false,
       "sequenceKitName": "HID S5 Sequencing Kit",
       "samplePrepKitName": "",
@@ -8471,13 +9181,13 @@
     "pk": 100,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "ion_530_HID_early_access",
-      "description" : "HID Early Access Sequencing on 530",
+      "name": "ion_530_HID",
+      "description" : "HID Sequencing on S5 530 chip",
       "active": true,
       "isSystem" : true,
       "chipType": "530",
       "applType" : ["AMPS"],
-      "applGroup": ["APPLGROUP_0001"],
+      "applGroup": ["APPLGROUP_0008"],
       "chip_default": false,
       "sequenceKitName": "HID S5 Sequencing Kit",
       "samplePrepKitName": "",
@@ -8495,6 +9205,90 @@
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --qual-filter true --qual-filter-slope 0.02 --qual-filter-offset 1.0 --wells-normalization on",
       "thumbnailalignmentargs"     : "tmap mapall -q 50000 ... stage1 map4",
       "thumbnailionstatsargs"      : "ionstats alignment"
+    }
+  },
+  {
+    "pk": 101,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "ion_314_Aneuploidy_Hi-QView",
+      "description" : "Ion 314 chip v2 pre-implantation Hi-Q View analysis arguments",
+      "active": true,
+      "isSystem" : true,
+      "chipType": "314",
+      "chip_default": false,
+      "libraryKitName" : "IonPicoPlex",
+      "sequenceKitName": "IonPGMHiQView",
+      "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_314_beadfind.json",
+      "analysisargs"               : "Analysis --args-json /opt/ion/config/args_314_analysis.json --gopt /opt/ion/config/gopt_314v2_Hi-Q.param.json --mixed-first-flow 51 --mixed-last-flow 111",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
+      "calibrateargs"              : "Calibration",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.314.B5.h5 --extra-trim-left 30",
+      "alignmentargs"              : "tmap mapall ... stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
+    }
+  },
+  {
+    "pk": 102,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "ion_316_Aneuploidy_Hi-QView",
+      "description" : "Ion 316 chip pre-implantation Hi-Q View analysis arguments",
+      "active": false,
+      "isSystem" : true,
+      "chipType": "316",
+      "chip_default": false,
+      "libraryKitName" : "IonPicoPlex",
+      "sequenceKitName": "IonPGMHiQView",      
+      "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_316_beadfind.json",
+      "analysisargs"               : "Analysis --args-json /opt/ion/config/args_316_analysis.json --gopt /opt/ion/config/gopt_316v2_Hi-Q.param.json --mixed-first-flow 51 --mixed-last-flow 111",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
+      "calibrateargs"              : "Calibration",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316v2.B5.h5 --extra-trim-left 30",
+      "alignmentargs"              : "tmap mapall ... stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
+    }
+  },
+  {
+    "pk": 103,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "ion_316v2_Aneuploidy_Hi-QView",
+      "description" : "Ion 316 chip v2 pre-implantation Hi-Q View analysis arguments",
+      "active": true,
+      "isSystem" : true,
+      "chipType": "316v2",
+      "chip_default": false,
+      "libraryKitName" : "IonPicoPlex",
+      "sequenceKitName": "IonPGMHiQView",       
+      "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_316v2_beadfind.json",
+      "analysisargs"               : "Analysis --args-json /opt/ion/config/args_316v2_analysis.json --gopt /opt/ion/config/gopt_316v2_Hi-Q.param.json --mixed-first-flow 51 --mixed-last-flow 111",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
+      "calibrateargs"              : "Calibration",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316v2.B5.h5 --extra-trim-left 30",
+      "alignmentargs"              : "tmap mapall ... stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
+    }
+  },
+  {
+    "pk": 104,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "ion_318_Aneuploidy_Hi-QView",
+      "description" : "Ion 318 chip v2 pre-implantation Hi-Q View analysis arguments",
+      "active": true,
+      "isSystem" : true,
+      "chipType": "318",
+      "chip_default": false,
+      "libraryKitName" : "IonPicoPlex",
+      "sequenceKitName": "IonPGMHiQView",      
+      "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_318_beadfind.json",
+      "analysisargs"               : "Analysis --args-json /opt/ion/config/args_318_analysis.json --gopt /opt/ion/config/gopt_318v2_Hi-Q.param.json --mixed-first-flow 51 --mixed-last-flow 111",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --extra-trim-left 30",
+      "calibrateargs"              : "Calibration",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.318.B5.h5 --extra-trim-left 30",
+      "alignmentargs"              : "tmap mapall ... stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   
@@ -9089,7 +9883,35 @@
       "isActive": true
     }
   },
-     
+  {
+    "pk": 35,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "controlType",
+      "uid": "SAMPLEANNOTATE_CV_0035",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "",
+      "iRValue": "",
+      "iRAnnotationType": "ControlType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 36,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "controlType",
+      "uid": "SAMPLEANNOTATE_CV_0036",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "No Template Control",
+      "iRValue": "No Template Control",
+      "iRAnnotationType": "ControlType",
+      "isActive": true
+    }
+  },
+
   {
     "pk": 1,
     "model": "rundb.sampleattributedatatype",
@@ -9292,120 +10114,18 @@
       ]
     }
   },
-    
   {
-    "pk": 1,
-    "model": "rundb.threeprimeadapter",
+    "pk": 17,
+    "model": "rundb.runtype_applicationgroups",
     "fields": {
-      "description": "Default forward adapter",
-      "direction": "Forward",
-      "isDefault": true,
-      "name": "Ion P1B",
-      "runMode": "single",
-      "sequence": "ATCACCGACTGCCCATAGAGAGGCTGAGAC",
-      "chemistryType": "",
-      "uid": "FWD_0001"
+      "runtype": [
+        "AMPS"
+      ],
+      "applicationgroup": [
+        "APPLGROUP_0008"
+      ]
     }
   },
-  {
-    "pk": 2,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "Default reverse adapter",
-      "direction": "Reverse",
-      "isDefault": true,
-      "name": "Ion Paired End Rev",
-      "runMode": "pe",
-      "sequence": "CTGAGTCGGAGACACGCAGGGATGAGATGG",
-      "chemistryType": "",
-      "uid": "REV_0001"
-    }
-  },
-  {
-    "pk": 3,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "Ion B",
-      "direction": "Forward",
-      "isDefault": false,
-      "name": "Ion B",
-      "runMode": "single",
-      "sequence": "CTGAGACTGCCAAGGCACACAGGGGATAGG",
-      "chemistryType": "",
-      "uid": "FWD_0002"
-    }
-  },
-  {
-    "pk": 4,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "Ion Truncated Fusion",
-      "direction": "Forward",
-      "isDefault": false,
-      "name": "Ion Truncated Fusion",
-      "runMode": "single",
-      "sequence": "ATCACCGACTGCCCATCTGAGACTGCCAAG",
-      "chemistryType": "",
-      "uid": "FWD_0003"
-    }
-  },
-  {
-    "pk": 5,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "Ion Paired End Fwd",
-      "direction": "Forward",
-      "isDefault": false,
-      "name": "Ion Paired End Fwd",
-      "runMode": "pe",
-      "sequence": "GCTGAGGATCACCGACTGCCCATAGAGAGG",
-      "chemistryType": "",
-      "uid": "FWD_0004"
-    }
-  },
-  {
-    "pk": 6,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "MuSeek/P1B adapter",
-      "direction": "Forward",
-      "isDefault": false,
-      "name": "MuSeek/P1B adapter",
-      "runMode": "single",
-      "sequence": "TGAACTGACGCACGAAATCACCGACTGCCCATAGAGAGGCTGAGAC",
-      "chemistryType": "",
-      "uid": "FWD_0005"
-    }
-  },
-  {
-    "pk": 7,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "Ion P1 3 prime adapter used with Avalanche templating",
-      "direction": "Forward",
-      "isDefault": true,
-      "name": "Ion P1",
-      "runMode": "single",
-      "sequence": "ATCACCGACTGCCCATAGAGAGGAAAGCGG",
-      "chemistryType": "avalanche",
-      "uid": "FWD_0006"
-    }
-  },
-  {
-    "pk": 8,
-    "model": "rundb.threeprimeadapter",
-    "fields": {
-      "description": "Ion Xpress MuSeek adapter",
-      "direction": "Forward",
-      "isDefault": false,
-      "name": " Ion Xpress MuSeek adapter",
-      "runMode": "",
-      "sequence": "TGCACTGAAGCACACAATCACCGACTGCCC",
-      "chemistryType": "",
-      "uid": "FWD_0007"
-    }
-  },
-
   {
     "pk": 1,
     "model": "rundb.flowOrder",
@@ -9453,5 +10173,5 @@
       "isSystem" : true,
       "flowOrder": "TACGTACGTCTGAGCATCGATCGATGTACAGCTACGTACGTAGCTGACGTACGTCATGCATCGATCAGCTAGCTGACGTAGCTAGCATCGATCAGTCATGACTGACGTAGCTGACTGATCAGTCATGCATCGTACGTACGTAGCTGACGTACGTCATGCATCGATCAGCTAGCTGACGTAGCTAGCATCGATCAGTCATGACTGACGTAGCTGACTGATCAGTCATGCATCGTACGTACGTAGCTGACGTACGTCATGCATCGATCAGCTAGCTGACGTAGCTAGCATCGATCAGTCATGACTGACGTAGCTGACTGATCAGTCATGCATCG"
     }
-  } 
+  }
 ]

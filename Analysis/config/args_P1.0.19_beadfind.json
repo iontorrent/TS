@@ -29,6 +29,7 @@
       "beadfindfile" : "",
       "beadmask-categorized" : false,
       "bfold" : true,
+      "datacollect-gain-correction" : false,
       "noduds" : false,
       "use-beadmask" : ""
    },

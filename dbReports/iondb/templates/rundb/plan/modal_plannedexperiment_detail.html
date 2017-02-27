@@ -84,7 +84,11 @@
                             <tr>
                                 <td><b>Templating Size:</b></td>
                                 <td>{% if plan.templatingSize %}{{ plan.templatingSize }}{%else%}--{%endif%}</td>
-                            </tr>							
+                            </tr>
+                            <tr>
+                                <td><b>Templating Protocol:</b></td>
+                                <td><small>{% if plan.samplePrepProtocol %}{{ samplePrepProtocol.0.displayedValue }}{%else%}(use instrument default){%endif%}</small></td>
+                            </tr>                            							
 							<tr>
 								<td><b>Sequencing Kit:</b></td>
 								<td>{{ sequenceKit.0.description }}</td>
@@ -160,6 +164,16 @@
 								<td><b>Hotspot Regions:</b></td>
 								<td class="word-break-all">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
 							</tr>
+							{% if runType.0.runType == "AMPS_DNA_RNA" %}
+							<tr>
+								<td><b>Fusions Reference Library:</b></td>
+								<td>{{ eas.mixedTypeRNA_reference }}</td>
+							</tr>
+							<tr>
+								<td><b>Fusions Target Regions:</b></td>
+								<td class="word-break-all">{{ eas.mixedTypeRNA_targetRegionBedFile|default:''|basename }}</td>
+							</tr>
+							{% endif %}
 						</table>
 					</div>
 				</div>

@@ -54,7 +54,9 @@ class TestTorrentPy(unittest.TestCase):
         with self.assertRaises(Exception):
             print "Expected Error:"
             r=read_Debug('blah')
-        
+    
+    def test_treephaser(self):
+        r=treephaser('.')
         
 if __name__ == "__main__":
     

@@ -124,8 +124,8 @@ void gpuDeviceConfig::initDeviceContexts(){
       it++;
     }
     catch(cudaException &e) {
-      throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
-      cout << "CUDA "<< *it << ": gpuDeviceConfig::initDeviceContexts: Context could not be created. removing device with id: "<<  *it << " from valid device list" << endl;
+      cout << e.what() << endl;
+      cout << "CUDA "<< *it << ": Context could not be created. Can't use this GPU." << *it << endl;
       it = validDevices.erase (it);
     }
   }

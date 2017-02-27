@@ -720,7 +720,7 @@ class ReferenceGenomeAdmin(admin.ModelAdmin):
 
 
 class ThreePrimeadapterAdmin(admin.ModelAdmin):
-    list_display = ('direction', 'chemistryType', 'name', 'sequence', 'description', 'isDefault')
+    list_display = ('direction', 'chemistryType', 'name', 'sequence', 'description', 'isActive', 'isDefault')
 
 
 class FlowOrderAdmin(admin.ModelAdmin):
@@ -829,6 +829,10 @@ class KitInfoAdmin(admin.ModelAdmin):
     ordering = ("kitType", "name",)
     list_filter = ('kitType',)
 
+class common_CVAdmin(admin.ModelAdmin):
+    list_display = ('cv_type', 'value', 'displayedValue', 'description', 'isDefault', 'isActive', 'categories', 'samplePrep_instrumentType', 'sequencing_instrumentType', 'uid')
+    ordering = ("cv_type", "displayedValue",)
+    list_filter = ('cv_type',)
 
 class RigAdmin(admin.ModelAdmin):
     list_display = ('name', 'ftpserver', 'location', 'state', 'serial')
@@ -845,7 +849,7 @@ class SampleSetItemInline(admin.StackedInline):
     max_num = 1
     verbose_name = "Sample Set Item"
     fields = [('sample', 'dnabarcode', 'description', 'creator'), ('nucleotideType', 'pcrPlateColumn', 'pcrPlateRow'),
-        ('gender', 'relationshipRole', 'relationshipGroup'), ('cancerType', 'cellularityPct', 'biopsyDays', 'coupleId', 'embryoId')]
+        ('controlType', 'gender', 'relationshipRole', 'relationshipGroup'), ('cancerType', 'cellularityPct', 'biopsyDays', 'coupleId', 'embryoId')]
     formfield_overrides = {models.CharField: {'widget': TextInput(attrs={'size': '25'})}, }
 
 
@@ -919,6 +923,7 @@ admin.site.register(NewsPost)
 admin.site.register(AnalysisArgs, AnalysisArgsAdmin)
 admin.site.register(SharedServer, SharedServerAdmin)
 admin.site.register(SampleSet, SampleSetAdmin)
+admin.site.register(common_CV, common_CVAdmin)
 
 # Add sessions to admin
 

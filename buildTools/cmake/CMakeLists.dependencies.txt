@@ -101,6 +101,7 @@ set(cuda_toolkit "cuda_toolkit")
 set(cuda_toolkit_version "${cuda_toolkit}-${cuda_proj_version}")
 
 
+
 if(ION_USE_CUDA)
 
     message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
@@ -347,6 +348,8 @@ if (NOT ION_USE_SYSTEM_PICARD)
 endif()
 
 
+set(bamtools_patch_file "bamtools-2.4.0.20150702+git15eadb925f.patch")
+
 if (NOT ION_USE_SYSTEM_BAMTOOLS)
     set(proj_name "bamtools")
     set(revision_tag 15eadb925f)#set date below accordingly
@@ -362,6 +365,7 @@ if (NOT ION_USE_SYSTEM_BAMTOOLS)
       BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
       CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
+      PATCH_COMMAND patch -p0 -t -N < "${PROJECT_SOURCE_DIR}/../external/${bamtools_patch_file}"
     )
     include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include/bamtools")
     set(ION_BAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/bamtools/libbamtools.a")

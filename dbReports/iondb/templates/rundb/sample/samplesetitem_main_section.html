@@ -143,6 +143,37 @@
 			</div>
 		</div>
 	</div>
+	<div class="control-group">
+		<label class="control-label" for="controlType">Control Type</label>
+		<div class="controls">
+			<select id="controlType" name="controlType"style="height:28px;">
+			{% if intent == "edit" %}
+				{% for controltype in controlType_CV_list %}
+					{% ifequal sampleSetItem.controlType controltype.value %}
+						<option SELECTED value="{{controltype.value}}">{{controltype.value}}</option>
+					{% else %}
+						<option value="{{controltype.value}}" >{{controltype.value}}</option>
+					{% endifequal %}
+				{% endfor %}
+			{% elif intent == "edit_pending" %}
+				{% for controltype in controlType_CV_list %}
+					{% ifequal pending_sampleSetItem.controlType controltype.value %}
+						<option SELECTED value="{{controltype.value}}">{{controltype.value}}</option>
+					{% else %}
+						<option value="{{controltype.value}}" >{{controltype.value}}</option>
+					{% endifequal %}
+				{% endfor %}
+			{% else %}
+				{% for controltype in controlType_CV_list %}
+				<option value="{{controltype.value}}" >{{controltype.value}}</option>}
+				{% endfor %}
+			{% endif %}
+			</select>
+
+			<div class="help-block">
+			</div>
+		</div>
+	</div>
 </div>         
 
 <div id="myBarcodes" class="control-group" style="display: none;" >

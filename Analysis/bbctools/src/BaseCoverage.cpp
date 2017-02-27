@@ -53,6 +53,9 @@ int BaseCoverage::AddAlignment( BamTools::BamAlignment &aread, int32_t endPositi
 		//throw runtime_error("Illegal call for read start out of order.");
 		return -1;
 	}
+	// update coverage buffer for new read - reset for new contig
+	FlushBuffer( aread.RefID, srt );
+	CheckBufferSize( end-srt );
 	// silently ignore or correct reads beyond ends of reference (shouldn't happen)
 	if( srt < 0 ) {
 		//throw runtime_error("Read start < 1.");
@@ -65,10 +68,6 @@ int BaseCoverage::AddAlignment( BamTools::BamAlignment &aread, int32_t endPositi
 		//throw runtime_error("Read end beyond length of reference contig.");
 		end = m_references[m_contigIdx].RefLength;
 	}
-	// update coverage buffer for new read
-	FlushBuffer( aread.RefID, srt );
-	CheckBufferSize( end-srt );
-
     // add to base reads over covered segments using CIGAR data
 	uint32_t *baseDepth = aread.IsReverseStrand() ? m_revDepth : m_fwdDepth;
     vector<BamTools::CigarOp>::const_iterator cigarIt = aread.CigarData.begin();

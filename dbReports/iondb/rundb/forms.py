@@ -243,7 +243,7 @@ class AnalysisSettingsForm(forms.ModelForm):
         self.fields['targetRegionBedFile'].choices = [('', '')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('bedFiles', [])]
         self.fields['hotSpotRegionBedFile'].choices = [('', '')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('hotspotFiles', [])]
         self.fields['barcodeKitName'].choices = [('', '')]+list(models.dnaBarcode.objects.order_by('name').distinct('name').values_list('name', 'name'))
-        adapters = models.ThreePrimeadapter.objects.all().order_by('-isDefault', 'name')
+        adapters = models.ThreePrimeadapter.objects.filter(direction='Forward', runMode='single').order_by('-isDefault', 'chemistryType', 'name')
         self.fields['threePrimeAdapter'].choices = [(v[1], "%s (%s)" % (v[0], v[1])) for v in adapters.values_list('name', 'sequence')]
 
     class Meta:

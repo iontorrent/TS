@@ -3407,29 +3407,32 @@ void DifferentialSeparator::DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, con
   Image img;
   size_t numWells = mask.H() * mask.W();
   mFilteredWells.resize(numWells, 0);
-  if (!opts.skipBuffer) {
-    ImageNNAvg imageNN;
+
+  OpenAndProcessImage(bfFile.c_str(), (char *)opts.resultsDir.c_str(), opts.ignoreChecksumErrors, 
+		      false, &mask, false, img, opts.col_pair_pixel_xtalk_correct, 
+		      opts.pair_xtalk_fraction, opts.corr_noise_correct, opts.isThumbnail);
+
+  // apply gain correction if requested
+  if (opts.doGainCorrect) {
+
     ImageTransformer::gain_correction = NULL;
-    OpenAndProcessImage(bfFile.c_str(), (char *)opts.resultsDir.c_str(), opts.ignoreChecksumErrors, 
-                        false, &mask, false, img, opts.col_pair_pixel_xtalk_correct, 
-                        opts.pair_xtalk_fraction, opts.corr_noise_correct, opts.isThumbnail);
-    imageNN.SetGainMinMult(opts.gainMult);
-    if (opts.doGainCorrect) {
-      if (opts.useBeadfindGainCorrect) {
-        mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf gain.");
-        if (opts.isThumbnail) { CalcImageGain(&img, &mask, &mFilteredWells[0], BF_THUMBNAIL_SIZE, BF_THUMBNAIL_SIZE, &imageNN); }
-        else { CalcImageGain(&img, &mask, &mFilteredWells[0], mask.H(), mask.W(), &imageNN); }
-        mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf gain.");
-      }
-      else if (opts.useDataCollectGainCorrect) {
-        const string gainFile = "Gain.lsr";
-        const string destFile = opts.resultsDir + "/" + gainFile; 
-        std::cout << "Reading per pixel gain from " << destFile << std::endl; 
-        ImageTransformer::ReadDataCollectGainCorrection(destFile, img.GetRows(), img.GetCols());
-      }
- 
-      GainCorrectImage(opts.doGainCorrect, img);
+
+    if (opts.useBeadfindGainCorrect) {
+      ImageNNAvg imageNN;
+      imageNN.SetGainMinMult(opts.gainMult);
+      mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf gain.");
+      if (opts.isThumbnail) { CalcImageGain(&img, &mask, &mFilteredWells[0], BF_THUMBNAIL_SIZE, BF_THUMBNAIL_SIZE, &imageNN); }
+      else { CalcImageGain(&img, &mask, &mFilteredWells[0], mask.H(), mask.W(), &imageNN); }
+      mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf gain.");
     }
+    else if (opts.useDataCollectGainCorrect) {
+      const string gainFile = "Gain.lsr";
+      const string destFile = opts.resultsDir + "/" + gainFile; 
+      std::cout << "DataCollect gain: reading per pixel gain from " << destFile << std::endl; 
+      ImageTransformer::ReadDataCollectGainCorrection(destFile, img.GetRows(), img.GetCols());
+    }
+
+    GainCorrectImage(opts.doGainCorrect, img);
   }
   
   // Caclulate t0 with the same file

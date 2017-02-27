@@ -1660,7 +1660,7 @@ def add_or_update_ion_xpress_museek_dnabarcode_set():
     barcode_prefix = "IonXMuSeek_"
 
     # This Select barcode kit has been released with no leading zero padding
-    add_or_update_barcode_set2(blist, btype, name, adapter, 1, 2.00, barcode_prefix, False, 3, isActive=False)
+    add_or_update_barcode_set2(blist, btype, name, adapter, 1, 2.00, barcode_prefix, False, 3)
 
 
 def ensure_dnabarcodes_have_id_str():

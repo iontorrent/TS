@@ -81,7 +81,7 @@
       "hilowfilter" : false,
       "ignore-checksum-errors" : false,
       "ignore-checksum-errors-1frame" : false,
-      "img-gain-correct" : false,
+      "img-gain-correct" : true,
       "mask-datacollect-exclude-regions" : true,
       "nn-subtract-empties" : false,
       "nnmask" : [ 1, 3 ],

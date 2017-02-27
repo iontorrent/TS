@@ -1826,8 +1826,6 @@ function ApplyParameterFilters () {
       if (first_valid_id === null)
         first_valid_id = tmp_id;
       try{if ($("#parameter_row_" + idx)) {$("#parameter_row_" + idx).show();}} catch(e) {}
-	  $("#"+tmp_id).prop("checked",true);
-	  UpdateParameterValues();
 	  last_parameter_index = idx;
     } else {
 		try {$("#parameter_row_" + idx).hide();} catch(e) {}
@@ -1836,9 +1834,10 @@ function ApplyParameterFilters () {
   if (reset_selection) {
     if (first_valid_id !== null) {
       $("#"+first_valid_id).prop("checked",true);
-      UpdateParameterValues();
     }
   }
+  UpdateParameterValues();
+
   $("#ptrim").hide();
   if (library_selection == "ampliseq") {
     $("#ampliseq_panel_row").show();
@@ -2409,6 +2408,9 @@ function restoreForm(data) {
 
     ampliseq_sets.push(restore_form_data);
 	set_values();
+	// restored config is next to last row
+	$("#parameter_sets_table [id^=parameter_row]:nth-last-child(2)").find('input[type=radio]').prop('checked',true);
+    	
   	$(".dropdown").trigger("liszt:updated");
   	ApplyParameterFilters();
   }

@@ -389,6 +389,11 @@ def cleanup_options(options):
     if options['library_type'] == "AmpliSeq" and not options['has_targets']:
         return {'error':'Analysis aborted: AmpliSeq runs must have target regions specified.'}
 
+    if options['library_type'] == "tagseq" and not options['has_targets']:
+        return {'error':'Analysis aborted: TagSequencing runs must have target regions specified.'}
+    if options['library_type'] == "tagseq" and not options['has_hotspots']:
+        return {'error':'Analysis aborted: TagSequencing runs must have hotspot file specified.'}
+
     # These keys are not part of the parameter set
     if 'librarytype' in options['parameters']['meta']:
         del options['parameters']['meta']['librarytype']
@@ -1297,6 +1302,20 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
     barcode_sample_info = load_barcode_sample_info(barcoded_run, configuration)
     
     write_parameters_file(configuration_name, configuration)
+
+    if configuration['options']['library_type'] == 'tagseq':
+        if not configuration['options']['has_targets']:
+            printtime('ERROR: Analysis aborted: TagSequencing runs must have target regions specified.')
+            for bam in configuration['bams']:
+               bam['status'] = 'error'
+               bams_processed.append(bam)
+            return
+        if not configuration['options']['has_hotspots']:
+            printtime('ERROR: Analysis aborted: TagSequencing runs must have hotspot file specified.')
+            for bam in configuration['bams']:
+               bam['status'] = 'error'
+               bams_processed.append(bam)
+            return
 
     for bam in configuration['bams']:
         printtime("name: %s" % bam['name'])

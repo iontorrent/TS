@@ -50,7 +50,7 @@ def get_raid_status_json(raidinfojson):
     '''
     #==========================================================================
     #==========================================================================
-    def status_rules(key, value):
+    def status_rules(key, value, system_name="", enclosure_name=""):
         '''Determine status from key, value pair'''
         alert_map = {
             'Foreign State': 'None',
@@ -64,6 +64,12 @@ def get_raid_status_json(raidinfojson):
             'Drive has flagged a S.M.A.R.T alert': 'No',
             'Predictive Failure Count': '0',
         }
+        drive_temperature_rules = [
+            # system name       enclosure     warn threshold  error threshold 
+            ("default",         "default",      46.0,         55.0),
+            ("PowerEdge T630",  "PERC H730",    56.0,         60.0),
+        ]
+
         if alert_map.get(key):
             return ERROR if value != alert_map[key] else GOOD
         elif warn_map.get(key):
@@ -80,11 +86,17 @@ def get_raid_status_json(raidinfojson):
             else:
                 return ERROR
         elif key == 'Drive Temperature':
+            match = [v for v in drive_temperature_rules if v[0] == system_name and v[1] == enclosure_name]
+            if match:
+                _,_,t_warn,t_err = match[0]
+            else:
+                _,_,t_warn,t_err = drive_temperature_rules[0]
+
             try:
                 value = float(value.split('C')[0])
-                if value > 55.0:
+                if value > t_err:
                     return ERROR
-                elif value > 46.0:
+                elif value > t_warn:
                     return WARN
                 else:
                     return GOOD
@@ -111,6 +123,7 @@ def get_raid_status_json(raidinfojson):
     # Example:
     # Return drive info for primary storage on T620: supporting existing functionality
     raid_status = []
+    system_name = raidjson.get('system_name','').strip()
     for adapter in raidjson['adapters']:
         for enclosure in adapter['enclosures']:
             drive_status = []
@@ -121,7 +134,7 @@ def get_raid_status_json(raidinfojson):
                 status = GOOD
                 info = []
                 for key, value in drive.iteritems():
-                    param_status = status_rules(key, value)
+                    param_status = status_rules(key, value, system_name, adapter['id'])
                     info.append((key, value, param_status))
                     if status != ERROR and param_status and param_status != GOOD:
                         status = param_status

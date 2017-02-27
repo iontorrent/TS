@@ -17,6 +17,7 @@ from iondb.rundb.plan.page_plan.ionreporter_step_data import IonReporterFieldNam
 
 
 from iondb.utils.utils import convert
+from django.core.urlresolvers import reverse
 
 import json
 import logging
@@ -39,6 +40,8 @@ class BarcodeBySampleStepData(AbstractStepData):
         super(BarcodeBySampleStepData, self).__init__(sh_type)
 
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_barcode.html'
+        self.prev_step_url = reverse("page_plan_plugins")
+        self.next_step_url = reverse("page_plan_output")
 
         self.savedFields = OrderedDict()
         self.savedFields[SavePlanFieldNames.BARCODE_SET] = ''
@@ -49,6 +52,10 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.savedFields[SavePlanFieldNames.TUBE_LABEL] = ''
         self.savedFields[SavePlanFieldNames.APPLICATION_TYPE] = ''
         self.savedFields[SavePlanFieldNames.IR_DOWN] = '0'
+
+        self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = None
+        self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = None
+        self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = False
 
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = []
         self.prepopulatedFields[BarcodeBySampleFieldNames.SHOW_SAMPLESET_INFO] = False
@@ -66,12 +73,12 @@ class BarcodeBySampleStepData(AbstractStepData):
 
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = [{"row": "1"}]
         self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
+        self.prepopulatedFields[SavePlanFieldNames.NUM_SAMPLES] = 1
 
         self.savedFields[SavePlanFieldNames.ONCO_SAME_SAMPLE] = False
 
         self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = None
 
-        self.updateSavedObjectsFromSavedFields()
         self.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = None
 
         self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = ""
@@ -120,29 +127,34 @@ class BarcodeBySampleStepData(AbstractStepData):
             logger.debug("barcode_by_sample_step_data.updateFromStep() APPLICATION going to update RUNTYPE value=%s" % (self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]))
 
         if updated_step.getStepName() == StepNames.IONREPORTER:
+            ir_account_id = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
+            ir_workflow = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
+            ir_isfactory = updated_step.savedFields[IonReporterFieldNames.IR_ISFACTORY]
 
             # update samples table with saved sampleset items fields for IR
-            if updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] and self.prepopulatedFields.get(SavePlanFieldNames.SELECTED_IR) != updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]:
-                sorted_sampleSetItems = self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS]
-                for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
-                    row[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
-                    row[SavePlanFieldNames.IR_ISFACTORY] = updated_step.savedFields[IonReporterFieldNames.IR_ISFACTORY]
-                    sampleset_item = [item for item in sorted_sampleSetItems if item.sample.displayedName == row['sampleName']]
-                    if len(sampleset_item) > 0:
-                        row[SavePlanFieldNames.IR_GENDER] = sampleset_item[0].gender
-                        row[SavePlanFieldNames.IR_RELATION_ROLE] = sampleset_item[0].relationshipRole
-                        row[SavePlanFieldNames.IR_SET_ID] = sampleset_item[0].relationshipGroup
-                        row[SavePlanFieldNames.IR_CANCER_TYPE] = sampleset_item[0].cancerType
-                        row[SavePlanFieldNames.IR_CELLULARITY_PCT] = sampleset_item[0].cellularityPct
-                        row[SavePlanFieldNames.IR_BIOPSY_DAYS] = sampleset_item[0].biopsyDays
-                        row[SavePlanFieldNames.IR_COUPLE_ID] = sampleset_item[0].coupleId
-                        row[SavePlanFieldNames.IR_EMBRYO_ID] = sampleset_item[0].embryoId
+            if ir_account_id and ir_account_id != "0":
+                if self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] != ir_workflow or self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] != ir_isfactory:
+                    sorted_sampleSetItems = self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS]
+
+                    for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
+                        row[SavePlanFieldNames.IR_WORKFLOW] = ir_workflow
+                        row[SavePlanFieldNames.IR_ISFACTORY] = ir_isfactory
+                        sampleset_item = [item for item in sorted_sampleSetItems if item.sample.displayedName == row['sampleName']]
+                        if len(sampleset_item) > 0:
+                            row[SavePlanFieldNames.IR_GENDER] = sampleset_item[0].gender
+                            row[SavePlanFieldNames.IR_RELATION_ROLE] = sampleset_item[0].relationshipRole
+                            row[SavePlanFieldNames.IR_SET_ID] = sampleset_item[0].relationshipGroup
+                            row[SavePlanFieldNames.IR_CANCER_TYPE] = sampleset_item[0].cancerType
+                            row[SavePlanFieldNames.IR_CELLULARITY_PCT] = sampleset_item[0].cellularityPct
+                            row[SavePlanFieldNames.IR_BIOPSY_DAYS] = sampleset_item[0].biopsyDays
+                            row[SavePlanFieldNames.IR_COUPLE_ID] = sampleset_item[0].coupleId
+                            row[SavePlanFieldNames.IR_EMBRYO_ID] = sampleset_item[0].embryoId
 
                 self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
-            self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
-            self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = updated_step.savedFields[IonReporterFieldNames.IR_ISFACTORY]
-            self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
+            self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = ir_workflow
+            self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = ir_isfactory
+            self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = ir_account_id
 
         if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
             self.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
@@ -319,6 +331,7 @@ class BarcodeBySampleStepData(AbstractStepData):
         # logger.debug("ENTER barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() self.savedFields[SavePlanFieldNames.BARCODE_SET]=%s" %(self.savedFields[SavePlanFieldNames.BARCODE_SET]))
 
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
+        self.prepopulatedFields[SavePlanFieldNames.NUM_SAMPLES] = len(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
         self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = update_ir_plugin_from_samples_table(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
@@ -402,6 +415,7 @@ class BarcodeBySampleStepData(AbstractStepData):
                             SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE: sampleHotSpotRegionBedFile,
 
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
+                            SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE, "")
                         }
 
         # logger.debug("EXIT barcode_by_sample_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])=%s; self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]));

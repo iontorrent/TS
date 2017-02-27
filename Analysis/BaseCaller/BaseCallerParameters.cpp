@@ -305,7 +305,6 @@ bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const in
       sampling_opts.MaskNotWanted    = (MaskType)(MaskFilteredBadResidual|MaskFilteredBadPPF|MaskFilteredBadKey);
 	  sampling_opts.num_unfiltered   = 0;
       context_vars.process_tfs       = false;
-      context_vars.flow_signals_type = "scaled-residual";
       cout << "=== BaseCaller Calibration Training ===" << endl;
       cout << " - Generating a training set up to " << sampling_opts.downsample_size << " randomly selected reads." << endl;
       if (sampling_opts.have_calib_panel)

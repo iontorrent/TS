@@ -6,9 +6,10 @@ from django.conf import settings
 from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
     ReferenceGenome, Content, KitInfo, VariantFrequencies, dnaBarcode, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
-    PlannedExperimentQC
+    PlannedExperimentQC, AnalysisArgs
 
 from iondb.rundb.plan.views_helper import getPlanDisplayedName
+from iondb.rundb.plan.plan_validator import MAX_LENGTH_PLAN_NAME
 
 from traceback import format_exc
 
@@ -55,10 +56,31 @@ class PlanCSVcolumns():
     COLUMN_NUCLEOTIDE_TYPE = "DNA/RNA/Fusions"
     COLUMN_SAMPLE_DESCRIPTION = "Sample Description"
     COLUMN_SAMPLE_FILE_HEADER = "Samples CSV file name (required)"
+    COLUMN_SAMPLE_CONTROLTYPE = "Control Type"
 
     # obsolete?
     COLUMN_IR_V1_0_WORKFLOW = "IR_v1_0_workflow"
     COLUMN_IR_V1_X_WORKFLOW = "IR_v1_x_workflow"
+    
+    # for Template export
+    TEMPLATE_NAME = "Template name (required)"
+    APPLICATION = "Application"
+    RUNTYPE = "Target Technique"
+    LIBRARY_KEY = "Library Key"
+    TF_KEY = "Test Fragment Key"
+    BARCODE_SET = "Barcode Set"
+    FAVORITE = "Set as Favorite"
+    SAMPLE_GROUP = "Sample Grouping"
+    THREEPRIME_ADAPTER = "Forward 3' Adapter"
+    FLOW_ORDER = "Flow Order"
+    CALIBRATION_MODE = "Base Calibration Mode"
+    MARK_DUPLICATES = "Mark as Duplicate Reads"
+    REALIGN = "Enable Realignment"
+    CATEGORIES = "Categories"
+    CUSTOM_ARGS = "Custom Args"
+
+    FUSIONS_REF = "Fusions Reference library"
+    FUSIONS_TARGET_BED = "Fusions Target regions BED file"
 
 TOKEN_DELIMITER = ";"
 
@@ -178,30 +200,30 @@ def _get_reference(template):
         ref = template.get_library()
     return ref
 
+def _get_bed_file_path(bedfile):
+    path = ""
+    if bedfile:
+        obj = Content.objects.filter(file=bedfile)
+        path = obj[0].path if obj else ""
+    return path
 
 def _get_target_regions_bed_file(template):
     filePath = ""
-
-    if template and template.get_bedfile():
-        try:
-            bed = Content.objects.get(file=template.get_bedfile())
-            filePath = bed.path
-        except:
-            logger.exception(format_exc())
+    if template:
+        filePath = _get_bed_file_path(template.get_bedfile())
     return filePath
-
 
 def _get_hotspot_regions_bed_file(template):
     filePath = ""
-
-    if template and template.get_regionfile():
-        try:
-            bed = Content.objects.get(file=template.get_regionfile())
-            filePath = bed.path
-        except:
-            logger.exception(format_exc())
+    if template:
+        filePath = _get_bed_file_path(template.get_regionfile())
     return filePath
 
+def _get_fusions_target_regions_bed_file(template):
+    filePath = ""
+    if template:
+        filePath = _get_bed_file_path(template.get_mixedType_rna_bedfile())
+    return filePath
 
 def _get_plugins(template, delimiter):
     plugins = ''
@@ -454,6 +476,7 @@ def get_samples_data_for_batch_planning(templateId):
 
     hdr = [
         PlanCSVcolumns.COLUMN_BARCODE,
+        PlanCSVcolumns.COLUMN_SAMPLE_CONTROLTYPE,
         PlanCSVcolumns.COLUMN_SAMPLE_NAME,
         PlanCSVcolumns.COLUMN_SAMPLE_ID,
         PlanCSVcolumns.COLUMN_SAMPLE_DESCRIPTION,
@@ -482,3 +505,118 @@ def get_samples_data_for_batch_planning(templateId):
                 row.append("")
         body.append(row)
     return hdr, body
+
+
+def export_template_keys(custom_args):
+    # map of keys from PlannedExperiment API fields to CSV columns
+    keys = {
+        'planDisplayedName':    PlanCSVcolumns.TEMPLATE_NAME,
+        'applicationGroupDisplayedName': PlanCSVcolumns.APPLICATION,
+        'barcodeId':            PlanCSVcolumns.BARCODE_SET,
+        'base_recalibration_mode': PlanCSVcolumns.CALIBRATION_MODE,
+        'bedfile':              PlanCSVcolumns.COLUMN_TARGET_BED,
+        'categories':           PlanCSVcolumns.CATEGORIES,
+        'chipType':             PlanCSVcolumns.COLUMN_CHIP_TYPE,
+        'controlSequencekitname': PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT,
+        'flows':                PlanCSVcolumns.COLUMN_FLOW_COUNT,
+        'flowsInOrder':         PlanCSVcolumns.FLOW_ORDER,
+        'forward3primeadapter': PlanCSVcolumns.THREEPRIME_ADAPTER,
+        'isDuplicateReads':     PlanCSVcolumns.MARK_DUPLICATES,
+        'isFavorite':           PlanCSVcolumns.FAVORITE,
+        'library':              PlanCSVcolumns.COLUMN_REF,
+        'libraryKey':           PlanCSVcolumns.LIBRARY_KEY,
+        'librarykitname':       PlanCSVcolumns.COLUMN_LIBRARY_KIT,
+        'libraryReadLength':    PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH,
+        'metaData':             PlanCSVcolumns.COLUMN_LIMS_DATA,
+        'notes':                PlanCSVcolumns.COLUMN_NOTES,
+        'runType':              PlanCSVcolumns.RUNTYPE,
+        'sampleGroupingName':   PlanCSVcolumns.SAMPLE_GROUP,
+        'samplePrepKitName':    PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT,
+        'sequencekitname':      PlanCSVcolumns.COLUMN_SEQ_KIT,
+        'tfKey':                PlanCSVcolumns.TF_KEY,
+        'templatingKitName':    PlanCSVcolumns.COLUMN_TEMPLATING_KIT,
+        'templatingSize':       PlanCSVcolumns.COLUMN_TEMPLATING_SIZE,
+        'realign':              PlanCSVcolumns.REALIGN,
+        'regionfile':           PlanCSVcolumns.COLUMN_HOTSPOT_BED,
+        'selectedPlugins':      PlanCSVcolumns.COLUMN_PLUGINS,
+        'projects':             PlanCSVcolumns.COLUMN_PROJECTS,
+        'export':               PlanCSVcolumns.COLUMN_EXPORT,
+        'custom_args':          PlanCSVcolumns.CUSTOM_ARGS,
+        'mixedTypeRNA_reference': PlanCSVcolumns.FUSIONS_REF,
+        'mixedTypeRNA_targetRegionBedFile': PlanCSVcolumns.FUSIONS_TARGET_BED
+    }
+    # QC values
+    keys.update({
+        'Bead Loading (%)':      PlanCSVcolumns.COLUMN_BEAD_LOAD_PCT,
+        'Key Signal (1-100)':        PlanCSVcolumns.COLUMN_KEY_SIGNAL_PCT,
+        'Usable Sequence (%)':        PlanCSVcolumns.COLUMN_USABLE_SEQ_PCT
+    })
+    # Analysis args, included only if custom
+    if custom_args:
+        args = AnalysisArgs().get_args()
+        for key in args:
+            keys[key] = key
+
+    return keys
+
+
+def get_template_data_for_export(templateId):
+    ''' generates data for template export to CSV file
+    '''
+    template = PlannedExperiment.objects.get(pk=int(templateId))
+    name = "exported " + getPlanDisplayedName(template).strip()
+    runType = RunType.objects.get(runType=template.runType)
+
+    data = [
+        ( PlanCSVcolumns.TEMPLATE_NAME,  name[:MAX_LENGTH_PLAN_NAME]),
+        ( PlanCSVcolumns.FAVORITE, template.isFavorite ),
+        ( PlanCSVcolumns.APPLICATION, template.applicationGroup.description if template.applicationGroup else '' ),
+        ( PlanCSVcolumns.RUNTYPE, runType.alternate_name ),
+        ( PlanCSVcolumns.SAMPLE_GROUP, template.sampleGrouping.displayedName if template.sampleGrouping else '' ),
+        ( PlanCSVcolumns.BARCODE_SET, template.get_barcodeId() ),
+        ( PlanCSVcolumns.COLUMN_CHIP_TYPE, _get_chip_type_description(template) ),
+        ( PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT, _get_sample_prep_kit_description(template) ),
+        ( PlanCSVcolumns.COLUMN_LIBRARY_KIT, _get_lib_kit_description(template) ),
+        ( PlanCSVcolumns.LIBRARY_KEY, template.get_libraryKey() ),
+        ( PlanCSVcolumns.TF_KEY, template.get_tfKey() ),
+        ( PlanCSVcolumns.THREEPRIME_ADAPTER, template.get_forward3primeadapter() ),
+        ( PlanCSVcolumns.FLOW_ORDER, template.experiment.flowsInOrder or "default" ),
+        ( PlanCSVcolumns.COLUMN_TEMPLATING_KIT, _get_template_kit_description(template) ),
+        ( PlanCSVcolumns.COLUMN_TEMPLATING_SIZE, _get_templating_size(template) ),
+        ( PlanCSVcolumns.COLUMN_SEQ_KIT, _get_seq_kit_description(template) ),
+        ( PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT, _get_control_seq_kit_description(template) ),
+        ( PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH, _get_library_read_length(template) ),
+        ( PlanCSVcolumns.CALIBRATION_MODE, template.latestEAS.base_recalibration_mode ),
+        ( PlanCSVcolumns.MARK_DUPLICATES, template.latestEAS.isDuplicateReads ),
+        ( PlanCSVcolumns.REALIGN, template.latestEAS.realign ),
+        ( PlanCSVcolumns.COLUMN_FLOW_COUNT, template.get_flows() ),
+        ( PlanCSVcolumns.COLUMN_REF, _get_reference(template) ),
+        ( PlanCSVcolumns.COLUMN_TARGET_BED, _get_target_regions_bed_file(template) ),
+        ( PlanCSVcolumns.COLUMN_HOTSPOT_BED,_get_hotspot_regions_bed_file(template) )
+    ]
+
+    # add fusions reference for DNA/Fusions application
+    if runType.runType == 'AMPS_DNA_RNA':
+        data.extend([
+            ( PlanCSVcolumns.FUSIONS_REF, template.get_mixedType_rna_library() ),
+            ( PlanCSVcolumns.FUSIONS_TARGET_BED, _get_fusions_target_regions_bed_file(template) )
+        ])
+
+    data.extend([
+        ( PlanCSVcolumns.COLUMN_BEAD_LOAD_PCT, _get_bead_loading_qc(template) ),
+        ( PlanCSVcolumns.COLUMN_KEY_SIGNAL_PCT, _get_key_signal_qc(template) ),
+        ( PlanCSVcolumns.COLUMN_USABLE_SEQ_PCT, _get_usable_seq_qc(template) ),
+        ( PlanCSVcolumns.COLUMN_PLUGINS, _get_plugins(template, TOKEN_DELIMITER) ),
+        ( PlanCSVcolumns.COLUMN_PROJECTS, _get_projects(template, TOKEN_DELIMITER) ),
+        ( PlanCSVcolumns.CATEGORIES, template.categories ),
+        ( PlanCSVcolumns.COLUMN_NOTES, _get_notes(template) ),
+        ( PlanCSVcolumns.COLUMN_LIMS_DATA, _get_LIMS_data(template) ),
+    ])
+
+    # add custom analysis args
+    if template.latestEAS.custom_args:
+        args = template.latestEAS.get_cmdline_args()
+        data.append((PlanCSVcolumns.CUSTOM_ARGS, True))
+        data.extend([(key, args[key]) for key in sorted(args)])
+
+    return zip(*data)

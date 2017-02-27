@@ -77,16 +77,24 @@ bool CalibrationContext::InitializeFromOpts(OptArgs &opts)
   string  output_dir   = opts.GetFirstString ('o', "output-dir", ".");
   filename_json        = output_dir + "/Calibration.json";
 
-  num_threads          = opts.GetFirstInt    ('-', "num-threads", max(numCores(), 4));
-  num_reads_per_thread = opts.GetFirstInt     ('-', "num-reads-per-thread", 1000);
+  num_threads          = opts.GetFirstInt     ('-', "num-threads", max(numCores(), 4));
+  num_reads_per_thread = opts.GetFirstInt     ('-', "num-reads-per-thread", 250);
   flow_window_size     = opts.GetFirstInt     ('-', "flow-window-size", 250);
+  rand_seed            = opts.GetFirstInt     ('-', "rand-seed", 631);
 
   // Given a target window length we distribute the number of flows into equal sized windows
   int num_flow_windows = max(1, max_num_flows/flow_window_size);
   flow_window_size = (max_num_flows+num_flow_windows-1)/num_flow_windows;
 
+  // Model fit options
+  successive_fit       = opts.GetFirstBoolean ('-', "successive-fit", true);
+  blind_fit            = opts.GetFirstBoolean ('-', "blind-fit", false);
+  num_train_iterations = opts.GetFirstInt     ('-', "num-train-iterations", 5);  // only used for blind
+  if (not blind_fit)
+    num_train_iterations = 1;
+
   // Alignment options
-  load_unmapped        = opts.GetFirstBoolean ('-', "load-unmapped", false);
+  load_unmapped        = opts.GetFirstBoolean ('-', "load-unmapped", blind_fit);
   do_flow_alignment    = opts.GetFirstBoolean ('-', "do-flow-alignment", false);
   match_zero_flows     = opts.GetFirstBoolean ('-', "align-match-zero", false);
   fill_strange_gaps    = opts.GetFirstDouble  ('-', "align-fill-gaps", -0.5f); // default to not do this
@@ -98,13 +106,6 @@ bool CalibrationContext::InitializeFromOpts(OptArgs &opts)
   // Solver options
   resolve_clipped_bases= opts.GetFirstBoolean ('-', "resolve-clipped-bases", false);
   skip_droop           = opts.GetFirstBoolean ('-', "skip-droop", true);
-
-  // Model fit options
-  successive_fit       = opts.GetFirstBoolean ('-', "successive-fit", true);
-  blind_fit            = opts.GetFirstBoolean ('-', "blind-fit", false);
-  num_train_iterations = opts.GetFirstInt     ('-', "num-train-iterations", 5);  // only used for blind
-  if (not blind_fit)
-    num_train_iterations = 1;
 
   verbose_level        = opts.GetFirstInt     ('-', "verbose", 1);
   debug                = opts.GetFirstBoolean ('-', "debug", false);
@@ -118,6 +119,12 @@ bool CalibrationContext::InitializeFromOpts(OptArgs &opts)
   num_mapped_reads = 0;
   num_loaded_reads = 0;
   num_useful_reads = 0;
+
+  // Program threading information
+  num_model_reads  = 0;
+  num_model_writes = 0;
+  wait_to_read_model  = false;
+  wait_to_write_model = true;
 
   Verbose();
   return true;
@@ -891,7 +898,7 @@ void  MultiBamHandler::Close()
 // -----------------------------------------------------------------------
 // We simply take the reads serially out of the different BAM files
 
-bool  MultiBamHandler::GetNextAlignment(BamAlignment & alignment)
+bool  MultiBamHandler::GetNextAlignmentCore(BamAlignment & alignment)
 {
   if ((not have_bam_files_) or no_more_data_)
     return false;
@@ -899,7 +906,7 @@ bool  MultiBamHandler::GetNextAlignment(BamAlignment & alignment)
   bool success = false;
 
   while ((not success) and (current_bam_idx_ < bam_readers_.size())){
-    success = bam_readers_.at(current_bam_idx_)->GetNextAlignment(alignment);
+    success = bam_readers_.at(current_bam_idx_)->GetNextAlignmentCore(alignment);
     if (not success){
       current_bam_idx_++;
     }

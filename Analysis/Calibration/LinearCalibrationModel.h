@@ -44,7 +44,6 @@ public:
   void   Reset();
 
   void   AccumulateTrainingData(const LinearFitCell& other);
-  void   CopyTrainingData(const LinearFitCell& other);
 
   void   GetSlopeAndInterceptFit(double &gain, double &offset) const;
   void   GetSafeSlopeAndInterceptFit(double &gain, double &offset, double safety_frac) const;
@@ -95,7 +94,6 @@ public:
   void  FreshReadData();
 
   void  AccumulateTrainingData(const LinCalModelRegion& other);
-  void  CopyTrainingData(const LinCalModelRegion& other);
 
   int   CreateCalibrationModel(int region_idx, unsigned long min_nsamples, float max_gain_shift, bool verbose);
   int   CreateOldStyleCalibrationModel(int region_idx, unsigned long min_nsamples, bool verbose);

@@ -1,8 +1,10 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 import json
+from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import Plugin
 from iondb.rundb.plan.page_plan.step_names import StepNames
+from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 try:
     from collections import OrderedDict
 except ImportError:
@@ -36,6 +38,12 @@ class PluginsStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(PluginsStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_plugins.html'
+        self.prev_step_url = reverse("page_plan_kits")
+        self.next_step_url = reverse("page_plan_output")
+        if sh_type in StepHelperType.PLAN_BY_SAMPLE_TYPES:
+            # Plan by Sample
+            self.next_step_url = reverse("page_plan_by_sample_barcode")
+
         self.all_enabled_plugins = Plugin.objects.filter(selected=True, active=True).order_by('name', '-version')
         self.non_ir_plugins = []
         for p in self.all_enabled_plugins:

@@ -25,13 +25,13 @@
                 owner=root group=root mode=644
 
     - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
-      template: src=files/iontorrent-ubuntu.j2
+      template: src=templates/iontorrent-ubuntu.j2
                 dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{FUNKYEXT|default('')}}
                 owner=root group=root mode=644
 
     # Adding IonReporter plugin repository
     - name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
-      template: src=files/ionreporter-plugin.j2
+      template: src=templates/ionreporter-plugin.j2
                 dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{FUNKYEXT|default('')}}
                 owner=root group=root mode=644
 
@@ -117,9 +117,11 @@
     # on the head node.
     #-----------------------------------------------------------------------------
 
-    # Rename sources.list only if it exists
+    # Replace sources.list with empty file
     - name: Disable /etc/apt/sources.list
-      command: "mv /etc/apt/sources.list /etc/apt/sources.list.orig removes=/etc/apt/sources.list"
+      template: src=templates/sources.list.j2
+                dest=/etc/apt/sources.list{{FUNKYEXT|default('')}}
+                owner=root group=root mode=644
 
     - name: Purge compute node's /etc/apt/sources.list.d directory
       shell: bash -lc "rm -f /etc/apt/sources.list.d/*"

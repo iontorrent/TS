@@ -3,9 +3,10 @@
 import logging
 import json
 from django.db.models import Q
+from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import KitInfo, Chip, dnaBarcode, LibraryKey,\
-    ThreePrimeadapter, GlobalConfig, FlowOrder
+    ThreePrimeadapter, GlobalConfig, FlowOrder, common_CV
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.utils import validation
@@ -74,6 +75,8 @@ class KitsFieldNames():
     TEMPLATING_SIZE = "templatingSize"
     READ_LENGTH_CHOICES = "readLengthChoices"
     FLOWS_FROM_CATEGORY_RULES = "defaultFlowsFromCategoryRules"
+    SAMPLE_PREP_PROTOCOL = "samplePrepProtocol"
+    SAMPLE_PREP_PROTOCOLS = "samplePrepProtocols"
 
 
 class KitsStepData(AbstractStepData):
@@ -81,6 +84,8 @@ class KitsStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(KitsStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_kits.html'
+        self.prev_step_url = reverse("page_plan_application")
+        self.next_step_url = reverse("page_plan_plugins")
 
         # 20130827-test
         # self._dependsOn.append(StepNames.IONREPORTER)
@@ -178,6 +183,9 @@ class KitsStepData(AbstractStepData):
         # For raptor templating kits, templating size cannot be used to drive UI behavior or db persistence.  Use read length instead.
         self.prepopulatedFields[KitsFieldNames.READ_LENGTH_CHOICES] = ["200", "400"]
         self.prepopulatedFields[KitsFieldNames.FLOWS_FROM_CATEGORY_RULES] = json.dumps(KitInfo._category_flowCount_rules)
+
+        self.savedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOL] = None
+        self.prepopulatedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOLS] = common_CV.objects.filter(isActive=True, cv_type = "samplePrepProtocol").order_by('uid')
 
         self.sh_type = sh_type
 
@@ -301,6 +309,7 @@ class KitsStepData(AbstractStepData):
                 self.savedFields[KitsFieldNames.FLOWS] = applProduct.defaultSequencingKit.flowCount
             logger.debug("kits_step_data.updateFieldsFromDefaults() USE SEQ KIT- flowCount=%s" % (str(self.savedFields[KitsFieldNames.FLOWS])))
 
+        
     def validateField(self, field_name, new_field_value):
         '''
         Flows qc value must be a positive integer

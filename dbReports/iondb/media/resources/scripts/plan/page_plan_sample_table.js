@@ -79,7 +79,7 @@ function handleSameSampleForDualNucleotideType(){
                     row[field] = prevRow[field];
                 });
             }
-            if (irWorkflowNotValid(row.reference, row.irWorkflow, row.irtag_isFactoryProvidedWorkflow)){
+            if (irWorkflowNotValid(row)){
                 row.irWorkflow = "";
             }
         });
@@ -129,7 +129,7 @@ function updateSampleReferenceColumnsWithDefaults() {
             this.targetRegionBedFile = refInfo.default_targetBedFile;
             this.hotSpotRegionBedFile = refInfo.default_hotSpotBedFile;
         }
-        if (irWorkflowNotValid(this.reference, this.irWorkflow, this.irtag_isFactoryProvidedWorkflow)){
+        if (irWorkflowNotValid(this)){
             this.irWorkflow = "";
         }
     });
@@ -144,7 +144,7 @@ function updateSamplesForReference(selectedReference) {
                 // don't update the RNA sample for mixed type DNA/RNA application
             } else {
                 this.reference = selectedReference;
-                if (irWorkflowNotValid(this.reference, this.irWorkflow, this.irtag_isFactoryProvidedWorkflow)){
+                if (irWorkflowNotValid(this)){
                     this.irWorkflow = "";
                 }
             }
@@ -159,7 +159,7 @@ function updateMixedTypeRNASamplesForReference(selectedReference) {
         $.each(samplesTableJSON, function(){
             if (this.nucleotideType == "RNA"){
                 this.reference = selectedReference;
-                if (irWorkflowNotValid(this.reference, this.irWorkflow, this.irtag_isFactoryProvidedWorkflow)){
+                if (irWorkflowNotValid(this)){
                     this.irWorkflow = "";
                 }
             }
@@ -225,6 +225,7 @@ function showHideSampleReferenceColumns(makeVisible) {
     } else {
         grid.hideColumn("hotSpotRegionBedFile");
     }
+    $('#referenceSectionTab').toggleClass('k-state-active', makeVisible);
 }
 
 function toggleSampleReferenceColumnEnablements(isToDisable) {
@@ -261,19 +262,12 @@ toggleDisableElements = function($elements, disable){
     $elements.css('cursor', disable ? 'not-allowed' : 'auto');
 }
 
-function toggleColumnVisibility(column){
-    var grid = $("#grid").data("kendoGrid");
-    $.each(grid.columns, function(){
-        if (this.field == column){
-            this.hidden ? grid.showColumn(column) : grid.hideColumn(column);
-        }
-    });
-}
-
 var dropDnTemplate = kendo.template(
     '${ html } <span class="k-icon k-i-arrow-s pull-right"></span>'
 )
-
+var columnSectionTemplate = kendo.template(
+    '<span id=#=id# class="verticalTab k-button" title="Show/Hide #=text# Columns">#=text#</span>'
+)
 
 $(document).ready(function () {
 
@@ -295,6 +289,7 @@ $(document).ready(function () {
                     sampleName:           { type: "string", defaultValue: "" },
                     sampleDescription:    { type: "string", defaultValue: "" },
                     sampleExternalId:     { type: "string", defaultValue: "" },
+                    controlType:          { type: "string", defaultValue: "" },
                     tubeLabel:            { type: "string", defaultValue: "", editable: !planOpt.isReserved },
                     chipBarcode:          { type: "string", defaultValue: "", editable: !planOpt.isReserved && !planOpt.isEditRun },
                     nucleotideType:       { type: "string",
@@ -362,15 +357,24 @@ $(document).ready(function () {
             },
             {
                 field: "sampleName", title: "Sample (required)",
-                width: '210px',
+                width: '200px',
                 attributes: { "name": "sampleName" },
                 editor: planOpt.isPlanBySample ? sampleForSamplesetEditor : "",
                 template: planOpt.isPlanBySample? dropDnTemplate({'html':$('#sampleForSamplesetColumnTemplate').html()}) : "#=sampleName#",
             },
             {
-                field: "sampleDescription", title: "Sample Description",
-                width: '210px',
-                attributes: { "name": "sampleDescription" }
+                field: "_control_type", width: "22px",
+                headerTemplate: columnSectionTemplate({'id':'controlTypeSectionTab','text':'Control Type'}),
+                hidden: !$('#chk_barcoded').is(':checked'),
+                editor: " ",
+            },
+            {
+                field: "controlType", title: "Control Type",
+                width: '150px',
+                attributes: { "name": "controlType" },
+                hidden: true,
+                editor: controlTypeEditor,
+                template: dropDnTemplate({'html': '#=controlType#'})
             },
             {
                 field: "sampleExternalId", title: "Sample ID",
@@ -378,16 +382,9 @@ $(document).ready(function () {
                 attributes: { "name": "sampleExternalId" }
             },
             {
-                field: "tubeLabel", title: "Sample Tube Label",
-                width: '150px',
-                attributes: { "name": "tubeLabel" },
-                hidden: $('#chk_barcoded').is(':checked')
-            },
-            {
-                field: "chipBarcode", title: "Chip ID",
-                width: '150px',
-                attributes: { "name": "chipBarcode" },
-                hidden: $('#chk_barcoded').is(':checked')
+                field: "sampleDescription", title: "Sample Description",
+                width: '200px',
+                attributes: { "name": "sampleDescription" }
             },
             {
                 field: "nucleotideType", title: planOpt.isDNAandFusions ? "DNA/Fusions" : "DNA/RNA",
@@ -396,6 +393,11 @@ $(document).ready(function () {
                 hidden: !planOpt.isDualNucleotideType,
                 editor: nucleotideTypeEditor,
                 template: "#= (nucleotideType == 'RNA' && planOpt.isDNAandFusions) ? 'Fusions' : nucleotideType #"
+            },
+            {
+                field: "_ref_details", width: "22px",
+                headerTemplate: columnSectionTemplate({'id':'referenceSectionTab', 'text':'Reference'}),
+                editor: " ",
             },
             {
                 field: "reference", title: "Reference",
@@ -420,6 +422,18 @@ $(document).ready(function () {
                 hidden: $('input[id=isSameRefInfoPerSample]').is(":checked"),
                 editor: hotspotBEDfileEditor,
                 template: dropDnTemplate({'html': '#=hotSpotRegionBedFile.split("/").pop()#'})
+            },
+            {
+                field: "tubeLabel", title: "Sample Tube Label",
+                width: '150px',
+                attributes: { "name": "tubeLabel" },
+                hidden: $('#chk_barcoded').is(':checked')
+            },
+            {
+                field: "chipBarcode", title: "Chip ID",
+                width: '150px',
+                attributes: { "name": "chipBarcode" },
+                hidden: $('#chk_barcoded').is(':checked')
             },
             {
                 field: "controlSequenceType", title: "Control Seq Type (optional)",
@@ -518,6 +532,16 @@ $(document).ready(function () {
                 template: '#=id_str# (#=sequence#)',
             });
     }
+
+    function controlTypeEditor(container, options) {
+        $('<input id="controlTypeEditor" name="controlTypeEditor" data-bind="value:' + options.field + '"/>')
+            .appendTo(container)
+            .kendoDropDownList({
+                dataSource: controlTypes,
+                dataTextField: "display",
+                dataValueField: "value"
+            });
+    }
     
     function referenceEditor(container, options) {
         $('<input id="referenceEditor" name="referenceEditor" data-bind="value:' + options.field + '"/>')
@@ -530,7 +554,7 @@ $(document).ready(function () {
                 change: function(e){
                     options.model.set('targetRegionBedFile','');
                     options.model.set('hotSpotRegionBedFile','');
-                    if (irWorkflowNotValid(this.value(), options.model.irWorkflow, options.model.irtag_isFactoryProvidedWorkflow)){
+                    if (irWorkflowNotValid(options.model)){
                         options.model.set('irWorkflow', '');
                     }
                 },
@@ -587,6 +611,9 @@ $(document).ready(function () {
                         options.model.set('targetRegionBedFile', refInfo.mixedTypeRNA_targetBedFile);
                         options.model.set('hotSpotRegionBedFile', "");
                     }
+                    if (irWorkflowNotValid(options.model)){
+                        options.model.set('irWorkflow', '');
+                    }
                 }
             });
     }
@@ -641,12 +668,6 @@ $(document).ready(function () {
             });
     }
     
-    $("[id^=showHideReferenceBySample]").click(function () { 
-        if (planOpt.isReferenceSupported) toggleColumnVisibility("reference");
-        if (planOpt.isTargetBEDFileSupported) toggleColumnVisibility("targetRegionBedFile");
-        if (planOpt.isHotspotBEDFileSupported) toggleColumnVisibility("hotSpotRegionBedFile");
-    });
-
     function parse_chip_barcode(_chip_barcode){
             var chipID = _chip_barcode;
             if (_chip_barcode.substring(0,2) == "21")
@@ -811,7 +832,7 @@ $(document).ready(function () {
         var nrows_new = parseInt(this.value);
         var barcoded = $('input[id=chk_barcoded]').is(':checked');
 
-        if (nrows_new == '0'){
+        if ((nrows_new == '0') || (isNaN(nrows_new)) || (typeof(nrows_new) === 'undefined')){
             //Do not allow to enter 0 samples - Value Error TS-12548
             $('#numRows').val(1);
             nrows_new = 1;
@@ -887,12 +908,25 @@ $(document).ready(function () {
 
 
     /**
-     Checkbox for isOnco and isPgs is clicked
-     */
+        Event handlers to show/hide grid columns
+    */
+    // show/hide control type column
+    $('#controlTypeSectionTab').click(function (){
+        var makeVisible = !$(this).hasClass('k-state-active');
+        $(this).toggleClass('k-state-active', makeVisible);
+        var grid = $("#grid").data("kendoGrid");
+        makeVisible ? grid.showColumn('controlType') : grid.hideColumn('controlType');
+    });
+    
+    
+    $('#referenceSectionTab').click(function (){
+        var makeVisible = !$(this).hasClass('k-state-active');
+        showHideSampleReferenceColumns(makeVisible);
+    });
+    
     $("input[name=isOnco_Pgs]").click(function () {
         var grid = $("#grid").data("kendoGrid");
         var selectedAnnotation = $("input[name=isOnco_Pgs]:checked").val();
-
         if (selectedAnnotation == 'Oncology') {
             grid.showColumn('ircancerType');
             grid.showColumn('ircellularityPct');
@@ -906,24 +940,26 @@ $(document).ready(function () {
             grid.showColumn('ircoupleID');
             grid.showColumn('irembryoID');
         }
+        grid.showColumn('_annotations');
+        $('#annotationsSectionTab').toggleClass('k-state-active', true);
     });
 
-    /**
-     *   Click event handler to show/hide the sample annotation columns
-     */
-    $("#showHideSampleAnnotation").click(function () {
+    // show/hide the sample annotation columns
+    $('#annotationsSectionTab').click(function (){
+        var makeVisible = !$(this).hasClass('k-state-active');
         var selectedAnnotation = $("input[name=isOnco_Pgs]:checked").val();
-
+        var annotation_columns = [];
         if (selectedAnnotation == 'Oncology') {
-            toggleColumnVisibility('ircancerType');
-            toggleColumnVisibility('ircellularityPct');
+            annotation_columns = ['ircancerType','ircellularityPct'];
         } else if (selectedAnnotation == 'Pgs') {
-            toggleColumnVisibility('irbiopsyDays');
-            toggleColumnVisibility('ircoupleID');
-            toggleColumnVisibility('irembryoID');
+            annotation_columns = ['irbiopsyDays','ircoupleID','irembryoID'];
         }
+        var grid = $("#grid").data("kendoGrid");
+        $.each(annotation_columns, function(i, column){
+            makeVisible ? grid.showColumn(column) : grid.hideColumn(column);
+        });
+        $('#annotationsSectionTab').toggleClass('k-state-active', makeVisible);
     });
-
 
     /**
      *  Enable a fill down functionality on the sample/barcode grid.
@@ -971,20 +1007,24 @@ $(document).ready(function () {
             .appendTo("#grid");
         fillDownButton.tooltip({title: "Copy value to all rows."});
         fillDownButton.mousedown(function (e) {
-            var samplesTableJSON = $("#grid").data("kendoGrid").dataSource.data().toJSON();
-            var val = "";
+            var grid = $("#grid").data("kendoGrid");
+            var samplesTableJSON = grid.dataSource.data().toJSON();
+            var val = grid.current().find("[name^="+name+"]").val();
+            var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+
             $.each(samplesTableJSON, function(i, row){
                 if (i==0){
-                    val = row[name];
+                    if (val === undefined){
+                        val = row[name];
+                    }
                 } else {
                     if (action == "increment" && !isNaN(val)) {
-                        if($("#isOncoSameSample:visible").length && $("#isOncoSameSample").attr('checked')){
+                        if (planOpt.isDualNucleotideType && isSameSampleForDual && row.nucleotideType == 'RNA'){
                             val = parseInt(val);
                         } else {
                             val = parseInt(val) + 1;
                         }
                     }
-                    row[name] = val;
                     // update related fields
                     if (options.updateRelated){
                         $.each(options.updateRelated, function(i, update){
@@ -992,8 +1032,9 @@ $(document).ready(function () {
                         });
                     }
                 }
+                row[name] = val;
             });
-            $("#grid").data("kendoGrid").dataSource.data(samplesTableJSON);
+            grid.dataSource.data(samplesTableJSON);
         });
 
         tableContainer.on('focus', elementSelector,
@@ -1079,29 +1120,15 @@ $(document).ready(function () {
         updateSampleReferenceColumnsWithDefaults();
     }
     
-    // if creating a new DNA/RNA plan initialize 2 basic rows
-    var barcoded = $('input[id=chk_barcoded]').is(':checked')
-    var isCreate = $('input[id=isCreate]').val() == "True";
-    var numRowValue = $('#numRows').val();
-
-	if (isCreate && parseInt(numRowValue) < 2) {
-	    if (planOpt.isDualNucleotideType) {
-	    	var count = "2";
-	       	if (barcoded && planOpt.isOCAv2) {
-	        	count = "24";
-	        }
-	        $('#numRows').val(count);
-	        $('#numRows').change();
-	    }
-	    else {
-	        if (barcoded && planOpt.isBarcodesDefaultCount) {
-	            var tokens = planCategories.split("barcodes_");
-	            var count = tokens[1].split(";");
-	            $('#numRows').val(count);
-	            $('#numRows').change();
-	        }
-	    }
-	}
+    // new plans may initialize with different default number of rows
+    var numRowValue = parseInt($('#numRows').val());
+    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+    if (numRowValue != samplesTableInit.length){
+        $('#numRows').change();
+        if (planOpt.isDualNucleotideType && isSameSampleForDual){
+            handleSameSampleForDualNucleotideType();
+        }
+    }
 });
 
 

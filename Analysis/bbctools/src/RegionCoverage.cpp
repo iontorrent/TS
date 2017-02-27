@@ -168,7 +168,7 @@ uint32_t RegionCoverage::GetTargetedWindowSize(
 	for( uint32_t contig = srtContig; contig <= endContig; ++contig ) {
 		// again have to track end of last region to avoid counting twice
 		uint32_t srtPos = contig > srtContig ? 1 : srtPosition;
-		uint32_t endPos = contig < endContig ? m_contigList[srtContig]->length : endPosition;
+		uint32_t endPos = contig < endContig ? m_contigList[contig]->length : endPosition;
 		for( TargetRegion *cur = m_contigList[contig]->targetRegionHead; cur; cur = cur->next ) {
 			if( cur->trgEnd < srtPos ) continue;
 			if( cur->trgSrt > endPos ) break;

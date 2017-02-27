@@ -33,7 +33,7 @@ const int s_initialMinJumpLen = 1000000;
 const int s_initialMaxReadLen = 1000;
 
 // Current version number string for bbctools executable
-const uint16_t s_versionNumber = 1000;
+const uint16_t s_versionNumber = 1003;
 
 // Forward declarations of functions used by main()
 int bbctools_create( BbcUtils::OptParser &optParser );
@@ -674,7 +674,7 @@ int bbctools_version( BbcUtils::OptParser &optParser ) {
 
     if( cmdArgs.size() == 0 ) {
     	if( !brief ) cout << "bbctools version: ";
-    	cout << BbcUtils::numberToString( s_versionNumber/1000, 3 ) << endl;
+    	cout << BbcUtils::numberToString( (double)s_versionNumber/1000, 3 ) << endl;
     	return 0;
     }
     // since binary files do not have a GUID (magic) number, rely on file extension

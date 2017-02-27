@@ -76,6 +76,13 @@
     - ionPlugin
 
 #-----------------------------------------------------------------------------
+# Add www-data user to the adm group to allow read permission on log files
+#-----------------------------------------------------------------------------
+- name: Add www-data user to adm group
+  user: name=www-data append=yes groups=adm
+  notify: restart apache2
+
+#-----------------------------------------------------------------------------
 # Site Specific Database Changes
 #-----------------------------------------------------------------------------
 # Add compute node hostnames to the Crunchers table
@@ -117,6 +124,17 @@
 - name: Adding ttyS0 config to enable console on the S5TSVM
   template: src={{ansible_env.PWD}}/templates/ttyS0.conf.j2 dest=/etc/init/ttyS0.conf mode=0644 owner=root group=root
   when: S5_virtual_guest|bool == True
+
+#-----------------------------------------------------------------------------
+# Enable a console for S5 only
+#-----------------------------------------------------------------------------
+- name: GRUB console enabled
+  lineinfile: dest=/etc/default/grub
+                insertafter=EOF
+                line='GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"'
+                regexp='GRUB_CMDLINE_LINUX=.*'
+  when: S5_virtual_guest|bool == True
+  notify: update grub
 
 #-----------------------------------------------------------------------------
 # Default tmpreaper will purge /tmp directory.  Headnode should also purge

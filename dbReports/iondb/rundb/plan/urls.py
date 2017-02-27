@@ -46,6 +46,8 @@ urlpatterns = patterns(
     url(r'^page_plan_samples_table/load/$', 'views.page_plan_load_samples_table', name="page_plan_load_samples_table"),
 
     url(r'^template/(?P<pks>[\d,]+)/delete/$', 'views.delete_plan_template', name='delete_plan_template'),
+    url(r'^export_template/(\d+)/$', 'views.plan_template_export', name="export_plan_template"),
+    url(r'^import_template/$', 'views.plan_template_import', name="import_plan_template"),
 
     url(r'^reviewplan/(?P<pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),
     url(r'^reviewplan/(?P<pk>\d+)/(?P<report_pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),

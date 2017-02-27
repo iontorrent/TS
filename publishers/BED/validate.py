@@ -105,14 +105,23 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
 
     return None
 
+def decorate_S5_instruments(instrument_type):
+    if instrument_type in ['520', '521', '530', '540']:
+        instrument_type = "S5 Chip: " + instrument_type.upper()
+    return instrument_type
 
 def plan_json(meta, upload_id, primary_path, secondary_path):
     run_type = meta['design']['plan'].get('runType', None)
     plan_name = meta["design"]["design_name"].encode("ascii", "ignore")
     applicationGroupDescription = meta['design']['plan'].get('applicationGroup', None)
     application_product_id = meta['design']['plan'].get('application_product_id', None)
+    available_choice = meta['design']['plan'].get("available_choice", None)
     run_type_model = models.RunType.objects.get(runType=run_type)
+
+    message = { "E001" : "The Imported Panel is not supported for the selected Instrument Type : {0}",
+                "E002" : "The supported Instrument Types for this panel {0}" }
     app_group_name = ""
+    decoratedInstType = None
     if applicationGroupDescription:
         app_group = models.ApplicationGroup.objects.get(description=applicationGroupDescription)
         app_group_name = app_group.description
@@ -135,6 +144,7 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
         chip_type = "P1.1.17"
         instrument_type = "proton"
     elif instrument_type in ['520', '521', '530', '540']:
+        decoratedInstType = decorate_S5_instruments(instrument_type)
         chip_type = instrument_type
         instrument_type = "s5"
     print("plan_json processing plan_name=%s; run_type=%s; instrument_type=%s" %
@@ -143,22 +153,43 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
     # Access the appl product obj directly using the application_product_id in plan.json
     if application_product_id:
         app = models.ApplProduct.objects.get(id=application_product_id)
-        if app.applicationGroup:
-            if app.applicationGroup.description == "Pharmacogenomics" and instrument_type == "pgm":
-                chip_type = app.defaultChipType
+        if app.instrumentType != instrument_type:
+            if decoratedInstType in available_choice:
+                print "Application Product ID does not match the Instrument Type. Please check"
+            else:
+                if not decoratedInstType:
+                    decoratedInstType = instrument_type.upper()
+                print message["E001"].format(decoratedInstType)
+                print message["E002"].format(available_choice)
+            sys.exit(1)
     else:
-        # Proceed with new old fashion if there is no application_product_id in the plan.json
-        if applicationGroupDescription == "Pharmacogenomics":
-            app = models.ApplProduct.objects.get(
-                applType__runType=run_type, isActive=True, instrumentType=instrument_type, applicationGroup__description=applicationGroupDescription)
-            if instrument_type == "pgm":
-                chip_type = app.defaultChipType
-        elif instrument_type == "proton" and plan_name.endswith("_Hi-Q"):
-            app = models.ApplProduct.objects.get(
-                applType__runType=run_type, isActive=True, productName__contains="_Hi-Q", instrumentType=instrument_type)
-        else:
-            app = models.ApplProduct.objects.get(
-                applType__runType=run_type, isActive=True, isDefault=True, instrumentType=instrument_type)
+        try:
+            if instrument_type == "proton" and plan_name.endswith("_Hi-Q"):
+                app = models.ApplProduct.objects.get(
+                    applType__runType=run_type, isActive=True, productName__contains="_Hi-Q", instrumentType=instrument_type)
+            else:
+                app = models.ApplProduct.objects.filter(
+                    applType__runType=run_type, isActive=True, instrumentType=instrument_type, applicationGroup=app_group)
+                if app.count() > 0:
+                    app = app[0]
+                else:
+                    app = models.ApplProduct.objects.filter(
+                        applType__runType=run_type, isActive=True, isDefault=True, instrumentType=instrument_type)[0]
+
+        except:
+            if decoratedInstType in available_choice:
+                traceback.print_exc()
+            else:
+                if not decoratedInstType:
+                    decoratedInstType = instrument_type.upper()
+                print message["E001"].format(decoratedInstType)
+                print message["E002"].format(available_choice)
+            sys.exit(1)
+
+    if app.applicationGroup:
+        if app.applicationGroup.description == "Pharmacogenomics" and instrument_type == "pgm":
+            chip_type = app.defaultChipType
+
 
     plugin_details = meta["design"]["plan"].get("selectedPlugins", {});
     alignmentargs_override = None
@@ -174,7 +205,7 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
             if plugin_details["variantCaller"]["userInput"]["meta"]["configuration"] == "custom":
                 plugin_details["variantCaller"]["userInput"]["meta"]["configuration"] = ""
             if "ts_version" not in plugin_details["variantCaller"]["userInput"]["meta"]:
-                plugin_details["variantCaller"]["userInput"]["meta"]["ts_version"] = "4.4"
+                plugin_details["variantCaller"]["userInput"]["meta"]["ts_version"] = "5.2"
             if "name" not in plugin_details["variantCaller"]["userInput"]["meta"]:
                 plugin_details["variantCaller"]["userInput"]["meta"][
                     "name"] = "Panel-optimized - " + meta["design"]["design_name"]

@@ -1,0 +1,13 @@
+--- src/api/internal/bam/BamWriter_p.cpp	2016-04-26 11:05:21.846478000 -0700
++++ src/api/internal/bam/BamWriter_p.cpp	2016-04-26 11:06:15.838242000 -0700
+@@ -175,9 +175,8 @@
+             m_stream = new SerialBgzfStream();
+ 
+         // open the BGZF file for writing
+-        m_stream->Open(filename, IBamIODevice::WriteOnly);
+-
+         m_stream->SetWriteCompressed(m_writeCompressed);
++        m_stream->Open(filename, IBamIODevice::WriteOnly);
+ 
+         // write BAM file 'metadata' components
+         WriteMagicNumber();

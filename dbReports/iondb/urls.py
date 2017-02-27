@@ -17,6 +17,7 @@ admin.autodiscover()
 
 from iondb.rundb.login.urls import urlpatterns as login_patterns
 from iondb.servelocation import serve_wsgi_location
+from iondb.utils.utils import is_TsVm
 
 urlpatterns = patterns(
     r'',
@@ -50,7 +51,7 @@ urlpatterns = patterns(
     url(r'^admin/tsvm/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm/(?P<action>\w+)/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm_log/(.+)/$', 'iondb.rundb.admin.tsvm_get_log', name="tsvm_log"),
-    (r'^admin/', include(admin.site.urls)),
+    (r'^admin/', include(admin.site.urls), {'extra_context': {'is_VM': is_TsVm() }}),
     (r'^(?P<urlpath>output.*)$', serve_wsgi_location),
     (r'^(?P<urlpath>chef_logs.*)$', serve_wsgi_location),
     (r'^(?P<urlpath>ot_logs.*)$', serve_wsgi_location),

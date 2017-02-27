@@ -95,7 +95,8 @@ class StepHelperDbSaver():
         else:
             libraryReadLength = kits_step_data.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH]
         templatingSize = kits_step_data.savedFields[KitsFieldNames.TEMPLATING_SIZE]
-
+        samplePrepProtocol = kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOL]
+        
         x_barcodeId = kits_step_data.savedFields[KitsFieldNames.BARCODE_ID]
         x_chipType = kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE]
         if not x_chipType:
@@ -183,6 +184,7 @@ class StepHelperDbSaver():
             'samplePrepKitName': samplePrepKitName,
             'libraryReadLength': libraryReadLength,
             'templatingSize': templatingSize,
+            'samplePrepProtocol': samplePrepProtocol,
             'planStatus': planStatus,
             'categories': categories,
 
@@ -241,7 +243,7 @@ class StepHelperDbSaver():
         note = save_step.savedFields[SavePlanFieldNames.NOTE]
 
         LIMS_meta = save_step.savedFields[SavePlanFieldNames.LIMS_META]
-        existing_meta = save_step.savedFields[SavePlanFieldNames.META]
+        existing_meta = save_step.savedObjects[SavePlanFieldNames.META]
 
         selectedPluginsValue = plugins_step_data.getSelectedPluginsValue()
 
@@ -305,7 +307,7 @@ class StepHelperDbSaver():
             note = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.NOTE]
 
             LIMS_meta = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.LIMS_META]
-            existing_meta = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.META]
+            existing_meta = step_helper.steps[StepNames.SAVE_PLAN].savedObjects[SavePlanFieldNames.META]
 
             sample = sample_name.strip().replace(' ', '_')
             sample_display_name = sample_name.strip()
@@ -319,7 +321,7 @@ class StepHelperDbSaver():
             note = save_step_data.savedFields[SaveTemplateStepDataFieldNames.NOTE]
 
             LIMS_meta = save_step_data.savedFields[SaveTemplateStepDataFieldNames.LIMS_META]
-            existing_meta = save_step_data.savedFields[SaveTemplateStepDataFieldNames.META]
+            existing_meta = save_step_data.savedObjects[SaveTemplateStepDataFieldNames.META]
 
         retval = {'planDisplayedName': planDisplayedName,
                   'planName': planDisplayedName.replace(' ', '_'),

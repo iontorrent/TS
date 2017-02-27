@@ -320,7 +320,7 @@ def csv_barcodes_read(report):
 def InitLog_read(report):
     # Get the S5 Init Log information from InitLog.txt
     initLogDict = OrderedDict()
-
+    InitLog_read = {}
     msg = {"001" : "No initLog file available.",
            "002" : "No consumable solutions information available."}
 
@@ -365,7 +365,19 @@ def InitLog_read(report):
         logger.debug("ERROR in rundb.report.view.InitLog_read: %s" % err)
         return {"err" : err}
 
-    return [initLogDict[key] for key in initLogDict.keys()]
+    expected_consumables = {'sequenc': 'Ion S5 Sequencing Reagents',
+                            'clean' : 'Ion S5 Cleaning Solution',
+                            'wash' : 'Ion S5 Wash Solution'}
+
+    existing_consumables = initLogDict.keys()
+    # get the consumables irrespective of sequencing kits
+    existing_consumables_generic = [expected_consumables[key] for key in expected_consumables.keys()
+                                    if any(key in xs.lower() for xs in existing_consumables)]
+
+    InitLog_read["missing_consumables"] = list(set(expected_consumables.values()) - set(existing_consumables_generic))
+    InitLog_read["existing_consumables"] = [initLogDict[key] for key in existing_consumables]
+
+    return InitLog_read
 
 def basecaller_read(report):
     basecaller = load_json(report, "basecaller_results", "BaseCaller.json")
@@ -508,29 +520,39 @@ def report_chef_display(report):
                 value = chips[0].description
         chef_info.append((label, value))
 
+    chef_planInfoList = [
+        ("samplePrepProtocol", "Templating Protocol"),
+    ]
+
+    plan = report.experiment.plan
+    if plan:
+        for key, label in chef_planInfoList:
+            value = getattr(plan, key)
+            if value:
+                protocol_cvList = models.common_CV.objects.filter(value = value)
+                value = protocol_cvList[0].displayedValue if protocol_cvList else value
+            else:
+                value = "(use instrument default)"
+            chef_info.append((label, value))
     return chef_info
 
-def report_S5_consumable_display(report):
-    # Get S5 consumable Summary Info:
-    chip_efuseDict = {}
-    chip_efuseOrderedDict = OrderedDict()
-    chip_efuseInfo = None
-    bcBarcode = None
-    bcChipType = None
+def get_msgDesc():
+    msgDesc = {"001": "Missing {0} information",
+                "002": "Error in processing chip efuse info. Please check."
+            }
 
-    msgDesc = { "001" : "Missing {0} information.",
-                "002" : "Error in processing chip efuse info. Please check."
-              }
+    return msgDesc
 
-    #Grep the Efuse fields from Chip_efuseInfo
-    #Example: chip_efuseInfo = "L:QKP721,W:3,J:WC2015600212-B00069,P:6,C:P1540,FC:H2,B:3,SB:34,CT:540v1,BC:21DABD01507*241540v1"
-
-    chip_efuseInfo = report.experiment.log.get("chip_efuse",None)
-    if chip_efuseInfo:
-        try:
-            chip_efuseDict = {}
+def parse_chip_efuse(report):
+    # Grep the Efuse fields from Chip_efuseInfo
+    # Example: chip_efuseInfo = "L:QKP721,W:3,J:WC2015600212-B00069,P:6,C:P1540,FC:H2,B:3,SB:34,CT:540v1,BC:21DABD01507*241540v1"
+    try:
+        chip_efuseDict = {}
+        # handle if identifiers are not present and display proper error message
+        efuse_array = []
+        chip_efuseInfo = report.experiment.log.get("chip_efuse",None)
+        if chip_efuseInfo:
             # handle if identifiers are not present and display proper error message
-            efuse_array = []
             for item in chip_efuseInfo.split(","):
                 if ":" in item:
                     prepareDict = item.split(":")
@@ -538,28 +560,51 @@ def report_S5_consumable_display(report):
                         efuse_array.append(prepareDict)
             if efuse_array:
                 chip_efuseDict = dict(efuse_array)
+    except Exception, Err:
+        logger.debug("ERROR in rundb.report.view.parse_chip_efuse: %s" % Err)
+        return {"err": get_msgDesc()['002']}
 
-            if 'BC' in chip_efuseDict:
-                if '*' in chip_efuseDict["BC"]:
-                    bcBarcode, bcChipType = chip_efuseDict["BC"].split("*")
-                    chip_efuseOrderedDict["Chip Type"] = re.sub(r'^241','', bcChipType)
-                    chip_efuseOrderedDict["Chip Barcode"] = re.sub(r'^21','', bcBarcode)
-            if 'Chip Type' not in chip_efuseOrderedDict:
-                if 'CT' in chip_efuseDict:
-                    chip_efuseOrderedDict["Chip Type"] = chip_efuseDict["CT"]
-                elif 'C' in chip_efuseDict:
-                    chip_efuseOrderedDict["Chip Type"] = chip_efuseDict["C"]
-        except Exception, Err:
-            logger.debug("ERROR in rundb.report.view.report_S5_consumable_display: %s" % Err)
-            return {"err" : msgDesc['002']}
+    return chip_efuseDict
+
+def get_chipLot(report):
+    # Send the Chip Lot information to Analysis Details
+    chip_efuseDict = parse_chip_efuse(report)
+
+    if not chip_efuseDict or "L" not in chip_efuseDict:
+        return ""
+
+    return chip_efuseDict["L"]
+
+
+def report_S5_consumable_display(report):
+    # Get S5 consumable Summary Info:
+    chip_efuseOrderedDict = OrderedDict()
+    chip_efuseInfo = None
+    bcBarcode = None
+    bcChipType = None
+    try:
+        chip_efuseDict = parse_chip_efuse(report)
+        if 'BC' in chip_efuseDict:
+            if '*' in chip_efuseDict["BC"]:
+                bcBarcode, bcChipType = chip_efuseDict["BC"].split("*")
+                chip_efuseOrderedDict["Chip Type"] = re.sub(r'^241','', bcChipType)
+                chip_efuseOrderedDict["Chip Barcode"] = re.sub(r'^21','', bcBarcode)
+        if 'Chip Type' not in chip_efuseOrderedDict:
+            if 'CT' in chip_efuseDict:
+                chip_efuseOrderedDict["Chip Type"] = chip_efuseDict["CT"]
+            elif 'C' in chip_efuseDict:
+                chip_efuseOrderedDict["Chip Type"] = chip_efuseDict["C"]
+    except Exception, Err:
+        logger.debug("ERROR in rundb.report.view.report_S5_consumable_display: %s" % Err)
+        return {"err" : get_msgDesc()['002']}
 
     if not chip_efuseOrderedDict:
-        chip_efuseOrderedDict["Chip Type"] = msgDesc["001"].format("Chip Type")
-        chip_efuseOrderedDict["Chip Barcode"] = msgDesc["001"].format("Chip Barcode")
+        chip_efuseOrderedDict["Chip Type"] = get_msgDesc()["001"].format("Chip Type")
+        chip_efuseOrderedDict["Chip Barcode"] = get_msgDesc()["001"].format("Chip Barcode")
     elif "Chip Type" not in chip_efuseOrderedDict:
-        chip_efuseOrderedDict["Chip Type"] = msgDesc["001"].format("Chip Type")
+        chip_efuseOrderedDict["Chip Type"] = get_msgDesc()["001"].format("Chip Type")
     elif "Chip Barcode" not in chip_efuseOrderedDict:
-        chip_efuseOrderedDict["Chip Barcode"] = msgDesc["001"].format("Chip Barcode")
+        chip_efuseOrderedDict["Chip Barcode"] = get_msgDesc()["001"].format("Chip Barcode")
 
     return chip_efuseOrderedDict
 
@@ -808,6 +853,7 @@ def _report_context(request, report_pk):
         chip_efuseDict = report_S5_consumable_display(report)
         S5_InitLog_read = InitLog_read(report)
 
+    chipLot = get_chipLot(report)
 
     # special case: combinedAlignments output doesn't have any basecaller results
     if report.resultsType and report.resultsType == 'CombinedAlignments':

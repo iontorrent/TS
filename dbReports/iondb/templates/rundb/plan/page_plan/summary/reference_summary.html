@@ -19,11 +19,11 @@
 
 {% ifequal helper.getApplicationGroupName "DNA + RNA"%}
     <tr>
-        <td><b>RNA Reference Library:</b></td>
+        <td><b>Fusions Reference Library:</b></td>
         <td id="selectedMixedTypeRNAReferenceLibrary">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference|default_if_none:""}}</td>
     </tr>
     <tr>
-        <td><b>RNA Target Regions:</b></td>
+        <td><b>Fusions Target Regions:</b></td>
         <td id="selectedMixedTypeRNATargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile|default_if_none:""}}</td>
     </tr>
 {% endifequal %}

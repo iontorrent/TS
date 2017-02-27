@@ -515,8 +515,8 @@ bool BbcCoarse::ReadSum( uint32_t dataPos, uint32_t srtBin, uint32_t endBin,
 		// partial skip for overlapping region
 		if( binsRead < srtBin ) {
 			dataPos += nbytes * (srtBin - binsRead);
-			binsRead = srtBin;
 			rglen -= srtBin - binsRead;
+			binsRead = srtBin;
 		}
 		// set unpack codes for coverage types - see PassCoverage() for details of coding
 		uint8_t fBytes = a, rBytes = (c == 3) ? a : b;

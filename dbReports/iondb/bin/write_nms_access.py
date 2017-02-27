@@ -7,8 +7,12 @@ import argparse
 
 
 def remove_entry(id_server, fpname):
-    '''Remove an entry from the file'''
-    if os.path.isfile(nexentacred):
+    '''
+    Remove an entry from the file:
+    Loop thru each entry and add entry to new list if it does not match id.
+    Overwrite file with the new list.
+    '''
+    if os.path.isfile(fpname):
         newlist = list()
         with open(fpname, 'rb') as fh:
             data = json.load(fh)
@@ -17,9 +21,13 @@ def remove_entry(id_server, fpname):
                 pass
             else:
                 newlist.append(appliance)
-        data = {"appliances": newlist}
-        with open(fpname, 'wb') as fh:
-            json.dump(data, fh)
+
+        if len(newlist) > 0:
+            data = {"appliances": newlist}
+            with open(fpname, 'wb') as fh:
+                json.dump(data, fh)
+        else:
+            os.remove(fpname)
     else:
         print("File does not exist: %s" % fpname)
 

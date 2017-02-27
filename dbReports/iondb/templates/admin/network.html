@@ -9,6 +9,7 @@
   <script src="{% static "js/underscore.js"%}"></script>
   <script src="{% static "js/backbone.js"%}"></script>
   <script src="{% static "js/messagebox.js"%}"></script>
+  <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
   <script>
     $(function () {
 
@@ -51,9 +52,8 @@
         "rssh.iontorrent.com:22",
         "drm.appliedbiosystems.com:443",
         "ionupdates.com:80",
-        "us.archive.ubuntu.com:80",
-        "security.ubuntu.com:80",
         "support.iontorrent.com:443",
+        "iru.ionreporter.thermofisher.com:80",
       ];
       function hey(address, friend) {
         var where = "/admin/network/how_is/" + friend + "/feeling";
@@ -65,6 +65,7 @@
         });
       }
 
+      $.blockUI();
       $.each(friends, hey);
 
       $.getJSON("/admin/network/check", function(data) {
@@ -108,6 +109,10 @@
         $("#id_network-no_proxy").val("{{ network.form.default_no_proxy }}");
       });
 
+    });
+
+    $(document).ajaxStop(function () {
+      $.unblockUI();
     });
   </script>
   <style type="text/css">
@@ -291,17 +296,14 @@
         <dt>ionupdates.com:80</dt>
         <dd>Access to "ionupdates.com" is required to download updates for Torrent Suite software when they are made available.</dd>
 
-        <dt>us.archive.ubuntu.com:80</dt>
-        <dd>Access to "us.archive.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
-
         <dt>drm.appliedbiosystems.com:443</dt>
         <dd>The Remote System Monitoring (RSM) agent on the Torrent Server sends system metrics & health information to this URL over port 443 to facilitate Life Technologies ability to help our customers maintain their systems in running order. If a problem with the PGM or Torrent Server is detected, the RSM agent provides real time warnings to help proactively diagnose issues before they cause any failures and downtime. Without access to the RSM agent, issues may not be detected until a failure occurs on the Torrent Server. Also please keep in mind that remote troubleshooting cannot be provided if this functionality is disabled.</dd>
 
-        <dt>security.ubuntu.com:80</dt>
-        <dd>Access to "security.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
-
         <dt>rssh.iontorrent.com:22</dt>
         <dd>Outgoing access to rssh.iontorrent.com over port 22 is required for the Remote System Monitoring (RSM) agent on the Torrent Server to initiate a remote access. When remote support or troubleshooting is required, remote access through the agent can reduce resolution time to hours instead of days and require minimal on-site resources. Without the remote access capabilities, diagnosing and implementing a solution can take much longer and will require significant back and forth over telephone and email with your on-site personnel.</dd>
+
+        <dt>iru.ionreporter.thermofisher.com:80</dt>
+        <dd>Access to iru.ionreporter.thermofisher.com:80 is required to download updates to the Ion Reporter Uploader plugin when they are made available.</dd>
 
       </dl>
     </div>

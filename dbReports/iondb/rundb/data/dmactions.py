@@ -48,7 +48,10 @@ def delete(user, user_comment, dmfilestat, lockfile, msg_banner, confirmed=False
     try:
         if dmfilestat.dmfileset.type == dmactions_types.OUT:
             _create_archival_files(dmfilestat)
-        _process_fileset_task(dmfilestat, DELETE, user, user_comment, lockfile, msg_banner)
+        filelistdict = _get_file_list_dict(dmfilestat, DELETE, user, user_comment, msg_banner)
+        locallockid = "%s_%s" % (dmfilestat.result.resultsName, dm_utils.slugify(dmfilestat.dmfileset.type))
+        set_action_state(dmfilestat, 'DG', DELETE)
+        _process_fileset_task(filelistdict, lockfile, locallockid)
     except:
         set_action_state(dmfilestat, 'E', DELETE)
         raise
@@ -70,7 +73,10 @@ def export(user, user_comment, dmfilestat, lockfile, msg_banner, backup_director
     try:
         if dmfilestat.dmfileset.type == dmactions_types.OUT:
             _create_archival_files(dmfilestat)
-        _process_fileset_task(dmfilestat, EXPORT, user, user_comment, lockfile, msg_banner)
+        filelistdict = _get_file_list_dict(dmfilestat, EXPORT, user, user_comment, msg_banner)
+        locallockid = "%s_%s" % (dmfilestat.result.resultsName, dm_utils.slugify(dmfilestat.dmfileset.type))
+        set_action_state(dmfilestat, 'EG', EXPORT)
+        _process_fileset_task(filelistdict, lockfile, locallockid)
         prepare_for_data_import(dmfilestat)
     except:
         set_action_state(dmfilestat, 'E', EXPORT)
@@ -95,7 +101,10 @@ def archive(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directo
     try:
         if dmfilestat.dmfileset.type == dmactions_types.OUT:
             _create_archival_files(dmfilestat)
-        _process_fileset_task(dmfilestat, ARCHIVE, user, user_comment, lockfile, msg_banner)
+        filelistdict = _get_file_list_dict(dmfilestat, ARCHIVE, user, user_comment, msg_banner)
+        locallockid = "%s_%s" % (dmfilestat.result.resultsName, dm_utils.slugify(dmfilestat.dmfileset.type))
+        set_action_state(dmfilestat, 'AG', ARCHIVE)
+        _process_fileset_task(filelistdict, lockfile, locallockid)
         prepare_for_data_import(dmfilestat)
     except:
         set_action_state(dmfilestat, 'E', ARCHIVE)
@@ -111,7 +120,9 @@ def test(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory=
     logger.info(msg, extra=logid)
     _update_related_objects(user, user_comment, dmfilestat, TEST, msg)
     try:
-        _process_fileset_task(dmfilestat, TEST, user, user_comment, lockfile, msg_banner)
+        filelistdict = _get_file_list_dict(dmfilestat, TEST, user, user_comment, msg_banner)
+        locallockid = "%s_%s" % (dmfilestat.result.resultsName, dm_utils.slugify(dmfilestat.dmfileset.type))
+        _process_fileset_task(filelistdict, lockfile, locallockid)
     except:
         raise
 
@@ -209,10 +220,10 @@ def destination_validation(dmfilestat, backup_directory=None, manual_action=Fals
             raise
 
     # check for write permission.
-    cmd = ['sudo','/opt/ion/iondb/bin/sudo_utils.py', 'check_write_permission', backup_directory]
+    cmd = ['sudo', '/opt/ion/iondb/bin/sudo_utils.py', 'check_write_permission', backup_directory]
     try:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        _, stderrdata =process.communicate()
+        _, stderrdata = process.communicate()
     except Exception as err:
         logger.debug("Sub Process execution failed %s" % err, extra=logid)
 
@@ -514,13 +525,11 @@ def _process(filepath, action, destination, _start_dir, to_keep):
             raise
 
 
-def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_banner):
+def _get_file_list_dict(dmfilestat, action, user, user_comment, msg_banner):
     '''
-    This function generates a list of files to process, then hands the list to a recursive
-    celery task function.  The recursion continues until the list is empty.  The calling
-    function exits immediately.
+    This function generates a list of files to process.
     '''
-    logid = {'logid': "%s" % (lockfile)}
+    logid = {'logid': "%s" % ('dmactions')}
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=logid)
 
     if dmfilestat.isdeleted():
@@ -538,29 +547,6 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
     else:
         # search both results directory and raw data directory
         search_dirs = [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir]
-
-    # Create a lock file here to block any other actions on this report (see TS-8411)
-    lock_id = "%s_%s" % (dmfilestat.result.resultsName, dm_utils.slugify(dmfilestat.dmfileset.type))
-    locallock = TaskLock(lock_id, timeout=60)  # short timeout in case lock release code doesn't get called
-
-    if not(locallock.lock()):
-        logger.warn("lock file exists: %s(%s)" % (lock_id, locallock.get()), extra=logid)
-        # Release the task lock
-        try:
-            applock = TaskLock(lockfile)
-            applock.unlock()
-        except:
-            logger.error(traceback.format_exc(), extra=logid)
-        return
-
-    logger.info("lock file created: %s(%s)" % (lock_id, locallock.get()), extra=logid)
-
-    if action == ARCHIVE:
-        set_action_state(dmfilestat, 'AG', ARCHIVE)
-    elif action == DELETE:
-        set_action_state(dmfilestat, 'DG', DELETE)
-    elif action == EXPORT:
-        set_action_state(dmfilestat, 'EG', EXPORT)
 
     # List of all files associated with the report
     cached_file_list = dm_utils.get_walk_filelist(search_dirs, list_dir=dmfilestat.result.get_report_dir())
@@ -600,10 +586,40 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
                 'total_size': 0,
                 'user': user,
                 'user_comment': user_comment,
-                'lockfile': lockfile,
+                'lockfile': '',
                 'msg_banner': msg_banner,
             }
         )
+    return list_of_file_dict
+
+
+def _process_fileset_task(list_of_file_dict, lockfile, lock_id):
+    '''
+    Hands the list to a recursive celery task function.
+    The recursion continues until the list is empty.  The calling
+    function exits immediately.
+    '''
+    logid = {'logid': "%s" % (lockfile)}
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=logid)
+
+    # Create a lock file here to block any other actions on this report (see TS-8411)
+    locallock = TaskLock(lock_id, timeout=60)  # short timeout in case lock release code doesn't get called
+
+    if not(locallock.lock()):
+        logger.warn("lock file exists: %s(%s)" % (lock_id, locallock.get()), extra=logid)
+        # Release the task lock
+        try:
+            applock = TaskLock(lockfile)
+            applock.unlock()
+        except:
+            logger.error(traceback.format_exc(), extra=logid)
+        return
+
+    logger.info("lock file created: %s(%s)" % (lock_id, locallock.get()), extra=logid)
+
+    # lockfile variable stored in list_of_file_dict
+    for entry in list_of_file_dict:
+        entry['lockfile'] = lockfile
 
     try:
         pfilename = set_action_param_var(list_of_file_dict)
@@ -657,34 +673,34 @@ def _process_task(pfilename):
         max_time_delta = timedelta(seconds=10)
 
         # list_of_file_dict contains zero, one, or two dictionary variables to iterate over.
-        for d_cnt, dict in enumerate(list_of_file_dict):
-            logid = {'logid': "%s" % (dict.get('lockfile', '_process_task'))}
+        for d_cnt, mydict in enumerate(list_of_file_dict):
+            logid = {'logid': "%s" % (mydict.get('lockfile', '_process_task'))}
 
             # The dictionary contains an element named 'to_process' which is a list variable to iterate over
-            logger.debug("%d, start_dir: %s" % (d_cnt, dict['start_dir']), extra=logid)
+            logger.debug("%d, start_dir: %s" % (d_cnt, mydict['start_dir']), extra=logid)
             logger.info("%6d %s %s" %
-                        (len(dict['to_process']), dmfilestat.dmfileset.type, dmfilestat.result.resultsName), extra=logid)
+                        (len(mydict['to_process']), dmfilestat.dmfileset.type, dmfilestat.result.resultsName), extra=logid)
 
             while (datetime.now() - start_time) < max_time_delta:
                 # If there are no files left to process, (all to_process lists are empty), the recursion ends
-                if len(dict['to_process']) > 0:
+                if len(mydict['to_process']) > 0:
                     terminate = False
 
                     try:
                         # process one file and remove entry from the list
-                        path = dict['to_process'].pop(0)
+                        path = mydict['to_process'].pop(0)
 
-                        j = dict['processed_cnt'] + 1
+                        j = mydict['processed_cnt'] + 1
 
                         this_file_size = 0
                         if not os.path.islink(path):
                             this_file_size = os.lstat(path)[6]
 
-                        if _process(path, dict['action'], dict['archivepath'], dict['start_dir'], dict['to_keep']):
-                            dict['processed_cnt'] = j
-                            dict['total_size'] += this_file_size
+                        if _process(path, mydict['action'], mydict['archivepath'], mydict['start_dir'], mydict['to_keep']):
+                            mydict['processed_cnt'] = j
+                            mydict['total_size'] += this_file_size
                             logger.debug("%04d/%04d %s %10d %s" % (
-                                j, dict['total_cnt'], dict['action'], dict['total_size'], path), extra=logid)
+                                j, mydict['total_cnt'], mydict['action'], mydict['total_size'], path), extra=logid)
 
                     except (OSError, IOError) as e:
                         # IOError: [Errno 28] No space left on device:
@@ -699,21 +715,21 @@ def _process_task(pfilename):
                         raise
                     except:
                         errmsg = "%04d/%04d %s %10d %s" % (
-                            j, dict['total_cnt'], dict['action'], dict['total_size'], path)
+                            j, mydict['total_cnt'], mydict['action'], mydict['total_size'], path)
                         logger.error(errmsg, extra=logid)
                         logger.error(traceback.format_exc(), extra=logid)
 
-                    if not dict['action'] in [EXPORT, TEST] and dmfilestat.dmfileset.del_empty_dir:
-                        dir = os.path.dirname(path)
+                    if not mydict['action'] in [EXPORT, TEST] and dmfilestat.dmfileset.del_empty_dir:
+                        thisdir = os.path.dirname(path)
                         try:
-                            if len(os.listdir(dir)) == 0:
-                                if not "plugin_out" in dir:
+                            if len(os.listdir(thisdir)) == 0:
+                                if not "plugin_out" in thisdir:
                                     try:
-                                        os.rmdir(dir)
-                                        logger.debug("Removed empty directory: %s" % dir, extra=logid)
+                                        os.rmdir(thisdir)
+                                        logger.debug("Removed empty directory: %s" % thisdir, extra=logid)
                                     except Exception as e:
                                         logger.warn("rmdir [%d] %s: %s" % (
-                                            e.errno, e.strerror, dir), extra=logid)
+                                            e.errno, e.strerror, thisdir), extra=logid)
                         except OSError as e:
                             if e.errno == errno.ENOENT:
                                 logger.warn("del_empty_dir Does not exist %s" % (path), extra=logid)
@@ -724,7 +740,7 @@ def _process_task(pfilename):
                     break
 
             # only expect to execute this line when no files to process
-            total_processed += dict['total_size']
+            total_processed += mydict['total_size']
 
     except Exception as e:
         fstatus = "Error"
@@ -732,14 +748,14 @@ def _process_task(pfilename):
         dmfilestat.setactionstate('E')
         logger.error("DM Action failure on %s for %s report." %
                      (dmfilestat.dmfileset.type, dmfilestat.result.resultsName), extra=logid)
-        logger.error("This %s action will need to be manually completed." % (dict['action']), extra=logid)
+        logger.error("This %s action will need to be manually completed." % (mydict['action']), extra=logid)
         logger.error("The following is the exception error:\n" + traceback.format_exc(), extra=logid)
         EventLog.objects.add_entry(
             dmfilestat.result, "%s - %s. Action not completed.  User intervention required." % (fstatus, e), username='dm_agent')
 
         # Release the task lock
         try:
-            applock = TaskLock(dict['lockfile'])
+            applock = TaskLock(mydict['lockfile'])
             applock.unlock()
         except:
             logger.error(traceback.format_exc(), extra=logid)
@@ -747,13 +763,13 @@ def _process_task(pfilename):
         # Do the user notification
         try:
             # pop up a message banner
-            if dict['msg_banner']:
+            if mydict['msg_banner']:
                 dmfileset = dmfilestat.dmfileset
                 project_msg = {}
                 msg_dict = {}
                 msg_dict[dmfileset.type] = fstatus
                 project_msg[dmfilestat.result_id] = msg_dict
-                project_msg_banner('', project_msg, dict['action'])
+                project_msg_banner('', project_msg, mydict['action'])
         except:
             logger.error(traceback.format_exc(), extra=logid)
 
@@ -774,7 +790,7 @@ def _process_task(pfilename):
         # Launch next task
         # ====================================================================
         try:
-            dict.get('action', 'unk')
+            mydict.get('action', 'unk')
             pfilename = set_action_param_var(list_of_file_dict)
             _process_task.delay(pfilename)
         except:
@@ -789,7 +805,7 @@ def _process_task(pfilename):
             dmfilestat.save()
             logger.info("%0.1f MB %s processed" %
                         (dmfilestat.diskspace, dmfilestat.dmfileset.type), extra=logid)
-            if dict['action'] in [ARCHIVE, DELETE]:
+            if mydict['action'] in [ARCHIVE, DELETE]:
                 _brokenlinks_delete([dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir])
                 _emptydir_delete([dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir])
         except:
@@ -797,22 +813,22 @@ def _process_task(pfilename):
 
         # Do the user notification
         try:
-            _action_complete_update(dict['user'], dict['user_comment'], dmfilestat, dict['action'])
+            _action_complete_update(mydict['user'], mydict['user_comment'], dmfilestat, mydict['action'])
 
             # pop up a message banner
-            if dict['msg_banner']:
+            if mydict['msg_banner']:
                 dmfileset = dmfilestat.dmfileset
                 project_msg = {}
                 msg_dict = {}
                 msg_dict[dmfileset.type] = fstatus
                 project_msg[dmfilestat.result_id] = msg_dict
-                project_msg_banner(dict['user'], project_msg, dict['action'])
+                project_msg_banner(mydict['user'], project_msg, mydict['action'])
         except:
             logger.error(traceback.format_exc(), extra=logid)
 
         # Release the task lock
         try:
-            applock = TaskLock(dict['lockfile'])
+            applock = TaskLock(mydict['lockfile'])
             applock.unlock()
         except:
             logger.error(traceback.format_exc(), extra=logid)
@@ -829,9 +845,9 @@ def _get_keeper_list(dmfilestat, action):
         # Are there entries in dmfilestat.dmfileset.keepwith?
         # logger.debug("FILES IN KEEPWITH FIELD", extra=logid)
         # logger.debug(dmfilestat.dmfileset.keepwith, extra=logid)
-        for type, patterns in dmfilestat.dmfileset.keepwith.iteritems():
+        for settype, patterns in dmfilestat.dmfileset.keepwith.iteritems():
             # Are the types specified in dmfilestat.dmfileset.keepwith still local?
-            if not dmfilestat.result.dmfilestat_set.get(dmfileset__type=type).isdisposed():
+            if not dmfilestat.result.dmfilestat_set.get(dmfileset__type=settype).isdisposed():
                 # add patterns to kpatterns
                 kpatterns.extend(patterns)
     logger.debug("Keep Patterns are %s" % kpatterns, extra=logid)
@@ -937,8 +953,8 @@ def set_action_state(dmfilestat, action_state, action=''):
         related = get_related_dmfilestats(dmfilestat)
         if related is not None:
             related.update(action_state=action_state)
-    else:
-        dmfilestat.setactionstate(action_state)
+
+    dmfilestat.setactionstate(action_state)
 
 
 def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_state=None):

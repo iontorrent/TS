@@ -1,4 +1,5 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.kits_step_data import KitsFieldNames
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import dnaBarcode, SampleAnnotation_CV, KitInfo, QCType
@@ -83,15 +84,13 @@ class SavePlanFieldNames():
     BAD_SAMPLE_DESCRIPTION = 'bad_sample_description'
     BAD_TUBE_LABEL = 'bad_tube_label'
     BAD_CHIP_BARCODE = 'bad_chip_barcode'
-    BARCODE_SAMPLE_NAME = 'barcodeSampleName'
-    BARCODE_SAMPLE_DESCRIPTION = 'barcodeSampleDescription'
-    BARCODE_SAMPLE_EXTERNAL_ID = 'barcodeSampleExternalId'
 
     BARCODE_SAMPLE_NUCLEOTIDE_TYPE = "nucleotideType"
     BARCODE_SAMPLE_REFERENCE = "reference"
     BARCODE_SAMPLE_TARGET_REGION_BED_FILE = "targetRegionBedFile"
     BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE = "hotSpotRegionBedFile"
     BARCODE_SAMPLE_CONTROL_SEQ_TYPE = "controlSequenceType"
+    BARCODE_SAMPLE_CONTROL_TYPE = "controlType"
 
     BARCODE_SAMPLE_INFO = 'barcodeSampleInfo'
     NO_SAMPLES = 'no_samples'
@@ -107,6 +106,7 @@ class SavePlanFieldNames():
     PLAN_HOTSPOT_REGION_BED_FILE = "plan_hotSpotRegionBedFile"
     SAMPLES_TABLE_LIST = "samplesTableList"
     SAMPLES_TABLE = "samplesTable"
+    NUM_SAMPLES = "numberOfSamples"
 
     APPL_PRODUCT = "applProduct"
 
@@ -174,6 +174,8 @@ class SavePlanStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(SavePlanStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_save_plan.html'
+        self.prev_step_url = reverse("page_plan_output")
+        self.next_step_url = reverse("page_plan_save")
 
         self.savedFields = OrderedDict()
 
@@ -190,6 +192,7 @@ class SavePlanStepData(AbstractStepData):
 
         self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = None
         self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = None
+        self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = False
         self.prepopulatedFields[SavePlanFieldNames.IR_CONFIG_JSON] = None
         self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
         self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = None
@@ -208,6 +211,7 @@ class SavePlanStepData(AbstractStepData):
 
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = [{"row": "1", 'sampleName': u'Sample 1'}]
         self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
+        self.prepopulatedFields[SavePlanFieldNames.NUM_SAMPLES] = 1
 
         self.savedFields[SavePlanFieldNames.ONCO_SAME_SAMPLE] = False
 
@@ -217,12 +221,10 @@ class SavePlanStepData(AbstractStepData):
 
         self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = None
 
-        self.updateSavedObjectsFromSavedFields()
-
         self.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = None
 
         self.savedFields[SavePlanFieldNames.LIMS_META] = None
-        self.savedFields[SavePlanFieldNames.META] = {}
+        self.savedObjects[SavePlanFieldNames.META] = {}
 
         self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = ""
 
@@ -424,6 +426,7 @@ class SavePlanStepData(AbstractStepData):
                 # logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() REFERENCE reference.savedFields=%s" %(sectionObj.savedFields))
 
         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
+        self.prepopulatedFields[SavePlanFieldNames.NUM_SAMPLES] = len(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
         self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = update_ir_plugin_from_samples_table(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
@@ -500,6 +503,7 @@ class SavePlanStepData(AbstractStepData):
                             SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE: sampleHotSpotRegionBedFile,
 
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
+                            SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE, ""),
                         }
 
                     # logger.debug("save_plan_step_data.updateSavedObjectsFromSaveFields() sampleName=%s; id_str=%s; savedObjects=%s" %(sample_name, id_str, self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str]))
@@ -561,17 +565,22 @@ class SavePlanStepData(AbstractStepData):
                 self.validateStep()
 
         if updated_step.getStepName() == StepNames.IONREPORTER:
+            ir_account_id = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
+            ir_workflow = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
+            ir_isfactory = updated_step.savedFields[IonReporterFieldNames.IR_ISFACTORY]
 
-            if updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] and updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] != "0" \
-                    and self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] != updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]:
+            if ir_account_id and ir_account_id != "0":
+                if self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] != ir_workflow or self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] != ir_isfactory:
 
                     for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
-                        row[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
-                        row[SavePlanFieldNames.IR_ISFACTORY] = updated_step.savedFields[IonReporterFieldNames.IR_ISFACTORY]
+                        row[SavePlanFieldNames.IR_WORKFLOW] = ir_workflow
+                        row[SavePlanFieldNames.IR_ISFACTORY] = ir_isfactory
 
-            self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
-            self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = updated_step.savedFields[IonReporterFieldNames.IR_ISFACTORY]
-            self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
+                    self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
+
+            self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = ir_workflow
+            self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = ir_isfactory
+            self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = ir_account_id
 
         for sectionKey, sectionObj in self.step_sections.items():
             if sectionObj:

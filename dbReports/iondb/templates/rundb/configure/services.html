@@ -32,7 +32,23 @@ function showModal(elem, modal_id){
     });
 }
 
+function showNasInfo(){
+    $('#torrentnas_msg').html('');
+    $('#torrentnas_loading').show();
+    var url = $('#refresh_nas_info').attr('href');
+    $('#nas_info_section').load(url, function(response, status, xhr){
+        if ( status == "error" ) {
+            $('#torrentnas_msg').html('<h4>'+response+'</h4>');
+        }
+        $('#torrentnas_loading').hide();
+    });
+}
+
 $(document).ready(function () {
+
+    {% if show_nas_info %}
+        showNasInfo();
+    {% endif %}
 
     $('.queueStat').live('click',function(e){
         e.preventDefault();
@@ -46,7 +62,7 @@ $(document).ready(function () {
         showModal(this, 'modal_raid_info');
     });
 
-    $('.openclose').click(function(e){
+    $('.openclose').live('click', function(e){
         if (!e.target.href){
             $(this).next('tr').toggle();
             $(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
@@ -123,6 +139,11 @@ $(document).ready(function () {
         }).always(function(){
             $('#cluster_loading').addClass('hidden');
         });
+    });
+    
+    $('#refresh_nas_info').click(function(e){
+        e.preventDefault();
+        showNasInfo();
     });
 });
 </script>
@@ -323,65 +344,16 @@ $(document).ready(function () {
         {% endif %}
     </div>
 
-    {% if nas_info %}
+    {% if show_nas_info %}
     <div class="content clearfix">
-        <h1>Torrent NAS Info</h1>
-        {% for nas in nas_info %}
-        <h2>address: {{nas.ipaddress}}</h2>
-        <table class="table table-condensed table-hover">
-            <thead>
-                <th></th>
-                <th>Name</th>
-                <th>Allocated</th>
-                <th>Available</th>
-                <th>Capacity</th>
-                <th>Health</th>
-                <th></th>
-            </thead>
-            <tbody>
-            {% for volume in nas.volumes %}
-                <tr class="{{volume.state}} openclose">
-                    <td><i class="icon-plus"></i></td>
-                    <td>{{volume.name}}</td>
-                    <td>{{volume.allocated}}</td>
-                    <td>{{volume.available}}</td>
-                    <td>{{volume.capacity}}</td>
-                    {% if volume.state == 'error' %}
-                        <td><span class="label label-important">{{volume.health}}</span></td>
-                    {% elif volume.state == 'warning' %}
-                        <td><span class="label label-warning">{{volume.health}}</span></td>
-                    {% else %}
-                        <td><span class="label label-success">{{volume.health}}</span></td>
-                    {% endif %}
-                    <td width="40%">{{volume.extra_info|safe}}</td>
-                </tr>
-                <tr class="hide">
-                    <td></td>
-                    <td colspan="6">
-                        <table class="table table-condensed">
-                            <thead>
-                                <th>Name</th>
-                                <th>Status</th>
-                                <th>Errors (Read / Write / Cksum)</th>
-                                <th></th>
-                            </thead>
-                            <tbody>
-                                {% for disk in volume.disks %}
-                                <tr class="{{disk.state}}">
-                                    <td>{{disk.name}}</td>
-                                    <td>{{disk.health}}</td>
-                                    <td>{{disk.err}}</td>
-                                    <td>{{disk.info}}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% endfor %}
+        <h1>Torrent NAS Info
+            <a title="Refresh Torrent NAS Info" id="refresh_nas_info" href="{% url 'torrent_nas_section' %}"><i class="icon-refresh"></i></a>
+            <div id="torrentnas_msg" style="display:inline-block;"></div>
+            <div id="torrentnas_loading" style="display:inline-block;">
+                <h4>Loading Torrent NAS Info <img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
+            </div>
+        </h1>
+        <div id="nas_info_section"></div>
     </div>
     {% endif %}
 

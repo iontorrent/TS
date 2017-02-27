@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 from __future__ import absolute_import
 from celery import Celery
-from iondb.rundb.session_cleanup.settings import nightly_schedule
+from iondb.rundb.session_cleanup.settings import hourly_schedule
 
 app = Celery('iondb')
 
@@ -63,7 +63,7 @@ app.conf.update(
     ),
 
     CELERYBEAT_SCHEDULE = {
-        'session_cleanup': nightly_schedule
+        'session_cleanup': hourly_schedule
     }
 )
 

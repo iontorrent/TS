@@ -143,6 +143,7 @@ $(function () {
     $(function () {
         TB.toggleContent();
         TB._RunTypes = null;
+        TB._ApplicationGroups = null;
         
         TB.runTypeDescription = function(runType) {
             var helper = function() {
@@ -169,35 +170,53 @@ $(function () {
             }
             return helper();
             
-        };            
+        };
+
+        TB.runTypeApplicationDescription = function(runType, application) {
+            var helper = function() {
+                if (TB._RunTypes && TB._ApplicationGroups) {
+                    for (i in TB._ApplicationGroups) {
+                        if (TB._ApplicationGroups[i] && (TB._ApplicationGroups[i].name == application || TB._ApplicationGroups[i].description == application)) {
+                        	if (TB._ApplicationGroups[i].applications.length <= 1) {
+                            	return TB._ApplicationGroups[i].description;
+                            }
+                            else {
+                            	return TB.runTypeDescription(runType);
+                            }
+                        }
+                    }
+                }
+                return '';
+            }
+            if (TB._RunTypes == 'undefined' || TB._RunTypes == null ) {
+                $.ajax({
+                    url:'/rundb/api/v1/runtype/',
+                    dataType: 'json',
+                    async: false,
+                    success: function(data) {
+                        if (data) {
+                            TB._RunTypes = data && data.objects;
+                        }
+                    }
+                });
+            }           
+            if (TB._ApplicationGroups == 'undefined' || TB._ApplicationGroups == null ) {
+                $.ajax({
+                    url:'/rundb/api/v1/applicationgroup/',
+                    dataType: 'json',
+                    async: false,
+                    success: function(data) {
+                        if (data) {
+                            TB._ApplicationGroups = data && data.objects;
+                        }
+                    }
+                });
+            }
+            return helper();
+            
+        };
+                   
         TB._RunModes = null;
-        
-        TB.runTypeDescription = function(runType) {
-            var helper = function() {
-                if (TB._RunTypes) {
-                    for (i in TB._RunTypes) {
-                        if (TB._RunTypes[i] && TB._RunTypes[i].runType == runType) {
-                            return TB._RunTypes[i].description;
-                        }
-                    }
-                }
-                return '';
-            }
-            if (TB._RunTypes == 'undefined' || TB._RunTypes == null ) {
-                $.ajax({
-                    url:'/rundb/api/v1/runtype/',
-                    dataType: 'json',
-                    async: false,
-                    success: function(data) {
-                        if (data) {
-                            TB._RunTypes = data && data.objects;
-                        }
-                    }
-                });
-            }
-            return helper();
-            
-        };        
         
     });
     

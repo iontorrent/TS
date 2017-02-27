@@ -68,7 +68,7 @@ void build_index(const string &path_in) {
 		  while (position.length() < 9) {position = "0" + position;}
 		  line_key = "";
 		  line_key.reserve(line.length());
-		  for (unsigned int index = 2; (index < strs.size()); ++index) {"\t" + line_key += strs[index];}
+		  for (unsigned int index = 2; (index < strs.size()); ++index) {line_key = line_key + "\t" + strs[index];}
 		  string key = chr_key + ":" + position + line_key;
           lines[key] = line;
         }
@@ -295,7 +295,7 @@ bool VcfOrderedMerger::is_within_target_region(T *variant) {
     current_target++;
   }
   if (current_target == targets_manager.merged.end() || chr_idx != current_target->chr) return false;
-  while (current_target != targets_manager.merged.end() && pos > current_target->end) {
+  while (current_target != targets_manager.merged.end() && chr_idx == current_target->chr && pos > current_target->end) {
     current_target++;
   }
   return current_target != targets_manager.merged.end()

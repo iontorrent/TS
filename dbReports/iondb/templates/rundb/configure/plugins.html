@@ -31,9 +31,9 @@
 {% endblock extra_head_styles %}
 
 {% block extra_head_js %}
+    <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
 
 <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
@@ -51,7 +51,12 @@
     <div class="content clearfix">
         <div class="clearfix">
             <h1 class="pull-left">Plugins</h1>
-            <button id="modal_show" style="font-size: 12px;font-weight: 700;outline: none" type="button" class="btn pull-right" data-toggle="modal" data-target="#modal_configure_plugins_plugin_install">Install or Upgrade Plugin</button>
+            <div class="pull-right btn-group">
+                <a href="{% url "configure_plugins_plugin_install" %}" class="btn install_plugin_or_publisher" style="margin-right: 5px;">Install or Upgrade Plugin</a>                
+                <br /><p></p>
+                <button id="rescan_button" style="font-size: 12px;font-weight: 700;outline: none" type="button" class="btn" onclick="rescan()">Rescan Plugins for Changes</button>
+                <br /><p></p>
+            </div>
         </div>
         <form class="well well-small clearfix">
             <div class="filter-item">
@@ -70,7 +75,7 @@
     <div class="content">
         <div class="clearfix">
             <h1 class="pull-left">Publishers</h1>
-            <a href="{% url "configure_publisher_install" %}" class="btn pull-right install_upgrade_publisher">Install or Upgrade Publisher</a>
+            <a href="{% url "configure_publisher_install" %}" class="btn pull-right install_plugin_or_publisher">Install or Upgrade Publisher</a>
         </div>
         {% if publishers %}
         <table id="publishers" class="data-table">
@@ -114,159 +119,26 @@
         {% endif %}
     </div>
 
-    <div id="modal_configure_plugins_plugin_install" title="" class="modal modal-750 fade hide">
-        <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>Install or Upgrade Plugin</h3>
-        </div>
-        <div class="modal-body" id="modal_configure_plugins_plugin_install_body">
-            <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
-                <form class="form-horizontal">
-                    <fieldset>
-                        <div id="upload-plugin-file" class="control-group">
-                            <label for="pickfile" class="control-label">Upload a Plugin</label>
-                            <div class="controls">
-                                <a id="pickfile" name="pickfile" class="btn">Select File</a><br />
-                                <span id="filelist">------</span>
-                                <div id="upload-help" class="help-block" >
-                                    In order to provide a better uploading experience either Microsoft Silverlight
-                                    plugin or an HTML5 compatible browser are required for file uploading.
-                                    <ul>
-                                        <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/"> microsoft.com </a></li>
-                                    </ul>
-                                    You may need to contact your local system administrator for assistance.
-                                </div>
-                                <div id="file_info" class="help-block"></div>
-                            </div>
-                            <div class="controls">
-                                <div id="upload-progress" class="progress progress-striped active hide">
-                                    <div class="bar" style="width: 0%">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </fieldset>
-                    <div id="update"></div>
-                    <input name="target_file" id="target_file" type="hidden"/>
-                    <input name="reported_file_size" id="reported_file_size" type="hidden"/>
-                </form>
-            <form id="modal_configure_plugins_plugin_install_form" method="POST" action="{% url "configure_plugins_plugin_install" %}" enctype="multipart/form-data">
-          </form>
-        </div>
-        <div class="modal-footer" id="tab-2-footer">
-            <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-            <a id="uploadfile" class="btn btn-primary">Upload file</a>
-        </div>
-    </div>
     <script>
-        $('#modal_show').on('click', function() {
-            $('#pickfile').show();
-            $("#uploadfile").removeAttr('disabled');
-            $('#upload-progress').hide();
-            $('#filelist').text('-----');
-            $("#update").hide();
-            $('#upload-progress .bar').css('width', '0%');
-            uploader.splice();
-            uploader.refresh();
-        });
-
-        var uploader = new plupload.Uploader({
-            runtimes: 'html5, silverlight',
-            filters : [
-                {title : "Debian Package", extensions : "deb"},
-                {title : "Zip File", extensions : "zip"}
-            ],
-            browse_button: 'pickfile',
-            url: '{% url "configure_plugins_plugin_zip_upload" %}',
-            chunk_size: '15mb',
-            unique_names: true,
-            multi_selection: false,
-            multiple_queues: false,
-            silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}'
-        });
-
-        uploader.bind('FilesAdded', function (up, files) {
-            // check for one and only one file
-            if(files.length != 1){
-                return;
-            }
-
-            $('#upload-plugin-file').removeClass('invalid alert alert-error').addClass('valid');
-            $("#file_info").html("");
-            $(".file_item").remove();
-            var file = files[0];
-            $("#filelist").text(file.name + ' (' + plupload.formatSize(file.size) + ')');
-            $("#reported_file_size").val(file.size);
-        });
-
-        uploader.bind('UploadProgress', function (up, file) {
-            $('#' + file.id + " b").html(file.percent + "%");
-            $('#upload-progress .bar').css('width', ''+file.percent + '%');
-            $("#file_info").html("");
-        });
-
-        uploader.bind('UploadComplete', function(up, file){
-            $('#' + file.id + " b").html("100%");
-            $('#upload-progress .bar').css('width', '100%');
-            $("#file_info").html("");
-            var file_name = uploader.files[0].target_name;
-            $("#target_file").val(file_name.split(' ').join(''));
-            $("#update").show();
-            $("#update").addClass('alert-success alert-error').addClass('alert alert-info').html("Attempting to install plugin");
-            target_file = $("#target_file").val();
-            dataFile = {"file": target_file};
-            dataFile = JSON.stringify(dataFile);
-
+        function rescan(){
+            // disable the kendo grid
+            var g = $('#grid').data('kendoGrid');
+            $.blockUI();
             $.ajax({
-                type: 'POST',
-                url: "/rundb/api/v1/plugin/install/",
-                contentType: "application/json; charset=utf-8",
-                data: dataFile,
-                dataType: "json",
-                async: false,
-                success: function () {
-                    $("#update").removeClass('alert-info alert-error').addClass('alert-success').html("Plugin success installing");
-                    setTimeout(function () {
-                        $('#grid').data('kendoGrid').dataSource.read();
-                        $('#grid').data('kendoGrid').refresh();
-                        $('#modal_configure_plugins_plugin_install').modal('hide');
-                    }, 2000);
+                url: '/rundb/api/v1/plugin/rescan',
+                dataType: 'json',
+                async: true,
+                success: function(data) {
+                    g.dataSource.read();
+                    g.refresh();
+                    $.unblockUI();
                 },
-                error:function(jqXHR, textStatus, errorThrown){
-                    $("#update").removeClass('alert-info alert-success').addClass('alert-error').html(jqXHR.responseText);
+                failure: function(data){
+                    $.unblockUI();
                 }
             });
-        });
-
-        $('#uploadfile').click(function (e) {
-            //don't allow them to upload a big file if they are using Flash, it will fail.
-            e.preventDefault();
-            $("#upload-plugin-file").addClass('invalid alert alert-error');
-            if (uploader.files.length == 1) {
-                $('#upload-plugin-file').removeClass('invalid alert alert-error').addClass('valid');
-                uploader.start();
-                $('#pickfile').hide();
-                $("#uploadfile").attr('disabled','disabled');
-                $('#upload-progress').show();
-            }
-            else {
-                $('#upload-plugin-file').addClass('invalid alert alert-error');
-                // $("#file_info").addClass('alert-error').html("You must select at a plugin file to upload.").show();
-            }
-        });
-
-        uploader.init();
+        }
     </script>
-
-<!--[if (gte IE 6)&(lte IE 8)]>
-<script type="text/javascript">
-    $(document).ready(function() {
-        $('#modal_configure_plugins_plugin_configure').on('hidden', function () {
-            //window.location.reload(); //HACK!!!! LOADING THE Plugin Configure modal messes up the JS on page. Reload
-        });
-    });
-    </script>
-<![endif]-->
 
 <div class="modal container hide" id="modal-window" data-modal-Overflow="true">
     <div class="modal-header">
@@ -328,7 +200,7 @@
                 <a href="#= '{% url "configure_plugins_plugin_upgrade" 999999 %}'.replace('999999',_id)#" class="upgrade-plugin">Upgrade to Latest</a>
             </li>
                     # } #
-                    #for (index = 0; index < data.availableVersions.length; ++index) {#
+                    #for (index = 0; index < data.availableVersions.length; ++index) { #
                         # if (data.availableVersions[index] != data.CurrentVersion) { #
                             # var _version = data.availableVersions[index] #
             <li>
@@ -342,6 +214,13 @@
                 <a href="#= '{% url "configure_plugins_plugin_uninstall" 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">Uninstall</a>
             </li>
                 # } #
+
+            # if (data.hasAbout) { #
+            <li>
+                <a class='about-plugin' href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#"> About </a>
+            </li>
+            # } #
+
             {% endif %}
         </ul>
     </div>
@@ -605,24 +484,18 @@ $(document).ready(function(){
         });
     }
 
-    $('.install_upgrade_publisher').click(function (e) {
+    $('.install_plugin_or_publisher').click(function (e) {
         e.preventDefault();
         $('#error-messages').hide().empty();
 
-        url = $(this).attr('href');
-        // alert(url);
+        var url = $(this).attr('href');
         $.get(url, function(data) {
-            return false;
-        }).done(function(data) {
-            console.log("success:",  url);
             $('body').append(data);
-            $('#modal_configure_publisher_install').modal('show');
-        })
-        .fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#modal_plugin_or_publisher_install').modal('show');
+        }).fail(function(data) {
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
             console.log("error:", data);
-        })
+        });
     });
 
     $('.publisher_upload').click(function(e) {

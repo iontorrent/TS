@@ -764,6 +764,7 @@ void ProgramControlSettings::SetOpts(OptArgs &opts, Json::Value &tvc_params) {
   use_SSE_basecaller                    = RetrieveParameterBool  (opts, tvc_params, '-', "use-sse-basecaller", true);
 
   do_indel_assembly                     = RetrieveParameterBool  (opts, tvc_params, '-', "do-indel-assembly", true);
+  is_multi_min_allele_freq              = RetrieveParameterBool  (opts, tvc_params, '-', "output-multi-min-allele-freq", false);
 
   RetrieveParameterVectorFloat(opts, tvc_params, '-', "snp-multi-min-allele-freq", "0.05,0.1,0.15,0.2", snp_multi_min_allele_freq);
   string snp_multi_min_allele_freq_str = "";

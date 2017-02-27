@@ -349,7 +349,8 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf Chip ID & {% spaceless %} {% if experiment %} {{experiment.chipBarcode}}{% endif %}{% endspaceless %} \\
 	\bf Chip Check & {% spaceless %} {% if experiment.log.calibratepassed %} Passed {% else %}Failed{% endif %}{% endspaceless %} \\
 	\bf Chip Type & {{experiment.chipType}} \\ 
-	\bf Chip Data & {{experiment.rawdatastyle}} \\ 
+	\bf Chip Data & {{experiment.rawdatastyle}} \\
+	\bf Chip Lot Number & {{chipLot}} \\
 	\bf Barcode Set & {{report.eas.barcodeKitName|latexsafe}} \\ 
 	\bf Analysis Name & {{report.resultsName|latexsafe}} \\ 
 	\bf Analysis Date & {{report.timeStamp}} \\ 
@@ -374,8 +375,6 @@ Run Report for {{report.resultsName|latexsafe}}
     {% endif %}
     \bf Analysis Parameters & {{report.eas.custom_args|yesno:"custom,default"}} \\
 \end{tabular}%
-
-
 
  
 %%%%%%%%%%top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -415,8 +414,70 @@ Run Report for {{report.resultsName|latexsafe}}
         \end{tabular}
     {% endif %}     
 
+    {%if S5_InitLog_read or chip_efuseDict%}
+        \section*{S5 Consumables Summary}
 
+        {% if chip_efuseDict.err %}
+            \begin{tabular}{l|l}
+            \bf Chip eFuse Error: {{ chip_efuseDict.err }} \\
+            \end{tabular}
+        {% else %}
+            \begin{tabular}{E{38mm}|E{125mm}}
+            {% for key, value in chip_efuseDict.items %}
+                {%if "Missing" in value %}
+                    \bf Missing - {{ key }} & {{value}} \\
+                {% else %}
+                    \bf {{ key }} & {{value}} \\
+                {% endif %}
+            {% endfor %}
+            \end{tabular}
+        {% endif %}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        {% if S5_InitLog_read.err %}
+            \begin{tabular}{l|l}
+            \bf Init Log Error: {{S5_InitLog_read.err}} \\
+            \end{tabular}
+        {% elif S5_InitLog_read.msg %}
+            \begin{tabular}{l|l}
+            \bf {{S5_InitLog_read.msg}} \\
+            \end{tabular}
+        {% else %}
+            \begin{minipage}[c]{100mm}
+            \fcolorbox{gray}{white}{\parbox[t][20mm]{160mm}{\setlength{\parindent}{0mm}\small\centering%%
+            \begin{tabular}{lrrrr}
+            \bf Product Description		& \bf Part Number &\bf Lot Number	&\bf Exp. Date &\bf Remaining Uses \\
+              \midrule
+               {% for initLog in S5_InitLog_read.existing_consumables %}
+                    {% for key, value in initLog.items %}
+                        {% if key == "productDesc" %}
+                            {{ value }}
+                        {% elif key == "partNumber" %}
+                            & {{ value }}
+                        {% elif key == "lotNumber" %}
+                            & {{ value }}
+                        {% elif key == "expDate" %}
+                            & {{ value }}
+                        {% elif key == "remainingUses" %}
+                            & {{ value }} \\
+                        {% else %}
+                            & {{ value }} \\
+                        {% endif %}
+                    {% endfor %}
+               {% endfor %}
+               {% if S5_InitLog_read.missing_consumables %}
+                   {% for consumable in S5_InitLog_read.missing_consumables %}
+                       {{consumable}}: Missing \\
+                   {% endfor %}
+               {% endif %}
+            \end{tabular}
+            }}
+            \end{minipage}
+        {% endif %}
+    {% endif %}
 
 %%%%%%%%%%top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

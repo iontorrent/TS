@@ -90,6 +90,8 @@ urlpatterns = patterns(
     url(r'^services/cluster_info/log/(?P<pk>\d+)/$', 'views.cluster_info_log', name='cluster_info_log'),
     url(r'^services/cluster_info/history/$', 'views.cluster_info_history', name='cluster_info_history'),
     url(r'^services/cluster_ctrl/(?P<name>\w+)/(?P<action>\w+)/$', 'views.cluster_ctrl', name='cluster_ctrl'),
+    url(r'^services/torrent_nas_section/$', 'views.torrent_nas_section', name="torrent_nas_section"),
+
     (r'^getZip/(.+)$', 'chips.getChipZip'),
     (r'^getChipLog/(.+)$', 'chips.getChipLog'),
     (r'^getChipPdf/(.+)$', 'chips.getChipPdf'),

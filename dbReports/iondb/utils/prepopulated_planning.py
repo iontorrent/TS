@@ -11,7 +11,6 @@ def apply_prepopulated_values_to_step_helper(request, step_helper):
             if "sampleName" not in sample or sample["sampleName"] == "":
                 sample["sampleName"] = "Sample %i" % (i+1)
         step_helper.steps["Save_plan"].savedFields["samplesTable"] = json.dumps(samples_table)
-        step_helper.steps["Save_plan"].updateSavedObjectsFromSavedFields()
 
     # Torrent Hub Sessions
     if "prepopulated-planning-session" in request.GET:

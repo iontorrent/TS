@@ -1000,8 +1000,12 @@ void BaseCallerFilters::TrimSuffixTag(int read_index, int read_class, ProcessedR
     processed_read.filter.is_filtered = true;
   }
   else if (n_bases_trimmed_tag > 0){
+    // Store trimmed molecular tag in bam tag
     processed_read.filter.n_bases_filtered -= n_bases_trimmed_tag;
     processed_read.bam.AddTag("YT", "Z", processed_read.trimmed_tags.suffix_mol_tag);
+    // update ZA tag: contains insert length, i.e., length of query sequence before quality trimming
+    // We require that suffix tag trimming is done after adapter trimming
+    processed_read.bam.EditTag("ZA", "i", max(processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix, 0));
   }
 
   processed_read.filter.n_bases_after_tag_trim = processed_read.filter.n_bases_filtered;
@@ -1308,6 +1312,8 @@ void BaseCallerFilters::TrimExtraRight (int read_index, int read_class, Processe
     }
     processed_read.filter.n_bases_filtered = new_end;
   }
+  else
+    return;
 
   // All of suffix trimming goes into the adapter trimming filter category since it's conditional on adapter trimming
   if (processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix < trim_min_read_len_) {
@@ -1317,6 +1323,10 @@ void BaseCallerFilters::TrimExtraRight (int read_index, int read_class, Processe
     processed_read.filter.is_filtered = true;
   } else {
     processed_read.filter.n_bases_after_extra_trim = processed_read.filter.n_bases_filtered;
+
+    // update ZA tag: contains insert length, i.e., length of query sequence before quality trimming
+    // We require that extra trimming right is done after adapter trimming and suffix tag trimming xxx
+    processed_read.bam.EditTag("ZA", "i", max(processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix, 0));
   }
 }
 
@@ -1404,16 +1414,20 @@ bool BaseCallerFilters::TrimAdapter_FlowAlign(float& best_metric, int& best_star
   best_start_base = -1;
   best_adapter_overlap= -1;
   int sequence_pos = 0;
+  char adapter_start_base = effective_adapter.at(0);
 
   for (int adapter_start_flow = 0; adapter_start_flow < flow_order_.num_flows(); ++adapter_start_flow) {
+
+    // Only consider start flows that agree with adapter start
+    if (flow_order_[adapter_start_flow] != adapter_start_base)
+      continue;
 
     while (sequence_pos < (int)read.sequence.size() and base_to_flow[sequence_pos] < adapter_start_flow)
       sequence_pos++;
     if (sequence_pos >= (int)read.sequence.size())
       break;
-    // Only consider start flows that agree with adapter start
-    if (effective_adapter.at(0) != flow_order_[adapter_start_flow])
-      continue;
+    else if (sequence_pos>0 and read.sequence.at(sequence_pos-1)==adapter_start_base)
+      continue; // Make sure we don't get impossible configurations
 
     // Evaluate this starting position
     int adapter_pos = 0;

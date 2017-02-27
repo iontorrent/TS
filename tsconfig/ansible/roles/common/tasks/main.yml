@@ -10,7 +10,7 @@
 - name: Disable /etc/apt/sources.list
   command: "mv /etc/apt/sources.list{{FUNKYEXT|default('')}} /etc/apt/sources.list.orig removes=/etc/apt/sources.list{{FUNKYEXT|default('')}}"
 - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
-  template: src=files/iontorrent-ubuntu.j2
+  template: src=templates/iontorrent-ubuntu.j2
             dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{FUNKYEXT|default('')}}
             owner=root group=root mode=644
   when: "ansible_hostname == groups.headnode[0]"
@@ -19,7 +19,7 @@
 # Adding IonReporter plugin repository
 #-----------------------------------------------------------------------------
 - name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
-  template: src=files/ionreporter-plugin.j2
+  template: src=templates/ionreporter-plugin.j2
             dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{FUNKYEXT|default('')}}
             owner=root group=root mode=644
 
@@ -119,19 +119,20 @@
                insertafter=EOF
                line='GRUB_RECORDFAIL_TIMEOUT=$GRUB_TIMEOUT'
                regexp='GRUB_RECORDFAIL_TIMEOUT.*'
-  notify: update grub
+  notify: "update grub"
   when: not docker_image
+  register: grub_update_needed
 
 #-----------------------------------------------------------------------------
-# Enable a console for S5 only
+# TS-13492
 #-----------------------------------------------------------------------------
-- name: GRUB console enabled
-  lineinfile: dest=/etc/default/grub
-                insertafter=EOF
-                line='GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"'
-                regexp='GRUB_CMDLINE_LINUX=.*'
-  when: S5_virtual_guest|bool == True
-  notify: update grub
+- name: solves the falsely reported DBE from GPU driver
+  lineinfile: dest={{grub_config_file}}
+                line='GRUB_TERMINAL=console'
+                regexp='.*GRUB_TERMINAL=console'
+  when: ansible_product_name == "Precision WorkStation T7500"
+  notify: "update grub"
+  register: grub_update_needed
 
 #-----------------------------------------------------------------------------
 #NOTE: required: ionian user be created prior to initial installation of ion-dbreports
@@ -237,3 +238,11 @@
                 regexp='.*root.*hard.*nofile.*$'
                 line='root             hard    nofile          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
+
+#-----------------------------------------------------------------------------
+# grub update based on changes in grub config
+#-----------------------------------------------------------------------------
+# For unknown reasons, "update grub" handlers are always skipped
+- name: Run update-grub if needed
+  command: /usr/sbin/update-grub
+  when: grub_update_needed.changed

@@ -5,6 +5,7 @@ __version__ = filter(str.isdigit, "$Revision$")
 
 import os
 import sys
+import time
 import argparse
 import traceback
 import xmlrpclib
@@ -248,15 +249,27 @@ if __name__ == "__main__":
             add_status("Pre Basecalling Step", status=1)
             sys.exit(1)
 
-        try:
-            with open(os.path.join(env['SIGPROC_RESULTS'], 'analysis_return_code.txt'), 'r') as f:
-                return_code = f.read()
-                if not int(return_code) == 0:
-                    printtime("ERROR: basecaller pre-conditions not met")
-                    add_status("Pre Basecalling Step", status=1)
-                    raise Exception("Analysis failed with %s" % return_code)
-        except:
-            traceback.print_exc()
+        # TS-13077.  Sometimes, file analysis_return_code.txt contents is empty
+        # Block for 10 minutes before exiting with a failure
+        proceed = False
+        for i in range(200):
+            try:
+                with open(os.path.join(env['SIGPROC_RESULTS'], 'analysis_return_code.txt'), 'r') as f:
+                    return_code = f.read()
+                    if not int(return_code) == 0:
+                        printtime("ERROR: basecaller pre-conditions not met")
+                        add_status("Pre Basecalling Step", status=1)
+                        raise Exception("Analysis failed with %s" % return_code)
+                    else:
+                        proceed = True
+                        break
+            except:
+                traceback.print_exc()
+                printtime("DEBUG: GPFS (%d)" % i)
+                time.sleep(3)
+
+        if not proceed:
+            printtime("ERROR: analysis_return_code.txt is empty")
             sys.exit(1)
 
         #
@@ -268,15 +281,15 @@ if __name__ == "__main__":
         #       'panel_recal' : 'Calibration Standard'
         #       'blind_recal' : 'Blind Calibration'
         #
-        
+
         additional_basecallerArgs = ""
         calibration_mode = env['doBaseRecal']
-        
+
         # If we don't have a reference we default to blind rather than no-calibration
         if (calibration_mode == "standard_recal" and not reference_selected):
             printtime("DEBUG: No reference selected, defaulting to blind calibration.")
-            calibration_mode == "blind_recal"
-        
+            calibration_mode = "blind_recal"
+
         if calibration_mode == "no_recal":
             printtime("DEBUG: Flow Space Recalibration is disabled")
         else:
@@ -288,7 +301,7 @@ if __name__ == "__main__":
                 # Part 1) Calling BaseCaller to generate a small training set of wells
                 # How the training subset is generated depends on the calibration method
                 #
-                
+
                 prebasecallerArgs = env['prebasecallerArgs']
 
                 if calibration_mode == "panel_recal":
@@ -316,7 +329,7 @@ if __name__ == "__main__":
                     env['platform'],
                     env['instrumentName'],
                     env['chipType'])
-                
+
                 # Reuse phase estimates in main base calling task
                 additional_basecallerArgs += " --phase-estimation-file " + \
                     os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json")
@@ -338,20 +351,20 @@ if __name__ == "__main__":
                         continue
                     if "nomatch" in dataset['basecaller_bam']:
                         continue
-                    
+
                     basecaller_bam = os.path.join(
                         env['BASECALLER_RESULTS'], 'recalibration', dataset['basecaller_bam'])
 
                     # For blind calibration we provide the unaligned BAM files to Calibration
                     if calibration_mode == "blind_recal":
-                        
+
                         if len(calibration_input_bams) > 0:
                             calibration_input_bams += ","
                         calibration_input_bams += basecaller_bam
-                        
+
                     # Otherwise we align the BAM files and provide the aligned BAMs to Calibration
                     else:
-                        
+
                         read_group = dataset['read_groups'][0]
                         referenceName = basecaller_recalibration_datasets['read_groups'][read_group]['reference']
                         if not referenceName:
@@ -383,12 +396,12 @@ if __name__ == "__main__":
                                         do_indexing=False,
                                         output_dir=RECALIBRATION_RESULTS,
                                         output_basename=dataset['file_prefix'])
-                
+
                 #
                 # Part 3) Call Calibration executable to create models and update basecallerArgs
                 # If we didn't generate any BAMs for calibration we don't do anything
                 #
-                    
+
                 # file containing chip dimension info (offsets, rows, cols) and flow info for stratification
                 try:
                     c = open(os.path.join(env['BASECALLER_RESULTS'], "recalibration", 'BaseCaller.json'), 'r')
@@ -403,7 +416,7 @@ if __name__ == "__main__":
                     calibration_args = env['recalibArgs']
                     if calibration_mode == "blind_recal":
                         calibration_args += " --blind-fit on --load-unmapped on"
-                    
+
                     flow_space_recal.calibrate(
                         env['BASECALLER_RESULTS'],
                         calibration_input_bams,

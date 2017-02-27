@@ -16,3 +16,8 @@ everyminute_schedule = {
     'task': 'iondb.rundb.session_cleanup.tasks.cleanup',
     'schedule': crontab(),
 }
+
+hourly_schedule = {
+    'task': 'iondb.rundb.session_cleanup.tasks.cleanup',
+    'schedule': crontab(hour='*/4', minute=0),
+}

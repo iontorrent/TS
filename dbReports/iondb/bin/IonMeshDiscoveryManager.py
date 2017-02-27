@@ -82,7 +82,10 @@ class IonMeshDiscoveryManager(threading.Thread):
         :param domain:
         :param flags:
         """
-
+        # skip local services
+        # http://sources.debian.net/src/avahi/0.6.32-1/avahi-python/avahi/__init__.py/?hl=50#L50
+        if flags & avahi.LOOKUP_RESULT_LOCAL:
+            return
         # add the computer name to the list of mesh computers
         self.__threadLock.acquire()
         try:

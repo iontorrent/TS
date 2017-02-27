@@ -1,0 +1,56 @@
+{% for nas in nas_info %}
+ <h3><span class="label label-info">{{nas.ipaddress}}</span></h3>
+ <table class="table table-condensed table-hover">
+     <thead>
+         <th></th>
+         <th>Name</th>
+         <th>Allocated</th>
+         <th>Available</th>
+         <th>Capacity</th>
+         <th>Health</th>
+         <th></th>
+     </thead>
+     <tbody>
+     {% for volume in nas.volumes %}
+         <tr class="{{volume.state}} openclose">
+             <td><i class="icon-plus"></i></td>
+             <td>{{volume.name}}</td>
+             <td>{{volume.allocated}}</td>
+             <td>{{volume.available}}</td>
+             <td>{{volume.capacity}}</td>
+             {% if volume.state == 'error' %}
+                 <td><span class="label label-important">{{volume.health}}</span></td>
+             {% elif volume.state == 'warning' %}
+                 <td><span class="label label-warning">{{volume.health}}</span></td>
+             {% else %}
+                 <td><span class="label label-success">{{volume.health}}</span></td>
+             {% endif %}
+             <td width="40%">{{volume.extra_info|safe}}</td>
+         </tr>
+         <tr class="hide">
+             <td></td>
+             <td colspan="6">
+                 <table class="table table-condensed">
+                     <thead>
+                         <th>Name</th>
+                         <th>Status</th>
+                         <th>Errors (Read / Write / Cksum)</th>
+                         <th></th>
+                     </thead>
+                     <tbody>
+                         {% for disk in volume.disks %}
+                         <tr class="{{disk.state}}">
+                             <td>{{disk.name}}</td>
+                             <td>{{disk.health}}</td>
+                             <td>{{disk.err}}</td>
+                             <td>{{disk.info}}</td>
+                         </tr>
+                         {% endfor %}
+                     </tbody>
+                 </table>
+             </td>
+         </tr>
+     {% endfor %}
+     </tbody>
+ </table>
+ {% endfor %}
