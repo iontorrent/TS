@@ -55,11 +55,39 @@ struct TagTrimmerParameters
   int     min_family_size;      //! Minimum size of a functional familiy
   string  cl_a_handle;          //! Command line specified a-handle
   int     handle_cutoff;        //! Cutoff to match an a-handle in flow alignment
+  bool    heal_tag_hp_indel;    //! Heal the hp indel when doing tag trimming
+};
+
+// ---------------------------------------------------------------------
+
+// For healing the homopolymer indel on tags
+class HealTagHpIndel
+{
+private:
+	// tag_structure related variables
+    vector< pair<string, string> > block_structure_; // block_structure_[i].first = random nucs, block_structure_[i].second = flag nucs
+    vector<unsigned int> block_size_;                // number of (random nucs + flag nucs) in each block
+    bool is_heal_suffix_;                            // Am I trying to heal a suffix tag?
+    unsigned int perfect_tag_len_ = 0;               // length of the tag in the prefect case (i.e. not indel)
+    unsigned int max_tag_len_ = 0;                   // maximum tag length to be trimmed
+
+    // Parameters for HealTagHpIndel
+    const static unsigned int kMinHpLenForHeal_ = 2;  // I attempt to heal a hp only if its length >= this value.
+    const static unsigned int kMinHealedHpLen_ = 3;   // All healed hp should have length >= this value.
+    const static unsigned int kMaxDelAllowed_ = 2;    // Allow the base sequence to have at most max_del_allowed-mer hp del per block. Declare as unsigned int to avoid confusion.
+    const static unsigned int kMaxInsAllowed_ = 2;    // Allow the base sequence to have at most max_ins_allowed-mer hp ins per block. Declare as unsigned int to avoid confusion.
+
+    bool HealHpIndelOneBlock_(const string& base_in_block, unsigned int block_index, string& tag_in_block, int& indel_offset, const string &anchor_base) const;
+
+public:
+    HealTagHpIndel(bool trim_suffix) {is_heal_suffix_ = trim_suffix; };
+    void SetBlockStructure(string tag_format);
+    bool TagTrimming(string base_seq, string& trimmed_tag, int& tag_len) const; // Trim the tag with a string input
+    bool TagTrimming(const char* base, int seq_length, string& trimmed_tag, int& tag_len) const;  // Trim the tag with a char* input
 };
 
 // ---------------------------------------------------------------------
 // Trimming and structural accounting for molecular tags
-
 
 class MolecularTagTrimmer
 {
@@ -95,6 +123,10 @@ private:
 
   int                       tag_trim_method_;            // method to do tag trimming
   int                       tag_filter_method_;          // method to do tag filtering
+
+  bool                      heal_tag_hp_indel_;          // Do I want to heal hp indel on tags?
+  vector<HealTagHpIndel>    heal_prefix_;                // use me to heal the prefix tag for the read groups
+  vector<HealTagHpIndel>    heal_suffix_;                // use me to heal the suffix tag for the read groups
 
 
 public:
@@ -138,10 +170,9 @@ public:
   bool    HasTags(string read_group_name) const;
   bool    HaveTags() const { return (num_read_groups_with_tags_>0); };
 
-
 };
 
 
-
 // ---------------------------------------------------------------------
+
 #endif // MOLECULARTAGTRIMMER_H

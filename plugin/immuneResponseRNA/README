@@ -1,0 +1,8 @@
+This plugin generates statistics, down-loadable data files and interactive visualization of representation of targeted RNA transcripts,
+including basic relative expression analysis across samples (barcodes).
+
+Additional options allow for filtering of barcodes with insufficient reads and ERCC target tracking.
+
+Author: Yongming Sun
+
+based on AmpliSeqRNA

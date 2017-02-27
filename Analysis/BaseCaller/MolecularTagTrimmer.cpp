@@ -7,6 +7,7 @@
 
 #include "MolecularTagTrimmer.h"
 #include <locale>
+#include <algorithm>
 
 enum TagFilterOptions {
   kneed_only_prefix_tag,
@@ -23,7 +24,8 @@ enum TagTrimMethod {
 
 MolecularTagTrimmer::MolecularTagTrimmer()
     : num_read_groups_with_tags_(0), suppress_mol_tags_(false),
-      command_line_tags_(false), tag_trim_method_(0), tag_filter_method_(0)
+      command_line_tags_(false), tag_trim_method_(0), tag_filter_method_(0),
+	  heal_tag_hp_indel_(true)
 {}
 
 // -------------------------------------------------------------------------
@@ -41,6 +43,7 @@ void MolecularTagTrimmer::PrintHelp(bool tvc_call)
     cout << "     --prefix-mol-tag        STRING     Structure of prefix molecular tag {ACGTN bases}" << endl;
     cout << "     --suffix-mol-tag        STRING     Structure of suffix molecular tag {ACGTN bases}" << endl;
     cout << "     --tag-trim-method       STRING     Method to trim tags. Options: {strict-trim, sloppy-trim} [sloppy-trim]" << endl;
+    cout << "     --heal-tag-hp-indel     Bool       Heal hp indel on tags [true]" << endl;
   }
   // Both
   cout << "     --suppress-mol-tags     BOOL       Ignore tag information [false]" << endl;
@@ -64,6 +67,8 @@ TagTrimmerParameters MolecularTagTrimmer::ReadOpts(OptArgs& opts)
 
   my_params.master_tags.prefix_mol_tag = opts.GetFirstString  ('-', "prefix-mol-tag", "");
   my_params.master_tags.suffix_mol_tag = opts.GetFirstString  ('-', "suffix-mol-tag", "");
+
+  my_params.heal_tag_hp_indel          = opts.GetFirstBoolean ('-', "heal-tag-hp-indel", true);
 
   ValidateTagString(my_params.master_tags.prefix_mol_tag);
   ValidateTagString(my_params.master_tags.suffix_mol_tag);
@@ -113,7 +118,7 @@ void MolecularTagTrimmer::InitializeFromJson(const TagTrimmerParameters params, 
   tag_trim_method_   = params.tag_trim_method;
   tag_filter_method_ = params.tag_filter_method;
   master_tags_       = params.master_tags;
-
+  heal_tag_hp_indel_ = params.heal_tag_hp_indel;
 
   if (not trim_barcodes and not suppress_mol_tags_){
     cerr << "MolecularTagTrimmer WARNING: Cannot trim tags because barcode trimming is disabled." << endl;
@@ -128,6 +133,8 @@ void MolecularTagTrimmer::InitializeFromJson(const TagTrimmerParameters params, 
 
   read_group_has_tags_.assign(read_group_index_to_name_.size(), false);
   tag_structure_.resize(read_group_index_to_name_.size());
+  heal_prefix_.assign(read_group_index_to_name_.size(), HealTagHpIndel(false));
+  heal_suffix_.assign(read_group_index_to_name_.size(), HealTagHpIndel(true));
 
   for (int rg = 0; rg < (int)read_group_index_to_name_.size(); ++rg) {
 
@@ -163,6 +170,10 @@ void MolecularTagTrimmer::InitializeFromJson(const TagTrimmerParameters params, 
     ValidateTagString(tag_structure_.at(rg).prefix_mol_tag);
     ValidateTagString(tag_structure_.at(rg).suffix_mol_tag);
 
+    // Set heal_prefix_ and heal_sufffix_
+    heal_prefix_.at(rg).SetBlockStructure(tag_structure_.at(rg).prefix_mol_tag);
+    heal_suffix_.at(rg).SetBlockStructure(tag_structure_.at(rg).suffix_mol_tag);
+
     read_group_has_tags_.at(rg) = tag_structure_.at(rg).HasTags();
     if (read_group_has_tags_.at(rg))
       ++num_read_groups_with_tags_;
@@ -188,6 +199,8 @@ void    MolecularTagTrimmer::InitializeFromSamHeader(const TagTrimmerParameters 
   read_group_name_to_index_.clear();
   read_group_has_tags_.clear();
   tag_structure_.clear();
+  heal_prefix_.clear();
+  heal_suffix_.clear();
 
   for (BamTools::SamReadGroupConstIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr) {
 
@@ -222,6 +235,11 @@ void    MolecularTagTrimmer::InitializeFromSamHeader(const TagTrimmerParameters 
 
     tag_structure_.push_back(my_tags);
     read_group_has_tags_.push_back(my_tags.HasTags());
+    heal_prefix_.push_back(HealTagHpIndel(false));
+    heal_suffix_.push_back(HealTagHpIndel(true));
+    heal_prefix_.back().SetBlockStructure(my_tags.prefix_mol_tag);
+    heal_suffix_.back().SetBlockStructure(my_tags.suffix_mol_tag);
+
     if (my_tags.HasTags())
       ++num_read_groups_with_tags_;
 
@@ -242,6 +260,7 @@ void MolecularTagTrimmer::PrintOptionValues(bool tvc_call)
     cout << "  suppress-mol-tags : " << (suppress_mol_tags_ ? "on" : "off") << endl;
 
     if (not tvc_call) {
+      cout << "    heal-tag-hp-indel : " << (heal_tag_hp_indel_? "on": "off") << endl;
       cout << "    tag-trim-method : ";
       switch (tag_trim_method_){
         case kSloppyTrim : cout << "sloppy-trim" << endl; break;
@@ -250,6 +269,7 @@ void MolecularTagTrimmer::PrintOptionValues(bool tvc_call)
       }
     }
 
+    cout << "    tag-filter-method : ";
     switch (tag_filter_method_){
       case kneed_all_tags : cout << "need-all" << endl; break;
       case kneed_only_prefix_tag : cout << "need-prefix" << endl; break;
@@ -314,13 +334,32 @@ int  MolecularTagTrimmer::TrimPrefixTag(const int read_group_idx,
     n_bases_trimmed = -1;
   }
   else if (tag_trim_method_ == kStrictTrim){
-    n_bases_trimmed = StrictTagTrimming(tag_structure_.at(read_group_idx).prefix_mol_tag,
-                                        tag_start, seq_length, Tag.prefix_mol_tag);
+	if(heal_tag_hp_indel_){
+		string tag_identified;
+		bool is_heal_or_match = heal_prefix_.at(read_group_idx).TagTrimming(tag_start, seq_length, tag_identified, n_bases_trimmed);
+	    if(is_heal_or_match){
+	    	Tag.prefix_mol_tag += tag_identified; // I follow the code in MolecularTagTrimmer::StrictTagTrimming where it does nothing on Tag.prefix_mol_tag if not is_heal_or_match
+	    }
+	    else{
+	    	n_bases_trimmed = -1;
+	    }
+	}
+	else{
+      n_bases_trimmed = StrictTagTrimming(tag_structure_.at(read_group_idx).prefix_mol_tag,
+                                          tag_start, seq_length, Tag.prefix_mol_tag);
+	}
   }
   else // if (tag_trim_method_ == kSloppyTrim)
   {
-    n_bases_trimmed = SloppyTagTrimming(tag_structure_.at(read_group_idx).prefix_mol_tag,
+	if(heal_tag_hp_indel_){
+		string tag_identified;
+		heal_prefix_.at(read_group_idx).TagTrimming(tag_start, seq_length, tag_identified, n_bases_trimmed);
+		Tag.prefix_mol_tag += tag_identified;
+	}
+	else{
+      n_bases_trimmed = SloppyTagTrimming(tag_structure_.at(read_group_idx).prefix_mol_tag,
                                         tag_start, seq_length, Tag.prefix_mol_tag);
+	}
   }
   // TODO add a more clever method
 
@@ -350,13 +389,32 @@ int  MolecularTagTrimmer::TrimSuffixTag(const int read_group_idx,
     n_bases_trimmed = -1;
   }
   else if (tag_trim_method_ == kStrictTrim){
-    n_bases_trimmed = StrictTagTrimming(tag_structure_.at(read_group_idx).suffix_mol_tag,
-                                        tag_end-tag_length, tag_length, Tag.suffix_mol_tag);
+	if (heal_tag_hp_indel_){
+		string tag_identified;
+		bool is_heal_or_match = heal_suffix_.at(read_group_idx).TagTrimming(tag_end - template_length, template_length, tag_identified, n_bases_trimmed);
+	    if(is_heal_or_match){
+	    	Tag.suffix_mol_tag += tag_identified;  // I follow the code in MolecularTagTrimmer::StrictTagTrimming where it does nothing on Tag.prefix_mol_tag if not is_heal_or_match
+	    }
+	    else{
+	    	n_bases_trimmed = -1;
+	    }
+	}
+	else{
+      n_bases_trimmed = StrictTagTrimming(tag_structure_.at(read_group_idx).suffix_mol_tag,
+                                          tag_end-tag_length, tag_length, Tag.suffix_mol_tag);
+	}
   }
   else // if (tag_trim_method_ == kSloppyTrim)
   {
-    n_bases_trimmed = SloppyTagTrimming(tag_structure_.at(read_group_idx).suffix_mol_tag,
-                                        tag_end-tag_length, tag_length, Tag.suffix_mol_tag);
+	if (heal_tag_hp_indel_){
+		string tag_identified;
+		heal_suffix_.at(read_group_idx).TagTrimming(tag_end - template_length, template_length, tag_identified, n_bases_trimmed);
+		Tag.suffix_mol_tag += tag_identified;
+	}
+	else{
+      n_bases_trimmed = SloppyTagTrimming(tag_structure_.at(read_group_idx).suffix_mol_tag,
+                                          tag_end-tag_length, tag_length, Tag.suffix_mol_tag);
+	}
   }
   // TODO add a more clever method
 
@@ -535,7 +593,286 @@ bool MolecularTagTrimmer::HasTags(string read_group_name) const
   return has_tags;
 }
 
+// -------------------------------------------------------------------------
 
+// I split tag_format into several blocks
+// A block is assumed to start with random nucs and then follow by the flag nucs.
+// Example 1: (prefix) tag_structure = "NNNACTNNNTGN", block_structure_ = { ("NNN", "ACT"), ("NNN", "TG"), ("N", "") }
+// Example 2: (prefix) tag_structure = "TACNNN", block_structure_ = { ("", "TAC"), ("NNN", "") }
+void HealTagHpIndel::SetBlockStructure(string tag_structure)
+{
+    if (is_heal_suffix_){
+        reverse(tag_structure.begin(), tag_structure.end());
+    }
+    block_structure_.clear();
+    block_size_.clear();
 
+    for (string::iterator tag_it = tag_structure.begin(); tag_it != tag_structure.end(); ++tag_it){
+        bool is_random_nuc = (*tag_it == 'N' or *tag_it == 'n');
+    	if (block_structure_.empty()){
+            block_structure_.push_back(pair<string, string>(string(""), string("")));
+        }
+        else if (is_random_nuc and block_structure_.back().second.size() > 0){
+            block_structure_.push_back(pair<string, string>(string(""), string("")));
+        }
+
+        if (is_random_nuc){
+            block_structure_.back().first += *tag_it;
+        }
+        else{
+            block_structure_.back().second += *tag_it;
+        }
+    }
+    perfect_tag_len_ = (unsigned int) tag_structure.size();
+    max_tag_len_ = perfect_tag_len_ + block_structure_.size() * kMaxInsAllowed_; // allow max_ins_allowed_ per block
+
+    block_size_.assign(block_structure_.size(), 0);
+    for (unsigned int i_block = 0; i_block < block_size_.size(); ++i_block){
+        block_size_[i_block] = block_structure_[i_block].first.size() + block_structure_[i_block].second.size();
+    }
+}
+
+// -------------------------------------------------------------------------
+
+// Find the maximum hp len of base_seq, also take anchor_bases into account.
+// Example:
+// Inputs: base_seq = "TTTAGGGG", anchor_bases = "CCGTT"
+// Outputs: max_hp_len_in_base_seq = 3, max_hp_len_from_anchor = 2, max_hp_base_idx = 0, is_max_hp_unique = true
+bool FindMaxHp(const string& base_seq, unsigned int& max_hp_len_in_base_seq, unsigned int& max_hp_len_from_anchor, unsigned int& max_hp_base_idx, const string& anchor_bases = "")
+{
+    bool is_max_hp_unique = true;
+    unsigned int current_hp_len = 1; // base_seq[0] has hp len at least 1
+    int max_hp_base_idx_tmp = 0;
+    max_hp_base_idx = 0;
+    max_hp_len_in_base_seq = 0;
+    max_hp_len_from_anchor = 0;
+
+    if (base_seq.empty()){
+        is_max_hp_unique = false;
+        return is_max_hp_unique;
+    }
+
+    // Count the hp len of base_seq[0] contributed from anchor_bases
+    for (string::const_iterator anchor_it = anchor_bases.end() - 1; anchor_it != anchor_bases.begin() - 1; --anchor_it){
+        if (*anchor_it == base_seq[0]){
+            ++max_hp_len_from_anchor;
+        }
+        else{
+            break;
+        }
+    }
+
+    // hp len for base_seq[0]
+    current_hp_len += max_hp_len_from_anchor;
+    max_hp_len_in_base_seq = current_hp_len;
+
+    if (base_seq.size() == 1){
+        return is_max_hp_unique;
+    }
+
+    for (unsigned int i = 1; i < base_seq.size(); ++i){
+        if (base_seq[i] == base_seq[i-1]){
+            ++current_hp_len;
+        }
+        else{
+            if (current_hp_len > max_hp_len_in_base_seq){
+            	max_hp_len_in_base_seq = current_hp_len;
+            	// max_hp_base_idx_tmp is the starting index of the max_hp_len bases in base_seq
+            	// max_hp_base_idx_tmp could be negative due to anchor_bases
+            	max_hp_base_idx_tmp = i - current_hp_len;
+                is_max_hp_unique = true;
+            }
+            else if (current_hp_len == max_hp_len_in_base_seq){
+                is_max_hp_unique = false;
+            }
+            current_hp_len = 1;
+        }
+    }
+
+    // Check the hp len for the last base of base_seq
+    if (current_hp_len > max_hp_len_in_base_seq){
+    	max_hp_len_in_base_seq = current_hp_len;
+    	max_hp_base_idx_tmp = base_seq.size()  - current_hp_len;
+        is_max_hp_unique = true;
+    }
+    else if (current_hp_len == max_hp_len_in_base_seq){
+        is_max_hp_unique = false;
+    }
+
+    if (max_hp_base_idx_tmp <= 0){
+    	// The max_hp_len occurs at base_seq[0]
+    	max_hp_base_idx = 0;
+    	max_hp_len_in_base_seq -= max_hp_len_from_anchor;
+    }
+    else{
+    	max_hp_base_idx = (unsigned int) max_hp_base_idx_tmp;
+    	// Set max_hp_len_from_anchor = 0 because anchor_bases does not contribute any hp length to max_hp_len
+    	max_hp_len_from_anchor = 0;
+    }
+    return is_max_hp_unique;
+}
+
+// -------------------------------------------------------------------------
+
+// Now I try to heal the hp indel for base_sub_seq
+// base_sub_seq is the subsequence of the original bases, and base_sub_seq[0] is the starting base of the block.
+// tag_in_block is the output identified tag in the block
+// indel_len is the hp length healed in the block.
+// anchor_bases is just for finding the hp len of base_sub_seq[0]
+// Example 1: block_structure[block_index] = ("NNN", "TAC"), base_sub_seq = "CCCCCTAC", then I output tag_in_block = "CCCTAC", indel_len = 2 (healed 2-mer insertion)
+// Example 2: block_structure[block_index] = ("NNN", "TAC"), base_sub_seq = "TTTAC", then I output tag_in_block = "TTTTAC", indel_len = -1 (healed 1-mer deletion)
+//@TODO: Ugly code because of using too many string operations. Should be optimized!
+bool HealTagHpIndel::HealHpIndelOneBlock_(const string& base_sub_seq, unsigned int block_index, string& tag_in_block, int& indel_len, const string &anchor_bases = "") const
+{
+    unsigned int max_hp_base_idx = 0;
+    unsigned int max_hp_len = 0;
+    unsigned int max_hp_len_from_anchor = 0;
+    bool is_match_or_healed = false;
+    string try_flag;
+
+    // Default output
+	indel_len = 0;
+    if (base_sub_seq.size() < block_size_[block_index]){
+    	// There is definitely ins. Maybe we will heal the ins.
+    	tag_in_block.clear();
+    }
+    else{
+        tag_in_block = base_sub_seq.substr(0, block_size_[block_index]);  // Actually I am doing sloppy tag trimming here
+
+        // First try the case where there is no indel
+        try_flag = tag_in_block.substr(block_structure_[block_index].first.size(), block_structure_[block_index].second.size()); // tag w/o indel offset
+        if (try_flag == block_structure_[block_index].second){
+        	// base_sub_seq matches the block structure. No heal needed.
+        	is_match_or_healed = true;
+        	return is_match_or_healed;
+        }
+    }
+
+    // Here I primarily focus on healing the hp indel in the random nucs.
+    // Find the max hp len of the bases in the block. I will adjust the len of the max hp to see if the flag can match the tag structure.
+    bool is_max_hp_unique = FindMaxHp(tag_in_block, max_hp_len, max_hp_len_from_anchor, max_hp_base_idx, anchor_bases);
+    char max_hp_nuc = base_sub_seq[max_hp_base_idx];
+
+    if ((not is_max_hp_unique) or (max_hp_len + max_hp_len_from_anchor< kMinHpLenForHeal_)){
+        return is_match_or_healed;
+    }
+
+    int min_try_hp_len = max(0, (int) kMinHealedHpLen_ - (int) max_hp_len_from_anchor);
+    string pre_max_hp_bases = base_sub_seq.substr(0, max_hp_base_idx); // bases before the max hp flow
+    string post_max_hp_bases = base_sub_seq.substr(max_hp_base_idx + max_hp_len); // bases after the max hp flow
+
+    // Adjust the length of the maximum hp to see if the flag can match the tag structure
+    for (int try_indel_len = - (int) kMaxDelAllowed_; try_indel_len <= (int) kMaxInsAllowed_; ++try_indel_len){
+        int try_hp_len = (int) max_hp_len - try_indel_len;
+    	if ((try_indel_len == 0)
+    			or (try_hp_len < min_try_hp_len)
+				or (base_sub_seq.size() < block_size_[block_index] + (unsigned int) try_indel_len)){
+            continue;
+        }
+        string try_hp(try_hp_len, max_hp_nuc);
+        string try_bases = pre_max_hp_bases + try_hp + post_max_hp_bases;
+
+        try_flag = try_bases.substr(block_structure_[block_index].first.size(), block_structure_[block_index].second.size());
+        if (try_flag == block_structure_[block_index].second){
+            indel_len = try_indel_len;
+            tag_in_block = try_bases.substr(0, block_size_[block_index]);
+            is_match_or_healed = true;
+            break;
+        }
+    }
+
+    return is_match_or_healed;
+}
+
+// -------------------------------------------------------------------------
+
+bool HealTagHpIndel::TagTrimming(const char* base, int seq_length, string& trimmed_tag, int& tag_len) const
+{
+    int safe_max_tag_len = min((int) max_tag_len_, seq_length);
+    bool is_healed_or_match = false;
+
+    if (base == NULL or (unsigned int) seq_length < perfect_tag_len_){
+        // The base sequence is shorter than the format_len. I'm not going to do anything.
+        tag_len = -1;
+        is_healed_or_match = false;
+        return is_healed_or_match;
+    }
+    string safe_max_tag_seq;  // I will trim the tag from safe_max_tag_seq.
+    if (is_heal_suffix_){
+    	safe_max_tag_seq = string(base + (seq_length - safe_max_tag_len), safe_max_tag_len);
+    }
+    else{
+    	safe_max_tag_seq = string(string(base, safe_max_tag_len));
+    }
+	is_healed_or_match = TagTrimming(safe_max_tag_seq, trimmed_tag, tag_len);
+    return is_healed_or_match;
+}
+
+// -------------------------------------------------------------------------
+// Input:
+// base_seq is the base sequence to be trimned.
+// Outputs:
+// trimmed_tag is the tag that I identified where hp indels are healed if applicable.
+// tag_len is the length of the base that I need to trim from base_seq.
+// is_healed_or_match indicates whether trimmed_tag matches the tag structure or not.
+// If is_healed_or_match = false, the block of trimmed_tag that doesn't match the tag structure is obtained by the same approach as sloppy tag trimmer.
+// Example for prefix tag trimming:
+// block_structure_ = {("NNN", "TAC"), }. If base_seq = "TTTTTAC", then trimmed_tag = "TTT", tag_len = 4, return true.
+bool HealTagHpIndel::TagTrimming(string base_seq, string& trimmed_tag, int& tag_len) const
+{
+    bool is_healed_or_match = true;
+
+    if (base_seq.size() < perfect_tag_len_){
+        // The base sequence is shorter than the ideal_tag_len_. I'm not going to do anything.
+        is_healed_or_match = false;
+        tag_len = -1;
+        return is_healed_or_match;
+    }
+
+    if (is_heal_suffix_){
+        reverse(base_seq.begin(), base_seq.end());
+    }
+
+    trimmed_tag.clear();
+    tag_len = 0;
+
+    for (unsigned int i_block = 0; i_block < block_structure_.size(); ++i_block){
+        unsigned int block_start = tag_len;
+        unsigned int expand_block_size = block_size_[i_block] + kMaxInsAllowed_;
+        int indel_len = 0;
+        string tag_in_block;
+
+        if (block_start + expand_block_size > base_seq.size()){
+            expand_block_size = base_seq.size() - block_start;
+        }
+
+        is_healed_or_match &= HealHpIndelOneBlock_(base_seq.substr(block_start, expand_block_size), i_block, tag_in_block, indel_len, trimmed_tag);
+
+        // Should I heal the rest of the blocks if one block is out of sync?
+        // Example: block_format_ = {("NNN", "ACT"), ("NNN", "TGA")}, base_seq = "CCTA" + "ACT" + "ATT" + "TGA"
+        // It fails to heal the first block since the max hp is not unique.
+        // If I try to heal the second block, trimmed_tag would be "CCTA" + "ACT" + "AT" + "TGA".
+        // Pons: better trimming result (trim 13 bases)
+        // Cons: wrong tag identification
+        // If not, trimmed_tag would be "CCTA" + "ACT" + "ATT" + "TG", which is still a wrong tag, but we only trim 12 bases.
+        // Since both tags are incorrect, I choose to continue to heal hp in the second block.
+        // A sophisticated but more complex approach to solve the problem is probably doing alignment.
+
+        trimmed_tag += tag_in_block;
+        tag_len += ((int) tag_in_block.size() + indel_len);
+    }
+
+    if (tag_len < (int) perfect_tag_len_){
+    	trimmed_tag = base_seq.substr(0, perfect_tag_len_);
+    	tag_len = perfect_tag_len_;
+    	is_healed_or_match = false;
+    }
+
+    if (is_heal_suffix_){
+        reverse(trimmed_tag.begin(), trimmed_tag.end());
+    }
+
+    return is_healed_or_match;
+}
 
 

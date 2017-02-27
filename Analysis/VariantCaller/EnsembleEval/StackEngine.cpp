@@ -312,6 +312,16 @@ void update_genotype_interval(vector<float> &genotype_interval, vector<float> &i
 
 void GenotypeByIntegral(vector<float> genotype_interval, int &genotype_call, float &quasi_phred_quality_score){
   //@TODO: do as paired and sort, for clean code
+
+  // First normalize genotype_interval to enhance the floating point accuracy
+  // It's better not to calculate best_val and worst_val together with the normalization step.
+  float max_genotype_interval = genotype_interval[0];
+  for (unsigned int i_geno = 1; i_geno < genotype_interval.size(); i_geno++)
+	  max_genotype_interval = max(genotype_interval[i_geno], max_genotype_interval);
+  for (unsigned int i_geno = 0; i_geno < genotype_interval.size(); i_geno++) {
+	  genotype_interval[i_geno] -= max_genotype_interval;
+  }
+
   // best zone = call
   unsigned int best_call = 0;
   float best_val = genotype_interval[0];
@@ -337,11 +347,11 @@ void GenotypeByIntegral(vector<float> genotype_interval, int &genotype_call, flo
   genotype_call = best_call;
 
   // quality score
-  float log_alternative = middle_val + log(1 + exp(worst_val - middle_val)); // total mass on alternative intervals
-  float log_all = best_val + log(1 + exp(log_alternative - best_val)); // total mass on all intervals
+  float log_alternative = middle_val + log(1.0f + exp(worst_val - middle_val)); // total mass on alternative intervals
+  float log_all = best_val + log(1.0f + exp(log_alternative - best_val)); // total mass on all intervals
 
   // output
-  quasi_phred_quality_score = 10 * (log_all - log_alternative) / log(10); // -10*log(error), base 10
+  quasi_phred_quality_score = 10.0f * (log_all - log_alternative) / log(10.0f); // -10*log(error), base 10
 
   if (isnan(quasi_phred_quality_score)) {
     cout << "Warning: quality score NAN "  << endl;
@@ -371,6 +381,12 @@ bool RejectionByIntegral(vector<float> dual_interval, float &reject_status_quali
   float log_ref = 0.0f;
   int top = 0;
   int bottom = 1;
+
+  // First normalize dual_interval to enhance the floating point accuracy
+  float max_dual_interval = max(dual_interval[0], dual_interval[1]);
+  for (unsigned int i = 0; i < dual_interval.size(); ++i){
+	  dual_interval[i] -= max_dual_interval;}
+
   if (dual_interval[1]>dual_interval[0]) {
     // if reference, how strongly can we reject the outer interval
     log_ref = dual_interval[0];
@@ -386,8 +402,10 @@ bool RejectionByIntegral(vector<float> dual_interval, float &reject_status_quali
     bottom=1;
   }
 
-  float log_all = dual_interval[top]+ log(1+exp(dual_interval[bottom]-dual_interval[top]));
-  reject_status_quality_score = 10 * (log_all - log_ref) / log(10); // how much mass speaks against the pure reference state
+  float log_all = dual_interval[top]+ log(1.0f+exp(dual_interval[bottom]-dual_interval[top]));
+
+  reject_status_quality_score = 10.0f * (log_all - log_ref) / log(10.0f); // how much mass speaks against the pure reference state
+  reject_status_quality_score = max(reject_status_quality_score, 3.010f); // Prevent floating error that causes QUAL < 10*log10(2)
   if (isnan(reject_status_quality_score)) {
     cout << "Warning: reject ref score NAN " << endl;
     reject_status_quality_score = 0.0f;

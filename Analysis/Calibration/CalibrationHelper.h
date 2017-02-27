@@ -45,7 +45,7 @@ public:
   bool    Open(vector<string> bam_names);
   void    Close();
 
-  bool    GetNextAlignment(BamAlignment & alignment);
+  bool    GetNextAlignmentCore(BamAlignment & alignment);
   int     NumPasses() const { return num_bam_passes_; };
   bool    Rewind(void);
   const   BamTools::SamReadGroupDictionary &  GetReadGroups() const { return merged_read_groups_; };
@@ -71,19 +71,30 @@ private:
 
 struct CalibrationContext
 {
+  // Program threading information
+  unsigned int               num_threads;                //!< Number of calibration worker threads
+  unsigned int               num_reads_per_thread;       //!< Number of reads to be processed per thread
+  unsigned int               num_model_reads;            //!< Accounting of how many threads read model information
+  unsigned int               num_model_writes;           //!< Accounting of how many threads wrote model information
+  bool                       wait_to_read_model;         //!< Signaling variable to read model information
+  bool                       wait_to_write_model;        //!< Signaling variable to write model information
+
+  pthread_mutex_t            read_mutex;                 //!< Shared data reading mutex for worker threads
+  pthread_mutex_t            write_mutex;                //!< Shared data writing mutex for worker threads
+  pthread_cond_t             model_read_cond;            //! Conditional variable for reading master model information
+  pthread_cond_t             model_write_cond;           //! Conditional variable for writing model information to master
+
   // General program flow
   string                     filename_json;              //!< Path and name of calibration json output
-  int                        num_threads;                //!< Number of calibration worker threads
-  unsigned int               num_reads_per_thread;       //!< Number of reads to be precessed per thread
   int                        flow_window_size;           //!< Size of a flow bin for calibration
   int                        max_num_flows;              //!< Maximum number of flows over all run ids.
   int                        verbose_level;              //!< Adjustment for the amount of feedback printout
+  int                        rand_seed;                  //!< Initializes random number generator for each thread
   bool                       debug;
 
   bool                       successive_fit;             //!< Successively fit models in the order they are applied
   bool                       local_fit_linear_model;     //!< control training of linear model
   bool                       local_fit_polish_model;     //!< control training of polish model
-  //bool                       update_sim_model;           //!< control live updates of fits // XXX
   bool                       blind_fit;                  //!< treat fitting as 'blind' to reference
   int                        num_train_iterations;       //!< Blind calibration: how many loops through the data for blind calibration
 
@@ -111,9 +122,6 @@ struct CalibrationContext
   map<string, int>           flow_order_index_by_run_id; //!< Map associating
   map<string, int>           num_flows_by_run_id;
   map<string, string>        key_by_read_group;          //!< Key sequence & Barcode by read group
-
-  pthread_mutex_t            read_mutex;                 //!< Shared data reading mutex for worker threads
-  pthread_mutex_t            write_mutex;                //!< Shared data writing mutex for worker threads
 
   // *** Pointers to master calibration modules
   HistogramCalibration *     hist_calibration_master;

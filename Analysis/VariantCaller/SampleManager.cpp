@@ -24,7 +24,8 @@ void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name
     if (pos != string::npos) {barcode = barcode.substr(pos + 1);}
     string sample_name;
     if (force_sample_name.empty()) {
-      sample_name = read_group->Sample + "." + barcode;
+      //sample_name = read_group->Sample + "." + barcode;
+      sample_name = read_group->Sample;
     }
     else {
       sample_name = force_sample_name;

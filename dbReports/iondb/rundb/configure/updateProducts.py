@@ -178,6 +178,8 @@ def get_update_products():
 
 
 def update_product(name, update_version):
+    ''' Update products via Off-Cycle Release path
+    '''
     productContents, isValidNetwork, network_or_file_errorMsg = get_productUpdateList() or []
     if not isValidNetwork:
         raise Exception(network_or_file_errorMsg)
@@ -196,48 +198,45 @@ def update_product(name, update_version):
 
     data = json.loads(productInfo.read())
     productName = data['productName']
+    
+    if 'models_info' in data or 'sys_template_info' in data:
+        monitor_pk = start_update_product(productName, productjsonURL, update_version)
+    else:
+        raise Exception('Did not find any objects to update')
 
-    if "models_info" in data:
-        modelsToUpdate = data.get('models_info')
-        if modelsToUpdate:
-            monitor_pk = start_update_product(productName, productjsonURL, update_version)
-            # Validation for any invalid Model Name or Invalid PKs
-            isValidModelInfo, errMsg = validate_modelObject(modelsToUpdate)
+    # create or update database objects
+    modelsToUpdate = data.get('models_info')
+    if modelsToUpdate:
+        logger.debug("Going to update database objects via off-cycle release")
+        # Validation for any invalid Model Name or Invalid PKs
+        isValidModelInfo, errMsg = validate_modelObject(modelsToUpdate)
+        if isValidModelInfo:
+            for model in modelsToUpdate:
+                pk = model.get('pk', None)
+                modelName = model['model']
+                fields = model['fields']
+                modelObject = get_model('rundb', modelName)
+                off_software_release_product_update(modelObject, pk, modelName, **fields)
+        else:
+            status = "Invalid Product/PK update."
+            logger.debug("Error: iondb.rundb.configure.updateProducts.update_product %s", status)
+            #delete the entry in File Monitor so that User can try again later
+            updateFileMonitor(monitor_pk, status)
+            raise Exception(errMsg)
 
-            if isValidModelInfo:
-                for model in modelsToUpdate:
-                    pk = model.get('pk', None)
-                    modelName = model['model']
-                    fields = model['fields']
-                    modelObject = get_model('rundb', modelName)
-                    #"validate_modelObject" validates all the Models and PKs specified in the Product JSON Fixture
-                    #Go ahead and update the models
-                    off_software_release_product_update(modelObject, pk, modelName, **fields)
-                status = 'Complete'
-            else:
-                status = "Invalid Product/PK update."
-                logger.debug("Error: iondb.rundb.configure.updateProducts.update_product %s", status)
+    # add or update system templates
+    sysTemplatesToUpdate = data.get('sys_template_info')
+    if sysTemplatesToUpdate:
+        logger.debug("Going to install system templates via off-cycle release")
+        for sysTemp in sysTemplatesToUpdate:
+            ctx_sys_temp_upd = add_or_updateSystemTemplate_OffCycleRelease(**sysTemp)
+            if not ctx_sys_temp_upd['isValid']:
+                status = errorCode['E009']
                 #delete the entry in File Monitor so that User can try again later
                 updateFileMonitor(monitor_pk, status)
-                raise Exception(errMsg)
+                raise Exception(ctx_sys_temp_upd['msg'])
 
-            updateFileMonitor(monitor_pk, status)
-    elif "sys_template_info" in data:
-        # Add/Update the System Template via Off-Cycle Release path
-        sysTemplatesToUpdate = data.get('sys_template_info')
-        logger.debug("Going to Install System Template via Off cycle: %s" % sysTemplatesToUpdate)
-        if sysTemplatesToUpdate:
-            monitor_pk = start_update_product(productName, productjsonURL, update_version)
-            for sysTemp in sysTemplatesToUpdate:
-                ctx_sys_temp_upd = add_or_updateSystemTemplate_OffCycleRelease(**sysTemp)
-                if not ctx_sys_temp_upd['isValid']:
-                    status = errorCode['E009']
-                    #delete the entry in File Monitor so that User can try again later
-                    updateFileMonitor(monitor_pk, status)
-                    raise Exception(ctx_sys_temp_upd['msg'])
-
-                status = 'Complete'
-            updateFileMonitor(monitor_pk, status)
+    updateFileMonitor(monitor_pk, 'Complete')
 
 
 def validate_modelObject(modelsToUpdate):
@@ -281,54 +280,39 @@ def start_update_product(name, url, updateVersion, callback=None):
     return monitor.id
 
 
-def model_specific_validations(modelObj, modelName, **fields):
-    isValidModel = None
-    if modelName == "dnaBarcode":
-        isValidModel = True
-        name = fields.get("name", None)
-        sequence = fields.get("sequence", None)
-
-        logger.debug("Check if the barcode is installed already by other route e.g. CSV upload")
+def add_or_update_dnaBarcode(fields):
+    name = fields.get("name")
+    sequence = fields.get("sequence")
+    if sequence == "ALL":
+        updateObjs = dnaBarcode.objects.filter(name=name)
+        if updateObjs.count() == 0:
+            raise Exception("Barcode set %s is not installed" % name)
+        else:
+            fields.pop("sequence")
+            updateObjs.update(**fields) 
+    else:
         try:
-            barcodeObj = modelObj.objects.get(name=name, sequence=sequence)
-            createPk = None
-            updatePk = barcodeObj
-        except modelObj.DoesNotExist:
-            logger.debug("modelObj.DoesNotExist")
-            createPk = True
-            updatePk = None
-        except Exception as e:
-            logger.debug("Unexpected error or returned more than one record %s" % e)
-            createPk = None
-            updatePk = None
-            raise Exception("Unexpected error or returned more than one record %s" % e)
+            barcodeObj = dnaBarcode.objects.get(name=name, sequence=sequence)
+        except dnaBarcode.DoesNotExist:
+            barcodeObj = dnaBarcode()
 
-    if not isValidModel:
-        logger.debug("There is no specific validation for this model %s" % modelName)
-        raise NotImplementedError
-
-    return createPk, updatePk
+        for key, value in fields.items():
+            setattr(barcodeObj, key, value)
+        barcodeObj.save()
 
 
 def off_software_release_product_update(modelObj, pk, modelName=None, **fields):
-    updatePk = None
-    createPk = None
-
-    if pk:
-        updatePk = modelObj.objects.get(pk=pk)
-    else:
-        createPk = True
-
-    if createPk and modelName == "dnaBarcode":
-         createPk, updatePk = model_specific_validations(modelObj, modelName, **fields)
     try:
-        if createPk:
+        if modelName == "dnaBarcode":
+            add_or_update_dnaBarcode(fields)
+        elif pk:
+            obj = modelObj.objects.get(pk=pk)
+            for key, value in fields.items():
+                setattr(obj, key, value)
+            obj.save()
+        else:
             obj = modelObj(**fields)
             obj.save()
-        elif updatePk:
-            for key, value in fields.items():
-                setattr(updatePk, key, value)
-            updatePk.save()
     except Exception, e:
        logger.debug("Model Object creation failed, %s" % e)
        raise Exception("Model Object creation failed, %s" % e)

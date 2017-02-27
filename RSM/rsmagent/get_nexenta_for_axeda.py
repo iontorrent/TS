@@ -10,42 +10,51 @@ import urllib2 as u
 
 def get_headers(nas):
     """Build HTTP headers from credentials"""
-    user = nas['user']
-    password = nas['pass']
-    auth = user + ':' + password
-    headers = {'Content-Type': 'application/json',
-               'Authorization': 'Basic %s' % auth.encode('base64')[:-1]
-               }
+    try:
+        user = nas['user']
+        password = nas['pass']
+        auth = user + ':' + password
+        headers = {'Content-Type': 'application/json',
+                   'Authorization': 'Basic %s' % auth.encode('base64')[:-1]
+                   }
+    except KeyError:
+        print 'did not find user or password information in nms_access file'
+        headers = {'Content-Type': 'application/json'}
     return headers
 
 
 def get_something(nas, data, verbose=False, debug=False):
-    '''
-    General information fetching function
-    '''
-    req = u.Request(nas['url'], data, get_headers(nas))
-    resp = u.urlopen(req)
-    respstr = resp.read()
-    result = json.loads(respstr).get('result')
-    error = json.loads(respstr).get('error')
+    """General information fetching function"""
+    result = {}
+    try:
+        req = u.Request(nas['url'], data, get_headers(nas))
+        resp = u.urlopen(req)
+        respstr = resp.read()
+        result = json.loads(respstr).get('result')
+        error = json.loads(respstr).get('error')
+        if error:
+            print error.get('message')
 
-    if debug:
-        print result
-
-    if result and verbose:
-        if isinstance(result, dict):
-            for key, value in result.iteritems():
-                print '%30s %s' % (key, value)
-        elif isinstance(result, list):
-            for item in result:
-                print item
-        else:
+        if debug:
             print result
 
-    if error:
-        print error.get('message')
+        if result and verbose:
+            if isinstance(result, dict):
+                for key, value in result.iteritems():
+                    print '%30s %s' % (key, value)
+            elif isinstance(result, list):
+                for item in result:
+                    print item
+            else:
+                print result
+    except KeyError:
+        print 'did not find url key in nas information'
+    except u.URLError:
+        print 'failed to open url ' + nas['url']
+    except IOError:
+        print 'failed to read from url ' + nas['url']
 
-    return result, error
+    return result
 
 
 def get_license_info(nas):
@@ -55,10 +64,7 @@ def get_license_info(nas):
         'method': 'get_license_info',
         'params': [],
         })
-    result, error = get_something(nas, data)
-    if error:
-        print error.get('message')
-    return result
+    return get_something(nas, data)
 
 
 def get_uuid(nas):
@@ -68,10 +74,7 @@ def get_uuid(nas):
         'method': 'get_prop',
         'params': ['uuid'],
         })
-    uuid, error = get_something(nas, data)
-    if error:
-        print error.get('message')
-    return uuid
+    return get_something(nas, data)
 
 
 def get_properties(nas, _object='folder', _child='pool1'):
@@ -81,10 +84,7 @@ def get_properties(nas, _object='folder', _child='pool1'):
         'method': 'get_child_props',
         'params': [_child, ''],
         })
-    result, error = get_something(nas, data)
-    if error:
-        print error.get('message')
-    return result
+    return get_something(nas, data)
 
 
 def get_diskusage(nas, _object='folder', _child='pool1'):
@@ -94,10 +94,7 @@ def get_diskusage(nas, _object='folder', _child='pool1'):
         'method': 'get_child_props',
         'params': [_child, ''],
         })
-    result, error = get_something(nas, data)
-    if error:
-        print error.get('message')
-    return result
+    return get_something(nas, data)
 
 
 def get_volumes(nas):
@@ -107,10 +104,7 @@ def get_volumes(nas):
         'method': 'get_all_names',
         'params': [''],
         })
-    result, error = get_something(nas, data)
-    if error:
-        print error.get('message')
-    return result
+    return get_something(nas, data)
 
 
 def get_disks_for_volume(nas, _input='pool1'):
@@ -120,28 +114,33 @@ def get_disks_for_volume(nas, _input='pool1'):
         'method': 'get_luns',
         'params': [_input],
         })
-    result, error = get_something(nas, data)
-    if error:
-        print error.get('message')
-    return result
+    return get_something(nas, data)
 
 
 def write_disk_info(nas, ofd, indices, disks, disk):
     """Write out one disk record"""
-    fl1 = 'health'
-    val1 = (disks.get(disk))[0]
-    dat = get_properties(nas, 'lun', disk)
-    fl2 = 'vendor'
-    fl3 = 'product'
-    fl4 = 'serial'
-    fl5 = 'size'
-    fmt = 'TS.Nexenta{}_vol{}_d{}: {} {}={} {}={} {}={} {}={} {}={}\n'
-    ofd.write(fmt.format(nas['index'], indices['vol'], indices['dsk'], disk,
-                         fl1, val1,
-                         fl2, dat.get(fl2),
-                         fl3, dat.get(fl3),
-                         fl4, dat.get(fl4),
-                         fl5, dat.get(fl5)))
+    try:
+        fl1 = 'health'
+        val1 = (disks.get(disk))[0]
+        dat = get_properties(nas, 'lun', disk)
+        fl2 = 'vendor'
+        fl3 = 'product'
+        fl4 = 'serial'
+        fl5 = 'size'
+        fmt = 'TS.Nexenta{}_vol{}_d{}: {} {}={} {}={} {}={} {}={} {}={}\n'
+        ofd.write(fmt.format(nas['index'], indices['vol'],
+                             indices['dsk'], disk,
+                             fl1, val1,
+                             fl2, dat.get(fl2),
+                             fl3, dat.get(fl3),
+                             fl4, dat.get(fl4),
+                             fl5, dat.get(fl5)))
+    except IOError:
+        pass
+    except IndexError:
+        pass
+    except KeyError:
+        pass
 
 
 def get_volume_info(nas, vol):
@@ -215,15 +214,20 @@ def get_nexenta_credentials():
             index = 0
             appliances = credentials['appliances']
             for unit in appliances:
-                nas = {}
+                try:
+                    nas = {}
 
-                nas['url'] = 'http://' + unit['ipaddress'] + ':8457/rest/nms'
-                nas['index'] = index
-                nas['user'] = unit['username']
-                nas['pass'] = unit['password']
+                    http = 'http://'
+                    url = ':8457/rest/nms'
+                    nas['url'] = http + unit['ipaddress'] + url
+                    nas['index'] = index
+                    nas['user'] = unit['username']
+                    nas['pass'] = unit['password']
 
-                nas_list.append(nas)
-                index = index + 1
+                    nas_list.append(nas)
+                    index = index + 1
+                except KeyError:
+                    pass
 
     except IOError:
         # No credentials file, so no TorrentNAS. Nothing to do, exit now.
@@ -287,8 +291,8 @@ def catch_offline_items(prev_file, work_file, axedafile):
                 workd = {}
                 for line in prevf:
                     key, value = get_key_and_value(line, ':')
-                    if value != "Not present":
-                        workd[key] = "Not present"
+                    if value != 'Not present':
+                        workd[key] = 'Not present'
                 write_axeda_file(axedafile, workd)
                 return
     except IOError:
@@ -303,7 +307,7 @@ def write_axeda_file(axedafile, datadict):
     """Write the file that Axeda will read"""
     with open(axedafile, 'w') as outf:
         for key in sorted(datadict):
-            outf.write("{}: {}\n".format(key, datadict[key]))
+            outf.write('{}: {}\n'.format(key, datadict[key]))
 
 
 def find_offline_items(prevf, workf, work_file, axedafile):
@@ -323,8 +327,8 @@ def find_offline_items(prevf, workf, work_file, axedafile):
     # equipment goes offline.
     changes_made = False
     for key in prevd:
-        if key not in workd and prevd[key] != "Not present":
-            workd[key] = "Not present"
+        if key not in workd and prevd[key] != 'Not present':
+            workd[key] = 'Not present'
             changes_made = True
 
     if changes_made:
@@ -346,8 +350,11 @@ def get_key_and_value(line, delim):
 
     index = line.find(delim)
     if index != -1:
-        key = line[:index]
-        value = line[index+1:]
+        try:
+            key = line[:index]
+            value = line[index+1:]
+        except IndexError:
+            pass
 
     return key.strip(), value.strip()
 

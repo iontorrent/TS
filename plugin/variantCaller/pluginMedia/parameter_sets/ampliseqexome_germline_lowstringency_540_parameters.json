@@ -1,6 +1,6 @@
 {
     "meta":{
-        "name"          : "AmpliSeq Exome Panel - Proton - Germ Line - Low Stringency",
+        "name"          : "AmpliSeq Exome Panel - 540 - Germ Line - Low Stringency",
         "tooltip"       : "Parameters optimized for AmpliSeq Exome Panel and HiQ",
         "configuration" : "ampliseqexome_germline_low_stringency_540",
         "ts_version"    : "5.2",

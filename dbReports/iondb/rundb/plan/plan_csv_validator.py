@@ -11,7 +11,7 @@ from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_default_or_first
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_flows, \
     validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info, \
     validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType, validate_chipBarcode, \
-    validate_reference
+    validate_reference, validate_sampleControlType
 
 from traceback import format_exc
 
@@ -34,6 +34,7 @@ KEY_SAMPLE_REF = "REF:"
 KEY_SAMPLE_TARGET = "TARGET:"
 KEY_SAMPLE_RNA_TARGET = "RNA TARGET:"
 KEY_SAMPLE_HOTSPOT = "HOTSPOT:"
+KEY_SAMPLE_CONTROLTYPE = "CONTROL TYPE:"
 
 
 class MyPlan:
@@ -55,9 +56,13 @@ class MyPlan:
             self.planObj.planName = ""
             self.planObj.planExecuted = False
             self.planObj.categories = selectedTemplate.categories
-            self.planObj.metaData = selectedTemplate.metaData if selectedTemplate.metaData else {}
             self.planObj.origin = "csv"
             self.planObj.latestEAS = None
+
+            metaData = selectedTemplate.metaData if selectedTemplate.metaData else {}
+            metaData["fromTemplate"] = selectedTemplate.planName
+            metaData["fromTemplateSource"] = "ION" if selectedTemplate.isSystem else selectedTemplate.username
+            self.planObj.metaData = metaData
 
             if userName:
                 self.planObj.username = userName
@@ -1176,7 +1181,8 @@ def _parse_barcodedSamples_from_plan_csv(input, selectedTemplate, barcodeKitName
                 'nucleotideType': "",
                 'reference': "",
                 'targetRegionBedFile': "",
-                'hotSpotRegionBedFile': ""
+                'hotSpotRegionBedFile': "",
+                'controlType': ""
             }
 
             foundSampleRefKeyword = False
@@ -1209,6 +1215,8 @@ def _parse_barcodedSamples_from_plan_csv(input, selectedTemplate, barcodeKitName
                         elif sampleToken.startswith(KEY_SAMPLE_HOTSPOT):
                             sampleDict['hotSpotRegionBedFile'] = sampleToken[8:].strip()
                             foundSampleHotSpotBedKeyword = True
+                        elif sampleToken.startswith(KEY_SAMPLE_CONTROLTYPE):
+                            sampleDict['controlType'] = sampleToken[13:].strip()
                         else:
                             sampleDict['sampleName'] = sampleToken
 
@@ -1280,7 +1288,8 @@ def _parse_barcodedSamples_from_sample_csv(samples_contents, barcodeKitName, csv
                 'nucleotideType': row.get(PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE, '').strip(),
                 'reference': row.get(PlanCSVcolumns.COLUMN_REF, '').strip(),
                 'targetRegionBedFile': row.get(PlanCSVcolumns.COLUMN_TARGET_BED, '').strip(),
-                'hotSpotRegionBedFile': row.get(PlanCSVcolumns.COLUMN_HOTSPOT_BED, '').strip()
+                'hotSpotRegionBedFile': row.get(PlanCSVcolumns.COLUMN_HOTSPOT_BED, '').strip(),
+                'controlType': row.get(PlanCSVcolumns.COLUMN_SAMPLE_CONTROLTYPE, '').strip(),
             }
             barcodedSampleList.append(sampleDict)
 
@@ -1381,6 +1390,7 @@ def _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj):
             sampleReference = row['reference']
             targetRegionBedFile = row['targetRegionBedFile']
             hotSpotRegionBedFile = row['hotSpotRegionBedFile']
+            controlType = row['controlType']
 
             # validate reference and bedfiles
             errors, sampleReference, nucleotideType = validate_barcoded_sample_info(sampleName, sampleExternalId, nucleotideType, sampleReference, runType, applicationGroupName)
@@ -1396,6 +1406,11 @@ def _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj):
             error_ref_bedFiles = validate_ref_bed_compatibility(sampleReference, hotSpotRegionBedFile, targetRegionBedFile)
             if error_ref_bedFiles:
                 errors.append(error_ref_bedFiles)
+
+            # validate sample controlType
+            error_controlType, controlType = validate_sampleControlType(controlType)
+            if error_controlType:
+                errors.extend(error_controlType)
 
             if errors:
                 errorMsgDict[error_key] = '  '.join(errors)
@@ -1420,7 +1435,8 @@ def _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj):
                     'controlSequenceType': '',
                     'reference': sampleReference,
                     'targetRegionBedFile': targetRegionBedFile,
-                    'hotSpotRegionBedFile': hotSpotRegionBedFile
+                    'hotSpotRegionBedFile': hotSpotRegionBedFile,
+                    'controlType': controlType
                 }
 
                 barcodedSampleJson[sampleName] = dict(barcodedSampleData)

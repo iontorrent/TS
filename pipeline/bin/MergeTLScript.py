@@ -85,7 +85,7 @@ if __name__ == "__main__":
     for barcode_name, barcode_info in sorted(env['barcodeInfo'].iteritems()):
         if barcode_info['referenceName']:
             reference_selected = True
-            pass
+            break
 
     try:
         graph_max_x = int(50 * math.ceil(0.014 * int(env['flows'])))
@@ -307,7 +307,8 @@ if __name__ == "__main__":
         if is_composite or not do_ionstats_spatial_accounting:
             basecaller_meta_information = None
 
-        set_result_status('Alignment')
+        if reference_selected:
+            set_result_status('Alignment')
 
         do_ionstats = True
         do_indexing = True

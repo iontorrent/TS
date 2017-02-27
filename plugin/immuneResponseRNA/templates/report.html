@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
+
+<link type="text/css" rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
+<link rel="stylesheet" type="text/css" href="lifechart/lifegrid.css"/>
+<link rel="stylesheet" type="text/css" href="flot/css/smoothness/jquery-ui-1.8.20.custom.css"/>
+
+<script language="javascript" type="text/javascript" src="flot/js/jquery-1.7.2.min.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/FileLinksTable.js"></script>
+
+{% load humanize %}
+
+<style type="text/css">
+  body {
+    background:white;
+    padding: 0;
+    margin: 8px;
+  }
+  .block-rounded {
+    padding:5px;
+    background-color:#F5F5F5;
+    border:1px solid #D6D6D6;
+    -moz-border-radius: 6px;
+    -webkit-border-radius:6px;
+    border-radius: 6px
+  }
+  .help {
+    cursor:help;
+    border-bottom: 1px dotted #A9A9A9
+  }
+</style>
+
+<title>Torrent ampliSeqRNA Report</title>
+
+</head>
+
+<body>
+
+<h1><center>ImmuneResponseRNA Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% endif %}
+<h3><center>{{run_name}}<center></h3>
+
+<table class="center">
+<tr><td><h4>
+{% if Target_Regions %}
+  <b>Target regions:</b> {{Target_Regions}}<br/>
+{% endif %}
+{% if Read_Filters %}
+  <b>Read filters:</b> {{Read_Filters}}<br/>
+{% endif %}
+</h4></td></tr><tr><td>
+
+<table class="block-rounded"><tr>
+  <td><a href="{{rep_overview_png}}" title="{{help_dict.Representation_Overview}}"><img  style="height:100px" src="{{rep_overview_png}}" alt="Representation Overview"/></a></td>
+  <td><div class="statsdata" style="width:{% if rna_stats %}340px{% else %}320px{% endif %}">
+  <table>
+    <tr><td class="inleft"><span title="{{help_dict.Number_of_mapped_reads}}">Number of mapped reads</span></td>
+        <td class="inright">{{Number_of_mapped_reads|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="{{help_dict.Percent_assigned_reads}}">Percent valid on-target reads</span></td>
+        <td class="inright">{{Percent_assigned_reads}}</td></tr>
+{% if ercc_track %}
+    <tr><td class="inleft"><span title="{{help_dict.Percent_ERCC_tracking_reads}}">Percent ERCC tracking reads</span></td>
+        <td class="inright">{{Percent_ERCC_tracking_reads}}</td></tr>
+{% endif %}
+  </table></div></td>
+</tr></table>
+
+</td></tr></table>
+
+<br/>
+
+<div class="center block-rounded" style="width:{% if num_stat_tables == 2 %}{% if amp_stats %}730px{% else %}780px{% endif %}{% else %}380px{% endif %}">
+<table>
+ <tr>
+  <th><span title="{{help_dict.Amplicon_Read_Coverage}}">Amplicon Read Coverage</span></th>
+ </tr>
+ <tr>
+  <td><div class="statsdata" style="width:360px"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Number_of_amplicons}}">Number of amplicons</span></td>
+      <td class="inright">{{Number_of_amplicons|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_1_read}}">Amplicons with at least 1 read</span></td>
+      <td class="inright">{{Amplicons_with_at_least_1_read|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_10_reads}}">Amplicons with at least 10 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_10_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_100_reads}}">Amplicons with at least 100 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_100_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_1000_reads}}">Amplicons with at least 1000 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_1000_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_10K_reads}}">Amplicons with at least 10K reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_10K_reads|intcomma}}</td></tr>
+ </table></div></td>
+ </tr>
+</table>
+</div></div>
+<br/>
+<div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>
+
+<br/>
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+  <div class="pull-right">
+    <p>For research use only. Not for therapeutic or diagnostic use.</p>
+    <p><span class="copyright">&copy; 2016 Thermo Fisher Scientific. All Rights Reserved.</span>
+    <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
+    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+  </div>
+</div> </div> </div> </div>
+<br/>
+</body>
+</html>

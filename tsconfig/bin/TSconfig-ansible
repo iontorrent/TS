@@ -378,13 +378,14 @@ if [ $UPDATE_HOSTNAME == 1 ]; then
     ansible-playbook rename_headnode.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
         --sudo
-
-    (
-    set +e
-    qconf -de $oldFQDN
-    qconf -ds $oldFQDN
-    qconf -dh $oldFQDN
-    )
+    if [[ "$oldFQDN" != "$newHostName" ]]; then
+        (
+        set +e
+        qconf -de $oldFQDN
+        qconf -ds $oldFQDN
+        qconf -dh $oldFQDN
+        )
+    fi
 
     #DIAGNOSTICS
     if false; then

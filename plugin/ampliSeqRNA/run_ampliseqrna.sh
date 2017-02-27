@@ -292,7 +292,7 @@ echo "Number of mapped reads:        $MAPPED_READS" >> "$STATSFILE"
 echo "Number of on-target reads:     $ONTRG_READS" >> "$STATSFILE"
 
 # grab assigned reads and complete basic stats output
-ASN_READS=`awk '++c>1 {t+=$10} END {printf "%.0f",t}' "$TARGETCOVFILE"`
+ASN_READS=`awk 'BEGIN {FS="\t"} NR>1 {t+=$10} END {printf "%.0f",t+0}' "$TARGETCOVFILE"`
 echo "Number of assigned reads:      $ASN_READS" >> "$STATSFILE"
 PC_ONTRG_READS=`echo "$ONTRG_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
 PC_ASN_READS=`echo "$ASN_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
@@ -302,7 +302,7 @@ echo "Percent assigned reads:        $PC_ASN_READS%" >> "$STATSFILE"
 # add RPM to target coverage file
 RPM_FACTOR=0
 if [ "$ASN_READS" -gt 0 ];then
-  RPM_FACTOR=`awk "BEGIN{printf \"%.9f\",1000000/$ASN_READS}"`
+  RPM_FACTOR=`awk "BEGIN {printf \"%.9f\",1000000/$ASN_READS}"`
 fi
 TMPFILE="fincov.rpm.tmp"
 awk "BEGIN {OFS=\"\t\"} {if(++c>1){lc=sprintf(\"%.3f\",$RPM_FACTOR*\$10)}else{lc=\"RPM\"}print \$0,lc}" "$TARGETCOVFILE" > "$TMPFILE"

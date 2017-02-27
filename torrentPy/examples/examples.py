@@ -93,6 +93,59 @@ def read_Debug( dir_name ):
     print "Bead Params: ", beadParams
     return locals()
 
+def treephaser( dir_name ):
+    bamreader = torrentPy.BamReader(dir_name+"/rawlib.bam")
+    tp=torrentPy.TreePhaser(bamreader.header['FlowOrder'][0])
+
+    with open(dir_name+"/Calibration.json") as f:
+        calib_model = f.read()
+        tp.setCalibFromJson(calib_model,4)
+
+    tp.setCAFIEParams(.01,.01,.01)
+    
+    keySeq = bamreader.header['KeySequence'][0]
+    flowOrder = bamreader.header['FlowOrder'][0]
+    key=torrentPy.seqToFlow(keySeq,flowOrder[0:8])
+
+    bamreader.SetSampleSize(3)
+    bamlist_sample = list(bamreader)
+    #apply different basecaller solvers to a list of reads
+    bamlist_sample[0].pop('predicted',None)
+    tp.treephaserSolveMulti('treephaser',bamlist_sample,key)
+    print(bamlist_sample[0]['predicted'][0:10])
+    tp.treephaserSolveMulti('treephaserSWAN',bamlist_sample,key)
+    print(bamlist_sample[0]['predicted'][0:10])
+    tp.treephaserSolveMulti('treephaserDP',bamlist_sample,key)
+    print(bamlist_sample[0]['predicted'][0:10])
+    tp.treephaserSolveMulti('treephaserAdaptive',bamlist_sample,key)
+    print(bamlist_sample[0]['predicted'][0:10])
+    tp.treephaserSolveMulti('treephaserDP',bamlist_sample,key)
+    print(bamlist_sample[0]['predicted'][0:10])
+    
+    
+    #process single read
+    b=bamlist_sample[0]
+    tp.treephaserDPSolve(b['meas'],key)    
+    print(b['predicted'][0:10])
+    tp.treephaserSolve(b['meas'],key)    
+    print(b['predicted'][0:10])
+    tp.treephaserAdaptiveSolve(b['meas'],key)    
+    print(b['predicted'][0:10])
+    tp.treephaserSWANSolve(b['meas'],key)    
+    print(b['predicted'][0:10])
+
+    
+    #Simulate a sequence
+    tp.setStateProgression(True)
+    res=tp.Simulate("TCAGGTTTACG",60)
+    print(res)
+
+    rr=torrentPy.LightFlowAlignment(b['keySeq']+b['qseq_bases'],b['keySeq']+b['tseq_bases'],b['flowOrder'],False,0.1);
+    print(rr)
+    return locals()
+    
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-d','--data-dir',help='path to debug data directory',default='.')
@@ -107,3 +160,5 @@ if __name__ == "__main__":
     ret = read_BfMask( os.path.join(args.data_dir,'bfmask.bin') )
     
     ret = read_Debug( args.data_dir )
+    
+    ret = treephaser(args.data_dir)

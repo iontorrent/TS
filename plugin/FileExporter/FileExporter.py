@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import tarfile
-import traceback
+import re
 import urllib2
 import zipfile
 
@@ -14,7 +14,7 @@ from ion.utils import blockprocessing
 from subprocess import *
 
 class FileExporter(IonPlugin):
-    version = '5.2.0.0'
+    version = '5.2.0.1'
     runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
     runlevels = [ RunLevel.DEFAULT ]
 
@@ -65,12 +65,14 @@ class FileExporter(IonPlugin):
             return self.renameString
 
         finalName = self.renameString.replace('@BARINFO@', barcodeName)
+        sampleName = self.json_barcodes[barcodeName].get('sample', '').replace(' ', '_')
+
         #if we cannot find a sample for this barcode, then we remove the sample id
-        if not self.json_barcodes[barcodeName]['sample']:
-            finalName = finalName.replace('@SAMPLEID@' + self.delim, '')
+        if sampleName:
+            return re.sub(r"@SAMPLEID@", sampleName, finalName)
         else:
-            finalName = finalName.replace('@SAMPLEID@', self.json_barcodes[barcodeName]['sample'])
-        return finalName
+            return re.sub(self.delim + r"?@SAMPLEID@" + self.delim + r"?", sampleName, finalName)
+
 
     def bamRename(self):
         """
@@ -224,11 +226,11 @@ class FileExporter(IonPlugin):
 
             self.basecaller_dir = self.json_dat['runinfo']['basecaller_dir']
             with open(os.path.join(self.basecaller_dir, "datasets_basecaller.json"), 'r') as f:
-                self.datasets_basecaller = json.load(f);
+                self.datasets_basecaller = json.load(f)
 
             # sanity check to make sure we have all of the settings
             if not 'pluginconfig' in self.json_dat:
-                print "ERROR: Failed to get plugin configuration."
+                print("ERROR: Failed to get plugin configuration.")
                 return
 
             # Define output directory.
@@ -285,7 +287,7 @@ class FileExporter(IonPlugin):
             self.wantTar     = pluginconfig.get('compressedType', '') == 'tar'
 
         except:
-            print 'ERROR: Failed read and parse the required information sources.'
+            print('ERROR: Failed read and parse the required information sources.')
             traceback.print_exc()
             return
 
@@ -298,44 +300,44 @@ class FileExporter(IonPlugin):
                 if pluginNumber is not None and api_key is not None:
                     api_url += '&pluginresult=%s&api_key=%s' % (pluginNumber, api_key)
                 else:
-                    print 'No API key available'
+                    print('No API key available')
                 d = json.loads(urllib2.urlopen(api_url).read())
                 self.variantCallerPath = d['objects'][0]['path']
                 self.variantCallerPath = self.variantCallerPath.split('/')[-1]
                 self.variantExists = True
 
             except:
-                print 'ERROR!  Failed to get variant caller path. Will not generate variant files.'
+                print('ERROR!  Failed to get variant caller path. Will not generate variant files.')
 
         # report settings
-        print "INFO: *************************************"
-        print "INFO: Plugin Dir    : " + str(self.pluginDir)
-        print "INFO: Download Dir  : " + str(self.downloadDir)
-        print "INFO: Is Barcoded   : " + str(self.isBarcodedRun)
-        print "INFO: Delimiter     : " + str(self.delim)
-        print "INFO: Selections    : " + str(self.selections)
-        print "INFO: Bam Create    : " + str(self.bamCreate)
-        print "INFO: FastQ Create  : " + str(self.fastqCreate)
-        print "INFO: VCF Create    : " + str(self.vcfCreate)
-        print "INFO: XLS Create    : " + str(self.xlsCreate)
-        print "INFO: Zip FastQ     : " + str(self.zipFASTQ)
-        print "INFO: Zip BAM       : " + str(self.zipBAM)
-        print "INFO: Zip VCF       : " + str(self.zipVCF)
-        print "INFO: Zip XLS       : " + str(self.zipXLS)
-        print "INFO: Want Tar      : " + str(self.wantTar)
-        print "INFO: Alignment Dir : " + str(self.alignment_dir)
-        print "INFO: Reference Path: " + str(self.reference_path)
-        print "INFO: Basecaller Dir: " + str(self.basecaller_dir)
-        print "INFO: Barcode Id    : " + str(self.barcodeId)
-        print "INFO: Run name      : " + str(self.run_name)
-        print "INFO: Report name   : " + str(self.report_name)
-        print "INFO: Run date      : " + str(self.run_date)
-        print "INFO: Chip type     : " + str(self.chiptype)
-        print "INFO: Instrument    : " + str(self.instrument)
-        print "INFO: Variant Exists: " + str(self.variantExists)
-        print "INFO: Variant Caller: " + str(self.variantCallerPath)
-        print "INFO: Analysis Dir  : " + str(self.analysis_dir)
-        print "INFO: *************************************"
+        print("INFO: *************************************")
+        print("INFO: Plugin Dir    : " + str(self.pluginDir))
+        print("INFO: Download Dir  : " + str(self.downloadDir))
+        print("INFO: Is Barcoded   : " + str(self.isBarcodedRun))
+        print("INFO: Delimiter     : " + str(self.delim))
+        print("INFO: Selections    : " + str(self.selections))
+        print("INFO: Bam Create    : " + str(self.bamCreate))
+        print("INFO: FastQ Create  : " + str(self.fastqCreate))
+        print("INFO: VCF Create    : " + str(self.vcfCreate))
+        print("INFO: XLS Create    : " + str(self.xlsCreate))
+        print("INFO: Zip FastQ     : " + str(self.zipFASTQ))
+        print("INFO: Zip BAM       : " + str(self.zipBAM))
+        print("INFO: Zip VCF       : " + str(self.zipVCF))
+        print("INFO: Zip XLS       : " + str(self.zipXLS))
+        print("INFO: Want Tar      : " + str(self.wantTar))
+        print("INFO: Alignment Dir : " + str(self.alignment_dir))
+        print("INFO: Reference Path: " + str(self.reference_path))
+        print("INFO: Basecaller Dir: " + str(self.basecaller_dir))
+        print("INFO: Barcode Id    : " + str(self.barcodeId))
+        print("INFO: Run name      : " + str(self.run_name))
+        print("INFO: Report name   : " + str(self.report_name))
+        print("INFO: Run date      : " + str(self.run_date))
+        print("INFO: Chip type     : " + str(self.chiptype))
+        print("INFO: Instrument    : " + str(self.instrument))
+        print("INFO: Variant Exists: " + str(self.variantExists))
+        print("INFO: Variant Caller: " + str(self.variantCallerPath))
+        print("INFO: Analysis Dir  : " + str(self.analysis_dir))
+        print("INFO: *************************************")
 
         # replace all of the values in the selection with their appropriate values
         self.selections = [self.run_name    if selection=='run_name'    else selection for selection in self.selections]

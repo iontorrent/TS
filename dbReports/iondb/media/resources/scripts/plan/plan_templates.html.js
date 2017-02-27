@@ -539,4 +539,70 @@ $(document).ready(function() {
             console.log("error:", data);
         });
     });
+    
+    $('#upload_template').click(function(e) {
+        e.preventDefault();
+        $('#modal_load_template .alert-error').empty().hide();
+
+        var filename = $('#modal_load_template :file').val();
+        if (!filename){
+            $('#modal_load_template .alert-error').empty().append('Please select a CSV file').show();
+            return false;
+        }
+
+        $('#importTemplateForm').ajaxSubmit({
+            dataType : 'json',
+            async: false,
+            beforeSubmit: $.blockUI({baseZ: 2000}),
+            success: function(data) {
+                if (data){
+                    var error = "<span>"+data.status_msg+"</span>";
+                    for (var key in data.msg) {
+                        error += "<br><ul class='unstyled'>";
+                        error += "<li><strong>" + key + " contained error(s):</strong> ";
+                        error += "<ul>";
+                        $.each(data.msg[key], function(i,msg){
+                            error += "<li>" + msg +"</li>";
+                        });
+                        error += "</ul>";
+                        error += "</li>";
+                        error += "</ul>";
+                    }
+                    if (data.status == 'failed'){
+                        $('#modal_load_template .alert-error').html(error).show();
+                    } else {
+                        $('#modal_load_template .alert-success').show();
+                        $('#modal_load_template .alert-warning').html(error).show();
+                        $('#modal_load_template .btn').hide();
+                        $('#modal_load_template #close_on_success').show();
+                    }
+                } else {
+                    $('#modal_load_template .alert-success').show();
+                    setTimeout(function(){
+                        $('#modal_load_template').modal('hide');
+                      }, 1000);
+                }
+                $.unblockUI();
+            },
+            error: function(data){
+                $('#modal_load_template .alert-error').empty().append(data.responseText).show();
+                $.unblockUI();
+            }
+        });
+        return false;
+    });
+
+    $('#modal_load_template').on('hide', function(){
+        if ( $('#modal_load_template .alert-success').is(':visible')){
+            // show new template
+            window.location.hash = 'recently_created';
+            if ($('#recently_created').data('kendoGrid')){
+                $('#recently_created').data('kendoGrid').refresh();
+            }
+        }
+        $('#importTemplateForm')[0].reset();
+        $('#modal_load_template .alert').hide();
+        $('#modal_load_template .btn').show();
+        $('#modal_load_template #close_on_success').hide();
+    });
 });

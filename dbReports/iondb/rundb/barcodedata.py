@@ -41,6 +41,7 @@ CONTROL_SEQUENCE_TYPE = 'control_sequence_type'
 GENOME_URL = 'genome_urlpath'
 SAMPLE_NUCLEOTIDE_TYPE = 'nucleotideType'
 SAMPLE_CONTROL_SEQEUENCE_TYPE = 'controlSequenceType'
+NTC_CONTROL = 'control_type'
 
 # TODO: for later release
 #ANALYSIS_PARAMETERS = 'analysis_parameters'
@@ -117,6 +118,7 @@ class BarcodeSampleInfo(object):
         unbarcodedEntry[SAMPLE] = singleReadGroup[SAMPLE]
         unbarcodedEntry[SAMPLE_ID] = samples.first().externalId if samples.count() == 1 else ''
         unbarcodedEntry[NUCLEOTIDE_TYPE] = ''
+        unbarcodedEntry[NTC_CONTROL] = ''
         data[NON_BARCODED] = unbarcodedEntry
 
         # construct the reference genome url which is web accessible
@@ -180,17 +182,12 @@ class BarcodeSampleInfo(object):
             # since there should be one and only one read group, we can hard code the first element of the read groups
             singleReadGroup = basecallerResults.get('read_groups')[readGroupId]
 
-            referenceGenome = self.eas.reference
-            barcodeEntry[REFERENCE] = referenceGenome
-            barcodeEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, referenceGenome, "%s.fasta" % referenceGenome) if barcodeEntry[REFERENCE] else ''
+            barcodeEntry[REFERENCE] = self.eas.reference
             barcodeEntry[FILTERED] = singleReadGroup.get(FILTERED, False)
             # if this is a "filtered" barcode, then we will skip including it.
             if barcodeEntry[FILTERED] and not include_filtered:
                 continue
 
-            barcodeEntry[ALIGNED] = (REFERENCE in barcodeEntry) and bool(barcodeEntry[REFERENCE]) and not barcodeEntry[FILTERED]
-            barcodeEntry[BAM] = dataset['file_prefix'] + (".bam" if barcodeEntry[ALIGNED] else ".basecaller.bam")
-            barcodeEntry[BAM_FULL_PATH] = BarcodeSampleInfo.getFullBamPath(reportFullPath, barcodeEntry[REFERENCE], barcodeEntry[BAM], barcodeEntry[FILTERED])
             barcodeEntry[READ_COUNT] = singleReadGroup[READ_COUNT]
             barcodeEntry[BARCODE_SEQUENCE] = singleReadGroup[BARCODE_SEQUENCE] if BARCODE_SEQUENCE is singleReadGroup else ''
             barcodeEntry[BARCODE_ADAPTER] = singleReadGroup.get(BARCODE_ADAPTER, '')
@@ -208,6 +205,7 @@ class BarcodeSampleInfo(object):
             barcodeEntry[NUCLEOTIDE_TYPE] = ''
             barcodeEntry[CONTROL_SEQUENCE_TYPE] = ''
             barcodeEntry[BARCODE_DESCRIPTION] = ''
+            barcodeEntry[NTC_CONTROL] = ''
             if len(EASbarcodedSamples) > 0:
                 # attempt to find the barcode in the EAS BarcodeSample mapping
                 try:
@@ -219,9 +217,15 @@ class BarcodeSampleInfo(object):
                     barcodeEntry[TARGET_REGION_FILEPATH] = barcodedSample.get(TARGET_REGION_BED, barcodeEntry[TARGET_REGION_FILEPATH])
                     barcodeEntry[HOT_SPOT_FILE_PATH] = barcodedSample.get(HOT_SPOT_BED, barcodeEntry[HOT_SPOT_FILE_PATH])
                     barcodeEntry[REFERENCE] = barcodedSample.get(REFERENCE, barcodeEntry[REFERENCE])
+                    barcodeEntry[NTC_CONTROL] = barcodedSample.get('controlType', barcodeEntry[NTC_CONTROL])
                 except:
                     # intentionally do nothing....
                     pass
+
+            barcodeEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, barcodeEntry[REFERENCE], "%s.fasta" % barcodeEntry[REFERENCE]) if barcodeEntry[REFERENCE] else ''
+            barcodeEntry[ALIGNED] = (REFERENCE in barcodeEntry) and bool(barcodeEntry[REFERENCE]) and not barcodeEntry[FILTERED]
+            barcodeEntry[BAM] = dataset['file_prefix'] + (".bam" if barcodeEntry[ALIGNED] else ".basecaller.bam")
+            barcodeEntry[BAM_FULL_PATH] = BarcodeSampleInfo.getFullBamPath(reportFullPath, barcodeEntry[REFERENCE], barcodeEntry[BAM], barcodeEntry[FILTERED])
 
             # if a sample has been defined the sample id should be the primary key to look up the sample by
             if barcodeEntry[SAMPLE] != '':

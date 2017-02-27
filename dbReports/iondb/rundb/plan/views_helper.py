@@ -247,7 +247,8 @@ def get_template_categories():
     Define isActive as a database call to be able to hide/show category via off-cycle release (e.g. PGx example)
     '''
     applicationGroup_PGx = ApplicationGroup.objects.filter(name='PGx')
-
+    applicationGroup_HID = ApplicationGroup.objects.filter(name='HID')
+    
     categories = [
         # Favorites
         {
@@ -307,6 +308,16 @@ def get_template_categories():
             'isActive': True,
             'code': 0,
         },
+        # HID
+        {
+            'tag': 'hid',
+            'displayedName': 'Human Identification',
+            'api_filter':'&runType=AMPS&applicationGroup__name__iexact=HID',
+            'img': 'resources/img/appl_hid.png',
+            'isActive': applicationGroup_HID[0].isActive if applicationGroup_HID else False,
+            'ampliSeq_upload': True,            
+            'code': 11,
+        },                  
         # Oncology - Liquid Biopsy
         {
             'tag': 'onco_liquidBiopsy',
@@ -366,6 +377,6 @@ def get_template_categories():
 
     if not isOCP_enabled():
         for category in categories:
-            category['api_filter'] += "&categories__in=Onconet,,"
+            category['api_filter'] += "&categories__regex=^((?!Oncomine))"
 
     return categories

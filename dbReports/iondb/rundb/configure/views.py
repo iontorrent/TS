@@ -49,7 +49,7 @@ from ion.plugin.remote import call_pluginStatus
 from iondb.utils.utils import convert
 from iondb.bin.IonMeshDiscoveryManager import IonMeshDiscoveryManager
 from iondb.rundb.configure import updateProducts
-from iondb.utils.nexenta_nms import this_is_nexenta, get_all_torrentnas_data
+from iondb.utils.nexenta_nms import this_is_nexenta, get_all_torrentnas_data, has_nexenta_cred
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +206,17 @@ def get_torrent_nas_info():
     return info
 
 
+def torrent_nas_section(request):
+    try:
+        nas_info = get_torrent_nas_info()
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return HttpResponseServerError("Failed to get Torrent NAS Info: %s" % repr(e))
+    else:
+        ctx = RequestContext(request, {"nas_info": nas_info})
+        return render_to_response("rundb/configure/services_torrentNAS.html", context_instance=ctx)
+
+
 @login_required
 def configure_services(request):
     '''Render the service tab'''
@@ -222,12 +233,6 @@ def configure_services(request):
     if raid_status:
         sort_drive_array_for_display(raid_status)
 
-    try:
-        nas_info = get_torrent_nas_info()
-    except:
-        logger.error(traceback.format_exc())
-        nas_info = None
-
     ctxd = {
         "processes": processes,
         "servers": servers,
@@ -236,7 +241,7 @@ def configure_services(request):
         "raid_status": raid_status,
         "raid_status_updated": raid_status_updated,
         'crunchers': Cruncher.objects.all().order_by('name'),
-        'nas_info': nas_info
+        'show_nas_info': has_nexenta_cred()
         }
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/services.html", context_instance=ctx)
@@ -259,7 +264,6 @@ def configure_plugins(request):
     # force a refresh of the cache
     pluginServer = xmlrpclib.ServerProxy(settings.IPLUGIN_STR)
     pluginServer.GetSupportedPlugins(list(), True, False)
-    pluginmanager.rescan()
 
     # Rescan Publishers
     publishers.search_for_publishers()
@@ -300,15 +304,27 @@ def configure_plugins_plugin_install_to_version(request, pk, version):
 @login_required
 def configure_plugins_plugin_install(request):
     '''Render plugin install tab'''
-    ctx = RequestContext(request, {})
-    return render_to_response("rundb/configure/modal_configure_plugins_plugin_install.html", context_instance=ctx)
+    ctxd = {
+        "what": "plugin",
+        "file_filters": [("deb", "Debian Package"), ("zip", "Compressed Zip files")],
+        "pick_label": "a Plugin File",
+        "plupload_url": reverse("configure_plugins_plugin_zip_upload"),
+        "install_url": reverse('api_dispatch_install', kwargs={'api_name': 'v1', 'resource_name': 'plugin'})
+    }
+    return render_to_response("rundb/configure/modal_plugin_or_publisher_install.html", context_instance=RequestContext(request, ctxd))
 
 
 @login_required
 def configure_publisher_install(request):
-    '''Render plugin install tab'''
-    ctx = RequestContext(request, {})
-    return render_to_response("rundb/configure/modal_configure_publisher_install.html", context_instance=ctx)
+    '''Render publisher install tab'''
+    ctxd = {
+        "what": "publisher",
+        "file_filters": [("zip", "Compressed Zip files")],
+        "pick_label": "a Publisher ZIP File",
+        "plupload_url": reverse("configure_plugins_plugin_zip_upload"),
+        "install_url": reverse('api_dispatch_install', kwargs={'api_name': 'v1', 'resource_name': 'publisher'})
+    }
+    return render_to_response("rundb/configure/modal_plugin_or_publisher_install.html", context_instance=RequestContext(request, ctxd))
 
 
 @login_required
@@ -1772,6 +1788,7 @@ def get_nas_devices(request):
 
     # ===== Get all servers with NFS mounts =====
     nas_devices = []
+    stderr = ""
     for device in devices:
         logger.info("scanning %s" % device)
         # Not the best way: - using showmount and a time limit
@@ -1864,14 +1881,17 @@ def add_nas_storage(request):
         if this_is_nexenta(servername):
             logger.info("%s is TorrentNAS", servername)
             # Update credentials file
-            subprocess.call(['sudo', '/opt/ion/iondb/bin/write_nms_access.py', '--id', servername])
+            subprocess.call(['sudo', '/opt/ion/iondb/bin/write_nms_access.py', '--id', '%s' % servername])
     except:
         logger.error(traceback.format_exc())
     return HttpResponse()
 
 
 def remove_nas_storage(request):
-    '''Edits all_local, removing specified mount entry, calls ansible-playbook'''
+    '''
+    Edits all_local, removing specified mount entry, calls ansible-playbook
+    Removes entry from nms_access file
+    '''
     try:
         data = json.loads(request.body)
         servername = data.get('servername')
@@ -1881,11 +1901,8 @@ def remove_nas_storage(request):
         result = tasks.remove_nas_storage.delay(mountpoint)
         # Wait for the task to complete
         result.wait()
-        # Probe nas unit to identify Nexenta appliance
-        if this_is_nexenta(servername):
-            logger.info("%s is TorrentNAS", servername)
-            # Update credentials file
-            subprocess.call(['sudo', '/opt/ion/iondb/bin/write_nms_access.py', '--remove', '--id', servername])
+        # Update credentials file
+        subprocess.call(['sudo', '/opt/ion/iondb/bin/write_nms_access.py', '--remove', '--id', '%s' % servername])
     except:
         logger.error(traceback.format_exc())
     return HttpResponse()

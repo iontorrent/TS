@@ -11,6 +11,7 @@ import re
 
 from iondb.rundb.models import SampleGroupType_CV, SampleAnnotation_CV, SampleSet, SampleSetItem, Sample
 from iondb.utils import validation
+from iondb.rundb.plan.plan_validator import validate_sampleControlType
 
 import views_helper
 
@@ -1010,3 +1011,11 @@ def validate_sampleSets_for_planning(sampleSets):
                 barcodes[barcode] = (sample, setname)
 
     return errors
+
+def validate_controlType(controlType):
+    errors, controlType = validate_sampleControlType(controlType)
+    if errors:
+        return False, errors[0], ""
+    else:
+        return True, "", controlType
+

@@ -230,3 +230,8 @@ def get_apt_cache(packageName):
     cache = apt.Cache()
     package = cache[packageName]
     return package, cache
+
+def is_TsVm():
+    # returns True if the TS is running as a VM instance on S5
+    return os.path.exists('/etc/init.d/mountExternal')
+

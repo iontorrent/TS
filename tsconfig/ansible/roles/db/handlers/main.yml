@@ -1,9 +1,0 @@
----
-- name: start postgresql
-  service: name=postgresql-{{ psql_version.stdout }} state=running enabled=yes
-- name: restart postgresql
-  service: name=postgresql-{{ psql_version.stdout }} state=restarted enabled=yes
-- name: reload postgresql
-  service: name=postgresql-{{ psql_version.stdout }} state=reloaded enabled=yes
-- name: reload sysctl
-  command: /sbin/sysctl -p {{ postgres_sysctl_file }}

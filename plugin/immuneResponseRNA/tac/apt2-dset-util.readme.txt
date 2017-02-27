@@ -1,0 +1,6 @@
+apt2-dset-util is a utility for converting between the different file formats supported by the APT2 framework, including HDF5-based files (such as OSCHP files, spf5 files and OncoScan REF_MODEL files), Calvin file formats (such as CEL and CYCHP files) and text or TSV (tab separated value) files.
+
+It is included in Affymetrix Power Tool package apt-1.18.2-x86_64-intel-linux.
+
+APT is an open-source project licensed under the GNU General Public License (GPL).
+

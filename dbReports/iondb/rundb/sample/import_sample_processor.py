@@ -40,6 +40,7 @@ COLUMN_PCR_PLATE_POSITION = "PCR Plate Position"
 COLUMN_BIOPSY_DAYS = "Biopsy Days"
 COLUMN_COUPLE_ID = "Couple ID"
 COLUMN_EMBRYO_ID = "Embryo ID"
+COLUMN_CONTROLTYPE = "Control Type"
 
 
 def process_csv_sampleSet(csvSampleDict, request, user, sampleSet_ids):
@@ -72,6 +73,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     sampleDisplayedName = csvSampleDict.get(COLUMN_SAMPLE_NAME, '').strip()
     sampleExtId = csvSampleDict.get(COLUMN_SAMPLE_EXT_ID, '').strip()
     sampleGender = csvSampleDict.get(COLUMN_GENDER, '').strip()
+    sampleControlType = csvSampleDict.get(COLUMN_CONTROLTYPE, '').strip()
     sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, None)
     sampleGroup = csvSampleDict.get(COLUMN_GROUP, '0').strip()
     sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
@@ -95,7 +97,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     # validation has been done already, this is just to get the official value
     isValid, errorMessage, gender_CV_value = sample_validator.validate_sampleGender(sampleGender)
     isValid, errorMessage, role_CV_value = sample_validator.validate_sampleGroupType(sampleGroupType)
-
+    isValid, errorMessage, controlType_CV_value = sample_validator.validate_controlType(sampleControlType)
     isValid, errorMessage, cancerType_CV_value = sample_validator.validate_cancerType(cancerType)
     isValid, errorMessage, pcrPlateRow_internal_value = sample_validator.validate_pcrPlateRow(pcrPlateRow)
 
@@ -144,7 +146,8 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
             'creationDate': currentDateTime,
             'lastModifiedUser': user,
             'lastModifiedDate': currentDateTime,
-            'description': sampleDescription
+            'description': sampleDescription,
+            'controlType': controlType_CV_value
         }
 
         sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample=sample,
@@ -251,6 +254,7 @@ def validate_csv_sample(csvSampleDict, request):
     try:
         sampleDisplayedName = csvSampleDict.get(COLUMN_SAMPLE_NAME, '').strip()
         sampleExtId = csvSampleDict.get(COLUMN_SAMPLE_EXT_ID, '').strip()
+        sampleControlType = csvSampleDict.get(COLUMN_CONTROLTYPE, '').strip()
         sampleGender = csvSampleDict.get(COLUMN_GENDER, '').strip()
         sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, '').strip()
         sampleGroup = csvSampleDict.get(COLUMN_GROUP, '').strip()
@@ -345,6 +349,11 @@ def validate_csv_sample(csvSampleDict, request):
             isValid, errorMessage = sample_validator.validate_sampleEmbryoId(embryoId)
             if not isValid:
                 failed.append((COLUMN_EMBRYO_ID, errorMessage))
+
+        if sampleControlType:
+            isValid, errorMessage, controlType_CV_value = sample_validator.validate_controlType(sampleControlType)
+            if not isValid:
+                failed.append((COLUMN_CONTROLTYPE, errorMessage))
 
         # NEW VALIDATION FOR BARCODEKIT AND BARCODE_ID_STR
         isValid, errorMessage, item = sample_validator.validate_barcodekit_and_id_str(barcodeKit, barcodeAssignment)

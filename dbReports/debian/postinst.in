@@ -260,7 +260,11 @@ ENDOFAPACHEENV
         rm -rf @PYTHON_LOCAL_SITE_PACKAGES@/ion
     fi
 
-    # stop the
+    # stop the dependent services
+    if [ -f "/etc/init.d/tomcat7" ]; then
+        invoke-rc.d tomcat7 stop
+    fi
+
     invoke-rc.d apache2 stop
     invoke-rc.d celerybeat stop
     invoke-rc.d celeryd stop
@@ -339,20 +343,19 @@ EOF
         rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
     fi
 
+    if [ -f "/etc/init.d/tomcat7" ]; then
+        invoke-rc.d tomcat7 start
+    fi
     invoke-rc.d apache2 start
     invoke-rc.d celeryd start
     invoke-rc.d celerybeat start
 
+
     #load the references for a first time
     (wget -q -O /dev/null http://localhost/configure/references/ > /dev/null) || \
-        echo "Loading references failed."
-
+        echo "Loading references failed."    
+    
     #load the config page to update plugins and publishers
-    (wget -q -O /dev/null http://localhost/configure/plugins/ > /dev/null) || \
-        echo "Loading plugin config page failed."
-
-    # Schedule plugin rescan task to run after various delays, catches plugins installed by other packages.
-    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=2)'
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=60)'
 
     # Rescan size and inode count for PluginResults

@@ -2,6 +2,7 @@
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.web.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.editable.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.dropdownlist.js"%}"></script>
+<link rel="stylesheet" href="{% static "resources/kendo/styles/kendo.common.min.css"%}" />
 
 <style>
 .k-dirty{
@@ -10,6 +11,29 @@
 .k-tooltip{
     min-width: 300px;
     max-width: 400px;
+}
+.k-grid td{
+    padding: 0.7em 0.5em;
+}
+#grid .k-grid-header .k-header .verticalTab{
+  display: inline-block;
+  white-space: nowrap;
+  -webkit-transform: translate(15px,26px) rotate(-90deg);
+  -ms-transform: translate(15px,26px) rotate(-90deg);
+  transform: translate(15px,26px) rotate(-90deg);
+  -webkit-transform-origin: left bottom;
+  -ms-transform-origin: left bottom;
+  transform-origin: left bottom;
+  position: absolute;
+  width: 100px;
+}
+#grid .k-grid-header .k-header{
+  height: 80px !important;
+}
+#grid .k-grid-header .k-state-active{
+  background-color: #D3D3D3;
+  border-color: #C5C5C5 !important;
+  border: 1px solid;
 }
 </style>
 
@@ -35,7 +59,7 @@
 	</br>
 	<div class="form-inline">
 		<label class="span3 form-label" id="numRowsLabel" for="numRows">Number of {%if helper.isBarcodeKitSelectionRequired or step.getCurrentSavedFieldDict.barcodeSet %}barcodes{% else %}chips{% endif %}</label>
-		<input type="text" id="numRows" name="numRows" value="{{step.savedObjects.samplesTableList|length}}" class="integer input-small span2" style="vertical-align: top;"/>
+		<input type="text" id="numRows" name="numRows" value="{{step.prepopulatedFields.numberOfSamples}}" class="integer input-small span2" style="vertical-align: top;"/>
 		<a id="numRowsClick" title="Change number of rows below for plan creation" class="btn"><i class="icon-ok-sign"></i></a>
 		<a id="loadTable" href="#" title="Load samples table from csv file" class="btn pull-right" data-toggle="modal" data-target="#modal_load_samples_table">Load Samples Table</a>
 		<a id="saveTable" href="{% url "page_plan_save_samples_table" %}" title="Save samples table to csv file" class="btn pull-right">Save Samples Table</a>
@@ -91,13 +115,6 @@
 	<a title="Auto generate sample names" class="btn" id="fillSampleNames"><i class="icon-arrow-down"></i></a>
 	<a title="Clear sample names" class="btn" id="clearSampleNames"><i class="icon-trash"></i></a>
 	{% endif %}
-	{% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
-		<a title="Show/Hide Sample Annotation Columns" class="btn" id="showHideSampleAnnotation"><i class="icon-comment"></i></a>
-	{% endifnotequal %}
-			   
-	{% if helper.isReferenceBySample %}
-		<a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample_bc"><i class="icon-eye-open"></i></a>
-	{% endif %}
     </div>
 </div>
 <div class="row-fluid nonbarcoded" {%if helper.isBarcoded%}style="display: none;"{%endif%}>
@@ -107,10 +124,6 @@
                 <a title="Refresh IonReporter Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
                 <img src="/site_media/img/loading.gif" width="35" height="35" id="loading" class="hide"/>
         {% endifnotequal %}
-
-        {% if helper.isReferenceBySample %}
-                <a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample"><i class="icon-eye-open"></i></a>
-        {% endif %}
     </div>
 </div>
 
@@ -143,9 +156,7 @@
         "isPlanBySample": "{{helper.isPlanBySample}}" == "True",
         "isControlSeqTypeBySample": "{{helper.isControlSeqTypeBySample}}" == "True",
         "isReserved": "{{ helper.getStepDict.Application.prepopulatedFields.planStatus }}" == "reserved",
-        "isEditRun": "{{helper.isEditRun}}" == "True",
-        "isOCAv2" : planCategories.toLowerCase().indexOf("ocav2") >= 0,
-        "isBarcodesDefaultCount" : planCategories.toLowerCase().indexOf("barcodes_") >= 0
+        "isEditRun": "{{helper.isEditRun}}" == "True"
     };
 
     var references = [];
@@ -181,6 +192,16 @@
            "name": "{{obj.name}}",
            "display": "{{obj.description}}"
         });
+    {% endfor %}
+
+    var controlTypes = [];
+    {% for obj in step.prepopulatedFields.sampleAnnotations %}
+        {% if obj.annotationType == "controlType" %}
+        controlTypes.push({
+           "value": "{{obj.value}}",
+           "display": "{{obj.value}}" || "None"
+        });
+        {% endif %}
     {% endfor %}
 
     var USERINPUT = USERINPUT || {};

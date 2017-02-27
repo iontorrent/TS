@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<head>
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+    #formwrap {
+        line-height: 2em;
+        background: #eef;
+        margin: 10px;
+        padding: 10px;
+        height: 500px;
+    }
+    body {
+        font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+        font-size: 14px;
+    }
+    .center { margin-left:auto; margin-right:auto; }
+    .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+
+ <script>
+    $(function() {
+        // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
+        $('#ercc').attr('checked',false);
+        $('#uniquemaps').attr('checked',false);
+        $('#filterbarcodes').attr('checked', false);
+        $("#uniquereads").hide();
+    });
+ </script>
+</head>
+
+<body>
+<form id="immuneResponseRNA" name="immuneResponseRNA">
+    <div style="text-align:center">
+        <h1>Torrent immuneResponseRNA Plugin</h1>
+        <h3>Immune Response Expression Analysis</h3>
+    </div>
+    <table class="center" cellpadding="5px">
+        <tr id="filterbcs">
+            <td><span class="help"
+                title="Check to filter 'phantom' barcodes, those with low relaively low numbers of reads.">
+                Filter Barcodes:</span></td>
+            <td><input type="checkbox" id="filterbarcodes" name="filterbarcodes" checked="checked" value="Yes"/></td> </tr>
+        <tr id="erccid">
+            <td><span class="help"
+                title="Check if this AmpliSeq-RNA library employed ERCC amplicons for performance tracking.">
+                ERCC Tracking:</span></td>
+            <td><input type="checkbox" id="ercc" name="ercc" checked="checked" value="Yes"/></td> </tr>
+        <tr id="uniquereads">
+            <td><span class="help"
+                title="Check to analyze only reads mapped uniquely in the genome.">
+                Use Only Uniquely Mapped Reads:</span></td>
+            <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes" checked="checked"/></td>
+        </tr>
+    </table>
+
+    <input type="hidden" id="launch_mode" name="launch_mode" value="Autostart with plan plugin configuration"/>
+    <br/>
+
+
+    <div align="left">
+        <h3>Description and Usage Notes</h3>
+    <p>
+    This plugin generates statistics, downloadable data files and interactive visualization of representation of
+    targeted RNA transcripts.</p>
+    </div>
+</form>
+</body>
+</html>
+

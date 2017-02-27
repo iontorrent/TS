@@ -40,7 +40,7 @@
       "barcode-spec-file" : "",
       "bkg-dont-emphasize-by-compression" : false,
       "bkg-well-xtalk-name" : "/opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
-      "gopt" : "/opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "gopt" : "/opt/ion/config/gopt_550.param.json",
       "xtalk" : "disable"
    },
    "GpuControlOpts" : {
@@ -72,7 +72,7 @@
       "col-flicker-correct" : true,
       "col-flicker-correct-aggressive" : true,
       "col-flicker-correct-verbose" : false,
-      "corr-noise-correct" : true,
+      "corr-noise-correct" : false,
       "dat-postfix" : "dat",
       "flowtimeoffset" : 1000,
       "fluid-potential-correct" : false,
@@ -81,7 +81,7 @@
       "hilowfilter" : false,
       "ignore-checksum-errors" : false,
       "ignore-checksum-errors-1frame" : false,
-      "img-gain-correct" : false,
+      "img-gain-correct" : true,
       "mask-datacollect-exclude-regions" : true,
       "nn-subtract-empties" : false,
       "nnmask" : [ 1, 3 ],
@@ -191,7 +191,8 @@
    },
    "ThumbnailControl" : {
       "bkg-debug-files" : true,
-      "bkg-debug-param" : 0,
+      "bkg-debug-param" : 3,
+      "gpuworkload" : 0.0,
       "mask-datacollect-exclude-regions" : false,
       "region-size" : [ 100, 100 ],
       "total-timeout" : 36000

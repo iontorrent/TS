@@ -4,7 +4,10 @@
 import urllib2 as u
 import traceback
 import json
+import os
 
+NEXENTACRED = "/etc/torrentserver/nms_access"
+#NEXENTACRED = "./nms_access"
 
 class Nexenta_nms(object):
 
@@ -132,12 +135,11 @@ class Nexenta_nms(object):
 
 def get_all_torrentnas_data():
     'Returns array with each element representing a TorrentNAS unit'
-    nexentacred = "/etc/torrentserver/nms_access"
     tnazzes = None
     data = list()
     errors = list()
     try:
-        with open(nexentacred, 'r') as fh:
+        with open(NEXENTACRED, 'r') as fh:
             tnazzes = json.load(fh)
     except:
         return data
@@ -153,6 +155,11 @@ def get_all_torrentnas_data():
         except:
             errors.append(traceback.format_exc())
     return data, errors
+
+
+def has_nexenta_cred():
+    # check whether nms_access file exists
+    return os.path.isfile(NEXENTACRED)
 
 
 def this_is_nexenta(ipaddress):

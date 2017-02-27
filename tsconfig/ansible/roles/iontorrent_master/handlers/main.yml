@@ -6,3 +6,5 @@
   service: name=ionPlugin state=restarted
 - name: restart ionCrawler
   service: name=ionCrawler state=restarted
+- name: restart apache2
+  service: name=apache2 state=restarted

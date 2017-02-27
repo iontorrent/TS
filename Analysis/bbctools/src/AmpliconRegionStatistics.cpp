@@ -81,6 +81,12 @@ void AmpliconRegionStatistics::TrackReadsOnRegion( const BamTools::BamAlignment 
 {
 	// pseudo-random number generator 'seed' for resolving equivalent read assignments
 	static uint16_t clockSeed = 0;
+	static int32_t lastRefID = 0;
+	// always reset clockSeed for new contig to allow consistency with BAM split up by contig vs. whole
+	if( lastRefID != aread.RefID ) {
+		clockSeed = 0;
+		lastRefID = aread.RefID;
+	}
 	// check/set first region read overlaps
 	uint32_t readSrt = aread.Position + 1;
 	uint32_t readEnd = endPos ? endPos : aread.GetEndPosition();

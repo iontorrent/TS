@@ -54,11 +54,6 @@
 </div>
 {%endblock%}
 
-{% block prevnext-buttons %}
-    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">&larr; Previous</a>
-    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Next &rarr;</a>&nbsp;&nbsp;<img id="loading1" src="/site_media/img/loading.gif" width="35" height="35" style="display:none;"/>    
-{% endblock prevnext-buttons %}
-
 {% block summary-table %}
     {%include "rundb/plan/page_plan/summary/uploader_summary.html"%}
 {% endblock summary-table %}

@@ -6,6 +6,8 @@
 
 
 #include "api/BamMultiReader.h"
+#include <algorithm>
+#include <random>
 #include "IonVersion.h"
 #include "Utils.h"
 #include "json/json.h"
@@ -113,6 +115,11 @@ int main (int argc, const char *argv[])
       for (int i_iteration=0; i_iteration<calib_context.num_train_iterations; i_iteration++) {
         cout << " -Training Iteration " << i_iteration+1;
         l_thread_time = ExecuteThreadedCalibrationTraining(calib_context);
+
+        // Activate master linear model after every round of training
+        master_linear_model.CreateCalibrationModel(false);  // make linear model
+        master_linear_model.SetModelGainsAndOffsets(); // expand for use in basecalling
+
         calibration_thread_time += l_thread_time;
         calib_context.bam_reader.Rewind(); // reset all files for another pass
         cout << " Duration = " << l_thread_time << endl;
@@ -166,21 +173,30 @@ int ExecuteThreadedCalibrationTraining(CalibrationContext &calib_context){
   time_t calibration_start_time;
   time(&calibration_start_time);
 
+  calib_context.num_model_reads  = 0;
+  calib_context.num_model_writes = 0;
+  calib_context.wait_to_read_model  = false;
+  calib_context.wait_to_write_model = true;
+
   pthread_mutex_init(&calib_context.read_mutex,  NULL);
   pthread_mutex_init(&calib_context.write_mutex, NULL);
+  pthread_cond_init(&calib_context.model_read_cond, NULL);
+  pthread_cond_init(&calib_context.model_write_cond, NULL);
 
   pthread_t worker_id[calib_context.num_threads];
-  for (int worker = 0; worker < calib_context.num_threads; worker++)
+  for (unsigned int worker = 0; worker < calib_context.num_threads; worker++)
     if (pthread_create(&worker_id[worker], NULL, CalibrationWorker, &calib_context)) {
       cerr << "Calibration ERROR: Problem starting thread" << endl;
       exit (EXIT_FAILURE);
     }
 
-  for (int worker = 0; worker < calib_context.num_threads; worker++)
+  for (unsigned int worker = 0; worker < calib_context.num_threads; worker++)
     pthread_join(worker_id[worker], NULL);
 
   pthread_mutex_destroy(&calib_context.read_mutex);
   pthread_mutex_destroy(&calib_context.write_mutex);
+  pthread_cond_destroy(&calib_context.model_read_cond);
+  pthread_cond_destroy(&calib_context.model_write_cond);
 
   time_t calibration_end_time;
   time(&calibration_end_time);
@@ -205,6 +221,12 @@ void * CalibrationWorker(void *input)
   read_alignment.SetSize(calib_context.max_num_flows);
   bool update_bam_stats = (calib_context.bam_reader.NumPasses() == 0);
 
+  // Random number generator & index vector
+  std::default_random_engine rand_engine(calib_context.rand_seed);
+  vector<unsigned> index_vec(calib_context.num_reads_per_thread);
+  for (unsigned int id=0; id < calib_context.num_reads_per_thread; ++id)
+    index_vec[id] = id;
+
   vector<DPTreephaser> treephaser_vector;
   for (unsigned int iFO=0; iFO < calib_context.flow_order_vector.size(); iFO++) {
     DPTreephaser      dpTreephaser(calib_context.flow_order_vector.at(iFO));
@@ -212,39 +234,57 @@ void * CalibrationWorker(void *input)
   }
 
   HistogramCalibration    hist_calibration_local(*calib_context.hist_calibration_master);
-  LinearCalibrationModel  linear_cal_model_local(*calib_context.linear_model_master);
-  pthread_mutex_lock(&calib_context.write_mutex);
-  LinearCalibrationModel  linear_model_cal_sim (*calib_context.linear_model_master); // make a copy, as master may be changing(!)
-  pthread_mutex_unlock(&calib_context.write_mutex);
-
-  // Activate local copy of linear model
-  if (calib_context.blind_fit){
-    linear_model_cal_sim.CreateCalibrationModel(false);
-    linear_model_cal_sim.SetModelGainsAndOffsets();
-  }
+  LinearCalibrationModel  linear_cal_model_local(*calib_context.linear_model_master); // Training data for current batch
+  LinearCalibrationModel  linear_model_cal_sim  (*calib_context.linear_model_master); // state of master to date (changing for blind)
 
 
   // *** Process reads
 
   while (true) {
 
-    // Step 1 *** load a number of reads from the BAM files
-
     hist_calibration_local.CleanSlate();
     linear_cal_model_local.CleanSlate();
-
     unsigned long num_useful_reads = 0;
 
-    pthread_mutex_lock(&calib_context.read_mutex);
+    // Step 0 *** Wait for permission to read most recent master model
+    //            Blind fit only! Non-blind is limited to one training iteration.
+
+    if (calib_context.blind_fit and calib_context.local_fit_linear_model){
+      pthread_mutex_lock(&calib_context.write_mutex);
+
+      while(calib_context.wait_to_read_model)
+        pthread_cond_wait (&calib_context.model_read_cond, &calib_context.write_mutex);
+
+      linear_model_cal_sim.CopyTrainingData(*calib_context.linear_model_master);
+      calib_context.num_model_reads++;
+      if (calib_context.num_model_reads == calib_context.num_threads){
+        calib_context.num_model_reads = 0;
+        calib_context.wait_to_read_model = true;
+        calib_context.wait_to_write_model = false;
+        pthread_cond_broadcast(&calib_context.model_write_cond);
+      }
+
+      pthread_mutex_unlock(&calib_context.write_mutex);
+
+      // Activate local copy of linear model
+      linear_model_cal_sim.CreateCalibrationModel(false);
+      linear_model_cal_sim.SetModelGainsAndOffsets();
+      if (not update_bam_stats)
+        std::shuffle ( index_vec.begin(), index_vec.end(), rand_engine);
+    }
+
+    // Step 1 *** load a number of reads from the BAM files
 
     bam_alignments.clear();
     BamAlignment new_alignment;
     bool have_alignment = true;
 
+    pthread_mutex_lock(&calib_context.read_mutex);
+
     // we may have an unsorted BAM with a large chunk of unmapped reads somewhere in the middle
     while((bam_alignments.size() < calib_context.num_reads_per_thread) and have_alignment) {
 
-      have_alignment = calib_context.bam_reader.GetNextAlignment(new_alignment);
+      have_alignment = calib_context.bam_reader.GetNextAlignmentCore(new_alignment);
       // Only log read stats during first pass through BAM
       if (have_alignment) {
         if (update_bam_stats)
@@ -269,7 +309,19 @@ void * CalibrationWorker(void *input)
     }
 
     if ((not have_alignment) and (bam_alignments.size() == 0)) {
+
       pthread_mutex_unlock(&calib_context.read_mutex);
+
+      pthread_mutex_lock(&calib_context.write_mutex);
+      calib_context.num_model_writes++;
+      if (calib_context.num_model_writes == calib_context.num_threads){
+        calib_context.num_model_writes = 0;
+        calib_context.wait_to_read_model = false;
+        calib_context.wait_to_write_model = true;
+        pthread_cond_broadcast(&calib_context.model_read_cond);
+      }
+      pthread_mutex_unlock(&calib_context.write_mutex);
+
       return NULL;
     }
 
@@ -278,9 +330,14 @@ void * CalibrationWorker(void *input)
 
     // Step 2 *** Iterate over individual reads and extract information
 
-    for (unsigned int iRead=0; iRead<bam_alignments.size(); iRead++) {
+    for (unsigned int idx=0; idx<bam_alignments.size(); idx++) {
+
+      unsigned int iRead = index_vec.at(idx);
+      if (iRead >= bam_alignments.size())
+        continue;
 
       // Unpack alignment related information & generate predictions
+      bam_alignments[iRead].BuildCharData();
       read_alignment.UnpackReadInfo(&bam_alignments[iRead], treephaser_vector, calib_context);
       read_alignment.UnpackAlignmentInfo(calib_context);
       read_alignment.GeneratePredictions(treephaser_vector, linear_model_cal_sim);
@@ -295,10 +352,10 @@ void * CalibrationWorker(void *input)
         hist_calibration_local.AddTrainingRead(read_alignment, calib_context);
 
       if (calib_context.local_fit_linear_model){
-        if (!calib_context.blind_fit)
-          linear_cal_model_local.AddTrainingRead(read_alignment,linear_model_cal_sim);
-        else
+        if (calib_context.blind_fit)
           linear_cal_model_local.AddBlindTrainingRead(read_alignment,linear_model_cal_sim);
+        else
+          linear_cal_model_local.AddTrainingRead(read_alignment,linear_model_cal_sim);
       }
     }
 
@@ -307,6 +364,13 @@ void * CalibrationWorker(void *input)
 
     pthread_mutex_lock(&calib_context.write_mutex);
 
+    if (calib_context.blind_fit and calib_context.local_fit_linear_model){
+      while(calib_context.wait_to_write_model)
+        pthread_cond_wait (&calib_context.model_write_cond, &calib_context.write_mutex);
+
+      calib_context.num_model_writes++;
+    }
+
     if (update_bam_stats)
       calib_context.num_useful_reads += num_useful_reads;
     if (calib_context.local_fit_polish_model)
@@ -314,17 +378,14 @@ void * CalibrationWorker(void *input)
     if (calib_context.local_fit_linear_model)
       calib_context.linear_model_master->AccumulateTrainingData(linear_cal_model_local);
 
-    // If we do blind fitting we'd like to use the most recent model.
-    if (calib_context.blind_fit)
-      linear_model_cal_sim.CopyTrainingData(*calib_context.linear_model_master); // update from current master model
+    if (calib_context.num_model_writes == calib_context.num_threads){
+      calib_context.num_model_writes = 0;
+      calib_context.wait_to_read_model = false;
+      calib_context.wait_to_write_model = true;
+      pthread_cond_broadcast(&calib_context.model_read_cond);
+    }
 
     pthread_mutex_unlock(&calib_context.write_mutex);
-
-    if (calib_context.blind_fit){
-      // Activate local copy of linear model
-      linear_model_cal_sim.CreateCalibrationModel(false);
-      linear_model_cal_sim.SetModelGainsAndOffsets();
-    }
 
   } // -- end while loop
 }

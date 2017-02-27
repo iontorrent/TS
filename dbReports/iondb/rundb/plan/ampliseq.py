@@ -15,6 +15,7 @@ CURRENT_VERSION = "5.2"
 
 def setup_vc_config_36(plan):
     vc_config = plan.pop("variant_caller", None)
+    plan["selectedPlugins"] = {}
     # If there's no VC config, we'll just skip the entire plugin configuration
     if vc_config is not None:
         name = "variantCaller"
@@ -32,7 +33,6 @@ def setup_vc_config_36(plan):
             }
         }
     return plan
-
 
 def setup_other_plugin_config(plan):
     plugin_config = plan.pop("plugins", None)
@@ -75,9 +75,12 @@ def legacy_plan_handler(data):
 def config_choice_handler_4_0(data, meta, config_choices):
     choice = meta.get("choice", None)
     keys = config_choices.keys()
+
     if len(keys) == 1 or choice not in keys:
         choice = sorted(keys)[0]
-        meta["choice"] = choice
+        #if user selects the wrong instrument type, TS should send validation error(TS-12754)
+        #meta["choice"] = choice
+
     plan = config_choices[choice]
 
     if "runType" in plan:
@@ -138,14 +141,13 @@ def plan_handler_5_2(data, meta, arg_path=None):
                 specificPluginData = {}
                 if pluginName:
                     pluginName = pluginName.strip()
+                    if pluginName == "variantCaller":
+                        pluginName = "variant_caller"
                     if paramFile:
                         specificPluginData = json.load(open(os.path.join(arg_path, paramFile)))
-                        if pluginName == "variantCaller":
-                            config_choices[key]["variant_caller"] = specificPluginData
-                        else:
-                            config_choices[key][pluginName] = specificPluginData
+                        config_choices[key][pluginName] = specificPluginData
                     else:
-                        config_choices[key][pluginName] = ""
+                        config_choices[key][pluginName] = {}
     return config_choice_handler_5_2(data, meta, config_choices)
 
 
@@ -257,9 +259,16 @@ def get_choice_specific_planData(meta, config_choices):
 
     if len(config_instrument_data) == 1 or choice not in config_instrument_data:
         choice = sorted(config_instrument_data)[0]
-        meta["choice"] = choice
+        #if user selects the wrong instrument type, TS should send validation error(TS-12754)
+        #meta["choice"] = choice
     plan = config_choices[choice]
-
+    available_choice = []
+    for available in config_instrument_data:
+        available = str(available.upper())
+        if available in ['520', '521', '530', '540']:
+            available = "S5 Chip: " + available
+        available_choice.append(available)
+    plan["available_choice"] = available_choice
     if "runType" in plan:
         if plan["runType"] == "AMPS_DNA":
             plan["runType"] = "AMPS"

@@ -605,7 +605,7 @@ if [ -n "$TRACKINGBED" ]; then
     echo "(`date`) Analyzing sample tracking reads..." >&2
   fi
   # Assume sampleID tracking must be for AmpliSeq type analysis
-  TRACKING_READS=`$BBCTOOLS create -R "$TRACKINGBED" -C - -T amplicon -P 30 -E 2 -D "" "$BAMFILE" | awk 'NR>1 {c+=$7} END {print c}'`
+  TRACKING_READS=`$BBCTOOLS create -R "$TRACKINGBED" -C - -T amplicon -P 30 -E 2 -D "" "$BAMFILE" | awk 'BEGIN {FS="\t"} NR>1 {c+=$7} END {print c}'`
 fi
 
 ########### Basic Coverage Statistics and Depth of Coverage ###########
@@ -614,7 +614,7 @@ if [ $TRACK -eq 1 ]; then
   echo "(`date`) Analyzing depth of coverage..." >&2
 fi
 
-read MAPPED_READS TARGET_READS <<< `awk 'NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
+read MAPPED_READS TARGET_READS <<< `awk 'BEGIN {FS="\t"} NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
 echo -e "Number of mapped reads:         $MAPPED_READS" >> "$STATSFILE"
 
 if [ -n "$BEDOPT" ]; then
@@ -671,7 +671,7 @@ if [ $AMPE2EREADS -eq 1 -a $CONTIGS -eq 0 ]; then
   if [ $RNABED -ne 0 ];then
     echo "" >> "$STATSFILE"
   fi
-  pce2erds=`awk 'NR>1 {e2e+=$8+$9;tr+=$10} END {if(tr>0){printf "%.2f",100*e2e/tr}else{print "0.00"}}' $TARGETCOVFILE`
+  pce2erds=`awk 'BEGIN {FS="\t"} NR>1 {e2e+=$8+$9;tr+=$10} END {if(tr>0){printf "%.2f",100*e2e/tr}else{print "0.00"}}' $TARGETCOVFILE`
   echo "Percent end-to-end reads:          ${pce2erds}%" >> "$STATSFILE"
 fi
 

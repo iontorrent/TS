@@ -700,9 +700,9 @@ function getColumns(isFusions) {
          title: "PCR Plate Position",        
          sortable: true     
      } , {
-         field: "dnabarcodeKit",
-         title: "Barcode Kit",        
-         sortable: false         
+         field: "controlType",
+         title: "Control Type",
+         sortable: false
      } , {
          field: "dnabarcode",
          title: "Barcode",        

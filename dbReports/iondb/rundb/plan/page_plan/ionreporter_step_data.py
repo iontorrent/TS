@@ -1,8 +1,10 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import SampleGroupType_CV, Plugin
-import logging
+from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.step_names import StepNames
+
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +32,8 @@ class IonreporterStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(IonreporterStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_ionreporter.html'
+        self.next_step_url = reverse("page_plan_application")
+        
 
         self.savedFields[IonReporterFieldNames.IR_WORKFLOW] = None
         self.savedFields[IonReporterFieldNames.IR_VERSION] = None

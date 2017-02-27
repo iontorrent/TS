@@ -102,6 +102,8 @@ UPDATE_SYSTEM: True
 
 ion_apt_server: ionupdates.com
 
+ubuntu_apt_server: ionupdates.com
+
 iru_apt_server: iru.ionreporter.thermofisher.com
 
 tsconfig_dir: /etc/torrentserver

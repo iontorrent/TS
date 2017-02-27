@@ -1181,6 +1181,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.2.1.param.json" DESTINATION 
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.2.2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p2.3.1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_520.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_520_ExT.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_521.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_521_ExT.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_522.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)

@@ -206,7 +206,7 @@
         "min_func_cov":[
             "Minimum number of functional families per target required for variant calling",
             "Allowed values: Integers > 0",
-            "Suggested trial value between 1500 and 10000",
+            "Suggested trial value between 2 and 10000",
             "Impact: Increasing values make variant calls less sensitive but more specific"],
 
         "min_func_maf":[

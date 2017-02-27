@@ -395,7 +395,7 @@ string BbcView::ReadRange( const string &range, bool isolateRegions,
 		if( endBin < 0 ) endBin = 0;
 		else if( endBin > (int32_t)numBins ) endBin = (int32_t)numBins;
 	}
-	if( endBin < srtBin ) {
+	if( endBin && endBin < srtBin ) {
 		cerr << "WARNING: Effective last bin (" << endBin << ") is less than first bin (" << srtBin;
 		cerr << "). No coverage bins were output." << endl;
 		delete [] contigBins;

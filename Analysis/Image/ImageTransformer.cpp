@@ -972,6 +972,7 @@ struct lsrow_header {
 #define LSROWIMAGE_MAGIC_VALUE    0xFF115E3A
 #endif
 
+// load Gain.lsr
 bool ImageTransformer::ReadDataCollectGainCorrection(
   const std::string &dataPath,
   unsigned int rows,
@@ -984,28 +985,42 @@ bool ImageTransformer::ReadDataCollectGainCorrection(
   ifstream gainFile;
   gainFile.open(dataPath.c_str(),ios::in | ios::binary);
 
-  if (gainFile.is_open()) {
+  if (!gainFile.is_open()) {
+    std::cout << "DataCollect gain: unable to open " << dataPath.c_str() << std::endl;
+  }
+  else {
     struct lsrow_header hdr;
     gainFile.read((char*)&hdr,sizeof(lsrow_header));
 
-    if (gainFile.good() &&
-        hdr.magic == LSROWIMAGE_MAGIC_VALUE &&
-        hdr.rows == rows &&
-        hdr.cols == cols) {
-
-      std::cout << "Gain.lsr: rows: " << hdr.rows << ",cols: " << hdr.cols << std::endl;
-      gainFile.read((char*)gain_correction,dataSize);
-
-      if (gainFile.good()) {
-        gainFile.close();
-       
-        std::cout << "Successfully read Gain.lsr file" << std::endl;
-        return true;
-      }
+    if (!gainFile.good()) {
+      std::cout << "DataCollect gain: header error in " << dataPath.c_str() << std::endl;
+    }   
+    else if (hdr.magic != LSROWIMAGE_MAGIC_VALUE){
+      std::cout << "DataCollect gain: header error in " << dataPath.c_str() << std::endl;
     }
+    else if (hdr.rows != rows || hdr.cols != cols){
+      std::cout << "DataCollect gain: unexpected dimensions rows:" << hdr.rows << " & cols:" <<  hdr.cols << std::endl;
+    }
+    else{
+      std::cout << "DataCollect gain: loading rows:" << hdr.rows << " & cols:" << hdr.cols << std::endl;
+
+	  gainFile.read((char*)gain_correction, dataSize);
+
+	  if (gainFile.good()) {
+
+ 	    std::cout << "DataCollect gain: successfully loaded " << dataPath.c_str() << std::endl;
+
+ 	    gainFile.close();
+	    return true;
+	  }
+
+	}
+
+    gainFile.close();
   }
 
-  std::cout << "Error in opening/reading Gain.lsr file. Using gain value of 1.0f" << std::endl; 
+
+  std::cout << "DataCollect gain: loading errors, using 1.0 gain for all wells" << std::endl; 
   for (size_t r = 0; r < rows; ++r) {
     for (size_t c = 0; c < cols; ++c) {
       gain_correction[r*cols + c] = 1.0f;

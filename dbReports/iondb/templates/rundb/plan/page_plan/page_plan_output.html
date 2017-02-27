@@ -37,25 +37,6 @@
 </div>
 {% endblock page-plan-content %}
 
-{% block prevnext-buttons %}
-    {% if helper.isPlanBySample%}
-        <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">&larr; Previous</a>
-        <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_save_plan" %}');$('#step_form').submit();return false;">Next &rarr;</a>
-    {%else%}
-        <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">&larr; Previous</a>
-        {% if helper.isPlan %}
-            <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Next &rarr;</a>
-        {% else %}
-            {%if helper.isTemplateBySample %}
-                <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template_by_sample" %}');$('#step_form').submit();return false;">Next &rarr;</a>
-            {%else%}
-                <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template" %}');$('#step_form').submit();return false;">Next &rarr;</a>
-            {%endif%}
-            
-            
-        {%endif%}
-    {%endif%}
-{% endblock prevnext-buttons %}
 
 {% block summary-table %}
     {%include "rundb/plan/page_plan/summary/output_summary.html"%}

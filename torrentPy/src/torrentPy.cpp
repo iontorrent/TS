@@ -1,9 +1,14 @@
 // Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
-#include "Python.h"
+#include <Python.h>
+
+#include "torrentPy.h"
+
 #include "numpy/noprefix.h"
 #include <boost/python.hpp>
 #include <boost/python/raw_function.hpp>
+#include <boost/python/stl_iterator.hpp>
 #include <ctime>
+#include <functional>
 
 #include <libgen.h>
 #include "api/BamReader.h"
@@ -24,18 +29,296 @@
 #include "CorrNoiseCorrector.h"
 #include "PairPixelXtalkCorrector.h"
 #include "IonErr.h"
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///
-/// Why is everything in one file? When I split it into several files torrentPy crashes.
-/// I don't yet understand why.
-/// I'll restructure this code when I figure out the crash.
-/// TODO: Restructure code
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#include "Calibration/LinearCalibrationModel.h"
 
 
 using namespace boost::python;
 using namespace std;
+
+template<typename T> handle<> toNumpy( const T& d ){
+
+    NPY_TYPES ArrayType = NPY_OBJECT;
+    if( boost::is_same<typename T::value_type, int>::value )
+        ArrayType = NPY_INT;
+    if( boost::is_same<typename T::value_type, unsigned int>::value )
+        ArrayType = NPY_UINT;
+    else if ( boost::is_same<typename T::value_type, float>::value )
+        ArrayType =  NPY_FLOAT;
+    else if ( boost::is_same<typename T::value_type, char>::value )
+        ArrayType =  NPY_CHAR;
+    else if ( boost::is_same<typename T::value_type, double>::value )
+        ArrayType =  NPY_DOUBLE;
+    else if ( boost::is_same<typename T::value_type, short>::value )
+        ArrayType =  NPY_SHORT;
+    else if ( boost::is_same<typename T::value_type, unsigned short>::value )
+        ArrayType =  NPY_USHORT;
+    else if ( boost::is_same<typename T::value_type, long>::value )
+        ArrayType =  NPY_LONG;
+    else if ( boost::is_same<typename T::value_type, unsigned long>::value )
+        ArrayType =  NPY_ULONG;
+
+    npy_intp dims[]={(npy_intp)d.size()};
+    handle<> array( PyArray_SimpleNew(1,dims, ArrayType ) );
+
+    int i = 0;
+    for(typename T::const_iterator it = d.begin(); it != d.end(); ++it ){
+        typename T::value_type* data = (typename T::value_type*)PyArray_GETPTR1(array.get(),i++);
+        *data = *it;
+    }
+    return array;
+}
+
+template<typename T_SRC, typename T_OUT> void convert_numpy(vector<T_OUT>& outputArr, PyObject* dataH)
+{
+    int len = outputArr.size();
+    for(int i=0; i<len; ++i){
+        npy_intp idx=static_cast<npy_intp>(i);
+        T_OUT val = static_cast<T_OUT>(boost::python::extract<T_SRC>(PyArray_GETITEM(dataH,PyArray_GETPTR1(dataH, idx))));
+        outputArr[i]=val;
+    }
+}
+
+template<typename T> vector<T> fromNumpy( const boost::python::object& data ){
+    PyObject* dataH = data.ptr();
+    int len = PyArray_Size( dataH );
+    int type = PyArray_TYPE(dataH);
+
+    if( PyArray_NDIM(dataH) != 1 ){
+        throw std::runtime_error("Only 1d arrays are supported");
+    }
+
+    vector<T> outputArr(len);
+
+    if( type==NPY_DOUBLE )
+            convert_numpy<npy_double,T>(outputArr,dataH);
+    else if( type == NPY_FLOAT)
+        convert_numpy<npy_float,T>(outputArr,dataH);
+    else if( type==NPY_INT )
+        convert_numpy<npy_int,T>(outputArr,dataH);
+    else if( type == NPY_UINT)
+        convert_numpy<npy_uint,T>(outputArr,dataH);
+    else if( type == NPY_SHORT)
+        convert_numpy<npy_short,T>(outputArr,dataH);
+    else if( type == NPY_CHAR)
+        convert_numpy<npy_char,T>(outputArr,dataH);
+    else if( type == NPY_LONG)
+        convert_numpy<npy_long,T>(outputArr,dataH);
+    else if( type == NPY_ULONG)
+        convert_numpy<npy_ulong,T>(outputArr,dataH);
+
+    return outputArr;
+}
+
+TreePhaser::TreePhaser(const string &_flowOrder)
+{
+    flowOrder = ion::FlowOrder(_flowOrder, _flowOrder.length());
+    dpTreephaser = new DPTreephaser(flowOrder);
+}
+
+void TreePhaser::setCalibFromTxtFile(const string &model_file, int threshold)
+{
+    calibModel.InitializeModelFromTxtFile(model_file, threshold);
+}
+
+void TreePhaser::setCalibFromJson(const string &json_model, int threshold)
+{
+    Json::Value json(Json::objectValue);
+    Json::Reader recal_reader;
+    if (not recal_reader.parse(json_model, json)) {
+      throw std::runtime_error("Failed to parse recalibration file");
+    }
+    calibModel.InitializeModelFromJson(json, threshold);
+}
+
+void TreePhaser::setCAFIEParams(double cf, double ie, double dr)
+{
+    dpTreephaser->SetModelParameters( cf, ie, dr );
+}
+
+void TreePhaser::setStateProgression(bool diagonalStates)
+{
+    dpTreephaser->SetStateProgression( diagonalStates );
+}
+
+object queryStates( DPTreephaser* dpTreephaser, const LinearCalibrationModel& calibModel, const string& sequence, int maxFlows, int calib_x, int calib_y, bool getStates )
+{
+    BasecallerRead read;
+    read.sequence = std::vector<char>(sequence.begin(), sequence.end());
+    if( calibModel.is_enabled() ) {
+        const vector<vector<vector<float> > > * aPtr = calibModel.getAs(calib_x, calib_y);
+        const vector<vector<vector<float> > > * bPtr = calibModel.getBs(calib_x, calib_y);
+        if (aPtr == 0 or bPtr == 0) {
+            std::cerr<< "Error finding recalibration model for x: " << calib_x << " y: " << calib_y << std::endl;
+        }
+        dpTreephaser->SetAsBs(aPtr, bPtr);
+    }
+    if( getStates ){
+        vector< vector<float> > queryStates;
+        vector< int > hpLength;
+        dpTreephaser->QueryAllStates(read, queryStates, hpLength, maxFlows);
+        vector<float> predictions = read.prediction;
+
+        //packing vector of vectors into a list of numpy
+        boost::python::list queryStates_list;
+        for(auto &row : queryStates ){
+            queryStates_list.append(toNumpy(row));
+        }
+
+        boost::python::dict ret;
+        ret["predictions"]=toNumpy(predictions);
+        ret["states"]=queryStates_list;
+        ret["hp_len"]=toNumpy(hpLength);
+        return object(ret);
+    }
+    dpTreephaser->Simulate(read, maxFlows);
+    vector<float> predictions = read.prediction;
+    dict ret;
+    ret["predictions"]=toNumpy(predictions);
+    return object(ret);
+}
+
+object TreePhaser::queryAllStates( const string& sequence, int maxFlows, int calib_x, int calib_y )
+{
+    return queryStates(dpTreephaser, calibModel, sequence, maxFlows, calib_x, calib_y, true);
+}
+
+
+object TreePhaser::Simulate( const string& sequence, int maxFlows )
+{
+    return queryStates(dpTreephaser, calibModel, sequence, maxFlows, 0, 0, false);
+}
+
+void makeOutput(const BasecallerRead& read, boost::python::dict& output)
+{
+    output["seq"]=toNumpy(read.sequence);
+    output["predicted"]=toNumpy(read.prediction);
+    output["norm_additive"]=toNumpy(read.additive_correction);
+    output["norm_multipl"]=toNumpy(read.multiplicative_correction);
+    std::vector<float> res;
+    res.resize(read.prediction.size());
+    //res=read.normalized_measurements-read.prediction
+    std::transform(read.normalized_measurements.begin(), read.normalized_measurements.end(), read.prediction.begin(), res.begin(), std::minus<float>() );
+    output["residual"]=toNumpy(res);
+}
+
+boost::python::dict TreePhaser::treephaserSolve(boost::python::object _signal, boost::python::object _keyVec)
+{
+    (void)_keyVec;
+
+    std::vector<float> signal = fromNumpy<float>(_signal);
+    BasecallerRead read;
+    int nFlow = signal.size();
+
+    if(flowOrder.num_flows() < nFlow)
+        throw std::runtime_error("Flow cycle is shorter than number of flows to solve");
+
+    read.SetData(signal, nFlow);
+    dpTreephaser->Solve(read, nFlow);
+
+    boost::python::dict output;
+    makeOutput(read,output);
+
+    return output;
+}
+
+boost::python::dict TreePhaser::treephaserSWANSolve(boost::python::object _signal, boost::python::object _keyVec)
+{
+    std::vector<float> signal = fromNumpy<float>(_signal);
+    std::vector<int> keyVec = fromNumpy<int>(_keyVec);
+    BasecallerRead read;
+    int nFlow = signal.size();
+    int nKeyFlow = keyVec.size();
+
+    if(flowOrder.num_flows() < nFlow)
+        throw std::runtime_error("Flow cycle is shorter than number of flows to solve");
+
+    read.SetDataAndKeyNormalize(signal.data(), nFlow, keyVec.data(), nKeyFlow-1);
+    dpTreephaser->NormalizeAndSolve_SWnorm(read, nFlow);
+
+    boost::python::dict output;
+    makeOutput(read,output);
+
+    return output;
+}
+
+
+boost::python::dict TreePhaser::treephaserDPSolve(boost::python::object _signal, boost::python::object _keyVec)
+{
+    std::vector<float> signal = fromNumpy<float>(_signal);
+    std::vector<int> keyVec = fromNumpy<int>(_keyVec);
+    BasecallerRead read;
+    int nFlow = signal.size();
+    int nKeyFlow = keyVec.size();
+
+    if(flowOrder.num_flows() < nFlow)
+        throw std::runtime_error("Flow cycle is shorter than number of flows to solve");
+
+    read.SetDataAndKeyNormalize(signal.data(), nFlow, keyVec.data(), nKeyFlow-1);
+    dpTreephaser->NormalizeAndSolve_GainNorm(read, nFlow);
+
+    boost::python::dict output;
+    makeOutput(read,output);
+
+    return output;
+}
+
+boost::python::dict TreePhaser::treephaserAdaptiveSolve(boost::python::object _signal, boost::python::object _keyVec)
+{
+    std::vector<float> signal = fromNumpy<float>(_signal);
+    std::vector<int> keyVec = fromNumpy<int>(_keyVec);
+    BasecallerRead read;
+    int nFlow = signal.size();
+    int nKeyFlow = keyVec.size();
+
+    if(flowOrder.num_flows() < nFlow)
+        throw std::runtime_error("Flow cycle is shorter than number of flows to solve");
+
+    read.SetDataAndKeyNormalize(signal.data(), nFlow, keyVec.data(), nKeyFlow-1);
+    dpTreephaser->NormalizeAndSolve_Adaptive(read, nFlow);
+
+    boost::python::dict output;
+    makeOutput(read,output);
+
+    return output;
+}
+
+void TreePhaser::treephaserSolveMulti(const string &solverName, boost::python::list readList, boost::python::object _keyVec)
+{
+    std::function<boost::python::dict(TreePhaser*, boost::python::object,boost::python::object)> solver;
+
+    if(solverName=="treephaser")
+        solver = &TreePhaser::treephaserSolve;
+    else if( solverName=="treephaserSWAN" )
+        solver = &TreePhaser::treephaserSWANSolve;
+    else if( solverName=="treephaserDP")
+        solver = &TreePhaser::treephaserDPSolve;
+    else if( solverName=="treephaserAdaptive" )
+        solver = &TreePhaser::treephaserAdaptiveSolve;
+    else
+        throw std::runtime_error("Solver name can only be: treephaser, treephaserSWAN, treephaserDP or treephaserAdaptive");
+
+    boost::python::stl_input_iterator<boost::python::dict> begin(readList), end;
+    for(auto read=begin; read!=end; ++read){
+        int row = boost::python::extract<float>((*read)["row"]);
+        int col = boost::python::extract<float>((*read)["col"]);
+        std::vector<float> phase=fromNumpy<float>((*read)["phase"]);
+
+        dpTreephaser->SetModelParameters(phase[0],phase[1],phase[2]);
+
+        if( calibModel.is_enabled() ){
+            const vector<vector<vector<float> > > * aPtr = 0;
+            const vector<vector<vector<float> > > * bPtr = 0;
+            aPtr = calibModel.getAs(col, row);
+            bPtr = calibModel.getBs(col, row);
+            dpTreephaser->SetAsBs(aPtr, bPtr);
+        }
+        else{
+            dpTreephaser->SetAsBs(NULL, NULL);
+        }
+        boost::python::dict output = solver(this,(*read)["meas"],_keyVec);
+        read->update(output);
+    }
+}
 
 boost::python::object seqToFlows( const std::string& sequence, const std::string& flowOrder ){
     npy_intp dims[]={static_cast<long int>(flowOrder.size())};
@@ -529,31 +812,6 @@ std::vector<int> score_alignments(string& pad_source, string& pad_target, string
     return q_len_vec;
 }
 
-class PyRawDat{
-    Image img;
-    std::string fname;
-    std::string curr_fname;
-
-    void loadImg( const std::string& fname );
-
-public:
-    bool normalize;
-    bool xtcorrect;
-    bool uncompress;
-    int norm_start, norm_end;
-
-    PyRawDat( std::string _fname, bool _normalize ) : curr_fname(""), normalize(_normalize), xtcorrect(false), uncompress(true), norm_start(1), norm_end(3) { fname = _fname; loadImg(fname); }
-    ~PyRawDat(){
-        img.Close();
-    }
-
-    boost::python::object LoadSlice(int row , int col, int h, int w);
-    boost::python::object LoadWells(const boost::python::tuple& pos);
-    void ApplyRowNoiseCorrection( int thumbnail = 1 );
-    void ApplyXTChannelCorrection(void);
-    void SetMeanOfFramesToZero(int norm_start=1, int norm_end=3);
-    void ApplyPairPixelXtalkCorrection( float pair_xtalk_fraction );
-};
 
 void PyRawDat::loadImg( const std::string& fname ){
     if(fname!=curr_fname){
@@ -641,15 +899,6 @@ boost::python::object PyRawDat::LoadWells( const boost::python::tuple& pos ){
     delete[] d;
     return object(array);
 }
-
-class PyWells{
-    std::string fname;
-
-public:
-    PyWells( std::string _fname ): fname(_fname){}
-    boost::python::object LoadWells(int rows, int cols , int h, int w);
-    boost::python::object LoadWellsFlow(int rows, int cols , int h, int w, int flow);
-};
 
 boost::python::object PyWells::LoadWells(int row , int col, int h, int w){
     IonErr::SetThrowStatus(true);
@@ -760,72 +1009,7 @@ template<typename T> void appendData( boost::python::dict& data, const std::stri
     data[key] = value;
 }
 
-class PyBam{
-private:
-    std::string fname;
-    BamTools::BamReader bamReader;
-    int numRecords;
-    std::map< std::string, int > keyLen;
-    std::vector< BamTools::BamAlignment > alignmentSample;
-    map<string,string> flow_order_by_read_group;
-    map<string,string> key_seq_by_read_group;
-    int minRow, maxRow, minCol, maxCol;
 
-    void appendToHeader( const std::string& key, bool has_key, std::string value ){
-        if( ! header.has_key(key) )
-            header[key] = boost::python::list();
-
-        boost::python::list l = extract<boost::python::list> (header[key]);
-        if( has_key )
-            l.append(value);
-        else
-            l.append("");
-    }
-
-    void appendRecord( const boost::python::dict &rec ){
-        boost::python::list iterkeys = (boost::python::list) rec.iterkeys();
-        for( int i = 0; i < boost::python::len(iterkeys); ++i ){
-            std::string key = boost::python::extract<std::string>(iterkeys[i]);
-
-            if( ! data.has_key(key) )
-                data[key] = boost::python::list();
-
-            boost::python::list l = extract<boost::python::list> (data[key]);
-            l.append(rec[key]);
-        }
-    }
-
-    bool getNextRead( boost::python::dict& );
-
-public:
-    boost::python::dict data;
-    boost::python::dict header;
-    boost::python::list refNames;
-    unsigned int sample_size;
-    int flowAlign;
-
-    void Open( std::string _fname );
-    int GetNumRecords( void );
-
-    boost::python::dict ReadBamHeader(void);
-    boost::python::dict ReadBam(void);
-    void Rewind( void ) { bamReader.Rewind(); }
-
-    void SetSampleSize( int nSample );
-
-    bool SetDNARegion( int leftRefId, int leftPosition, int rightRefId, int rightPosition ){ return bamReader.SetRegion( leftRefId, leftPosition, rightRefId, rightPosition ); }
-    void SetChipRegion( int _minRow, int _maxRow, int _minCol, int _maxCol ){ minRow=_minRow; maxRow=_maxRow; minCol=_minCol; maxCol=_maxCol;}
-    bool Jump( int refId, int position ){ return bamReader.Jump( refId, position ); }
-    void SimulateCafie( boost::python::dict& read );
-    void PhaseCorrect(boost::python::dict& read , object keyFlow );
-
-    ~PyBam(){ bamReader.Close(); }
-    PyBam(std::string _fname) : numRecords(0), sample_size(0), flowAlign(1) { SetChipRegion(0,MAX_INT,0,MAX_INT); Open(_fname); }
-
-    PyBam& __iter__( void ){ return *this; }
-    boost::python::dict next( void );
-
-};
 
 void PyBam::Open( std::string _fname ){
     fname = _fname;
@@ -944,37 +1128,29 @@ boost::python::dict PyBam::ReadBamHeader( void ){
     return header;
 }
 
-template<typename T> handle<> toNumpy( const T& d ){
 
-    NPY_TYPES ArrayType = NPY_OBJECT;
-    if( boost::is_same<typename T::value_type, int>::value )
-        ArrayType = NPY_INT;
-    if( boost::is_same<typename T::value_type, unsigned int>::value )
-        ArrayType = NPY_UINT;
-    else if ( boost::is_same<typename T::value_type, float>::value )
-        ArrayType =  NPY_FLOAT;
-    else if ( boost::is_same<typename T::value_type, char>::value )
-        ArrayType =  NPY_CHAR;
-    else if ( boost::is_same<typename T::value_type, double>::value )
-        ArrayType =  NPY_DOUBLE;
-    else if ( boost::is_same<typename T::value_type, short>::value )
-        ArrayType =  NPY_SHORT;
-    else if ( boost::is_same<typename T::value_type, unsigned short>::value )
-        ArrayType =  NPY_USHORT;
-    else if ( boost::is_same<typename T::value_type, long>::value )
-        ArrayType =  NPY_LONG;
-    else if ( boost::is_same<typename T::value_type, unsigned long>::value )
-        ArrayType =  NPY_ULONG;
+void PyBam::appendToHeader(const string &key, bool has_key, string value){
+    if( ! header.has_key(key) )
+        header[key] = boost::python::list();
 
-    npy_intp dims[]={(npy_intp)d.size()};
-    handle<> array( PyArray_SimpleNew(1,dims, ArrayType ) );
+    boost::python::list l = extract<boost::python::list> (header[key]);
+    if( has_key )
+        l.append(value);
+    else
+        l.append("");
+}
 
-    int i = 0;
-    for(typename T::const_iterator it = d.begin(); it != d.end(); ++it ){
-        typename T::value_type* data = (typename T::value_type*)PyArray_GETPTR1(array.get(),i++);
-        *data = *it;
+void PyBam::appendRecord(const dict &rec){
+    boost::python::list iterkeys = (boost::python::list) rec.iterkeys();
+    for( int i = 0; i < boost::python::len(iterkeys); ++i ){
+        std::string key = boost::python::extract<std::string>(iterkeys[i]);
+
+        if( ! data.has_key(key) )
+            data[key] = boost::python::list();
+
+        boost::python::list l = extract<boost::python::list> (data[key]);
+        l.append(rec[key]);
     }
-    return array;
 }
 
 bool PyBam::getNextRead( boost::python::dict& brec ){
@@ -1033,14 +1209,12 @@ bool PyBam::getNextRead( boost::python::dict& brec ){
         appendData( brec, "flow",toNumpy(flowInt));
     }
 
-    std::vector<int16_t> zcTag;
+    std::vector<int32_t> zcTag;
 
     if(alignment.GetTag("ZC", zcTag)){
         appendData( brec, "adapterTag",toNumpy(zcTag));
     }
 
-
-    // experimental tag for Project Razor: "measured" values
     std::vector<int16_t> flowMeasured; // round(256*val), signed
     if(alignment.GetTag("ZM", flowMeasured)){
         appendData( brec, "meas",toNumpy(flowMeasured));
@@ -1273,20 +1447,13 @@ void PyBam::PhaseCorrect( boost::python::dict& read, object keyFlow )
     read["residual"] = residual_out;
 }
 
-class PyBkgModel{
-public:
-    float C;
-    float sens;
-    PyBkgModel() : C(50.),sens(1.256 * 2./100000.){}
-    float AdjustEmptyToBeadRatio(float etbR, float NucModifyRatio, float RatioDrift, int flow, bool fitTauE);
-    float TauBFromLinearModel(float etbR, float tauR_m, float tauR_o , float minTauB, float maxTauB);
-    boost::python::object IntegrateRedFromObservedTotalTracePy (object purple_obs, object blue_hydrogen, object deltaFrame, float tauB, float etbR);
-    boost::python::object BlueTracePy ( object blue_hydrogen,  object deltaFrame, float tauB, float etbR);
-    boost::python::object PurpleTracePy ( object blue_hydrogen,  object red_hydrogen, object deltaFrame, float tauB, float etbR);
-    boost::python::object CalculateNucRisePy (object timeFrame, int sub_steps, float C, float t_mid_nuc, float sigma, float nuc_span);
-    boost::python::object GenerateRedHydrogensFromNucRisePy (object nucRise, object deltaFrame, int sub_steps, int my_start_index, float C, float Amplitude,
-                                                              float Copies, float krate, float kmax, float diffusion , int hydrogenModelType);
-};
+PyBam::PyBam(string _fname) : numRecords(0), sample_size(0), flowAlign(1)
+{
+    SetChipRegion(0,MAX_INT,0,MAX_INT);
+    Open(_fname);
+}
+
+
 
 float PyBkgModel::AdjustEmptyToBeadRatio(float etbR, float NucModifyRatio, float RatioDrift, int flow, bool fitTauE)
 {
@@ -1441,6 +1608,37 @@ boost::python::object PyBkgModel::GenerateRedHydrogensFromNucRisePy ( object nuc
     return object(out_array);
 }
 
+boost::python::object lightFlowAlignment(
+    // Inputs:
+    const string&             t_char,
+    const string&             q_char,
+    const string&             main_flow_order,
+    bool match_nonzero, // enforce phase identity
+    float strange_gap  // close gaps containing too many errors
+    )
+{
+    vector<char>             flowOrder;
+    vector<int>              qseq;
+    vector<int>              tseq;
+    vector<int>              aln_flow_index;
+    vector<char>             aln;
+    string                   synthetic_reference;
+
+    boost::python::dict ret;
+
+    LightFlowAlignment(t_char, q_char, main_flow_order, match_nonzero, strange_gap,
+                       flowOrder, qseq, tseq, aln_flow_index, aln, synthetic_reference);
+
+    ret["flowOrder"] = toNumpy(flowOrder);
+    ret["qseq"] = toNumpy(qseq);
+    ret["tseq"] = toNumpy(tseq);
+    ret["align_index"] = toNumpy(aln_flow_index);
+    ret["aln"] = toNumpy(aln);
+    ret["synthetic_reference"] = boost::python::str(synthetic_reference.c_str());
+    return(ret);
+}
+
+
 BOOST_PYTHON_MODULE(torrentPyLib)
 {
     boost::python::docstring_options local_docstring_options(true, true, false);
@@ -1523,4 +1721,20 @@ BOOST_PYTHON_MODULE(torrentPyLib)
 
     def("LoadBfMaskByType", LoadBfMaskByType, "LoadBfMaskByType( file_name, BfMask_Type ) - load beadfind mask from a file. Set values to 1 where mask value matches specified type.");
     def("seqToFlow", seqToFlows,"seqToFlows( sequence, flowOrder ) - map base sequence to flow space.");
+    def("LightFlowAlignment", lightFlowAlignment, "Flow alignment assuming the base alignment can mostly be relied upon.");
+
+    class_<TreePhaser>("TreePhaser",boost::python::init<std::string>("Interface to DPTreephaser",(boost::python::arg("flowOrder"))))
+            .def("setCalibFromTxtFile",&TreePhaser::setCalibFromTxtFile,"setCalibFromTxtFile( model_file, threshold) Set calibration model from file named model_file, with homopolymer limit threshold.")
+            .def("setCalibFromJson",&TreePhaser::setCalibFromJson,"Set calibration model from json")
+            .def("setCAFIEParams",&TreePhaser::setCAFIEParams,"Set CAFIE parameters")
+            .def("queryAllStates",&TreePhaser::queryAllStates,"Query all states")
+            .def("Simulate",&TreePhaser::Simulate,"Simulate")
+            .def("setStateProgression",&TreePhaser::setStateProgression,"Set State Progression Model to Diagonal")
+            .def("treephaserSolve",&TreePhaser::treephaserSolve,"Unnormalized solver")
+            .def("treephaserSWANSolve",&TreePhaser::treephaserSWANSolve,"treephaserSWAN solver")
+            .def("treephaserDPSolve",&TreePhaser::treephaserDPSolve,"DP treephaser solver")
+            .def("treephaserAdaptiveSolve",&TreePhaser::treephaserAdaptiveSolve,"Adaptive treephaser solver")
+            .def("treephaserSolveMulti",&TreePhaser::treephaserSolveMulti,"Basecall a list of reads")
+            ;
 }
+

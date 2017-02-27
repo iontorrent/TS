@@ -165,7 +165,7 @@ class StepHelper(object):
         return self.sh_type in StepHelperType.PLAN_TYPES
 
     def isPlanBySample(self):
-        return self.sh_type in (StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE, StepHelperType.EDIT_PLAN_BY_SAMPLE, StepHelperType.COPY_PLAN_BY_SAMPLE)
+        return self.sh_type in StepHelperType.PLAN_BY_SAMPLE_TYPES
 
     def isTemplate(self):
         return self.sh_type in StepHelperType.TEMPLATE_TYPES
@@ -232,6 +232,12 @@ class StepHelper(object):
         returns a collection of applProduct entries for the selected application and target technique
         """
         return self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS]
+
+    def getCategorizedApplProducts(self):
+        """
+        returns a collection of categorized applProduct entries for the selected application and target technique
+        """
+        return self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED]
 
     def getApplProductByInstrumentType(self, instrumentType):
         applProducts = self.getApplProducts()

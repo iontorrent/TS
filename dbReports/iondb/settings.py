@@ -7,6 +7,7 @@ import json
 from iondb.bin import dj_config
 from django.core import urlresolvers
 import subprocess
+import sys
 
 HOSTNAME = socket.gethostname()
 TEST_INSTALL = False
@@ -38,6 +39,9 @@ DATABASES = {
         'PORT': ''
     }
 }
+
+if 'test' in sys.argv:
+    DATABASES['default'] = {'ENGINE': 'django.db.backends.sqlite3'}
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name

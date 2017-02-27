@@ -5,6 +5,7 @@ Created on May 21, 2013
 @author: ionadmin
 '''
 import logging
+from django.core.urlresolvers import reverse
 
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import RunType, ApplProduct, ApplicationGroup
@@ -18,6 +19,7 @@ class ApplicationFieldNames():
 
     APPL_PRODUCT = 'applProduct'
     APPL_PRODUCTS = 'applProducts'   #this is for all applProduct definitions for the selected application and target technique
+    APPL_PRODUCTS_CATEGORIZED = 'applProducts_categorized'   #this is for all categorized applProduct definitions for the selected application and target technique    
     RUN_TYPE = 'runType'
     APPLICATION_GROUP_NAME = "applicationGroupName"
     SAMPLE_GROUPING = 'sampleGrouping'
@@ -38,6 +40,8 @@ class ApplicationStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(ApplicationStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_application.html'
+        self.prev_step_url = reverse("page_plan_ionreporter")
+        self.next_step_url = reverse("page_plan_kits")
 
         # self._dependsOn = [StepNames.IONREPORTER]
 
@@ -49,6 +53,7 @@ class ApplicationStepData(AbstractStepData):
         self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
         self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
         self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
+        self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
         self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.filter(isActive=True).order_by('nucleotideType', 'runType'))
 
@@ -60,8 +65,8 @@ class ApplicationStepData(AbstractStepData):
 #        else:
 #            self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).exclude(name = "DNA + RNA").order_by('uid')
 
-        self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).order_by('uid')
-
+        self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).order_by('description')
+        
         # self.prepopulatedFields[ApplicationFieldNames.SAMPLE_GROUPINGS] = SampleGroupType_CV.objects.filter(isActive=True).order_by('uid')
         # self._dependsOn = [StepNames.EXPORT]
 
@@ -93,12 +98,27 @@ class ApplicationStepData(AbstractStepData):
                                                           applicationGroup__name=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
                 
                 # moreApplProducts cannot filtered purely by runType alone since runType and applicationGroup has many-to-many relationship
+                # client code applProductToInstrumentType assumes there is only applProduct entry for a given runType + applicationGroup + instrumentType
                 if moreApplProducts:
                     self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = moreApplProducts
                 else:
                     self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
                                                                                                     applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
                                                                                                     applicationGroup = None)
+
+                # an applProduct entry can be categorized for certain specific business requirements
+                # client code reads the first the 1st entry of applProductToCategories matching a given runType + applicationGroup + categories
+                # do not want to mix this with applProducts since the latter is intended for default characters matching a given runType + applicationGroup + instrumentType
+                # assumption: applProduct's categories attribute contains only 1 category value (instead of chained categories) 
+                categorizedApplProducts = ApplProduct.objects.filter(isActive=True,
+                                                          applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                                                          applicationGroup__name=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]).exclude(categories = "")
+
+                if categorizedApplProducts:
+                    self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = categorizedApplProducts
+                else:
+                    self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
+                                                                                                   
             else:
                 self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
                                                                                                 applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
@@ -109,6 +129,7 @@ class ApplicationStepData(AbstractStepData):
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
             self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
             self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
+            self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
 
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = previous_run_type != self.savedObjects[ApplicationFieldNames.RUN_TYPE]
 

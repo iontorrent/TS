@@ -169,10 +169,12 @@ $(function() {//DOM ready handler
     //------------------------------------------------
 	$("#btn_remove_mnt").click(function(){
         var selectedItem = $("#shares_mounted option:selected");
+		var servername = selectedItem.text().split(":")[0];
         var mountpoint = selectedItem.text().split(" ")[2];
         console.log("Removing selected volume: " + mountpoint);
+        console.log("Removing server: " + servername);
 		$('#nas_content').block();
-        ajax_remove_volume(mountpoint);
+        ajax_remove_volume(servername, mountpoint);
     });
 
 	//------------------------------------------------
@@ -203,12 +205,12 @@ $(function() {//DOM ready handler
 	//------------------------------------------------
 	//Ajax call removes selected volume's mount
     //------------------------------------------------
-    function ajax_remove_volume(mountpoint){
+    function ajax_remove_volume(servername, mountpoint){
     	console.log("ajax_remove_volume: "+mountpoint);
         $.ajax({
 			url: "remove_nas_storage/",
 			type: "POST",
-			data: JSON.stringify({"mountpoint": mountpoint}),
+			data: JSON.stringify({"servername": servername, "mountpoint": mountpoint}),
 			dataType: "html",
         }).done(function(data){
             $('#nas_content').unblock();

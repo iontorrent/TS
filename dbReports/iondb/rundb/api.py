@@ -1859,7 +1859,9 @@ class PluginResource(ModelResource):
             url(r"^(?P<resource_name>%s)/show%s$" %
                 (self._meta.resource_name, trailing_slash()), self.wrap_view('dispatch_show'), name="api_plugins_show"),
             url(r"^(?P<resource_name>%s)/lineage%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_lineage'), name="api_dispatch_lineage")
+                self.wrap_view('dispatch_lineage'), name="api_dispatch_lineage"),
+            url(r"^(?P<resource_name>%s)/rescan%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan")
         ]
 
         return urls
@@ -2401,6 +2403,19 @@ class RunTypeResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
+class common_CVResource(ModelResource):
+
+    class Meta:
+        queryset = models.common_CV.objects.all()
+
+        # allow ordering and filtering by all fields
+        field_list = models.common_CV._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
 
 class dnaBarcodeResource(ModelResource):
 
@@ -2434,6 +2449,7 @@ class PlannedExperimentValidation(Validation):
         errors = {}
         barcodedSampleWarnings = []
         barcodedWarnings = []
+        spp_warnings = []
 
         isNewPlan = bundle.data.get('isNewPlan', False)
         isTemplate = bundle.data.get('isReusable', False)
@@ -2463,6 +2479,16 @@ class PlannedExperimentValidation(Validation):
             if err:
                 errors["templatingKitName"] = err
 
+        value = bundle.data.get("libraryKey","")
+        noGlobal_libraryKit = None
+        if not value:
+            gc = models.GlobalConfig.get()
+            if not gc.default_library_key:
+                noGlobal_libraryKit = True
+        if value or noGlobal_libraryKit:
+            err, selectedLibKey = plan_validator.validate_library_key(value)
+            if err:
+                errors["libraryKey"] = err
         # validate optional parameters
 
         for key, value in bundle.data.items():
@@ -2608,6 +2634,13 @@ class PlannedExperimentValidation(Validation):
                                             warnings.append(keyErrMsg % e)
                                     except Exception, e:
                                         warnings.append(e)
+
+                                    # validate controlType
+                                    if 'controlType' in barcodeSampleInfo[barcode]:
+                                        err_controltype, _ = plan_validator.validate_sampleControlType(barcodeSampleInfo[barcode]['controlType'])
+                                        if err_controltype:
+                                            eachBarcodeErr.append("".join(err_controltype))
+
                                 if eachBarcodeErr:
                                     barcodedSampleErrors += [{barcode: eachBarcodeErr}]
                                 if warnings:
@@ -2641,6 +2674,10 @@ class PlannedExperimentValidation(Validation):
                 err = plan_validator.validate_libraryReadLength(value)
             if key == "templatingSize":
                 err = plan_validator.validate_templatingSize(value)
+            if key == "samplePrepProtocol":
+                samplePrepWarnings = bundle.data.get("samplePrepWarnings", "")
+                if samplePrepWarnings:
+                    spp_warnings = {"samplePrepProtocol" : samplePrepWarnings}
             if key == "bedfile":
                 if "library" in bundle.data:
                     reference = bundle.data.get("library")
@@ -2655,6 +2692,9 @@ class PlannedExperimentValidation(Validation):
                 err = plan_validator.validate_reference_for_runType(value, runType, applicationGroupName)
                 if not err:
                     err = plan_validator.validate_reference_short_name(value)
+            if key == "mixedTypeRNA_reference":
+                err = plan_validator.validate_fusions_reference(value, runType, applicationGroupName)
+
             if err:
                 errors[key] = err
 
@@ -2664,6 +2704,10 @@ class PlannedExperimentValidation(Validation):
             raise ValidationError(json.dumps(errors))
         if barcodedSampleWarnings:
             bundle.data["Warnings"] = barcodedSampleWarnings
+        if "Warnings" in bundle.data and spp_warnings:
+            bundle.data["Warnings"].append(spp_warnings)
+        elif spp_warnings:
+            bundle.data["Warnings"] = spp_warnings
 
         return errors
 
@@ -2993,6 +3037,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['thumbnailalignmentargs'] = latest_eas.thumbnailalignmentargs if latest_eas else ""
             bundle.data['ionstatsargs'] = latest_eas.ionstatsargs if latest_eas else ""
             bundle.data['thumbnailionstatsargs'] = latest_eas.thumbnailionstatsargs if latest_eas else ""
+            bundle.data['custom_args'] = latest_eas.custom_args if latest_eas else ""
 
             if latest_eas and latest_eas.barcodeKitName:
                 bundle.data['sample'] = ""
@@ -3170,6 +3215,32 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['libraryKitName'] = bundle.data['librarykitname']
         return bundle
 
+    def hydrate_samplePrepProtocol(self, bundle):
+        if "samplePrepProtocol" in bundle.data:
+            samplePrepProtocol = bundle.data.get("samplePrepProtocol")
+            if samplePrepProtocol:
+                templatingKitName = bundle.obj.templatingKitName
+                samplePrepWarnings, selectedSamplePrepProtocol = plan_validator.validate_plan_samplePrepProtocol(samplePrepProtocol, templatingKitName)
+                if not samplePrepWarnings:
+                    bundle.data["samplePrepProtocol"] = selectedSamplePrepProtocol
+                else:
+                    bundle.data["samplePrepWarnings"] = samplePrepWarnings
+                    bundle.data['samplePrepProtocol'] = bundle.obj.samplePrepProtocol
+
+        return bundle
+
+    def hydrate_libraryKey(self, bundle):
+        libraryKey = bundle.data.get("libraryKey", None)
+        if libraryKey:
+            error, selectedLibKey = plan_validator.validate_library_key(libraryKey)
+            if not error:
+                bundle.data['libraryKey'] = selectedLibKey.sequence
+        else:
+            gc = models.GlobalConfig.get()
+            bundle.data['libraryKey'] = gc.default_library_key
+        return bundle
+
+
     def hydrate_regionfile(self, bundle):
         bedfile = bundle.data.get('regionfile')
         if bedfile:
@@ -3257,11 +3328,10 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         #run plan created on TS should not have post-run-bead find enabled for S5 and proton
         if "usePostBeadfind" not in bundle.data:
-            bundleChipType = bundle.data["chipType"]
+            bundleChipType = bundle.data.get("chipType")
             if bundleChipType:
-                isPostbead_disable_chips = models.Chip.objects.filter(name=bundleChipType)
-                if isPostbead_disable_chips[0].instrumentType.upper() == 'S5' or \
-                    isPostbead_disable_chips[0].instrumentType.upper() == "PROTON":
+                isPostbead_disable_chips = models.Chip.objects.filter(name=bundleChipType, instrumentType__in=['proton','S5'])
+                if isPostbead_disable_chips:
                     bundle.data["usePostBeadfind"] = False
 
         applicationGroupDisplayedName = bundle.data.get('applicationGroupDisplayedName', "")
@@ -3287,6 +3357,14 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 # sampleTubeLabel = sampleTubeLabel.strip().lstrip("0")
                 sampleTubeLabel = sampleTubeLabel.strip()
                 bundle.data["sampleTubeLabel"] = sampleTubeLabel
+
+        # update Fusions BED file path, if specified
+        rna_bedfile = bundle.data.get('mixedTypeRNA_targetRegionBedFile')
+        rna_reference = bundle.data.get('mixedTypeRNA_reference')
+        if rna_bedfile and rna_reference:
+            rna_bedfile_path = self._get_bedfile_path(rna_bedfile, rna_reference)
+            if rna_bedfile_path:
+                bundle.data['mixedTypeRNA_targetRegionBedFile'] = rna_bedfile_path
 
         return bundle
 
@@ -3338,27 +3416,18 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         # if include_plugin_default_selection and isNewPlan and NOT isSystem, then
         # add in plugins to selectedPlugins.  Watch for duplicates!!!
-        selectedPlugins = bundle.data.get('selectedPlugins', {})
+        selectedPlugins = bundle.data.get('selectedPlugins') or {}
 
-        default_selected_plugins_to_add = []
         for default_plugin in default_selected_plugins:
             if default_plugin.name not in selectedPlugins.keys():
-                default_selected_plugins_to_add.append(default_plugin)
-
-        plugins = bundle.data.get('selectedPlugins', {})
-        pluginUserInput = {}
-        for plugin_to_add in default_selected_plugins_to_add:
-            pluginDict = {
-                "id": plugin_to_add.id,
-                "name": plugin_to_add.name,
-                "version": plugin_to_add.version,
-                "userInput": pluginUserInput,
-                "features": []
-            }
-
-            plugins[plugin_to_add.name] = pluginDict
-
-        bundle.data['selectedPlugins'] = plugins
+                selectedPlugins[default_plugin.name] = {
+                    "id": default_plugin.id,
+                    "name": default_plugin.name,
+                    "version": default_plugin.version,
+                    "userInput": {},
+                    "features": []
+                }
+        bundle.data['selectedPlugins'] = selectedPlugins
         return bundle
 
     def obj_create(self, bundle, request=None, **kwargs):
@@ -3410,7 +3479,33 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         return bundle
 
 
-class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
+class AvailableIonChefPlannedExperimentResource(ModelResource):
+
+    experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
+
+    def dehydrate(self, bundle):
+        required_chef_fields_list = ["id",
+                                     "experiment",
+                                     "username",
+                                     "planShortID",
+                                     "planName",
+                                     "date",
+                                     "planStatus",
+                                     "isPlanGroup",
+                                     "isReverseRun",
+                                     "parentPlan",
+                                     "libraryTubeBarCode",
+                                     "sampleTubeLabel",
+                                     "templatingSize",
+                                     "templatingKitName",
+                                     "samplePrepProtocol"
+                                     ]
+        chef_bundle = {}
+        for key,value in bundle.data.iteritems():
+            if key in required_chef_fields_list:
+                chef_bundle[key] = value
+
+        return chef_bundle
 
     def build_filters(self, filters=None):
         if filters is None:
@@ -3429,12 +3524,40 @@ class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
 
         # allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
+
         ordering = field_list
+        filtering = field_dict(field_list)
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
 
 class AvailableIonChefPlannedExperimentSummaryResource(ModelResource):
+
+    experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
+
+    def dehydrate(self, bundle):
+        required_chef_fields_list = ["id",
+                                     "experiment",
+                                     "username",
+                                     "planShortID",
+                                     "planName",
+                                     "date",
+                                     "planStatus",
+                                     "isPlanGroup",
+                                     "isReverseRun",
+                                     "parentPlan",
+                                     "libraryTubeBarCode",
+                                     "sampleTubeLabel",
+                                     "templatingSize",
+                                     "templatingKitName",
+                                     "samplePrepProtocol"
+                                     ]
+        chef_bundle = {}
+        for key,value in bundle.data.iteritems():
+            if key in required_chef_fields_list:
+                chef_bundle[key] = value
+
+        return chef_bundle
 
     def build_filters(self, filters=None):
         if filters is None:
@@ -3610,7 +3733,7 @@ class OneTouchPlanTemplateSummaryResource(ModelResource):
         metadata_allowed_methods = ['get', ]
 
 
-class AvailablePlannedExperimentSummaryResource(ModelResource):
+class AvailablePlannedExperimentSummaryResource(PlannedExperimentResource):
 
     class Meta:
         queryset = models.PlannedExperiment.objects.filter(

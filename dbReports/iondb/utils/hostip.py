@@ -5,11 +5,7 @@ import os
 import socket
 from iondb.bin import djangoinit
 from iondb.rundb import models
-
-
-def is_TsVm():
-    return os.path.exists('/etc/init.d/mountExternal')
-
+from iondb.utils.utils import is_TsVm
 
 def instrument_host_ip():
     '''Returns ip address of the host system'''

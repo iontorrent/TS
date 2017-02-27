@@ -1,4 +1,5 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_QC
@@ -21,6 +22,8 @@ class SaveTemplateBySampleStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(SaveTemplateBySampleStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_save_plan.html'
+        self.prev_step_url = reverse("page_plan_output")
+        self.next_step_url = reverse("page_plan_save")
         self.savedFields = OrderedDict()
 
         self.savedFields[SaveTemplateStepDataFieldNames.TEMPLATE_NAME] = None
@@ -28,7 +31,7 @@ class SaveTemplateBySampleStepData(AbstractStepData):
         self.savedFields[SaveTemplateStepDataFieldNames.NOTE] = None
 
         self.savedFields[SaveTemplateStepDataFieldNames.LIMS_META] = None
-        self.savedFields[SaveTemplateStepDataFieldNames.META] = {}
+        self.savedObjects[SaveTemplateStepDataFieldNames.META] = {}
 
         self.sh_type = sh_type
 

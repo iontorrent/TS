@@ -1,6 +1,6 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
-from iondb.rundb.models import Chip, RunType, KitInfo, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct, PlannedExperiment
+from iondb.rundb.models import Chip, LibraryKey, RunType, KitInfo, common_CV, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct, PlannedExperiment, SampleAnnotation_CV
 from iondb.utils import validation
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 import os
@@ -220,6 +220,25 @@ def validate_flows(value, displayedName='Flows'):
 
     return errors
 
+def validate_library_key(value, displayedName='Library key'):
+    errors = []
+    selectedLibKey = None
+    if not value:
+        errors.append(validation.required_error(displayedName))
+    else:
+        try:
+            selectedLibKey = LibraryKey.objects.get(name__iexact=value.strip())
+        except LibraryKey.DoesNotExist:
+            try:
+                selectedLibKey = LibraryKey.objects.get(sequence__iexact=value.strip())
+            except LibraryKey.DoesNotExist:
+                logger.debug("plan_validator.validate_lib_key ...%s not found" % input)
+                selectedLibKey = None
+
+        if not selectedLibKey:
+            errors.append('Library key %s not found' % value)
+
+    return errors, selectedLibKey
 
 def validate_libraryReadLength(value, displayedName='Library Read Length'):
     errors = []
@@ -331,6 +350,43 @@ def validate_plan_templating_kit_name(value, displayedName="Template Kit"):
 
     return errors
 
+def _validate_spp_value_uid(value):
+    common_CVs = common_CV.objects.filter(cv_type__in=["samplePrepProtocol"])
+
+    for cv in common_CVs:
+        isValid = True
+        if ((value.lower() == cv.value.lower()) or
+                (value.lower() == cv.uid.lower())):
+            return isValid, cv
+        else:
+            isValid = False
+
+    return isValid, value
+
+def _validate_ssp_templatingKit(samplePrepValue, templatingKitName):
+    # validate whether the samplePrepProtocal is supported for this templatingKit
+    isValid = False
+    kit = KitInfo.objects.get(kitType__in=["TemplatingKit", "IonChefPrepKit"], name=templatingKitName)
+    for value in samplePrepValue.split(";"):
+            if value in kit.categories:
+                isValid = True
+                break;
+    return isValid
+
+def validate_plan_samplePrepProtocol(value, templatingKitName, displayedName="sample Prep Protocol"):
+    # validate if input matches the common_CV value or uid
+    errors = []
+    if value:
+        value = value.strip()
+        isValid, cv = _validate_spp_value_uid(value)
+        if not isValid:
+            errors.append("%s not found : %s is ignored" % (displayedName, value))
+        if isValid:
+            isValid = _validate_ssp_templatingKit(cv.categories, templatingKitName)
+            if not isValid:
+                errors.append("%s not supported for this templatingKit %s : %s is ignored  " % (displayedName, templatingKitName, value))
+            value = cv.value
+    return errors, value
 
 def validate_runType(runType):
     errors = []
@@ -528,5 +584,36 @@ def validate_planStatus(planStatus):
             errors.append("The plan status(%s) is not valid. Default Values are: %s" % (planStatus, defaultPlanStatus_display))
 
     logger.debug("plan_validator.validate_planStatus() value=%s;" % (planStatus))
+
+    return errors
+    
+
+def validate_sampleControlType(value, displayedName="Control Type"):
+    errors = []
+    value = value.strip().lower() if value else ''
+    if value:
+        if value == 'none':
+            value = ''
+        else:
+            controlTypes = SampleAnnotation_CV.objects.filter(annotationType='controlType')
+            controlType = controlTypes.filter(value__iexact=value) or controlTypes.filter(iRValue__iexact=value)
+            if controlType:
+                value = controlType[0].value
+            else:
+                errors.append("%s %s not found" % (displayedName, value))
+
+    return errors, value
+
+
+def validate_fusions_reference(value, runType, applicationGroupName, displayedName='Fusions Reference'):
+    errors = []
+    value = value.strip() if value else ""
+
+    if value:
+        applProduct = ApplProduct.objects.filter(isActive=True, applType__runType=runType, applicationGroup__name=applicationGroupName) \
+            or ApplProduct.objects.filter(isActive=True, applType__runType=runType)
+        # need to validate only if this is a dual nuc type plan
+        if applProduct and applProduct[0].isDualNucleotideTypeBySampleSupported:
+            errors = validate_reference_short_name(value, displayedName)
 
     return errors

@@ -474,6 +474,7 @@ def make_barcodeInfo(eas, exp, doBaseRecal):
             barcodeInfo[barcode['id_str']]['sample'] = 'none'
             barcodeInfo[barcode['id_str']]['referenceName'] = eas.reference
             barcodeInfo[barcode['id_str']]['calibrate'] = doBaseRecal
+            barcodeInfo[barcode['id_str']]['controlType'] = ''
 
         if eas.barcodedSamples:
             for sample, value in eas.barcodedSamples.items():
@@ -489,6 +490,9 @@ def make_barcodeInfo(eas, exp, doBaseRecal):
                         # exclude RNA barcodes from recalibration (Compendia project RNA/DNA sample)
                         if dna_rna_sample and info.get(bcId, {}).get('nucleotideType', '') == 'RNA':
                             barcodeInfo[bcId]['calibrate'] = False
+
+                        # get the controlType from the barcode.json
+                        barcodeInfo[bcId]['controlType'] = info[bcId].get('controlType', '')
                 except:
                     pass
 

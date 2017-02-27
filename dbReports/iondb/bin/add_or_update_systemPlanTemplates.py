@@ -41,6 +41,7 @@ class TemplateParams:
         self.samplePrepKitName = None
         self.templatingSize = None
         self.libraryReadLength = 0
+        self.samplePrepProtocol = ""
         self.planStatus = "planned"
         # Experiment
         self.chipType = ""
@@ -272,7 +273,7 @@ def finish_sys_template(sysTemplate, isCreated, templateParams, plugins={}):
         experiment=exp, isEditable=True, isOneTimeOverride=False)
 
     if not eas_set:
-        return create_sys_template_eas(currentTime, experiment, sysTemplate, templateParams, plugins)
+        return create_sys_template_eas(currentTime, exp, sysTemplate, templateParams, plugins)
 
     eas = eas_set[0]
 
@@ -428,7 +429,8 @@ def add_or_update_sys_template(templateParams, isSystemDefault=False):
             "sampleGrouping": sampleGrouping_obj,
             "categories": templateParams.categories,
             "templatingSize": templateParams.templatingSize,
-            "libraryReadLength": templateParams.libraryReadLength
+            "libraryReadLength": templateParams.libraryReadLength,
+            "samplePrepProtocol" : templateParams.samplePrepProtocol
         }
     )
 
@@ -437,13 +439,12 @@ def add_or_update_sys_template(templateParams, isSystemDefault=False):
             (sysTemplate.id, sysTemplate.planDisplayedName, str(isSystemDefault))
     else:
         hasChanges = False
-        if templateParams.templatingSize:
-            if (sysTemplate.templatingSize != templateParams.templatingSize):
-                print ">>> DIFF: orig sysTemplate.templatingSize=%s for system template.id=%d; name=%s" % \
-                    (sysTemplate.templatingSize, sysTemplate.id, sysTemplate.planName)
+        if (sysTemplate.templatingSize != templateParams.templatingSize):
+            print ">>> DIFF: orig sysTemplate.templatingSize=%s, new templatingSize=%s for system template.id=%d; name=%s" % \
+                (sysTemplate.templatingSize, templateParams.templatingSize, sysTemplate.id, sysTemplate.planName)
 
-                sysTemplate.templatingSize = templateParams.templatingSize
-                hasChanges = True
+            sysTemplate.templatingSize = templateParams.templatingSize
+            hasChanges = True
 
         if templateParams.libraryReadLength:
             if (sysTemplate.libraryReadLength != templateParams.libraryReadLength):
@@ -533,6 +534,18 @@ def add_or_update_sys_template(templateParams, isSystemDefault=False):
             sysTemplate.save()
             isUpdated = True
 
+        if (sysTemplate.samplePrepProtocol != templateParams.samplePrepProtocol):
+            print ">>>DIFF: orig sysTemplate.samplePrepProtocol=%s new samplePrepProtocol=%s for system template.id=%d; name=%s" % \
+                (sysTemplate.samplePrepProtocol, templateParams.samplePrepProtocol, sysTemplate.id, sysTemplate.planName)
+
+            sysTemplate.samplePrepProtocol = templateParams.samplePrepProtocol
+            hasChanges = True
+
+        if hasChanges:
+            sysTemplate.date = currentTime
+            sysTemplate.save()
+            isUpdated = True
+            
     if isUpdated:
         print "...Updated System template.id=%d; name=%s" % (sysTemplate.id, sysTemplate.planDisplayedName)
 
@@ -749,13 +762,11 @@ def add_or_update_museek_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams)
     
     # 52
-    PLAN_STATUS = "inactive"
     templateParams = TemplateParams("Ion Xpress MuSeek Library", PGM, "GENS")
     templateParams.update({
         "threePrimeAdapter": "TGCACTGAAGCACACAATCACCGACTGCCC",
         "libraryKitName": "Ion Xpress MuSeek Library Preparation Kit",
         "barcodeKitName": "Ion Xpress MuSeek Barcode set 1",
-        "planStatus": PLAN_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -836,7 +847,6 @@ def add_or_update_targetseq_system_templates():
     templateParams.update({
         "chipType": "P1.1.17",
         "flows": 440,
-        "samplePrepKitName": "Ion TargetSeq(tm) Exome Kit (4 rxn)",
         "reference": "hg19"
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1305,7 +1315,7 @@ def add_or_update_oncomine_ocav3_system_templates():
     OCAV3_CATEGORIES = "Oncomine"
     OCAV3_CHIP_NAME = "540"
     OCAV3_FLOWS = 400
-    OCAV3_FUSION_LIB_KIT_NAME = "Ion AmpliSeq RNA Library Kit"
+    OCAV3_FUSION_LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     OCAV3_LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     OCAV3_LIBRARY_READ_LENGTH = 200
     OCAV3_REFERENCE = "hg19"
@@ -1614,6 +1624,285 @@ def add_or_update_S5_ocp_focus_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams)
 
 
+def add_or_update_hid_system_templates():
+    # HID
+    default_flowOrderList = models.FlowOrder.objects.filter(name="Ion samba")
+    flowOrderList = models.FlowOrder.objects.filter(name="Ion samba.gafieira")
+    samplePrepProtocolList = models.common_CV.objects.filter(cv_type = "samplePrepProtocol", uid="CV0001")
+        
+    BARCODE_KIT_NAME = ""
+    CATEGORIES = ""
+    CHIP_NAME_PGM = "318"
+    CHIP_NAME_S5 = "530"
+    FLOWS_STR = 850
+    FLOWS = 500
+    FLOWORDER_STR = flowOrderList[0].flowOrder if flowOrderList else ""
+    FLOWORDER_DEFAULT = default_flowOrderList[0].flowOrder if default_flowOrderList else ""
+    LIB_KIT_NAME = "Precision ID Library Kit"
+    LIBRARY_READ_LENGTH = 200
+    REFERENCE = "hg19"
+    REFERENCE_mtDNA = "PrecisionID_mtDNA_rCRS"
+    SAMPLE_PREP_PROTOCOL_STR = samplePrepProtocolList[0].value if samplePrepProtocolList else ""
+    SAMPLE_PREP_PROTOCOL = ""
+    SEQ_KIT_NAME_PGM = "IonPGMHiQ"
+    SEQ_KIT_NAME_S5 = "Ion S5 Sequencing Kit"
+    TEMPLATE_KIT_NAME_PGM = "Ion PGM Hi-Q Chef Kit"
+    TEMPLATE_KIT_NAME_S5 = "Ion Chef S530 V1"
+    TEMPLATING_SIZE_PGM = "200"
+    TEMPLATING_SIZE_S5 = None
+    
+    # 56 HID STR
+    templateParams = TemplateParams("Applied Biosystems Precision ID GlobalFiler NGS STR Panel - PGM", PGM, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_PGM,
+        "flows": FLOWS_STR,
+        "flowOrder" : FLOWORDER_STR,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL_STR,
+        "sequencekitname": SEQ_KIT_NAME_PGM,
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
+        "templatingSize": TEMPLATING_SIZE_PGM
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+    
+    # 57 HID identity PGM
+    templateParams = TemplateParams("Applied Biosystems Precision ID Identity Panel - PGM", PGM, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_PGM,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_PGM,
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
+        "templatingSize": TEMPLATING_SIZE_PGM
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+        
+    # 58 HID identity S5    
+    templateParams = TemplateParams("Applied Biosystems Precision ID Identity Panel - S5", S5, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_S5,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "templatingSize": TEMPLATING_SIZE_S5
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+
+    
+    # 59 HID ancestry PGM    
+    templateParams = TemplateParams("Applied Biosystems Precision ID Ancestry Panel - PGM", PGM, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_PGM,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_PGM,
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
+        "templatingSize": TEMPLATING_SIZE_PGM
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+        
+    # 60 HID ancestry S5    
+    templateParams = TemplateParams("Applied Biosystems Precision ID Ancestry Panel - S5", S5, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_S5,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "templatingSize": TEMPLATING_SIZE_S5
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+
+
+    # 61 HID mito whole genome PGM    
+    templateParams = TemplateParams("Applied Biosystems Precision ID mtDNA Whole Genome Panel - PGM", PGM, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_PGM,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE_mtDNA,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_PGM,
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
+        "templatingSize": TEMPLATING_SIZE_PGM
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+        
+    # 62 HID mito whole genome S5    
+    templateParams = TemplateParams("Applied Biosystems Precision ID mtDNA Whole Genome Panel - S5", S5, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_S5,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE_mtDNA,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "templatingSize": TEMPLATING_SIZE_S5
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+
+
+    # 63 HID mito control region PGM    
+    templateParams = TemplateParams("Applied Biosystems Precision ID mtDNA Control Region Panel - PGM", PGM, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_PGM,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE_mtDNA,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_PGM,
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
+        "templatingSize": TEMPLATING_SIZE_PGM
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+        
+    # 64 HID mito control region S5    
+    templateParams = TemplateParams("Applied Biosystems Precision ID mtDNA Control Region Panel - S5", S5, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME_S5,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE_mtDNA,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "templatingSize": TEMPLATING_SIZE_S5
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+
+
+def add_or_update_hid_dexter_system_templates():
+    # HID
+    default_flowOrderList = models.FlowOrder.objects.filter(name="Ion samba.gafieira")
+        
+    BARCODE_KIT_NAME = "IonCode Barcodes 1-32"
+    CATEGORIES = ""
+    CHIP_NAME = "530"
+    FLOWS = 650
+    FLOWORDER_DEFAULT = default_flowOrderList[0].flowOrder if default_flowOrderList else ""
+    LIB_KIT_NAME = "Ion Chef HID Library V2"
+    LIBRARY_READ_LENGTH = 200
+    REFERENCE = "hg19"
+    SAMPLE_PREP_PROTOCOL = ""
+    SEQ_KIT_NAME = "HID S5 Sequencing Kit"
+    TEMPLATE_KIT_NAME = "Ion Chef HID S530 V2"
+    TEMPLATING_SIZE = None
+    
+    # 65 HID STR
+    templateParams = TemplateParams("Applied Biosystems Precision ID GlobalFiler Mixture ID Panel - S5", PGM, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME,
+        "templatingKitName": TEMPLATE_KIT_NAME,
+        "templatingSize": TEMPLATING_SIZE
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+    
+    # 66 HID identity PGM
+    templateParams = TemplateParams("Applied Biosystems Precision ID GlobalFiler STR Panel - S5", S5, "AMPS")
+    templateParams.update({
+        "applicationGroup" : "HID",
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,           
+        "chipType": CHIP_NAME,
+        "flows": FLOWS,
+        "flowOrder" : FLOWORDER_DEFAULT,
+        "libraryKitName": LIB_KIT_NAME,
+        "libraryReadLength" : LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "sequencekitname": SEQ_KIT_NAME,
+        "templatingKitName": TEMPLATE_KIT_NAME,
+        "templatingSize": TEMPLATING_SIZE
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
+
 @transaction.commit_manually()
 def add_or_update_all_system_templates():
 
@@ -1638,6 +1927,8 @@ def add_or_update_all_system_templates():
         add_or_update_oncomine_BRCA_system_templates()
         add_or_update_immune_response_system_templates()
         add_or_update_S5_ocp_focus_system_templates()
+        add_or_update_hid_system_templates()
+        add_or_update_hid_dexter_system_templates()
     except:
         print format_exc()
         transaction.rollback()
@@ -1670,7 +1961,8 @@ def clean_up_obsolete_templates():
             "Oncomine Comprehensive v1 for S5 DNA and Fusions",
             " Oncomine Comprehensive v2 for S5 DNA and Fusions",
             "Oncomine BRCA for PGM",
-            "Oncomine BRCA for S5"
+            "Oncomine BRCA for S5", 
+            "Applied Biosystems Precision ID GlobalFiler NGS STR Panel"
             ]
 
         templates = models.PlannedExperiment.objects.filter(
@@ -1687,49 +1979,27 @@ def clean_up_obsolete_templates():
         transaction.commit()
         print "*** System Template(s) deletion committed."
 
-# The below method is being used to install the System Template via Off-Cycle Release path
 
-
+'''
+    The below method is used to install System Templates via Off-Cycle Release path
+    NOTES:
+    1) off-cycle json file must include ALL of the same fields as in the above on-cycle functions
+    2) update and create methods need identical off-cycle files, i.e. cannot just include single field to update
+'''
 def add_or_updateSystemTemplate_OffCycleRelease(**sysTemp):
 
     logger.debug("Start Installing System Template via Off cycle release")
-    application = str(sysTemp.get('application', 'GENS'))
-    instrumentType = sysTemp.get('instrumentType').upper() or PGM
-    templateName = str(sysTemp.get('templateName'))
-    isValid = True
-    error = None
-    flowCount = sysTemp.get('flowCount') or 0
-    libraryReadLength = sysTemp.get('libraryReadLength') or 0
-    pluginsList = [plugin for plugin in sysTemp.get("plugins_preselect", [])]
-    planStatus = sysTemp.get('planStatus') or "planned"
+    templateName = sysTemp.pop('templateName')
+    application = sysTemp.pop('application', 'GENS')
+    instrumentType = sysTemp.pop('instrumentType','').upper() or PGM
 
-    threePrimeAdapter = sysTemp.get('threePrimeAdapter','')
-    if not threePrimeAdapter:
-        threePrimeAdapter = DEFAULT_3_PRIME_ADAPTER_SEQUENCE if not bool(sysTemp.get('isMuSeek')) else DEFAULT_MUSEEK_3_PRIME_ADAPTER_SEQUENCE
+    isSystemDefault = sysTemp.pop('isSystemDefault', False)
+    pluginsList = [plugin for plugin in sysTemp.pop("plugins_preselect", [])]
 
     try:
         templateParams = TemplateParams(templateName, instrumentType, application)
-        templateParams.update({
-            "applicationGroup":     str(sysTemp.get('applicationGroup')),
-            "chipType":             str(sysTemp.get('chipType')),
-            "flows":                int(flowCount),
-            "planStatus":           str(planStatus),
-            "categories":           str(sysTemp.get('categories', "")),
-            "templatingKitName":    str(sysTemp.get('templateKitName')),
-            "controlSequencekitname": str(sysTemp.get('controlSeqKitName')),
-            "samplePrepKitName":    str(sysTemp.get('samplePrepKitName')),
-            "sampleGrouping":       str(sysTemp.get('sampleGrouping')),
-            "sequencekitname":      str(sysTemp.get('seqKitName')),
-            "libraryKitName":       str(sysTemp.get('libKitName')),
-            "barcodeKitName":       str(sysTemp.get('barcodeKitName')),
-            "reference":            str(sysTemp.get('reference')),
-            "targetRegionBedFile":  str(sysTemp.get('targetRegionBedFile')),
-            "hotSpotRegionBedFile": str(sysTemp.get('hotSpotRegionBedFile')),
-            "threePrimeAdapter":    threePrimeAdapter,
-            "templatingSize":       str(sysTemp.get('templatingSize')),
-            "libraryReadLength":    int(libraryReadLength)
-        })
-        sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams, isSystemDefault=bool(sysTemp.get('isSystemDefault')))
+        templateParams.update(sysTemp)
+        sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams, isSystemDefault)
 
         plugins = {}
         if (len(pluginsList) > 0):
@@ -1740,12 +2010,12 @@ def add_or_updateSystemTemplate_OffCycleRelease(**sysTemp):
             logger.debug("warning: No Plugins selected for the template: %s" % templateName)
 
         finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+        status = {'isValid': True, 'msg': None}
 
     except Exception as err:
-        isValid = False
-        error = err.message
+        status = {'isValid': False, 'msg': err.message}
+        print format_exc()
 
-    status = {'isValid': isValid, 'msg': error}
     return status
 
 

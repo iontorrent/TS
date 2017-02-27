@@ -16,7 +16,7 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-VERSION='5.2.0.0'
+VERSION='5.2.1.0'
 
 # set the ram
 #$ -l mem_free=${PLUGINCONFIG__RAM},s_vmem=${PLUGINCONFIG__RAM}
@@ -35,9 +35,26 @@ run ()
 }
 
 #*! @function
-set_output_paths ()
+get_bam_paths ()
 {
-	PLUGIN_OUT_BAM_NAME=`echo ${TSP_FILEPATH_BAM} | sed -e 's_.*/__g' | sed -e 's/bam/basecaller.bam/g'`; 
+    #barcoded unaligned bam
+	PLUGIN_OUT_BAM_NAME="rawlib.basecaller.bam";
+	BAM_PATH="${ANALYSIS_DIR}/basecaller_results/${BARCODE_ID}_${PLUGIN_OUT_BAM_NAME}";
+    if [ ! -f ${BAM_PATH} ]; then
+    #barcoded aligned bam	
+        PLUGIN_OUT_BAM_NAME="rawlib.bam";
+	    BAM_PATH="${ANALYSIS_DIR}/${BARCODE_ID}_${PLUGIN_OUT_BAM_NAME}";
+		if [ ! -f ${BAM_PATH} ]; then
+	#non-barcoded unaligned bam	
+		PLUGIN_OUT_BAM_NAME="rawlib.basecaller.bam";
+	    BAM_PATH="${ANALYSIS_DIR}/basecaller_results/${PLUGIN_OUT_BAM_NAME}";
+		if [ ! -f ${BAM_PATH} ]; then
+	#non-barcoded aligned bam	
+		PLUGIN_OUT_BAM_NAME="rawlib.bam";
+	    BAM_PATH="${ANALYSIS_DIR}/${PLUGIN_OUT_BAM_NAME}";
+		fi	
+      fi		
+	fi	
 }
 
 # ===================================================
@@ -45,12 +62,11 @@ set_output_paths ()
 # ===================================================
 
 # Set defaults
-set_output_paths;
 ASSEMBLER_PATH="${DIRNAME}/bin/";
 export HTML="$TSP_FILEPATH_PLUGIN_DIR/${PLUGINNAME}.html"
 
 # remove some files if they are there
-run "rm -rf ${TSP_FILEPATH_PLUGIN_DIR}/*.html ${TSP_FILEPATH_PLUGIN_DIR}/info*.json"
+#run "rm -rf ${TSP_FILEPATH_PLUGIN_DIR}/*.html ${TSP_FILEPATH_PLUGIN_DIR}/barcodes.json"
 
 # ===================================================
 # Run AssemblerSPAdes Plugin
@@ -73,10 +89,12 @@ if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
         if [ -n "$PLUGINCONFIG__ONLY_BARCODES" ] && [[ ,$PLUGINCONFIG__ONLY_BARCODES, != *,$BARCODE_ID,* ]]; then
           continue
         fi
-
+	
+	    get_bam_paths; 
+	
         BARCODE_SEQ=`echo ${BARCODE_LINE} | awk 'BEGIN{FS=","} {print $3}'`;
         BARCODE_BAM_NAME="${BARCODE_ID}_${PLUGIN_OUT_BAM_NAME}";
-
+    
 	echo "";
 	echo "";
 	echo "#########################";
@@ -86,7 +104,7 @@ if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
 	echo "";
 	
 	#see if bam file exists
-	if [ -f ${BASECALLER_DIR}/${BARCODE_BAM_NAME} ]; then
+	if [ -f ${BAM_PATH} ]; then
 	    #create sub dir
 	    if [ ! -f ${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE_ID}.${BARCODE_SEQ} ]; then
 		run "mkdir -p ${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE_ID}.${BARCODE_SEQ}";
@@ -99,7 +117,7 @@ if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
 
 	    #create sym link to bam file
 	    if [ ! -f ${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE_ID}.${BARCODE_SEQ}/${BARCODE_BAM_NAME} ]; then
-		run "ln -snf ${BASECALLER_DIR}/${BARCODE_BAM_NAME} ${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE_ID}.${BARCODE_SEQ}/${BARCODE_BAM_NAME}";
+		run "ln -snf ${BAM_PATH} ${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE_ID}.${BARCODE_SEQ}/${BARCODE_BAM_NAME}";
 	    fi
 
             #build call to the assembler.pl script which will take care of the rest
@@ -112,6 +130,9 @@ if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
 
 #nonbarcoded run
 else
+    
+	get_bam_paths;
+
     echo "";
     echo "";
     echo "#########################";
@@ -120,7 +141,7 @@ else
     echo "";
     echo "";
     
-    if [ ! -f ${BASECALLER_DIR}/${PLUGIN_OUT_BAM_NAME} ]; then
+    if [ ! -f ${BAM_PATH} ]; then
     ERROR_MESSAGE="Required unaligned BAM file is missing. Plugin doesn't support assembly from aligned reads!"
     echo $ERROR_MESSAGE >&2
     echo "<html><body><h3><center>$PLUGIN_RUN_NAME</center></h3><br/><h3 style=\"text-align:center;color:red\">*** $ERROR_MESSAGE ***</h3><br/></body></html>" >> "$HTML"
@@ -135,9 +156,9 @@ else
 
     #create the sym link
     if [ ! -f ${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAM_NAME} ]; then
-	run "ln -snf ${BASECALLER_DIR}/${PLUGIN_OUT_BAM_NAME} ${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAM_NAME}";
+	run "ln -snf ${BAM_PATH} ${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAM_NAME}";
     fi
 
     run "python ${ASSEMBLER_PATH}/RunAssembler.py ${PLUGIN_OUT_BAM_NAME}"
-    run "python ${ASSEMBLER_PATH}/GenerateReport.py ${TSP_FILEPATH_PLUGIN_DIR}/info.json"
+    run "python ${ASSEMBLER_PATH}/GenerateReport.py ${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json"
 fi

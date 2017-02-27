@@ -214,6 +214,7 @@ function precisionUnits(num, div) {
 				</tr>
 				<tr><td>Chip Type</td><td>{{experiment.chipType}}</td></tr>
 				<tr><td>Chip Data</td><td>{{experiment.rawdatastyle}}</td></tr>
+				<tr><td>Chip Lot Number</td> <td>{{chipLot}}</td></tr>
 				<tr><td>Barcode Set</td><td>{{report.eas.barcodeKitName}}</td></tr>
 				<tr><td>Analysis Name</td><td>{{report.resultsName}}</td></tr>
 				<tr><td>Analysis Date</td><td>{{report.timeStamp}}</td></tr>
@@ -321,14 +322,20 @@ function precisionUnits(num, div) {
 				{% else %}
 					<table class="table table-striped">
 						<tr><th>Product Description</th><th>Part Number</th><th>Lot Number</th><th>Exp. Date</th><th>Remaining Uses</th></tr>
-						{% for initLog in S5_InitLog_read %}
+						{% for initLog in S5_InitLog_read.existing_consumables %}
 							<tr>
 							{% for key, value in initLog.items %}
 								<td>{{value}}</td>
 							{% endfor %}
 							</tr>
 						{% endfor %}
+						{% if S5_InitLog_read.missing_consumables %}
+						    {% for consumable in S5_InitLog_read.missing_consumables %}
+						         <tr><td>{{consumable}}:&ensp;<font color="red">Missing</font></td><td colspan="4"></td></tr>
+						    {% endfor %}
+						{% endif %}
 					</table>
+
 			    {% endif %}
 			{% endif %}
 		</div>

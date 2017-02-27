@@ -176,7 +176,7 @@ def download_samplefile_format(request):
 
     sample_csv_version = import_sample_processor.get_sample_csv_version()
 
-    hdr = [import_sample_processor.COLUMN_SAMPLE_NAME, import_sample_processor.COLUMN_SAMPLE_EXT_ID, import_sample_processor.COLUMN_PCR_PLATE_POSITION, import_sample_processor.COLUMN_BARCODE_KIT, import_sample_processor.COLUMN_BARCODE, import_sample_processor.COLUMN_GENDER, import_sample_processor.COLUMN_GROUP_TYPE, import_sample_processor.COLUMN_GROUP, import_sample_processor.COLUMN_SAMPLE_DESCRIPTION, import_sample_processor.COLUMN_NUCLEOTIDE_TYPE, import_sample_processor.COLUMN_CANCER_TYPE, import_sample_processor.COLUMN_CELLULARITY_PCT, import_sample_processor.COLUMN_BIOPSY_DAYS, import_sample_processor.COLUMN_COUPLE_ID, import_sample_processor.COLUMN_EMBRYO_ID
+    hdr = [import_sample_processor.COLUMN_SAMPLE_NAME, import_sample_processor.COLUMN_SAMPLE_EXT_ID, import_sample_processor.COLUMN_CONTROLTYPE, import_sample_processor.COLUMN_PCR_PLATE_POSITION, import_sample_processor.COLUMN_BARCODE_KIT, import_sample_processor.COLUMN_BARCODE, import_sample_processor.COLUMN_GENDER, import_sample_processor.COLUMN_GROUP_TYPE, import_sample_processor.COLUMN_GROUP, import_sample_processor.COLUMN_SAMPLE_DESCRIPTION, import_sample_processor.COLUMN_NUCLEOTIDE_TYPE, import_sample_processor.COLUMN_CANCER_TYPE, import_sample_processor.COLUMN_CELLULARITY_PCT, import_sample_processor.COLUMN_BIOPSY_DAYS, import_sample_processor.COLUMN_COUPLE_ID, import_sample_processor.COLUMN_EMBRYO_ID
            ]
 
     customAttributes = SampleAttribute.objects.all().exclude(isActive=False).order_by("displayedName")
@@ -644,11 +644,9 @@ def save_input_samples_for_sampleset(request):
                 sampleDisplayedName = pending_sampleSetItem.get("displayedName", "").strip()
                 sampleExternalId = pending_sampleSetItem.get("externalId", "").strip()
                 sampleDesc = pending_sampleSetItem.get("description", "").strip()
+                sampleControlType = pending_sampleSetItem.get("controlType", "")
 
-                sampleAttribute_dict = pending_sampleSetItem.get("attribute_dict", {})
-
-                if sampleAttribute_dict is None:
-                    sampleAttribute_dict = {}
+                sampleAttribute_dict = pending_sampleSetItem.get("attribute_dict") or {}
 
                 sampleGender = pending_sampleSetItem .get("gender", "")
                 sampleRelationshipRole = pending_sampleSetItem.get("relationshipRole", "")
@@ -680,7 +678,7 @@ def save_input_samples_for_sampleset(request):
                     # return HttpResponse(errorMessage, mimetype="text/html")
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
 
-                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, \
+                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, sampleControlType,\
                                                                      selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId, sampleDesc)
 
             clear_samplesetitem_session(request)
@@ -927,6 +925,7 @@ def show_samplesetitem_modal(request, intent, sampleSetItem=None, pending_sample
 
     sample_groupType_CV_list = _get_sample_groupType_CV_list(request)
     sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType="relationshipRole").order_by('value')
+    controlType_CV_list = SampleAnnotation_CV.objects.filter(annotationType="controlType").order_by('value')
     gender_CV_list = SampleAnnotation_CV.objects.filter(annotationType="gender").order_by('value')
     cancerType_CV_list = SampleAnnotation_CV.objects.filter(annotationType="cancerType").order_by('value')
     sampleAttribute_list = SampleAttribute.objects.filter(isActive=True).order_by('id')
@@ -961,6 +960,7 @@ def show_samplesetitem_modal(request, intent, sampleSetItem=None, pending_sample
         'pending_sampleSetItem': pending_sampleSetItem,
         'sample_groupType_CV_list': sample_groupType_CV_list,
         'sample_role_CV_list': sample_role_CV_list,
+        'controlType_CV_list': controlType_CV_list,
         'gender_CV_list': gender_CV_list,
         'cancerType_CV_list': cancerType_CV_list,
         'sampleAttribute_list': sampleAttribute_list,

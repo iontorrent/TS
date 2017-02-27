@@ -7,7 +7,7 @@
 
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
-
+<script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 
@@ -80,7 +80,12 @@ color: #0088cc;
                 <h3 style="float:left;"><img src="{% static category.img %}" border="0" width='24px;'>&nbsp;{{category.displayedName}}</h3>
                 <div class="clearfix">
                     <div class="pull-right">
-                        <a href="{% url "upload_plans_for_template" %}" class="btn btn-primary upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a>
+                        <div class="btn-group"><a title="Upload Plan Runs or Template" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">Upload <span class="caret"></span></a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url "upload_plans_for_template" %}" class="upload-plan" >Upload Plans</a></li>
+                                <li><a href="#" data-toggle="modal" data-target="#modal_load_template">Upload Template</a></li>
+                            </ul>
+                        </div>
                         {% if category.ampliSeq_upload %}
                         <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>
                             <ul class="dropdown-menu">
@@ -104,6 +109,30 @@ color: #0088cc;
     </div>
 </div>
 
+<div id="modal_load_template" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Import Plan Template</h3>
+    </div>
+    <div class="modal-body">
+        <div class="alert alert-error hide"></div>
+        <div class="alert alert-success hide">Success!</div>
+        <div class="alert alert-warning hide"></div>
+        <form id="importTemplateForm" method="POST" action="{% url "import_plan_template" %}" enctype="multipart/form-data">
+            <div id="csv_load" class="control-group">
+                <div class="controls">
+                <label for="file" class="control-label">Select a CSV File</label>
+                <input type="file" name="csv_file" class="input-xxlarge input-file required">
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a id="upload_template" class="btn btn-primary" href="#">Load</a>
+        <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">Close</a>
+    </div>
+</div>
 
 <script id="emptyRowTemplate" type="text/x-kendo-template">
     <tr>
@@ -260,6 +289,9 @@ var username = '{{user.username}}';
         <li>
             <a href="#= '{% url "page_plan_copy_template" 999999 %}'.replace('999999',_id)#">Copy</a>
         </li> 
+        <li>
+            <a href="#= '{% url "export_plan_template" 999999 %}'.replace('999999',_id)#">Export</a>
+        </li>
         # if (!_isSystem) { #
             <li class="divider"></li>
             <li>

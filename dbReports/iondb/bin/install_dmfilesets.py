@@ -30,6 +30,7 @@ DM_FILE_SETS = [
             '.[^/]*\.dat',
             'X\d+_Y\d+.*\.dat',
             'thumbnail.*\.dat',
+            'thumbnail/explog_final.txt',
             #'.[^/]*?\.txt',    need to be specific
             '.[^/]*?alW1Step_explog\.txt',
             '.[^/]*?hecksum_status\.txt',
@@ -46,6 +47,8 @@ DM_FILE_SETS = [
             'Controller',
             'DataCollect\.config',
             'debug',
+            'Gain.lsr',
+            'thumbnail/Gain.lsr',
             # not required, but want to clean these up if exist
             ],
         'exclude':[
@@ -207,6 +210,7 @@ DM_FILE_SETS = [
             '.[^/]*\.dat',
             'X\d+_Y\d+.*\.dat',
             'thumbnail.*\.dat',
+            'thumbnail/explog_final.txt',
             '.*?CalW1Step_explog\.txt',
             '.*?checksum_status\.txt',
             '.*?explog\.txt',
@@ -223,6 +227,8 @@ DM_FILE_SETS = [
             'Controller',
             'DataCollect\.config',
             'debug',
+            'Gain.lsr',
+            'thumbnail/Gain.lsr',
             # not required, but want to clean these up if exist
             'jpg/.*?',
             '.[^/]*?\.jpg',

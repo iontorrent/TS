@@ -138,7 +138,7 @@ inline string get_str(string info_key){
 
 
  VariantFeatures(string _vc_record, char _index){vc_record = _vc_record; gt_index = _index; info_key_value=NULL;};
- ~VariantFeatures(){if(info_key_value != NULL) delete info_key_value; info_key_value = NULL;}
+ ~VariantFeatures(){/*if(info_key_value != NULL) delete info_key_value; info_key_value = NULL;*/}
 
  void  parse_info_values(){
 
@@ -146,10 +146,9 @@ inline string get_str(string info_key){
    std::stringstream cols(vc_record);
    string vcf_col;
    while(cols.good() && getline( cols, vcf_col, '\t') && ++col_idx<6);
-   if(col_idx == 6)
+   if(col_idx == 6 && info_key_value==NULL)
    {
-    
-    if(info_key_value != NULL) delete info_key_value;
+   
     info_key_value = new std::map<string, string>();
     info_key_value->insert(std::pair<string, string>("QUAL", vcf_col)); 
     
@@ -1188,12 +1187,19 @@ map<unsigned,PileUp *> * consensus_analysis(string & ref_seq, vector<BamAlignmen
   return top_family; 
 }
 //---------------------------------------------------------------------------------------
-void load_read_filters(vector<std::map< int , string > > * read_filter, VCFinfo & rec)
+bool load_read_filters(vector<std::map< int , string > > * read_filter, VCFinfo & rec)
 {
+  bool haplo_filter = true;
 		std::map<string,bool> rfmap;
 				for(int a=0;a<rec.alt_count();a++)
 				{
 			     string rf = rec.get_str_flag_value(a,"READ_FILTER");
+			     
+			     if(haplo_filter){
+			      string pf = rec.get_str_flag_value(a,"HAPLO_FILTER");
+			      if(pf.length()>0 && pf[0]=='0') haplo_filter = false;
+			      }
+			      
 				  if(rf.length()>0){
 					 std::stringstream ss(rf);
                      string rf_temp;
@@ -1220,7 +1226,8 @@ void load_read_filters(vector<std::map< int , string > > * read_filter, VCFinfo 
          }
 	    }
 	if(!signature.empty()) read_filter->push_back(signature);
-	}	
+	}
+	return haplo_filter;	
 }				
 //---------------------------------------------------------------------------------------
 void report_consensus_counts(string & ref_seq, string ref_name, map<unsigned,PileUp *> * top_family, unsigned * global_consensus,  int tagging_method, int ref_idx, const int32_t start_pos, const int32_t end_pos, ofstream & alt_fam, ofstream & global_counts, ofstream & targ_fam_sz, ofstream & var_calls, vector<long int> & hotspot_pos, vector<VCFinfo> & hotspot_rec, unsigned reads_on_target, unsigned reads_with_p1, int vc_min_fam_size, int vc_min_func_cov,  float vc_min_func_maf, int vc_min_num_fam, string trg_def, int max_var_amp, bool hs_mask_only)
@@ -1385,7 +1392,7 @@ void report_consensus_counts(string & ref_seq, string ref_name, map<unsigned,Pil
 			     // filter out black-listed alleles
 				 if(hs_pos)
 				 {	 
-				  hotspot_rec[h-1].parse_info_values();
+				  //hotspot_rec[h-1].parse_info_values();
 				  for(int a=0;a<hotspot_rec[h-1].alt_count();a++)
 				   if(strcmp(alt_allele.c_str(),hotspot_rec[h-1].get_alt(a).c_str()) == 0)
 					  {
@@ -1763,7 +1770,8 @@ int main(int argc, char *argv[])
 
 	vector<long int> hotspot_pos;
 	vector<VCFinfo> hotspot_rec;
-	vector<std::map< int , string > > read_filter; 
+	vector<std::map< int , string > > read_filter;
+	int local_max_var_amp = max_var_amp;
 	
 	if(varVC != NULL){
 		std::map<string,std::map<long int,VCFinfo> > * vcfrec =  varVC->getList();
@@ -1772,9 +1780,9 @@ int main(int argc, char *argv[])
 			for(std::map<long int,VCFinfo>::iterator vcfpos = chrVC->second.begin(); vcfpos != chrVC->second.end(); vcfpos++)
 		    if(vcfpos->first > start_pos && vcfpos->first < end_pos){
 			 hotspot_pos.push_back(vcfpos->first);
+  			 vcfpos->second.parse_info_values();
  			 hotspot_rec.push_back(vcfpos->second);
- 			 vcfpos->second.parse_info_values();
-			 load_read_filters( &read_filter, vcfpos->second);
+			 if(!load_read_filters( &read_filter, vcfpos->second)) local_max_var_amp = 100;
 		    }
 	if(!hs_mask_only && hotspot_pos.size()==0) continue;
 	}
@@ -1827,7 +1835,7 @@ int main(int argc, char *argv[])
   fam_sz3.push_back(n_fam3);
   fam_sz7.push_back(n_fam7);  
   // This one, too.
-  report_consensus_counts(ref_seq, chrit->first,top_family, global_consensus, tagging_method, refid, start_pos, end_pos, alt_fam, global_cons, targ_fam_sz, var_calls, hotspot_pos, hotspot_rec, buffer->size(), local_total_reads_p1, vc_min_fam_size, vc_min_func_cov, vc_min_func_maf, vc_min_num_fam, tgdef2, max_var_amp, hs_mask_only);
+  report_consensus_counts(ref_seq, chrit->first,top_family, global_consensus, tagging_method, refid, start_pos, end_pos, alt_fam, global_cons, targ_fam_sz, var_calls, hotspot_pos, hotspot_rec, buffer->size(), local_total_reads_p1, vc_min_fam_size, vc_min_func_cov, vc_min_func_maf, vc_min_num_fam, tgdef2, local_max_var_amp, hs_mask_only);
  
   delete [] index_counts;
   delete [] global_consensus;

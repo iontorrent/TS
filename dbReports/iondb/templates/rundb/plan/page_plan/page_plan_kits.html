@@ -118,7 +118,6 @@
     <div class="span6">
         <label>Forward Library Key:</label>
         <select id="libraryKey" name="libraryKey" value="" class="select-group"  style="width:350px;">
-            <option value=""></option>
             {% for libKey in step.getPrePopulatedFieldDict.forwardLibKeys %}
                 {% ifequal libKey.sequence step.getCurrentSavedFieldDict.libraryKey %}
                     <option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
@@ -136,11 +135,11 @@
         <select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group">
             <option value=""></option>
             {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
-                {% ifequal adapter.sequence step.getCurrentSavedFieldDict.forward3primeAdapter %}
+                {% if adapter.sequence == step.getCurrentSavedFieldDict.forward3primeAdapter %}
                     <option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
-                {% else %}
+                {% elif adapter.isActive %}
                     <option value="{{adapter.sequence}}">{{adapter}}</option>
-                {% endifequal %}
+                {% endif %}
             {% endfor %}
         </select>
     </div>
@@ -179,6 +178,7 @@
                 >{{kitTypeName}}
                 {% endifequal %}
             {% endfor %}
+            <a class="btn btn-mini chef-protocol-inline">Details +</a>
         </p>      
         </small>
         </span>
@@ -205,7 +205,22 @@
             
         </div>
     </div>
+
+	<div class="chef_protocol_info span6 hide" style="display: block;">
+        <label>Templating Protocol:</label>
+        <select id="samplePrepProtocol" name="samplePrepProtocol" value="" class="select-group">
+        	<option value=""></option>
+            {% for protocol in step.getPrePopulatedFieldDict.samplePrepProtocols %}
+                {% ifequal protocol.displayedValue step.getCurrentSavedFieldDict.samplePrepProtocol %}
+                    <option SELECTED value="{{protocol.value}}">{{protocol.displayedValue}}</option>
+                {% else %}
+                    <option value="{{protocol.value}}">{{protocol.displayedValue}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+	</div>   
 </div>
+
 
 <div class="templating_size_info row-fluid hide" style="display: block;">
     <div class="span6">
@@ -311,12 +326,6 @@
 </div>
 {% endblock page-plan-content %}
 
-{% block prevnext-buttons %}
-    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">&larr; Previous</a>
-    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">Next &rarr;</a>
-    
-{% endblock prevnext-buttons %}
-
 {% block summary-table %}
     {%include "rundb/plan/page_plan/summary/kit_summary.html"%}
 {% endblock summary-table %}
@@ -368,7 +377,8 @@
             "seq_instruments":  "{{kit.instrumentType}}",
             "samplePrep_instruments":  samplePrep_instrumentType_to_values("{{kit.samplePrep_instrumentType}}"),
             "libraryReadLength":"{{kit.libraryReadLength}}",
-            "templatingSize":   "{{kit.templatingSize}}"
+            "templatingSize":   "{{kit.templatingSize}}",
+            "defaultThreePrimeAdapter": "{{kit.defaultThreePrimeAdapter.sequence}}" || ""
         };
     {% endfor %}
 
@@ -396,7 +406,18 @@
     {% endfor %}
 
     var defaultFlowsFromCategoryRules = {{step.getPrePopulatedFieldDict.defaultFlowsFromCategoryRules|safe}};
-    
+  
+    var samplePrepProtocols = {};
+    {% for protocol in step.getPrePopulatedFieldDict.samplePrepProtocols %}
+        samplePrepProtocols["{{protocol.value}}"] = {
+            "index":       {{forloop.counter0}},
+            "value":       "{{protocol.value}}",
+            "display": "{{protocol.displayedValue}}",
+            "toolTip":       "{{protocol.description}}" || "",
+            "categories":  "{{protocol.categories}}" || ""
+        };
+    {% endfor %}
+
     var applProductDefaults = {};
     {% for applProduct in helper.getStepDict.Application.getPrePopulatedFieldDict.applProducts %}
         var defaultTemplateKit = '{{applProduct.defaultTemplateKit.name}}' || '';
@@ -417,9 +438,38 @@
             "defaultSequencingKit": '{{applProduct.defaultSequencingKit.name}}' || ''
         }
     {% endfor %}
+
+    var categorizedApplProducts = {};
+    {% for applProduct in helper.getStepDict.Application.getPrePopulatedFieldDict.applProducts_categorized %}
+		//supports Chef categorization only for now
+       categorizedApplProducts['{{applProduct}}'] = {
+            "categories": '{{applProduct.categories}}',
+            "defaultFlowCount": '{{applProduct.defaultFlowCount}}' || '{{applProduct.defaultSequencingKit.flowCount}}',
+            "defaultFlowOrder": '{{applProduct.defaultFlowOrder.flowOrder}}' || '',
+            "defaultIonChefPrepKit": '{{applProduct.defaultIonChefPrepKit.name}}' || '', 
+            "defaultLibraryKit" : '{{applProduct.defaultLibraryKit.name}}' || '',
+            "defaultSamplePrepProtocol": '{{applProduct.defaultSamplePrepProtocol.value}}' || '',
+            "defaultSequencingKit": '{{applProduct.defaultSequencingKit.name}}' || '',
+            "defaultTemplateKit": '{{applProduct.defaultIonChefPrepKit.name}}' || '',
+            "defaultTemplateKitType": "IonChef",
+            "instrumentType": '{{applProduct.instrumentType}}',
+            "isBarcodeKitSelectionRequired" : '{{applProduct.isBarcodeKitSelectionRequired}}' || ''
+       }
+    {% endfor %}
+
     
     $(document).ready(function () {
-
+    	//there are 8 ways flow count can be automatically set based on the
+    	// 1 - sequencing kit
+    	// 2 - templating kit
+    	// 3 - templating size
+    	// 4 - read length
+    	// 5 - chipType
+		// 6 - applProduct for the application and target technique
+		// 7 - applProduct for the application, target technique and sequencing instrument
+		// 8 - categorized applProduct for the application, target technique and categories
+		var categorizedApplProductInUse = null;
+		
         $("form").submit(function(){
             $("select[name=barcodeId]").attr('disabled', false);
         });
@@ -451,13 +501,12 @@
         {% for barcodeKit in step.getPrePopulatedFieldDict.barcodes %}
             barcode_kits_all_list.push("{{barcodeKit.name}}");
         {% endfor %}
-        
 
-        function init_templatingSize_n_readLength_visibility() { 
+        function init_protocol_templatingSize_n_readLength_visibility() { 
             var templateKit = templateKits[$("#templateKit").val()];
+            console.log("templateKit=", templateKit);
             if (templateKit) {
                 var categories = templateKit.categories;
-                
                 if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
                     $('.templating_size_info').hide();
                     $('.library_read_length_info').hide();
@@ -472,6 +521,7 @@
                     $('.library_read_length_info').hide();
                     $('.read_length_info').hide();
                }
+               handleTemplateKitSelectionForProtocol();
             }
         }
           
@@ -528,8 +578,12 @@
 
                 var sequenceKit = sequencingKits[$("#sequenceKit").val()];
                 if (sequenceKit && sequenceKit.categories.toLowerCase().indexOf("readlengthderivablefromflows") >= 0){
+
                     // set Library Read Length from Seq Kit flows instead
                     var seqKitFlowCount = sequenceKit.flowCount;
+                    if (categorizedApplProductInUse && sequenceKit.value === categorizedApplProducts[categorizedApplProductInUse].defaultSequencingKit) {
+                    	seqKitFlowCount = categorizedApplProducts[categorizedApplProductInUse].defaultFlowCount;
+                   	}
                     if (seqKitFlowCount > 0) defaultLibraryReadLength = seqKitFlowCount / 2.2 | 0;
                 } else {
                     setFlowCountByLibraryReadLength(defaultLibraryReadLength);
@@ -591,29 +645,124 @@
                 }
             }
         }
-        
 
+        function handleTemplateKitSelectionForProtocol() {
+        	categorizedApplProductInUse = null;
+        	
+            var templateKit = templateKits[$("#templateKit").val()];
+
+            if (templateKit && ($('input[name="templatekitType"]:checked').val() == "IonChef")) {
+                var kitCategories = templateKit.categories;
+
+                if (kitCategories.toLowerCase().indexOf("sampleprepprotocol") >= 0) {
+					var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
+					if (categorizedApplProduct) {
+						update_samplePrepProtocol_select(kitCategories);
+						
+						//if user traverses from chevron to chevron, we should not trigger auto-selection when user retuns to the Kits chevron		
+	                	if (!_isEditRun && $("#templateKit").val() != "{{step.savedFields.templatekitname}}") {
+	                		//try to auto-select the appropriate samplePrepProtocol
+	                		handleAutoSelectionByKitCategories(categorizedApplProduct, kitCategories);
+	                	}
+	                	else {
+	                		//re-select original value after selection list refresh
+	                		setSamplePrepProtocolSelection("{{step.savedFields.samplePrepProtocol}}");
+	                	}
+	                	$('.chef-protocol-inline').show();
+	                	return;
+                	}
+                }
+            }
+            $('.chef-protocol-inline').hide();
+            $('.chef_protocol_info').hide();
+            setSamplePrepProtocolSelection("");
+        }
+        
+	    function update_samplePrepProtocol_select(kitCategories){
+	    	console.log("update_samplePrepProtocol_select kitCategories=", kitCategories);
+	        var filters = {};
+
+	        filters['categories'] = kitCategories;
+	        filter_select_dropdown_multi_tokens(samplePrepProtocols, filters, "#samplePrepProtocol");
+	    }
+
+		function handleAutoSelectionByKitCategories(categorizedApplProduct, kitCategories) {
+			
+			if (categorizedApplProduct) {
+        		categorizedApplProductInUse = categorizedApplProduct;
+				var categorizedDefaults = categorizedApplProducts[categorizedApplProduct];
+
+				//do not auto-select protocol but user should be able to select it in the dropdown
+				//setSamplePrepProtocolSelection(categorizedDefaults.defaultSamplePrepProtocol);
+				
+				if (categorizedDefaults.defaultFlowOrder && $("#flowOrder").val() === "") {
+					$("#flowOrder").val(categorizedDefaults.defaultFlowOrder);
+					$('#flowOrder').change();
+				}
+
+				if (categorizedDefaults.defaultSequencingKit) {				
+					$("#sequenceKit").val(categorizedDefaults.defaultSequencingKit);
+					$("#sequenceKit").change();
+					
+					if (categorizedDefaults.defaultFlowCount) {
+						updateFlows(categorizedDefaults.defaultFlowCount);
+						set_templating_size_from_category_rules();
+					}
+				}
+			}
+			else {
+				categorizedApplProductInUse = null;
+				setSamplePrepProtocolSelection("");
+			}
+		}
+                		
+		function setSamplePrepProtocolSelection(value) {
+			$("#samplePrepProtocol").val(value);
+			$("#samplePrepProtocol").change();
+		}
+		
+
+		function handleTemplateKitTypeChange(selectedTemplateKitType, selectedTemplateKit) {			
+			$('input[name="templatekitType"][value='+ selectedTemplateKitType +']').prop('checked', true);
+			$("#templateKit_comment").hide();
+			$("#templateKit").show();
+	
+			// update dropdown options
+			update_TemplateKit_select();
+			update_SequencingKit_select()
+	
+			if (selectedTemplateKit) {
+				$("#templateKit").val(selectedTemplateKit);
+				$("#templateKit").change();
+			}
+		}
+							
         function handleSeqKitSelectionForFlowOrder(selectedSeqKitName) {
             var defaultFlowOrder = "";
-            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
-                var seqKitName = "{{kit.name}}";
-                if (seqKitName == selectedSeqKitName) {
-                    if ("{{kit.defaultFlowOrder}}" != null) {
-                        defaultFlowOrder = "{{kit.defaultFlowOrder.flowOrder}}";                    
-                    }
-                    else {
-                        defaultFlowOrder = "";
-                    }                    
-                }
-            {% endfor %}
-             
+
+        	if (categorizedApplProductInUse && categorizedApplProducts[categorizedApplProductInUse].defaultSequencingKit == selectedSeqKitName && categorizedApplProducts[categorizedApplProductInUse].defaultFlowOrder) {
+        		defaultFlowOrder = categorizedApplProducts[categorizedApplProductInUse].defaultFlowOrder;
+        	}
+        	else {
+	            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
+	                var seqKitName = "{{kit.name}}";
+	                if (seqKitName == selectedSeqKitName) {
+	                    if ("{{kit.defaultFlowOrder}}" != null) {
+	                        defaultFlowOrder = "{{kit.defaultFlowOrder.flowOrder}}";
+	                    }
+	                    else {
+	                        defaultFlowOrder = "";
+	                    }
+	                }
+	            {% endfor %}
+            }
             $('#flowOrder option[value="'+defaultFlowOrder+'"]').attr('selected', 'selected');
             $('#flowOrder').change();
         }
 
 
         function handleSequencingKitSelection(selectedSequenceKitName) {        
-            if (!_isEditRun) {    
+            if (!_isEditRun) {
                 setFlowCountBySelectedKits()
                 updateLibraryReadLength();
                 handleSeqKitSelectionForFlowOrder(selectedSequenceKitName);
@@ -636,7 +785,9 @@
             }
         }
 
+/*
         function toggleFlowOrder() {
+
             if ($("#instrumentType").val() == "pgm"){
                 $(".hideIfPgm").css('display','none');
                 updateSummaryPanel("#selectedFlowOrder", "");
@@ -645,35 +796,45 @@
             else{
                 $(".hideIfPgm").show();
              }
+
+            $(".hideIfPgm").show();
         }
+*/
 
         function setFlowCountBySelectedKits(){
             
             if (_isEditRun) return;
-            
+
             var templateKit = templateKits[$("#templateKit").val()];
             var sequenceKit = sequencingKits[$("#sequenceKit").val()];
             var templateKitFlowCount = templateKit ? templateKit.flowCount : 0;
             var sequenceKitFlowCount = sequenceKit ? sequenceKit.flowCount : 0;
 
             var flowCount = 0;
-            if (!templateKit){
-                flowCount = sequenceKitFlowCount;
-            } else if (!sequenceKit){
-                flowCount = templateKitFlowCount;
-            } else {
-                // both kits selected: use templateKit flows if flowoverridable, otherwise use sequenceKit flows
-                var categories = sequenceKit.categories;
-                if ((categories.toLowerCase().indexOf("flowoverridable") >= 0) && (templateKitFlowCount > 0)){
-                    flowCount = templateKitFlowCount;
-                } else {
-                    flowCount = sequenceKitFlowCount;
-                }
+            if (categorizedApplProductInUse && sequenceKit.value === categorizedApplProducts[categorizedApplProductInUse].defaultSequencingKit && categorizedApplProducts[categorizedApplProductInUse].defaultFlowCount) {
+            	flowCount = categorizedApplProducts[categorizedApplProductInUse].defaultFlowCount;
+            }
+            else {
+	            if (!templateKit){
+	                flowCount = sequenceKitFlowCount;
+	            } else if (!sequenceKit){
+	                flowCount = templateKitFlowCount;
+	            } else {
+	                // both kits selected: use templateKit flows if flowoverridable, otherwise use sequenceKit flows
+	                var categories = sequenceKit.categories;
+	                if ((categories.toLowerCase().indexOf("flowoverridable") >= 0) && (templateKitFlowCount > 0)){
+	                    flowCount = templateKitFlowCount;
+	                } else {
+	                    flowCount = sequenceKitFlowCount;
+	                }
+	            }
             }
             updateFlows(flowCount);
         }
         
         function setFlowCountByLibraryReadLength(libraryReadLength) {
+        	if (categorizedApplProductInUse) return;
+
             var sequenceKit = sequencingKits[$("#sequenceKit").val()];
             if (sequenceKit) {
                 var categories = sequenceKit.categories;
@@ -704,24 +865,79 @@
                         }
                     }
                 });
+        		
+        		//even for categorizedApplProductInUse, rule still applies for templating/flowCount relationship
+        		/*
+        		if (categorizedApplProductInUse) {
+        			var categorizedDefaults = categorizedApplProducts[categorizedApplProductInUse];
+										
+					if (categorizedDefaults.defaultTemplateKit && categorizedDefaults.defaultTemplateKit === templateKit.value &&
+						categorizedDefaults.defaultSequencingKit && categorizedDefaults.defaultSequencingKit === $("#sequenceKit").val()) {
+						//it is already set, no more changes needed
+						return;
+					}
+        		}
+        		*/
+
                 if (flowCount) updateFlows(flowCount);
             }
         }
+	
+        // Set templating size as defined in the business rule based on number of flows selected
+        function set_templating_size_from_category_rules() {
+            var templateKit = templateKits[$("#templateKit").val()];
+            if (templateKit && templateKit.categories){
+                // values_selected fields must correspond to rules defined in KitInfo._category_flowCount_rules
+                var values_selected = {
+                    'flowCount': $("#flows").val()
+                }
 
+                $.each(defaultFlowsFromCategoryRules, function(i, rule){
+                    if (templateKit.categories.toLowerCase().indexOf(rule.category.toLowerCase()) >= 0){
+                        for (field in values_selected) {
+                            if (field in rule && values_selected[field] == rule[field]){
+                                templatingSize = rule.templatingSize;
+                               $('input[name = "templatingSize"][value="' + templatingSize + '"]').prop('checked', true);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
         function update_barcodeKit_dropdown() {
-            $('#barcodeKitLabel').text("Barcode Set (optional)");
             $('input[name = "isBarcodeKitRequired"]').val("false");
             var value_list = barcode_kits_all_list;
-
             var libraryKit = libraryKits[$("#libraryKitType").val()];
-            if (libraryKit){
-                if (libraryKit.categories.toLowerCase().indexOf("bcrequired") >= 0) {
-                    $('#barcodeKitLabel').text("Barcode Set (required)");
+            var templateKit = templateKits[$("#templateKit").val()];
+
+            if (templateKit && categorizedApplProductInUse){
+                var categorizedDefaults = categorizedApplProducts[categorizedApplProductInUse];
+			    if (categorizedDefaults.isBarcodeKitSelectionRequired == "True"){
+				    $('#barcodeKitLabel').text("Barcode Set (required)");
                     $('input[name = "isBarcodeKitRequired"]').val("true");
                 }
-                
-                if (libraryKit.categories.toLowerCase().indexOf("bcshowsubset") >= 0)
+            }
+            if (libraryKit) {
+                isBarcodeKitRequired = $("#isBarcodeKitRequired").val() || "";
+                if (!isBarcodeKitRequired || isBarcodeKitRequired == "false"){
+                    if ("{{helper.getApplProduct.isBarcodeKitSelectionRequired }}" == "True"){
+                        $('#barcodeKitLabel').text("Barcode Set (required)");
+                        $('input[name = "isBarcodeKitRequired"]').val("true");
+                    }
+                    else if (libraryKit.categories.toLowerCase().indexOf("bcrequired") >= 0) {
+                        $('#barcodeKitLabel').text("Barcode Set (required)");
+                        $('input[name = "isBarcodeKitRequired"]').val("true");
+                    }
+                    else{
+                        $('#barcodeKitLabel').text("Barcode Set (optional)");
+                        $('input[name = "isBarcodeKitRequired"]').val("false");
+                    }
+
+                }
+                if (libraryKit.categories.toLowerCase().indexOf("bcshowsubset") >= 0){
                     value_list = barcode_kits_subset_list;
+                }
             }
 
             var $selects = $("#barcodeId");
@@ -745,10 +961,40 @@
         function getApplProduct() {
             var selectedInstrumentType = $("#instrumentType").val();
             var applProduct = applProductToInstrumentType[selectedInstrumentType.toLowerCase()];
-            console.log(">>> selectedInstrumentType=", selectedInstrumentType, "applProduct=", applProduct);
+            console.log(">>> selectedInstrumentType=", selectedInstrumentType, "; applProduct=", applProduct);
             return applProduct; 
         }
-        
+
+        function getCategorizedApplProduct(kitCategories) {
+        	var tokens = kitCategories.split(";");
+            for (var index in tokens) {
+				var category = tokens[index].toLowerCase();
+
+				//console.log("getCategorizedApplProduct() tokens=", category, "; applProductToCategories=", applProductToCategories);
+        		if (category in applProductToCategories) {
+            		var applProduct = applProductToCategories[category];
+
+            		//applProduct must match instrument type as well
+            		var selectedInstrumentType = $("#instrumentType").val();
+
+					//instrumentType may not be set when creating plan from template and jumping to the kits chevron right away
+            		if (!selectedInstrumentType && $("#chipType").val()){
+                		var chip = chips[$("#chipType").val()];
+                		$('#instrumentType').val(chip ? chip['seq_instrument'] : "");
+                	}
+                	selectedInstrumentType = $("#instrumentType").val();
+                	
+            		if (selectedInstrumentType && selectedInstrumentType.toLowerCase() === categorizedApplProducts[applProduct].instrumentType.toLowerCase()) {
+            			return applProduct;
+            		}
+            		else {
+            			return null;
+            		}
+            	}
+            }
+            return null;
+        }
+                        
         function handleAutoSelectionByApplProduct(selectedInstrumentType) {
             //get the applProduct for selected instrumentType
             var applProduct = getApplProduct();
@@ -773,6 +1019,28 @@
         }
 
 
+        function handleTemplateKitSelectionForThreePrimeadapter(){
+            var templateKit = templateKits[$("#templateKit").val()];
+
+            if (templateKit && templateKit.defaultThreePrimeAdapter) {
+                var selectedThreePrimeAdapter = $('[name=forward3primeAdapter]').val();
+                if (selectedThreePrimeAdapter != templateKit.defaultThreePrimeAdapter){
+                    // save previously selected value
+                    $('[name=forward3primeAdapter]').data('previous_selection',selectedThreePrimeAdapter);
+                    $('[name=forward3primeAdapter]').val(templateKit.defaultThreePrimeAdapter);
+                    $('[name=forward3primeAdapter]').change();
+                }
+            } else {
+                // restore 3' adapter selection if it was auto set based on kit default but now the kit changed again
+                var previous_selection = $('[name=forward3primeAdapter]').data('previous_selection');
+                if (selectedThreePrimeAdapter != previous_selection){
+                    $('[name=forward3primeAdapter]').val(previous_selection);
+                    $('[name=forward3primeAdapter]').change();
+                }
+            }
+        }
+
+
         $("#sequenceKit").on('change', function(){
             handleSequencingKitSelection($(this).val());
         });
@@ -786,8 +1054,36 @@
         	//update barcode kit selection list on library kit selection changed
         	var libKitName = $(this).val();
         	//console.log("at libraryKitType.change() libKitName=", libKitName);
-            update_barcodeKit_dropdown()
+
             updateSummaryPanel("#selectedLibraryKitType", libKitNameToDesc[libKitName]);
+
+        	categorizedApplProductInUse = null;          
+            var libraryKit = libraryKits[libKitName];
+
+			//if user traverses from chevron to chevron, we should not trigger auto-selection when user retuns to the Kits chevron
+            if (libraryKit && (libKitName != "{{step.savedFields.librarykitname}}")) {
+            	if (libraryKit.categories.toLowerCase().indexOf("sampleprepprotocol") >= 0) {
+            		var kitCategories = libraryKit.categories;
+					var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
+
+					if (!_isEditRun && categorizedApplProduct) {
+        				categorizedApplProductInUse = categorizedApplProduct;        				
+						var categorizedDefaults = categorizedApplProducts[categorizedApplProduct];
+
+						// select default Template Kit Type and trigger change to update Kit dropdown options and selected value
+            			var defaultTemplateKitType = categorizedDefaults.defaultTemplateKitType;
+            			if (defaultTemplateKitType) {
+            				handleTemplateKitTypeChange(defaultTemplateKitType, categorizedDefaults.defaultTemplateKit);
+    					}
+                	}
+                }
+                else {
+                	//if categorizedApplProduct exists, need to reset samplePrepProtocol value
+                	setSamplePrepProtocolSelection("");
+                }
+            }
+            update_barcodeKit_dropdown()
+            
         }).change();
 
 
@@ -812,7 +1108,8 @@
 
 
         $("#templateKit").change(function()  {
-
+        	categorizedApplProductInUse = null;
+        	
         	var selectedVal = $(this).find("option:selected").val();
         	
             // save kit value to restore if type selection changes
@@ -823,7 +1120,10 @@
             handleTemplateKitSelectionForLibraryReadLength();
             handleTemplateKitSelectionForReadLength();
             handleTemplateKitSelectionForAutoSeqKitSelection();
+            handleTemplateKitSelectionForProtocol();
             set_default_flows_from_category_rules();
+            handleTemplateKitSelectionForThreePrimeadapter();
+            update_barcodeKit_dropdown();
 
             updateSummaryPanel("#selectedTemplatingKitName", templateKitNameToDesc[selectedVal]);
         });
@@ -853,6 +1153,19 @@
             }
             else {
                 updateSummaryPanel("#selectedFlowOrder", "(use instrument settings)");
+            }
+        });
+		
+
+		$("#samplePrepProtocol").change(function() {
+            var value = $(this).val();
+
+            var displayedValue = samplePrepProtocolToDisplayedValue[value];
+            if (displayedValue) {
+                updateSummaryPanel("#selectedSamplePrepProtocol", displayedValue);
+            }
+            else {
+                updateSummaryPanel("#selectedSamplePrepProtocol", "(use default)");
             }
         });
         
@@ -917,7 +1230,7 @@
             update_LibraryKit_select();
             update_TemplateKit_select();
             update_SequencingKit_select();
-            toggleFlowOrder();
+            //toggleFlowOrder();
 
             handleAutoSelectionByApplProduct($(this).val());
         });
@@ -933,12 +1246,12 @@
                 $(".extra_kit_forward_info").hide();
             } else {
                 $(".extra-kit-inline").text("Details -");
-                toggleFlowOrder();
+                //toggleFlowOrder();
                 $(".extra_kit_forward_info").show();
             }
         });
 
-        init_templatingSize_n_readLength_visibility();
+		init_protocol_templatingSize_n_readLength_visibility();
 
         //hide templatingSize UI section by default if value is blank
         if ($('input[name = "templatingSize"]:checked').val() == undefined) {
@@ -947,7 +1260,19 @@
         else {
             $(".templating_size_info").show();
         }
-
+    
+        $(".chef_protocol_info").hide();
+        $(".chef-protocol-inline").click(function() {
+            if (($(".chef_protocol_info").is(":visible"))) {
+                $(".chef-protocol-inline").text("Details +");
+                $(".chef_protocol_info").hide();
+            } else {
+                $(".chef-protocol-inline").text("Details -");
+                //toggleFlowOrder();
+                $(".chef_protocol_info").show();
+            }
+        });
+        		
         $('#isDuplicateReads').change(function(){
             if($(this).is(':checked')) {
                 $('#selectedMarkAsPcrDuplicates').text('True');
@@ -989,6 +1314,41 @@
         // make sure to keep original option order
         filtered_options.sort(function(a,b){ return a.index > b.index? 1: -1;})
 
+		create_filter_select_dropdown(filtered_options, selectId);
+	}
+
+    function filter_select_dropdown_multi_tokens(data, filters, selectId){
+    	// compare if any of the tokens in filters[filterKey] is found in match_values
+    	
+        // re-create dropdown options after applying filters
+        // filter logic is: value == filter OR !value
+        // multiple values must use ";" as separator, e.g. "RNA;AMPS_RNA"
+        var filtered_options = $.map(data, function(option){
+            for (filterKey in filters){
+                if (option[filterKey] && option[filterKey] != "None"){
+                    var match_values = option[filterKey].split(';');
+                    //var filter_tokens = filters[filterKey].split(';');
+                    var isFound = false;
+                    for (match_value in match_values) {
+	                    if (filters[filterKey].indexOf(match_values[match_value]) >= 0){
+	                        //console.log('FOUND! multi_tokens filtered - selectId=', selectId, "; filterKey=", filterKey, "; filters[key]=", filters[filterKey], "; match_value=", match_value, "; matchValues=", match_values, "; display=", option.display)
+	                        isFound = true;
+	                    }
+	                }
+                    if (!isFound) {
+                    	return;
+                    }
+                }
+            }
+            return ({ "index": option.index, "value": option.value, "display": option.display });
+        });
+        // make sure to keep original option order
+        filtered_options.sort(function(a,b){ return a.index > b.index? 1: -1;})
+
+		create_filter_select_dropdown(filtered_options, selectId);
+	}
+    
+    function create_filter_select_dropdown(filtered_options, selectId){
         // create dropdown options
         var $select = $(selectId);
         var selectedValue = $select.val();

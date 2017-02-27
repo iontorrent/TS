@@ -103,7 +103,8 @@ while(<>) {
     $barcode_fields .= $fn;
     next;  # skip header line
   }
-  my @fields = split;
+  chomp;
+  my @fields = split('\t',$_);
   # assume target ID plus start+end location is unique
   my $trgid = $fields[$idField].':'.$fields[1].'-'.$fields[2];
   if( defined($targets{$trgid}) ) {

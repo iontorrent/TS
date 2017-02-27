@@ -116,6 +116,7 @@ v1_api.register(api.SamplePrepDataResource())
 
 v1_api.register(api.AnalysisArgsResource())
 v1_api.register(api.FlowOrderResource())
+v1_api.register(api.common_CVResource())
 
 v1_api.register(api.FileMonitorResource())
 v1_api.register(api.SupportUploadResource())

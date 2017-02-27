@@ -140,15 +140,12 @@
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
-    <input type="hidden" name="error_messages_count" value="0"/>
-    <input type="hidden" name="warning_messages_count" value="-1"/>
-    
-    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">&larr; Previous</a>
     {% if helper.isEditRun %}
-        <a class="btn btn-primary btn-100 pull-right" href="#" style="margin-left:10px;" onclick="USERINPUT.validate=true; $('#step_form').attr('action', '{% url "page_plan_save_and_reanalyze" exp_id=helper.experiment_id %}');$('#step_form').submit();return false;">
-            Update Run & Reanalyze</a>
+        <a class="submitStepForm btn btn-primary btn-100 pull-right" style="margin-left:10px;" onclick="USERINPUT.validate=true;"
+        href='{% url "page_plan_save_and_reanalyze" exp_id=helper.experiment_id %}'>Update Run & Reanalyze</a>
     {% endif %}
-    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="USERINPUT.validate=true; $('#step_form').attr('action', '{% url "page_plan_save" %}');$('#step_form').submit();return false;">
+    <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}" onclick="USERINPUT.validate=true;">
         {% if helper.isCopy %}
             Copy Plan
         {% elif helper.isEdit %}

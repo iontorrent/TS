@@ -18,188 +18,336 @@ from celery.utils.log import get_task_logger
 
 import simplejson
 import os
+
+# uncomment for testing
+# os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
 import uuid
-from os import path
 import traceback
-import logging
-import iondb.anaserve.djangoinit
 import iondb.rundb.models
 
-__version__ = filter(str.isdigit, "$Revision: 74807 $")
-
-logger = get_task_logger(__name__)
+__version__ = filter(str.isdigit, '$Revision: 74807 $')
 
 
-def numBarcodes(r):
-    """Count the number of barcodes in this run that weren't filtered out of the views.py output """
-    nBarcodes = 0;
+def num_barcodes(run):
+    """Count barcodes in run not filtered out of the views.py output """
+    nbarcodes = 0
 
     try:
-        filename = os.path.join(r.get_report_dir(), 'basecaller_results', 'datasets_basecaller.json')
-        with open(filename) as fp:
-            basecallerDict = simplejson.load(fp)
-            read_groups = basecallerDict['read_groups']
-            for read_group in read_groups:
+        filename = os.path.join(run.get_report_dir(),
+                                'basecaller_results',
+                                'datasets_basecaller.json')
+        with open(filename) as inputfile:
+            basecallerdict = simplejson.load(inputfile)
+            read_groups = basecallerdict['read_groups']
+            for grp in read_groups:
                 try:
-                    if not read_groups[read_group]['filtered']:
-                        if "nomatch" not in read_groups[read_group]['barcode_name']:
-                            nBarcodes = nBarcodes + 1
-                except:
+                    if not read_groups[grp]['filtered']:
+                        if 'nomatch' not in read_groups[grp]['barcode_name']:
+                            nbarcodes = nbarcodes + 1
+                except KeyError:
                     pass
-    except:
+                except:
+                    pass  # print traceback.format_exc()
+    except IOError:
         pass
-    return nBarcodes
+    except:
+        pass  # print traceback.format_exc()
+
+    return nbarcodes
 
 
 @app.task
-def createRSMExperimentMetrics(resultId):
-    """ Creates a file named TSExperiment-UUID.txt that contains metrics from the Results of an experiment."""
-    logger.debug("createRSMExperimentMetrics begins for resultId" + str(resultId))
+def createRSMExperimentMetrics(result_id):
+    """Creates file TSExperiment-UUID.txt with metrics for an experiment."""
+    logger = get_task_logger(__name__)
+    logger.debug('createRSMExperimentMetrics begins for resultId=' +
+                 str(result_id))
     try:
-        r = iondb.rundb.models.Results.objects.get(id=resultId)
-        if not r:
+        run = iondb.rundb.models.Results.objects.get(id=result_id)
+        if not run:
             return 1
-        logger.debug("createRSMExperimentMetrics after results objects")
+        logger.debug('createRSMExperimentMetrics after results objects')
 
         # initialize metrics object
         metrics = []
 
         # information from explog
-        e = r.experiment
+        exp = run.experiment
 
         try:
-            v = e.chipType
-            if v:
-                metrics.append('chiptype:' + str(v))
+            chiptype = exp.chipType
+            if chiptype:
+                metrics.append('chiptype:' + str(chiptype))
         except:
-            pass
+            pass  # print traceback.format_exc()
 
-        explog = e.log
-        keys = [
-            'serial_number',
-            'run_number',
-            'chipbarcode',
-            'seqbarcode',
-            'flows',
-            'cycles',
-            'gain',
-            'noise',
-            'cal_chip_high_low_inrange'
-            ]
+        try:
+            if exp.sequencekitname:
+                metrics.append('seqkit:' + str(exp.sequencekitname))
+        except:
+            pass  # print traceback.format_exc()
 
-        for k in keys:
+        explog = exp.log
+        keys = ['serial_number',
+                'run_number',
+                'chipbarcode',
+                'seqbarcode',
+                'flows',
+                'cycles',
+                'gain',
+                'noise',
+                'cal_chip_high_low_inrange'
+                ]
+
+        for key in keys:
             try:
-                v = explog.get(k)
-                if v:
-                    metrics.append(k + ':' + str(v))
+                val = explog.get(key)
+                if val:
+                    metrics.append(key + ':' + str(val))
             except:
-                pass
+                pass  # print traceback.format_exc()
 
         # information from libmetrics
-        keys = [
-            'sysSNR',
-            'aveKeyCounts',
-            'total_mapped_target_bases',
-            'totalNumReads',
-            'raw_accuracy',
-            ]
-        for k in keys:
+        keys = ['sysSNR',
+                'aveKeyCounts',
+                'total_mapped_target_bases',
+                'totalNumReads',
+                'raw_accuracy',
+                ]
+        for key in keys:
             try:
                 # there should be only one libmetrics in the set
-                v = r.libmetrics_set.values()[0][k]
-                if v:
-                    metrics.append(k + ':' + str(v))
-            except Exception as err:
+                val = run.libmetrics_set.values()[0][key]
+                if val:
+                    metrics.append(key + ':' + str(val))
+            except IndexError:
                 pass
+            except:
+                pass  # print traceback.format_exc()
 
         # information from quality metrics
-        keys = [
-            'q17_mean_read_length',
-            'q20_mean_read_length',
-            ]
-        for k in keys:
+        keys = ['q17_mean_read_length',
+                'q20_mean_read_length',
+                ]
+        for key in keys:
             try:
                 # there should be only one qualitymetrics in the set
-                v = r.qualitymetrics_set.values()[0][k]
-                if v:
-                    metrics.append(k + ':' + str(v))
-            except Exception as err:
+                val = run.qualitymetrics_set.values()[0][key]
+                if val:
+                    metrics.append(key + ':' + str(val))
+            except IndexError:
                 pass
+            except:
+                pass  # print traceback.format_exc()
 
         try:
-            metrics.append("RunType:" + e.plan.runType)
-        except Exception as err:
-            pass
-
-        eas = e.get_EAS()
-        try:
-            if (eas.targetRegionBedFile == ""):
-                eas.targetRegionBedFile = "none"
-            if (eas.hotSpotRegionBedFile == ""):
-                eas.hotSpotRegionBedFile = "none"
-            metrics.append("targetRegionBedFile:" + eas.targetRegionBedFile);
-            metrics.append("hotSpotRegionBedFile:" + eas.hotSpotRegionBedFile);
-        except Exception as err:
-            pass
-
-        try:
-            # metrics.append("runPlanName:" + e.plan); not wanted
-            metrics.append("isBarcoded:" + str(e.isBarcoded()));
-            nBarcodes = numBarcodes(r)
-            metrics.append("numBarcodes:" + str(nBarcodes));
+            if exp.plan.metaData is not None:
+                key = 'fromTemplate'
+                if key in exp.plan.metaData:
+                    metrics.append('fromTmpl:' + exp.plan.metaData[key])
         except:
-            pass
+            pass  # print traceback.format_exc()
+
+        try:
+            if exp.plan.metaData is not None:
+                key = 'fromTemplateSource'
+                if key in exp.plan.metaData:
+                    metrics.append('fromTmplSrc:' + exp.plan.metaData[key])
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            metrics.append('RunType:' + exp.plan.runType)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if exp.plan.sampleTubeLabel is not None:
+                if len(exp.plan.sampleTubeLabel) > 0:
+                    metrics.append('sampTube:' + exp.plan.sampleTubeLabel)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(exp.plan.templatingKitName) > 0:
+                metrics.append('tplkit:' + exp.plan.templatingKitName)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if exp.plan.libraryReadLength is None:
+                metrics.append('libRdLn:none')
+            else:
+                metrics.append('libRdLn:' + str(exp.plan.libraryReadLength))
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(exp.plan.irworkflow) > 0:
+                metrics.append('irworkflow:' + exp.plan.irworkflow)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(exp.plan.applicationGroup.name) > 0:
+                metrics.append('appGp:' + exp.plan.applicationGroup.name)
+        except:
+            pass  # print traceback.format_exc()
+
+        eas = exp.get_EAS()
+        try:
+            if eas.targetRegionBedFile == '':
+                eas.targetRegionBedFile = 'none'
+            if eas.hotSpotRegionBedFile == '':
+                eas.hotSpotRegionBedFile = 'none'
+            metrics.append('targetRegionBedFile:' + eas.targetRegionBedFile)
+            metrics.append('hotSpotRegionBedFile:' + eas.hotSpotRegionBedFile)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(eas.selectedPlugins) <= 0:
+                metrics.append('pluginsUsed:none')
+            else:
+                plugins = ''
+                for plugin in eas.selectedPlugins:
+                    if len(plugins) > 0:
+                        plugins = plugins + ','
+                    plugins = plugins + str(plugin)
+
+                metrics.append('pluginsUsed:' + plugins)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(eas.reference) > 0:
+                metrics.append('reflib:' + eas.reference)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(eas.threePrimeAdapter) > 0:
+                metrics.append('3pAdapter:' + eas.threePrimeAdapter)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if len(eas.barcodeKitName) > 0:
+                metrics.append('barcodeSet:' + eas.barcodeKitName)
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            ir_account_name = get_ir_account_name(eas)
+            if ir_account_name:
+                metrics.append('irCfgd:yes')
+            else:
+                metrics.append('irCfgd:no')
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            if eas.libraryKitName:
+                metrics.append('libkit:' + str(eas.libraryKitName))
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            metrics.append('isBarcoded:' + str(exp.isBarcoded()))
+        except:
+            pass  # print traceback.format_exc()
+
+        try:
+            nbarcodes = num_barcodes(run)
+            metrics.append('numBarcodes:' + str(nbarcodes))
+        except:
+            pass  # print traceback.format_exc()
 
         try:
             # get the names of all Ion Chef kits
-            ion_chef_kit_names = iondb.rundb.models.KitInfo.objects.filter(kitType="IonChefPrepKit").values_list('name', flat=True)
+            kits = (iondb.rundb.models.KitInfo.objects.filter
+                    (kitType='IonChefPrepKit').values_list('name', flat=True))
 
-            # if the kit for this run is in the list of Ion Chef kits, then this run was an Ion Chef run.
-            if e.plan.templatingKitName in ion_chef_kit_names:
-                metrics.append("chef:y");
+            # if kit in list of Chef kits, then this run was an Ion Chef run.
+            if exp.plan.templatingKitName in kits:
+                metrics.append('chef:y')
             else:
-                metrics.append("chef:n");
+                metrics.append('chef:n')
         except:
-            pass
+            pass  # print traceback.format_exc()
 
-        # report loading for this run (percent of addressable wells that contain ISPs)
+        # report loading for run (% addressable wells that contain ISPs)
         wells_with_isps = 0
         addressable_wells = 0
-        keys = [
-            'bead',
-            'empty',
-            'pinned',
-            'ignored',
-            ]
-        for k in keys:
+        keys = ['bead',
+                'empty',
+                'pinned',
+                'ignored',
+                ]
+        for key in keys:
             try:
-                v = r.analysismetrics_set.values()[0][k]
-                if v:
-                    addressable_wells = addressable_wells + v
-                    if k == 'bead':
-                        wells_with_isps = v
-            except Exception as err:
+                val = run.analysismetrics_set.values()[0][key]
+                if val:
+                    addressable_wells = addressable_wells + val
+                    if key == 'bead':
+                        wells_with_isps = val
+            except IndexError:
                 pass
+            except:
+                pass  # print traceback.format_exc()
 
-        if (addressable_wells > 0):
-            percent_loaded = 100.0 * float(wells_with_isps) / float(addressable_wells)
-            pstr = 'loading:{0:.3}'.format(percent_loaded)
+        if addressable_wells > 0:
+            pctload = 100.0 * float(wells_with_isps) / float(addressable_wells)
+            pstr = 'loading:{0:.3}'.format(pctload)
             metrics.append(pstr)
 
         # write out the metrics
-        x = uuid.uuid1()
-        fname = os.path.join("/var/spool/ion/", 'TSexperiment-' + str(x) + '.txt')
-        f = open(fname, 'w')
+        runid = uuid.uuid1()
+        fname = os.path.join('/var/spool/ion/',
+                             'TSexperiment-' + str(runid) + '.txt')
+        # fname = os.path.join('/home/ionadmin/jt/',
+        #                     'TSexperiment-' + str(result_id) + '.txt')
+        outfile = open(fname, 'w')
 
         try:
-            f.write("\n".join(metrics))
-            f.write("\n")
+            outfile.write('\n'.join(sorted(metrics)))
+            outfile.write('\n')
         finally:
-            f.close()
+            outfile.close()
             os.chmod(fname, 0666)
 
-        logger.debug("RSM createExperimentMetrics done for resultsId " + str(resultsId))
-        return True, "RSM createExperimentMetrics"
+        logger.debug('RSM createExperimentMetrics done resultId=' +
+                     str(result_id))
+        return True, 'RSM createExperimentMetrics'
     except:
         logger.error(traceback.format_exc())
         return False, traceback.format_exc()
+
+
+def get_ir_account_name(eas):
+    """Return IR account name, or None if not found."""
+    try:
+        if eas.selectedPlugins:
+            if eas.selectedPlugins.IonReporterUploader:
+                if eas.selectedPlugins.IonReporterUploader.userInput:
+                    inpt = eas.selectedPlugins.IonReporterUploader.userInput
+                    if inpt.accountName:
+                        if len(inpt.accountName) > 0:
+                            return inpt.accountName
+    except AttributeError:
+        pass
+    except:
+        pass  # print traceback.format_exc()
+    return None
+
+
+# uncomment these lines for unit testing
+# def main():
+#    for run in iondb.rundb.models.Results.objects.all():
+#        print 'id', run.id, run
+#        createRSMExperimentMetrics(run.id)
+#
+#
+# if __name__ == "__main__":
+#    main()

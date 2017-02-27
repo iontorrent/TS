@@ -248,7 +248,11 @@ class KitInfo(models.Model):
         ("s5ExTKit", "S5 ExT kit categories"),
         ("s5541", "S5 541 kit categories"),
         ("s5v1Kit;flowOverridable;multipleReadLength;s5541", "S5 541 v1 templating kit categories"),
-        ("s5HidKit", "S5 HID kit categories")
+        ("s5HidKit", "S5 HID kit categories"),
+        ('multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep', 'Proton templating size, read length, RNA WT Chef Protocol'),
+        ('multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;hidSamplePrep', 'templating size, read length, HID Chef Protocol'),
+        ('s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5RnaWTSamplePrep', "S5 flow count, read length, RNA WT Protocol"),
+        ('samplePrepProtocol;hidSamplePrep', 'Library kit-based HID Sample Prep Protocol'),
     )
     categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
     libraryReadLength = models.PositiveIntegerField(default=0)
@@ -277,13 +281,15 @@ class KitInfo(models.Model):
         ('540', 'S5 540'),
         ('541', 'S5 541'),
         ('521;530', 'S5 521 or 530'),
-        ('541', 'S5 541')
+        ('530', 'S5 530'),
+        ('520;521;530', 'S5 520 or 521 or 530')
     )
 
     #compatible chip types
     chipTypes = models.CharField(max_length=127, choices=ALLOWED_CHIP_TYPES, default='', blank=True)
     
     defaultFlowOrder = models.ForeignKey("FlowOrder", blank=True, null=True, default=None)
+    defaultThreePrimeAdapter = models.ForeignKey("ThreePrimeadapter", blank=True, null=True, default=None)
     
     uid = models.CharField(max_length=10, unique=True, blank=False)
 
@@ -366,6 +372,71 @@ class ApplicationGroupManager(models.Manager):
     def get_by_natural_key(self, uid):
         return self.get(uid=uid)
 
+class common_CVManager(models.Manager):
+
+    def get_by_natural_key(self, uid):
+        return self.get(uid=uid)
+
+
+class common_CV(models.Model):
+    # Common Control vacabulary model - TS-12954
+    # The current use case of this model is to allow the same Chef script to be executed with slight variation in steps and/or parameters
+
+    # FOREIGN KEY DEFINITIONS
+    # samplePrepProtocol_applProduct_set from ApplProduct
+
+    ALLOWED_CONTROL_VACABULORIES = (
+        ('samplePrepProtocol', 'Sample Prep Protocol'),
+    )
+
+    cv_type = models.CharField(max_length=127, choices=ALLOWED_CONTROL_VACABULORIES, blank=False, null=False)
+    value = models.CharField(max_length=127, blank=False, null=False)
+    displayedValue = models.CharField(max_length=127, blank=False, null=False, unique=True)
+    description = models.CharField(max_length=1024, blank=True, null=True)
+    isDefault = models.BooleanField(default=True)
+    isActive = models.BooleanField(default=True)
+
+    ALLOWED_CATEGORIES = (
+        ('', 'Unspecified'),
+        ('hidSamplePrep', 'HID Sample Prep Protocal'),
+        ('protonRnaWTSamplePrep', 'Proton RNA WT Sample Prep Protocal'),
+        ('s5RnaWTSamplePrep', 'S5 RNA WT Sample Prep Protocal'),
+        ('protonRnaWTSamplePrep;s5RnaWTSamplePrep', 'RNA WT Sample Prep Protocal')
+    )
+    categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+
+    # compatible sample prep instrument type
+    ALLOWED_SAMPLE_PREP_INSTRUMENT_TYPES = (
+        ('', 'Unspecified'),
+        ('OT', 'OneTouch'),
+        ('IC', 'IonChef'),
+        ("OT_IC", "Both OneTouch and IonChef")
+    )
+    samplePrep_instrumentType = models.CharField(max_length=64, choices=ALLOWED_SAMPLE_PREP_INSTRUMENT_TYPES,
+                                                 default='', blank=True)
+
+    # compatible sequencing instrument type
+    ALLOWED_SEQUENCING_INSTRUMENT_TYPES = (
+        ('', 'Any'),
+        ('pgm', 'PGM'),
+        ('proton', 'Proton'),
+        ('s5', 'S5')
+    )
+    sequencing_instrumentType = models.CharField(max_length=64, choices=ALLOWED_SEQUENCING_INSTRUMENT_TYPES,
+                                                 default='', blank=True)
+
+    uid = models.CharField(max_length=10, unique=True, blank=False)
+
+    objects = common_CVManager()
+
+    def __unicode__(self):
+        return u'%s' % self.displayedValue
+
+    def natural_key(self):
+        return (self.uid,)  # must return a tuple
+
+    class Meta:
+        unique_together = (('cv_type', 'value'),)
 
 class ApplicationGroup(models.Model):
 
@@ -475,6 +546,15 @@ class ApplProduct(models.Model):
     defaultFlowOrder = models.ForeignKey("FlowOrder", related_name='flowOrder_applProduct_set', blank=True, null=True)
 
     isDefaultForInstrumentType = models.BooleanField(default=False)
+
+    ALLOWED_CATEGORIES = (
+        ('', 'Unspecified'),
+        ('hidSamplePrep', 'HID Sample Prep Protocal'),
+        ('protonRnaWTSamplePrep', 'Proton RNA WT Sample Prep Protocal'),
+        ('s5RnaWTSamplePrep', 'S5 RNA WT Sample Prep Protocal')        
+    )
+    categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+    defaultSamplePrepProtocol = models.ForeignKey(common_CV, related_name='common_CV_applProduct_set', blank=True, null=True)
 
     def __unicode__(self):
         return u'%s' % self.productName
@@ -815,6 +895,9 @@ class PlannedExperiment(models.Model):
 
     # this will be set based on plan creation method, e.g. gui, csv, api, etc.
     origin = models.CharField(max_length=64, blank=True, null=True, default="")
+
+    # this is to use alternate chef script protocal
+    samplePrepProtocol = models.CharField(max_length=64, blank=True, null=True, default="")
 
     objects = PlannedExperimentManager()
 
@@ -1264,7 +1347,7 @@ class PlannedExperiment(models.Model):
                 'cycles': 0,
                 'expCompInfo': '',
                 'baselineRun': '',
-                'flowsInOrder': exp_kwargs.get('flowsInOrder', ''),
+                'flowsInOrder': exp_kwargs.get('flowsInOrder') or '',
                 'ftpStatus': '',
                 'displayName': '',
                 'storageHost': '',
@@ -2192,7 +2275,8 @@ class SampleAnnotation_CV(models.Model):
         ('relationship', 'Relationship'),
         ('relationshipRole', 'RelationshipRole'),
         ('relationshipGroup', 'RelationshipGroup'),
-        ('cancerType', "CancerType")
+        ('cancerType', "CancerType"),
+        ('controlType', 'ControlType')
     )
 
     annotationType = models.CharField(max_length=127, blank=False, null=False, choices=ALLOWED_TYPES)
@@ -2214,6 +2298,7 @@ class SampleAnnotation_CV(models.Model):
 
     def natural_key(self):
         return (self.uid,)  # must return a tuple
+
 
 
 class SampleSet(models.Model):
@@ -2338,13 +2423,13 @@ class SampleSetItem(models.Model):
     relationshipRole = models.CharField(max_length=127, blank=True, null=True)
     relationshipGroup = models.IntegerField()
     description = models.CharField(max_length=1024, blank=True, null=True, default='')
-    creator = models.ForeignKey(User, related_name="created_sampleSetItem")
+    controlType = models.CharField(max_length=127, blank=True, null=True, default='')
 
+    creator = models.ForeignKey(User, related_name="created_sampleSetItem")
     # This will be set to the time a new record is created
     creationDate = models.DateTimeField(auto_now_add=True)
 
     lastModifiedUser = models.ForeignKey(User, related_name="lastModified_sampleSetItem")
-
     # This will be set to the current time every time the model is updated
     lastModifiedDate = models.DateTimeField(auto_now=True)
 
@@ -4681,6 +4766,7 @@ class ThreePrimeadapter(models.Model):
     description = models.CharField(max_length=1024, blank=True)
 
     isDefault = models.BooleanField("use this by default", default=False)
+    isActive = models.BooleanField(default=True)
 
     uid = models.CharField(max_length=32, unique=True, blank=False)
 

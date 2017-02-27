@@ -3,7 +3,6 @@
 # Purpose: update existing all_local with new settings
 set -e
 target=/usr/share/ion-tsconfig/ansible/group_vars/all_local
-target=./all_local
 [[ ! -f "$target" ]] && exit
 
 #=============================================================================
@@ -65,4 +64,14 @@ if ! grep -q ^UPDATE_SYSTEM "$target"; then
     lineno=$(grep -n "End of user customizable section" "$target"|awk -F: '{print $1}')
     lineno=$((lineno-1))
     sed -i "${lineno}i $line\n" "$target"
+fi
+
+#=============================================================================
+# Edits for TSS5.2.1 release
+#=============================================================================
+# ubuntu_apt_server: new variable defined
+if ! grep -q ^ubuntu_apt_server "$target"; then
+    line="ubuntu_apt_server: ionupdates.com"
+    # insert this line above line starting with 'tsconfig_dir'
+    sed -i "/^tsconfig_dir.*$/i $line\n" "$target"
 fi

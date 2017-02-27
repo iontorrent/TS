@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8">
+<head>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+    <link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
+    <link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+
+    <!--link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/-->
+    <link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+    <link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="lifechart/sumoselect.css" />
+    <link rel="stylesheet" type="text/css" href="lifechart/lifegrid.css" />
+    <link rel="stylesheet" type="text/css" href="lifechart/tabbar.css"/>
+
+    <script type="text/javascript" src="lifechart/jquery.sumoselect.min.js"></script>
+    <script type="text/javascript" src="lifechart/DLDE_dialog.js"></script>
+
+    <style type="text/css">
+        body {background:white}
+        .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+    </style>
+
+    {% load humanize %}
+
+    {% if autorefresh %}
+    <META HTTP-EQUIV="refresh" CONTENT="15">
+    {% endif %}
+
+</head>
+
+<title>Torrent ImmuneResponseRNA Report</title>
+<body>
+
+<div class="container-fluid">
+
+    <h1><center>ImmuneResponseRNA Report</center></h1>
+    <h3><center>{{run_name}}<center></center></h3>
+    <h2><center>Analysis Summary</center></h2>
+
+    <h4>
+        {% if target_regions %}
+        <b>Target regions:</b> {{target_regions}}<br/>
+        {% endif %}
+        <b>Genes of interest region: </b> {{user_target_regions_name}}<br/>
+        {% if filter_options %}
+        <b>Read filters:</b> {{filter_options}}<br/>
+        {% endif %}
+        {%if time_of_analysis %}
+        <b>Time of analysis: </b> {{time_of_analysis}}<br/>
+        {% endif %}
+    </h4>
+
+    <script type="text/javascript">
+        function numberWithCommas(x) {
+            if( !x ) return "NA";
+            var parts = x.toString().split(".");
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            return parts.join(".");
+        }
+    </script>
+
+    <!-- Capture django variable in to javascript -->
+    <script>
+        var barcodes_json = {{barcode_results|safe}};
+    </script>
+
+    <script type="text/javascript">
+        $(document).ready(function() {
+            if (typeof barcodes_json !== 'undefined'){
+                $("#barcodes").kendoGrid({
+                    height: 'auto',
+                    groupable: false,
+                    scrollable: false,
+                    selectable: false,
+                    sortable: { mode: "multiple", allowUnsort: true },
+                    pageable : { pageSizes:[5,10,20,50,100,1000] },
+                    dataSource: {
+                        data: barcodes_json,
+                        schema: { model: { fields: {
+                            barcode_name: {type:"string"},
+                            sample: {type:"string"},
+                            mapped_reads: {type:"number"},
+                            valid_target: {type:"float"},
+                            detected_target: {type:"float"},
+                            target1: {type:"float"},
+                            target2: {type:"float"},
+                            {% if ercc_track %}
+                                ercc_target: {type:"float"},
+                            {% endif %}
+                        } } },
+                        pageSize: 20
+                    },
+                    columns: [
+                        {field:"barcode_name"},
+                        {field:"sample"},
+                        {field:"mapped_reads"},
+                        {field:"valid_target"},
+                        {field:"detected_target"},
+                        {field:"target1"},
+                        {field:"target2"},
+                        {% if ercc_track %}
+                            {field:"ercc_target"},
+                        {% endif %}
+                    ],
+                    rowTemplate: kendo.template($("#barcodesRowTemplate").html())
+                });
+            }
+        });
+    </script>
+
+    <div>
+        <table id="barcodes" style="width:100%">
+            <thead>
+            <tr>
+                <th title="{{help_dict.barcode_name}}">Barcode Name</th>
+                <th title="{{help_dict.sample_name}}">Sample</th>
+                <th title="{{help_dict.mapped_reads}}">Mapped Reads</th>
+                <th title="{{help_dict.valid_reads}}">Valid Reads</th>
+                <th title="{{help_dict.target1}}">Targets >= 1 reads</th>
+                <th title="{{help_dict.target2}}">Targets >= 2 reads</th>
+                <th title="{{help_dict.detected_target}}">Targets >= 10 reads</th>
+                {% if ercc_track %}
+                <th title="{{help_dict.ercc_target}}">ERCC</th>
+                {% endif %}
+            </tr>
+            </thead>
+            <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
+            <tr>
+                <td> #= barcode_details #</td>
+                <td> #= (sample) ? sample : "None" #</td>
+                <td> #= numberWithCommas(mapped_reads) # </td>
+                <td>#= valid_target #</td>
+                <td>#= target1 #</td>
+                <td>#= target2 #</td>
+                <td>#= detected_target #</td>
+                {% if ercc_track %}
+                    <td>#= ercc_target #</td>
+                {% endif %}
+            </tr>
+            </script>
+        </table>
+    </div>
+
+    {% if num_barcodes_filtered > 0 %}
+        <h3><span title="Reads for some barcodes were ignored as having less than {{barcode_filter}}% of the file size of the largest barcode aligned reads file. To include these barcodes in the analysis, re-run with the Filter Barcodes option unchecked." style="cursor:help;color:red">WARNING: {{num_barcodes_filtered}} barcodes were discounted from analysis as having relatively too few reads.</span></h3>
+    {% endif %}
+
+    <script type="text/javascript">
+        $(document).ready(function() {
+        $('.tabs .tab-title a').on('click', function(e)  {
+            var currentAttrValue = $(this).attr('href');
+            $('.tabs-content '+currentAttrValue).show().siblings().hide();
+            $(this).parent('li').addClass('active').siblings().removeClass('active');
+            e.preventDefault();
+        });
+        });
+    </script>
+
+    <script type="text/javascript">
+        var img_width = 0, img_height = 0 ;
+        var img = new Image();
+        img.onload = function() {
+            img_width = this.width;
+            img_height = this.height;
+            var maxWidth = screen.availWidth-10;
+            var maxHeight = screen.availHeight-10;
+            if( img_width > maxWidth ) img_width = maxWidth;
+            if( img_height > maxHeight ) img_height = maxHeight;
+        }
+        img.src = $("#paircor_img").attr("src");
+        $(".unscaled_image_window").click(function() {
+            window.open(this.href,"_blank",'height='+img_height+',width='+img_width+',titlebar=0,toolbar=0,location=0,status=0');
+            return false;
+        });
+    </script>
+
+    {% if bctable %}
+    <ul class="tabs" data-tab>
+        <li class="tab-title active"><a href="#QAPlots">Sample Characteristics</a></li>
+        <li class="tab-title"><a href="#CorPlot">Sample Correlation</a></li>
+
+        {% if user_target_regions_name != 'None' %}
+        <li class="tab-title"><a href="#UserTargets">Analysis of Selected Targets</a></li>
+        {% endif %}
+        <li class="tab-title"><a href="#GeneHeatmap">Analysis of All Targets</a></li>
+        {% if sample_grouping %}
+        <li class="tab-title"><a href="#SampleGrouping">Sample Grouping Analysis</a></li>
+        {% endif %}
+    </ul>
+
+    <div class="tabs-content">
+        <div class="content active" id="QAPlots">
+            <table style="margin-left:auto;margin-right:auto;">
+                <tr>
+                    {% if genepdfplot != 'None' %}
+                    <td><a href="{{genepdfplot}}" title="Distribution of genes across barcodes showing the frequency of numbers of genes having similar log2 reads counts. All curves are plotted on the same axis scales. Note that this does not show genes that had 0 reads but these are included in the normalization so that areas under the curves do not integrate to 1. Barcodes with more genes represented will have proportionally the larger areas under these curves."><img style="height:auto" src="{{genepdfplot}}" alt="Distribution of Gene Reads"/></a></td>
+                    {% endif %}
+                    {% if housekeepingplot != 'None' %}
+                    <td><a href="{{housekeepingplot}}" title="Housekeeping gene expression."><img style="height:auto" src="{{housekeepingplot}}" alt="Housekeeping gene expression"/></a></td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    {% if heatmapplot != 'None' %}
+                    <td><a href="{{heatmapplot}}" title="A heatmap of Spearman correlation r-values from comparing log2(gene reads) of pairs of barcodes, with dendrogram reflecting ordering of barcodes as being most similar by these values."><img style="height:auto" src="{{heatmapplot}}" alt="Heatmap of Barcode Pair Correlations"/></a></td>
+                    {% endif %}
+                    {% if pcasampleplot != 'None' %}
+                    <td><a href="{{pcasampleplot}}" title="Sample relationship based on PCA"><img style="..." src="{{pcasampleplot}}" alt="Sample PCA plot"></a> </td>
+                    {% endif %}
+                </tr>
+            </table>
+        </div>
+
+
+        <div class="content" id="CorPlot">
+            <div style="text-align:center">
+                {% if cpairsplot != 'None' %}
+                <a class="unscaled_image_window" href="{{cpairsplot}}" title='Barcode read pair correlation plot. Lower panels show log2(RPM+1) values plotted for each pair of barcodes, with linear least squares regression line overlaid and line slope reported. Upper panels show Pearson Correlation r-value for the regression line. Diagonal panels shows the frequency density plot for the individual log(RPM+1) values for each barcode. (If only a single barcode had reads then just the density plot is displayed.) Click to open an expanded view in a new window.'><img id="paircor_img" style="width:auto" src="{{cpairsplot}}" alt="Barcode read pair correlation plot."/></a>
+                {% endif %}
+            </div>
+        </div>
+        {% if user_target_regions_name != 'None' %}
+        <div class="content" id="UserTargets">
+            <table style="...">
+                <tr>
+                    {% if heatmap_user_target_regions_plot != 'None' %}
+                    <td>
+                    <a href="{{heatmap_user_target_regions_plot}}" title="A clustering heatmap of genes of interest."><img src="{{heatmap_user_target_regions_plot}}" alt="Clustering heatmap of genes of interest."/></a>
+                    </td>
+                    {% endif %}
+                    {% if fold_change_user_target_plot %}
+                    <td>
+                        <a href="{{fold_change_user_target_plot}}" title="Fold changes for genes of interest."><img src="{{fold_change_user_target_plot}}" alt="Cold changes of genes of interest."/></a>
+                    </td>
+                    {% endif %}
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+        <div class="content" id="GeneHeatmap">
+            {% if genebcplot != 'None' %}
+            <div style="width:50%;margin:0 auto;width:800px;height:900px;border:1px solid #ccc;overflow:auto">
+                <a href="{{genebcplot}}" title="A heatmap of 250 genes showing the most variation in representation across barcodes as measured by the coefficient of variation (CV) of normalized reads counts for genes that have at least one barcode with at least 100 RPM reads, plotted using log10 of those counts. For this plot barcodes will be omitted if they had less than 10,000 total reads."><img src="{{genebcplot}}" alt="Heatmap of Barcode log10(RPM) for 250 genes showing largest variation across barcodes."/></a>
+            </div>
+            {% endif %}
+        </div>
+        {% if sample_grouping %}
+        <div class="content" id="SampleGrouping">
+            <div style="width:50%;margin:0 auto;width:800px;height:900px;border:1px solid #ccc;overflow:auto">
+                <a href="{{fcp_volcano_plot}}" title="Differential expression analysis based on pre-defined sample grouping "><img src="{{fcp_volcano_plot}}" alt="Differential expression analysis"/></a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if autorefresh %}
+        <br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+        <a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
+        <div style="text-align:center">Click here to refresh</div></a>
+    {% endif %}
+
+    {% if bctable %}
+    <li><a href="{{bctable}}" title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a></li>
+    {% endif %}
+    {% if bcmatrix %}
+    <li><a href="{{bcmatrix}}" title='Click to download a table file of reads assigned to individual {{bcmtype}}s for each barcode.'>Download absolute read counts data</a></li>
+    {% endif %}
+    {% if rpmbcmatrix %}
+    <li><a href="{{rpmbcmatrix}}" title='Click to download a table file of RPM (Reads Per Million reads) values assigned to individual {{bcmtype}}s for each barcode.'>Download RPM data (normalized by total read counts)</a></li>
+    {% endif %}
+    {% if hk_scaled_log2_count %}
+    <li><a href="{{hk_scaled_log2_count}}" title='Download a table of mean housekeeping gene scaled log2 RPM.'>Download mean housekeeping scaled log2 count data</a></li>
+    {% endif %}
+
+    {% if chp_rpm_zip %}
+    <li><a href="{{chp_rpm_zip}}" title='Download zipped CHP files.'>Download CHP files normalized by RPM</a></li>
+    {% endif %}
+
+    {% if chp_housekeeping_zip %}
+    <li><a href="{{chp_housekeeping_zip}}" title='Download zipped CHP file for TAC.'>Download CHP files normalized by mean housekeeping genes</a></li>
+    {% endif %}
+
+    {% if deratiomatrix %}
+    <br/><b>{{deratiotargets}}</b>
+    <li><a href="{{deratiomatrix}}" title='Click to download a table file of largest target (gene) expression ratios over the barcoded runs. Minimum, maximum and average RPM reads are provided per target. The differential expression ratio is given by maxRPM/minRPM but assuming a value of 10 read counts for any barcode that had less than 10 reads.'>Download differential expression table</a></li>
+    {% endif %}
+
+    {% if gDNA_H2O_data %}
+    <li><a href="{{gDNA_H2O_data}}" title='Background_expression_from_gDNA_H2O_negcontrol.'>Download background expression from genomic DNA and H2O neg_control</a></li>
+    {% endif %}
+
+</div>
+
+<br/>
+
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+    <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+    <div class="pull-right">
+        <p>For research use only. Not for therapeutic or diagnostic use.</p>
+        <p><span class="copyright">&copy; 2016 Thermo Fisher Scientific. All Rights Reserved.</span>
+            <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
+            <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+    </div>
+</div> </div> </div> </div>
+<br/>
+</body>
+</html>
+

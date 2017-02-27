@@ -53,7 +53,7 @@ def get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net
         "plugin_dir": plugin['path'], # compat
         "plugin_name": plugin['name'], # compat
         "plugin": plugin, # name,version,id,path
-        "pk": primary_key, # Result PK
+        "pk": int(primary_key), # Result PK
         "tmap_version": ion_params.get('tmap_version',''),
         "library": ion_params.get('referenceName',''),
         "chipType": ion_params.get('chipType',''),

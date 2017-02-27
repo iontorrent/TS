@@ -1,23 +1,27 @@
 /* Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved.
    Remote Support and Monitor Agent - Torrent Server
 */
+// for strdup
 #define _BSD_SOURCE
 // for sigprocmask
 #define _POSIX_SOURCE
 
 #include <errno.h>
+#include <math.h>		// fabs
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
-#include <pthread.h>
-#include <unistd.h>
 #include <string.h>
 #include <time.h>
-#include <sys/vfs.h>
-#include <stdlib.h>
+#include <unistd.h>
 #include <openssl/opensslv.h>
+#include <sys/vfs.h>	// statfs
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 
+// keep these Ae* includes in this order
 #include "AeOSLocal.h"
 #include "AeTypes.h"
 #include "AeError.h"
@@ -25,8 +29,6 @@
 #include "AeInterface.h"
 
 #include "parson.h"
-
-#include "AlarmMgr.h"
 #include "sshTunnelMgmt.h"
 
 #define DEFAULT_OWNER "drm-data_source"
@@ -42,7 +44,7 @@
 #define TS_CONTACTINFO	SPOOL_DIR "/ContactInfo.txt"
 #define INSTR_LIST		SPOOL_DIR "/InstrumentList.txt"
 #define ALT_SN			SPOOL_DIR "/serial_number.alt"
-#define LOC_FILE		SPOOL_DIR "/loc.txt"
+#define S5_SN			SPOOL_DIR "/serial_number_from_s5"
 #define RAIDINFO_FILE	SPOOL_DIR "/raidstatus.json"
 #define NEXENTA_DATA	SPOOL_DIR "/nexenta_data.txt"
 #define NEXENTA_CHECKSUM	SPOOL_DIR "/nexenta_md5sum.txt"
@@ -60,7 +62,6 @@ typedef enum {
 	STATUS_FILESERVERS,
 	STATUS_INSTRS,
 	STATUS_CONTACTINFO,
-	STATUS_LOCATIONINFO,
 	STATUS_NETWORK,
 	STATUS_EXPERIMENT,
 	STATUS_RAIDINFO,
@@ -133,7 +134,6 @@ AeInt32 iDeviceId, iServerId;
 static double percentFull = -1.0;
 static time_t lastVersionModTime = 0;
 static time_t lastContactInfoTime = 0;
-static time_t lastLocationInfoTime = 0;
 static char lastNexentaChecksum [64] = {0};
 static int wantConfigUpdate = 1;
 static char const * const gpuErrorFile = "/var/spool/ion/gpuErrors";
@@ -142,7 +142,6 @@ static char savedOsVersion[LINELEN] = {0};
 UpdateItem updateItem[] = {
 		{STATUS_VERSIONS, 120, 0},		// check every 2 min but only send updates if versions have changed
 		{STATUS_CONTACTINFO, 120, 0},	// check every 2 min but only send updates if contact info has changed
-		{STATUS_LOCATIONINFO,120, 0},	// check every 2 min but only send updates if location info has changed
 		{STATUS_EXPERIMENT, 120, 0},
 		{STATUS_NEXENTA, 300, 0},		// check every 5 min but only send updates if Nexenta info has changed
 		{STATUS_SERVICES, 360, 0},		// send status of all servers every 6 minutes, even if no change
@@ -155,8 +154,6 @@ UpdateItem updateItem[] = {
 };
 unsigned int numUpdateItems = sizeof(updateItem) / sizeof(UpdateItem);
 webProxy_t proxyInfo;
-static pthread_t locationThreadId = 0;
-static int locationThreadExited = 0;
 
 int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem);
 void SendVersionInfo(AeDRMDataItem *dataItem);
@@ -164,7 +161,7 @@ void SendServersStatus(AeDRMDataItem *dataItem);
 void GenerateVersionInfo();
 void SendFileServerStatus(AeDRMDataItem *dataItem);
 void checkEnvironmentForWebProxy();
-void readAlarmsFromJson(char const * const filename);
+void readAlarmsFromJson(char* filename);
 void buildRaidAlarmName(const int eNum, const int sNum, char const * const iName,
 		char * aName, size_t aNameSize);
 void WriteAeStringDataItem(char const * const subcat, char const * const key,
@@ -172,14 +169,13 @@ void WriteAeStringDataItem(char const * const subcat, char const * const key,
 void readGpuErrorFile(char const * const filename, int *gpuFound, int *allRevsValid);
 void getNexentaData(AeDRMDataItem *dataItem);
 void readNexentaData(char const * const filename, AeDRMDataItem *dataItem);
+int ReadOsVersion(char *OsVersion, const size_t OsVersionSize);
+char* getTsSerialNumber();
 
 // file upload callbacks
 static AeBool OnFileUploadBegin(AeInt32 iDeviceId, AeFileUploadSpec **ppUploads, AePointer *ppUserData);
 static AeBool OnFileUploadData(AeInt32 iDeviceId, AeFileStat **ppFile, AeChar **ppData, AeInt32 *piSize, AePointer pUserData);
 static void OnFileUploadEnd(AeInt32 iDeviceId, AeBool bOK, AePointer pUserData);
-static void SendLocationInfo(AeDRMDataItem *dataItem);
-void *locationThreadTask(void *args __attribute__((unused)));
-int ReadOsVersion(char *OsVersion, const size_t OsVersionSize);
 
 void trimTrailingWhitespace(char *inputBuf)
 {
@@ -373,21 +369,8 @@ void RSMInit()
 
 	// initialize the AgentInfo fields
 	agentInfo.modelNumber = strdup("ION-TS1");
-
-	char buf[256];
-	int ret = GetConfigEntry(TS_VERSIONS, ':', "serialnumber", buf, sizeof(buf));
-	if (ret != 0)
-		ret = GetConfigEntry(ALT_SN, ':', "serialnumber", buf, sizeof(buf));
-	if (ret != 0)
-		ret = GetConfigEntry(TS_VERSIONS, ':', "host", buf, sizeof(buf));
-	if (ret == 0) {
-		if (strlen(buf) == 0)
-			strcpy(buf, "unknown");
-		agentInfo.serialNumber = strdup(buf);
-	} else
-		agentInfo.serialNumber = strdup("unknown");
+	agentInfo.serialNumber = getTsSerialNumber();
 	agentInfo.pingRate = pingRate;
-
 	agentInfo.numInsts = 0;
 	agentInfo.serialNumberList = 0;
 
@@ -399,14 +382,6 @@ void RSMInit()
 	int rc = unlink(TS_SERVERS_OLD);
 	if (rc && errno != ENOENT)
 		fprintf(stderr, "%s: unlink: %s\n", __FUNCTION__, strerror(errno));
-
-	rc = pthread_create(&locationThreadId, NULL, locationThreadTask, NULL);
-	if (rc)
-		fprintf(stderr, "%s: pthread_create: %s\n", __FUNCTION__, strerror(rc));
-
-	rc = pthread_detach(locationThreadId);
-	if (rc)
-		fprintf(stderr, "%s: pthread_detach: %s\n", __FUNCTION__, strerror(rc));
 }
 
 void RSMClose()
@@ -481,9 +456,6 @@ void setUpSignalHandling()
 	rc = sigaction(SIGINT, &act, NULL);
 	if (rc)
 		fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
-	//rc = sigaction(SIGQUIT, &act, NULL);
-	//if (rc)
-	//	fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
 	rc = sigaction(SIGTERM, &act, NULL);
 	if (rc)
 		fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
@@ -582,8 +554,6 @@ int main(int argc, char *argv[])
 	AeDRMSetOnFileUploadData(OnFileUploadData);
 	AeDRMSetOnFileUploadEnd(OnFileUploadEnd);
 
-	AlarmMgrInit(iDeviceId, iServerId);
-
 	printf("Initialized!\n");
 
 	AeDRMDataItem dataItem;
@@ -629,9 +599,8 @@ int main(int argc, char *argv[])
 		AeDRMExecute(&timeLimit);
 	}
 
-	//  shutdown Axeda Agent Embedded 
+	//  shutdown Axeda Agent Embedded
 	printf("Shutting down...\n");
-	AlarmMgrSave();
 	AeShutdown();
 	RSMClose();
 
@@ -749,18 +718,6 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 		if (retVal == 0 && buf.st_mtime != lastContactInfoTime) {
 			lastContactInfoTime = buf.st_mtime;
 			SendContactInfo(dataItem, TS_CONTACTINFO);
-			// no need to set ret to 1, we have already posted the data
-		}
-	} break;
-
-	case STATUS_LOCATIONINFO: {
-		// check to see if the location info has been modified and if so update Axeda
-		struct stat buf;
-		memset(&buf, 0, sizeof(buf));
-		int retVal = stat(LOC_FILE, &buf);
-		if (retVal == 0 && buf.st_mtime != lastLocationInfoTime) {
-			lastLocationInfoTime = buf.st_mtime;
-			SendLocationInfo(dataItem);
 			// no need to set ret to 1, we have already posted the data
 		}
 	} break;
@@ -1079,22 +1036,8 @@ void SendVersionInfo(AeDRMDataItem *dataItem)
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	GetSoftwareVersion("configuration", "Config", dataItem, TS_VERSIONS);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("serialnumber", "Config", dataItem, TS_VERSIONS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-}
-
-static void SendLocationInfo(AeDRMDataItem *dataItem)
-{
-	GetSoftwareVersion("State", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("City", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("Street-Address", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("Org-Name", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("Postal-Code", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
+	//GetSoftwareVersion("serialnumber", "Config", dataItem, TS_VERSIONS);
+	//AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 }
 
 char *getTextUpToDelim(char * const start, const char delim, char * const output, const int outputSize)
@@ -1180,8 +1123,23 @@ void checkEnvironmentForWebProxy()
 	fclose(fp);
 }
 
+static void sendRaidAlarm(
+		char* alarmName,
+		const char* itemDesc)
+{
+    AeDRMDataItem dataItem;
+    memset(&dataItem, 0, sizeof(AeDRMDataItem));
+	AeGetCurrentTime(&dataItem.value.timeStamp);
+
+	dataItem.pName = alarmName;
+	dataItem.value.data.pString = (char*)itemDesc;
+	dataItem.value.iType = AeDRMDataString;
+	dataItem.value.iQuality = AeDRMDataGood;
+	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, &dataItem);
+}
+
 // Read raidstatus.json and identify the items with non-blank, non-good status
-void readAlarmsFromJson(char const * const filename)
+void readAlarmsFromJson(char* filename)
 {
 	JSON_Value *root_value;
 	JSON_Array *raid_status;
@@ -1258,12 +1216,9 @@ void readAlarmsFromJson(char const * const filename)
 
 			buildRaidAlarmName(encNum, slotNum, itemName, alarmName, LINE_LENGTH);
 
-			if (0 != strcmp("good", passFail)) {
-				AlarmMgr_AddAlarmByName(alarmName, itemDesc);
-			}
-			else {
-				AlarmMgr_DelAlarmByName(alarmName);
-			}
+			char itemData[256];
+			snprintf(itemData, 256, "%s%s", itemDesc, ((0 == strcmp("good", passFail)) ? " - CLEARED" : ""));
+			sendRaidAlarm(alarmName, itemData);
 		}
 
 	}
@@ -1562,12 +1517,60 @@ void readNexentaData(char const * const filename, AeDRMDataItem *dataItem)
 	}
 }
 
+int getTsVmSerialNumber(const int ret, char * const serial, const size_t serialLen)
+{
+	// Only write to "serial" output buf if this is a TsVm.
+	// Best way to know we’re on an S5 VM is to check for existence of the file /etc/init.d/mountExternal
+	struct stat statbuf;
+	int rc = stat("/etc/init.d/mountExternal", &statbuf);
+	if (rc == 0) {
+		rc = system("/opt/ion/RSM/s5serial.py");
+		if (WEXITSTATUS(rc) == 0) {
+			*serial = '\0';
+			FILE *fp = fopen("/var/spool/ion/serial_number_from_s5", "rb");
+			if (fp) {
+				char *cp __attribute__((unused)) = fgets(serial, serialLen, fp);
+				fclose(fp);
+				return 0;
+			}
+		}
+	}
+	return ret;	// otherwise return the same ret value as was passed in
+}
+
+char* getTsSerialNumber()
+{
+	char buf[256] = {0};
+	char* out = NULL;
+
+	// 1: get serial number from TSConfig.txt
+	int ret = GetConfigEntry(TS_VERSIONS, ':', "serialnumber", buf, sizeof(buf));
+
+	// 2: get serial number from serial_number.alt
+	if (ret != 0)
+		ret = GetConfigEntry(ALT_SN, ':', "serialnumber", buf, sizeof(buf));
+
+	// 3: failed to get serial number, use host name
+	if (ret != 0)
+		ret = GetConfigEntry(TS_VERSIONS, ':', "host", buf, sizeof(buf));
+
+	// 4: If this is a TS VM, read the S5 serial number and suffix _tsvm.
+	ret = getTsVmSerialNumber(ret, buf, sizeof(buf));
+
+	if (ret == 0 && strlen(buf) > 0)
+		out = strdup(buf);
+	else
+		out = strdup("unknown");
+
+	return out;
+}
+
 /******************************************************************************
  * Callbacks
  ******************************************************************************/
 
 /******************************************************************************/
-static AeBool OnFileUploadBegin(AeInt32 iDeviceId __attribute__((unused)), 
+static AeBool OnFileUploadBegin(AeInt32 iDeviceId __attribute__((unused)),
 		AeFileUploadSpec **ppUploads, AePointer *ppUserData)
 {
 	AeDemoUpload *pUpload;
@@ -1767,13 +1770,4 @@ static void OnFileUploadEnd(AeInt32 iDeviceId __attribute__((unused)),
 		AeFileClose(pUpload->iCurFileHandle);
 
 	AeFree(pUpload);
-}
-
-void *locationThreadTask(void *args __attribute__((unused)))
-{
-	int rc = system(BIN_DIR "/location_helper.sh");
-	if (rc == -1)
-		printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
-	locationThreadExited = 1;
-	return NULL;
 }

@@ -1,4 +1,5 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import dnaBarcode, Plugin, QCType
 from iondb.rundb.plan.page_plan.step_names import StepNames
@@ -35,15 +36,17 @@ class SavePlanBySampleStepData(AbstractStepData):
     def __init__(self, sh_type):
         super(SavePlanBySampleStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_save_plan.html'
-        self.savedFields = OrderedDict()
+        self.prev_step_url = reverse("page_plan_output")
+        self.next_step_url = reverse("page_plan_save")
 
+        self.savedFields = OrderedDict()
         self.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME] = None
         self.savedFields[SavePlanBySampleFieldNames.ERROR_MESSAGES] = None
         self.savedFields[SavePlanBySampleFieldNames.WARNING_MESSAGES] = None
         self.savedFields[SavePlanBySampleFieldNames.NOTE] = None
 
         self.savedFields[SavePlanBySampleFieldNames.LIMS_META] = None
-        self.savedFields[SavePlanBySampleFieldNames.META] = {}
+        self.savedObjects[SavePlanBySampleFieldNames.META] = {}
 
         self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = ""
         self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = ""

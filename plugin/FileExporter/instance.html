@@ -92,7 +92,7 @@
 </head>
 <script type='text/javascript'>
 	// set up an empty array where the options will  be held
-	var selectCode =["","","","","","",""]
+	var selectCode =["","","","","","",""];
 	$(document).ready(function(){
 		$.ajax({
 			url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
@@ -164,7 +164,7 @@
 					if (key == "select_dialog"){
 						totalCode = "";
 						if (val != null)
-							selectCode = val
+							selectCode = val;
 						for(each in selectCode){
 
 							if (selectCode[each] != ''){
@@ -335,33 +335,33 @@
 
     $(function() {
     	$('#postbutton').click(function() {
-    		$('#postbutton').attr('disabled','disabled')
+    		$('#postbutton').attr('disabled','disabled');
     		$("#postbutton").val("Submitting...");
     		obj = $('#bamform').serializeObject();
-    		console.log(obj)
+    		console.log(obj);
     		if (!document.getElementById("bamCreate").checked)
-    			obj["bamCreate"] = 'off'
+    			obj["bamCreate"] = 'off';
     		if (!document.getElementById("vcfCreate").checked)
-    			obj["vcfCreate"] = 'off'
+    			obj["vcfCreate"] = 'off';
     		if (!document.getElementById("xlsCreate").checked)
-    			obj["xlsCreate"] = 'off'
+    			obj["xlsCreate"] = 'off';
     		if (!document.getElementById("fastqCreate").checked)
-    			obj["fastqCreate"] = 'off'
+    			obj["fastqCreate"] = 'off';
     		if (!document.getElementById("zipBAM").checked)
-    			obj["zipBAM"] = 'off'
+    			obj["zipBAM"] = 'off';
     		if (!document.getElementById("zipVCF").checked)
-    			obj["zipVCF"] = 'off'
+    			obj["zipVCF"] = 'off';
     		if (!document.getElementById("zipXLS").checked)
-    			obj["zipXLS"] = 'off'
+    			obj["zipXLS"] = 'off';
     		if (!document.getElementById("zipFASTQ").checked)
-    			obj["zipFASTQ"] = 'off'
+    			obj["zipFASTQ"] = 'off';
 
     		if (document.getElementsByName("compressedType")[0].checked)
-    			obj["compressedType"] = 'zip'
+    			obj["compressedType"] = 'zip';
     		else if (document.getElementsByName("compressedType")[1].checked)
-    			obj["compressedType"] = 'tar'
+    			obj["compressedType"] = 'tar';
 
-    		obj['select_dialog'] = selectCode
+    		obj['select_dialog'] = selectCode;
     		pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
     		pluginAPIJSON = JSON.stringify(pluginAPIJSON);
     		pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
@@ -514,7 +514,7 @@
 					<span type="button" id="instrument" class="btn btn-primary active dragelement">Sequencer Name</span>
 				</div></td>
 				<td><div class="dropzone intable row-fluid" style="text-align: center;">
-					<span type="button" id="sample" class="btn btn-primary active dragelement">Sample Name</span>
+					<span type="button" id="samplename" class="btn btn-primary active dragelement">Sample Name</span>
 				</div></td>
 				<td><div class="dropzone intable row-fluid" style="text-align: center;">
 					<span type="button" id="barcodename"  class="btn btn-primary active dragelement">Barcode Name</span>

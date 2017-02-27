@@ -1,0 +1,143 @@
+{% load static from staticfiles %}
+
+<div id="modal_plugin_or_publisher_install" title="" class="modal hide" data-width="800">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Install or Upgrade {{what|capfirst}}</h3>
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+        <form class="form-horizontal" id="modal_plugin_or_publisher_install_form" method="POST">
+            <div id="upload_file" class="control-group">
+                <label for="pickfile" class="control-label">Upload {{pick_label|default:"a File"}}</label>
+                <div class="controls">
+                    <a id="pickfile" name="pickfile" class="btn">Select File</a><br />
+                    <span id="filelist">------</span>
+                    <div id="upload-help" class="help-block" >
+                        In order to provide a better uploading experience either Microsoft Silverlight
+                        plugin or an HTML5 compatible browser are required for file uploading.
+                        <ul>
+                            <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/"> microsoft.com </a></li>
+                        </ul>
+                        You may need to contact your local system administrator for assistance.
+                    </div>
+                    <div id="msg" class="alert hide"></div>
+                </div>
+                <div class="controls">
+                    <div id="upload-progress" class="progress progress-striped active hide">
+                        <div class="bar" style="width: 0%">
+                        </div>
+                    </div>
+                </div>
+                <input name="target_file" id="target_file" type="hidden"/>
+                <input name="reported_file_size" id="reported_file_size" type="hidden"/>
+            </div>
+        </form>
+    <div class="bump">
+        <div id="loadingstatus"></div>
+        <div id="return"></div>
+        <div id="error"></div>
+    </div>
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a id="uploadfile" class="btn btn-primary" href="#">Upload and Install</a>
+    </div>
+
+<script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+<script type="text/javascript">
+var file_filters = [];
+{% for ext, label in file_filters %}
+    file_filters.push({
+        title: "{{label}}", extensions: "{{ext}}"
+    })
+{% endfor %}
+    
+var uploader = new plupload.Uploader({
+    runtimes: 'silverlight, html5, html4',
+    filters: file_filters,
+    browse_button: 'pickfile',
+    url: "{{plupload_url}}",
+    chunk_size: '15mb',
+    unique_names: true,
+    multi_selection: false,
+    multiple_queues: false,
+    silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}'
+});
+
+$(function(){
+    uploader.bind('FilesAdded', function (up, files) {
+        // only one file allowed
+        if(files.length != 1){
+            return;
+        }
+        $('#upload_file').removeClass('alert alert-error');
+        $(".file_item").remove();
+        var file = files[0];
+        $("#filelist").text(file.name + ' (' + plupload.formatSize(file.size) + ')');
+        $("#reported_file_size").val(file.size);
+    });
+
+    uploader.bind('UploadProgress', function (up, file) {
+        $('#' + file.id + " b").html(file.percent + "%");
+        $('#upload-progress .bar').css('width', ''+file.percent + '%');
+    });
+
+    uploader.bind('UploadComplete', function(up, file){
+        $('#' + file.id + " b").html("100%");
+        $('#upload-progress .bar').css('width', '100%');
+        $("#file_info").html("");
+        var file_name = uploader.files[0].target_name;
+        file_name = file_name.split(' ').join('');
+        $("#target_file").val(file_name);
+
+        $("#msg").addClass('alert-info').html("Attempting to install ...");
+        $("#msg").show();
+
+        $.ajax({
+            type: 'POST',
+            url: "{{install_url}}",
+            contentType: "application/json; charset=utf-8",
+            data: JSON.stringify({"file": file_name}),
+            dataType: "json",
+            success: function () {
+                $("#msg").removeClass('alert-info alert-error').addClass('alert-success').html("Started {{what}} install");
+                setTimeout(function () {
+                    if ("{{what}}" == "publisher"){
+                        window.location.reload(true);
+                    } else {
+                        $('#grid').data('kendoGrid').dataSource.read();
+                        $('#grid').data('kendoGrid').refresh();
+                    }
+                    $('#modal_plugin_or_publisher_install').modal('hide');
+                }, 2000);
+            },
+            error:function(jqXHR, textStatus, errorThrown){
+                $("#msg").removeClass('alert-info alert-success').addClass('alert-error').html(jqXHR.responseText);
+            }
+        });
+    });
+
+    uploader.init();
+    uploader.refresh();
+
+    $('#uploadfile').click(function (e) {
+        e.preventDefault();
+        if (uploader.files.length == 1) {
+            $('#pickfile, #uploadfile, #msg').hide();
+            $('#upload-progress').show();
+            uploader.start();
+        }
+        else {
+            $('#upload_file').addClass('alert alert-error');
+        }
+    });
+    
+    $('#modal_plugin_or_publisher_install').on('hidden', function () {
+        setTimeout(function () {
+            $('body #modal_plugin_or_publisher_install').remove();
+        }, 500);
+    });
+});
+</script>
+</div>

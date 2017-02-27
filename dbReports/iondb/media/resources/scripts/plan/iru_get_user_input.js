@@ -55,6 +55,12 @@ function getIonReporterColumns(){
     }
 
     var iru_columns = [
+        {
+            field: "_annotations", width: "22px",
+            headerTemplate: columnSectionTemplate({'id':'annotationsSectionTab', 'text': 'Annotations'}),
+            hidden: !$('#isOnco').is(':checked') && !$('#isPgs').is(':checked'),
+            editor: " ",
+        },
         // Oncology
         {
             field: "ircancerType", title: "Cancer Type",
@@ -141,9 +147,10 @@ function irWorkflowEditor(container, options) {
             dataTextField: "display",
             dataValueField: "Workflow",
             open: function(e){
+                var filters = [];
                 var reference = options.model.get('reference');
                 if (reference){
-                    e.sender.dataSource.filter({
+                    filters.push({
                         logic: "or",
                         filters: [
                             { field: "Reference", value: reference },
@@ -151,6 +158,20 @@ function irWorkflowEditor(container, options) {
                         ]
                     });
                 }
+                var nucleotideType = options.model.get('nucleotideType');
+                if (nucleotideType){
+                    filters.push({
+                        logic: "or",
+                        filters: [
+                            { field: "nucleotideType", value: nucleotideType },
+                            { field: "nucleotideType", value: "" },
+                        ]
+                    });
+                }
+                e.sender.dataSource.filter({
+                    logic: "and",
+                    filters: filters
+                });
                 // save next grid row to update for RNA/DNA plans
                 this.nextGridItem = $("#grid").data("kendoGrid").dataItem(this.element.closest("tr").next());
             },
@@ -260,14 +281,18 @@ function defaultRelation(workflow, tag_isFactoryProvidedWorkflow){
     return "";
 }
 
-function irWorkflowNotValid(reference, workflow, tag_isFactoryProvidedWorkflow){
+function irWorkflowNotValid(row){
+    var notValid = false;
     if (USERINPUT.is_ir_connected){
-        var workflowObj = getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow);
-        if (reference && workflowObj && workflowObj.Reference){
-            return reference != workflowObj.Reference;
+        var workflowObj = getWorkflowObj(row.irWorkflow, row.irtag_isFactoryProvidedWorkflow);
+        if (row.reference && workflowObj && workflowObj.Reference){
+            notValid = notValid || (row.reference != workflowObj.Reference);
+        }
+        if (row.nucleotideType && workflowObj && workflowObj.nucleotideType){
+            notValid = notValid || (row.nucleotideType != workflowObj.nucleotideType);
         }
     }
-    return false;
+    return notValid;
 }
 
 /**
@@ -412,14 +437,26 @@ function check_selected_values(){
 
     $.each(samplesTableJSON, function(i,row){
         if( row.irWorkflow && ($.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == row.irWorkflow } ).length == 0) ){
-            errors.push("<br>Row "+ (row.row+1) + ": Previous workflow for this plan is no longer available: " + row.irWorkflow)
+            errors.push("<br>Row "+ (row.row+1) + ": Previous Workflow for this plan is no longer available: " + row.irWorkflow)
             row.irWorkflow = "";
             row.irRelationRole = "Self";
         }
+        if (irWorkflowNotValid(row)){
+            errors.push("<br>Row "+ (row.row+1) + ": Selected Workflow not compatible: " + row.irWorkflow);
+            row.irWorkflow = "";
+            row.irRelationRole = "Self";
+        }
+
         if (row.irRelationRole && ($.grep(USERINPUT.relations, function(obj){ return obj.Relation == row.irRelationRole } ).length == 0) ){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Relation not found: " + row.irRelationRole);
             row.irRelationRole = "";
         }
+        var workflowObj = getWorkflowObj(row.irWorkflow, row.irtag_isFactoryProvidedWorkflow);
+        if (workflowObj && row.irRelationRole && (workflowObj.relations_list.indexOf(row.irRelationRole) == -1) ){
+            errors.push("<br>Row "+ (row.row+1) + ": Selected Relation not compatible: " + row.irRelationRole);
+            row.irRelationRole = "";
+        }
+
         if (row.irGender && ($.grep(USERINPUT.genders, function(obj){ return obj.Gender == row.irGender } ).length == 0) ){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Gender not found: " + row.irGender);
             row.irGender = "";
@@ -433,7 +470,6 @@ function check_selected_values(){
                 if (planOpt.isDualNucleotideType && isSameSampleForDual && !isEven(i)){
                     row.irSetID = samplesTableJSON[i-1].irSetID;
                 } else {
-                    var workflowObj=getWorkflowObj(row.irWorkflow, row.tag_isFactoryProvidedWorkflow)
                     row.irSetID = set_id_from_workflow(workflowObj, 1, samplesTableJSON.slice(0, i));
                 }
             } else {
@@ -496,6 +532,7 @@ function populate_userinput_from_response(data){
         // reference name conversion: TS "GRCh38.p2.mask1" = IR "GRCh38"
         var reference = (irReference == "GRCh38") ? "GRCh38.p2.mask1" : irReference
         var relationshipType = cm["RelationshipType"];
+        var nucleotideType = cm["DNA_RNA_Workflow"] || "";
 
         USERINPUT.workflows.push({
             "Workflow": workflow != "Upload Only" ? workflow : "",
@@ -504,6 +541,7 @@ function populate_userinput_from_response(data){
             "ApplicationType": cm["ApplicationType"],
             "RelationshipType": relationshipType,
             "Reference": reference,
+            "nucleotideType": (nucleotideType=="DNA" || nucleotideType=="RNA") ? nucleotideType : "",
             "relations_list": relationshipType_to_relations[relationshipType] || []
         });
     });

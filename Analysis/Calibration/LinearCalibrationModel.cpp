@@ -116,7 +116,13 @@ void LinearFitCell::AccumulateTrainingData(const LinearFitCell& other)
     return; // Nothing to do
 
   if (nsamples_ == 0){
-    CopyTrainingData(other);
+    nsamples_      = other.nsamples_;
+    mean_pred_     = other.mean_pred_;
+    mean_measured_ = other.mean_measured_;
+    M2pred_        = other.M2pred_;
+    M2meas_        = other.M2meas_;
+    Cn_            = other.Cn_;
+    nreads_        = other.nreads_;
     return;
   }
 
@@ -141,19 +147,6 @@ void LinearFitCell::AccumulateTrainingData(const LinearFitCell& other)
   nsamples_ = total_samples;
   nreads_ = other.nreads_ + nreads_;
 
-};
-
-// --------------------------------------------------------------------------
-
-void LinearFitCell::CopyTrainingData(const LinearFitCell& other)
-{
-  nsamples_      = other.nsamples_;
-  mean_pred_     = other.mean_pred_;
-  mean_measured_ = other.mean_measured_;
-  M2pred_        = other.M2pred_;
-  M2meas_        = other.M2meas_;
-  Cn_            = other.Cn_;
-  nreads_        = other.nreads_;
 };
 
 // --------------------------------------------------------------------------
@@ -317,18 +310,6 @@ void  LinCalModelRegion::AccumulateTrainingData(const LinCalModelRegion& other)
       for (unsigned int iHP=0; iHP < training_data.at(iWindow).at(iNuc).size(); ++iHP) {
 
         training_data.at(iWindow).at(iNuc).at(iHP).AccumulateTrainingData(other.training_data.at(iWindow).at(iNuc).at(iHP));
-      }
-    }
-  }
-}
-
-void  LinCalModelRegion::CopyTrainingData(const LinCalModelRegion& other)
-{
-  for (unsigned int iWindow=0; iWindow < training_data.size(); ++iWindow){
-    for (unsigned int iNuc=0; iNuc < training_data.at(iWindow).size(); ++iNuc) {
-      for (unsigned int iHP=0; iHP < training_data.at(iWindow).at(iNuc).size(); ++iHP) {
-
-        training_data.at(iWindow).at(iNuc).at(iHP).CopyTrainingData(other.training_data.at(iWindow).at(iNuc).at(iHP));
       }
     }
   }
@@ -1083,15 +1064,17 @@ void  LinearCalibrationModel::AccumulateTrainingData(const LinearCalibrationMode
   }
 }
 
-// direct copy to update the model
+// --------------------------------------------------------------------------
+
+// direct copy to update the model XXX
 void LinearCalibrationModel::CopyTrainingData(const LinearCalibrationModel &other){
   if (not do_training_)
     return;
 
-  for (int iRegion=0; iRegion<chip_subset_.NumRegions(); ++iRegion) {
-    region_data.at(iRegion).CopyTrainingData(other.region_data.at(iRegion));
-  }
+  region_data = other.region_data;
 }
+
+// --------------------------------------------------------------------------
 
 bool LinearCalibrationModel::FilterTrainingReads(const ReadAlignmentInfo& read_alignment, LinearCalibrationModel &linear_model_cal_sim,
                                                 int my_region, int iHP, float &yobs, float &xobs, int &governing_hp){

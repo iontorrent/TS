@@ -17,6 +17,8 @@ class AbstractStepData(object):
 
     def __init__(self, sh_type):
         self.resourcePath = None
+        self.prev_step_url = '#'
+        self.next_step_url = '#'
         self.savedFields = {}
         self.savedListFieldNames = []
         self.savedObjects = {}
