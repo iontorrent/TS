@@ -8,5 +8,6 @@ www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
                              /opt/ion/iondb/bin/ion_plugin_install.py, \
                              /opt/ion/iondb/bin/ion_plugin_install_deb.py, \
                              /opt/ion/iondb/bin/sudo_utils.py, \
-                             /opt/ion/iondb/bin/write_nms_access.py
+                             /opt/ion/iondb/bin/write_nms_access.py, \
+                             /opt/ion/iondb/bin/ion_plugin_migrate_permissions.py
 
