@@ -14,11 +14,12 @@ from distutils.version import LooseVersion
 import iondb.rundb.tasks  ## circular import
 from iondb.utils.utils import getPackageName
 import iondb.plugins.tasks
-
 import json
 import datetime
 import logging
 import xmlrpclib
+import subprocess
+from iondb.utils.utils import getPackageName
 logger = logging.getLogger(__name__)
 
 class PluginManager(object):
@@ -170,6 +171,17 @@ class PluginManager(object):
         # Basedir - typically '/results/plugins', passed in args
         if not os.path.exists(basedir):
             return None
+
+        # reset permissions assuming for all of the non supported plugins
+        for i in os.listdir(basedir):
+            if i in ["scratch", "implementations", "archive"]:
+                continue
+            if not getPackageName(os.path.join(basedir, i)):
+                try:
+                    subprocess.check_call(['sudo', '/opt/ion/iondb/bin/ion_plugin_migrate_permissions.py', i])
+                except:
+                    logger.exception("Failed to change permissions")
+
 
         logger.debug("Scanning %s for plugin folders", basedir)
         # only list files in the 'plugin' directory if they are actually folders

@@ -138,6 +138,7 @@ static char lastNexentaChecksum [64] = {0};
 static int wantConfigUpdate = 1;
 static char const * const gpuErrorFile = "/var/spool/ion/gpuErrors";
 static char savedOsVersion[LINELEN] = {0};
+static char *alarmdata = NULL;
 
 UpdateItem updateItem[] = {
 		{STATUS_VERSIONS, 120, 0},		// check every 2 min but only send updates if versions have changed
@@ -162,8 +163,6 @@ void GenerateVersionInfo();
 void SendFileServerStatus(AeDRMDataItem *dataItem);
 void checkEnvironmentForWebProxy();
 void readAlarmsFromJson(char* filename);
-void buildRaidAlarmName(const int eNum, const int sNum, char const * const iName,
-		char * aName, size_t aNameSize);
 void WriteAeStringDataItem(char const * const subcat, char const * const key,
 		char const * const value, AeDRMDataItem *item);
 void readGpuErrorFile(char const * const filename, int *gpuFound, int *allRevsValid);
@@ -171,6 +170,7 @@ void getNexentaData(AeDRMDataItem *dataItem);
 void readNexentaData(char const * const filename, AeDRMDataItem *dataItem);
 int ReadOsVersion(char *OsVersion, const size_t OsVersionSize);
 char* getTsSerialNumber();
+void getKeyAndValue(char *inputBuf, const char delim, char **key, char **value);
 
 // file upload callbacks
 static AeBool OnFileUploadBegin(AeInt32 iDeviceId, AeFileUploadSpec **ppUploads, AePointer *ppUserData);
@@ -266,7 +266,7 @@ static void SendContactInfo(AeDRMDataItem *dataItem, const char* contactInfoFile
 
 static void SendNetworkStatus(AeDRMDataItem *dataItem, const char* networkInfoFile)
 {
-	char info[4096];
+	char info[4096] = {};
 	FILE *fp = fopen(networkInfoFile, "r");
 	if (fp) {
 		char line[1024];
@@ -297,14 +297,41 @@ static void SendExperimentMetrics(AeDRMDataItem *dataItem, const char* experimen
 		char expFileName[256];
 		while (fgets(expFileName, sizeof(expFileName), explistfp)) {
 			expFileName[strcspn(expFileName, "\n\r")] = '\0';
+
+			// Single aggregate TS.Experiment data item - deprecated
 			FILE *expfp = fopen(expFileName, "r");
 			if (!expfp)
 				continue;
 
-			char value[4096] = {0};
-			if (fread(value, sizeof(char), sizeof(value), expfp)) {
+			char aggregate[4096] = {0};
+			if (fread(aggregate, sizeof(char), sizeof(aggregate), expfp)) {
 				AeGetCurrentTime(&dataItem->value.timeStamp);
 				dataItem->pName = "TS.Experiment";
+				dataItem->value.data.pString = aggregate;
+				dataItem->value.iType = AeDRMDataString;
+				dataItem->value.iQuality = AeDRMDataGood;
+				AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
+			}
+
+			fclose(expfp);
+
+			// Report each run field as a separate data item (replaces deprecated code above).
+			expfp = fopen(expFileName, "r");
+			if (!expfp)
+				continue;
+
+			char line[1024] = {};
+			while (fgets(line, 1024, expfp)) {
+				char *key = NULL;
+				char *value = NULL;
+				getKeyAndValue(line, ':', &key, &value);
+				if ((!key) || (!value) || (strlen(key) == 0) || (strlen(value) == 0))
+					continue;
+
+				char name[128] = {};
+				snprintf(name, 128, "TS.Experiment.%s", key);
+				AeGetCurrentTime(&dataItem->value.timeStamp);
+				dataItem->pName = name;
 				dataItem->value.data.pString = value;
 				dataItem->value.iType = AeDRMDataString;
 				dataItem->value.iQuality = AeDRMDataGood;
@@ -394,6 +421,14 @@ void RSMClose()
 			free(agentInfo.serialNumberList[i]);
 		free(agentInfo.serialNumberList);
 	}
+
+	if (alarmdata)
+		free(alarmdata);
+	alarmdata = NULL;
+
+	if (agentInfo.serialNumberList)
+		free(agentInfo.serialNumberList);
+	agentInfo.serialNumberList = NULL;
 }
 
 void GetSoftwareVersion(char *softwareComponent, char *subcat, AeDRMDataItem *item, char *refFile)
@@ -1123,6 +1158,19 @@ void checkEnvironmentForWebProxy()
 	fclose(fp);
 }
 
+static int get_file_size(char * filename) // path to file
+{
+    int size = 0;
+    FILE *p_file = NULL;
+    p_file = fopen(filename, "rb");
+    if (p_file != NULL) {
+        fseek(p_file,0,SEEK_END);
+        size = ftell(p_file);
+        fclose(p_file);
+    }
+    return size;
+}
+
 static void sendRaidAlarm(
 		char* alarmName,
 		const char* itemDesc)
@@ -1146,8 +1194,27 @@ void readAlarmsFromJson(char* filename)
 	JSON_Array *drives;
 	JSON_Object *obj;
 	size_t ii, jj;
-	int encNum = -1;
-	char alarmName[LINE_LENGTH];
+
+	size_t json_size = get_file_size(filename);
+	if (json_size == 0)
+		return;
+
+	char *newptr = realloc(alarmdata, json_size);
+	if (newptr) {
+		alarmdata = newptr;
+		*alarmdata = '\0';
+	}
+	else {
+		if (alarmdata != NULL)
+			free(alarmdata);
+		alarmdata = NULL;
+
+		if (json_size > 0)
+			fprintf(stderr, "%s: failed to allocate %ld bytes.\n", __FUNCTION__, json_size);
+		return;
+	}
+	char *alarmpos = alarmdata;
+	size_t bytesLeft = json_size;
 
 	// Read the raidstatus.json file into memory.
 	root_value = json_parse_file(filename);
@@ -1160,7 +1227,6 @@ void readAlarmsFromJson(char* filename)
 		return;
 	}
 
-	//const char *date = json_object_get_string(obj, "date");
 	raid_status = json_object_get_array(obj, "raid_status");
 	if (!obj) {
 		json_value_free(root_value);
@@ -1173,9 +1239,6 @@ void readAlarmsFromJson(char* filename)
 		return;
 	}
 
-	const char *encId = json_object_get_string(obj, "enclosure_id");
-	encNum = atoi(encId);
-
 	drives = json_object_get_array(obj, "drives");
 	if (!drives) {
 		json_value_free(root_value);
@@ -1184,7 +1247,6 @@ void readAlarmsFromJson(char* filename)
 
 	// For each drive in raidstatus.json:
 	for (ii = 0; ii < json_array_get_count(drives); ii++) {
-		int slotNum = -1;
 
 		obj = json_array_get_object(drives, ii);
 		if (!obj)
@@ -1194,6 +1256,8 @@ void readAlarmsFromJson(char* filename)
 		if (!info)
 			continue;
 
+		char slotNum[16] = {};
+
 		// For each drive parameter:
 		for (jj = 0; jj < json_array_get_count(info); jj++) {
 
@@ -1201,52 +1265,47 @@ void readAlarmsFromJson(char* filename)
 			if (!drvinf)
 				continue;
 
-			const char *itemName = json_array_get_string(drvinf, 0);
-			const char *itemDesc = json_array_get_string(drvinf, 1);
-			const char *passFail = json_array_get_string(drvinf, 2);
+			const char* itemName = json_array_get_string(drvinf, 0);
+			const char* itemDesc = json_array_get_string(drvinf, 1);
+			const char* passFail = json_array_get_string(drvinf, 2);
 
-			if (0 == strcmp(itemName, "Slot"))
-				slotNum = atoi(itemDesc);
+			// Save the slot number for use in reporting below.
+			if (strcmp(itemName, "Slot") == 0) {
+				snprintf(slotNum, 16, "%s", itemDesc);
+				continue;
+			}
 
-			// Items like "Slot" and "Inquiry Data", for which no alarm conditions exist,
+			// Items like "Inquiry Data", for which no alarm conditions exist,
 			// have a passFail field with length 0.
 			if ((!passFail) ||					// error
 					(0 == strlen(passFail)))	// items for which no alarms conditions exist
 				continue;
 
-			buildRaidAlarmName(encNum, slotNum, itemName, alarmName, LINE_LENGTH);
+			// Don't report warnings about empty slots.
+			if ((strcmp(itemName, "Slot Status") == 0) &&
+				(strcmp(itemDesc, "Empty") == 0) &&
+				(strcmp(passFail, "warning") == 0)     )
+				continue;
 
-			char itemData[256];
-			snprintf(itemData, 256, "%s%s", itemDesc, ((0 == strcmp("good", passFail)) ? " - CLEARED" : ""));
-			sendRaidAlarm(alarmName, itemData);
+			if (strcmp("good", passFail) != 0) {
+				snprintf(alarmpos, bytesLeft, "Slot%s:%s:%s:%s; ", slotNum, itemName, itemDesc, passFail);
+				size_t addedLength = strlen(alarmpos);
+				bytesLeft -= addedLength;
+				alarmpos += addedLength;
+			}
 		}
 
 	}
 
 	json_value_free(root_value);
-}	// end readAlarmsFromJson
-
-void buildRaidAlarmName(const int encNum, const int slotNum,
-		char const * const itemName, char * alarmName, size_t alarmNameSize)
-{
-	size_t itemNameLen;
-	size_t oi ;
-	size_t ii; // input index
-
-	if (!itemName || !alarmName || !alarmNameSize)
-		return;
-
-	itemNameLen = strlen(itemName);
-	memset(alarmName, 0, alarmNameSize);
-	snprintf(alarmName, alarmNameSize, "Alarm.RaidEnc%d.Slot%d.", encNum, slotNum);
-	oi = strlen(alarmName); // output index
-
-	for (ii = 0; ii < itemNameLen && oi < alarmNameSize - 1; ++ii) {
-		if (itemName[ii] != ' '  && itemName[ii] != '.') {
-			alarmName[oi++] = itemName[ii];
+	if (alarmdata) {
+		if (strlen(alarmdata) == 0) {
+			snprintf(alarmdata, json_size, "None");
 		}
+		sendRaidAlarm("TS.RaidIssues", alarmdata);
 	}
-}	// end buildRaidAlarmName
+
+}	// end readAlarmsFromJson
 
 void WriteAeStringDataItem(char const * const subcat, char const * const key,
 		char const * const value, AeDRMDataItem *item)

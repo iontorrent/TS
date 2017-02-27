@@ -315,39 +315,6 @@ def downloadGenome(url, genomeID):
     downloadChunks(url)
 
 
-def fix_plugin_owner(target_path):
-    # Fix ownership - zeroinstall can leave files owned by root
-    try:
-        import pwd, grp
-        uid = pwd.getpwnam('ionadmin')[2]
-        gid = grp.getgrnam('ionadmin')[2]
-    except OSError:
-        uid = os.getuid()
-        gid = os.getgid()
-
-    logger.info("Changing plugin at '%s' to owner %d:%d", target_path, uid, gid)
-
-    #try:
-    #    os.chown(target_path, uid, gid)
-    #except (OSError, IOError) as e:
-    #    logger.warn("Failed to set time/owner attributes on '%s': %s", target_path , e)
-
-    file_walker = (
-        os.path.join(root, f)
-        for root, _, files in os.walk(target_path)
-        for f in files
-    )
-    for f in file_walker:
-        if not os.path.isfile(f):
-            continue
-        try:
-            os.chown(f, uid, gid)
-        except (OSError, IOError) as e:
-            # Non fatal if time and owner fail.
-            logger.warn("Failed to set time/owner attributes on '%s': %s", f, e)
-    return
-
-
 @app.task
 def downloadPublisher(url, zip_file=None):
     from iondb.rundb.models import Message

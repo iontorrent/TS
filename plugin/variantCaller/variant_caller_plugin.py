@@ -1206,6 +1206,10 @@ def set_from_plan(configuration, bam, barcode_sample_info):
         configuration['options']['targets_bed_unmerged']  = barcode_sample_info[bam['name']].get('targetRegionBedFile','')
         configuration['options']['hotspots_bed_unmerged'] = barcode_sample_info[bam['name']].get('hotSpotRegionBedFile','')
         configuration['options']['nuc_type']              = barcode_sample_info[bam['name']].get('nucleotideType','DNA').upper()
+        # set the merged bed
+        configuration['options']['targets_bed_merged']    = configuration['options']['targets_bed_unmerged'].replace('/unmerged/detail/','/merged/plain/')
+        #TODO: The existance of the files of each sample should be checked!
+        #TODO: Need to handle the missing barcode case
     else:
         if bam['name'] not in barcode_sample_info: 
             printtime('Detected barcode ' + bam['name'] + ' : Missing barcode sample info ')
@@ -1298,7 +1302,7 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
             bam['status'] = 'error'
             bams_processed.append(bam)
         return
-        
+    # barcode_sample_info will be used to overwrite configuration again and again if the start mode is Auto start.
     barcode_sample_info = load_barcode_sample_info(barcoded_run, configuration)
     
     write_parameters_file(configuration_name, configuration)
@@ -1318,6 +1322,7 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
             return
 
     for bam in configuration['bams']:
+        set_from_plan(configuration, bam, barcode_sample_info)
         printtime("name: %s" % bam['name'])
         bam['status'] = 'in_progress'
         if configuration_name == "":
@@ -1339,6 +1344,7 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
                 bam['status'] = 'error'
     else:
         for bam in configuration['bams']:
+            set_from_plan(configuration, bam, barcode_sample_info)
             bams = []
             bams.append(bam)
             try:
@@ -1348,6 +1354,7 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
                 bam['status'] = 'error'
 
     for bam in configuration['bams']:
+        set_from_plan(configuration, bam, barcode_sample_info)
         try:
             bam['summary'] = process_results(barcoded_run, configuration, bam)
             load_results_json(barcoded_run, configuration, bam, results_json)
