@@ -886,6 +886,7 @@ int PrepareHotspots(int argc, const char *argv[])
 
           map<string,map<string,string> > unique_alts_and_tags;
           set<string> unique_tags;
+	  set<string> unique_alt_alleles;
 
           for (deque<Allele>::iterator I = A; I != B; ++I) {
             if (I->filtered)
@@ -893,7 +894,6 @@ int PrepareHotspots(int argc, const char *argv[])
             unique_alts_and_tags[I->alt].insert(I->custom_tags.begin(), I->custom_tags.end());
             for (map<string,string>::iterator S = I->custom_tags.begin(); S != I->custom_tags.end(); ++S)
               unique_tags.insert(S->first);
-            /*
             if (unique_alt_alleles.count(I->alt) > 0)
               continue;
             unique_alt_alleles.insert(I->alt);
@@ -901,9 +901,8 @@ int PrepareHotspots(int argc, const char *argv[])
               fprintf(output_vcf, ",");
             comma = true;
             fprintf(output_vcf, "%s", I->alt.c_str());
-            */
           }
-
+	  /*
           for (deque<Allele>::iterator I = A; I != B; ++I) {
             if (I->filtered)
               continue;
@@ -914,6 +913,7 @@ int PrepareHotspots(int argc, const char *argv[])
             if (Q == unique_alts_and_tags.end()) {fprintf(output_vcf, "."); continue;}
             fprintf(output_vcf, "%s", Q->first.c_str());
           }
+          */
 
           fprintf(output_vcf, "\t.\t.\tOID=");
           comma = false;

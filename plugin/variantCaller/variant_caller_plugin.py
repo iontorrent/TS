@@ -163,7 +163,7 @@ def prepare_hotspots(options):
         if not os.path.exists(options['hotspots_bed_unmerged_local']):
             shutil.copy(options['hotspots_bed_unmerged'], options['hotspots_bed_unmerged_local'])
 
-            prepare_hotspots_command  = 'tvcutils prepare_hotspots'
+            prepare_hotspots_command  = TVCUTILS + ' prepare_hotspots'
             prepare_hotspots_command += '  --input-bed "%s"' % options['hotspots_bed_unmerged']
             prepare_hotspots_command += '  --reference "%s"' % options['reference_genome_fasta']
             prepare_hotspots_command += '  --left-alignment on'
@@ -345,8 +345,11 @@ def cleanup_options(options):
         options['hotspots_bed_merged']      = options['hotspots_bed_unmerged'].replace('/unmerged/detail/','/merged/plain/')
         options['hotspots_name']            = os.path.basename(options['hotspots_bed_unmerged'])[:-4]
 
-    options['has_targets']                  = options['targets_name']
-    options['has_hotspots']                 = options['hotspots_name']
+    options['has_targets']                  = options['targets_bed_unmerged']  != ""
+    options['has_hotspots']                 = options['hotspots_bed_unmerged'] != ""
+    options['is_targets_barcode_specific']  = False
+    options['is_hotspot_barcode_specific']  = False
+    options['is_reference_barcode_specific']= False
 
     reference_genome_fasta_local = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(options['reference_genome_fasta']))
     if not os.path.lexists(reference_genome_fasta_local):
@@ -724,7 +727,7 @@ def variant_caller_pipeline(barcoded_run, multisample, configuration_name, confi
     else:
         multisample_processed_bam = os.path.join(vc_pipeline_directory,os.path.basename(bams[0]['file'])[:-4] + '_processed.bam')
     untrimmed_bams = get_untrimmed_bams(configuration, bams)
-        
+
     prepare_hotspots(configuration['options'])
     if configuration['options']['library_type'] == 'tagseq':
         sample_name = 'none'
@@ -780,19 +783,19 @@ def split_results(barcoded_run, configuration_name, configuration, bams):
         run_command("cp " + os.path.join(vc_pipeline_directory,'TSVC_variants.vcf') + " " + os.path.join(vc_pipeline_directory,'TSVC_variants_1.vcf'), "Copy TSVC_variants.vcf")
         run_command("cp " + os.path.join(vc_pipeline_directory,'TSVC_variants.genome.vcf') + " " + os.path.join(vc_pipeline_directory,'TSVC_variants.genome_1.vcf'), "Copy TSVC_variants.genome.vcf")
     else:
-        cmd = 'tvcutils split_vcf'
+        cmd = TVCUTILS + ' split_vcf'
         cmd += ' --input-vcf ' + os.path.join(vc_pipeline_directory,'small_variants.vcf')
         cmd += ' --out-dir ' + vc_pipeline_directory
         run_command(cmd, 'Split small_variants.vcf')
-        cmd = 'tvcutils split_vcf'
+        cmd = TVCUTILS + ' split_vcf'
         cmd += ' --input-vcf ' + os.path.join(vc_pipeline_directory,'small_variants_filtered.vcf')
         cmd += ' --out-dir ' + vc_pipeline_directory
         run_command(cmd, 'Split small_variants_filtered.vcf')
-        cmd = 'tvcutils split_vcf'
+        cmd = TVCUTILS + ' split_vcf'
         cmd += ' --input-vcf ' + os.path.join(vc_pipeline_directory,'TSVC_variants.vcf')
         cmd += ' --out-dir ' + vc_pipeline_directory
         run_command(cmd, 'Split TSVC_variants.vcf')
-        cmd = 'tvcutils split_vcf'
+        cmd = TVCUTILS + ' split_vcf'
         cmd += ' --input-vcf ' + os.path.join(vc_pipeline_directory,'TSVC_variants.genome.vcf')
         cmd += ' --out-dir ' + vc_pipeline_directory
         run_command(cmd, 'Split TSVC_variants.genome.vcf')
@@ -845,7 +848,7 @@ def split_results(barcoded_run, configuration_name, configuration, bams):
         if configuration['options']['has_targets']:
             cmd += "-b '" + configuration['options']['targets_bed_unmerged'] + "' "
         cmd += processed_bam + " | "
-        cmd += "tvcutils unify_vcf "
+        cmd += TVCUTILS + " unify_vcf "
         cmd += "--novel-tvc-vcf " + os.path.join(vc_pipeline_directory,'TSVC_variants_' + str(dataset_num) + '.vcf') + " "
         cmd += "--output-vcf " + os.path.join(results_directory,basename_variants_vcf) + ".gz "
         cmd += "--reference-fasta '" + configuration['options']['reference_genome_fasta'] + "' "
@@ -1009,7 +1012,7 @@ def render_webpages(results_directory, render_context):
     out.close()
 
 def generate_variant_allele_cov(configuration, results_directory, processed_bam, untrimmed_bam, bam, render_context):
-    tvcutils_command = "tvcutils prepare_hotspots"
+    tvcutils_command = TVCUTILS + " prepare_hotspots"
     tvcutils_command += ' --reference "%s"' % configuration['options']['reference_genome_fasta']
     tvcutils_command += ' --input-vcf "%s"' % os.path.join(results_directory,BASENAME_VARIANTS_VCF)
     tvcutils_command += ' --output-bed "%s"' % os.path.join(results_directory,'TSVC_variants.bed')
@@ -1201,13 +1204,23 @@ def load_barcode_sample_info(barcoded_run, configuration):
 
 def set_from_plan(configuration, bam, barcode_sample_info):
     if configuration['options']['start_mode'] == 'Auto start' and bam['name'] in barcode_sample_info:
+        my_reference = barcode_sample_info[bam['name']].get('reference','')
+        my_unmerged_targets = barcode_sample_info[bam['name']].get('targetRegionBedFile','')
+        my_unmerged_hotspots = barcode_sample_info[bam['name']].get('hotSpotRegionBedFile','')
+        configuration['options']['is_targets_barcode_specific'] = configuration['options']['is_targets_barcode_specific'] or (my_unmerged_targets != configuration['options']['targets_bed_unmerged']) 
+        configuration['options']['is_hotspot_barcode_specific'] = configuration['options']['is_hotspot_barcode_specific'] or (my_unmerged_hotspots != configuration['options']['hotspots_bed_unmerged'])
+        configuration['options']['is_reference_barcode_specific'] = configuration['options']['is_reference_barcode_specific'] or (my_reference != configuration['options']['reference_genome_name']) 
         configuration['options']['sample_name']           = barcode_sample_info[bam['name']].get('sample','')
-        configuration['options']['reference_genome_name'] = barcode_sample_info[bam['name']].get('reference','')
-        configuration['options']['targets_bed_unmerged']  = barcode_sample_info[bam['name']].get('targetRegionBedFile','')
-        configuration['options']['hotspots_bed_unmerged'] = barcode_sample_info[bam['name']].get('hotSpotRegionBedFile','')
+        configuration['options']['reference_genome_name'] = my_reference
+        configuration['options']['targets_bed_unmerged']  = my_unmerged_targets
+        configuration['options']['hotspots_bed_unmerged'] = my_unmerged_hotspots        
         configuration['options']['nuc_type']              = barcode_sample_info[bam['name']].get('nucleotideType','DNA').upper()
-        # set the merged bed
+        # set the merged bed files
         configuration['options']['targets_bed_merged']    = configuration['options']['targets_bed_unmerged'].replace('/unmerged/detail/','/merged/plain/')
+        configuration['options']['hotspots_bed_merged']   = configuration['options']['hotspots_bed_unmerged'].replace('/unmerged/detail/','/merged/plain/')
+        # has hotspot? has targets?
+        configuration['options']['has_hotspots'] = configuration['options']['hotspots_bed_unmerged'] != ''
+        configuration['options']['has_targets'] = configuration['options']['targets_bed_unmerged'] != ''  
         #TODO: The existance of the files of each sample should be checked!
         #TODO: Need to handle the missing barcode case
     else:
@@ -1335,6 +1348,7 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
         process_reference(configuration, bam)
     
     if multisample:
+        # Run variant_caller_pipeline and process results for multisample
         try:
             variant_caller_pipeline(barcoded_run, multisample, configuration_name, configuration, configuration['bams'])
             split_results(barcoded_run, configuration_name, configuration, configuration['bams'])
@@ -1342,29 +1356,33 @@ def process_configuration(barcoded_run, multisample, configuration_name, configu
             traceback.print_exc()
             for bam in configuration['bams']:
                 bam['status'] = 'error'
+
+        for bam in configuration['bams']:
+            set_from_plan(configuration, bam, barcode_sample_info)
+            try:
+                bam['summary'] = process_results(barcoded_run, configuration, bam)
+                load_results_json(barcoded_run, configuration, bam, results_json)
+                bam['status'] = 'completed'
+            except:
+                traceback.print_exc()
+                bam['status'] = 'error'
+            bams_processed.append(bam)                
     else:
+        # Run variant_caller_pipeline and process results for non-multisample
         for bam in configuration['bams']:
             set_from_plan(configuration, bam, barcode_sample_info)
             bams = []
             bams.append(bam)
             try:
                 variant_caller_pipeline(barcoded_run, multisample, bam['name'], configuration, bams)
+                bam['summary'] = process_results(barcoded_run, configuration, bam)
+                load_results_json(barcoded_run, configuration, bam, results_json)
+                bam['status'] = 'completed'
             except:
                 traceback.print_exc()
                 bam['status'] = 'error'
-
-    for bam in configuration['bams']:
-        set_from_plan(configuration, bam, barcode_sample_info)
-        try:
-            bam['summary'] = process_results(barcoded_run, configuration, bam)
-            load_results_json(barcoded_run, configuration, bam, results_json)
-            bam['status'] = 'completed'
             bams_processed.append(bam)
-        except:
-            traceback.print_exc()
-            bam['status'] = 'error'
-            bams_processed.append(bam)
-        
+       
 def plugin_main():
     global PLUGIN_DEV_SKIP_VARIANT_CALLING
     global DIRNAME
@@ -1373,6 +1391,7 @@ def plugin_main():
     global TSP_FILEPATH_PLUGIN_DIR
     global STARTPLUGIN_JSON
     global OUTPUT_FILES
+    global TVCUTILS
 
     parser = OptionParser()
     parser.add_option('-d', '--install-dir', help='Directory containing plugin files', dest='install_dir')
@@ -1388,7 +1407,12 @@ def plugin_main():
     TSP_URLPATH_PLUGIN_DIR      = options.output_url
     PLUGIN_DEV_SKIP_VARIANT_CALLING = options.skip_tvc
     OUTPUT_FILES = []
-    
+
+    bin_dir = '%s/bin' % DIRNAME
+    TVCUTILS = os.path.join(bin_dir,'tvcutils')
+    if not os.path.exists(TVCUTILS):
+        TVCUTILS = 'tvcutils'
+
     setup_run()
 
     printtime('')
