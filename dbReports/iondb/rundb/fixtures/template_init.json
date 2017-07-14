@@ -46,6 +46,17 @@
   },
   {
     "model": "rundb.template",
+    "pk": 5,
+    "fields": {
+      "name": "TF_G",
+      "sequence": "TACGTAGTGAGTATACATGCTCTGACACTATGTACGATCTGAGACTGCCAAGGCACACAGGGGATAGG",
+      "key": "ATCG",
+      "comments": " ",
+      "isofficial": true
+    }
+  },  
+  {
+    "model": "rundb.template",
     "pk": 100,
     "fields": {
       "name": "TF_1",

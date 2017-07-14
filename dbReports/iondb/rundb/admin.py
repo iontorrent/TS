@@ -6,6 +6,7 @@ from iondb.rundb import tasks
 from iondb.rundb import tsvm
 from iondb.rundb.forms import NetworkConfigForm
 from iondb.utils import files
+from iondb.utils.utils import is_TsVm
 from django.contrib import admin
 from django.forms import TextInput, Textarea
 from django.forms.models import model_to_dict
@@ -18,7 +19,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.sessions.models import Session
 
 from django import http
-
+import httplib2
 from tastypie.bundle import Bundle
 
 from subprocess import Popen, PIPE
@@ -31,6 +32,7 @@ import json
 import re
 import logging
 import urllib
+import markdown
 
 from ion.utils.TSversion import findUpdates, findOSversion
 
@@ -244,7 +246,8 @@ def network(request):
         form = NetworkConfigForm(prefix="network")
 
         return render_to_response("admin/network.html", RequestContext(request,
-            {"network": {"mac": mac_address(), "form": form}}))
+            {"network": {"mac": mac_address(), "form": form},
+             "is_TsVm": is_TsVm()}))
 
 
 @staff_member_required
@@ -319,7 +322,7 @@ def tsconfig_log(request):
 
 
 def get_zip_logs(request):
-    ''' Make an archive of logs available to download '''
+    """ Make an archive of logs available to download """
     from django.core.servers.basehttp import FileWrapper
     import zipfile
     try:
@@ -329,8 +332,7 @@ def get_zip_logs(request):
 
     zipPath = '/tmp/logs.zip'
     zipfile = zipfile.ZipFile(zipPath, mode='w', allowZip64=True)
-    files = ['tsconfig_gui.log', 'django.log', 'celery_w1.log']
-    for afile in files:
+    for afile in ['tsconfig_gui.log', 'django.log', 'celery_w1.log', 'tsconfig_debug.log']:
         fullpath = os.path.join('/var/log/ion', afile)
         if os.path.exists(fullpath):
             zipfile.write(fullpath, arcname=afile, compress_type=compression)
@@ -366,6 +368,44 @@ def run_update():
     else:
         return False
 
+def get_EULA_text():
+    h = httplib2.Http()
+    isValid = True
+    errorMsg = None
+    eula_content = None
+
+    errorCodes = {"E001" : "The requested EULA file does not exist on the Ion Updates server",
+                  "E002" : "HTTP ServerNotFoundError: {0}",
+                  "E003" : "HTTP Error: {0}",
+                  "E004" : "No EULA content available"}
+
+    EULA_TEXT_URL = settings.PRODUCT_UPDATE_BASEURL + settings.EULA_TEXT_URL
+
+    try:
+        response, content = h.request(EULA_TEXT_URL)
+        if response['status'] == '200':
+            markDown_content = markdown.markdown(content)
+            markDown_content = re.sub(r"([===*])\n", r"\1<br />", markDown_content)
+            markDown_content = re.sub(r"([a-zA-Z0-9])\n([===*])", r"\1<br />\2", markDown_content)
+            eula_content = markDown_content
+        if response['status'] == '404':
+            isValid = False
+            errorMsg = errorCodes["E001"]
+            logger.debug("httplib2.ServerNotFoundError: iondb.rundb.admin.py %s", errorMsg)
+    except httplib2.ServerNotFoundError, err:
+        isValid = False
+        errorMsg = errorCodes["E002"].format(err)
+        logger.debug("httplib2.ServerNotFoundError: iondb.rundb.admin.py %s", err)
+    except Exception, err:
+        isValid = False
+        errorMsg = errorCodes["E003"].format(err)
+        logger.debug("urllib2.HTTPError: iondb.rundb.admin.py %s", errorMsg)
+    if not eula_content and not errorMsg:
+        errorMsg = errorCodes["E004"]
+        logger.debug("urllib2.HTTPError: iondb.rundb.admin.py %s", errorMsg)
+
+    return (eula_content, isValid, errorMsg)
+
 
 @staff_member_required
 def update(request):
@@ -379,6 +419,8 @@ def update(request):
         about, meta_version = findUpdates()
         config = GlobalConfig.objects.filter()[0]
         config_dict = model_to_dict(config)
+        eula_content, isValid, errorMsg = get_EULA_text()
+
         try:
             # Disable Update Server button for some reason
             # Checking root partition for > 1GB free
@@ -395,7 +437,8 @@ def update(request):
             "admin/update.html",
             {"about": about, "meta": meta_version,
              "show_available": config.ts_update_status not in ['No updates', 'Finished installing'],
-             "legacy_OS": findOSversion().get('RELEASE') == '10.04',
+             "eula_content": eula_content,
+             "eula_error": errorMsg,
              "global_config_json": json.dumps(config_dict),
              "maintenance_mode": maintenance_action("check")['maintenance_mode'],
              "allow_update": allow_update},
@@ -405,13 +448,8 @@ def update(request):
 
 @staff_member_required
 def version_lock(request, enable):
-
-    if enable == "enable_lock":
-        # hide repository list file /etc/apt/sources.list
-        async_result = tasks.lock_ion_apt_sources.delay(enable=True)
-    else:
-        # restore repository list file /etc/apt/sources.list
-        async_result = tasks.lock_ion_apt_sources.delay(enable=False)
+    # hide repository list file /etc/apt/sources.list
+    async_result = tasks.lock_ion_apt_sources.delay(enable=(enable == "enable_lock"))
 
     try:
         async_result.get(timeout=20)
@@ -441,18 +479,15 @@ def maintenance(request, action):
 
 
 def tsvm_control(request, action=''):
-
     if request.method == 'GET':
-        status = tsvm.status()
-        versions = tsvm.versions()
         log_files = []
         for logfile in ["provisioning.log", "running.log"]:
             if os.path.exists(os.path.join("/var/log/ion/", logfile)):
                 log_files.append(logfile)
 
         ctxd = {
-            'versions': versions.split() if len(versions) > 0 else '',
-            'status': status,
+            'versions': tsvm.versions(),
+            'status': tsvm.status(),
             'host': request.META.get('HTTP_HOST'),
             'log_files': log_files
         }
@@ -467,11 +502,11 @@ def tsvm_control(request, action=''):
         elif "status" in action:
             response_object = tsvm.status()
         elif "check_update" in action:
-            async_result = tsvm.check_for_new_tsvm.delay()
-            response_object = async_result.get()
+            stdout = subprocess.check_output(['sudo', '/opt/ion/iondb/bin/ion_check_for_new_tsvm.py'])
+            response_object = json.loads(stdout)
         elif "update" in action:
-            async_result = tsvm.install_new_tsvm.delay()
-            response_object = async_result.get()
+            response_string = subprocess.check_output(['sudo', '/opt/ion/iondb/bin/install_new_tsvm.py'])
+            response_object = json.load(response_string)
         else:
             return http.HttpResponseBadRequest('Error: unknown action type specified: %s' % action)
 
@@ -617,13 +652,15 @@ class PluginResultAdmin(admin.ModelAdmin):
         return filesizeformat(obj.size)
     total_size.admin_order_field = 'size'
 
-    list_display = ('result', 'plugin', 'state', 'path', 'duration', 'total_size')
+    list_display = ('result', 'plugin', 'path', 'total_size')
     list_display_links = ('path',)
-    list_filter = ('state',)
     search_fields = ('result__resultsName', 'plugin__name')
-    readonly_fields = ('result', 'plugin', 'duration', 'path', 'total_size')
-    fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path', 'total_size'), 'store',)
+    readonly_fields = ('result', 'plugin', 'path', 'total_size')
+    fields = ('result', ('plugin', ), ('path', 'total_size'), 'store',)
     ordering = ("-id", )
+
+class PluginResultJobAdmin(admin.ModelAdmin):
+    model = PluginResultJob
 
 
 class PluginResultsInline(admin.StackedInline):
@@ -638,10 +675,9 @@ class PluginResultsInline(admin.StackedInline):
     verbose_name = "Plugin Result"
     extra = 0
     can_delete = True
-    fields = (('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path', 'total_size'), 'store')
-    readonly_fields = ('duration', 'total_size', 'plugin', 'path')
-    radio_fields = {'state': admin.HORIZONTAL}
-    ordering = ("endtime", "-id", )
+    fields = ('plugin', ('path', 'total_size'), 'store')
+    readonly_fields = ('total_size', 'plugin', 'path')
+    ordering = ("-id", )
 
 
 class ResultsAdmin(admin.ModelAdmin):
@@ -660,7 +696,8 @@ class TFMetricsAdmin(admin.ModelAdmin):
 
 
 class TemplateAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+    list_display = ('name', 'isofficial', 'key', 'sequence')
+    ordering = ('name',)
 
 
 class LocationAdmin(admin.ModelAdmin):
@@ -679,7 +716,6 @@ class EmailAddressAdmin(admin.ModelAdmin):
 class GlobalConfigAdmin(admin.ModelAdmin):
     list_display = ('name', 'web_root',
                     'site_name',
-                    'plugin_folder',
                     'records_to_display',
                     'default_test_fragment_key',
                     'default_library_key',
@@ -785,12 +821,16 @@ class SampleAdmin(admin.ModelAdmin):
 
 
 class ExperimentAnalysisSettingsAdmin(admin.ModelAdmin):
-    list_display = ("experiment", "isEditable", "isOneTimeOverride", "date", "status")
+    list_display = ("experiment", "isEditable", "isOneTimeOverride", "date", "status", "get_plan")
     list_filter = ('status',)
     search_fields = ['experiment__expName']
     ordering = ("-id", )
     raw_id_fields = ('experiment',)
     formfield_overrides = {models.CharField: {'widget': Textarea(attrs={'size': '512', 'rows': 4, 'cols': 80})}}
+
+    def get_plan(self, obj):
+        return obj.experiment.plan
+    get_plan.short_description = 'Plan'
 
 
 class DMFileSetAdmin(admin.ModelAdmin):
@@ -865,8 +905,18 @@ class ApplProductAdmin(admin.ModelAdmin):
                     'isDefaultForInstrumentType', 'defaultLibraryKit', 'defaultTemplateKit', 'defaultIonChefPrepKit',
                     'defaultSequencingKit', 'defaultIonChefSequencingKit', 'defaultFlowCount', 
                     'isActive', 'isVisible', 'productCode')
-    ordering = ("applType", "applicationGroup", "productName",)
+    ordering = ("productName", "applicationGroup", "applType", "instrumentType", "defaultChipType",)
     list_filter = ('applType',)
+
+class ApplicationGroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description', 'isActive', "uid")
+    list_filter = ('isActive',)
+    ordering = ("name",)
+
+
+class IonMeshNodeAdmin(admin.ModelAdmin):
+    list_display = ('hostname', 'system_id', 'share_plans', 'share_data', 'share_monitoring')
+
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
@@ -880,10 +930,11 @@ admin.site.register(Cruncher, CruncherAdmin)
 admin.site.register(AnalysisMetrics)
 admin.site.register(LibMetrics)
 admin.site.register(QualityMetrics)
-admin.site.register(Template)
+admin.site.register(Template, TemplateAdmin)
 admin.site.register(GlobalConfig, GlobalConfigAdmin)
 admin.site.register(Plugin, PluginAdmin)
 admin.site.register(PluginResult, PluginResultAdmin)
+admin.site.register(PluginResultJob, PluginResultJobAdmin)
 admin.site.register(EmailAddress, EmailAddressAdmin)
 admin.site.register(Chip, ChipAdmin)
 admin.site.register(dnaBarcode, dnaBarcodeAdmin)
@@ -891,12 +942,12 @@ admin.site.register(RunType, RunTypeAdmin)
 admin.site.register(ThreePrimeadapter, ThreePrimeadapterAdmin)
 admin.site.register(FlowOrder, FlowOrderAdmin)
 admin.site.register(PlannedExperiment, PlannedExperimentAdmin)
+admin.site.register(IonMeshNode, IonMeshNodeAdmin)
 admin.site.register(Publisher)
 admin.site.register(ContentUpload)
 admin.site.register(Content)
 admin.site.register(UserEventLog)
 admin.site.register(UserProfile)
-admin.site.register(VariantFrequencies)
 #ref genome
 admin.site.register(ReferenceGenome, ReferenceGenomeAdmin)
 
@@ -924,13 +975,16 @@ admin.site.register(AnalysisArgs, AnalysisArgsAdmin)
 admin.site.register(SharedServer, SharedServerAdmin)
 admin.site.register(SampleSet, SampleSetAdmin)
 admin.site.register(common_CV, common_CVAdmin)
+admin.site.register(ApplicationGroup, ApplicationGroupAdmin)
 
 # Add sessions to admin
-
-
 class SessionAdmin(admin.ModelAdmin):
 
     def _session_data(self, obj):
         return obj.get_decoded()
     list_display = ['session_key', '_session_data', 'expire_date']
 admin.site.register(Session, SessionAdmin)
+
+class PlanSessionAdmin(admin.ModelAdmin):
+    list_display = ['session_key', 'plan_key', 'expire_date']
+admin.site.register(PlanSession, PlanSessionAdmin)

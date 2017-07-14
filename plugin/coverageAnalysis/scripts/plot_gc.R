@@ -48,10 +48,15 @@ if( is.null(yprop) ) {
 
 # test for property
 ndata <- length(yprop)
-if( ndata < 2 )
+if( ndata < 1 )
 {
   write(sprintf("ERROR: No coverage property field found in data file %s\n",nFileIn),stderr())
   q(status=1)
+}
+if( ndata < 2 )
+{
+  write("WARNING: Skipping representation plot generation for only a single target region\n",stderr())
+  q(status=0)
 }
 
 tlen <- rcov$contig_end - rcov$contig_srt + 1

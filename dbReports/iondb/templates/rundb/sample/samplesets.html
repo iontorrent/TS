@@ -53,7 +53,7 @@ border-bottom:none;
 height:24px;
 padding-top:16px;
 font-size:13px;
-color: #0088cc;
+color: #333;
 }
 .k-header:first-child{
 height:12px;
@@ -289,9 +289,9 @@ function CustomSampleAttributeTemplate_old(index) {
 					</div>
 					<div class="pull-right">
 		            	<a id="import_samples" href="{% url "import_samples" %}" class="btn btn-primary">Import Samples from File</a>
-						<a id="input_samples" href="{% url "input_samples" %}" class="btn btn-primary">Enter Samples Manually</a>
+						<a id="input_samples" href="{% url "input_samples" %}" class="btn">Enter Samples Manually</a>
 						<div class="btn-group">
-							<a class="btn btn-primary dropdown-toggle" data-toggle="dropdown" href="#">
+							<a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
 								Sample Attributes <span class="caret"></span>
 							</a>
 							<ul class="dropdown-menu">								
@@ -313,7 +313,7 @@ function CustomSampleAttributeTemplate_old(index) {
                         <div class="btn-group" style="width: 150px;" id="sampleSet_search_options">
                             <label for="searchSubject" id="search_subject" class=" hide">sampleSetName</label> 
                             
-                            <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by name or code" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
+                            <a id="search_subject_nav" class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
             
                             <ul id="sampleset_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
                                 <li><a href="#" class="search_sampleSetName"><span class="search_sampleSetName_selected icon-check"></span>Sample set name</a></li>
@@ -326,7 +326,7 @@ function CustomSampleAttributeTemplate_old(index) {
                     </div>
                     <div style="display:inline-block;float: right;">
                             <span rel="tooltip" data-original-title="Select at least one sampleSet to Plan Run">
-                                    <a id="plan_from_selected" href="{% url "sampleset_plan_run" 999999 %}" class="btn btn-primary" disabled>Plan Run</a>
+                                    <a id="plan_from_selected" href="{% url "sampleset_plan_run" 999999 %}" class="btn" disabled>Plan Run</a>
                             </span>
                     </div>
                 </div>				

@@ -4,8 +4,30 @@ set -e
 #set -x
 #echo "preinst $@"
 case "$1" in
-	install|upgrade)
-	;;
+    install|upgrade)
+
+	# test to see if running GPU on PROTON, S5 or DX
+	if [ -f "/software/datacollect.avx" ]; then
+		# stop OIA
+		if [ -n "`service --status-all | grep -i oia`" ]; then
+			service oia stop
+		fi
+		if [ -n "`ps -e | grep -v "grep" | grep Analysis`" ]; then
+			pkill Analysis
+		fi
+
+		if [ -n "`service --status-all | grep -i lightdm`" ]; then
+			# stop lightdm server
+			service lightdm stop
+		fi
+    
+		if [ -n "`service --status-all | grep -i ganglia-monitor`" ]; then
+			# stop ganglia-monitor server (which might monitor the GPU)
+			service ganglia-monitor stop
+		fi
+	fi
+
+    ;;
     
     abort-install|abort-upgrade)
     	rm -rf @ION_INSTALL_PREFIX@/devdriver

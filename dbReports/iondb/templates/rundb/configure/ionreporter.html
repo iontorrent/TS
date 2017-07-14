@@ -2,7 +2,7 @@
 {% load url from future %}
 {% load static from staticfiles %}
 {% block extra_head_js %}
-    <script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
 {% endblock extra_head_js %}
 {% block tab-configure-ionreporter %}
     <li class="active"><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>

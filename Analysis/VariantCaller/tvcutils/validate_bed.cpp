@@ -48,7 +48,7 @@ void ValidateBedHelp()
   printf ("     --validation-log            FILE       log file for user-readable warning/error messages [stdout]\n");
   printf ("     --meta-json                 FILE       save validation and file statistics to json file [none]\n");
   printf ("     --unmerged-detail-bed       FILE       output a valid unmerged BED. To be used as input to --primer-trim-bed argument of variant_caller_pipeline.py (recommended) [none]\n");
-  printf ("     --unmerged-plain-bed        FILE       output a valid merged BED. To be used as input to --region-bed argument of variant_caller_pipeline.py (recommended) [none]\n");
+  printf ("     --unmerged-plain-bed        FILE       output a valid unmerged BED. To be used as input to --region-bed argument of variant_caller_pipeline.py (recommended) [none]\n");
   printf ("     --merged-detail-bed         FILE       output an (almost) valid bedDetail merged BED [none]\n");
   printf ("     --merged-plain-bed          FILE       output a valid plain merged BED [none]\n");
   printf ("     --effective-bed             FILE       output a valid effective BED [none]\n");
@@ -416,6 +416,10 @@ bool parse_track_line(char *track_line, int line_number, BedFile& bed)
     bed.log_line(kLineFixed, kUnsuppressable, line_number, 0, "track line has ionVersion higher than current ionVersion=4.0");
   }
 
+  if (bed.ion_version == 0) {
+    bed.log_line(kLineFixed, kUnsuppressable, line_number, 0, "track line has no ionVersion number");
+  }
+
   return true;
 }
 
@@ -424,22 +428,39 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
 {
   // assert type=bedDetail
 
+  bool invalid_format = false;
+  string error_details;
+
   if (bed.ion_version < 4.0) {
+
     bed_line->gene_id = description;
     if (bed_line->gene_id == ".")
       bed_line->gene_id.clear();
+
+    size_t found = bed_line->gene_id.find("=");
+    if (found != string::npos) {
+      invalid_format = true;
+      if (not error_details.empty())
+	error_details += "; ";
+      error_details += "For ionVersion < 4.0 GENE_ID column cannot contain an = sign";
+    }
+    found = bed_line->gene_id.find(";");
+    if (found != string::npos) {
+      invalid_format = true;
+      if (not error_details.empty())
+	error_details += "; ";
+      error_details += "For ionVersion < 4.0 GENE_ID column cannot contain a ; character";
+    }
+
+
     bed_line->submitted_region = id;
     if (bed_line->submitted_region == ".")
       bed_line->submitted_region.clear();
 
   } else {
 
-    bool invalid_format = false;
-
     if (description[0] == '.' and description[1] == 0)
       return;
-
-    string error_details;
 
     while (*description) {
       if (*description == ';') {
@@ -451,7 +472,7 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
       string key;
       bool invalid_char = false;
       for(; *description and *description != '=' and *description != ';'; ++description) {
-        if (isalnum(*description) or *description == '_' or *description == '.' or *description == '-')
+        if (isalnum(*description) or *description == '_' or *description == '.' or *description == '-' or *description == '*')
           key.push_back(*description);
         else {
           invalid_format = true;
@@ -534,12 +555,10 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
         bed_line->ion_value.push_back(value);
       }
     }
-
-
-    if (invalid_format) {
-      bed.log_column(kLineIgnored, kUnsuppressable, line_number, column, bed_line, "Problem parsing description column: ", error_details.c_str());
-      bed_line->filtered = true;
-    }
+  }
+  if (invalid_format) {
+    bed.log_column(kLineIgnored, kUnsuppressable, line_number, column, bed_line, "Problem parsing description column: ", error_details.c_str());
+    bed_line->filtered = true;
   }
 }
 
@@ -569,7 +588,7 @@ void parse_bed_detail_hotspots(const char *id, char *description, int line_numbe
     // Parse names
     string key;
     for(; *id and *id != '=' and *id != ';'; ++id) {
-      if (isalnum(*id) or *id == '_' or *id == '.' or *id == '-')
+      if (isalnum(*id) or *id == '_' or *id == '.' or *id == '-' or *id == '*')
         key.push_back(*id);
       else {
         invalid_format = true;
@@ -691,7 +710,7 @@ string validate_name(char *name, int line_number, int column, BedLine *bed_line,
   bool warning = false;
 
   for (; *name; ++name) {
-    if (isalnum(*name) or *name == '_' or *name == '.' or *name == '-' or *name == ':')
+    if (isalnum(*name) or *name == '_' or *name == '.' or *name == '-' or *name == ':' or *name == '*')
       corrected_name.push_back(*name);
     else
       warning = true;
@@ -1012,8 +1031,10 @@ void merge_overlapping_regions(ReferenceReader& reference_reader, BedFile& bed)
       merged_line->name += A->name;
       merged_line->gene_id += "&";
       merged_line->gene_id += A->gene_id;
-      merged_line->submitted_region += "&";
-      merged_line->submitted_region += A->submitted_region;
+      if (not A->submitted_region.empty()) {
+          merged_line->submitted_region += "&";
+          merged_line->submitted_region += A->submitted_region;
+      }
       merged_line->ref += "&";
       merged_line->ref += A->ref;
       merged_line->obs += "&";

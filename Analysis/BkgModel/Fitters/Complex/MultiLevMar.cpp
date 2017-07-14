@@ -2,6 +2,7 @@
 #include "MultiLevMar.h"
 #include "MiscVec.h"
 #include <assert.h>
+#include "BkgFitMatDat.h"
 
 MultiFlowLevMar::MultiFlowLevMar ( SignalProcessingMasterFitter &_bkg, int flow_block_size,
                                    master_fit_type_table *table ) :
@@ -66,7 +67,8 @@ int MultiFlowLevMar::MultiFlowSpecializedSampledLevMarFitParameters ( int additi
   {
     for ( int loc_iter=0 ; ( loc_iter< number_region_iterations_wanted )  & do_just_region; loc_iter++ )
     {
-      DoSampledRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+      int nbeads = DoSampledRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+      IF_OPTIMIZER_DEBUG(bkg.inception_state, bkg.debugSaver.WriteData(reg_fit, bkg.region_data->my_regions.rp ,flow_block_start, bkg.GetRegion(),reg_fit->compNames, nbeads));
       total_iter++;
     }
   }
@@ -90,7 +92,8 @@ int MultiFlowLevMar::MultiFlowSpecializedSampledLevMarFitParameters ( int additi
       // do one region iteration
       if ( !skip_region )
       {
-        DoSampledRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+        int nbeads = DoSampledRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+        IF_OPTIMIZER_DEBUG(bkg.inception_state, bkg.debugSaver.WriteData(reg_fit, bkg.region_data->my_regions.rp ,flow_block_start, bkg.GetRegion(),reg_fit->compNames, nbeads));
         total_iter++;
       }
     }
@@ -129,7 +132,8 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
   {
     for ( int loc_iter=0 ; loc_iter<number_region_iterations_wanted; loc_iter++ )
     {
-      DoRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+      int nbeads = DoRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+      IF_OPTIMIZER_DEBUG(bkg.inception_state, bkg.debugSaver.WriteData(reg_fit, bkg.region_data->my_regions.rp ,flow_block_start, bkg.GetRegion(),reg_fit->compNames, nbeads));
       total_iter++;
     }
   }
@@ -150,7 +154,8 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
       // do one region iteration
       if ( !skip_region )
       {
-        DoRegionIteration ( reg_fit, total_iter, flow_key, flow_block_size, flow_block_start );
+        int nbeads = DoRegionIteration ( reg_fit, total_iter, flow_key, flow_block_size, flow_block_start );
+        IF_OPTIMIZER_DEBUG(bkg.inception_state, bkg.debugSaver.WriteData(reg_fit, bkg.region_data->my_regions.rp ,flow_block_start, bkg.GetRegion(),reg_fit->compNames, nbeads));
         total_iter++;
       }
     }
@@ -186,7 +191,8 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParametersOnlyRegion (
   {
     for ( int loc_iter=0 ; loc_iter<number_region_iterations_wanted; loc_iter++ )
     {
-      DoRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+      int nbeads = DoRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+      IF_OPTIMIZER_DEBUG(bkg.inception_state, bkg.debugSaver.WriteData(reg_fit, bkg.region_data->my_regions.rp ,flow_block_start, bkg.GetRegion(),reg_fit->compNames, nbeads));
       total_iter++;
     }
   }
@@ -212,7 +218,7 @@ void MultiFlowLevMar::MultiFlowSpecializedLevMarFitAllWells ( int bead_only_iter
 }
 
 ///-----------------------------------done with entry points
-void MultiFlowLevMar::DoSampledRegionIteration (
+int MultiFlowLevMar::DoSampledRegionIteration (
     BkgFitMatrixPacker *reg_fit,
     int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
@@ -231,9 +237,10 @@ void MultiFlowLevMar::DoSampledRegionIteration (
     printf("DoSampledRegionIteration: %d beads less than minimum %d required in region(col=%d,row=%d)\n",reg_wells, lm_state.min_bead_to_fit_region, bkg.region_data->region->col, bkg.region_data->region->row);
   }
   IdentifyParametersFromSample ( bkg.region_data->my_beads,bkg.region_data->my_regions, lm_state.well_mask, lm_state.reg_mask, lm_state , flow_block_size);
+  return reg_wells;
 }
 
-void MultiFlowLevMar::DoRegionIteration (
+int MultiFlowLevMar::DoRegionIteration (
     BkgFitMatrixPacker *reg_fit,
     int iter, int flow_key, int flow_block_size, int flow_block_start )
 {
@@ -257,6 +264,7 @@ void MultiFlowLevMar::DoRegionIteration (
       lm_state.IncrementRegionGroup(); // better try another bead set if this one doesn't work!
   }
   IdentifyParameters ( bkg.region_data->my_beads,bkg.region_data->my_regions, *bkg.region_data_extras.my_flow, flow_block_size, lm_state.well_mask, lm_state.reg_mask,lm_state.skip_beads );
+  return reg_wells;
 }
 
 

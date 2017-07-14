@@ -21,6 +21,7 @@ v1_api.register(api.LocationResource())
 v1_api.register(api.RigResource())
 v1_api.register(api.PluginResource())
 v1_api.register(api.PluginResultResource())
+v1_api.register(api.PluginResultJobResource())
 v1_api.register(api.FileServerResource())
 v1_api.register(api.TFMetricsResource())
 v1_api.register(api.LibMetricsResource())
@@ -121,10 +122,13 @@ v1_api.register(api.common_CVResource())
 v1_api.register(api.FileMonitorResource())
 v1_api.register(api.SupportUploadResource())
 
+
 v1_api.register(api.PrepopulatedPlanningSessionResource())
+v1_api.register(api.IonMeshNodeResource())
 
 v1_mesh_api = Api(api_name='v1')
 v1_mesh_api.register(mesh_api.MeshCompositeExperimentResource())
+v1_mesh_api.register(mesh_api.MeshPrefetchResource())
 
 urlpatterns = patterns(
     'iondb.rundb',

@@ -8,6 +8,7 @@ import json
 import traceback
 import stat
 import csv
+import codecs
 import re
 import httplib2
 import urlparse
@@ -15,7 +16,7 @@ import datetime
 from django.utils import timezone
 import celery.exceptions
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.http import require_POST
 from django.shortcuts import render_to_response, get_object_or_404, get_list_or_404
@@ -32,25 +33,28 @@ from iondb.rundb import tasks, publishers
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
-from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, GlobalConfig, Chip, AnalysisArgs, \
-    EmailAddress, Publisher, Results, Template, UserProfile, \
-    FileMonitor, ContentType, Cruncher, SharedServer, RunType
+from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, PluginResultJob, GlobalConfig, Chip, AnalysisArgs, \
+                               EmailAddress, Publisher, Results, Template, UserProfile, model_to_csv, IonMeshNode, \
+                               FileMonitor, ContentType, Cruncher, SharedServer, RunType, RUNNING_STATES
 from iondb.rundb.data import rawDataStorageReport
 from iondb.rundb.configure.genomes import search_for_genomes
 from iondb.rundb.plan import ampliseq
+from iondb.rundb.plan.ampliseq import AmpliSeqPanelImport
 # Handles serialization of decimal and datetime objects
 from django.core.serializers.json import DjangoJSONEncoder
 from iondb.rundb.configure.util import plupload_file_upload
 from ion.utils import makeCSA
+from ion.utils import makeSSA
 from django.core import urlresolvers
+from django.template.loader import get_template
 from iondb.utils.raid import get_raid_status, load_raid_status_json
 from iondb.servelocation import serve_wsgi_location
 from ion.plugin.remote import call_pluginStatus
-from iondb.utils.utils import convert
+from iondb.utils.utils import convert, cidr_lookup
 from iondb.bin.IonMeshDiscoveryManager import IonMeshDiscoveryManager
 from iondb.rundb.configure import updateProducts
 from iondb.utils.nexenta_nms import this_is_nexenta, get_all_torrentnas_data, has_nexenta_cred
-
+from iondb.rundb.configure import ampliseq_design_parser
 logger = logging.getLogger(__name__)
 
 from json import encoder
@@ -87,19 +91,6 @@ def configure_ionreporter(request):
 
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/ionreporter.html", context_instance=ctx)
-
-
-def timeout_raid_info():
-    '''Call celery task to query RAID card status'''
-    async_result = tasks.get_raid_stats.delay()
-    try:
-        raidinfo = async_result.get(timeout=45)
-        if async_result.failed():
-            raidinfo = None
-    except celery.exceptions.TimeoutError as err:
-        logger.warning("RAID status check timed out, taking longer than 45 seconds.")
-        raidinfo = None
-    return raidinfo
 
 
 def timeout_raid_info_json():
@@ -350,7 +341,7 @@ def configure_plugins_plugin_configure(request, action, pk):
     def openfile(fname):
         """strip lines """
         try:
-            fhandle = open(fname, 'r')
+            fhandle = codecs.open(fname, 'r', 'utf-8')
         except:
             logger.exception("Failed to open '%s'", fname)
             return False
@@ -401,6 +392,15 @@ def configure_plugins_plugin_configure(request, action, pk):
             "results": results_json, "plan" : plan_json, "action": action}
 
     context = RequestContext(request, ctxd)
+
+    # modal_configure_plugins_plugin_configure.html will be removed in a newer release as it places a script outside the
+    # html tag.
+    # Add in the js vars just before the closing head tag.
+    plugin_js_script = get_template("rundb/configure/plugins/plugin_configure_js.html").render(context).replace("\n",
+                                                                                                                "")
+    context["file"] = context["file"].replace("</head>", plugin_js_script + "</head>", 1)
+
+
     return render_to_response("rundb/configure/modal_configure_plugins_plugin_configure.html", context_instance=context)
 
 
@@ -496,45 +496,56 @@ def configure_plugins_plugin_refresh(request, pk):
 @login_required
 def configure_plugins_plugin_usage(request, pk):
     plugin = get_object_or_404(Plugin, pk=pk)
-    pluginresults = plugin.pluginresult_set.filter(endtime__isnull=False)
+    pluginresults = plugin.pluginresult_set
     ctx = RequestContext(request, {'plugin': plugin, 'pluginresults': pluginresults})
     return render_to_response("rundb/configure/plugins/plugin_usage.html", context_instance=ctx)
 
 
 @login_required
 def configure_configure(request):
+    """
+    Handles the render and post for server configuration
+    """
     ctx = RequestContext(request, {})
     emails = EmailAddress.objects.all().order_by('pk')
     enable_nightly = GlobalConfig.get().enable_nightly_email
     ctx.update({"email": emails, "enable_nightly": enable_nightly})
     config_contacts(request, ctx)
     config_site_name(request, ctx)
-    if request.method == "POST" and "zone_select" in request.POST:
-        timezone = request.POST["zone_select"] + '/' + request.POST["city_select"]
-        result = tasks.set_timezone.delay(timezone)
-        while not result.ready():
-            pass
-        if not result.successful():
-            logger.debug("Celery was not successful with return code: %s" % result.result)
-            if isinstance(result.result, Exception):
-                raise result.result
-            else:
-                raise Http404()
-        else:
-            logger.debug("Celery was successful and returned code: %s" % result.result)
-            if result.result != 0:
-                raise Http404()
 
+    # handle post request for setting a time zone
+    if request.method == "POST" and "zone_select" in request.POST:
+        try:
+            selected_timezone = request.POST["zone_select"] + '/' + request.POST["city_select"]
+            subprocess.check_call(['sudo', 'timedatectl', 'set-timezone', selected_timezone])
+            logger.info("Successfully set the timezone to " + selected_timezone)
+        except subprocess.CalledProcessError as exc:
+            logger.error(str(exc))
+            raise Http404()
+
+    # handle the request for the timezones
     else:
         get_timezone_info(request, ctx)
 
-    # update the context with the ion mesh
-    ctx.update({
-        "ionMesh": ionMeshDiscoveryManager.getMeshComputers(),
-        "sharedServers": SharedServer.objects.filter(active=True)
+    # get current list of
+    return render_to_response("rundb/configure/configure.html", context_instance=ctx)
+
+
+@permission_required('user.is_staff')
+def configure_mesh(request):
+    """
+    Handles view requests for the ion mesh configuration page.
+    :param request: The http request
+    :return: A http response
+    """
+
+    ctx=RequestContext(request, {
+        "mesh_computers": sorted(ionMeshDiscoveryManager.getMeshComputers()),
+        "ion_mesh_nodes_table": IonMeshNode.objects.all(),
+        "system_id": settings.SYSTEM_UUID
     })
 
-    return render_to_response("rundb/configure/configure.html", context_instance=ctx)
+    return render_to_response("rundb/configure/configure_mesh.html", context_instance=ctx)
 
 
 def _crawler_status(request):
@@ -568,7 +579,6 @@ def _crawler_status(request):
 def seconds2htime(_seconds):
     """Convert a number of seconds to a dictionary of days, hours, minutes,
     and seconds.
-
     >>> seconds2htime(90061)
     {"days":1,"hours":1,"minutes":1,"seconds":1}
     """
@@ -639,24 +649,24 @@ def current_plugin_jobs():
     Get list of active pluginresults from database then connect to ionPlugin and get drmaa status per jobid.
     """
     jobs = []
-    running = PluginResult.objects.filter(state__in=PluginResult.RUNNING_STATES).order_by('pk')
+    running = PluginResultJob.objects.filter(state__in=RUNNING_STATES).order_by('pk')
     if running:
         # get job status from drmaa
-        jobids = running.values_list('jobid', flat=True)
+        jobids = running.values_list('grid_engine_jobid', flat=True)
         try:
             job_status = call_pluginStatus(list(jobids))
-            for i, pr in enumerate(list(running)):
+            for i, prj in enumerate(list(running)):
                 if job_status[i] not in ['DRMAA BUG', 'job finished normally']:
                     jobs.append({
-                        'name': pr.plugin.name,
-                        'resultsName': pr.result.resultsName,
-                        'pid': pr.jobid,
+                        'name': prj.plugin_result.plugin.name+"-"+prj.run_level,
+                        'resultsName': prj.plugin_result.result.resultsName,
+                        'pid': prj.grid_engine_jobid,
                         'type': 'plugin',
                         'status': job_status[i],
-                        'pk': pr.pk,
+                        'pk': prj.plugin_result.pk,
                         'report_exist': True,
-                        'report_url': reverse('report', args=(pr.result.pk,)),
-                        'term_url': "/rundb/api/v1/pluginresult/%d/control/" % pr.pk
+                        'report_url': reverse('report', args=(prj.plugin_result.result.pk,)),
+                        'term_url': "/rundb/api/v1/pluginresult/%d/stop/" % prj.plugin_result.pk
                     })
         except:
             pass
@@ -666,14 +676,20 @@ def current_plugin_jobs():
 
 def process_set():
     def process_status(process):
-        return subprocess.Popen("service %s status" % process,
-                                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return subprocess.Popen("service %s status" % process, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def simple_status(name):
         proc = process_status(name)
         stdout, stderr = proc.communicate()
         logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
         return proc.returncode == 0
+
+    def upstart_status(name):
+        # Upstart jobs status command always returns 0.
+        proc = subprocess.Popen("service %s status" % name, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
+        return "start/running" in stdout
 
     def complicated_status(filename, parse):
         try:
@@ -698,12 +714,14 @@ def process_set():
     for name in processes:
         proc_set[name] = simple_status(name)
 
-    # Ubuntu 10.04 lucid compatibility: dhcp3-server
-    proc_set['dhcp'] = simple_status('dhcp3-server') or simple_status('isc-dhcp-server')
+    # get the DjangoFTP status
+    proc_set['DjangoFTP'] = upstart_status("DjangoFTP")
 
-    # Ubuntu 10.04 lucid compatibility: tomcat6
-    proc_set["tomcat"] = complicated_status("/var/run/tomcat6.pid", int) or \
-                         complicated_status("/var/run/tomcat7.pid", int)
+    # get the dhcp service status
+    proc_set['dhcp'] = simple_status('isc-dhcp-server')
+
+    # get the tomcat service status
+    proc_set["tomcat"] = complicated_status("/var/run/tomcat7.pid", int)
 
     # pids should contain something like '[{rabbit@TSVMware,18442}].'
     proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid", int)
@@ -858,6 +876,16 @@ def _validate_barcode(barCodeDict, barcodeSetName=None):
     return failed
 
 
+def reference_barcodeset_csv(request, barcodesetid):
+    """Get a csv for a barcode set"""
+    barcodeset_name = get_object_or_404(dnaBarcode, pk=barcodesetid).name
+    filename = '%s_%s' % (barcodeset_name, str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S")))
+    barcode_csv_filename = filename.replace(" ", "_")
+    response = HttpResponse(mimetype='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=%s.csv' % barcode_csv_filename
+    response.write(model_to_csv(dnaBarcode.objects.filter(name=barcodeset_name), ['index', 'id_str', 'sequence', 'annotation', 'adapter']))
+    return response
+
 @login_required
 def references_barcodeset_delete(request, barcodesetid):
     barCodeSetName = get_object_or_404(dnaBarcode, pk=barcodesetid).name
@@ -985,7 +1013,7 @@ def configure_system_stats_data(request):
     # Run a script on the server to generate text
     # If this is change, mirror that change in
     # rundb/configure/configure_system_stats_loading.html
-    networkCMD = ["/usr/bin/ion_netinfo"]
+    networkCMD = "/usr/bin/ion_netinfo"
     logger.info("Calling netinfo script")
     p = subprocess.Popen(networkCMD, shell=True, stdout=subprocess.PIPE)
     stdout, stderr = p.communicate()
@@ -994,7 +1022,7 @@ def configure_system_stats_data(request):
     else:
         stats_network = []
 
-    statsCMD = ["/usr/bin/ion_sysinfo"]
+    statsCMD = "/usr/bin/ion_sysinfo"
     logger.info("Calling ion_sysinfo script")
     q = subprocess.Popen(statsCMD, shell=True, stdout=subprocess.PIPE)
     stdout, stderr = q.communicate()
@@ -1006,7 +1034,10 @@ def configure_system_stats_data(request):
     # MegaCli64 needs root privilege to access RAID controller - we use a celery task
     # to do the work since they execute with root privilege
     logger.info("Calling timeout_raid_info")
-    raid_stats = timeout_raid_info()
+    raidCMD = "sudo /usr/bin/ion_raidinfo"
+    q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
+    stdout, stderr = q.communicate()
+    raid_stats = stdout if q.returncode == 0 else stderr
 
     logger.info("Calling storage_report")
     stats_dm = rawDataStorageReport.storage_report()
@@ -1154,11 +1185,11 @@ def auto_detect_timezone(request):
 
     current_zone = []
     current_city = []
-    url = 'http://freegeoip.net/json/'
+    url = 'http://geoip.nekudo.com/api'
     try:
         with closing(urlopen(url, timeout=1)) as response:
             location = json.loads(response.read())
-            timezone = location['time_zone']
+            timezone = location['location']['time_zone']
             current_zone, current_city = timezone.split("/", 1)
     except:
         return HttpResponse("error", status=404)
@@ -1367,7 +1398,7 @@ def configure_account(request):
 @login_required
 def system_support_archive(request):
     try:
-        path, name = makeCSA.make_ssa()
+        path, name = makeSSA.makeSSA()
         response = HttpResponse(FileWrapper(open(path)),
                                     mimetype='application/zip')
         response['Content-Disposition'] = 'attachment; filename=%s' % name
@@ -1375,42 +1406,6 @@ def system_support_archive(request):
     except:
         logger.exception("Failed to create System Support Archive")
         return HttpResponseServerError(traceback.format_exc())
-
-
-def get_ampliseq_designs(user, password):
-    http = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
-    http.add_credentials(user, password)
-    url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/list")
-    response, content = http.request(url)
-    if response['status'] == '200':
-        design_data = json.loads(content)
-        designs = design_data.get('AssayDesigns', [])
-        for design in designs:
-            solutions = []
-            for solution in design.get('DesignSolutions', []):
-                version, data, meta = ampliseq.handle_versioned_plans(solution)
-                solutions.append(data)
-            design['DesignSolutions'] = solutions
-        return response, designs
-    else:
-        return response, {}
-
-
-def get_ampliseq_fixed_designs(user, password):
-    http = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
-    http.add_credentials(user, password)
-    url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/tmpldesign/list/active")
-    response, content = http.request(url)
-    if response['status'] == '200':
-        designs = json.loads(content)
-        fixed = []
-        for template in designs.get('TemplateDesigns', []):
-            version, data, meta = ampliseq.handle_versioned_plans(template)
-            fixed.append(data)
-        return response, fixed
-    else:
-        return response, None
-
 
 @require_POST
 @login_required
@@ -1421,13 +1416,11 @@ def configure_ampliseq_logout(request):
         del request.session["ampliseq_password"]
     return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
 
-
 @login_required
 def configure_ampliseq(request, pipeline=None):
-    ctx = {
-        'designs': None
-    }
+    ctx = {'designs': None}
     form = AmpliseqLogin()
+
     if request.method == 'POST':
         form = AmpliseqLogin(request.POST)
         if form.is_valid():
@@ -1439,79 +1432,37 @@ def configure_ampliseq(request, pipeline=None):
                 return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
 
     if 'ampliseq_username' in request.session:
+        # Get the list of ampliseq designs panels both custom and fixed for display
         username = request.session['ampliseq_username']
         password = request.session['ampliseq_password']
         try:
-            response, designs = get_ampliseq_designs(username, password)
+            response, ctx = ampliseq_design_parser.get_ampliseq_designs(username, password, pipeline, ctx)
             if response['status'].startswith("40"):
                 request.session.pop('ampliseq_username')
                 request.session.pop('ampliseq_password')
-                ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to <a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
+                ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to ' \
+                                    '<a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                 fixed = None
+
             else:
-                response, fixed = get_ampliseq_fixed_designs(username, password)
+                ctx = ampliseq_design_parser.get_ampliseq_fixed_designs(username, password, pipeline, ctx)
+                fixed = ctx['fixed_solutions']
         except httplib2.HttpLib2Error as err:
             logger.error("There was a connection error when contacting ampliseq: %s" % err)
             ctx['http_error'] = "Could not connect to AmpliSeq.com"
             fixed = None
-
-        pipe_types = {
-            "RNA": "AMPS_RNA",
-            "DNA": "AMPS",
-            "exome": "AMPS_EXOME"
-        }
-        target = pipe_types.get(pipeline, None)
-
-        def match(design):
-            return not target or design['plan']['runType'] == target
-
-        if fixed is not None:
+        if fixed:
             form = None
-            ctx['ordered_solutions'] = []
-            ctx['fixed_solutions'] = filter(lambda x: x['status'] == "ORDERABLE" and
-                match(x), fixed)
-            #creates fixed_solution: a list of dictionaries with 2 keys - id (design id from the Ready-to-Use ampliseq panel and configuration_choices (the instrument/chip types supported by the corresponding panel).
-            tmpList = []
-            for design in ctx['fixed_solutions']:
-                designID = design['id']
-                configurationChoices = design['configuration_choices']
-                tmpDict = {'id': designID, 'configuration_choices': configurationChoices}
-                tmpList.append(tmpDict)
 
-            tmpList = convert(tmpList)
-            ctx['fixed_solution'] = json.dumps(tmpList)
-
-            #creates ordered_solution: a list of dictionaries with 2 keys - id (solution id from the custom ampliseq panel and configuration_choices (the instrument/chip types supported by the corresponding panel).
-            #creates unordered_solution: a list of dictionaries with 2 keys - id (solution id from the custom ampliseq panel and configuration_choices (the instrument/chip types supported by the corresponding panel).
-            #solution_id: unique identifier of custom panels designed by ampliseq.com
-
-            ctx['unordered_solutions'] = []
-            unordered_tmpList = []
-            ordered_tmpList = []
-            for design in designs:
-                for solution in design['DesignSolutions']:
-                    solution_id = solution['id']
-                    configurationChoices = solution['configuration_choices']
-                    if match(solution):
-                        if solution.get('ordered', False):
-                            ctx['ordered_solutions'].append((design, solution))
-                            ordered_tmpList.append({'configuration_choices': configurationChoices, 'id': solution_id})
-                        else:
-                            ctx['unordered_solutions'].append((design, solution))
-                            unordered_tmpList.append({'configuration_choices': configurationChoices, 'id': solution_id})
-            unordered_tmpList = convert(unordered_tmpList)
-            ordered_tmpList = convert(ordered_tmpList)
-            ctx['unordered_solution'] = json.dumps(unordered_tmpList)
-            ctx['ordered_solution'] = json.dumps(ordered_tmpList)
-
-            ctx['designs_pretty'] = json.dumps(designs, indent=4, sort_keys=True)
-            ctx['fixed_designs_pretty'] = json.dumps(fixed, indent=4, sort_keys=True)
     ctx['form'] = form
     ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
     ctx['ampliseq_url'] = settings.AMPLISEQ_URL
+
+    s5_chips = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540"], instrumentType= "S5").values_list('name', flat=True).order_by('name')
+    ctx['s5_chips'] = s5_chips
+    
     return render_to_response("rundb/configure/ampliseq.html", ctx,
         context_instance=RequestContext(request))
-
 
 @login_required
 def configure_ampliseq_download(request):
@@ -1619,8 +1570,6 @@ def cluster_ctrl(request, name, action):
     if error:
         return HttpResponse(json.dumps({"error": error}), mimetype="application/json")
 
-    # refresh queues database info
-    tasks.cluster_queue_info()
     return HttpResponse(json.dumps({"status": "%s is %sd" % (name, action.capitalize())}), mimetype="application/json")
 
 
@@ -1641,7 +1590,7 @@ def cluster_info_history(request):
 
 @login_required
 def configure_analysisargs(request):
-    chips = Chip.objects.filter(isActive=True)
+    chips = Chip.objects.filter(isActive=True).order_by("name")
     ctx = RequestContext(request, {'chips': chips})
     return render_to_response("rundb/configure/manage_analysisargs.html", context_instance=ctx)
 
@@ -1654,7 +1603,7 @@ def configure_analysisargs_action(request, pk, action):
         obj = AnalysisArgs(name='new_parameters')
 
     if request.method == 'GET':
-        chips = Chip.objects.filter(isActive=True)
+        chips = Chip.objects.filter(isActive=True).order_by("name")
         args_for_uniq_validation = AnalysisArgs.objects.all()
         display_name = "%s (%s)" % (obj.description, obj.name) if obj else ''
         if action == "copy":
@@ -1692,7 +1641,7 @@ def get_local_ip():
     ip_array = []
     cmd = "ifconfig"
     p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = p.communicate()
+    stdout, _ = p.communicate()
     if p.returncode == 0:
         for line in [line for line in stdout.splitlines() if "inet addr" in line]:
             address = line.split(':', 1)[1].split()[0].strip()
@@ -1700,54 +1649,12 @@ def get_local_ip():
     return ip_array
 
 
-def cidr_lookup(address):
-    # Lookup table of netmask values and the corresponding CIDR mask bit.
-    maskbits = (
-        ("128.0.0.0", 1),
-        ("192.0.0.0", 2),
-        ("224.0.0.0", 3),
-        ("240.0.0.0", 4),
-        ("248.0.0.0", 5),
-        ("252.0.0.0", 6),
-        ("254.0.0.0", 7),
-        ("255.0.0.0", 8),
-        ("255.128.0.0", 9),
-        ("255.192.0.0", 10),
-        ("255.224.0.0", 11),
-        ("255.240.0.0", 12),
-        ("255.248.0.0", 13),
-        ("255.252.0.0", 14),
-        ("255.254.0.0", 15),
-        ("255.255.0.0", 16),
-        ("255.255.128.0", 17),
-        ("255.255.192.0", 18),
-        ("255.255.224.0", 19),
-        ("255.255.240.0", 20),
-        ("255.255.248.0", 21),
-        ("255.255.252.0", 22),
-        ("255.255.254.0", 23),
-        ("255.255.255.0", 24),
-        ("255.255.255.128", 25),
-        ("255.255.255.192", 26),
-        ("255.255.255.224", 27),
-        ("255.255.255.240", 28),
-        ("255.255.255.248", 29),
-        ("255.255.255.252", 30),
-        ("255.255.255.254", 31),
-        ("255.255.255.255", 32),
-        )
-    for (netmask, maskbit) in maskbits:
-        if address == netmask:
-            return maskbit
-
-
 def get_nas_devices(request):
-    '''Returns json object containting list of IP addresses/hostnames of direct-connected
+    '''Returns json object containing list of IP addresses/hostnames of direct-connected
     NAS devices'''
     # ===== get local instrument network ports from dhcp.conf =====
     addresses = []
-    filename = '/etc/dhcp/dhcpd.conf'
-    with open(filename) as fh:
+    with open('/etc/dhcp/dhcpd.conf') as fh:
         for subnet in [line for line in fh.readlines() if line.startswith('subnet')]:
             addresses.append([subnet.split()[1].strip(), subnet.split()[3].strip()])
 
@@ -1764,7 +1671,7 @@ def get_nas_devices(request):
     ## Append the LAN address
     #addresses.append(lan_address)
 
-    logger.info("scanning these subnets for NAS: %s" % addresses)
+    logger.info("scanning these subnets for NAS: %s", addresses)
 
     # ===== Get all servers in given address range =====
     devices = []
@@ -1772,9 +1679,9 @@ def get_nas_devices(request):
         # nmap cmdline returns addresses of given range.  Output:
         # "Nmap scan report for localhost (127.0.0.1)"
         cmd = "/usr/bin/nmap -sn %s/%s" % (address[0], cidr_lookup(address[1]))
-        logger.info("CMD: %s" % cmd)
+        logger.info("CMD: %s", cmd)
         p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = p.communicate()
+        stdout, _ = p.communicate()
         if p.returncode == 0:
             for line in [line for line in stdout.splitlines() if "Nmap scan" in line]:
                 devices.append(line.replace('(', '').replace(')', '').split()[4])
@@ -1784,13 +1691,13 @@ def get_nas_devices(request):
     # ===== Filter out addresses of this host =====
     ip_list = get_local_ip()
     devices = list(set(devices) - set(ip_list))
-    logger.info("scanning these devices for shares: %s" % devices)
+    logger.info("scanning these devices for shares: %s", devices)
 
     # ===== Get all servers with NFS mounts =====
     nas_devices = []
     stderr = ""
     for device in devices:
-        logger.info("scanning %s" % device)
+        logger.info("scanning %s", device)
         # Not the best way: - using showmount and a time limit
         cmd = "/usr/bin/timelimit -t 9 -T 1 showmount -e %s" % (device)
         p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1804,7 +1711,7 @@ def get_nas_devices(request):
             stderr = "Request timed out"
 
     myjson = json.dumps({
-        'error': '',
+        'error': stderr,
         'devices': nas_devices,
     })
     return HttpResponse(myjson, mimetype="application/json")
@@ -1866,17 +1773,21 @@ def get_current_mnts(request):
 
 
 def add_nas_storage(request):
-    '''Edits all_local, adding specified mount entry, calls ansible-playbook'''
+    """
+    Edits all_local, adding specified mount entry, calls ansible-playbook
+    :parameter request: The web request
+    """
+
     try:
         data = json.loads(request.body)
         servername = data.get('servername')
         sharename = data.get('sharename')
         mountpoint = data.get('mountpoint')
         logger.info("Handling request for %s:%s on %s" % (servername, sharename, mountpoint))
-        # Celery task (b/c of root privilege)
-        result = tasks.add_nfs_mount.delay(servername, sharename, mountpoint)
-        # Wait for the task to complete
-        result.wait()
+
+        # create an ansible playbook and which will mount the drive
+        subprocess.check_call(['sudo', '/opt/ion/iondb/bin/ion_add_nfs_mount.py', servername, sharename, mountpoint])
+
         # Probe nas unit to identify Nexenta appliance
         if this_is_nexenta(servername):
             logger.info("%s is TorrentNAS", servername)
@@ -1896,11 +1807,8 @@ def remove_nas_storage(request):
         data = json.loads(request.body)
         servername = data.get('servername')
         mountpoint = data.get('mountpoint')
-        logger.info("Handling request to remove %s", mountpoint)
-        # Celery task (b/c of root privilege)
-        result = tasks.remove_nas_storage.delay(mountpoint)
-        # Wait for the task to complete
-        result.wait()
+        logger.info("Handling request to remove %s", mountpoint)  # create an ansible playbook and which will mount the drive
+        subprocess.check_call(['sudo', '/opt/ion/iondb/bin/ion_remove_nfs_mount.py', mountpoint])
         # Update credentials file
         subprocess.call(['sudo', '/opt/ion/iondb/bin/write_nms_access.py', '--remove', '--id', '%s' % servername])
     except:

@@ -172,7 +172,7 @@ def initBlockReport(blockObj, SIGPROC_RESULTS, BASECALLER_RESULTS, ALIGNMENT_RES
 
 
 def get_plugins_to_run(plugins, report_type):
-    """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
+    """ Sort out runtypes and runlevels of each plugin and return plugins appropriate for this analysis """
     blocklevel = False
     plugins_to_run = {}
     printtime("Get plugins to run, report type = %s" % report_type)
@@ -181,17 +181,19 @@ def get_plugins_to_run(plugins, report_type):
 
         # default is run on wholechip and thumbnail, but not composite
         selected = report_type in [RunType.FULLCHIP, RunType.THUMB]
-        if plugin.get('runtype', ''):
-            selected = (report_type in plugin['runtype'])
+        if plugin.get('runtypes'):
+            selected = (report_type in plugin['runtypes'])
 
         if selected:
-            plugin['runlevel'] = plugin.get('runlevel') if plugin.get('runlevel') else [RunLevel.DEFAULT]
-            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'], ','.join(plugin['runlevel'])))
+            plugin['runlevels'] = plugin.get('runlevels') if plugin.get('runlevels') else [RunLevel.DEFAULT]
+            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'], ','.join(plugin['runlevels'])))
             plugins_to_run[name] = plugin
 
             # check if have any blocklevel plugins
-            if report_type == RunType.COMPOSITE and RunLevel.BLOCK in plugin['runlevel']:
+            if report_type == RunType.COMPOSITE and RunLevel.BLOCK in plugin['runlevels']:
                 blocklevel = True
+        else:
+            printtime("Plugin %s (runtypes=%s) is not enabled for %s report" % (plugin['name'], ','.join(plugin.get('runtypes','')), report_type))
 
     return plugins_to_run, blocklevel
 
@@ -255,11 +257,18 @@ def GetBlocksToAnalyze(env):
     else:
         explogblocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
         for block in explogblocks:
-            rawDirectory = block['datasubdir']
-            print "expblock: " + str(block)
-            if (block['autoanalyze'] and block['analyzeearly']) or os.path.isdir(os.path.join(env['pathToRaw'], rawDirectory)):
+            rawDirectory = os.path.join(env['pathToRaw'], block['datasubdir'])
+            toProcess = (block['autoanalyze'] and block['analyzeearly']) or os.path.isdir(rawDirectory)
+
+            if env.get('chipBlocksOverride') and toProcess:
+                if env['chipBlocksOverride'] == '510':
+                    toProcess = block['id_str'].endswith('Y0')
+
+            if toProcess:
                 print "block: " + str(block)
                 blocks.append(block)
+            else:
+                print "skip block: " + str(block)
 
     print blocks
     return blocks
@@ -302,6 +311,19 @@ def get_mem_usage():
     mem_cached = meminfo['Cached']/1024
     mem_total_free = mem_free+mem_buffers+mem_cached
     return "Memory [MB]  Total: {0:6d}   Used: {1:6d}   Free: {2:6d}   Buffers: {3:6d}   Cached: {4:6d}   TotalFree: {5:6d}".format(mem_total, mem_used, mem_free, mem_buffers, mem_cached, mem_total_free)
+
+
+def write_jobid_list(block_job_dict, merge_job_dict=None):
+    # save job ids to file, Services page job termination and job info functions read this
+    job_list = {}
+    for block, jobid in block_job_dict.items():
+        job_list[block] = {'block_processing': jobid}
+
+    if merge_job_dict:
+        job_list['merge'] = merge_job_dict
+
+    with open('job_list.json', 'w') as f:
+        f.write(json.dumps(job_list, indent=2))
 
 
 def spawn_cluster_job(rpath, scriptname, args, holds=None):
@@ -689,6 +711,9 @@ if __name__ == "__main__":
 
                 blocks_to_process.remove(block)
 
+            if len(blocks_to_process_ready) > 0:
+                write_jobid_list(block_job_dict)
+
         if timeout <= 0:
             printtime("Error: timeout while processing blocks")
 
@@ -699,13 +724,8 @@ if __name__ == "__main__":
             merge_job_dict['merge'] = spawn_cluster_job('.', 'MergeTLScript.py', ['--do-zipping'], block_job_dict.values())
             printtime("Submitted zipping job with job ID (%s)" % (str(merge_job_dict['merge'])))
 
-        # write job id's to file
-        job_list = {}
-        job_list['merge'] = merge_job_dict
-        for block, jobid in block_job_dict.items():
-            job_list[block] = {'block_processing': jobid}
-        with open('job_list.json', 'w') as f:
-            f.write(json.dumps(job_list, indent=2))
+        # update file now that all jobs are launched
+        write_jobid_list(block_job_dict, merge_job_dict)
 
         # multilevel plugins preprocessing level
         plugins = runplugins(plugins, env, RunLevel.PRE, plugins_params)

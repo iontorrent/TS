@@ -119,6 +119,15 @@
                 <div class="row-fluid">
                     <div class="span8" id="mainContent">
                         <a class="btn pull-right hide" style="margin-top: 10px;" id="showSummary" href="#">Show Summary</a>
+                        {% if step.warnings %}
+                        <div class="alert alert-warning">
+                            <ul>
+                            {% for warning in step.warnings %}
+                                <li>{{warning}}</li>
+                            {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
                         <h3>{% block main-title %} {% endblock main-title %}</h3>
                         <form id='step_form' method='post'>
                             {% block page-plan-content %}
@@ -168,6 +177,8 @@
             window.location = "{% url 'planRuns' %}";
         }
 
+		$("#selectedApplicationCategory").html('{{helper.getApplicationCategoryDisplayedName}}')
+		
         applicationToRuntype = {};
         {% for application in helper.getStepDict.Application.getPrePopulatedFieldDict.applicationGroups %}
             applicationToRuntype['{{application.name}}'] = [];

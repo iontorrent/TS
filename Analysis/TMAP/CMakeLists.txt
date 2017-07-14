@@ -172,9 +172,19 @@ configure_file (
         "${PROJECT_BINARY_DIR}/config.h" @ONLY
 )
 
-
 add_executable(tmap ${tmap_SOURCES})
 set_target_properties(tmap PROPERTIES COMPILE_FLAGS "-D_TMAP_BWT_RUN_TYPE=0 -D_USE_KNETFILE -DSAMTOOLS_MAIN -D__STDC_LIMIT_MACROS -DTMAP_MMAP=1")
+
+include(CheckCCompilerFlag)
+check_c_compiler_flag(-fdiagnostics-color=never HAS_DIAGNOSTICS_COLOR)
+if (HAS_DIAGNOSTICS_COLOR)
+    target_compile_options(tmap PUBLIC -fdiagnostics-color=never)
+endif()
+
+
+
+#
+
 target_link_libraries (tmap m z pthread bz2)
 install(TARGETS tmap DESTINATION bin)
 

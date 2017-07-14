@@ -37,9 +37,11 @@ def validate_csv_template_version(headerName=None, isSampleCSV=None, isPlanCSV=N
     user_SampleCSV_version = None
     if isSampleCSV:
         systemCSV_version = settings.SAMPLE_CSV_VERSION
+        systemSupportedCSV_version = settings.SUPPORTED_SAMPLE_CSV_VERSION
         csvTemplate = "Sample"
     if isPlanCSV:
         systemCSV_version = settings.PLAN_CSV_VERSION
+        systemSupportedCSV_version = settings.SUPPORTED_PLAN_CSV_VERSION
         csvTemplate = "Plan"
     logger.debug("iondb.utils.validate_csv_template_version %s" % csv_version_row)
     # skip this row if no values found (will not prohibit the rest of the files from upload
@@ -62,7 +64,7 @@ def validate_csv_template_version(headerName=None, isSampleCSV=None, isPlanCSV=N
                     user_SampleCSV_version = float(user_SampleCSV_version)
                 user_SampleCSV_version = str(user_SampleCSV_version)
                 systemCSV_version = str(systemCSV_version)
-                if StrictVersion(user_SampleCSV_version.strip()) < StrictVersion(systemCSV_version.strip()):
+                if user_SampleCSV_version not in systemSupportedCSV_version:
                     isToAbort = True
                     isValidCSV = False
             except Exception as e:
@@ -231,7 +233,58 @@ def get_apt_cache(packageName):
     package = cache[packageName]
     return package, cache
 
+
+def cidr_lookup(address):
+    # Lookup table of netmask values and the corresponding CIDR mask bit.
+    maskbits = (
+        ("128.0.0.0", 1),
+        ("192.0.0.0", 2),
+        ("224.0.0.0", 3),
+        ("240.0.0.0", 4),
+        ("248.0.0.0", 5),
+        ("252.0.0.0", 6),
+        ("254.0.0.0", 7),
+        ("255.0.0.0", 8),
+        ("255.128.0.0", 9),
+        ("255.192.0.0", 10),
+        ("255.224.0.0", 11),
+        ("255.240.0.0", 12),
+        ("255.248.0.0", 13),
+        ("255.252.0.0", 14),
+        ("255.254.0.0", 15),
+        ("255.255.0.0", 16),
+        ("255.255.128.0", 17),
+        ("255.255.192.0", 18),
+        ("255.255.224.0", 19),
+        ("255.255.240.0", 20),
+        ("255.255.248.0", 21),
+        ("255.255.252.0", 22),
+        ("255.255.254.0", 23),
+        ("255.255.255.0", 24),
+        ("255.255.255.128", 25),
+        ("255.255.255.192", 26),
+        ("255.255.255.224", 27),
+        ("255.255.255.240", 28),
+        ("255.255.255.248", 29),
+        ("255.255.255.252", 30),
+        ("255.255.255.254", 31),
+        ("255.255.255.255", 32),
+        )
+    for (netmask, maskbit) in maskbits:
+        if address == netmask:
+            return maskbit
+
+
 def is_TsVm():
     # returns True if the TS is running as a VM instance on S5
     return os.path.exists('/etc/init.d/mountExternal')
+
+
+def is_internal_server():
+    isInternalServer = False  
+    try:
+        isInternalServer = os.path.exists("/opt/ion/.ion-internal-server")
+    except:
+        logger.exception("Failed to create isInternalServer variable")
+    return isInternalServer
 

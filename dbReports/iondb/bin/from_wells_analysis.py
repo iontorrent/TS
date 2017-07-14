@@ -27,6 +27,7 @@ import traceback
 import logging
 from iondb.bin.djangoinit import *
 from iondb.rundb import models
+from ion.utils.explogparser import load_log
 from ion.utils.explogparser import load_log_path
 from ion.utils.explogparser import parse_log
 from iondb.bin.crawler import generate_updateruninfo_post
@@ -37,6 +38,12 @@ class fakelog(object):
     def __init__(self):
         self.errors = logging.getLogger(__name__)
         self.errors.propagate = True
+
+    def warn(self, msg):
+        print(msg)
+
+    def error(self, msg):
+        print(msg)
 
 logger = fakelog()
 
@@ -72,7 +79,7 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
 
     # instead of relying on globalConfig, user can now set isDuplicateReads for the experiment
     eas = exp.get_EAS()
-    if (eas):
+    if eas:
         # logger.errors.info("from_well_analysis.generate_http_post() exp.name=%s;
         # id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk),
         # str(eas.isDuplicateReads)))
@@ -136,9 +143,9 @@ def newExperiment(_explog_path, _plan_json=''):
     # Test if Experiment object already exists
     try:
         _newExp = models.Experiment.objects.get(unique=folder)
-        print "DEBUG: Experiment exists in database: %s" % (folder)
+        print("DEBUG: Experiment exists in database: %s" % folder)
     except:
-        print "DEBUG: Experiment does not exist in database"
+        print("DEBUG: Experiment does not exist in database")
         _newExp = None
 
     if _newExp is None:
@@ -156,24 +163,50 @@ def newExperiment(_explog_path, _plan_json=''):
                     # Experiment object exists in database
                     _newExp = exp_set[0]
             else:
-                print "ERROR: Could not update/generate new Experiment record in database"
-                print ret_val
+                print("ERROR: Could not update/generate new Experiment record in database")
+                print(ret_val)
                 return None
 
             # Append to expName to indicate imported dataset.
             _newExp.expName += "_foreign"
+            chefLog_parsed = isChefInfoAvailable(folder)
+            if chefLog_parsed:
+                update_chefSummary(_newExp, chefLog_parsed)
             _newExp.save()
             if _plan_json:
                 planObj = _newExp.plan
                 easObj = _newExp.get_EAS()
                 update_plan_info(_plan_json, planObj, easObj)
         except:
-            print "DEBUG: There was an error adding the experiment"
+            print("DEBUG: There was an error adding the experiment")
             _newExp = None
-            print traceback.format_exc()
+            print(traceback.format_exc())
 
     return _newExp
 
+def isChefInfoAvailable(folder):
+    # parse chef_param.json
+    chefLog_parsed = {}
+    JSON_BASENAME = "chef_params.json"
+    chefLog = load_log(folder, JSON_BASENAME)
+    if chefLog is None:
+        payload = "Chef summary info not available read %s" % (os.path.join(folder, JSON_BASENAME))
+        logger.warn(payload)
+    else:
+        try:
+            chefLog_parsed = json.loads(chefLog)
+        except:
+            logger.warn("Error parsing %s, skipping %s" % (JSON_BASENAME, folder))
+            logger.error(traceback.format_exc())
+            print(traceback.format_exc())
+
+    return chefLog_parsed
+
+def update_chefSummary(_newExp, chefSummary):
+    if chefSummary:
+        for k, v in chefSummary.items():
+            if not v: continue
+            setattr(_newExp, k, v)
 
 def update_plan_info(_plan_json, planObj, easObj):
     # update Plan and EAS fields
@@ -193,7 +226,7 @@ def update_plan_info(_plan_json, planObj, easObj):
         easObj.save()
         planObj.save()
     except:
-        print traceback.format_exc()
+        print(traceback.format_exc())
 
 
 def getReportURL(_report_name):
@@ -204,7 +237,7 @@ def getReportURL(_report_name):
     except models.Results.DoesNotExist:
         URLString = "Not found"
     except:
-        print traceback.format_exc()
+        print(traceback.format_exc())
     finally:
         return URLString
 
@@ -225,16 +258,16 @@ if __name__ == '__main__':
 
     # Test inputs
     if not os.path.isdir(args.directory):
-        print "Does not exist: %s" % args.directory
+        print("Does not exist: %s" % args.directory)
         sys.exit(1)
     src_dir = args.directory
 
     # Validate existence of prerequisite files
     explog_path = os.path.join(src_dir, 'explog.txt')
     if not os.path.isfile(explog_path):
-        print "Does not exist: %s" % explog_path
-        print "Cannot create environment for re-analysis to take place"
-        print "STATUS: Error"
+        print("Does not exist: %s" % explog_path)
+        print("Cannot create environment for re-analysis to take place")
+        print("STATUS: Error")
         sys.exit(1)
 
     if os.path.exists(os.path.join(src_dir, 'onboard_results', 'sigproc_results')):
@@ -252,39 +285,39 @@ if __name__ == '__main__':
     else:
         wells_path = os.path.join(test_dir, '1.wells')
         if not os.path.isfile(wells_path):
-            print "Does not exist: %s" % wells_path
-            print "Cannot basecall without output from signal processing"
-            print "STATUS: Error"
+            print("Does not exist: %s" % wells_path)
+            print("Cannot basecall without output from signal processing")
+            print("STATUS: Error")
             sys.exit(1)
 
         testpath = os.path.join(test_dir, 'analysis.bfmask.bin')
         if not os.path.isfile(testpath):
             testpath = os.path.join(test_dir, 'bfmask.bin')
             if not os.path.isfile(testpath):
-                print "Does not exist: %s" % testpath
-                print "Cannot basecall without bfmask.bin from signal processing"
-                print "STATUS: Error"
+                print("Does not exist: %s" % testpath)
+                print("Cannot basecall without bfmask.bin from signal processing")
+                print("STATUS: Error")
                 sys.exit(1)
 
         testpath = os.path.join(test_dir, 'analysis.bfmask.stats')
         if not os.path.isfile(testpath):
             testpath = os.path.join(test_dir, 'bfmask.stats')
             if not os.path.isfile(testpath):
-                print "Does not exist: %s" % testpath
-                print "Cannot basecall without bfmask.stats from signal processing"
-                print "STATUS: Error"
+                print("Does not exist: %s" % testpath)
+                print("Cannot basecall without bfmask.stats from signal processing")
+                print("STATUS: Error")
                 sys.exit(1)
 
     # Missing these files just means key signal graph will not be generated
     testpath = os.path.join(test_dir, 'avgNukeTrace_ATCG.txt')
     if not os.path.isfile(testpath):
-        print "Does not exist: %s" % testpath
-        print "Cannot create TF key signal graph without %s file" % 'avgNukeTrace_ATCG.txt'
+        print("Does not exist: %s" % testpath)
+        print("Cannot create TF key signal graph without %s file" % 'avgNukeTrace_ATCG.txt')
 
     testpath = os.path.join(test_dir, 'avgNukeTrace_TCAG.txt')
     if not os.path.isfile(testpath):
-        print "Does not exist: %s" % testpath
-        print "Cannot create Library key signal graph without %s file" % 'avgNukeTrace_TACG.txt'
+        print("Does not exist: %s" % testpath)
+        print("Cannot create Library key signal graph without %s file" % 'avgNukeTrace_TACG.txt')
 
     # Plan parameters, if any
     plan_json = ''
@@ -294,23 +327,23 @@ if __name__ == '__main__':
             with open(plan_params_file) as f:
                 plan_json = json.loads(f.read())
         except:
-            print "Unable to read Plan info from ", plan_params_file
+            print("Unable to read Plan info from ", plan_params_file)
 
     # Create Experiment record
     newExp = newExperiment(explog_path, plan_json)
     if newExp is None:
-        print ("Could not create an experiment object")
-        print "STATUS: Error"
+        print("Could not create an experiment object")
+        print("STATUS: Error")
         sys.exit(1)
 
     # Submit analysis job URL
     report_name = generate_http_post(newExp, src_dir, thumbnail_analysis=args.thumbnail_only)
     if report_name == "Failure to generate POST":
-        print ("Could not start a new analysis")
-        print "STATUS: Error"
+        print("Could not start a new analysis")
+        print("STATUS: Error")
         sys.exit(1)
     else:
-        print ("DEBUG: Report Name is %s" % report_name)
+        print("DEBUG: Report Name is %s" % report_name)
 
     # Test for Report Object
     count = 0
@@ -320,17 +353,17 @@ if __name__ == '__main__':
         count += 1
         reportURL = getReportURL(report_name)
         if reportURL is None:
-            print "STATUS: Error"
+            print("STATUS: Error")
             sys.exit(1)
         elif reportURL == "Not found":
-            print "Retry %d of %d in %d second" % (count, retries, delay)
+            print("Retry %d of %d in %d second" % (count, retries, delay))
             time.sleep(delay)
         else:
             count = retries
 
     if reportURL == "Not found":
-        print "STATUS: Error"
+        print("STATUS: Error")
         sys.exit(1)
     else:
-        print "STATUS: Success"
-        print "REPORT-URL: %s" % reportURL
+        print("STATUS: Success")
+        print("REPORT-URL: %s" % reportURL)

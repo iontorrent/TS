@@ -233,60 +233,109 @@ int PinnedInFlow::Update (int flow, Image *img, float *gainPtr)
   }
 
 #ifdef __AVX__
-	if ((cols % VEC8_SIZE) == 0 && gainPtr != NULL)
-	{
+	if ((cols % VEC8_SIZE) == 0) {
 		int k, idx;
 		int frameStride = rows * cols;
 		short int *src;
+#define MY_VEC_SIZE 8
+#define MY_VECF v8f_u
+
 		v8f_u highV, lowV;
-		v8f_u tmpV;
-		v8f *gainPtrV;
-		v8f_u pinnedV;
+		v8f_u dummy8 = { };
+		MY_VECF tmpV;
+		MY_VECF *gainPtrV;
+		MY_VECF pinnedV;
+		MY_VECF dummy = { };
 		short int *sptr;
 
-		highV.V = LD_VEC8F((const float) pinHigh);
-		lowV.V = LD_VEC8F((const float)pinLow);
+		highV.V = dummy8.V + (float) pinHigh;
+		lowV.V = dummy8.V + (float) pinLow;
 
 		src = (short int *) (raw->image);
-		gainPtrV=(v8f *)gainPtr;
-		for(idx=0;idx<frameStride;idx+=VEC8_SIZE,src+=VEC8_SIZE)
-		{
-			pinnedV.V = LD_VEC8F(0);
+		if (gainPtr) {
+			gainPtrV = (MY_VECF *) gainPtr;
+			for (idx = 0; idx < frameStride; idx += MY_VEC_SIZE, src +=
+					MY_VEC_SIZE) {
+				pinnedV.V = dummy.V + 0;
 
-//			for (k = 0; k < VEC8_SIZE; k++)
-//			{
-//				gainTmp.A[k] = gainPtr[idx+k];
-//			}
-			for (frame = 0; frame < frames; frame++)
-			{
-				sptr=&src[frame*frameStride];
+				for (frame = 0; frame < frames; frame++) {
+					sptr = &src[frame * frameStride];
 
-				LD_VEC8S_CVT_VEC8F(sptr,tmpV);
+					LD_VS_VF(sptr, tmpV); // load values from sptr to tmpV
+					// now, do the pinned pixel comparisons
+					for (uint l = 0;
+							l < sizeof(pinnedV.V8) / sizeof(pinnedV.V8[0]);
+							l++) {
+						pinnedV.V8[l] += __builtin_ia32_cmpps256(tmpV.V8[l],
+								lowV.V, _CMP_LT_OS);
+						pinnedV.V8[l] += __builtin_ia32_cmpps256(highV.V,
+								tmpV.V8[l], _CMP_LT_OS);
+					}
 
-				// now, do the pinned pixel comparisons
-				pinnedV.V += __builtin_ia32_cmpps256(tmpV.V , lowV.V, _CMP_LT_OS);
-				pinnedV.V += __builtin_ia32_cmpps256(highV.V, tmpV.V, _CMP_LT_OS);
+					// gain correct
+					tmpV.V *= (*gainPtrV).V;
 
-				// gain correct
-//				tmpV.V *= gainTmp.V;
-				tmpV.V *= *gainPtrV;
+					v8s_u tmpS;
+					CVT_VF_VS(tmpS, tmpV);
+					((v8s_u *) sptr)->V = tmpS.V;
+				}
+				gainPtrV++;
+				// if any of the 8 pixels are pinned
+				int somePinned = 0;
+				for (uint l = 0; l < sizeof(pinnedV.V8) / sizeof(pinnedV.V8[0]);
+						l++) {
+					if (__builtin_ia32_ptestnzc256((v4di) pinnedV.V8[l],
+							(v4di ) { -1, -1, -1, -1 }))
+						somePinned = 1;
+				}
 
-				CVT_VEC8F_VEC8S((*(v8s_u *)sptr),tmpV);
-			}
-			gainPtrV++;
-			// if any of the 8 pixels are pinned
-			if(__builtin_ia32_ptestnzc256((v4di)pinnedV.V,(v4di){-1,-1,-1,-1}) )
-			{
-				for (k = 0; k < VEC8_SIZE; k++)
-				{
-					if(pinnedV.A[k])
-						SetPinned(idx+k, flow);
+				if (somePinned) {
+					for (k = 0; k < MY_VEC_SIZE; k++) {
+						if (pinnedV.A[k])
+							SetPinned(idx + k, flow);
+					}
 				}
 			}
-		}
-	}
+		} else {
+			// no gain correction
+			for (idx = 0; idx < frameStride; idx += MY_VEC_SIZE, src +=
+					MY_VEC_SIZE) {
+				pinnedV.V = dummy.V + 0;
 
-	else
+				for (frame = 0; frame < frames; frame++) {
+					sptr = &src[frame * frameStride];
+
+					LD_VS_VF(sptr, tmpV);
+
+					// now, do the pinned pixel comparisons
+					for (uint l = 0;
+							l < sizeof(pinnedV.V8) / sizeof(pinnedV.V8[0]);
+							l++) {
+						pinnedV.V8[l] += __builtin_ia32_cmpps256(tmpV.V8[l],
+								lowV.V, _CMP_LT_OS);
+						pinnedV.V8[l] += __builtin_ia32_cmpps256(highV.V,
+								tmpV.V8[l], _CMP_LT_OS);
+					}
+				}
+				// if any of the 8 pixels are pinned
+				int somePinned = 0;
+				for (uint l = 0; l < sizeof(pinnedV.V8) / sizeof(pinnedV.V8[0]);
+						l++) {
+					if (__builtin_ia32_ptestnzc256((v4di) pinnedV.V8[l],
+							(v4di ) { -1, -1, -1, -1 }))
+						somePinned = 1;
+				}
+
+				if (somePinned) {
+					for (k = 0; k < MY_VEC_SIZE; k++) {
+						if (pinnedV.A[k])
+							SetPinned(idx + k, flow);
+					}
+				}
+			}
+
+		}
+	}else
 #endif
   {
 	  int16_t *pixPtr;

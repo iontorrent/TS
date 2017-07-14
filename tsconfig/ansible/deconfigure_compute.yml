@@ -8,7 +8,7 @@
   tasks:
     - name: Uninstall Ion Packages
       apt: name={{ item }} state=absent force=yes
-      with_items: ioncompute_ionpkg_list
+      with_items: "{{ ioncompute_ionpkg_list }}"
     - name: Stop gridengine-exec
       service: name=gridengine-exec state=stopped
     - name: Uninstall gridengine pkgs (forces deconfiguration)
@@ -22,4 +22,4 @@
     - name: "Unmounting all ansible-added mountpoints"
       script: "files/unmount_ansible_mounts.sh"
     - name: "Remove mountpoints from /etc/fstab"
-      shell: sed -i '/^{{startline}}/,/{{endline}}$/d' /etc/fstab
+      shell: sed -i '/^{{ startline }}/,/{{ endline }}$/d' /etc/fstab

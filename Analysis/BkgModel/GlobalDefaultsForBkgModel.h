@@ -167,17 +167,19 @@ public:
 
   void FixRdrInFirst20Flows(bool fixed_RatioDrift) { signal_process_control.no_RatioDrift_fit_first_20_flows = fixed_RatioDrift; }
   void SetUse_alternative_etbR_equation(bool if_use_alternative_etbR_equation) { signal_process_control.use_alternative_etbR_equation = if_use_alternative_etbR_equation; }
-   void SetFittingTauE(bool fit_taue) { signal_process_control.fitting_taue = fit_taue; }
+  void SetFittingTauE(bool fit_taue) { signal_process_control.fitting_taue = fit_taue; }
   void SetHydrogenModel( int model ) { signal_process_control.hydrogenModelType = model; }
 
   void SetFitGaussNewton(bool _fit_gauss_newton){signal_process_control.fit_gauss_newton = _fit_gauss_newton;};
-  void SetEmphasizeByCompression(bool _emp_by_comp){data_control.point_emphasis_by_compression = _emp_by_comp;};
+  void SetEmphasizeByCompression(bool _emp_by_comp){data_control.emphasis_params.point_emphasis_by_compression = _emp_by_comp;};
   void ReadXtalk(char *name);
   void SetChipType(const char *name);
 
   // i/o from files for parameters
-  void  SetGoptDefaults(char *gopt);
-  void  ReadEmphasisVectorFromFile(char *experimentName);
+  void SetGoptDefaults(char *gopt, char *results_folder);
+  void ReadEmphasisVectorFromFile(char *experimentName);
+  bool ReadEmphasisVectorFromJson(char *experimentName);
+  void set_GoptParameter_byIndex(int iCase, float v);
   void DumpExcitingParameters(const char *fun_string);
   void GoptDefaultsFromJson(char *fname);
   void GoptDefaultsFromPoorlyStructuredFile(char *fname);

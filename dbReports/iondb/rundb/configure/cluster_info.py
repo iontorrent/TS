@@ -90,10 +90,13 @@ def config_nodetest(node, head_versions):
     return status_dict
 
 
-def queue_info():
+def queue_info(node=''):
     info = {}
     try:
         command = ["qstat", "-f"]
+        if node:
+            command.extend(["-q", "*@" + node.strip()])
+
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
 
@@ -117,21 +120,21 @@ def queue_info():
                 state = l[5] if len(l) > 5 else ''
                 if state == 'E':
                     info[name]['error'] += int(total)
-                if state == 'd':
+                if 'd' in state:
                     info[name]['disabled'] += int(total)
 
     except Exception as err:
         logger.error(err)
 
-    return info
+    return info.get(node,{}) if node else info
 
 
 def sge_ctrl(action, node):
     ''' Run command and return error '''
     if action == "enable":
-        command = "qmod -e *@%s" % node
+        command = "sudo -u %s qmod -e *@%s" % (USER, node)
     elif action == "disable":
-        command = "qmod -d *@%s" % node
+        command = "sudo -u %s qmod -d *@%s" % (USER, node)
 
     error = ''
     try:

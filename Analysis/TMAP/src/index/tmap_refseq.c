@@ -1235,7 +1235,7 @@ tmap_refseq_read_bed_core(tmap_refseq_t *refseq, char *bedfile, int flag, char *
 		    // ZZ:current ampl is contained in the previous one 
 		    continue;
 	    } else if (b[num-1] == beg) {
-		// ZZ:current one containing the previous one with the same begin, and larger ending, use the current to replace the previous
+		// ZZ:current one has same beg, but larger end, replace previous one
 		num--;
 	    }
 	} 
@@ -1265,11 +1265,11 @@ find_next_bed(tmap_refseq_t *refseq, int cur_ind, int cur_pos, int *b, int *e, i
 {
     int i = *n;
     *b = -1;
-    while (i < refseq->bednum[cur_ind] && refseq->bedend[cur_ind][i] < cur_pos) i++;
+    while (i < refseq->bednum[cur_ind] && refseq->bedend[cur_ind][i] <= cur_pos) i++;
     *n = i;
     if (i < refseq->bednum[cur_ind]) {
-	*b = refseq->bedstart[cur_ind][i]-1;
-	*e = refseq->bedend[cur_ind][i]-1;
+	*b = refseq->bedstart[cur_ind][i];
+	*e = refseq->bedend[cur_ind][i];
     }
 }
 
@@ -1364,7 +1364,7 @@ int tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[])
                 // now cur_chr == chr
                 char *s = line;
                 while (*s != '\n' &&  *s != 0) {
-                    if(cur_pos > e) {
+                    if(cur_pos >= e) {
                         find_next_bed(refseq, chr_ind, cur_pos, &b, &e, &n);
                         if (b == -1) {
                                 all_N(s);

@@ -220,10 +220,10 @@ void check_sample(FILE *input, vector<ofstream *>& out_files, string& qual_field
         }
         if ((*tag_iter == "AO") or 
             (*tag_iter == "DP") or 
-            (*tag_iter == "MDP") or
-            (*tag_iter == "MAO") or
-            (*tag_iter == "MRO") or
-            (*tag_iter == "MAF") or
+            (*tag_iter == "MDP") or 
+            (*tag_iter == "MAO") or 
+            (*tag_iter == "MRO") or 
+            (*tag_iter == "MAF") or 
             (*tag_iter == "FAO") or 
             (*tag_iter == "FDP") or 
             (*tag_iter == "FRO") or 

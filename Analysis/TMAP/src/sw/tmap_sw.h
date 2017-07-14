@@ -110,7 +110,7 @@ typedef struct
   int32_t i; /*!< the seq1 index (1-based) */
   int32_t j; /*!< the seq2 index (1-based) */
   uint8_t ctype; /*!< the edit operator applied */
-} tmap_sw_path_t;
+}  tmap_sw_path_t;
 
 /*!
   Stores a Smith Waterman alignment.
@@ -311,6 +311,7 @@ tmap_sw_clipping_core2(uint8_t *seq1, int32_t len1, uint8_t *seq2, int32_t len2,
   */
 uint32_t *
 tmap_sw_path2cigar(const tmap_sw_path_t *path, int32_t path_len, int32_t *n_cigar);
+
 
 
 /********************

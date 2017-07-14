@@ -49,7 +49,10 @@ def gethostname():
     the hostname of the instrument host server'''
     if is_TsVm():
         ipaddr = instrument_host_ip()
-        hostname, _, _ = socket.gethostbyaddr(ipaddr)
+        try:
+            hostname, _, _ = socket.gethostbyaddr(ipaddr)
+        except:
+            hostname = 'tsvm'
     else:
         hostname = socket.gethostname()
     return hostname

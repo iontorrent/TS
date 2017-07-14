@@ -164,12 +164,15 @@ public:
 
   MolTag  GetReadGroupTags (string read_group_name) const;
   string  GetPrefixTag (string read_group_name) const;
+  string  GetPrefixTag (int read_group_idx) const;
   string  GetSuffixTag (string read_group_name) const;
+  string  GetSuffixTag (int read_group_idx) const;
 
   bool    HasTags(int read_group_idx) const { return read_group_has_tags_.at(read_group_idx); };
   bool    HasTags(string read_group_name) const;
   bool    HaveTags() const { return (num_read_groups_with_tags_>0); };
 
+  int     GetTagTrimMethod() const {return tag_trim_method_; };
 };
 
 

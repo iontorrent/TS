@@ -89,6 +89,7 @@ class SavePlanFieldNames():
     BARCODE_SAMPLE_REFERENCE = "reference"
     BARCODE_SAMPLE_TARGET_REGION_BED_FILE = "targetRegionBedFile"
     BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE = "hotSpotRegionBedFile"
+    BARCODE_SAMPLE_SSE_BED_FILE = "sseBedFile"
     BARCODE_SAMPLE_CONTROL_SEQ_TYPE = "controlSequenceType"
     BARCODE_SAMPLE_CONTROL_TYPE = "controlType"
 
@@ -437,6 +438,7 @@ class SavePlanStepData(AbstractStepData):
 
             logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET PLAN_REFERENCE=%s; TARGET_REGION=%s; HOTSPOT_REGION=%s;" % (planReference, planTargetRegionBedFile, planHotSptRegionBedFile))
 
+            reference_step_helper = self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER]
             self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = {}
             for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
 
@@ -464,7 +466,6 @@ class SavePlanStepData(AbstractStepData):
                     # logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() SETTING reference step helper runType=%s; sample_nucleotideType=%s; sampleReference=%s" %(runType, sample_nucleotideType, sampleReference))
 
                     if runType == "AMPS_DNA_RNA" and sample_nucleotideType == "DNA":
-                        reference_step_helper = self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER]
                         if reference_step_helper:
                             if sampleReference != planReference:
                                 reference_step_helper.savedFields[ReferenceFieldNames.REFERENCE] = sampleReference
@@ -486,10 +487,11 @@ class SavePlanStepData(AbstractStepData):
                             sampleReference = planReference
                             sampleHotSpotRegionBedFile = planHotSptRegionBedFile
                             sampleTargetRegionBedFile = planTargetRegionBedFile
-                        # else:
-                        # logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() SKIP SETTING sampleReference to planReference... planReference=%s" %(planReference))
 
-                    # if reference info is not settable in the sample config table, use the up-to-date reference selection from the reference chevron
+                    sseBedFile = ""
+                    if reference_step_helper:
+                         sseBedFile = reference_step_helper.get_sseBedFile(sampleTargetRegionBedFile)
+
                     self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][KitsFieldNames.BARCODES].append(id_str)
                     self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str] = \
                         {
@@ -501,6 +503,7 @@ class SavePlanStepData(AbstractStepData):
                             SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE: sampleReference,
                             SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE: sampleTargetRegionBedFile,
                             SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE: sampleHotSpotRegionBedFile,
+                            SavePlanFieldNames.BARCODE_SAMPLE_SSE_BED_FILE: sseBedFile,
 
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE, ""),

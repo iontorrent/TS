@@ -26,7 +26,7 @@ from django.core import mail
 from django.core.exceptions import ObjectDoesNotExist
 
 from iondb.rundb.models import GlobalConfig, \
-    DMFileSet, DMFileStat, User, Experiment, Backup, Results, EventLog, Message, PluginResult
+    DMFileSet, DMFileStat, User, Experiment, Backup, Results, EventLog, Message, PluginResultJob
 from iondb.utils.TaskLock import TaskLock
 import iondb.settings as settings
 from iondb.rundb.data.tasks import delete_action, archive_action, export_action
@@ -812,8 +812,8 @@ def update_files_in_use():
     # Add reports that have plugins currently running
     # consider only plugins with state='Started' and starttime within a day
     timerange = datetime.now(pytz.UTC) - timedelta(days=1)
-    pluginresults = PluginResult.objects.filter(state='Started', starttime__gt=timerange)
-    for pk in set(pluginresults.values_list('result__pk', flat=True)):
+    pluginresults = PluginResultJob.objects.filter(state='Started', starttime__gt=timerange)
+    for pk in set(pluginresults.values_list('plugin_result__result__pk', flat=True)):
         result = Results.objects.get(pk=pk)
         dmfilestats = result.dmfilestat_set.all()
         msg = "plugins running on %s (%s)" % (result.resultsName, result.id)

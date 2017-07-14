@@ -9,7 +9,7 @@ from ion.plugin import *
 
 class PGxAnalysis(IonPlugin):
   '''Run the PGX Analysis pipeline.'''
-  version = '5.2.0.0'
+  version = '5.4.0.1'
   #major_block = True
   allow_autorun = False
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]

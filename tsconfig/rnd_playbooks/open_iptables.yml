@@ -1,0 +1,17 @@
+---
+# open_iptables.yml + open_iptables.j2
+# copy both files to /usr/share/ion-tsconfig/ansible/
+# run: sudo ansible-playbook iptables.yml -i torrentsuite_hosts --sudo
+
+- hosts: headnode
+  tasks:
+    - name: Overwriting iptables.custom
+      template:
+        src: open_iptables.j2
+        dest: /etc/iptables.custom
+        force: yes
+        owner: root
+        mode: 0644
+
+    - name: Loading updated iptables.custom
+      shell: iptables-restore --noflush < /etc/iptables.custom

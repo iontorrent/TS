@@ -10,7 +10,7 @@
 #include "SignalProcessingMasterFitter.h"
 #include "RawWells.h"
 #include "MathOptim.h"
-#include "mixed.h"
+#include "ClonalFilter/mixed.h"
 #include "BkgDataPointers.h"
 #include "DNTPRiseModel.h"
 #include "DiffEqModel.h"
@@ -424,6 +424,8 @@ void SignalProcessingMasterFitter::BkgModelInit ( bool debug_trace_enable,float 
   if ( ( !NeverProcessRegion() ) && debug_trace_enable )
     my_debug.DebugFileOpen ( global_state.dirName, region_data->region );
 
+  IF_OPTIMIZER_DEBUG( inception_state, debugSaver.DebugFileOpen( global_state.dirName ) );
+
   // Rest of initialization delayed until SetupTimeAndBuffers() called.
 }
 
@@ -594,11 +596,11 @@ void SignalProcessingMasterFitter::FirstPassSampledRegionParamFit( int flow_key,
 
   MultiFlowLevMar first_lev_mar_fit( *this, flow_block_size, table );
 
-  first_lev_mar_fit.MultiFlowSpecializedSampledLevMarFitParameters ( 1, 3, first_lev_mar_fit.fit_control.FitWellAmplBuffering, first_lev_mar_fit.fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  first_lev_mar_fit.MultiFlowSpecializedSampledLevMarFitParameters ( 1, 3, first_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), first_lev_mar_fit.fit_control.GetFitPacker("FitRegionTmidnucPlus"), SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeSampledReads ( true, flow_block_size );
-  first_lev_mar_fit.MultiFlowSpecializedSampledLevMarFitParameters ( 1, 1, first_lev_mar_fit.fit_control.FitWellAmplBuffering, first_lev_mar_fit.fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  first_lev_mar_fit.MultiFlowSpecializedSampledLevMarFitParameters ( 1, 1, first_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), first_lev_mar_fit.fit_control.GetFitPacker("FitRegionTmidnucPlus"), SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeSampledReads ( true, flow_block_size );
-  first_lev_mar_fit.MultiFlowSpecializedSampledLevMarFitParameters ( 1,1, first_lev_mar_fit.fit_control.FitWellAmplBuffering, first_lev_mar_fit.fit_control.FitRegionTmidnucPlus,SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  first_lev_mar_fit.MultiFlowSpecializedSampledLevMarFitParameters ( 1,1, first_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), first_lev_mar_fit.fit_control.GetFitPacker("FitRegionTmidnucPlus"),SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
 }
 
 // first pass fit using all beads
@@ -609,11 +611,11 @@ void SignalProcessingMasterFitter::FirstPassRegionParamFit( int flow_key, int fl
 
   MultiFlowLevMar first_lev_mar_fit( *this, flow_block_size, table );
 
-  first_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( 1, 3, first_lev_mar_fit.fit_control.FitWellAmplBuffering, first_lev_mar_fit.fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  first_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( 1, 3, first_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), first_lev_mar_fit.fit_control.GetFitPacker("FitRegionTmidnucPlus"), SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true, false, flow_block_size );
-  first_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( 1, 1, first_lev_mar_fit.fit_control.FitWellAmplBuffering, first_lev_mar_fit.fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA, NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  first_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( 1, 1, first_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), first_lev_mar_fit.fit_control.GetFitPacker("FitRegionTmidnucPlus"), SMALL_LAMBDA, NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true, false, flow_block_size );
-  first_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( 1, 1, first_lev_mar_fit.fit_control.FitWellAmplBuffering, first_lev_mar_fit.fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  first_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( 1, 1, first_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), first_lev_mar_fit.fit_control.GetFitPacker("FitRegionTmidnucPlus"), SMALL_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
 }
 
 
@@ -627,8 +629,8 @@ void SignalProcessingMasterFitter::PostKeyFitNoRegionalSampling (MultiFlowLevMar
   fit_timer.restart();
   region_data->RezeroByCurrentTiming( flow_block_size ); // rezeroing??
 
-
-  post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellPostKey, post_key_fit.fit_control.FitRegionInit2, LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  bool fittaue = global_defaults.signal_process_control.fitting_taue;
+  post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellPostKey"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionInit2TauE":"FitRegionInit2"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   elapsed_time += fit_timer.elapsed();
 
   // classify beads here?
@@ -643,9 +645,9 @@ void SignalProcessingMasterFitter::PostKeyFitNoRegionalSampling (MultiFlowLevMar
     post_key_fit.lm_state.ref_penalty_scale = global_defaults.signal_process_control.barcode_penalty; // big penalty for getting these wrong!
     post_key_fit.lm_state.kmult_penalty_scale = global_defaults.signal_process_control.kmult_penalty; // minor penalty for kmult to keep zeros from annoying us
      if (global_defaults.signal_process_control.fit_region_kmult)
-      post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellAll, post_key_fit.fit_control.FitRegionInit2, LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+      post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellAll"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionInit2TauE":"FitRegionInit2"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
     else
-      post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellPostKey, post_key_fit.fit_control.FitRegionInit2, LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+      post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellPostKey"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionInit2TauE":"FitRegionInit2"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
 
     region_data->my_beads.AssignBarcodeState(true, global_defaults.signal_process_control.barcode_radius, global_defaults.signal_process_control.barcode_tie, flow_block_size, flow_block_start);
     if (global_defaults.signal_process_control.barcode_debug){
@@ -663,9 +665,9 @@ void SignalProcessingMasterFitter::PostKeyFitNoRegionalSampling (MultiFlowLevMar
 
   fit_timer.restart();
   if (global_defaults.signal_process_control.fit_region_kmult)
-    post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellAll, post_key_fit.fit_control.FitRegionFull, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellAll"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionFullTauE":"FitRegionFull"), LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   else
-    post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellPostKey, post_key_fit.fit_control.FitRegionFull, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    post_key_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellPostKey"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionFullTauE":"FitRegionFull"), LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
 
   elapsed_time += fit_timer.elapsed();
   // last check
@@ -683,8 +685,9 @@ void SignalProcessingMasterFitter::PostKeyFitWithRegionalSampling (MultiFlowLevM
   fit_timer.restart();
   region_data->RezeroByCurrentTiming( flow_block_size ); // rezeroing??
 
+  bool fittaue = global_defaults.signal_process_control.fitting_taue;
 
-  post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellPostKey, post_key_fit.fit_control.FitRegionInit2, LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellPostKey"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionInit2TauE":"FitRegionInit2"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   elapsed_time += fit_timer.elapsed();
 
   // classify beads here?
@@ -699,7 +702,7 @@ void SignalProcessingMasterFitter::PostKeyFitWithRegionalSampling (MultiFlowLevM
     post_key_fit.lm_state.ref_penalty_scale = global_defaults.signal_process_control.barcode_penalty; // big penalty for getting these wrong!
     post_key_fit.lm_state.kmult_penalty_scale = global_defaults.signal_process_control.kmult_penalty; // minor penalty for kmult to keep zeros from annoying us
 
-    post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellAll, post_key_fit.fit_control.FitRegionInit2, LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellAll"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionInit2TauE":"FitRegionInit2"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
     region_data->my_beads.AssignBarcodeState(false, global_defaults.signal_process_control.barcode_radius, global_defaults.signal_process_control.barcode_tie, flow_block_size, flow_block_start);
     if (global_defaults.signal_process_control.barcode_debug){
       region_data->my_beads.barcode_info.ReportClassificationTable(100+region_data->region->index); // show my classification
@@ -710,14 +713,14 @@ void SignalProcessingMasterFitter::PostKeyFitWithRegionalSampling (MultiFlowLevM
 
   fit_timer.restart();
   if (global_defaults.signal_process_control.fit_region_kmult){
-  post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellAll, post_key_fit.fit_control.FitRegionFull, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+      post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellAll"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionFullTauE":"FitRegionFull"), LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   } else {
-    post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.FitWellPostKey, post_key_fit.fit_control.FitRegionFull, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+      post_key_fit.MultiFlowSpecializedSampledLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, post_key_fit.fit_control.GetFitPacker("FitWellPostKey"), post_key_fit.fit_control.GetFitPacker(fittaue?"FitRegionFullTauE":"FitRegionFull"), LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   }
   elapsed_time += fit_timer.elapsed();
   // last check
   if (barcode_flag){
-    region_data->my_beads.AssignBarcodeState(false, global_defaults.signal_process_control.barcode_radius, global_defaults.signal_process_control.barcode_tie, flow_block_size, flow_block_start);
+      region_data->my_beads.AssignBarcodeState(false, global_defaults.signal_process_control.barcode_radius, global_defaults.signal_process_control.barcode_tie, flow_block_size, flow_block_start);
   }
 }
 
@@ -775,7 +778,7 @@ void SignalProcessingMasterFitter::PostKeyFitAllWells ( double &elapsed_time, Ti
   }
 
   for (int i_train=0; i_train<global_defaults.signal_process_control.post_key_train; i_train++){
-    all_wells_lev_mar_fit.MultiFlowSpecializedLevMarFitAllWells ( global_defaults.signal_process_control.post_key_step, all_wells_lev_mar_fit.fit_control.FitWellAmplBuffering, SMALL_LAMBDA, NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    all_wells_lev_mar_fit.MultiFlowSpecializedLevMarFitAllWells ( global_defaults.signal_process_control.post_key_step, all_wells_lev_mar_fit.fit_control.GetFitPacker("FitWellAmplBuffering"), SMALL_LAMBDA, NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
     region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true, false, flow_block_size );
     if (false){
       float monitor_etbR = region_data->my_beads.etbRFromReads();
@@ -797,9 +800,9 @@ void SignalProcessingMasterFitter::PostKeyFitAllWells ( double &elapsed_time, Ti
 
   // only wells are fit here
   if (global_defaults.signal_process_control.fit_region_kmult)
-    all_wells_lev_mar_fit.MultiFlowSpecializedLevMarFitAllWells ( HAPPY_ALL_BEADS, all_wells_lev_mar_fit.fit_control.FitWellAll, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    all_wells_lev_mar_fit.MultiFlowSpecializedLevMarFitAllWells ( HAPPY_ALL_BEADS, all_wells_lev_mar_fit.fit_control.GetFitPacker("FitWellAll"), LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   else
-    all_wells_lev_mar_fit.MultiFlowSpecializedLevMarFitAllWells ( HAPPY_ALL_BEADS, all_wells_lev_mar_fit.fit_control.FitWellPostKey, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    all_wells_lev_mar_fit.MultiFlowSpecializedLevMarFitAllWells ( HAPPY_ALL_BEADS, all_wells_lev_mar_fit.fit_control.GetFitPacker("FitWellPostKey"), LARGER_LAMBDA, FULL_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
 
   elapsed_time += fit_timer.elapsed();
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true, false, flow_block_size );
@@ -833,9 +836,9 @@ void SignalProcessingMasterFitter::FitAmplitudeAndDarkMatter ( MultiFlowLevMar &
   //@TODO: should I be skipping low-quality bead refits here because we'll be getting their amplitudes in the refinement phase?
   fit_timer.restart();
   if (global_defaults.signal_process_control.enable_dark_matter)
-    fad_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, fad_lev_mar_fit.fit_control.FitWellAmpl, fad_lev_mar_fit.fit_control.FitRegionDarkness, BIG_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    fad_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, fad_lev_mar_fit.fit_control.GetFitPacker("FitWellAmpl"), fad_lev_mar_fit.fit_control.GetFitPacker("FitRegionDarkness"), BIG_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   else
-    fad_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, fad_lev_mar_fit.fit_control.FitWellAmpl, fad_lev_mar_fit.fit_control.DontFitRegion, BIG_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+    fad_lev_mar_fit.MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, STANDARD_POST_KEY_ITERATIONS, fad_lev_mar_fit.fit_control.GetFitPacker("FitWellAmpl"), NULL, BIG_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
 
   elapsed_time += fit_timer.elapsed();
 }
@@ -961,11 +964,15 @@ void SignalProcessingMasterFitter::GuessCrudeAmplitude ( double &elapsed_time, T
 void SignalProcessingMasterFitter::FitTimeVaryingRegion ( double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start )
 {
   MultiFlowLevMar tvr_lev_mar_fit( *this, flow_block_size, table );
+  //example of using new interface
+  //table->addBkgModelFitType("NoCopydrift",{"TMidNuc","RatioDrift","TableEnd"});
+  //tvr_lev_mar_fit.fit_control.AddFitPacker("NoCopydrift",region_data->time_c.npts(),flow_block_size);
   fit_timer.restart();
   // >NOW< we allow any emphasis level given our crude estimates for emphasis
   region_data->AdaptiveEmphasis();
   tvr_lev_mar_fit.ChooseSkipBeads ( true );
-  tvr_lev_mar_fit.MultiFlowSpecializedLevMarFitParametersOnlyRegion ( 4, tvr_lev_mar_fit.fit_control.FitRegionTimeVarying, LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  tvr_lev_mar_fit.MultiFlowSpecializedLevMarFitParametersOnlyRegion ( 4, tvr_lev_mar_fit.fit_control.GetFitPacker("FitRegionTimeVarying"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
+  //tvr_lev_mar_fit.MultiFlowSpecializedLevMarFitParametersOnlyRegion ( 4, tvr_lev_mar_fit.fit_control.GetFitPacker("NoCopydrift"), LARGER_LAMBDA , NO_NONCLONAL_PENALTY, flow_key, flow_block_size, flow_block_start );
   tvr_lev_mar_fit.ChooseSkipBeads ( false );
   elapsed_time += fit_timer.elapsed();
 }

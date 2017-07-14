@@ -1,0 +1,453 @@
+{% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load pagetools %}
+{% load static from staticfiles %}
+
+{% block tab-configure-mesh %}
+    <li class="active"><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
+{% endblock tab-configure-mesh %}
+
+{% block extra_head_styles %}
+    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
+{% endblock extra_head_styles %}
+
+{% block extra_head_js %}
+    <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
+    <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script>
+    <script type="text/javascript">
+        window.system_id = "{{ system_id }}";
+    </script>
+    <script type="text/javascript">
+
+        // get the system id from a server
+        function get_id(server, username, password){
+            var system_id = 'UNKNOWN';
+            var hostname = 'UNKNOWN';
+            var error = '';
+
+            $.ajax({
+                type: 'GET',
+                url: 'http://' + server + "/rundb/api/v1/ionmeshnode/system_id/",
+                dataType: 'json',
+                contentType: 'application/json',
+                async: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader ("Authorization", "Basic " + btoa(username + ":" + password));
+                },
+                success: function (data, textStatus, jqXHR) {
+                    system_id = data['system_id'];
+                    hostname = data['hostname']
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    error = errorThrown ? errorThrown : "An unknown error occured.";
+                }
+            });
+
+            if(error){
+                throw error;
+            }
+
+            return {'system_id': system_id, 'hostname': hostname};
+        }
+
+        // get the remote key for a system on a server
+        function get_key(server, system_id, username, password){
+            var apikey_local = 'UNKNOWN';
+            var error = '';
+
+            $.ajax({
+                type: 'GET',
+                data:{
+                    'system_id': system_id
+                },
+                url: 'http://' + server + "/rundb/api/v1/ionmeshnode/retrieve_key/",
+                dataType: 'json',
+                contentType: 'application/json',
+                async: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader ("Authorization", "Basic " + btoa(username + ":" + password));
+                },
+                success: function (data, textStatus, jqXHR) {
+                    apikey_local = data['apikey_local'];
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    error = errorThrown ? errorThrown : "An unknown error occured.";
+                }
+            });
+
+            if(error){
+                throw error;
+            }
+
+            return apikey_local;
+        }
+
+        // assign a key for a server
+        function put_key(server, system_id, hostname, apikey_remote, username, password){
+            var error = '';
+
+            $.ajax({
+                type: 'PUT',
+                data: JSON.stringify({
+                    'apikey_remote': apikey_remote,
+                    'system_id': system_id,
+                    'hostname': hostname
+                }),
+                url: 'http://' + server + "/rundb/api/v1/ionmeshnode/assign_key/",
+                dataType: 'json',
+                contentType: 'application/json',
+                async: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader ("Authorization", "Basic " + btoa(username + ":" + password));
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    error = errorThrown ? errorThrown : "An unknown error occured.";
+                }
+            });
+
+            if(error){
+                throw error;
+            }
+        }
+
+        // this method will exchange keys between remote and local computers to create a mesh link
+        function exchange_keys(remote_host, remote_username, remote_password){
+
+            var localhost = window.location.hostname;
+
+            // get the information from the local system and then do a sanity check
+            var local_system = get_id(localhost);
+            if(local_system['system_id']==null || !local_system['system_id'].trim()){
+                throw "Could not establish a unique id for the local system.";
+            }
+            if(local_system['hostname']==null || !local_system['hostname'].trim()){
+                throw "Could not establish a local hostname for this system.";
+            }
+
+            // get the information from the remote system and again do (a more limited) sanity check
+            var remote_system = get_id(remote_host, remote_username, remote_password);
+            if(remote_system['system_id']==null || !remote_system['system_id'].trim()){
+                throw "Could not establish a unique id for the local system.";
+            }
+
+            // check to make sure this is not the local host
+            if(remote_system['system_id'] == local_system['system_id']){
+                throw "You have attempted to setup a mesh with the same computer.";
+            }
+
+            var local_apikey = get_key(localhost, remote_system['system_id']);
+            var remote_apikey = get_key(remote_host, local_system['system_id'], remote_username, remote_password);
+
+            //check_keys(local_apikey, remote_apikey);
+
+            put_key(localhost, remote_system['system_id'], remote_host, remote_apikey);
+            put_key(remote_host, local_system['system_id'], localhost, local_apikey, remote_username, remote_password);
+            //check_mesh();
+        }
+
+        function remove_local_node(local_pk, callback) {
+            $.ajax({
+                type: 'DELETE',
+                url: "/rundb/api/v1/ionmeshnode/" + String(local_pk) + "/",
+                dataType: 'json',
+                contentType: 'application/json',
+                success: function (data, textStatus, jqXHR) {
+                    return callback(false);
+                }, error: function (jqXHR, textStatus, errorThrown) {
+                    console.log(errorThrown ? errorThrown : "An unknown error occurred.");
+                    return callback(true);
+                }
+
+            });
+        }
+
+        function remove_remote_node(remote_host, remote_api_key, callback) {
+            var auth_headers = {
+                "Authorization": "system_id " + window.system_id + ":" + remote_api_key
+            };
+            // Find the id of the remote node we need to remove
+            $.ajax({
+                type: 'GET',
+                url: "http://" + remote_host + "/rundb/api/v1/ionmeshnode/",
+                headers: auth_headers,
+                dataType: 'json',
+                contentType: 'application/json',
+                data: {system_id: window.system_id},
+                success: function (data, textStatus, jqXHR) {
+                    if (data.objects.length > 0) {
+                        var remote_pk = data.objects[0].id;
+                        // Delete the remote node now that we have the id
+                        $.ajax({
+                            type: 'DELETE',
+                            url: "http://" + remote_host + "/rundb/api/v1/ionmeshnode/" + String(remote_pk) + "/",
+                            headers: auth_headers,
+                            dataType: 'json',
+                            contentType: 'application/json',
+                            success: function (data, textStatus, jqXHR) {
+                                callback(false);
+                            },
+                            error: function (jqXHR, textStatus, errorThrown) {
+                                console.log(errorThrown ? errorThrown : "An unknown error occurred.");
+                                return callback(true);
+                            }
+                        });
+                    } else {
+                        return callback(true);
+                    }
+                }, error: function (jqXHR, textStatus, errorThrown) {
+                    console.log(errorThrown ? errorThrown : "An unknown error occurred.");
+                    return callback(true);
+                }
+
+            });
+
+        }
+
+        function clearModalSetupComputer(){
+            $('#input-hostname').val("");
+            $('#input-username').val("");
+            $('#input-password').val("");
+            var status = $('#status-text');
+            status.css('color', '');
+            status.text(status.attr("data-default-text"));
+        }
+
+        $(document).ready(function() {
+            var inputHostname = $('#input-hostname');
+            var inputUsername = $('#input-username');
+            var inputPassword = $('#input-password');
+            var submitButton = $('#submit-button');
+            var button_revalidate = $('#button-revalid-version');
+            var buttonSetup = $('#button-setup');
+            var buttonSetupCustom = $('#button-setup-custom');
+            var modalSetupComputer = $('#modal_setup_computer');
+            var statusText = $('#status-text');
+
+            buttonSetup.prop('disabled', $('#computer-selection option').size() == 0);
+
+            // when the "normal" setup computer option is used
+            buttonSetup.on('click', function(){
+                var selected_computer = $('#computer-selection option:selected').text();
+                inputHostname.val(selected_computer);
+                inputHostname.prop('disabled', true);
+            });
+
+            // do a custom connection
+            buttonSetupCustom.on('click', function() {
+                inputHostname.val('');
+                inputHostname.prop('disabled', false);
+            });
+
+            // setup modal clearing
+            modalSetupComputer.on('hidden', function () {
+                clearModalSetupComputer();
+            });
+
+            // do the exchange!
+            submitButton.on('click', function () {
+                try {
+                    $.blockUI();
+
+                    // disable all of the control buttons to prevent interruption during setup
+                    statusText.css('color', '');
+                    submitButton.prop('disabled', true);
+                    inputUsername.prop('disabled', true);
+                    inputPassword.prop('disabled', true);
+
+                    // get the selected computer and then perform the key exchange
+                    exchange_keys(inputHostname.val(), inputUsername.val(), inputPassword.val());
+
+                    // force a refresh of the data source
+                    var grid = $("#mesh-table").data("kendoGrid");
+                    grid.dataSource.page(1);
+                    grid.dataSource.read();
+
+                    // if everything went correctly then we can close the modal box
+                    modalSetupComputer.modal('hide');
+                }
+                catch(err){
+                    statusText.css('color', 'red');
+                    if(err instanceof DOMException){
+                        statusText.text("Could not make a connection to this server. Ensure that it is running the same version of Torrent Suite as this server.");
+                    }
+                    else if(err === "UNAUTHORIZED"){
+                        statusText.text("Bad username and/or password.");
+                    }
+                    else if(err === "INTERNAL SERVER ERROR"){
+                        statusText.text("There was a problem while attempting to setup mesh.");
+                    }
+                    else {
+                        statusText.text(err);
+                    }
+                }
+                finally{
+                    submitButton.prop('disabled', false);
+                    inputUsername.prop('disabled', false);
+                    inputPassword.prop('disabled', false);
+                    $.unblockUI();
+                }
+            });
+
+            // compare all of the version of the currently registered nodes
+            button_revalidate.on('click', function(){
+                // disable all of the control buttons to prevent interruption during setup
+                $.blockUI();
+                $.ajax({
+                    type: 'GET',
+                    url: "/rundb/api/v1/ionmeshnode/revalidate/",
+                    dataType: 'json',
+                    contentType: 'application/json',
+                    async: true,
+                    success: function (data, textStatus, jqXHR) {
+                        var msg = '';
+                        for (var index in data) {
+                            msg += index + " : " + data[index] + "\n";
+                        }
+                        if(msg) {
+                            alert(msg);
+                            var grid = $("#mesh-table").data("kendoGrid");
+                            grid.dataSource.page(1);
+                            grid.dataSource.read();
+                        }
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        console.log(errorThrown ? errorThrown : "An unknown error occured.");
+                    },
+                    complete: function(){
+                        $.unblockUI();
+                    }
+                });
+
+            });
+
+            $("#mesh-table").kendoGrid({
+                dataSource: {
+                    type: "json",
+                    transport: {
+                        read: "/rundb/api/v1/ionmeshnode/",
+                        parameterMap: function (options) {
+                            return buildParameterMap(options)
+                        }
+                    },
+                    schema: {
+                        data: "objects",
+                        total: "meta.total_count"
+                    },
+                    // without server paging and a non-default page size, you get an "offset=NaN" argument passed to the api.
+                    // This will trip up tastypie's default model serving.
+                    serverPaging: true,
+                    pageSize: 20
+                },
+                columns: [
+                    {
+                        field: "hostname",
+                        title: "Name"
+                    } , {
+                        field: "share_data",
+                        title: "Allow Viewing Runs From",
+                        template: "<input name='share_data' type='checkbox' class='chkbx' data-bind='checked: share_data' #= share_data ? checked='checked' : '' #/>"
+                    //} , {
+                    //    field: "share_monitoring",
+                    //    title: "Share Monitoring",
+                    //    template: "<input name='share_monitoring' type='checkbox' class='chkbx' data-bind='checked: share_monitoring' #= share_monitoring ? checked='checked' : '' #/>"
+                    //} , {
+                    //    field: "share_plans",
+                    //    title: "Share Plans",
+                    //    template: "<input name='share_plans' type='checkbox' class='chkbx' data-bind='checked: share_plans' #= share_plans ? checked='checked' : '' #/>"
+                    } , {
+                        title: "",
+                        template: "<input name='remove' type='button' class='btn btn-default remove-button pull-right' value='Unlink' />"
+                    }
+                ]
+            });
+
+            $("#mesh-table .k-grid-content").on("click", "input.remove-button", function (e) {
+                if (confirm("Are you sure you want to remove this TS?")) {
+                    $.blockUI();
+                    var grid = $("#mesh-table").data("kendoGrid");
+                    var dataItem = grid.dataItem($(e.target).closest("tr"));
+                    remove_remote_node(dataItem.hostname, dataItem.apikey_remote, function () {
+                        remove_local_node(dataItem.id, function () {
+                            grid.dataSource.page(1);
+                            grid.dataSource.read();
+                            $.unblockUI();
+                        });
+                    });
+                }
+            });
+
+            $("#mesh-table .k-grid-content").on("change", "input.chkbx", function(e) {
+                var grid = $("#mesh-table").data("kendoGrid");
+                var dataItem = grid.dataItem($(e.target).closest("tr"));
+                var itemKey = e.target.name;
+                var itemValue = e.target.checked;
+                var node_data = {};
+                node_data[itemKey] = itemValue;
+                $.ajax({
+                    type: 'PATCH',
+                    url: "/rundb/api/v1/ionmeshnode/" + String(dataItem.id) + "/",
+                    dataType: 'json',
+                    // this relies on having had named all of the inputs according to the model variable names
+                    data: JSON.stringify(node_data),
+                    contentType: 'application/json',
+                    async: false,
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        console.log(errorThrown ? errorThrown : "An unknown error occured.");
+                    }
+                });
+            });
+        });
+
+    </script>
+
+{% endblock extra_head_js %}
+
+{% block content %}
+    <div class="row-fluid">
+        <h1>Configure Mesh</h1>
+        <!-- disabling the auto discovery service
+        <select id="computer-selection" style="margin-bottom: 0px" {% if mesh_computers|length == 0 %} disabled="disabled" {% endif %}>
+            {% for mesh_computer in mesh_computers %}
+                <option value="{{ mesh_computer }}">{{ mesh_computer }}</option>
+            {% endfor %}
+        </select>
+
+        <button id="button-setup" type="button" class="btn" data-toggle="modal" data-target="#modal_setup_computer">Link Selected TS</button>
+        -->
+        <button id="button-setup-custom" type="button" class="btn" data-toggle="modal" data-target="#modal_setup_computer">Connect to another Torrent Server</button>
+        <button id="button-revalid-version" type="button" class="btn pull-right">Recheck Torrent Server Links</button>
+    </div>
+
+    <div id="mesh-table">
+    </div>
+
+    <!-- Modal -->
+    <div id="modal_setup_computer" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content -->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h3 id="modal-header-text" class="modal-title">Setup Mesh Computer</h3>
+                </div>
+                <form name="login" style="margin: 10px">
+                    <h4 id="status-text" data-default-text="Ready to setup mesh.">Ready to setup mesh.</h4>
+                    <label class="form-label">Hostname</label>
+                    <input id="input-hostname" title="The hostname of the remote Mesh node." type="text" name="hostname"/><br />
+                    <label class="form-label">Username</label>
+                    <input id="input-username" title="User name on the remote computer." type="text" name="userid"/><br />
+                    <label class="form-label">Password</label>
+                    <input id="input-password" title="Password on the remote computer." type="password" name="pswrd" autocomplete="new-password"/><br />
+                    <input id="submit-button" type="button" value="Setup" class="btn btn-primary"/>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock content %}

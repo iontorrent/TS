@@ -52,10 +52,12 @@ OPTIONS="OPTIONS:
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
   -L <name> Reference Library name, e.g. hg19. Defaults to <reference> if not supplied.
   -N <name> Sample name for use in summary output. Default: 'None'
+  -M <int>  Minimium Mapped read length filter. Default: 0.
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMNAME>.stats.cov.txt.
   -P <int>  Padding value used for BED file padding. Assumes -B targets file is padded if the pad value is > 0 and
      base coverage stats will be generated using this file BUT read stats will use the annotated -A targets file,
      which is required for this option. The padding value itself is only used for reporting. Default: 0.
+  -Q <int>  Minimum read mapping Quality (MAPQ). Default: 0.
   -R <file> Name for local HTML Results file (in output directory). Default: '' (=> no HTML report created)
   -S <file> SampleID tracking regions file. Default: '' (=> no tracking reads statistics reported)
   -l Log progress to STDERR. (A few primary progress messages will always be output.)
@@ -89,6 +91,8 @@ LIBRARY=""
 FILESTEM=""
 AUXSTEM=""
 CONTIGS=0
+MINMAPLEN=0
+MINMAPQUAL=0
 
 TRACK=1
 PLOTERROR=0
@@ -96,7 +100,7 @@ LINKANNOBED=1
 TRGCOVDEPTH=1
 AMPE2EREADS=1
 
-while getopts "hlabcdgurtA:B:C:D:E:F:G:L:N:O:P:R:S:" opt
+while getopts "hlabcdgurtA:B:C:D:E:F:G:L:M:N:O:P:Q:R:S:" opt
 do
   case $opt in
     A) ANNOBED=$OPTARG;;
@@ -107,9 +111,11 @@ do
     F) FILESTEM=$OPTARG;;
     G) GENOME=$OPTARG;;
     L) LIBRARY=$OPTARG;;
+    M) MINMAPLEN=$OPTARG;;
     N) SAMPLENAME=$OPTARG;;
     O) STATSTEM=$OPTARG;;
     P) PADVAL=$OPTARG;;
+    Q) MINMAPQUAL=$OPTARG;;
     R) RESHTML=$OPTARG;;
     S) TRACKINGBED=$OPTARG;;
     a) AMPOPT="-a";;
@@ -333,19 +339,24 @@ fi
 
 RFTITLE=""
 FILTOPTS=""
-SAMVIEWOPT="-F 4"
 if [ -n "$TRACKINGBED" ]; then
   RFTITLE="Sample tracking"
 fi
 if [ $DEDUP -eq 1 ]; then
   FILTOPTS="-d"
-  SAMVIEWOPT="-F 0x404"
   RFTITLE="${RFTITLE}, Non-duplicate"
 fi
 if [ $UNIQUE -eq 1 ]; then
   RFTITLE="${RFTITLE}, Uniquely mapped"
   FILTOPTS="$FILTOPTS -u"
-  SAMVIEWOPT="$SAMVIEWOPT -q 1"
+fi
+if [ $MINMAPLEN -gt 0 ];then
+  RFTITLE="${RFTITLE}, Minimum aligned length = $MINMAPLEN"
+  FILTOPTS="$FILTOPTS -L $MINMAPLEN"
+fi
+if [ $MINMAPQUAL -gt 0 ]; then
+  RFTITLE="${RFTITLE}, Minimum mapping quality = $MINMAPQUAL"
+  FILTOPTS="$FILTOPTS -Q $MINMAPQUAL"
 fi
 RFTITLE=`echo $RFTITLE | sed -e "s/^, //"`
 
@@ -364,7 +375,7 @@ if [ "$ANNOBEDFORMAT" -ne 0 -a $NOTARGETANAL -eq 0 ];then
   if [ -n "$INBEDFILE" ]; then
     echo "(`date`) Creating GC annotated targets file..." >&2
     ANNOBED="${AUXFILEROOT}.gc.bed"
-    ${RUNDIR}/../bed/gcAnnoBed.pl -a -s -w -t "$WORKDIR" "$BEDFILE" "$REFERENCE" > "$ANNOBED"
+    ${RUNDIR}/../bed/gcAnnoBed.pl -a -s -w -t "$WORKDIR" "$INBEDFILE" "$REFERENCE" > "$ANNOBED"
     LINKANNOBED=0
     ANNOBEDOPT="-R '$ANNOBED'"
     if [ $SHOWLOG -eq 1 ]; then
@@ -392,6 +403,7 @@ echo "Alignments: $BAMSTEM" >> "$STATSFILE"
 if [ -n "$RFTITLE" ];then
   echo "Read Filters: $RFTITLE" >> "$STATSFILE"
 fi
+eval "$BBCTOOLS version" >> "$STATSFILE"
 echo "" >> "$STATSFILE"
 
 ########### Create BBC and target (read) coverage result files ###########
@@ -642,6 +654,14 @@ if [ $? -ne 0 ]; then
   echo -e "\nERROR: targetReadStats.pl failed." >&2
   echo "\$ $STATCMD >> '$STATSFILE'" >&2
   exit 1;
+fi
+if [ -n "$ANNOBEDOPT" ]; then
+  CMPBIAS=`R --no-save --slave --vanilla --args "$TARGETCOVFILE" < $RUNDIR/gcbias.R`
+  if [ $AMPLICONS -ne 0 ]; then
+    echo "Amplicon base composition bias:     $CMPBIAS" >> "$STATSFILE"
+  else
+    echo "Target base composition bias:       $CMPBIAS" >> "$STATSFILE"
+  fi
 fi
 
 ########### Base depth of coverage and summary report ###########

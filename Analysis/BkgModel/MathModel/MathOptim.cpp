@@ -79,6 +79,8 @@ float ErfApprox ( float x )
   return ( ret * sign );
 }
 
+
+#if 0
 float ExpApprox ( float x )
 {
   int left, right;
@@ -112,7 +114,7 @@ float ExpApprox ( float x )
 
   return ( ret );
 }
-
+#endif
 
 
 

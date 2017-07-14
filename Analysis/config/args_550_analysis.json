@@ -39,7 +39,7 @@
    "GlobalDefaultsForBkgModel" : {
       "barcode-spec-file" : "",
       "bkg-dont-emphasize-by-compression" : false,
-      "bkg-well-xtalk-name" : "/opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
+      "bkg-well-xtalk-name" : "/opt/ion/config/xtalk.550.well.settings.json",
       "gopt" : "/opt/ion/config/gopt_550.param.json",
       "xtalk" : "disable"
    },

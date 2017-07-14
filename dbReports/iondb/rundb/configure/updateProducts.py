@@ -29,7 +29,7 @@ from django.core import urlresolvers
 from django.contrib.auth.models import User
 
 from iondb.rundb.ajax import render_to_json
-from iondb.rundb.models import ReferenceGenome, FileMonitor, dnaBarcode, Plugin
+from iondb.rundb.models import ReferenceGenome, FileMonitor, dnaBarcode, Plugin, GlobalConfig
 from iondb.utils.utils import GetChangeLog, VersionChange, get_apt_cache
 from django.db.models import get_model
 from distutils.version import StrictVersion, LooseVersion
@@ -115,9 +115,36 @@ def validate_product_updateVersion(productContents):
 
         version_match = TS_version_comparison(tsVersion, product['version_req'], product['version_max'])
         if version_match:
-            valid.append(product)
-
+            """
+              Validate and verify that the customer is allowed to view system Templates
+              If "visible_to"  key does not exist in json or If value is "All":
+                     products/sys template will be displayed for all customers
+              For other values:
+                  show/hide according to rundb_globalConfig settings Ex:enable_compendia_OCP
+              if "visible_to" key present in json and it is empty/None -> do not show to any customers
+            """
+            if "visible_to" in product:
+                isCustomerAllowedToView = verify_customer_access(product['visible_to'])
+                if isCustomerAllowedToView:
+                    valid.append(product)
+            else:
+                valid.append(product)
     return valid
+
+def verify_customer_access(visible_to):
+    logger.debug("Validate and verify that the customer is allowed to view system Templates")
+    isCustEligible = False
+    globalConfig = GlobalConfig.objects.get(name="Config")
+    if visible_to:
+        if visible_to.lower() == "all":
+            isCustEligible = True
+        else:
+            try:
+                isCustEligible = getattr(globalConfig, visible_to)
+            except Exception,err:
+                logger.debug("Error:configure.updateProducts.verify_customer_access %s" % err)
+
+    return isCustEligible
 
 
 def TS_version_comparison(tsVersion, version_req, version_max):
@@ -301,22 +328,64 @@ def add_or_update_dnaBarcode(fields):
         barcodeObj.save()
 
 
+def get_fk_model(model, fieldname):
+    '''returns None if not foreignkey, otherswise the relevant model'''
+    field_object, model, direct, m2m = model._meta.get_field_by_name(fieldname)
+    if direct and field_object.get_internal_type() in ['ForeignKey', 'OneToOneField', 'ManyToManyField']:
+        return field_object.rel.to
+    return None
+
+# process foreign key and store the object if exists
+def process_model_fields(fields, modelObj):
+    inValidFKs = {}
+    processed_model_fields = {}
+
+    for key, value in fields.items():
+        isFKObj = None
+        #check if field is a foreign key
+        isFK = get_fk_model(modelObj, key)
+        if isFK and value:
+            if type(value) is list:
+                value = value[0]
+
+            qLists = ["id", "name", "uid", "runType"]
+            for FK_field in qLists:
+                try:
+                    isFKObj = isFK.objects.get(**{FK_field: value})
+                    processed_model_fields[key] = isFKObj
+                    break
+                except:
+                    continue
+
+            if not isFKObj:
+                inValidFKs[key] = value
+            continue
+        processed_model_fields[key] = value
+
+    return processed_model_fields, inValidFKs
+
 def off_software_release_product_update(modelObj, pk, modelName=None, **fields):
     try:
         if modelName == "dnaBarcode":
             add_or_update_dnaBarcode(fields)
-        elif pk:
-            obj = modelObj.objects.get(pk=pk)
-            for key, value in fields.items():
-                setattr(obj, key, value)
-            obj.save()
         else:
-            obj = modelObj(**fields)
-            obj.save()
+            # if any of the given field is a foreign key, update the field with foreign key object
+            fields, inValidFKs = process_model_fields(fields, modelObj)
+            if inValidFKs:
+                errMsg = "Foreign key record does not exists for {0}".format(json.dumps(inValidFKs))
+                logger.debug(errMsg)
+                raise Exception(errMsg)
+            elif pk:
+                obj = modelObj.objects.get(pk=pk)
+                for key, value in fields.items():
+                    setattr(obj, key, value)
+                    obj.save()
+            else:
+                obj = modelObj(**fields)
+                obj.save()
     except Exception, e:
        logger.debug("Model Object creation failed, %s" % e)
        raise Exception("Model Object creation failed, %s" % e)
-
 
 
 def updateFileMonitor(filemonitor_pk, status):
@@ -333,24 +402,25 @@ def updateFileMonitor(filemonitor_pk, status):
 
 def get_update_packages():
     installPackages = [
-        #('ion-chefupdates', 'Ion Chef scripts'),
+        ('ion-chefupdates', 'Ion Chef scripts'),
     ]
     contents = []
     error = ""
     try:
         for name, description in installPackages:
             package, cache = get_apt_cache(name)
-            availableVersions = package.versions.keys()
-            installableVersions = [version for version in availableVersions if version != package.installed.version]
-            if installableVersions or package.is_upgradable:
-                contents.append({
-                    'name': name,
-                    'description': description,
-                    'currentVersion': package.installed.version,
-                    'candidateVersion': package.candidate.version,
-                    'availableVersions': availableVersions,
-                    'upgradable': package.is_upgradable
-                })
+            if package.installed.version not in package.candidate.version:
+                availableVersions = package.versions.keys()
+                installableVersions = [version for version in availableVersions if StrictVersion(version) > StrictVersion(package.installed.version)]
+                if installableVersions or package.is_upgradable:
+                    contents.append({
+                        'name': name,
+                        'description': description,
+                        'currentVersion': package.installed.version,
+                        'candidateVersion': package.candidate.version,
+                        'availableVersions': installableVersions,
+                        'upgradable': package.is_upgradable
+                    })
 
     except Exception as err:
         logger.error(traceback.format_exc())

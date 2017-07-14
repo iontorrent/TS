@@ -30,6 +30,7 @@ private:
 	void  EnsureOrthogonal(int nvect, int check);
 	int   ComputeNextVector(int nvect, int skip);
 	void  ComputeEmphasisVector(float *gv, float mult, float adder, float width);
+	void  smoothNextVector(int nvect, int blur);
 
 
 	int nRvect;

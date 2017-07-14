@@ -39,7 +39,7 @@
    "GlobalDefaultsForBkgModel" : {
       "barcode-spec-file" : "",
       "bkg-dont-emphasize-by-compression" : false,
-      "bkg-well-xtalk-name" : "/opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
+      "bkg-well-xtalk-name" : "/opt/ion/config/xtalk.p2.3.1.well.settings.json",
       "gopt" : "/opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
       "xtalk" : "disable"
    },
@@ -72,7 +72,7 @@
       "col-flicker-correct" : true,
       "col-flicker-correct-aggressive" : true,
       "col-flicker-correct-verbose" : false,
-      "corr-noise-correct" : true,
+      "corr-noise-correct" : false,
       "dat-postfix" : "dat",
       "flowtimeoffset" : 1000,
       "fluid-potential-correct" : false,
@@ -190,6 +190,9 @@
       "wells-save-queue-size" : 0
    },
    "ThumbnailControl" : {
+      "bkg-debug-files" : true,
+      "bkg-debug-param" : 3,
+      "gpuworkload" : 0.0,
       "mask-datacollect-exclude-regions" : false,
       "region-size" : [ 100, 100 ],
       "total-timeout" : 36000

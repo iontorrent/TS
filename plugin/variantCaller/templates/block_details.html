@@ -26,7 +26,7 @@
     <tr><td>Hotspot regions:</td>     <td>None</td></tr>
   {% endif %}
   <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
-  <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
+  <tr><td>Output directory:</td>         <td>{{output_dir}}</td></tr>
 </table>
 
 <div class="k-widget k-grid">
@@ -38,7 +38,7 @@
             {% if options.library_type == "tagseq" %}
 				<th class="k-header"><span class="help" title="Median number of reads covering on target position">Median Read Cov</span></th>
 				<th class="k-header"><span class="help" title="Median number of Molecules per target">Median Mol Cov</span></th>
-            	<th class="k-header"><span class="help" title="Targets with Molecular coverage above 80% of Median">Targets >0.8MM Cov</span></th>
+            	<th class="k-header"><span class="help" title="Limits of Detection (median - high) %">LOD %</span></th>
             {% endif %}
             {% if options.has_hotspots %}
               <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>

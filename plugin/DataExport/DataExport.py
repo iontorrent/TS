@@ -16,7 +16,7 @@ class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.2.0.1'
+    version = '5.4.0.1'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
     runlevels = [RunLevel.LAST]
 
@@ -191,7 +191,7 @@ class DataExport(IonPlugin):
         display_fs.write("<html><head>\n")
         #display_fs.write("<link href=\"/pluginMedia/IonCloud/bootstrap.min.css\" rel=\"stylesheet\">\n")
         display_fs.write("</head><body>\n")
-        display_fs.write("<bold><h2>DATA TRANSFER</h2></bold>")
+        display_fs.write("<bold><h2>DATA EXPORT</h2></bold>")
         #display_fs.write("<p>REPORT NAME: %s</p>" % (self.report_name))
         #display_fs.write("<p>REPORT ID: %s</p>" % (self.result_pk))
         display_fs.write("<p>FILE CATEGORIES:</p>" % (self.categories))

@@ -101,6 +101,7 @@
 
             input.on('click', function(){
                 $("#selectedTechnique").text($(this).parent().text().trim());
+				$("#selectedApplicationCategory").html("");
             });
             
             inputHolder.append(input);
@@ -178,7 +179,8 @@
                 
         //display the application in the summary
         $("input[name=applicationGroupName]").on('click', function(){
-            $("#selectedApplication").text($(this).parent().text().trim());   
+            $("#selectedApplication").text($(this).parent().text().trim());
+			$("#selectedApplicationCategory").html("");
         });
 
         $(".seqInstrumentOptionsContent input").change(function()  {

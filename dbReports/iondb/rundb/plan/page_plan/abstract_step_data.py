@@ -26,6 +26,7 @@ class AbstractStepData(object):
         self.validationErrors = {}
         self._dependsOn = []
         self._changedFields = {}
+        self.warnings = []
 
         # some section can appear in multiple chevrons, key is the step name and value is the step_data object
         self.step_sections = {}
@@ -96,6 +97,9 @@ class AbstractStepData(object):
                 for key in sectionObj.getCurrentSavedFieldDict().keys():
                     if sectionObj.updateSavedFieldValueFromRequest(request, key):
                         changed = True
+
+        if changed:
+            self.warnings = []
 
         self.validate()
         return changed

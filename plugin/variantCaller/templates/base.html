@@ -22,16 +22,6 @@
         }
     </script>
 
-
-    <script type='text/javascript'>
-        (function (d, t) {
-          var bh = d.createElement(t), s = d.getElementsByTagName(t)[0];
-          bh.type = 'text/javascript';
-          bh.src = '//www.bugherd.com/sidebarv2.js?apikey=mhri1kewssaksxvoltca3a';
-          s.parentNode.insertBefore(bh, s);
-          })(document, 'script');
-    </script>
-
     <style>
         .tall {
             min-height: 400px;
@@ -77,53 +67,6 @@
         <div class="row-fluid">
             <div class="span12">
                 <h1 class="logo pull-left">Variant Caller</h1>
-                <ul class="nav nav-pills utility-menu pull-right">
-
-                    <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-                            Help
-                            <b class="caret"></b>
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a href="http://ioncommunity.iontorrent.com/">IonCommunity</a></li>
-                            <li><a href="http://iontorrent.com/support">Support</a></li>
-                            <li><a href="/ion-docs/Home.html">Local Documentation</a></li>
-                            <li><a href="/configure/info">System Support Diagnostics</a></li>
-                            <li><a href="/configure/chips">Instrument Diagnostics</a></li>
-                        </ul>
-                    </li>
-
-                </ul>
-            </div>
-        </div>
-    </div>
-    <div class="container-fluid">
-        <div class="row-fluid">
-            <div class="span12">
-
-                <ul class="nav nav-tabs pull-left">
-                    <li><a href="/plan">Plan</a></li>
-                    <li><a href="/monitor">Monitor</a></li>
-                    <li class="active"><a href="/data">Data</a></li>
-                </ul>
-                <ul class="nav nav-tabs pull-right" id="configureNav">
-                    <li class="dropdown">
-                        <a id="configure" class="dropdown-toggle" data-toggle="dropdown" data-target="#"
-                           href="/configure/about">
-                            <div id="gear" class="gear-inactive"><b class="caret"></b></div>
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a href="/configure/about">About</a></li>
-                            <li><a href="/configure/references">References</a></li>
-                            <li><a href="/configure/services">Services</a></li>
-                            <li><a href="/configure/plugins">Plugins</a></li>
-                            <li><a href="/configure/configure">Configure</a></li>
-                            <li><a href="/configure/ionreporter">Ion Reporter Configure</a></li>
-                            <li><a href="/configure/account">Accounts</a></li>
-                        </ul>
-                    </li>
-                </ul>
-
             </div>
         </div>
     </div>
@@ -133,9 +76,7 @@
         <div class="row-fluid">
             <div class="span12">
                 <ul class="nav">
-                    {% block subnav %}
-                    <li><a href="/data">Completed Runs & Results</a></li>
-                    {% endblock %}
+                     {% block subnav %}{% endblock %}
                 </ul>
             </div>
         </div>

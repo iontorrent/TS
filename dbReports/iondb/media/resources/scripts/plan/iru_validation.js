@@ -56,6 +56,10 @@ function call_validation_api($form, accountId, userInputInfoDict) {
         "CellularityPct": "ircellularityPct",
         "setid": "irSetID",
         "NucleotideType": "nucleotideType",
+        "ControlType": "controlType",
+        "Reference" : "reference",
+        "TargetRegionBedFile" : "targetRegionBedFile",
+        "HotSpotRegionBedFile" : "hotSpotRegionBedFile"
     }
 
     var url = "/rundb/api/v1/plugin/IonReporterUploader/extend/wValidateUserInput/";
@@ -111,7 +115,7 @@ function call_validation_api($form, accountId, userInputInfoDict) {
             }
             
             if (error_messages.length > 0){
-                if (results) {
+                if (results && results["advices"]) {
                     show_apprise($form, results["advices"]["onTooManyErrors"]);
                 }
                 show_errors($form, error_messages);
@@ -149,6 +153,10 @@ function get_user_input_info_from_ui() {
             dict["coupleID"] = row["ircoupleID"];
             dict["embryoID"] = row["irembryoID"];
             dict["setid"] = row["irSetID"];
+            dict["controlType"] = row["controlType"];
+            dict["reference"] = row["reference"];
+            dict["targetRegionBedFile"] = row["targetRegionBedFile"];
+            dict["hotSpotRegionBedFile"] = row["hotSpotRegionBedFile"];
 
             userInputInfo.push(dict);
         }

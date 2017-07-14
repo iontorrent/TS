@@ -1,0 +1,26 @@
+<div style="margin: 10px 0; min-height: 150px">
+    <div id="bedPublish">
+        <div>
+            <span id="file_info">No file selected.</span>
+            <span id="file_progress"></span>
+        </div>
+        <button class="btn" id="pickfiles">Select File</button>
+        <p>
+        <div>Select which instrument/chip this panel is intended for:</div>
+        <div>
+                <table><tr>
+                <td style="padding-right:20px;"><span class=label>PGM: </span></td><td>
+                <label class="radio inline"><input id="pgm_choice" type="radio" name="instrument_choice" value="pgm" checked /><div>  314 / 316 / 318</div></label></td>
+                </tr><tr>
+                <td style="padding-right:20px;"><span class=label>Proton: </span></td><td>
+                <label class="radio inline"><input type="radio" name="instrument_choice" value="p1" /><div> PI</div></label>
+                </tr><tr>
+                <td style="padding-right:20px;"><span class=label>S5/S5XL: </span></td><td><div>
+                {% for s5_chip in s5_chips %}
+					<label class="radio inline"><input type="radio" name="instrument_choice" value="{{s5_chip}}" /> {{s5_chip}}</label>
+                {% endfor %}
+                </div></td></tr></table>
+        </div>
+    </div>
+</div>
+

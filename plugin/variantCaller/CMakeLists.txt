@@ -33,9 +33,3 @@ add_custom_target(parameter_sets ALL
                    COMMENT "Combining individual parameter sets into a single parameter_sets.json")
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/parameter_sets.json" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/pluginMedia/parameter_sets")
-
-# TS-13996
-if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/../../Analysis")
-    message(STATUS "Adding tvcutils from Analysis build")
-    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/../../Analysis/tvcutils" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/bin/")
-endif()

@@ -22,11 +22,8 @@
 <script src="slickgrid/slick.dataview.js"></script>
 <script src="lifegrid/lifegrid.js"></script>
 
-{% if options.library_type == "tagseq" %}
-<script src="lifegrid/allelesTableTagSeq.js"></script>
-{% else %}
+
 <script src="lifegrid/allelesTable.js"></script>
-{% endif %}
 <script src="bootstrap-select.js"></script>
 <script src="bootbox.min.js"></script>
 
@@ -260,7 +257,7 @@
                 </div>
             </div>
 
-            {% if options.trim_reads %}
+            {% if has_processed_bam %}
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
                     <span class="headvc">TVC-Processed Reads</span>
@@ -317,15 +314,15 @@
             </div>
 			<div class="row-fluid minibump">
                 <div class="span3 movedown5">
-                    Median Read Coverage
+                    <span class="headvc">Median Read Coverage</span>
                 </div>
-                <div class="span3 movedown5">
+                <div class="span3 movedown5"> 
                     <div class="help" title="Median number of reads covering on target position">{{summary.median_depth}}</div>
                 </div>
             </div>
 						<div class="row-fluid minibump">
                 <div class="span3 movedown5">
-                    Median Molecular Coverage
+                    <span class="headvc">Median Molecular Coverage</span>
                 </div>
                 <div class="span3 movedown5">
                     <div class="help" title="Median number of Molecules per target">{{summary.median_num_fam3}}</div>
@@ -333,10 +330,10 @@
             </div>
 						<div class="row-fluid minibump">
                 <div class="span3 movedown5">
-                    Targets passing 80% Median Molecular Coverage 
+                    <span class="headvc">Limits of Detection (median - high) </span>
                 </div>
                 <div class="span3 movedown5">
-                    <div class="help" title="Targets with Molecular coverage above 80% of Median">{{summary.fm3_pass80}}</div>
+                    <div class="help" title="Limits of Detection (median - high) %">{{summary.fm3_pass80}}&nbsp;%</div>
                 </div>
             </div>
             {% else %}
@@ -353,10 +350,10 @@
 		   
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
-                    <span class="headvc">Ion Community</span>
+                    <span class="headvc">Documentation</span>
                 </div>
                 <div class="span4 movedown5">
-                    <a href="http://ioncommunity.thermofisher.com/docs/DOC-7426">Torrent Variant Caller documentation</a>
+                    <a href="http://tools.thermofisher.com/content/sfs/manuals/MAN0014668_Torrent_Suite_RUO_Help.pdf">Torrent Variant Caller Documentation</a>
                 </div>
             </div>
 
@@ -458,12 +455,11 @@
                   <li>
                       <a id="coverage">View Coverage Metrics</a>
                   </li>
-	              {% if options.library_type == "tagseq" %}
-			      {% else %}
+                  {% if options.library_type != "tagseq" %}
                   <li>
                       <a id="quality">View Quality Metrics</a>
                   </li>
-				  {% endif %}
+                  {% endif %}
               </ul>
           </div>
 
@@ -488,7 +484,7 @@
     </div>
   </div>
   <div class="clearfix" style="margin-bottom:10px;">
-    <a href="http://ioncommunity.thermofisher.com/docs/DOC-8140">How to optimize variant caller parameters</a>
+    <a href="http://tools.thermofisher.com/content/sfs/manuals/MAN0014668_Torrent_Suite_RUO_Help.pdf">How to optimize variant caller parameters</a>
   </div>
 
   <div class="clearfix collapse" id="filter_settings" style="height:0px;">
@@ -626,7 +622,7 @@ $(function () {
 
   $.ajax({
     type: "GET",
-    url: {% if barcode %} "../local_parameters.json" {% else %} "local_parameters.json" {% endif %},
+    url: "{{parameter_name}}",
     dataType: "json"
   }).done(function (data) {
     local_parameters = data;

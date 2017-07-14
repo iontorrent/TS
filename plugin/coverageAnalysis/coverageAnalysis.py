@@ -8,7 +8,7 @@ from ion.plugin import *
 
 class coverageAnalysis(IonPlugin):
   '''Genome and Targeted Re-sequencing Coverage Analysis. (Ion supported)'''
-  version = '5.2.1.2'
+  version = '5.4.0.5'
   major_block = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]

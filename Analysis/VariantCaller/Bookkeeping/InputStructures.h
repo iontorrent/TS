@@ -39,7 +39,7 @@ class OrderedVCFWriter;
 class SampleManager;
 class MetricsManager;
 class IndelAssembly;
-
+class MolecularTagManager;
 // ==============================================================================
 
 struct VariantCallerContext {
@@ -55,7 +55,7 @@ struct VariantCallerContext {
   MetricsManager *      metrics_manager;              //! Keeps track of metrics to output in tvc_metrics.json
   SampleManager*        sample_manager;               //! Tracks the sample used in multi-sample analysis
   IndelAssembly*        indel_assembly;               //! Outputs the indel_assembly.vcf for long indels
-  MolecularTagTrimmer*  tag_trimmer;                  //! Manager for molecular tags
+  MolecularTagManager*  mol_tag_manager;              //! Manager for molecular tags
 
   pthread_mutex_t       bam_walker_mutex;             //! Mutex for state-altering bam_walker operations
   pthread_mutex_t       read_loading_mutex;           //! Mutex for raw read retrieval
@@ -79,6 +79,7 @@ struct VariantSpecificParams {
 
       min_coverage_override(false), min_coverage(0),
       min_coverage_each_strand_override(false), min_coverage_each_strand(0),
+	  min_var_coverage_override(false), min_var_coverage(0),
       min_variant_score_override(false), min_variant_score(0),
       data_quality_stringency_override(false), data_quality_stringency(0),
 
@@ -90,6 +91,7 @@ struct VariantSpecificParams {
       filter_insertion_predictions_override(false), filter_insertion_predictions(0),
       filter_deletion_predictions_override(false), filter_deletion_predictions(0),
       sse_prob_threshold_override(false), sse_prob_threshold(0),
+	  min_tag_fam_size_override(false), min_tag_fam_size(0),
       black_strand('.') {}
 
   bool  min_allele_freq_override;
@@ -102,6 +104,8 @@ struct VariantSpecificParams {
   int   min_coverage;
   bool  min_coverage_each_strand_override;
   int   min_coverage_each_strand;
+  bool  min_var_coverage_override;
+  int   min_var_coverage;
   bool  min_variant_score_override;
   float min_variant_score;
   bool  data_quality_stringency_override;
@@ -122,6 +126,8 @@ struct VariantSpecificParams {
   float filter_deletion_predictions;
   bool  sse_prob_threshold_override;
   float sse_prob_threshold;
+  bool min_tag_fam_size_override;
+  int  min_tag_fam_size;
   char  black_strand;
 };
 
@@ -197,19 +203,19 @@ public:
 
     PersistingThreadObjects(const InputStructures &global_context);
     ~PersistingThreadObjects() {
-#ifdef __SSE3__
-        for (vector<TreephaserSSE*>::iterator iter = treephaserSSE_vector.begin(); (iter != treephaserSSE_vector.end()); ++iter) {
-            delete *iter;
-            *iter = NULL;
-        } 
-#endif
+//#ifdef __SSE3__
+//        for (vector<TreephaserSSE*>::iterator iter = treephaserSSE_vector.begin(); (iter != treephaserSSE_vector.end()); ++iter) {
+//            delete *iter;
+//            *iter = NULL;
+//        } 
+//#endif
     };
 
     //@brief Interface for setting the phasing model parameters
     void SetModelParameters(const int & flow_order_index, const vector<float> & phase_params) {
 #ifdef __SSE3__
       if (use_SSE_basecaller)
-        treephaserSSE_vector.at(flow_order_index)->SetModelParameters(phase_params.at(0), phase_params.at(1));
+        treephaserSSE_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1));
       else
 #endif
         dpTreephaser_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1), phase_params.at(2));
@@ -220,7 +226,7 @@ public:
     {
 #ifdef __SSE3__
        if (use_SSE_basecaller)
-         treephaserSSE_vector.at(flow_order_index)->DisableRecalibration();
+         treephaserSSE_vector.at(flow_order_index).DisableRecalibration();
        else
 #endif
          dpTreephaser_vector.at(flow_order_index).DisableRecalibration();
@@ -231,7 +237,7 @@ public:
     {
 #ifdef __SSE3__
       if (use_SSE_basecaller)
-        return (treephaserSSE_vector.at(flow_order_index)->SetAsBs(As, Bs));
+        return (treephaserSSE_vector.at(flow_order_index).SetAsBs(As, Bs));
       else
 #endif
         return (dpTreephaser_vector.at(flow_order_index).SetAsBs(As, Bs));
@@ -241,7 +247,7 @@ public:
     void SolveRead(const int & flow_order_index, BasecallerRead& read, const int & begin_flow, const int & end_flow){
 #ifdef __SSE3__
       if (use_SSE_basecaller)
-        treephaserSSE_vector.at(flow_order_index)->SolveRead(read, begin_flow, end_flow);
+        treephaserSSE_vector.at(flow_order_index).SolveRead(read, begin_flow, end_flow);
       else
 #endif
         dpTreephaser_vector.at(flow_order_index).Solve(read, end_flow, begin_flow);
@@ -253,7 +259,7 @@ public:
     Realigner              realigner;             // realignment tool
     vector<DPTreephaser >  dpTreephaser_vector;   // c++ treephaser
 #ifdef __SSE3__
-    vector<TreephaserSSE*>  treephaserSSE_vector;  // vectorized treephaser
+    vector<TreephaserSSE>  treephaserSSE_vector;  // vectorized treephaser
 #endif
 
 

@@ -1,15 +1,20 @@
 {% extends "admin/base_site.html" %}
 {% load url from future %}
-
+{% load static from staticfiles %}
 {% block title %}Management Options{% endblock %}
 
 {% block content %}
+  <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}" />
+  <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/tb-styles.min.css"%}" />
+
   <style type="text/css">
+    #warning_msg {
+      color: #b22222;
+    }
     #interface {
       min-height: 150px;
     }
     #update_confirmation {
-      background-color: #fafad2;
       padding: 8px;
     }
     #update_running {
@@ -22,6 +27,7 @@
     }
     #version_info {
       float: left;
+      padding-right: 40px;
     }
     #update_control {
       min-width: 580px;
@@ -36,10 +42,20 @@
       margin-right: 10px;
       margin-bottom: 10px;
     }
+    .modal-body{
+        background-color: #fafad2;
+    }
+    .modal{
+      overflow-y: auto;
+      overflow-x: auto;
+      min-width: 700px;
+    }
   </style>
+<script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
+
   <div id="content-main">
     <h1>Update Torrent Suite</h1>
-    <div id="version_info" style="float: left; padding-right: 40px;">
+        <div id="version_info">
       <h3>Software Versions</h3>
       <div class="bounded_container clear">
         <table>
@@ -73,11 +89,6 @@
         <h2 id="update_status">Checking status</h2>
         <div id="update_actions" class="actions">
           <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
-        {% if legacy_OS %}
-        <div id="security_update_actions" title="All server packages with security updates will be installed when TS is updated">
-          <div><input type="checkbox" id="checkbox_auto_security" /> Automatically install security updates when TS software is updated.</div>
-        </div>
-        {% endif %}
         <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
           <button id="check_update">Check</button>
           <button id="confirm_update" disabled="disabled">Update Server</button>
@@ -85,12 +96,37 @@
               <p><strong>Update is disabled until more disk space is available on root partition</strong></p>
             {% endif %}
         </div>
-        <div id="update_confirmation" style="display: none;">
-          <p><strong>Are you sure you want to update?</strong></p>
-          <p>The system will be unavailable during the update. <br>
-          <font color=red>All active analyses will be terminated immediately.</font></p>
-          <button id="start_update">Update Now</button>
-          <button id="cancel">Cancel</button>
+        <div id="update_confirmation" class="modal fade" data-backdrop="static" data-keyboard="false" role="dialog">
+          <div class="modal-dialog">
+            <div class="modal-content">
+               {% if not eula_error %}
+                  <div class="modal-header bg-info">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                    <h4 class="modal-title">End User License Agreement (EULA)</h4>
+                  </div>
+                  <div class="modal-body">
+                    <div id="agreement">
+                        {{eula_content|safe}}
+                     </div>
+                  </div>
+                  <div class="modal-footer bg-info">
+                    <p align="left">The system will be unavailable during the update.<br />
+                    <span id="warning_msg"><strong>Note</strong>: Make sure all the runs are completed and analyzed before starting the upgrade process.</span></p>
+                    <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <button id="start_update" type="button" class="btn btn-primary" disabled>Agree and Update now</button>
+                  </div>
+                  {% else %}
+                    <div class="alert alert-danger" role="alert">
+                      <p><i class="icon-wrench"></i><strong>Error: cannot proceed with the upgrade process...</strong></p>
+                      <p>{{eula_error}}. Please consult your Torrent Suite administrator to fix this issue.</p>
+                      <input type="hidden" id="eula_error" value="{{eula_error}}">
+                     </div>
+                     <div class="modal-footer bg-info">
+                      <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                   </div>
+              {% endif %}
+            </div>
+           </div>
         </div>
         <div id="status_texts">
           <div id="update_checking" style="display: none;">
@@ -144,7 +180,6 @@
       </div>
       <div id="release_memo">
         <h3>Torrent Suite Release Notes</h3>
-        <p>Please check the Release Notes on the <a href="http://ioncommunity.thermofisher.com/welcome">Ion Community</a> for more details.</p>
         <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
       </div>
     </div>  <!--END update_control-->
@@ -295,14 +330,13 @@
 
         confirm_update: function(){
           this.$("#update_actions").hide();
-          if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
-          this.$("#update_confirmation").slideDown('slow');
+          this.$('#update_confirmation').modal('show');
         },
 
         start_update: function(){
           $.post("/admin/update/", null, function() {
           });
-          this.$("#update_confirmation").hide();
+          this.$("#update_confirmation").modal('hide');
           this.$("#confirm_update").attr("disabled", "disabled");
           this.$("#update_running").slideDown('slow');
           $('#maintenance_div').hide();
@@ -345,6 +379,20 @@
 
       window.controller = new UpdateControl;
 
+      if ($('#eula_error').length == 0) {
+          if ($('#agreement').height() < $('#update_confirmation').height()){
+              $('#start_update').removeAttr('disabled')
+          }
+          $('.modal-body').scroll(function() {
+            disable = $('#agreement').height() <= ($(this).scrollTop() + $(this).height())
+            if ($.browser.mozilla) {
+                disable = $('#agreement').height() <= ($(this).scrollTop() + $(this).height() + 15)
+            }
+            if (disable) {
+                $('#start_update').removeAttr('disabled');
+            }
+          });
+      }
       $(".maintenance").click(function(){
         $(this).prop('disabled', true);
         $('#maintenance_div .error').remove();

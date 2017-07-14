@@ -49,6 +49,8 @@ BkgFitMatrixPacker:: BkgFitMatrixPacker (int imgLen,fit_instructions &fi,Partial
 
   nOutputs = fi.output_len;
   outputList = fi.output;
+  for (int i=0; i<nOutputs; ++i )
+      compNames.push_back(outputList[i].name);
 }
 
 
@@ -103,7 +105,7 @@ LinearSolverResult BkgFitMatrixPacker::GetOutput (BeadParams *bp, reg_params *rp
 
   for (int i=0;i < nOutputs;i++)
   {
-    if (isnan (data->delta->at (i)))
+    if (std::isnan (data->delta->at (i)))
     {
       delta_ok = false;
       break;

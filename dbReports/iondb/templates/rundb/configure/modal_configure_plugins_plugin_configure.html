@@ -1,6 +1,7 @@
 {{ file|safe }}
 <script>
   // Torrent Browser provides TB_plugin which is a JSON object with plugin information.
+  // This script tag outside of the html tag will be removed in a newer version of TS.
   TB_plugin = {{ plugin|safe }};
   TB_pluginMedia = "/pluginMedia/" + TB_plugin["fields"]["name"] + "/";
   TB_user = "{{ request.user.username }}";

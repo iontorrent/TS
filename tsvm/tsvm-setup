@@ -13,17 +13,22 @@ INTERACTIVE=true
 DO_IMPORT=true
 BASIC_SERVER=false
 DIST=trusty
+EXTERNAL=${EXTERNAL-"0"}
 
 #=======================================================================
 # Common variables
 #=======================================================================
 source ${WHERE}/tsvm-include
+
 #=============================================================================
 # Functions
 #=============================================================================
 function on_intranet
 {
     host updates.ite > /dev/null
+    if [[ "$EXTERNAL" != "0" ]]; then
+        false
+    fi
     return $?
 }
 
@@ -82,7 +87,7 @@ fi
 #=============================================================================
 # Validate the version string
 #=============================================================================
-if [ ! -z $VERSION ]; then
+if [ ! -z ${VERSION} ]; then
     invalid=true
     for item in ${VER_AVAIL[@]}; do
         if [[ "$item" == "$VERSION" ]]; then
@@ -90,7 +95,7 @@ if [ ! -z $VERSION ]; then
             break
         fi
     done
-    if $invalid; then
+    if ${invalid}; then
         echo -n "$VERSION is not a valid version" >&2
         echo -n "Error" >&1
         user_msg "Choose one of ${VER_AVAIL[@]}"
@@ -102,7 +107,7 @@ fi
 # Get the TS version to install
 # Dynamic menu populated with contents of VER_AVAIL list
 #=============================================================================
-while [ -z $VERSION ]; do
+while [ -z ${VERSION} ]; do
     clear
     echo
     echo "Torrent Server - Virtual Machine Configuration"
@@ -119,10 +124,10 @@ while [ -z $VERSION ]; do
     echo
 
     read -p "Enter a number: " answer
-    if [[ "$answer" = "E" ]]||[[ "$answer" = "e" ]]; then
+    if [[ "$answer" = "E" ]] || [[ "$answer" = "e" ]]; then
         exit
     fi
-    if [[ $answer -gt 0 ]]&&[[ $answer -le $SELECTMAX ]]; then
+    if [[ $answer -gt 0 ]] && [[ $answer -le $SELECTMAX ]]; then
         VERSION=${VER_AVAIL[$((answer-=1))]}
         break
     else
@@ -130,7 +135,7 @@ while [ -z $VERSION ]; do
     fi
 done
 
-if $INTERACTIVE; then
+if ${INTERACTIVE}; then
     echo "You have chosen $VERSION"
     read -p "Is this correct? (N|y) " answer
     case $answer in
@@ -161,11 +166,11 @@ sed -i "s,ION_APT =.*,ION_APT = \"deb http://$URL_LOCATION/updates/software/arch
 sed -i "s,TS_VERSION =.*,TS_VERSION = '$VERSION'," ${WHERE}/Vagrantfile
 sed -i "s,DIST =.*,DIST = '$DIST'," ${WHERE}/Vagrantfile
 
-if on_intranet && [ $VERSION = $LATEST ]; then
+if on_intranet && [ ${VERSION} = ${LATEST} ]; then
     sed -i "s,ION_APT =.*,ION_APT = \"deb http://$URL_LOCATION/updates/software/ ${DIST}-beta/\"," ${WHERE}/Vagrantfile
 fi
 
-if $BASIC_SERVER; then STR_BS='true'; else STR_BS='false';fi
+if ${BASIC_SERVER}; then STR_BS='true'; else STR_BS='false';fi
 sed -i "s,BASIC_SERVER.*,BASIC_SERVER = $STR_BS," ${WHERE}/Vagrantfile
 
 sed -i "s,^default_router.*,default_router = \'$(netstat -rn|awk '/^0.0.0.0/{printf $2;exit;}')\'," ${WHERE}/Vagrantfile
@@ -176,7 +181,7 @@ sed -i "s/^OUTBOUND.*/OUTBOUND_PORT = \'${PORT}\'/" ${WHERE}/Vagrantfile
 
 #=============================================================================
 #=============================================================================
-if ! $DEBUG; then
+if ! ${DEBUG}; then
 
     #=============================================================================
     # Prepare the existing Reports on the host system to be available for Import into VM.
@@ -192,12 +197,9 @@ if ! $DEBUG; then
 
     #=============================================================================
     # Enable firewall rule to allow NFS to the TS-VM
-    # NOTE: GUI setup calls this in separate case
     #=============================================================================
-    if $INTERACTIVE; then
-        enable_nfs_rule
-    fi
-    
+    sudo ${WHERE}/tsvm-enable-nfs-rule
+
     #=============================================================================
     # Create secure key
     #=============================================================================
@@ -249,15 +251,15 @@ if ! $DEBUG; then
     user_msg "This can take 30 minutes or longer"
     VBoxManage setproperty machinefolder $TSVM_MACHINE_FOLDER
     #Rotate the log files
-    rotate_this_pile $PROVISION_LOG
-    rotate_this_pile $RUNNING_LOG
-    echo $(date +"[%Y-%m-%d %H:%M:%S]") "Running: vagrant up" >>$PROVISION_LOG
-
+    rotate_this_pile ${PROVISION_LOG}
+    rotate_this_pile ${RUNNING_LOG}
+    echo $(date +"[%Y-%m-%d %H:%M:%S]") "Running: vagrant up" >>${PROVISION_LOG}
     cd ${WHERE}
-    if $INTERACTIVE; then
-        vagrant --provision up  2>&1 | tee -a $PROVISION_LOG
+    touch ${PROVISION_LOG}
+    if ${INTERACTIVE}; then
+        vagrant --provision up  2>&1 | tee -a ${PROVISION_LOG}
     else
-        vagrant --provision up  >>$PROVISION_LOG 2>&1
+        vagrant --provision up  >>${PROVISION_LOG} 2>&1
     fi
 #    echo $(date +"[%Y-%m-%d %H:%M:%S]") "Running: vagrant provision" >>$PROVISION_LOG
 #    if $INTERACTIVE; then

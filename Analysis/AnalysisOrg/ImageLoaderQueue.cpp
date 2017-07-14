@@ -194,7 +194,10 @@ void *FileLoadWorker ( void *arg )
     int buffer_ix = one_img_loader->cur_buffer;
 
     // setting the mean of frames to zero will be done by the bkgmodel as soon as its loaded.
-    img->SetMeanOfFramesToZero ( one_img_loader->normStart, one_img_loader->normEnd,0 );
+
+// the traces will be zero'd by the bknd model loader anyway, no need to do them here.
+ //   img->SetMeanOfFramesToZero ( one_img_loader->normStart, one_img_loader->normEnd,0 );
+
 
     // calculate the smooth pH step amplitude in empty wells across the whole image
     if ( one_img_loader->doEmptyWellNormalization )

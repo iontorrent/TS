@@ -513,32 +513,32 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
 
     // testing of lossy compression
 //    printf("loaded %s ts[0]=%d\n",rawFileName,raw->timestamps[0]);
-    if(!headerOnly && timeTransform && rc != 0 && raw->timestamps[0] > 0 && (raw->timestamps[0] < 60 || raw->timestamps[0] > 72))
-    {
-        // more than 10% off from 15fps
-    	// use PCA to time-transform this file to 15fps
-    	AdvComprTest(rawFileName,this,(char *)"7"); // 7 is write a file that's pca compressed and time transformed
-    	free(raw->timestamps);
-    	raw->timestamps=NULL;
-    	free(raw->image);
-    	raw->image=NULL;
-    	raw->rows=saved_rows;
-    	raw->cols=saved_cols;
-    	raw->frames=saved_frames;
-    	raw->uncompFrames=saved_uncompframes;
-    	raw->imageState = saved_ImageState;
-    	char newFname[2048];
-    	strcpy(newFname,rawFileName);
-      char *ptr = strstr(newFname,datPostfix);
-    	if(ptr)
-        sprintf(ptr,"_testPCA.%s", datPostfix);
-        rc = deInterlace_c ( ( char * ) newFname,&raw->image,&raw->timestamps,
-                             &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
-                             0,0,
-                             ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
-                             ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
-                             ignoreChecksumErrors, &raw->imageState );
-    }
+//    if(!headerOnly && timeTransform && rc != 0 && raw->timestamps[0] > 0 && (raw->timestamps[0] < 60 || raw->timestamps[0] > 72))
+//    {
+//        // more than 10% off from 15fps
+//        // use PCA to time-transform this file to 15fps
+//        AdvComprTest(rawFileName,this,(char *)"7"); // 7 is write a file that's pca compressed and time transformed
+//        free(raw->timestamps);
+//        raw->timestamps=NULL;
+//        free(raw->image);
+//        raw->image=NULL;
+//        raw->rows=saved_rows;
+//        raw->cols=saved_cols;
+//        raw->frames=saved_frames;
+//        raw->uncompFrames=saved_uncompframes;
+//        raw->imageState = saved_ImageState;
+//        char newFname[2048];
+//        strcpy(newFname,rawFileName);
+//      char *ptr = strstr(newFname,datPostfix);
+//        if(ptr)
+//        sprintf(ptr,"_testPCA.%s", datPostfix);
+//        rc = deInterlace_c ( ( char * ) newFname,&raw->image,&raw->timestamps,
+//                             &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
+//                             0,0,
+//                             ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
+//                             ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
+//                             ignoreChecksumErrors, &raw->imageState );
+//    }
 
 
     if ( ImageCropping::chipSubRegion.h != 0 )

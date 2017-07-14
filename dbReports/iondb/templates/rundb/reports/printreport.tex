@@ -2,7 +2,9 @@
 {% load pagetools %}
 {% load ion_readable %}
 \documentclass[letterpaper,10pt]{article}
-\usepackage[left=1in,right=1in,top=1.1in,bottom=1.1in]{geometry}
+\usepackage{geometry}
+\geometry{tmargin=0.7in,bmargin=.7in,lmargin=0.8in,rmargin=0.8in,includehead,headheight=35pt, headsep=35pt}
+\geometry{tmargin=0.7in,bmargin=.7in,lmargin=0.8in,rmargin=0.8in,includefoot,footskip=15pt}
 \usepackage[x11names]{xcolor}
 \usepackage{fancyhdr}
 \usepackage{graphicx}
@@ -111,7 +113,12 @@ Run Report for {{report.resultsName|latexsafe}}
  ISP Summary
  }
  \\[1.5mm]
-  \includegraphics[width=48mm]{basecaller_results/wells_beadogram.png}
+   
+ {% if basecaller.isToShowClonality %}
+   \includegraphics[width=48mm]{basecaller_results/wells_beadogram.png}
+ {% else %}
+   \includegraphics[width=48mm]{basecaller_results/wells_beadogram_basic.png}  
+ {% endif %}
  }}
  \end{minipage}
 %%%%%%%%%%second column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -181,6 +188,7 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%part row3 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 {% if datasets.barcode_config %}
+{% if isToShowExtraStats %}%
  \begin{longtable}{E{28mm}E{32mm}E{18mm}E{18mm}E{18mm}E{30mm}}
  Barcode Name		& Sample	& Bases					& \geq Q20	& Reads		& Mean Read Length\\
  \midrule
@@ -189,6 +197,20 @@ Run Report for {{report.resultsName|latexsafe}}
 {{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}} & {{barcode.total_bases|intcomma}} & {{barcode.Q20_bases|intcomma}} & {{barcode.read_count|intcomma}} & {{barcode.mean_read_length}} \\[2.5mm]
    {% endif %}
  {% endfor %}
+ 
+{% else %}%
+
+ \begin{longtable}{E{28mm}E{32mm}E{18mm}E{18mm}E{30mm}}
+ Barcode Name		& Sample	& Bases					& Reads		& Mean Read Length\\
+ \midrule
+ {% for barcode in barcodes %}
+   {% if not barcode.filtered %} 
+{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}} & {{barcode.total_bases|intcomma}} & {{barcode.read_count|intcomma}} & {{barcode.mean_read_length}} \\[2.5mm]   
+   {% endif %}
+ {% endfor %}
+ 
+ {% endif %}%
+ 
  \bottomrule
  \end{longtable}
 {% elif CA_barcodes %}
@@ -211,7 +233,7 @@ Run Report for {{report.resultsName|latexsafe}}
  Test Fragment		& Reads			& Percent 50AQ17	& Read Length Histogram \\
  \midrule
  {% for tf_name,tf_data in testfragments.items %}
- \bf {{tf_name|latexsafe}} & \bf {{tf_data.num_reads|intcomma}} 	& \bf {{tf_data.conversion_50AQ17}}\%	& \includegraphics[width=50mm]{{tf_data.histogram_filename|bracewrap}}\\[2.5mm]
+ \bf {{tf_name|latexsafe}} & \bf {{tf_data.num_reads|intcomma}} 	& \bf {{tf_data.conversion_50AQ17}}	& \includegraphics[width=50mm]{{tf_data.histogram_filename|bracewrap}}\\[2.5mm]
  {% endfor %}
  \bottomrule
  \end{longtable}
@@ -243,7 +265,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \end{tabular}
  }}
  \end{minipage}
- {% if isToShowRawReadAccuracy %}%
+ {% if isToShowExtraStats %}%
 %%%%%%%%%%first column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%second column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -261,6 +283,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \end{minipage}
  {% endif %}%
  
+ {% if isToShowExtraStats %}% 
 %%%%%%%%%%second column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bigskip %add some vertical space
@@ -280,6 +303,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \end{tabular}%
  }}
  \end{minipage}
+ {% endif %}%
  
 %%%%%%%%%%second row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -327,11 +351,18 @@ Run Report for {{report.resultsName|latexsafe}}
 \newpage %%starts new page
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section*{Analysis Details}
 
+\makeatletter
+\def\seqbreak#1#2{%
+  \parbox{#1}{\strut\@tfor\xx:=#2\do{%
+    \xx\linebreak[0]%
+  }\strut}%
+}
+
+\section*{Analysis Details}
 	\begin{tabular}{E{38mm}|E{125mm}}
-	\bf Run Name & {{experiment.expName|latexsafe}} \\ 
-	\bf Run Date & {{experiment.date}} \\ 
+	\bf Run Name & {{experiment.expName|latexsafe}} \\
+	\bf Run Date & {{experiment.date}} \\
 	\bf Run Flows & {{experiment.flows}} \\ 
 	\bf Projects & 
 			{% spaceless %}
@@ -340,40 +371,42 @@ Run Report for {{report.resultsName|latexsafe}}
 				{{project.name|latexsafe}}
 			{% endfor %}
 			{% endspaceless %} \\
-	\bf Sample & {{experiment.samples.all|join:", "|latexsafe}} \\ 
+	\bf Sample & {{experiment.samples.all|join:", "|latexsafe}} \\
 	\bf Reference & {{report.corollary|latexsafe}} \\ 
-	\bf Instrument & {{experiment.pgmName|latexsafe}} \\ 
-	\bf Flow Order & {{experiment.flowsInOrder}} \\ 
-	\bf Library Key & {{report.eas.libraryKey}} \\ 
-	\bf TF Key & {{report.eas.tfKey|default:"ATCG"}} \\ 
-	\bf Chip ID & {% spaceless %} {% if experiment %} {{experiment.chipBarcode}}{% endif %}{% endspaceless %} \\
+	\bf Instrument & {{experiment.pgmName|latexsafe}} \\
+    \bf Flow Order & \seqbreak{5in}{ {{experiment.flowsInOrder}} } \\
+	\bf Library Key & {{report.eas.libraryKey|latexsafe}} \\
+	\bf TF Key & {{report.eas.tfKey|default:"ATCG"}} \\
+	\bf Chip Barcode & {% spaceless %} {% if experiment %} {{experiment.chipBarcode}}{% endif %}{% endspaceless %} \\
 	\bf Chip Check & {% spaceless %} {% if experiment.log.calibratepassed %} Passed {% else %}Failed{% endif %}{% endspaceless %} \\
 	\bf Chip Type & {{experiment.chipType}} \\ 
 	\bf Chip Data & {{experiment.rawdatastyle}} \\
 	\bf Chip Lot Number & {{chipLot}} \\
-	\bf Barcode Set & {{report.eas.barcodeKitName|latexsafe}} \\ 
+	\bf Chip Wafer & {{chipWafer}} \\
+	\bf Barcode Set & {{report.eas.barcodeKitName|latexsafe}} \\
 	\bf Analysis Name & {{report.resultsName|latexsafe}} \\ 
 	\bf Analysis Date & {{report.timeStamp}} \\ 
-	\bf Analysis Flows & {{report.processedflows}} \\ 
+	\bf Analysis Flows & {{report.processedflows}} \\
 	\bf runID & {{report.runid}} \\
     {% if not report.isThumbnail %}
-        \bf BeadFind Args & {{ report.eas.beadfindargs }} \\
-        \bf Analysis Args & \detokenize{% verbatim %}{ {% endverbatim %}{{ report.eas.analysisargs }}{% verbatim %}}{% endverbatim %} \\
-        \bf Pre-BaseCaller Args for calibration & {{ report.eas.prebasecallerargs }} \\
+        \bf BeadFind Args & {{ report.eas.beadfindargs|latexsafe }} \\
+        \bf Analysis Args & {{ report.eas.analysisargs|latexsafe }} \\
+        \bf Pre-BaseCaller & {{ report.eas.prebasecallerargs }} \\
         \bf Calibration Args & {{ report.eas.calibrateargs }} \\
         \bf BaseCaller Args & {{ report.eas.basecallerargs }} \\
         \bf Alignment Args & {{ report.eas.alignmentargs }} \\
         \bf IonStats Args & {{ report.eas.ionstatsargs }} \\
     {% else %}
-        \bf BeadFind Args & {{ report.eas.thumbnailbeadfindargs }} \\
-        \bf Analysis Args & \detokenize{% verbatim %}{ {% endverbatim %}{{ report.eas.thumbnailanalysisargs }}{% verbatim %}}{% endverbatim %}| \\
-        \bf Pre-BaseCaller Args for calibration & {{ report.eas.prethumbnailbasecallerargs }} \\
+        \bf BeadFind Args & {{ report.eas.thumbnailbeadfindargs|latexsafe }} \\
+        \bf Analysis Args & {{ report.eas.thumbnailanalysisargs|latexsafe }} \\
+        \bf Pre-BaseCaller & {{ report.eas.prethumbnailbasecallerargs }} \\
         \bf Calibration Args: & {{ report.eas.thumbnailcalibrateargs }} \\
         \bf BaseCaller Args & {{ report.eas.thumbnailbasecallerargs }} \\
         \bf Alignment Args & {{ report.eas.thumbnailalignmentargs }} \\
         \bf IonStats Args & {{ report.eas.thumbnailionstatsargs }} \\
     {% endif %}
     \bf Analysis Parameters & {{report.eas.custom_args|yesno:"custom,default"}} \\
+
 \end{tabular}%
 
  
@@ -446,11 +479,10 @@ Run Report for {{report.resultsName|latexsafe}}
             \bf {{S5_InitLog_read.msg}} \\
             \end{tabular}
         {% else %}
-            \begin{minipage}[c]{100mm}
-            \fcolorbox{gray}{white}{\parbox[t][20mm]{160mm}{\setlength{\parindent}{0mm}\small\centering%%
-            \begin{tabular}{lrrrr}
-            \bf Product Description		& \bf Part Number &\bf Lot Number	&\bf Exp. Date &\bf Remaining Uses \\
-              \midrule
+             \resizebox{\textwidth}{!}{%
+             \begin{tabular}{lrrrr}
+             \bf Product Description		& \bf Part Number &\bf Lot Number	&\bf Exp. Date &\bf Remaining Uses \\
+             \midrule
                {% for initLog in S5_InitLog_read.existing_consumables %}
                     {% for key, value in initLog.items %}
                         {% if key == "productDesc" %}
@@ -473,9 +505,8 @@ Run Report for {{report.resultsName|latexsafe}}
                        {{consumable}}: Missing \\
                    {% endfor %}
                {% endif %}
-            \end{tabular}
-            }}
-            \end{minipage}
+            \end{tabular}%
+            }
         {% endif %}
     {% endif %}
 

@@ -2,7 +2,7 @@
 {% load static from staticfiles %}
 
 {% block extra_head %}
-  <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+  <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
   <style type="text/css">
 
     #file_item {
@@ -26,6 +26,7 @@
   <div>
     <form class="form-horizontal" id="modal_references_new_genome_form" method="POST">
       <fieldset>
+        <div id="errors" class="alert alert-error hide"></div>
         <div id="bedPublish" class="control-group">
           {% if hotspot %}
           <label for="pickfile" class="control-label">Hotspots File</label>
@@ -99,8 +100,8 @@
         multi_selection: false,
         multiple_queues: false,
         multipart_params: {meta: '{}'},
-        silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}',
-        flash_swf_url: '{% static "resources/plupload/js/plupload.flash.swf"%}'
+        silverlight_xap_url: '{% static "resources/plupload/js/Moxie.xap"%}',
+        flash_swf_url: '{% static "resources/plupload/js/Moxie.swf"%}'
       });
 
       var valid_file_selected = false;
@@ -125,6 +126,14 @@
         $('#file_item').html(file.name + ' (' + plupload.formatSize(file.size) + ') <b></b>');
         up.refresh(); // Reposition Flash/Silverlight
         $("#uploadfile").removeAttr('disabled');
+      });
+
+      uploader.bind('Error', function(up, err) {
+        var msg = 'There was an error during your upload'
+        if (err.response && !err.response.startsWith('<!')){
+          msg = err.response;
+        }
+        $('#errors').text(msg).show();
       });
       
       $('#uploadfile').click(function (e) {

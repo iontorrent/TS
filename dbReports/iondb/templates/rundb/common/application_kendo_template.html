@@ -1,0 +1,51 @@
+{% load static from staticfiles %}
+
+<script id="RunTypeColumnTemplate" type="text/x-kendo-template">
+	# 
+	var runType = data.runType;
+	var applications = {AMPS : 'appl_ampliSeq',
+						GENS : 'appl_wildcard',
+						TARS : 'appl_targetSeq',
+						WGNM : 'appl_wholeGenome',
+						RNA : 'appl_rnaSeq',
+						AMPS_RNA : 'appl_ampliSeqRna',
+						AMPS_EXOME : 'appl_ampliSeqExome',
+						TARS_16S : 'appl_metagenomics',
+						Pharmacogenomics : 'appl_pgx',
+						HID : 'appl_hid' }; 
+
+	var applicationGroupName = data.applicationGroupDisplayedName;
+	var applicationCategoryName = data.applicationCategoryDisplayedName;
+	 
+	#
+    <span class="runTypeImageClass" rel="tooltip" title="#=TB.runTypeApplicationDescription(runType, applicationGroupName, applicationCategoryName)#">
+    # if (applicationGroupName == "Pharmacogenomics") { #
+      <img src="{% static "resources/img/appl_pgx.png"%}" width="24px" height="24px" />
+     # } else if (applicationGroupName == "Human Identification") { #
+      <img src="{% static "resources/img/appl_hid.png"%}" width="24px" height="24px" />
+     # } else if (applicationGroupName == "Immune Repertoire") { #
+      <img src="{% static "resources/img/appl_immuneRepertoire.png"%}" width="24px" height="24px" />
+	# } else if (runType == "AMPS") { #
+	  <img src="{% static "resources/img/appl_ampliSeq.png"%}" width="24px" height="24px" />
+	# } else if (runType == "GENS") { #
+      <img src="{% static "resources/img/appl_wildcard.png"%}" width="24px" height="24px" />	
+    # } else if (runType == "TARS") { #
+      <img src="{% static "resources/img/appl_targetSeq.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "WGNM") { #
+      <img src="{% static "resources/img/appl_wholeGenome.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "RNA") { #
+      <img src="{% static "resources/img/appl_rnaSeq.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "AMPS_RNA") { #
+      <img src="{% static "resources/img/appl_ampliSeqRna.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "AMPS_EXOME") { #
+      <img src="{% static "resources/img/appl_ampliSeqExome.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "TARS_16S") { #
+      <img src="{% static "resources/img/appl_metagenomics.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "AMPS_DNA_RNA") { #
+      <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" width="24px" height="24px" />  
+    # } else if (runType == "TAG_SEQUENCING") { #
+      <img src="{% static "resources/img/appl_tagSequencing.png"%}" width="24px" height="24px" />
+    # } #
+	</span>
+	
+</script>

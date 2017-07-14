@@ -162,6 +162,8 @@ class DifSepOpt
     bool col_pair_pixel_xtalk_correct;
     float pair_xtalk_fraction;
     bool corr_noise_correct;
+    std::vector<float> beadfindAcqThreshold;
+    std::vector<float> beadfindBfThreshold;
 };
 
 /**

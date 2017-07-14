@@ -14,12 +14,12 @@
     },
     {
         "file"          : "ampliseq_germline_lowstringency_530_parameters.json",
-        "name"          : "Generic - S5/S5XL (520/530) - Germ Line - Low Stringency",
+        "name"          : "Generic - S5/S5XL (510/520/530) - Germ Line - Low Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries",
         "configuration" : "germline_low_stringency_520_530",
         "replaces"      : ["germline_low_stringency_520_530", "germline_low_stringency"],
         "compatibility" : {
-          "chip"        : ["520", "530"],
+          "chip"        : ["510", "520", "530"],
           "library"     : ["ampliseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]
@@ -66,12 +66,12 @@
     },
     {
         "file"          : "ampliseq_somatic_lowstringency_530_parameters.json",
-        "name"          : "Generic - S5/S5XL (520/530) - Somatic - Low Stringency",
+        "name"          : "Generic - S5/S5XL (510/520/530) - Somatic - Low Stringency",
         "tooltip"       : "Optimized for allele frequencies >2.5% and high sensitivity",
         "configuration" : "somatic_low_stringency_520_530",
         "replaces"      : ["somatic_low_stringency_520_530", "somatic_low_stringency"],
         "compatibility" : {
-          "chip"        : ["520","530"],
+          "chip"        : ["510","520","530"],
           "library"     : ["wholegenome","ampliseq","targetseq"],
           "frequency"   : ["somatic"],
           "stringency"  : ["low"]
@@ -104,31 +104,31 @@
         }
     },
     {
-        "file"          : "tagseq_tumor_parameters.json",
-        "name"          : "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)",
-        "tooltip"       : "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.",
-        "configuration" : "tagseq_ffpe",
-        "replaces"      : ["tagseq_ffpe"],
-        "compatibility" : {
-          "chip"        : ["520","530","540","pgm"],
-          "library"     : ["tag_sequencing"],
-          "frequency"   : ["rare_somatic"],
-          "stringency"  : ["low"]
-        }
-    },
-    {
         "file"          : "tagseq_liquidbiopsy_parameters.json",
         "name"          : "Oncomine Liquid Biopsy DNA - PGM (318) or S5/S5XL (5xx)",
         "tooltip"       : "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA",
         "configuration" : "tagseq_cfdna",
         "replaces"      : ["tagseq_cfdna"],
         "compatibility" : {
-          "chip"        : ["520","530","540","pgm"],
+          "chip"        : ["510","520","530","540","pgm"],
           "library"     : ["tag_sequencing"],
           "frequency"   : ["rare_somatic"],
           "stringency"  : ["low"]
         }
-    }	
+    },
+    {
+        "file"          : "tagseq_tumor_parameters.json",
+        "name"          : "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)",
+        "tooltip"       : "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.",
+        "configuration" : "tagseq_ffpe",
+        "replaces"      : ["tagseq_ffpe"],
+        "compatibility" : {
+          "chip"        : ["510","520","530","540","pgm"],
+          "library"     : ["tag_sequencing"],
+          "frequency"   : ["rare_somatic"],
+          "stringency"  : ["low"]
+        }
+    }
 ]
 
 

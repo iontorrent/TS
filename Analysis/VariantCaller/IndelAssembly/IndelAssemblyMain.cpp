@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
   }
 
   SampleManager sample_manager;
-  sample_manager.Initialize(bam_reader.GetHeader(), parsed_opts.sample_name, parsed_opts.force_sample_name);
+  sample_manager.Initialize(bam_reader.GetHeader(), parsed_opts.sample_name, parsed_opts.force_sample_name, parsed_opts.multisample);
 
   IndelAssembly indel_assembly(&parsed_opts, &reference_reader, &sample_manager, &targets_manager);
 
@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
   while (bam_reader.GetNextAlignment(alignment)) {  
     if (!indel_assembly.processRead(alignment, indel_target)) {break;}
   }
-  indel_assembly.onTraversalDone();
+  indel_assembly.onTraversalDone(true);
 
   bam_reader.Close();
 

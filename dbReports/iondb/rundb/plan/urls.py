@@ -16,6 +16,7 @@ urlpatterns = patterns(
     url(r'^page_plan_copy_template/(\d+)/$', 'views.page_plan_copy_template', name="page_plan_copy_template"),
     url(r'^page_plan_new_plan/(\d+)/$', 'views.page_plan_new_plan', name="page_plan_new_plan"),
     url(r'^get_ir_config/$', 'views.get_ir_config', name='get_ir_config'),
+    url(r'^plan_templates/install_files/$', 'views.upload_and_install_files', name="install_files"),
 
     url(r'^page_plan_new_template_by_sample/([\d,]+)/$', 'views.page_plan_new_template_by_sample', name="page_plan_new_template_by_sample"),
     url(r'^page_plan_new_plan_by_sample/(\d+)/([\d,]+)$', 'views.page_plan_new_plan_by_sample', name="page_plan_new_plan_by_sample"),
@@ -53,10 +54,6 @@ urlpatterns = patterns(
     url(r'^reviewplan/(?P<pk>\d+)/(?P<report_pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),
 
     url(r'^transfer/(?P<pk>\d+)/(?P<destination>.*)/$', 'views.plan_transfer', name='plan_transfer'),
-
-    url(r'^save/(\d+)/$', 'views.save_plan_or_template', name='save_plan_or_template'),
-
-    url(r'^template/presets/$', 'views.get_application_product_presets', name="get_application_product_presets"),
 
     url(r'^batchplanrunsfromtemplate/(\d+)/$', 'views.batch_plans_from_template', name='batch_plans_from_template'),
     url(r'^uploadplansfortemplate/$', 'views.upload_plans_for_template', name='upload_plans_for_template'),

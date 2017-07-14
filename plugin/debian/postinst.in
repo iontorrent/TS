@@ -16,6 +16,9 @@ case "$1" in
         # create the new symlink
         ln -sf @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@/pluginMedia /results/pluginMedia/@PLUGIN_NAME@
     fi
+
+    # make sure everything is (including directories) are owned by root
+    chown root:root -R @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@
     ;;
 
 esac

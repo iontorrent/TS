@@ -26,7 +26,7 @@ from iondb.plugins.manager import pluginmanager
 from iondb.plugins.launch_utils import get_plugins_to_run, add_hold_jid
 from iondb.plugins.plugin_json import make_plugin_json
 
-from iondb.rundb.models import Results, PluginResult, User, Plugin
+from iondb.rundb.models import Results, PluginResult, PluginResultJob, User, Plugin
 from django.db import IntegrityError
 
 from ion.plugin.constants import Feature, RunLevel
@@ -172,16 +172,15 @@ def SGEPluginJob(start_json, hold=False):
     args is a dict of all the args that are needed by for the plugin to run
     """
     try:
-        os.umask(0000)
+        os.umask(0o0002)
 
         plugin_output = start_json['runinfo']['results_dir']
         # Make sure the dirs exist
         if not os.path.exists(plugin_output):
-            os.makedirs(plugin_output, 0775)
+            os.makedirs(plugin_output, 0o0775)
 
         plugin = start_json['runinfo']['plugin']
-        logger.info("Preparing for SGE submission - plugin %s --v%s on result %s (%s)", plugin[
-                    'name'], plugin['version'], start_json['expmeta']['results_name'], start_json['runinfo']['pk'])
+        logger.info("Preparing for SGE submission - plugin %s --v%s on result %s (%s)", plugin['name'], plugin['version'], start_json['expmeta']['results_name'], start_json['runinfo']['pk'])
 
         # Branch for launch.sh vs 3.0 plugin class
         # logger.debug("Finding plugin definition: '%s':'%s'", plugin['name'], plugin['path'])
@@ -318,35 +317,20 @@ class PluginServer(object):
 
         return plugin
 
-    def pluginStart(self, start_json):
-        """
-        Launch the plugin defined by the start_json block
-        """
-        logger.debug("SGE job start request")
-        try:
-            jobid = SGEPluginJob(start_json, hold=True)
-            _session.control(jid, drmaa.JobControlAction.RELEASE)  # no return value
-            return jobid
-        except:
-            logger.error(traceback.format_exc())
-            return -1
-
     def launchPlugins(self, result_pk, plugins, net_location, username, runlevel=RunLevel.DEFAULT, params={}):
         """
         Launch multiple plugins with dependencies
         For multi-runlevel plugins the input 'plugins' is common for all runlevels
         """
         msg = ''
-        logger.debug("[launchPlugins] result %s requested plugins: %s" %
-                     (result_pk, ','.join(plugins.keys())))
+        logger.debug("[launchPlugins] result %s requested plugins: %s" % (result_pk, ','.join(plugins.keys())))
 
         try:
             # get plugins to run for this runlevel
             plugins, plugins_to_run, satisfied_dependencies = get_plugins_to_run(plugins, result_pk, runlevel)
 
             if len(plugins_to_run) > 0:
-                logger.debug("[launchPlugins] runlevel: %s, depsolved launch order: %s" %
-                             (runlevel, ','.join(plugins_to_run)))
+                logger.debug("[launchPlugins] runlevel: %s, depsolved launch order: %s" % (runlevel, ','.join(plugins_to_run)))
             else:
                 logger.debug("[launchPlugins] no plugins to run at runlevel: %s" % runlevel)
                 return plugins, msg
@@ -360,8 +344,7 @@ class PluginServer(object):
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
                 user = User.objects.get(pk=1)
-                logger.error("Invalid user specified for plugin launch: %s, will use %s" %
-                             (username, user.username))
+                logger.error("Invalid user specified for plugin launch: %s, will use %s" % (username, user.username))
 
             for name in plugins_to_run:
                 try:
@@ -369,8 +352,7 @@ class PluginServer(object):
                     # get params for this plugin, make empty json value if doesn't exist
                     plugin_params = params.setdefault('plugins', {}).setdefault(name, {})
 
-                    # Get pluginresult for multi-runlevel plugins or if specified to be reused
-                    # by manual launch
+                    # Get pluginresult for multi-runlevel plugins or if specified to be reused by manual launch
                     pr = None
                     pluginresult_pk = p.get('pluginresult') or plugin_params.get('pluginresult')
 
@@ -379,21 +361,13 @@ class PluginServer(object):
                         try:
                             pr = result.pluginresult_set.get(pk=pluginresult_pk)
                         except:
-                            logger.error("Failed to find pluginresult for plugin %s, result %s: %s" %
-                                         (name, result.resultsName, pluginresult_pk))
+                            logger.error("Failed to find pluginresult for plugin %s, result %s: %s" % (name, result.resultsName, pluginresult_pk))
                             pr = None
-                    elif Feature.EXPORT in p.get('features', []):
-                        # Export plugins rerun in place to enable resuming upload
-                        pr = result.pluginresult_set.filter(plugin=p['id'])
-                        if pr.count() > 0:
-                            pr = pr[0]
-                            pr.owner = user
 
                     # Create new pluginresult - this is the most common path
                     if not pr:
                         pr = PluginResult.objects.create(result_id=result_pk, plugin_id=p['id'], owner=user)
-                        logger.debug("New pluginresult id=%s created for plugin %s and result %s." %
-                                     (pr.pk, name, result.resultsName))
+                        logger.debug("New pluginresult id=%s created for plugin %s and result %s." % (pr.pk, name, result.resultsName))
                         # Always create new, unique output folder.
                         # Never fallback to old *_out format.
                         plugin_output = pr.path(create=True, fallback=False)
@@ -405,8 +379,8 @@ class PluginServer(object):
                     p['pluginresult'] = pr.pk
                     p, holding_for = add_hold_jid(p, plugins, runlevel, satisfied_dependencies)
 
-                    start_json = make_plugin_json(result_pk, report_dir, p, plugin_output, net_location, url_root, username, runlevel, params.get(
-                        'blockId', ''), params.get('block_dirs', ["."]), plugin_params.get('instance_config', {}))
+                    start_json = make_plugin_json(result_pk, report_dir, p, plugin_output, net_location, url_root, username, runlevel,
+                                                  params.get('blockId', ''), params.get('block_dirs', ["."]), plugin_params.get('instance_config', {}))
 
                     # Pass on run_mode (launch source - manual/instance, pipeline)
                     start_json['runplugin']['run_mode'] = params.get('run_mode', '')
@@ -425,7 +399,7 @@ class PluginServer(object):
                                 }
 
                     # prepare for launch: updates config, sets pluginresults status, generates api key
-                    pr.prepare(config=start_json['pluginconfig'])
+                    pr.prepare()
                     pr.save()
                     # update startplugin json with pluginresult info
                     start_json['runinfo']['pluginresult'] = pr.pk
@@ -438,12 +412,19 @@ class PluginServer(object):
 
                     if jid:
                         # Update pluginresult status
-                        PluginResult.objects.filter(pk=pr.pk).update(state='Queued', jobid=jid)
+                        prj, created = PluginResultJob.objects.get_or_create(
+                            plugin_result=pr,
+                            run_level=runlevel,
+                            grid_engine_jobid=jid,
+                            state = 'Queued',
+                            config = start_json['pluginconfig'],
+                        )
+                        prj.save()
+
                         # Release now that jobid and queued state are set.
                         _session.control(jid, drmaa.JobControlAction.RELEASE)  # no return value
 
-                    msg += 'Plugin: %s result: %s, jid %s, depends %s, holding for %s \n' % (
-                        p.get('name', ''), result.resultsName, jid, p.get('depends', []), holding_for)
+                    msg += 'Plugin: %s result: %s, jid %s, depends %s, holding for %s \n' % (p.get('name', ''), result.resultsName, jid, p.get('depends', []), holding_for)
 
                     if runlevel != RunLevel.BLOCK:
                         p['jid'] = jid
@@ -454,8 +435,6 @@ class PluginServer(object):
                     logger.error(traceback.format_exc())
                     msg += 'ERROR: Plugin %s failed to launch.\n' % p['name']
                     pr = PluginResult.objects.get(pk=pr.pk)
-                    pr.complete('Error')
-                    pr.save()
         except:
             logger.error(traceback.format_exc())
             msg += 'ERROR: Failed to launch requested plugins.'
@@ -477,10 +456,8 @@ class PluginServer(object):
         try:
             jobinfo = _session.wait(jobid, timeout=20)
             # returns JobInfo object
-            logger.info("Job %s wasAborted=%s with exit_status=%s", jobinfo.jobId,
-                        jobinfo.wasAborted, jobinfo.resourceUsage.get('exit_status'))
-            status = "Job %s wasAborted=%s with exit_status=%s" % (
-                jobinfo.jobId, jobinfo.wasAborted, jobinfo.resourceUsage.get('exit_status'))
+            logger.info("Job %s wasAborted=%s with exit_status=%s", jobinfo.jobId, jobinfo.wasAborted, jobinfo.resourceUsage.get('exit_status'))
+            status = "Job %s wasAborted=%s with exit_status=%s" % (jobinfo.jobId, jobinfo.wasAborted, jobinfo.resourceUsage.get('exit_status'))
         except drmaa.errors.InvalidJobException:
             status = "Job already terminated, or started previously."
             logger.warn("SGE job %s already terminated", jobid)
@@ -519,24 +496,7 @@ class PluginServer(object):
 
         return ret if return_list else ret[0]
 
-    def createPR(self, resultpk, pluginpk, username=None, config={}):
-        if username is None:
-            username = "ionadmin"
-        try:
-            user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            user = User.objects.get(pk=1)
-        try:
-            pr = PluginResult.objects.create(
-                result_id=resultpk, plugin_id=pluginpk, owner=user, pluginconfig=config)
-        except IntegrityError:
-            return False
-        # from tastypie.serializers import Serializer
-        # s = Serializer()
-        # return s.to_json(pr)
-        return True
-
-    def updatePR(self, pk, state, store, jobid=None):
+    def updatePR(self, pk, grid_engine_job_id, state, store, jobid=None):
         """
         Because of the Apache security it is hard for crucher nodes to contact the API directly.
         This method is a simple proxy to update the status of plugins
@@ -548,8 +508,8 @@ class PluginServer(object):
 
             # TODO: should do an explicit check for the database object in case it's been deleted
             pr = PluginResult.objects.get(id=pk)
-            if (state is not None) and (state != pr.state):
-                pr.SetState(state, jobid)
+            if state is not None:
+                pr.SetState(state, grid_engine_job_id, jobid)
 
             if store is not None:
                 # Validate JSON?
@@ -560,6 +520,13 @@ class PluginServer(object):
             return False
 
         return True
+
+    def delete_pr_directory(self, directory):
+        """We need to use the same user to delete the folder as created it"""
+        def delete_error(func, path, info):
+            logger.error("Failed to delete %s: %s", path, info)
+
+        shutil.rmtree(directory, onerror=delete_error)
 
 if __name__ == '__main__':
     # Instantiate the xmlrpc server

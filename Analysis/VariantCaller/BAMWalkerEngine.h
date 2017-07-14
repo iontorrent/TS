@@ -49,7 +49,7 @@ struct Allele {
 // structure to encapsulate registered reads and alleles
 struct Alignment {
 
-  Alignment() { Reset(); }
+  Alignment() { Reset(); read_count = 1;}
   void Reset() {
     next = NULL;
     read_number = 0;
@@ -67,10 +67,12 @@ struct Alignment {
     refmap_code.clear();
     refmap_has_allele.clear();
     refmap_allele.clear();
+    target_coverage_indices.clear();
     is_reverse_strand = false;
     measurements.clear();
     measurements_length = 0;
     phase_params.clear();
+    measurements_sd.clear();
     runid.clear();
     well_rowcol.clear();
     read_bases.clear();
@@ -86,8 +88,9 @@ struct Alignment {
     flow_order_index = -1;
     read_group.clear();
     prefix_bases.clear();
+    suffix_bases.clear();
     tag_info.Clear();
-	read_count = 1;
+//	read_count = 1;
   }
 
   BamAlignment          alignment;          //! Raw BamTools alignment
@@ -114,12 +117,14 @@ struct Alignment {
   vector<char>          refmap_code;
   vector<char>          refmap_has_allele;
   vector<Allele>        refmap_allele;
+  vector<int>           target_coverage_indices;
 
   // Candidate evaluator information
   bool                  is_reverse_strand;  //! Indicates whether read is from the forward or reverse strand
   vector<float>         measurements;       //! The measurement values for this read blown up to the length of the flow order
   int                   measurements_length;//! Original trimmed length of the ZM measurements vector
   vector<float>         phase_params;       //! cf, ie, droop parameters of this read
+  vector<float>         measurements_sd;    //! The standard deviation of measurements for consensus reads
   string                runid;              //! Identify the run from which this read came: used to find run-specific parameters
   vector<int>           well_rowcol;        //! 2 element int vector 0-based row, col in that order mapping to row,col in chip
   string                read_bases;         //! Read sequence as base called (minus hard but including soft clips)
@@ -135,6 +140,7 @@ struct Alignment {
   short                 flow_order_index;   //! Index of the flow order belonging to this read
   string                read_group;         //! Read group of this read
   string                prefix_bases;       //! hard clipped start of the read
+  string                suffix_bases;       //! hard clipped end of the read
 
   // Post-processing information
   vector<CigarOp>       old_cigar;          //! Cigar information before primer trimming
@@ -146,6 +152,7 @@ struct PositionInProgress {
 
   int                   chr;                //! Chromosome index of this variant position
   long                  pos;                //! Position within chromosome
+  long                  target_begin;       //! Begin of current target region
   long                  target_end;         //! End of current target region
   Alignment *           begin;              //! First read covering this position
   Alignment *           end;                //! Last read coverint this position
@@ -164,7 +171,7 @@ public:
   BAMWalkerEngine();
   ~BAMWalkerEngine();
   void Initialize(const ReferenceReader& ref_reader, TargetsManager& targets_manager,
-      const vector<string>& bam_filenames, const string& postprocessed_bami, int px);
+      const vector<string>& bam_filenames, const string& postprocessed_bam, int px);
   void Close();
   const SamHeader& GetBamHeader() { return bam_header_; }
 
@@ -174,7 +181,7 @@ public:
   bool ReadyForNextPosition();
 
   // Memory contention prevention
-  bool MemoryContention();
+  bool MemoryContention(int max_num_reads = 50000);
   bool IsEarlierstPositionProcessingTask(list<PositionInProgress>::iterator& position_ticket);
 
   // Loading new reads
@@ -203,46 +210,29 @@ public:
     basecaller_version = basecaller_version_;
     tmap_version = tmap_version_;
   }
+  void AddReadToPG(Alignment *rai);
+  bool GetMostPopularTmap(SamProgram& most_popular_tmap);
+
   void processDepth(BamAlignment& alignment, TargetsManager* targets_manager, vector<MergedTarget>::iterator& curr_target);
   void openDepth(const string& filename);
   void writeDepth(ReferenceReader* reference_reader, std::map<long int, int>::size_type offset = 0);
   void closeDepth(ReferenceReader* reference_reader);
+  int getChrIndex() const {return next_target_->chr;}
+  long int getStartPosition() const {return next_target_->begin;}
+  long int getEndPosition() const {return next_target_->end;}
+  long int getPosition() const {return next_position_;}
+  Alignment *               alignments_first_;      //! First in a list of all alignments in memory
 
 private:
   void InitializeBAMs(const ReferenceReader& ref_reader, const vector<string>& bam_filenames);
 
   TargetsManager *          targets_manager_;       //! Manages targets loaded from BED file
-  BamMultiReader            bam_reader_;            //! BamTools mulit-bam reader
-  SamHeader                 bam_header_;            //! Bam header
   string                    basecaller_version_;    //! BaseCaller version retrieved from BAM header
   string                    tmap_version_;          //! TMAP version retrieved from BAM header
-
-  MergedTarget *            next_target_;           //! Target containing next position
-  long int                  next_position_;         //! Next position (chr in the target)
-
-  int                       last_processed_chr_;    //! Reads up to this chr+pos are guaranteed to be processed
-  long int                  last_processed_pos_;    //! Reads up to this chr+pos are guaranteed to be processed
-  bool                      has_more_alignments_;   //! Are there still more reads in BAM?
-  bool                      has_more_positions_;    //! Are there still more positions within the target region to process?
-public:
-  Alignment *               alignments_first_;      //! First in a list of all alignments in memory
-private:
-  Alignment *               alignments_last_;       //! Last in a list of all alignments in memory
-  int                       read_counter_;          //! Total # of reads retrieved so far
 
   Alignment *               recycle_;               //! Stack of allocated, reusable Alignment objects
   int                       recycle_size_;          //! Size of the the recycle stack
   pthread_mutex_t           recycle_mutex_;         //! Mutex controlling access to the recycle stack
-
-  Alignment *               tmp_begin_;             //! Starts read window of most recent position task
-  Alignment *               tmp_end_;               //! Ends read window of most recent position task
-
-  Alignment *               processing_first_;      //! First in a list of alignments being processed
-  Alignment *               processing_last_;       //! Last in a list of alignments being processed
-  list<PositionInProgress>  positions_in_progress_; //! List of positions being processed
-  int                       first_excess_read_;     //! Index of the earliest read beyond the current position
-
-  int                       first_useful_read_;     //! Index of the earliest read that may still be in use
 
   bool                      bam_writing_enabled_;
   BamWriter                 bam_writer_;
@@ -260,8 +250,50 @@ private:
   int prevRefID;
   long int prevEndPos;
 
+protected:
+  BamMultiReader            bam_reader_;            //! BamTools mulit-bam reader
+  SamHeader                 bam_header_;            //! Bam header
+
+  MergedTarget *            next_target_;           //! Target containing next position
+  long int                  next_position_;         //! Next position (chr in the target)
+
+  int                       last_processed_chr_;    //! Reads up to this chr+pos are guaranteed to be processed
+  long int                  last_processed_pos_;    //! Reads up to this chr+pos are guaranteed to be processed
+  bool                      has_more_alignments_;   //! Are there still more reads in BAM?
+  bool                      has_more_positions_;    //! Are there still more positions within the target region to process?
+  Alignment *               alignments_last_;       //! Last in a list of all alignments in memory
+  int                       read_counter_;          //! Total # of reads retrieved so far
+
+  Alignment *               tmp_begin_;             //! Starts read window of most recent position task
+  Alignment *               tmp_end_;               //! Ends read window of most recent position task
+
+  Alignment *               processing_first_;      //! First in a list of alignments being processed
+  Alignment *               processing_last_;       //! Last in a list of alignments being processed
+  list<PositionInProgress>  positions_in_progress_; //! List of positions being processed
+  int                       first_excess_read_;     //! Index of the earliest read beyond the current position
+
+  int                       first_useful_read_;     //! Index of the earliest read that may still be in use
+  map<string, unsigned int> read_counts_of_pg_;     //!  Count how many reads that use the program for alignment.
 };
 
+class ConsensusBAMWalkerEngine : public BAMWalkerEngine
+{
+private:
+    BamWriter               aln_no_needed_consensus_bam_writer_;
+    BamWriter               aln_needed_consensus_bam_writer_;
+    pthread_mutex_t         aln_no_needed_consensus_bam_writer_mutex_;
+    pthread_mutex_t         aln_needed_consensus_bam_writer_mutex_;
+    bool                    write_consensus_bam_ = true;
+public:
+    ConsensusBAMWalkerEngine() : BAMWalkerEngine(){};
+	void SaveConsensusAlignments(Alignment* const & read_list, Alignment* const & aln_needed_read_list);
+	void Initialize(const ReferenceReader& ref_reader, TargetsManager& targets_manager,
+	        const vector<string>& bam_filenames, const string& postprocessed_bam, int px, const string& consensus_bam);
+	void Close();
+    void RequestTargetBasedReadRemovalTask(Alignment*& removal_list);
+    void BeginTargetProcessingTask(list<PositionInProgress>::iterator& position_ticket);
+    bool EligibleForTargetBasedReadRemoval();
+};
 
 #endif //BAMWALKERENGINE_H
 

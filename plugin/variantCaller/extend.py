@@ -8,10 +8,9 @@ import time
 import json
 import sys
 import subprocess
-import zipfile
 import glob
 import sqlite3
-
+import traceback
 def printtime(message, *args):
     if args:
         message = message % args
@@ -54,6 +53,25 @@ def _execute(path, query, limit, offset):
     else:
         raise Exception("Unable to open database file")
 
+def db_columns(bucket):
+    """returns the keys of columns from database"""
+    path = bucket["request_get"].get("path", '')
+    dbPath = os.path.join(path, 'alleles.db')
+    if path and os.path.exists(dbPath):
+            connection = sqlite3.connect(dbPath)
+            cursorobj = connection.cursor()
+            try:
+                cursorobj.execute('select * from variants')
+                # The first two columns are '"id" INTEGER PRIMARY KEY, "ChromSort" UNSIGNED BIG INT,
+                column_offset = 2
+                db_columns_list = [col_description[0] for col_description in cursorobj.description[column_offset:]]
+            except Exception as e:
+                raise e
+            connection.close()
+            return db_columns_list
+    else:
+        raise(ValueError('Empty path in the bucket.'))
+     
 
 def query(bucket):
     """returns a list of rows from database"""
@@ -250,9 +268,11 @@ def bam_index(input_bam):
     """make the bam index"""
     return ["samtools", "index", input_bam]
 
-def status_update(path, status):
+def status_update(path, status, extra_info_dict = {}):
+    status_dict = dict([(key, value) for key, value in extra_info_dict.iteritems()])
+    status_dict['split_status'] = str(status)
     with open(os.path.join(path, "split_status.json"), "w+") as f:
-        f.write(json.dumps({"split_status": str(status) }))
+        f.write(json.dumps(status_dict))
 
 def clean_position_name(chrom, pos, position_names, window, id):
     """try to clean up chr names"""
@@ -273,49 +293,115 @@ def clean_position_name(chrom, pos, position_names, window, id):
 
     return name
 
-if __name__ == '__main__':
-    """extend.py main will do the data slicing, and spit out a zip"""
+def add_to_zip_list(to_zip_list, source_path, dest_dir = None, dest_basename = None):
+    if dest_basename is None:
+        dest_basename = os.path.basename(source_path)
+    if dest_dir is None:
+        dest_path = dest_basename
+    else:
+        dest_path = os.path.join(dest_dir, dest_basename)
+    to_zip_list.append((source_path, dest_path))
 
-    printtime('Slicing started using: ' + (' '.join(sys.argv)))
-
-    #where the run data lives
-    path = sys.argv[1]
-    #name of the working dir used for the temp files
-    temp_path = sys.argv[2]
-    try:
-        barcode = sys.argv[3]
-    except IndexError:
-        barcode = False
+def slicer_main(path, temp_path, barcode):
+    '''
+    path: path to the barcode directory
+    temp_path: path to the sliced data directory
+    barcode: barcode of interest. Empty string refers to as no barcode.
+    '''
 
     full_path = os.path.join(path, temp_path)
-
-    rawlib = "rawlib.bam"
-    prefix = ""
-
-    #is there a ptrim file?
-    ptrim = ""
-    source_bed_files = []
-
-    if not barcode:
-        startplugin = json.load(open(os.path.join(path, "startplugin.json")))
-        ptrim = os.path.join(path, "rawlib_processed.bam")
-        source_bed_files = glob.glob(path+'/*.bed')
+    
+    # Use variant_caller_plugin to get information
+    if barcode in ['', False, None]:
+        plugin_dir = path
+        prefix = ''
+        my_barcode = None
     else:
-        #load it from the parent dir if it is a barcode
-        startplugin = json.load(open(os.path.join(path, "../startplugin.json")))
-        prefix = barcode + "_"
-        rawlib = prefix + rawlib
-        source_bed_files = glob.glob(path+'/../*.bed')
+        plugin_dir = os.path.realpath(os.path.join(path, ".."))
+        my_barcode = barcode
+        prefix = barcode + '_'
 
-        try:
-            ptrim = glob.glob(path +  "/*_processed.bam")[0]
-        except IndexError:
-            ptrim = ""
+    # Get startplugin_json
+    with open(os.path.join(plugin_dir, 'startplugin.json'), 'rb') as f_json:
+        startplugin_json = json.load(f_json, parse_float=str)
+    # Get the directory of the plugin
+    dirname = startplugin_json['runinfo']['plugin_dir']
+    # Add the path of the plugin 
+    sys.path.append(dirname)
+    # Now I can import variant_caller_plugin.py
+    import variant_caller_plugin as vc_plugin
+   
+    if my_barcode is None:
+        my_barcode = vc_plugin.NONBARCODED
+    vc_plugin.STARTPLUGIN_JSON = startplugin_json
+    vc_plugin.TSP_FILEPATH_PLUGIN_DIR = plugin_dir
+    vc_plugin.DIRNAME = dirname
 
-    printtime(str(source_bed_files))
+    # Read barcodes.json
+    with open(os.path.join(vc_plugin.TSP_FILEPATH_PLUGIN_DIR, 'barcodes.json'), 'rb') as f_json:
+        vc_plugin.BARCODES_JSON = json.load(f_json)
+    barcoded_run, configured_run, start_mode, multisample = vc_plugin.get_plugin_mode()
 
-    results_name = startplugin.get("expmeta", {}).get("results_name","results")
-    reference = startplugin.get("runinfo", {}).get("library","hg19")
+    # tvcutils
+    vc_plugin.TVCUTILS = os.path.join(os.path.join(vc_plugin.DIRNAME, 'bin'), 'tvcutils')
+    if not os.path.exists(vc_plugin.TVCUTILS):
+        vc_plugin.TVCUTILS = 'tvcutils'
+        
+    # I do almost exactly the same thing as the plugin does for getting configuration and options.    
+    configurations, process_status = vc_plugin.get_configurations(barcoded_run, configured_run, start_mode, multisample)
+    # Get the configuration of the barcode
+    my_configutation = None
+    my_bam_dict = None
+    for config in configurations.itervalues():
+        for bam in config['bams']:
+            if bam['name'] == my_barcode:
+                my_configutation = config
+                my_bam_dict = bam
+                break
+        if (my_configutation is not None) and (my_bam_dict is not None):
+            break
+    if (my_configutation is None) or (my_bam_dict is None):
+        raise(ValueError('Fail to get the barcode.'))
+    
+    # Get options
+    my_configutation['options'] = vc_plugin.ConfigureOptionsManager(my_configutation)
+
+    # Get the bam file
+    try_bams = [os.path.basename(my_bam_dict['file'])[:-4] + '.realigned.bam', os.path.basename(my_bam_dict['file'])]
+    my_bam_dict['untrimmed_bam'] = None
+    for try_bam in try_bams:
+        try_bam_path = os.path.join(vc_plugin.TSP_FILEPATH_PLUGIN_DIR, try_bam)
+        if os.path.exists(try_bam_path):
+            my_bam_dict['untrimmed_bam'] = try_bam_path
+            break
+        try_bam_path = os.path.join(path, try_bam)
+        if os.path.exists(try_bam_path):
+            my_bam_dict['untrimmed_bam'] = try_bam_path
+            break        
+        
+    if my_bam_dict['untrimmed_bam'] is None:
+        raise(IOError('Can not find the bam file.'))
+    # Identify the directory for the barcode 
+    if barcoded_run:
+        my_bam_dict['results_directory'] = os.path.join(vc_plugin.TSP_FILEPATH_PLUGIN_DIR, my_bam_dict['name'])
+    else:
+        my_bam_dict['results_directory'] = vc_plugin.TSP_FILEPATH_PLUGIN_DIR
+    # Determine the 'vc_pipeline_directory' and post processed bam
+    if multisample:
+        my_bam_dict['vc_pipeline_directory'] = os.path.join(vc_plugin.TSP_FILEPATH_PLUGIN_DIR, my_configutation['name'])
+        ptrim = os.path.join(my_bam_dict['vc_pipeline_directory'], 'multisample_processed.bam')
+    else:
+        my_bam_dict['vc_pipeline_directory'] = my_bam_dict['results_directory']
+        assert(my_bam_dict['untrimmed_bam'].endswith('.bam'))
+        ptrim = os.path.join(my_bam_dict['vc_pipeline_directory'], os.path.basename(my_bam_dict['untrimmed_bam'])[:-4] + '_processed.bam')
+
+    if not os.path.exists(ptrim):
+        ptrim = ''
+
+    # Get all bed files
+    source_bed_files = glob.glob(my_bam_dict['results_directory'] + '/*.bed')
+
+    results_name = vc_plugin.STARTPLUGIN_JSON.get("expmeta", {}).get("results_name", "results")
     variants = json.load(open(os.path.join(full_path, "variants.json")))
 
     status_update(path, "Stat Generation in progress")
@@ -328,7 +414,7 @@ if __name__ == '__main__':
 
     #if it is there just added it to the zip later
     #Get full bam stats
-    rawlib_stats = subprocess.Popen(['samtools', 'flagstat', os.path.join(path, rawlib)],
+    rawlib_stats = subprocess.Popen(['samtools', 'flagstat', my_bam_dict['untrimmed_bam']],
                                     stdout=subprocess.PIPE).communicate()[0]
 
     with open(os.path.join(full_path, prefix + "rawlib_stats.txt"),"w+") as f:
@@ -338,12 +424,22 @@ if __name__ == '__main__':
         rawlib_prtim_stats = subprocess.Popen(['samtools', 'flagstat', ptrim],
                                               stdout=subprocess.PIPE).communicate()[0]
 
-        with open(os.path.join(full_path, prefix +  "rawlib_ptrim_stats.txt"),"w+") as f:
+        with open(os.path.join(full_path, prefix + "rawlib_ptrim_stats.txt"),"w+") as f:
             f.write(rawlib_prtim_stats)
 
-    #TODO add the bed files
-
-    vcf_files = ["small_variants.vcf", "small_variants_filtered.vcf", "TSVC_variants.vcf"]
+    vcf_files = ["small_variants.vcf", "small_variants_filtered.vcf", "TSVC_variants.vcf", "indel_assembly.vcf"]
+    # Hotspots vcf
+    hotspots_name = my_configutation['options'].serve_option('hotspots_name', my_barcode)
+    if hotspots_name != '':
+        try_hs_vcf_path = os.path.join(path, hotspots_name + '.hotspot.vcf')
+        if os.path.exists(try_hs_vcf_path):
+            vcf_files.append(os.path.basename(try_hs_vcf_path))
+    # sse vcf
+    sse_bed = my_configutation['options'].serve_option('sse_bed', my_barcode)
+    if sse_bed.endswith('bed') :
+        try_sse_vcf_path = os.path.join(path, os.oath.basename(sse_bed)[:-4] + '.vcf')
+        if os.path.exists(try_sse_vcf_path):
+            vcf_files.append(os.path.basename(try_sse_vcf_path))
 
     status_update(path, "BAM and VCF files are being sliced")
     printtime("Generating expected VCF files")
@@ -368,18 +464,17 @@ if __name__ == '__main__':
                     "REF=" + ref + ";OBS=" + str(v.get("expected","")) + "\t" +
                     "." + "\n"
             )
-        to_zip.append((os.path.join(full_path, expected_bed_filename), expected_vcf_filename))
+        add_to_zip_list(to_zip, os.path.join(full_path, expected_bed_filename), results_name)  
         
-        args =  "tvcutils prepare_hotspots"
-        args += " --input-bed " + expected_bed_filename
-        args += " --output-vcf " + expected_vcf_filename
-        args += " --reference /results/referenceLibrary/tmap-f3/"+reference+"/"+reference+".fasta"
+        args =  "%s prepare_hotspots " %vc_plugin.TVCUTILS
+        args += " --input-bed %s " %expected_bed_filename
+        args += " --output-vcf %s " %expected_vcf_filename
+        args += " --reference %s " %my_configutation['options'].serve_option('reference_genome_fasta', my_barcode)
         args += " --left-alignment on"
         printtime(args)
         subprocess.check_call(args, cwd=full_path, shell=True)
-        to_zip.append((os.path.join(full_path, expected_vcf_filename), expected_vcf_filename))
+        add_to_zip_list(to_zip, os.path.join(full_path, expected_vcf_filename), results_name)  
         
-
     #store all the names so that we don't use the same one twice
     position_names = []
     #Do splicing for each of the variants
@@ -391,37 +486,43 @@ if __name__ == '__main__':
 
         printtime("Slicing BAM and VCF files for " + base)
 
-        #rawlib bam
-        rawlib_variant = prefix + "rawlib_" + base + ".bam"
-        args = bam_split(os.path.join(path, rawlib), rawlib_variant, variant["chrom"], variant["pos"], WINDOW)
+        # rawlib bam
+        rawlib_variant = '%s_%s.bam' %(os.path.basename(my_bam_dict['untrimmed_bam'])[:-4], base)
+        args = bam_split(my_bam_dict['untrimmed_bam'], rawlib_variant, variant["chrom"], variant["pos"], WINDOW)
         subprocess.check_call(args, cwd=full_path)
-        to_zip.append((os.path.join(full_path, rawlib_variant), rawlib_variant))
+        add_to_zip_list(to_zip, os.path.join(full_path, rawlib_variant), results_name)  
 
-        #make indexes
+        # make indexes for rawlib bam
         args = bam_index(os.path.join(full_path, rawlib_variant))
         subprocess.check_call(args, cwd=full_path)
-        to_zip.append((os.path.join(full_path, rawlib_variant + ".bai"), rawlib_variant + ".bai"))
+        add_to_zip_list(to_zip, os.path.join(full_path, rawlib_variant + ".bai"), results_name)  
 
         if ptrim:
-            rawlib_ptrim_variant = prefix + "rawlib_processed_" + base + ".bam"
+            # processed bam
+            rawlib_ptrim_variant = '%s_%s.bam' %(os.path.basename(ptrim)[:-4], base) 
             args = bam_split(ptrim, rawlib_ptrim_variant, variant["chrom"], variant["pos"], WINDOW)
             subprocess.check_call(args, cwd=full_path)
-            to_zip.append((os.path.join(full_path, rawlib_ptrim_variant), rawlib_ptrim_variant))
+            add_to_zip_list(to_zip, os.path.join(full_path, rawlib_ptrim_variant), results_name)  
 
-            #make indexes
+            # make indexes for processed bam
             args = bam_index(os.path.join(full_path, rawlib_ptrim_variant))
             subprocess.check_call(args, cwd=full_path)
-            to_zip.append((os.path.join(full_path, rawlib_ptrim_variant) + ".bai", rawlib_ptrim_variant + ".bai"))
+            add_to_zip_list(to_zip, os.path.join(full_path, rawlib_ptrim_variant + '.bai'), results_name)  
 
-        #make the tiny vcfs
+        # make tiny vcf files
+        printtime('Making tiny vcf files from %s' %', '.join(vcf_files))
         for vcf in vcf_files:
-            vcf_for_variant = vcf.split(".")[0] + "_" + base
+            assert(vcf.endswith('.vcf'))
+            vcf_for_variant = '%s_%s' %(vcf[:-4], base)
             args = vcf_split(os.path.join(path, vcf), vcf_for_variant, variant["chrom"], variant["pos"], WINDOW)
             #I don't think the error code that is returned can be trusted.
             vcf_status = subprocess.check_call(args, cwd=full_path)
-            to_zip.append((os.path.join(full_path, vcf_for_variant + ".recode.vcf"), vcf_for_variant + ".recode.vcf"))
+            add_to_zip_list(to_zip, os.path.join(full_path, vcf_for_variant + ".recode.vcf"), results_name)  
         
+        # make tiny bed files
+        printtime('Making tiny bed files from %s' %', '.join(source_bed_files))
         for bed in source_bed_files:
+            assert(bed.endswith('.bed'))
             bed_for_variant = os.path.join(full_path,os.path.basename(bed)[:-4] + "_" + base + '.bed')
             printtime("Converting " + bed + " to " + bed_for_variant)
             with open(bed,"r") as i:
@@ -440,55 +541,77 @@ if __name__ == '__main__':
                         if endpos < int(variant["pos"]) - (WINDOW/2):
                             continue
                         o.write(line)
-            to_zip.append((bed_for_variant, os.path.basename(bed_for_variant)))
-            
-        
+            add_to_zip_list(to_zip, bed_for_variant, results_name)  
 
-    zip = zipfile.ZipFile(os.path.join(full_path,  results_name + ".zip"), "w")
+    #add bam stats to the zip
+    add_to_zip_list(to_zip, os.path.join(full_path, prefix + "rawlib_stats.txt"), results_name)  
+    if ptrim:
+        add_to_zip_list(to_zip, os.path.join(full_path, prefix + "rawlib_ptrim_stats.txt"), results_name)  
 
+    #parameters
+    parameter_path = my_configutation['options'].serve_option('parameters_file')
+    add_to_zip_list(to_zip, parameter_path, results_name)  
+
+    #add the variants.json file
+    add_to_zip_list(to_zip, os.path.join(full_path, "variants.json"), results_name)  
+    
+    # make zip file
     status_update(path, "Creating ZIP")
     printtime("Generating final ZIP file")
-    missing_vcfs = []
+    zip_path = os.path.join(full_path, "%s.zip" %results_name)    
+    missing_files = []
     for source, dest in to_zip:
         try:
-            zip.write(source, os.path.join(results_name, dest))
-            #so if it got here then we now the vcf was there, we can know try to bgzip and index it.
-            if source.endswith(".vcf"):
+            vc_plugin.compress.make_zip(zip_path, source, arcname=dest, use_sys_zip = False)
+        except:
+            missing_files.append(source)
+    
+        if source.endswith(".vcf"):
+             #so if it got here then we now the vcf was there, we can know try to bgzip and index it.
+            try:
                 #make the bgzip, same file name with .gz added to the end it also replaces the old file
                 #yes it is redundant to include this file twice. but it should be tiny
                 subprocess.check_call(["bgzip", source], cwd=full_path)
-                zip.write(source + ".gz" , os.path.join(results_name, dest + ".gz"))
                 subprocess.check_call(["tabix", "-f" , "-p", "vcf", source + ".gz"], cwd=full_path)
-                zip.write(source + ".gz.tbi", os.path.join(results_name, dest + ".gz.tbi"))
-        except OSError:
-            missing_vcfs.append(source)
-
-    #add bam stats to the zip
-    zip.write(os.path.join(full_path, prefix + "rawlib_stats.txt"), os.path.join(results_name, prefix + "rawlib_stats.txt"))
-
-    #if not barcode:
-    #    zip.write(os.path.join(full_path,"rawlib_ptrim_stats.txt"), os.path.join(results_name, "rawlib_ptrim_stats.txt"))
-
-    #parameters
-    if not barcode:
-        zip.write(os.path.join(path, "local_parameters.json"), os.path.join(results_name, "local_parameters.json"))
-    else:
-        zip.write(os.path.join(path, "../local_parameters.json"), os.path.join(results_name, "local_parameters.json"))
-
-    #add the variants.json file
-    zip.write(os.path.join(full_path, "variants.json"), os.path.join(results_name, "variants.json"))
+                vc_plugin.compress.make_zip(zip_path, source + '.gz', arcname = dest + '.gz', use_sys_zip = False)                
+                vc_plugin.compress.make_zip(zip_path, source + '.gz.tbi', arcname = dest + '.gz.tbi', use_sys_zip = False)                
+            except:
+                missing_files.append(source + '.gz')
+                missing_files.append(source + '.gz.tbi')
 
     #if there are missing vcfs add those to the zip
-    if missing_vcfs:
-        with open(os.path.join(full_path, "missing_vcf.txt"), "w+") as f:
-            for missing_vcf in missing_vcfs:
-                f.write(missing_vcf + "\n")
-
-        zip.write(os.path.join(full_path, "missing_vcf.txt"), os.path.join(results_name, "missing_vcf.txt"))
-
-    zip.close()
+    if missing_files:
+        printtime('Missing files: %s' %', '.join(missing_files))
+        with open(os.path.join(full_path, "missing_files.txt"), "w+") as f:
+            for missing_file in missing_files:
+                f.write(missing_file + "\n")
+        vc_plugin.compress.make_zip(zip_path, os.path.join(full_path, "missing_files.txt"), arcname = os.path.join(results_name, "missing_files.txt"), use_sys_zip = False) 
 
     #Now that everything is done write out the status file which will be checked by the VC JavaScript
     with open(os.path.join(path, "split_status.json"), "w+") as f:
         f.write(json.dumps({"split_status": "done", "url" : os.path.join(temp_path, results_name + ".zip")}))
+
+if __name__ == '__main__':
+    """
+    extend.py main will do the data slicing, and spit out a zip
+    """
+    printtime('Slicing started using: ' + (' '.join(sys.argv)))
+    #where the run data lives
+    path = sys.argv[1]
+    #name of the working dir used for the temp files
+    temp_path = sys.argv[2]
+    try:
+        barcode = sys.argv[3]
+    except IndexError:
+        barcode = ""
+
+    try:
+        slicer_main(path, temp_path, barcode)
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+        sys.stdout.flush()
+        sys.stderr.flush()        
+        # If an error occures, I must update the status to tell allelesTable.js don't have to wait until timeout (1000 sec).
+        status_update(path, 'failed', {'path': path, 'temp_path': temp_path})
 

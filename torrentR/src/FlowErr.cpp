@@ -1,6 +1,5 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#include <cassert>
 #include <Rcpp.h>
 #include "hdf5.h"
 
@@ -14,23 +13,37 @@ RcppExport SEXP LoadFlowErr(SEXP RFileName)
     const char* fileName = Rcpp::as<const char*>(RFileName);
 
     hid_t file = H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT);
-    assert(file >= 0);
+    if(file<0){
+      cerr << "H5Fopen unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     hid_t dset = H5Dopen(file, "/dset", H5P_DEFAULT);
-    assert(dset >= 0);
+    if(dset<0){
+      cerr << "H5Dopen unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     // Get dimensions for the data set:
     hid_t space = H5Dget_space(dset);
-    assert(space >= 0);
+    if(space<0){
+      cerr << "H5Dget_space unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     int ndims = H5Sget_simple_extent_ndims(space);
-    assert(ndims == 3);
+    if(ndims!=3){
+      cerr << "Error: H5Sget_simple_extent_ndims returned " << ndims << endl;
+      exit(EXIT_FAILURE);
+    }
 
     hsize_t dims[ndims];
     hsize_t maxDims[ndims];
     int result = H5Sget_simple_extent_dims(space, dims, maxDims);
-    assert(result != 0);
-    if (result==0) {result=0;}; // soak up error message for never using result
+    if(result==0){
+      cerr << "H5Sget_simple_extent_dims unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     int numFlows  = dims[0];
     int maxReadHP = dims[1];
@@ -40,7 +53,10 @@ RcppExport SEXP LoadFlowErr(SEXP RFileName)
     int counts[numFlows][maxReadHP][maxRefHP];
     size_t nelem  = numFlows * maxReadHP * maxRefHP;
     herr_t status = H5Dread(dset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, counts);
-    assert(status >= 0);
+    if (status < 0){
+      cout << "H5Dread unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     // Change to R-style column-major order:
     std::vector<int> Rcounts(nelem);
@@ -54,10 +70,16 @@ RcppExport SEXP LoadFlowErr(SEXP RFileName)
 
     // Close file:
     status = H5Dclose(dset);
-    assert(status >= 0);
+    if (status < 0){
+      cout << "H5Dclose unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     status = H5Fclose(file);
-    assert(status >= 0);
+    if (status < 0){
+      cout << "H5Fclose unsuccessful." << endl;
+      exit(EXIT_FAILURE);
+    }
 
     // Package results for return to R:
     std::map<std::string,SEXP> map;

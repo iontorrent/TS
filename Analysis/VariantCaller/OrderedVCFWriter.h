@@ -35,7 +35,7 @@ public:
   }
 
 
-  void Initialize(const string& output_vcf, const ExtendParameters& parameters, ReferenceReader& ref_reader, const SampleManager& sample_manager) {
+  void Initialize(const string& output_vcf, const ExtendParameters& parameters, ReferenceReader& ref_reader, const SampleManager& sample_manager, bool use_molecular_tag = false) {
 
     string filtered_vcf;
     size_t pos = output_vcf.rfind(".");
@@ -57,7 +57,7 @@ public:
     }
     suppress_no_calls_ = parameters.my_controls.suppress_no_calls;
 
-    string vcf_header = getVCFHeader(&parameters, ref_reader, sample_manager.sample_names_, sample_manager.primary_sample_);
+    string vcf_header = getVCFHeader(&parameters, ref_reader, sample_manager.sample_names_, sample_manager.primary_sample_, use_molecular_tag);
     output_vcf_stream_ << vcf_header << endl;
     filtered_vcf_stream_ << vcf_header << endl;
     variant_initializer_.parseHeader(vcf_header);

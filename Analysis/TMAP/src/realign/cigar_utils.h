@@ -38,7 +38,7 @@ const char* clip_seq (const char* qry, const uint32_t* cigar, unsigned cigar_sz,
 // starting insertion is added to soft clip
 // starting deletion is subtracted from starting insertion and result is returned as reference shift
 
-unsigned roll_cigar (uint32_t* cigar, unsigned max_cigar_len, unsigned& cigar_len, const BATCH* batches, unsigned bno, unsigned clean_len, EndClips& clip_store, unsigned& x_off, unsigned& y_off);
+unsigned roll_cigar (uint32_t* cigar, unsigned max_cigar_len, unsigned& cigar_len, const BATCH* batches, unsigned bno, unsigned clean_len, EndClips& clip_store, unsigned& x_off, unsigned& y_off, unsigned& xlen, unsigned& ylen);
 
 // conversion from cigar to batch format
 unsigned cigar_to_batches (const uint32_t* cigar, unsigned cigar_sz, BATCH* batches, unsigned max_batches);

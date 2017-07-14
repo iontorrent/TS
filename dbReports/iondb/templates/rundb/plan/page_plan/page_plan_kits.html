@@ -43,7 +43,7 @@
                 {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
                     {% if chipType.name == step.getCurrentSavedFieldDict.chipType %}
                         <option SELECTED 
-                    {% elif not step.getCurrentSavedFieldDict.chipType and not helper.isTemplate and chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
+                    {% elif not step.getCurrentSavedFieldDict.chipType and not helper.isTemplate and chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType and "Chip Type is required" not in step.validationErrors.values %}
                         <option SELECTED 
                     {% else %}                    
                         <option 
@@ -146,20 +146,14 @@
     <div class="span6 hideIfPgm" style="...">
         <label>Flow Order:</label>
         <select id="flowOrder" name="flowOrder" value="" class="select-group">
-            {% if helper.isEditRun %}
-                <option SELECTED value="{{step.getCurrentSavedFieldDict.flowOrder}}">
-                    {{step.getCurrentSavedFieldDict.flowOrder}}
-                </option>
-            {% else %}
-                <option value=""></option>
-                {% for flowOrder in step.getPrePopulatedFieldDict.flowOrders %}
-                    {% ifequal flowOrder.flowOrder step.getCurrentSavedFieldDict.flowOrder %}
-                        <option SELECTED value="{{flowOrder.flowOrder}}">{{flowOrder.description}}</option>
-                    {% else %}
-                        <option value="{{flowOrder.flowOrder}}">{{flowOrder.description}}</option>
-                    {% endifequal %}
-                {% endfor %}
-            {% endif %}
+        <option value=""></option>
+        	{% for flowOrder in step.getPrePopulatedFieldDict.flowOrders %}
+            	{% ifequal flowOrder.flowOrder step.getCurrentSavedFieldDict.flowOrder %}
+                	<option SELECTED value="{{flowOrder.flowOrder}}">{{flowOrder.description}}</option>
+                {% else %}
+                	<option value="{{flowOrder.flowOrder}}">{{flowOrder.description}}</option>
+                {% endifequal %}
+            {% endfor %}
         </select>
     </div>
 </div>                      
@@ -390,6 +384,7 @@
             "display":     "{{kit.description}}",
             "runType": applicationType_to_values("{{kit.applicationType}}"),
             "categories":  "{{kit.categories}}" || "",
+            "chipTypes":   "{{kit.chipTypes}}",
             "seq_instruments":  "{{kit.instrumentType}}"
         };
     {% endfor %}
@@ -457,7 +452,7 @@
        }
     {% endfor %}
 
-    
+
     $(document).ready(function () {
     	//there are 8 ways flow count can be automatically set based on the
     	// 1 - sequencing kit
@@ -502,6 +497,17 @@
             barcode_kits_all_list.push("{{barcodeKit.name}}");
         {% endfor %}
 
+		//show non-db flowOrder value if needed
+        var $flowOrderSelects = $("#flowOrder");
+        var value = "{{step.getCurrentSavedFieldDict.flowOrder}}";
+        if (value && (!(value in flowOrderToDescAndFlowOrder))) {
+            var $opt = $("<option></option>");
+            $opt.attr("selected","selected");
+            $opt.attr('value', value);
+            $opt.text(value);
+            $flowOrderSelects.append($opt);
+         }
+         
         function init_protocol_templatingSize_n_readLength_visibility() { 
             var templateKit = templateKits[$("#templateKit").val()];
             console.log("templateKit=", templateKit);
@@ -538,21 +544,31 @@
                     $('.templating_size_info').hide();
                     $('.library_read_length_info').hide();
                 }
-                if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {
-                    var allowed_templatingSizes = templateKit.templatingSize;
-                    //console.log("at handleTemplateKitSelectionForTemplatingSize() categories=", categories, "; allowed_templatingSizes=", allowed_templatingSizes);
-                    if (allowed_templatingSizes) {
-                        $('input[name = "templatingSize"]').parent().hide();
-
-                        jQuery.each(allowed_templatingSizes.split(";"), function(index, item) {
-                            $('input[name = "templatingSize"][value="' + item + '"]').parent().show();
-                            if (index == 0) {
-                                $('input[name = "templatingSize"][value="' + item + '"]').prop('checked', true);
-                                defaultTemplatingSize = item;
-                            }
-                        });
-                        $('.templating_size_info').show(); 
-                    }
+                // only show templating size if there applProduct has no specialcategorization
+                var mayBeShowTemplatingSize = true;
+                if (categorizedApplProductInUse) {
+                	var categorizedDefaults = categorizedApplProducts[categorizedApplProductInUse];										
+					if (categorizedDefaults.defaultTemplateKit && categorizedDefaults.defaultTemplateKit === templateKit.value) {
+						mayBeShowTemplatingSize = false;
+					}
+				}
+                if (mayBeShowTemplatingSize) {
+	                if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {
+	                    var allowed_templatingSizes = templateKit.templatingSize;
+	                    //console.log("at handleTemplateKitSelectionForTemplatingSize() categories=", categories, "; allowed_templatingSizes=", allowed_templatingSizes);
+	                    if (allowed_templatingSizes) {
+	                        $('input[name = "templatingSize"]').parent().hide();
+	
+	                        jQuery.each(allowed_templatingSizes.split(";"), function(index, item) {
+	                            $('input[name = "templatingSize"][value="' + item + '"]').parent().show();
+	                            if (index == 0) {
+	                                $('input[name = "templatingSize"][value="' + item + '"]').prop('checked', true);
+	                                defaultTemplatingSize = item;
+	                            }
+	                        });
+	                        $('.templating_size_info').show(); 
+	                    }
+	                }
                 }
             }
             updateSummaryPanel("#selectedTemplatingSize", defaultTemplatingSize);
@@ -657,7 +673,8 @@
                 if (kitCategories.toLowerCase().indexOf("sampleprepprotocol") >= 0) {
 					var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
 					if (categorizedApplProduct) {
-						update_samplePrepProtocol_select(kitCategories);
+                        var planCategories = "{{step.getPrePopulatedFieldDict.planCategories}}";
+						update_samplePrepProtocol_select(kitCategories, planCategories);
 						
 						//if user traverses from chevron to chevron, we should not trigger auto-selection when user retuns to the Kits chevron		
 	                	if (!_isEditRun && $("#templateKit").val() != "{{step.savedFields.templatekitname}}") {
@@ -678,12 +695,18 @@
             setSamplePrepProtocolSelection("");
         }
         
-	    function update_samplePrepProtocol_select(kitCategories){
-	    	console.log("update_samplePrepProtocol_select kitCategories=", kitCategories);
+	    function update_samplePrepProtocol_select(kitCategories, planCategories){
+	    	//console.log("update_samplePrepProtocol_select kitCategories=", kitCategories);
 	        var filters = {};
-
 	        filters['categories'] = kitCategories;
-	        filter_select_dropdown_multi_tokens(samplePrepProtocols, filters, "#samplePrepProtocol");
+
+            // TS-14664 remove empty templating protocol choice for myeloid plan
+            var includeEmpty = true;
+            if (planCategories && planCategories.indexOf('chef_myeloid_protocol') >= 0){
+                includeEmpty = false;
+            }
+
+	        filter_select_dropdown_multi_tokens(samplePrepProtocols, filters, "#samplePrepProtocol", includeEmpty);
 	    }
 
 		function handleAutoSelectionByKitCategories(categorizedApplProduct, kitCategories) {
@@ -1066,18 +1089,36 @@
             		var kitCategories = libraryKit.categories;
 					var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
 
-					if (!_isEditRun && categorizedApplProduct) {
-        				categorizedApplProductInUse = categorizedApplProduct;        				
-						var categorizedDefaults = categorizedApplProducts[categorizedApplProduct];
+                	//if user now selects a library kit with no filter category, need to reset kit dropdowns
+					if (!_isEditRun) {
+    					update_TemplateKit_select();
+    					update_SequencingKit_select();   					
+    					if (categorizedApplProduct) {
+	        				categorizedApplProductInUse = categorizedApplProduct;        				
+							var categorizedDefaults = categorizedApplProducts[categorizedApplProduct];
+	
+							// select default Template Kit Type and trigger change to update Kit dropdown options and selected value
+	            			var defaultTemplateKitType = categorizedDefaults.defaultTemplateKitType;
+	            			if (defaultTemplateKitType) {
+	            				handleTemplateKitTypeChange(defaultTemplateKitType, categorizedDefaults.defaultTemplateKit);
+	    					}
+                		}
+                	}
+                }
+                else if (libraryKit.categories.toLowerCase().indexOf("filter_") >= 0) {
+            		var kitCategories = libraryKit.categories;
 
-						// select default Template Kit Type and trigger change to update Kit dropdown options and selected value
-            			var defaultTemplateKitType = categorizedDefaults.defaultTemplateKitType;
-            			if (defaultTemplateKitType) {
-            				handleTemplateKitTypeChange(defaultTemplateKitType, categorizedDefaults.defaultTemplateKit);
-    					}
+					if (!_isEditRun) {
+    					update_TemplateKit_select_by_category_filter(kitCategories);
+    					update_SequencingKit_select_by_category_filter(kitCategories);
                 	}
                 }
                 else {
+                	//if user now selects a library kit with no filter category, need to reset kit dropdowns
+					if (!_isEditRun) {
+    					update_TemplateKit_select();
+    					update_SequencingKit_select();
+                	}
                 	//if categorizedApplProduct exists, need to reset samplePrepProtocol value
                 	setSamplePrepProtocolSelection("");
                 }
@@ -1136,10 +1177,6 @@
 
         $("#forward3primeAdapter").change(function() {
         	var value = $(this).val();
-
-            if (value == "{{step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter}}") {
-            	$('input[name="templatekitType"][value="OneTouch"]').attr('checked', true).change();
-            }
             
             updateSummaryPanel("#selected3PrimeAdapter", threePrimeAdapterSeqToNameAndSeq[value]);
         });
@@ -1317,7 +1354,7 @@
 		create_filter_select_dropdown(filtered_options, selectId);
 	}
 
-    function filter_select_dropdown_multi_tokens(data, filters, selectId){
+    function filter_select_dropdown_multi_tokens(data, filters, selectId, includeEmpty){
     	// compare if any of the tokens in filters[filterKey] is found in match_values
     	
         // re-create dropdown options after applying filters
@@ -1345,15 +1382,17 @@
         // make sure to keep original option order
         filtered_options.sort(function(a,b){ return a.index > b.index? 1: -1;})
 
-		create_filter_select_dropdown(filtered_options, selectId);
+		create_filter_select_dropdown(filtered_options, selectId, includeEmpty);
 	}
     
-    function create_filter_select_dropdown(filtered_options, selectId){
+    function create_filter_select_dropdown(filtered_options, selectId, includeEmpty){
+        var includeEmpty = (includeEmpty === undefined) ? true : includeEmpty;
+        
         // create dropdown options
         var $select = $(selectId);
         var selectedValue = $select.val();
         $select.empty();
-        $select.append($("<option></option>"));
+        if (includeEmpty) $select.append($("<option></option>"));
 
         $.each(filtered_options, function(i, obj){
             $select.append(
@@ -1372,49 +1411,21 @@
     }
 
     function update_LibraryKit_select(){
-        var filters = {
-            'runType': "{{helper.getRunTypeObject.runType}}",
-        };
-        var instrumentType = $('#instrumentType').val();
-        if (instrumentType){
-            filters['seq_instruments'] = instrumentType;
-        }
-        var chipType = $('#chipType').val();
-        if (chips[chipType]){
-            filters['chipTypes'] = chipType;
-        }
+        var filters = get_filters("");
         filter_select_dropdown(libraryKits, filters, "#libraryKitType");
     }
 
     function update_TemplateKit_select(){
-        var filters = {
-            'runType': "{{helper.getRunTypeObject.runType}}",
-            'samplePrep_instruments': $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT"
-        };
-        var instrumentType = $('#instrumentType').val();
-        if (instrumentType){
-            filters['seq_instruments'] = instrumentType;
-        }
-        var chipType = $('#chipType').val();
-        if (chips[chipType]){
-            filters['chipTypes'] = chipType;
-        }
+        var filters = get_filters("");
+        filters['samplePrep_instruments'] = $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT"
+
         filter_select_dropdown(templateKits, filters, "#templateKit");
     }
 
     function update_SequencingKit_select(){
-        var filters = {
-            'runType': "{{helper.getRunTypeObject.runType}}",
-            'samplePrep_instruments': $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT"
-        };
-        var instrumentType = $('#instrumentType').val();
-        if (instrumentType){
-            filters['seq_instruments'] = instrumentType;
-        }
-        var chipType = $('#chipType').val();
-        if (chips[chipType]){
-            filters['chipTypes'] = chipType;
-        }
+        var filters = get_filters("");
+        filters['samplePrep_instruments'] = $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT"
+
         filter_select_dropdown(sequencingKits, filters, "#sequenceKit");
     }
     
@@ -1425,5 +1436,45 @@
             filters = {'seq_instrument': instrumentType };
         filter_select_dropdown(chips, filters, "#chipType");
     }
+
+    function update_LibraryKit_select_by_category_filter(categoryFilter){
+        var filters = get_filters(categoryFilter);
+        filter_select_dropdown(libraryKits, filters, "#libraryKitType");
+    }
+
+    function update_TemplateKit_select_by_category_filter(categoryFilter){
+        var filters = get_filters(categoryFilter);
+        filters['samplePrep_instruments'] = $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT",
+        
+        filter_select_dropdown(templateKits, filters, "#templateKit");
+    }
+
+    function update_SequencingKit_select_by_category_filter(categoryFilter){
+        var filters = get_filters(categoryFilter);
+        filters['samplePrep_instruments'] = $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT",
+
+        filter_select_dropdown(sequencingKits, filters, "#sequenceKit");
+    }
+
+    function get_filters(categoryFilter) {
+        var filters = {
+            'runType': "{{helper.getRunTypeObject.runType}}"
+        };
+        
+        if (categoryFilter) {
+        	filters['categories'] = categoryFilter
+        }
+        var instrumentType = $('#instrumentType').val();
+        if (instrumentType){
+            filters['seq_instruments'] = instrumentType;
+        }
+        var chipType = $('#chipType').val();
+        if (chips[chipType]){
+            filters['chipTypes'] = chipType;
+        }
+        
+        return filters;
+     }
+    
 </script>
 {% endblock post-raw %}

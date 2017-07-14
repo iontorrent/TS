@@ -4,10 +4,25 @@ www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
                              /usr/bin/aptitude, \
                              /usr/bin/apt-get, \
                              /usr/sbin/TSconfig, \
+                             /usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py, \
                              /opt/ion/onetouch/findHosts.py, \
                              /opt/ion/iondb/bin/ion_plugin_install.py, \
                              /opt/ion/iondb/bin/ion_plugin_install_deb.py, \
                              /opt/ion/iondb/bin/sudo_utils.py, \
                              /opt/ion/iondb/bin/write_nms_access.py, \
-                             /opt/ion/iondb/bin/ion_plugin_migrate_permissions.py
-
+                             /opt/ion/iondb/bin/ion_plugin_migrate_permissions.py, \
+                             /opt/ion/iondb/bin/lock_ion_apt_sources.py, \
+                             /opt/ion/iondb/bin/ion_add_nfs_mount.py, \
+                             /opt/ion/iondb/bin/ion_remove_nfs_mount.py, \
+                             /opt/ion/iondb/bin/ion_check_for_new_tsvm.py, \
+                             /usr/sbin/TSstaticip, \
+                             /usr/sbin/TSsetproxy, \
+                             /usr/sbin/grp_connect_nodetest, \
+                             /usr/sbin/grp_config_nodetest, \
+                             /usr/bin/qmod, \
+                             /usr/bin/ion_raidinfo, \
+                             /usr/bin/timedatectl, \
+                             /results/tsvm/tsvm-include, \
+                             /results/tsvm/tsvm-tsvm-isvtenabled, \
+                             /results/tsvm/tsvm-enable-nfs-rule, \
+                             /usr/sbin/dmidecode

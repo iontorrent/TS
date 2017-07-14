@@ -182,7 +182,7 @@ public:
   void Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
        int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
        int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments,
-       MolecularTagTrimmer& tag_trimmer, bool trim_barcodes);
+       MolecularTagTrimmer& tag_trimmer, bool trim_barcodes, bool compress_bam);
 
   //! @brief  Drop off a region-worth of reads for writing. Write opportunistically.
   //! @param  region          Index of the region being dropped off.
@@ -230,6 +230,7 @@ private:
   vector<string>            bam_filename_;
 
   bool                      save_filtered_reads_;
+  bool                      compress_bam_;
   int                       num_bamwriter_threads_;
 
   vector<uint64_t>          read_group_num_Q20_bases_;         //!< Number of >=Q20 bases written per read group

@@ -11,6 +11,8 @@
       "beadfind-lib-filt" : 1.0,
       "beadfind-lib-min-peak" : 10.0,
       "beadfind-mesh-step" : [ 80, 112 ],
+      "beadfind-acq-threshold" : [ -10, 3, 5, 500 ],
+      "beadfind-bf-threshold" : [ -5, 300, -20000, -10 ],
       "beadfind-min-tf-snr" : 4.0,
       "beadfind-minlive" : 0.00010,
       "beadfind-minlivesnr" : 3.0,
@@ -31,7 +33,8 @@
       "bfold" : true,
       "datacollect-gain-correction" : false,
       "noduds" : false,
-      "use-beadmask" : ""
+      "use-beadmask" : "", 
+      "exclusion-mask" : "exclusionMask_p1.0.19.txt"
    },
    "DebugMe" : {
       "bkg-dbg-trace" : [],

@@ -13,7 +13,8 @@
 
 #include "BaseCallerUtils.h"
 #include "Mask.h"
-#include "mixed.h"
+#include "ClonalFilter/polyclonal_filter.h"
+#include "ClonalFilter/mixed.h"
 #include "OptArgs.h"
 
 class  DPTreephaser;
@@ -60,8 +61,7 @@ public:
   //! @param    wells               Wells file reader object, source of filter training reads
   //! @param    max_sample_size     Max number of reads to sample for training
   //! @param    mask                Mask for determining which reads are eligible for training set
-  //! @param    opts                User options for polyclonal filter and flows
-  void TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask, const PolyclonalFilterOpts & opts);
+  void TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask);
 
   //! @brief    Once filtering is complete, transfer filtering outcomes to Mask object.
   //!
@@ -109,8 +109,7 @@ public:
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    measurements        Key-normalized flow signal from wells
-  //! @param    opts                User options for how filters work
-  void FilterHighPPFAndPolyclonal   (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& measurements, const PolyclonalFilterOpts & opts);
+  void FilterHighPPFAndPolyclonal   (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& measurements);
 
   //! @brief    Trim key sequence and initialize filtered read length
   //! @param    key_length          Length of key sequence
@@ -243,9 +242,8 @@ protected:
   bool                filter_residual_enabled_;           //!< Is residual filter enabled for library reads?
   bool                filter_residual_enabled_tfs_;       //!< Is residual filter enabled for TFs?
   double              filter_residual_max_value_;         //!< Residual filter threshold
-  bool                filter_clonal_enabled_;             //!< Is polyclonal filter enabled for library reads?
-  bool                filter_clonal_enabled_tfs_;         //!< Is polyclonal filter enabled for TFs?
-  int                 filter_clonal_maxreads_;            //!< Number of reads to be used for clonal filter training
+
+  PolyclonalFilterOpts clonal_opts_;                      //! Class to store the clonal filter options
   clonal_filter       clonal_population_;                 //!< Object implementing clonal filter
 
   // Beverly filter

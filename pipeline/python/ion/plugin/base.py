@@ -171,7 +171,6 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
     results = {}
 
     def __init__(self, *args, **kwargs):
-        self.runtype = kwargs.get('runtype', None)
         self.context = {}
         self.blockcount = 0
         self.exit_status = -1
@@ -294,3 +293,16 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
 
     def getUserInput(self):
         return None
+
+    # functions for plugins that want to show barcode table UI
+    def barcodetable_columns(self):
+        # plugin needs to implement this function to use barcode table UI feature
+        return []
+
+    def barcodetable_data(self, data, planconfig={}, globalconfig={}):
+        # optional function, if not implemented table will initialize with default (input) data
+        #   data - same as barcodes.json, can be passed as is or modified or overwritten by the plugin
+        #   planconfig - plugin configuration from Planning (plan.html), if any
+        #   globalconfig - plugin global configuration (config.html), if any
+        return data
+

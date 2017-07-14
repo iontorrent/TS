@@ -31,14 +31,14 @@
             To access the TS-VM, try address <a href="http://ts-vm-{{host}}/" target='_blank'>ts-vm-{{host}}</a> 
             or <a href="http://{{host}}:8082/" target='_blank'>{{host}}:8082</a>
         </div>
-        </br>
+        <br />
         <div>
             <button href="start/" id="start" class="action">Start</button>
             <button href="stop/" id="stop" class="action">Stop</button>
             <button href="suspend/" id="suspend" class="action">Suspend</button>
             <button href="destroy/" id="destroy" class="action">Delete</button>
         </div>
-        </br>
+        <br />
         {% if log_files %}
         <div>
             Download Logs:
@@ -50,7 +50,7 @@
         </div>
         {% endif %}
     </div>
-    </br>
+    <br />
     <div id="log" data-url="{%url 'tsvm_log' 'provisioning.log' %}" style="display:none; width:70%; background-color:#F3F3F3;">
         <a id="close_log" href="#" class="close" style="position:fixed;left:67%;">&times;</a>
         <pre style="height:400px; overflow:scroll;"></pre>
@@ -68,16 +68,17 @@
     }
     
     function vmNotSetup(state){
+        console.log("The state: " + state);
         var notsetup_states = ['Not setup'];
         return notsetup_states.indexOf(state)>=0;
     }
-    
-    function showMsg(state, msg, elem){
-        elem = elem || '#msg';
+
+    // updates the message element at the top of the page
+    function showMsg(state, msg){
         if (state == 'Error'){
-            $(elem).html("ERROR: "+msg).addClass('alert-error').removeClass('alert-info').show();
+            $('#msg').html("ERROR: " + msg).addClass('alert-error').removeClass('alert-info').show();
         } else {
-            $(elem).html(msg).removeClass('alert-error').addClass('alert-info').show();
+            $('#msg').html(msg).removeClass('alert-error').addClass('alert-info').show();
         }
     }
     
@@ -113,7 +114,7 @@
                 }
             });
         }
-        
+
         function handle_status(status){
             var previous_state = $('#state').text();
             console.log('handle_status', previous_state, status.state);
@@ -142,25 +143,27 @@
             
             $('#state').text(status.state);
             
-            if (vmNotSetup(status.state)){
+            if (vmNotSetup(status.msg)){
                 $('#no_tsvm').show();
                 $('#tsvm').hide();
-            } else if (vmExists(status.state)){
+            } else if (vmExists(status.msg)){
                 $('#no_tsvm').hide();
                 $('#tsvm').show();
             }
 
-            if (status.msg) showMsg(status.state, status.msg);
+            if (status.msg){
+                showMsg(status.state, status.msg);
+            }
 
             // update buttons
             $("button").prop('disabled', true);
             $("#goto_vm").hide();
-            if (status.state == 'Running'){
+            if (status.msg == 'Running'){
                 $('#stop, #suspend, #destroy').prop('disabled',false);
                 $("#goto_vm").show();
-            } else if (status.state == 'Stopped' || status.state == 'Saved'){
+            } else if (status.msg == 'Stopped' || status.state == 'Saved'){
                 $('#start, #destroy').prop('disabled',false);
-            } else if (status.state == 'Not setup'){
+            } else if (status.msg == 'Not setup'){
                 $('#setup').prop('disabled',false);
             }
             if (!vmExists(status.state)) {

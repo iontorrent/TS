@@ -58,23 +58,9 @@ h5, h6 {
 
 
 body {
-  background: #EFEFEF;
+  background: #FFFFFF;
   color: #333333;
   font: 0.875em/1.4 Arial,"Helvetica Neue",Helvetica,sans-serif;
-  background-image: linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -o-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -moz-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -webkit-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -ms-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -webkit-gradient(
-    linear,
-    left bottom,
-    left top,
-    color-stop(0.08, @header-background-high),
-    color-stop(0.61, @main-background-high),
-    color-stop(0.89, @header-background-high)
-  );
-  background-position: center 100px;
 }
 
 .form-label {
@@ -206,7 +192,7 @@ a.btn-danger {
 
 .gear-inactive {
   .gear();
-  background: url("../img/gear-inactive.png") no-repeat center top transparent;
+  background: url("../img/gear-inactive.png") no-repeat center center transparent;
   .caret {
     border-top-color: #FFF;
     border-bottom-color: #FFF;
@@ -214,7 +200,7 @@ a.btn-danger {
 }
 .gear-active {
   .gear();
-  background: url("../img/gear-active.png") no-repeat center top transparent;
+  background: url("../img/gear-active.png") no-repeat center center transparent;
   .caret {
     border-top-color: #233873;
     border-bottom-color: #233873;
@@ -226,9 +212,13 @@ a.btn-danger {
 @header-background-high : #efefef;
 @main-background-high: #a0a0a0;
 
-.header { 
-  background-color: transparent;
-  
+.header {
+  background-color: #EFEFEF;
+  .badge-dark {
+    background-color: white;
+    color: #2d4782;
+    text-shadow: none;
+  }
   .nav-tabs {
     > li {
       > .nav-tab {
@@ -270,27 +260,18 @@ a.btn-danger {
         #gear {
           .gear-active();
         }
-        .icon-bullhorn.icon-white {
-          background-image: url("../bootstrap/img/glyphicons-halflings.png");
+        .badge-dark {
+          background-color: #2d4782;
+          color: white;
         }
       }  
     }
   }
   .nav-pills > li > span {
-    margin-bottom: 4px;
-    margin-top: 4px;
-    padding-bottom: 6px;
-    padding-top: 6px;
+    margin: 2px 2px 2px 0;
+    padding: 6px 12px 6px 12px;
     border-radius: 5px 5px 5px 5px;
-    margin-bottom: 2px;
-    margin-top: 2px;
-    padding-bottom: 8px;
-    padding-top: 8px;
     line-height: 14px;
-    margin-right: 2px;
-    padding-left: 12px;
-    padding-right: 12px;
-    font-style: bold;
     font-size: 12px;
     font-weight: bold;
     text-decoration: none;
@@ -357,8 +338,13 @@ a.btn-danger {
 .report-header .form-inline {
 	margin-top: 6px;
 }
-.utility-menu a {
+
+.utility-menu {
+  margin-top: 15px;
+  margin-bottom: 0px;
+  a {
     color: #333333;
+  }
 }
 
 .main, .login {
@@ -510,14 +496,19 @@ body .modal-1000 {
   .k-pager {
     float:right;
   }
-  .k-grid-header{
-    th{
+  .k-grid-header {
+    th {
       border-left-width: 0px;
-      border-right-width: 0px;      
+      border-right-width: 0px;
+      &:first-child {
+        border-top-left-radius: 4px;
+      }
+      &:last-child {
+        border-top-right-radius: 4px;
+      }
     }
     .k-header { /*http://www.kendoui.com/forums/ui/grid/header-wrapping-height.aspx*/
       white-space: normal;
-      border-bottom: 3px solid #D6D6D6;
       padding: 0.7em 0.6em;    
       .k-link {/*http://www.kendoui.com/forums/ui/grid/header-wrapping-height.aspx*/
         height: auto;
@@ -598,6 +589,9 @@ body .modal-1000 {
   border-radius:0 0 4px 4px;
   overflow:hidden;
   // background-color: #FFFFFF;
+  .k-state-selected {
+    background-color: #08c;
+  }
 }
 
 /* =============================================================================
@@ -898,8 +892,6 @@ tr.new_plan td {
 
 #OutputFiles h4 { width: 40%; }
 
-#AnalysisDetails td span { color: red; }
-
 #PluginOutputAccordian {
 	margin: 15px 0 0;
 }
@@ -1049,6 +1041,7 @@ tr.new_plan td {
 }
 
 .view-toggle {
+    display: inline-block;
     font-size: 12px;
     font-weight: bold;
     margin: 10px 0 0;
@@ -1143,6 +1136,11 @@ tr.new_plan td {
   .runTypeImage();
   background: url('../img/appl_hid.png') no-repeat center center;
 }
+.IMMUNE_REPERTOIRE {
+  .runTypeImage();
+  background: url('../img/appl_immuneRepertoire.png') no-repeat center center;
+}
+
 /* =============================================================================
    Ion plugin report
    ========================================================================== */
@@ -1198,12 +1196,6 @@ div.valid { /* Additions for validation */
   padding: 0;
 }
 
-.alert-warning {
-  background-color: @alertWarningBackground;
-  border-color: @alertWarningBorder;  
-  color: @alertWarningText;
-}
-
 @media print {
 	@import "print.less";
 }
@@ -1256,9 +1248,8 @@ div.valid { /* Additions for validation */
   }
 }
 
-#configModal {
-    margin-left: -425px;
-    width: 850px;
+#configModal iframe{
+    width: 100%;
 }
 
 .bordered-section {
@@ -1913,7 +1904,63 @@ color: #fff;
   border-color: #cdcdcd;
 }
 
-#configModal {
-    margin-left: -425px;
-    width: 850px;
+/* Overrides for bootstrap-select */
+.bootstrap-select {
+  li, .actions-btn, input, .filter-option {
+    font-size: 11px;
+  }
+  .actions-btn {
+    margin: 0
+  }
+}
+
+/* Make the search bar on the data page look like the bootstrap selects */
+#search_bar {
+  .search-field, .search-field-run {
+    > .btn, > input {
+      font-size: 11px;
+    }
+  }
+  .search-field {
+    /* Needed to override style on data.html page */
+    &.hide {
+      display: none;
+    }
+    /* Order by is on the right and needs to right margin */
+    &.order-by {
+      float: right;
+      margin-right: 0;
+    }
+  }
+  .clearfix {
+    clear: both;
+    margin-left: 28px;
+  }
+}
+
+/* Style the popup on the data page for samples */
+#sample-popover-container {
+  .popover-title {
+    display: none;
+  }
+  .popover {
+    width: 340px;
+  }
+  table.sample-popover-table {
+    margin: 0px;
+    font-size: 10px;
+    tbody > tr > td {
+      word-wrap: break-word;
+    }
+    tfoot > tr > td {
+      text-align: center;
+    }
+  }
+}
+
+/* Override all table headers to change the link color to black */
+table > thead > tr > th {
+  a:link, a:visited {
+    color: #333;
+  }
 }

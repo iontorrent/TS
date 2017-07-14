@@ -4,13 +4,14 @@
 #include "AdvCompr.h"
 #ifndef WIN32
 #include "PCACompression.h"
+#ifdef PCASPLINE
 #include "PcaSpline.h"
+#endif
 #include "Utils.h"
 #endif
 
 //#define SMOOTH_BEGINNING_OF_TRACE 1
 //#define POST_CLEAR_FRONT_PORCH 1
-//#define PCA_MEAN_SMOOTHING 3
 //#define PCA_CONVERGE_BASIS_VECTORS 1
 
 //#define SCALE_TRACES 1
@@ -23,16 +24,22 @@
 //#define USE_LESS_BASIS_VECTS 3
 //#define OUTPUT_VECTOR_COEFFS 1
 //#define CLEAR_MEAN 1
-//#define CENTER_TRACES 1
 
-#define XTALK_FRAC (0.20f)
-#define XTALK_FRAC_MODE73 (0.30f)
-#define XTALK_FRAC_MODE76 (0.25f)
+#ifndef RDR_MAX_REGIONS
+#define RDR_MAX_REGIONS 96
+#endif
+
+
+#define XTALK_FRAC (0.30f)
 
 #define XTALK_FRAC_EARLY 1
 #define GAIN_CORR_IN_ADVTEST 1
 
+#define NOT_PINNED(idx) (mMask == NULL || (mMask[(idx)]))
 
+#define V8_SUM(a) (a.A[0]+a.A[1]+a.A[2]+a.A[3]+a.A[4]+a.A[5]+a.A[6]+a.A[7])
+#define SIGS_ACC(idx,frame) (mCorr_sigs[((idx)*(npts) + (frame))])
+#define NOISE_ACC(idx,frame) (mCorr_noise[((idx)*(npts) + (frame))])
 
 
 // limits on the gain term we allow
@@ -56,13 +63,13 @@ uint32_t AdvCompr::threadMemLen[ADVC_MAX_REGIONS] = {0};
 AdvCompr::AdvCompr(FILE_HANDLE _fd, short int *_raw, int _w, int _h,
 		int _nImgPts, int _nUncompImgPts, int *_timestamps_compr,
 		int *_timestamps_uncompr, int _testUncompr, char *_fname,
-		char *_options, int _frameRate)
+		char *_options, int _frameRate, int RemoveRowNoise)
 {
 	ThreadNum=-1;
 	GblMemPtr=NULL;
 	GblMemLen=0;
-    do_cnc = true;
-    do_rnc = true;
+    do_cnc = false;//true;
+//    do_rnc = true;
 	w = _w;
 	h = _h;
 	npts = _nImgPts;
@@ -78,11 +85,12 @@ AdvCompr::AdvCompr(FILE_HANDLE _fd, short int *_raw, int _w, int _h,
 	nPcaSplineBasisVectors=0;
 	nDfcCoeff=0;
 	frameRate=_frameRate;
+	CorrectRowNoise = RemoveRowNoise;
 
 	nBasisVectors=0;
 
 	SplineStrategy[0]=0;
-	options=_options;
+	inp_options=_options;
 
 	if (_fname)
 		strncpy(fname, _fname, sizeof(fname));
@@ -114,61 +122,6 @@ AdvCompr::~AdvCompr()
 
 #ifndef WIN32
 
-void AdvCompr::ZeroTraceMean(short int *raw, int h, int w, int npts)
-{
-	int frameStride=w*h;
-
-	// first, zero all the trace means
-	for(int y=0;y<h;y++){
-		for(int x=0;x<w;x++){
-			// sum this trace
-			int sum = 0;
-			for(int frame=0;frame<npts;frame++){
-				sum += raw[frame*frameStride + y*w+x];
-			}
-//			if(y==0 && x == 0)
-//				printf("%s: sum=%d avg=%d\n",__FUNCTION__,sum,sum/npts);
-			sum /= npts;
-
-			for(int frame=0;frame<npts;frame++){
-				raw[frame*frameStride + y*w+x]-=sum;
-			}
-		}
-	}
-}
-void AdvCompr::ZeroBelow(float thresh)
-{
-	int start_ts=0;
-	int end_ts=0;
-	int frameStride=w*h;
-
-	for(int ts=0;ts<npts;ts++){
-		if(start_ts == 0 && timestamps_compr[ts] > 1000){
-			start_ts = ts;
-		}
-		if(end_ts == 0 && timestamps_compr[ts] > 3000){
-			end_ts = ts;
-		}
-	}
-
-
-	for(int idx=0;idx<w*h;idx++){
-		// get integral
-		float integral=0;
-		short int *rptr = &raw[idx];
-
-		for(int frame=start_ts;frame<end_ts;frame++){
-			integral += rptr[frame*frameStride]-8192;
-		}
-		// if integral < thresh, zero the trace
-		if((integral/(end_ts-start_ts)) < thresh){
-			for(int frame=0;frame<npts;frame++){
-				rptr[frame*frameStride]=0;
-			}
-		}
-	}
-}
-
 
 void AdvCompr::NeighborSubtract(short int *raw, int h, int w, int npts, float *saved_mean)
 {
@@ -183,7 +136,7 @@ void AdvCompr::NeighborSubtract(short int *raw, int h, int w, int npts, float *s
 		short int *rptr = &raw[frame*frameStride];
 		for(int y=0;y<h;y++){
 			int x=0;
-			if(mMask == NULL || mMask[y*w+h]){
+			if(NOT_PINNED(y*w+h)){
 				if(y>0){
 					lsum[y*w+x]   =lsum[(y-1)*w+x] + rptr[y*w+x];
 					lsumNum[y*w+x]=lsumNum[(y-1)*w+x] + 1;
@@ -202,7 +155,7 @@ void AdvCompr::NeighborSubtract(short int *raw, int h, int w, int npts, float *s
 					lsum[y*w+x]=0;
 			}
 			for(x=1;x<w;x++){
-				if(mMask == NULL || mMask[y*w+h]){
+				if(NOT_PINNED(y*w+h)){
 					if(y>0){
 						lsum[y*w+x]=lsum[(y-1)*w+x] + lsum[y*w+x-1] - lsum[(y-1)*w+x-1] + rptr[y*w+x];
 						lsumNum[y*w+x]=lsumNum[(y-1)*w+x] + lsumNum[y*w+x-1] - lsumNum[(y-1)*w+x-1] + 1;
@@ -229,7 +182,7 @@ void AdvCompr::NeighborSubtract(short int *raw, int h, int w, int npts, float *s
 		// now, neighbor subtract each well
 		for(int y=0;y<h;y++){
 			for(int x=0;x<w;x++){
-				if(mMask[y*w+x] == 0){
+				if(NOT_PINNED(y*w+x)){
 //					rptr[y*w+x] = 8192;
 //					printf("pinned %d/%d\n",y,x);
 					rptr[y*w+x] = 0;
@@ -271,16 +224,36 @@ void AdvCompr::NeighborSubtract(short int *raw, int h, int w, int npts, float *s
 	free(lsumNum);
 }
 
+float *AdvCompr::AllocateGainCorrection(uint32_t region, uint32_t len)
+{
+	float *rc = NULL;
+
+	if(region < ADVC_MAX_REGIONS){
+		if(gainCorrection[region] == NULL || gainCorrectionSize[region] != len)
+		{
+//			AdvComprPrintf("%s: Allocating gainCorrection[%d] (%p)\n",__FUNCTION__,region,gainCorrection[region]);
+			if(gainCorrection[region])
+				free(gainCorrection[region]);
+			gainCorrection[region] = (float *) memalign(VEC8F_SIZE_B,len);
+			gainCorrectionSize[region] = len;
+			for (unsigned int i = 0; i < (len/sizeof(float)); i++)
+				gainCorrection[region][i] = ADV_COMPR_DEFAULT_GAIN;
+		}
+		rc = gainCorrection[region];
+	}
+	return rc;
+}
 
 // compress a memory image into a file
 //   threadNum is used to keep static memory and avoid malloc calls for each invocation
-int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
+int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg, int _timeTransform)
 {
 //	int num_pinned;
 	double start = AdvCTimer();
 //	double start1, start2;
 	uint32_t len = w * h * sizeof(float);
 
+	timeTransform = _timeTransform;
 	ThreadNum = _threadNum;
 	ntrcs = ntrcsL = BLK_SZ;
 	if (ntrcsL % (VEC8_SIZE * 4))
@@ -288,14 +261,7 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 
 	if(region  < ADVC_MAX_REGIONS)
 	{
-		if(gainCorrection[region] == NULL || gainCorrectionSize[region] != len)
-		{
-			gainCorrection[region] = (float *) memalign(VEC8F_SIZE_B,len);
-			gainCorrectionSize[region] = len;
-			for (int i = 0; i < w * h; i++)
-				gainCorrection[region][i] = ADV_COMPR_DEFAULT_GAIN;
-		}
-		gainCorr = gainCorrection[region];
+		gainCorr = AllocateGainCorrection(region,len);
 	}
 	else
 	{
@@ -316,7 +282,7 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 #endif
 		doGain = 0;
 
-	ParseOptions(options);
+	ParseOptions(inp_options);
 
 	nBasisVectors=nPcaBasisVectors+nPcaFakeBasisVectors+
 			nPcaSplineBasisVectors+nSplineBasisVectors+nDfcCoeff;
@@ -345,7 +311,11 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 	FileHdrV4.uncomp_frames_in_file = BYTE_SWAP_2(nUncompImgPts_newfr);
 
 	FileHdrV4.interlaceType = BYTE_SWAP_2(7); // PCA
-	FileHdrV4.sample_rate = BYTE_SWAP_4(15);
+	if(timeTransform)
+		FileHdrV4.sample_rate = BYTE_SWAP_4(15);
+	else
+		FileHdrV4.sample_rate = BYTE_SWAP_4(frameRate);
+
 	if (fd >= 0)
 		Write(fd, &FileHdrV4, sizeof(FileHdrV4));
 
@@ -354,44 +324,41 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 		Write(fd, timestamps_newfr, sizeof(timestamps_newfr[0]) * npts_newfr);
 	}
 
+	double start_xtc=AdvCTimer();
 	int total_iter = 0;
-#ifdef SCALE_TRACES
-	ComputeGain_FullChip();
-#endif
-	ApplyGain_FullChip(/*do_rnc?0:*/targetAvg);
-
-
-#ifndef PYEXT
-    if(do_rnc) {
-		double start2 = AdvCTimer();
-
-        CorrNoiseCorrector rnc;
-		rnc.CorrectCorrNoise(raw, h, w, npts, 3, (region >= 96), 0,0,ThreadNum,targetAvg);
-		timing.rcn += AdvCTimer() - start2;
 
 #ifdef XTALK_FRAC_EARLY
-		{
-			float corrFrac=XTALK_FRAC;
-#ifdef BB_DC
-			if(fpgaImage.ChipMode == 73)
-				corrFrac=XTALK_FRAC_MODE73;
-			if(fpgaImage.ChipMode == 76)
-				corrFrac=XTALK_FRAC_MODE76;
-#endif
-			xtalkCorrect_raw(corrFrac, w, h, npts, raw);
-		}
-#endif
-    }
+	findPinned();
+	if(CorrectRowNoise)
+		ApplyGain_FullChip_xtalkcorr_sumRows(XTALK_FRAC, w, h, npts, (short unsigned int *)raw);
+	else
+		ApplyGain_FullChip_xtalkcorr(XTALK_FRAC, w, h, npts, (short unsigned int *)raw);
 
-    else if (do_cnc) {
-		double start2 = AdvCTimer();
-		ComparatorNoiseCorrector cnc;
-		cnc.CorrectComparatorNoise(raw, h, w, npts, NULL, 0, true,
-				false, ThreadNum);
-		timing.ccn += AdvCTimer() - start2;
-		memcpy(mMask,raw,w*h*sizeof(raw[0])); // use the first frame as a pinned mask
-	}
+#else
+	ApplyGain_FullChip(0);
 #endif
+	timing.xtalk += AdvCTimer() - start_xtc;
+
+	if(CorrectRowNoise){
+        if(region >= RDR_MAX_REGIONS)
+			NNSubtractComparatorSigs_tn(100);
+		else
+			NNSubtractComparatorSigs(500);
+	}
+
+#if 0
+#ifndef PYEXT
+//    if(do_rnc)
+    {
+		double start2 = AdvCTimer();
+        CorrNoiseCorrector rnc;
+		rnc.CorrectCorrNoise(raw, h, w, npts, 1, (region >= 96), 0,0,ThreadNum,targetAvg);
+		timing.rcn += AdvCTimer() - start2;
+    }
+#endif
+#endif
+
+
 
 	for (int rblk = 0; rblk < rblocks; rblk++)
 	{
@@ -443,38 +410,12 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 			t0est = findt0(&t0estIdx);
 //			printf("t0est=%d t0estIdx=%d\n",t0est,t0estIdx);
 
-#ifdef SMOOTH_BEGINNING_OF_TRACE
-			smoothBeginning(); // locates the traces better.
-#endif
-
-
 			SetMeanOfFramesToZero_SubMean(npts); // subtracts mean as well
 
-#ifdef CLEAR_BEGINNING_OF_TRACE
-//			float tmpMean[npts];
-//			memcpy(tmpMean,mean_trc,sizeof(float)*npts);
-//			memset(mean_trc,0,sizeof(float)*npts);
-//			SetMeanOfFramesToZero_SubMean(npts); // subtracts mean as well
-//			memcpy(mean_trc,tmpMean,sizeof(float)*npts);
-			ClearBeginningOfTrace();
-#endif
-
-			SmoothMean();
-
-#ifdef CLEAR_MEAN
-			for(int pt=0;pt<npts;pt++)
-				mean_trc[pt]=8192;
-#endif
-
-
-//			AddSavedMeanToTrace(saved_mean);
 			AddDcOffsetToMeanTrace();
-			//SetMeanTraceToZero();
-
 
 			if (testType)
 				doTestComprPre();
-
 
 			hdr.nBasisVec = nBasisVectors;
 
@@ -482,25 +423,6 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 
 			total_iter += CompressBlock();
 
-#ifdef POST_CLEAR_FRONT_PORCH
-			PostClearFrontPorch(); // clear up to t0.  Helps t0 estimation
-#endif
-
-#ifdef XTALK_FRAC
-#ifndef XTALK_FRAC_EARLY
-
-			if(do_rnc) {
-#ifdef BB_DC
-				if(fpgaImage.ChipMode == 73)
-					xtalkCorrect(XTALK_FRAC_MODE73);
-				else
-					xtalkCorrect(XTALK_FRAC);
-#else
-		    	xtalkCorrect(XTALK_FRAC);
-#endif
-		    }
-#endif
-#endif
 			if (fd >= 0)
 				WriteTraceBlock();
 
@@ -519,51 +441,6 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg)
 	return total_iter;
 }
 
-void AdvCompr::SmoothMean()
-{
-#ifdef PCA_MEAN_SMOOTHING
-
-	float nmean_trc[hdr.npts];
-	for (int pt = 0; pt < hdr.npts; pt++){
-		int span=PCA_MEAN_SMOOTHING;
-		int start_pt=pt-span;
-		int end_pt=pt+span;
-		if(start_pt<0)
-			start_pt=0;
-		if(end_pt>hdr.npts)
-			end_pt=hdr.npts;
-
-		float avg=0;
-		for(int npt=start_pt;npt<end_pt;npt++){
-			avg += mean_trc[npt];
-		}
-		avg /= (float)(end_pt-start_pt);
-		nmean_trc[pt] = avg;
-	}
-	for (int pt = 0; pt < hdr.npts; pt++)
-		mean_trc[pt]=nmean_trc[pt]; // copy it back
-#endif
-}
-
-void AdvCompr::ClearBeginningOfTrace()
-{
-	int end = t0estIdx;
-	if(end > 15)
-		end = 15;
-//	v8s zeroV=LD_VEC8S(0);
-//	int frameStride=w*h;
-
-	// mean has already been subtracted, so just zero the points up to t0est
-	for(int pt=0;pt<end;pt++){
-//		v8s *rtrcV=(v8s *)&raw[pt*frameStride];
-//		for(int itrc=0;itrc<ntrcs;itrc++){
-//			TRCS_ACCESS(itrc,pt) = 0;
-//			*rtrcV = zeroV;
-//		}
-		mean_trc[pt]=0;
-	}
-}
-
 void AdvCompr::ApplyGain_FullChip(float targetAvg)
 {
 	int frameStride=w*h;
@@ -573,41 +450,21 @@ void AdvCompr::ApplyGain_FullChip(float targetAvg)
 	v8f_u tmpV;
 	v8s_u tmpVS;
 	v8f   sumV=LD_VEC8F(0);
-#ifdef CENTER_TRACES
-	const v8f   targetAvgV=LD_VEC8F(targetAvg);
-#endif
 
 	for (int itrc = 0; itrc < frameStride; itrc+=8,lgcV++)
 	{
-#ifdef CENTER_TRACES
-		for (int pt = 0; pt < npts; pt++)
-		{
-			short int *rtrc = &raw[pt * frameStride + itrc];
-
-			LD_VEC8S_CVT_VEC8F(rtrc, tmpV);
-			sumV += tmpV.V; // for avg trace
-		}
-		sumV /= LD_VEC8F((float)npts);
-//		sumV -= LD_VEC8F(targetAvg);
-#else
 		{ // load the first frame as our subtract point
 			short int *rtrc = &raw[0 * frameStride + itrc];
 			LD_VEC8S_CVT_VEC8F(rtrc, tmpV);
 			sumV = tmpV.V;
 		}
-#endif
 
 		for (int pt = 0; pt < npts; pt++)
 		{
 			short int *rtrc = &raw[pt * frameStride + itrc];
 
 			LD_VEC8S_CVT_VEC8F(rtrc, tmpV);
-#ifdef CENTER_TRACES
-			tmpV.V = ((tmpV.V - sumV) * *lgcV) + targetAvgV; // for avg trace
-#else
 			tmpV.V = sumV + ((tmpV.V - sumV) * *lgcV);
-#endif
-
 			//  put it back
 			CVT_VEC8F_VEC8S(tmpVS,tmpV);
 			*(v8s *)rtrc = tmpVS.V;
@@ -661,25 +518,11 @@ void AdvCompr::ComputeGain_FullChip()
 	float mean_highest_point = 0.0f;
 	int lowest_pt=0;
 	int highest_pt=0;
-#if 0
-	for (int pt = 0; pt < npts; pt++)
-	{
-		if (mean_trc[pt] < mean_lowest_point){
-			mean_lowest_point = mean_trc[pt];
-			lowest_pt = pt;
-		}
-		if (mean_trc[pt] > mean_highest_point){
-			mean_highest_point = mean_trc[pt];
-			highest_pt = pt;
-		}
-	}
-#else
 	// use the last point as the height
 	highest_pt=npts-1;
 	lowest_pt=1;
 	mean_highest_point=mean_trc[highest_pt];
 	mean_lowest_point = mean_trc[lowest_pt];
-#endif
 
 	float mean_height=mean_highest_point - mean_lowest_point;
 
@@ -708,200 +551,12 @@ void AdvCompr::ComputeGain_FullChip()
 //	}
 }
 
-void AdvCompr::adjustForDrift()
-{
-	// create a mean trace
-	int frameStride=w*h;
-	float meanTrc[npts];
-	short int meanTrcSub[npts];
-	uint64_t sum=0;
-	int pt=0;
-
-	for (pt=0;pt<npts;pt++){
-		sum=0;
-		for(int idx=0;idx<frameStride;idx++){
-			sum += raw[pt*frameStride + idx];
-		}
-		meanTrc[pt] = (float)sum/(float)frameStride;
-	}
-
-	// we now have meanTrc
-	// make the front porch flat...
-	for(pt=0;pt<npts;pt++){
-		if(timestamps_compr[pt] > 1000)
-			break;
-	}
-	int onesec_ts_pt = pt;
-	float onesec_ts = timestamps_compr[pt];
-	float slope = (meanTrc[pt]-meanTrc[0])/((float)timestamps_compr[pt]);
-
-	for(pt=0;pt<npts;pt++){
-		meanTrcSub[pt] = (short int)(slope*(float)timestamps_compr[pt]);
-	}
-
-	printf("slope=%f(%d) meanTrcSub=%d %d %d %d %d\n",slope*onesec_ts,onesec_ts_pt,meanTrcSub[0],meanTrcSub[1],meanTrcSub[2],meanTrcSub[3],meanTrcSub[4]);
-	// now, subtract meanTrcSub from all traces
-	for (pt=0;pt<npts;pt++){
-
-		for(int idx=0;idx<frameStride;idx++){
-			raw[pt*frameStride + idx] -= meanTrcSub[pt];
-		}
-	}
-}
-
-//{
-//	int pt=0;
-//	// make the front porch flat...
-//	for(;pt<npts;pt++){
-//		if(timestamps_compr[pt] > 1000)
-//			break;
-//	}
-//	float onesec_ts = timestamps_compr[pt];
-//
-//	// we now have the last timestamp before the valve opens
-//	// this should be a flat region
-//	float slope = (mean_trc[pt]-mean_trc[0])/((float)timestamps_compr[pt]);
-//
-////	printf("B Slope=%f lastpt=%d %.0f %.0f %.0f %.0f %.0f\n",slope,pt,mean_trc[0],mean_trc[1],mean_trc[2],mean_trc[3],mean_trc[4]);
-//
-//	for(pt=0;pt<npts;pt++){
-//		mean_trc[pt] -= slope*(float)timestamps_compr[pt];
-//	}
-////	printf("A Slope=%f lastpt=%d %.0f %.0f %.0f %.0f %.0f\n",slope,pt,mean_trc[0],mean_trc[1],mean_trc[2],mean_trc[3],mean_trc[4]);
-//	// re-set mean to zero
-//	// now, remove the dc component from the mean trace
-//	float meanAvg=0;
-//	for (pt = 0; pt < npts; pt++)
-//		meanAvg += mean_trc[pt];
-//	meanAvg /= (float)npts;
-//	for (pt = 0; pt < npts; pt++)
-//		mean_trc[pt] -= meanAvg;
-//
-//}
-
-void AdvCompr::AddSavedMeanToTrace(float *saved_mean)
-{
-	//TODO: figure out if the average needs to be offset
-	for (int i = 0; i < npts; i++)
-		mean_trc[i] += 8192 + saved_mean[i]; // add back some dc offset
-}
-
 void AdvCompr::AddDcOffsetToMeanTrace()
 {
 	//TODO: figure out if the average needs to be offset
 	for (int i = 0; i < npts; i++)
 		mean_trc[i] += 8192; // add back some dc offset
 }
-void AdvCompr::SetMeanTraceToZero()
-{
-	//TODO: figure out if the average needs to be offset
-	for (int i = 0; i < npts; i++)
-		mean_trc[i] = 8192; // add back some dc offset
-}
-
-void AdvCompr::smoothBeginning()
-{
-	int end_pt=t0estIdx;
-//	int span=3;
-//	int start_span;
-//	int end_span;
-
-
-	if(end_pt > 12)
-		end_pt=12;
-	// we already have t0est...
-	float weight[npts];
-	float totalWeight=0;
-	int prev=0;
-	for (int i = 0; i < end_pt && i < npts; i++){
-		// get how many samples went into this timepoint
-		weight[i] = (timestamps_compr[i] - prev) + 10 / timestamps_compr[0];
-		totalWeight += weight[i];
-		prev = timestamps_compr[i];
-	}
-
-	// smooth from 0 to end_ts
-	for (int nt = 0; nt < ntrcs; nt++){
-		float avg=0;
-		for (int pt = 0; pt < end_pt; pt++){
-				avg += ((float)TRCS_ACCESS(nt,pt))*weight[pt];
-		}
-		avg /= totalWeight;
-		short int avgS = avg;
-		for (int pt = 0; pt < end_pt; pt++){
-				TRCS_ACCESS(nt,pt) = avgS;
-		}
-	}
-	// now, smooth the mean trc
-	{
-		float avg=0;
-		for (int pt = 0; pt < end_pt; pt++){
-				avg += mean_trc[pt]*weight[pt];
-		}
-		avg /= totalWeight;
-		short int avgS = avg;
-		for (int pt = 0; pt < end_pt; pt++){
-				mean_trc[pt] = avgS;
-		}
-	}
-
-}
-
-void AdvCompr::PostClearFrontPorch()
-{
-	// first, figure out where t0 should really be..
-	int num_interesting_nvect = 3;
-
-	int t0IdxEst[10]={0};
-	float t0=0;
-	int t0Int=0;
-
-	if(hdr.nBasisVec < num_interesting_nvect)
-		num_interesting_nvect = hdr.nBasisVec;
-
-	for (int nvect = 0; nvect < num_interesting_nvect; nvect++)
-	{
-		float maxVal = 0;
-		for (int pt = 0; pt < npts; pt++){
-			float val = fabs(COEFF_ACCESS(pt,nvect)-COEFF_ACCESS(0,nvect));
-			if(val > maxVal)
-				maxVal = val;
-		}
-		float triggerLevel = maxVal/10.0f;
-//		printf("%s: vect %d maxVal %.2f triggerLeve = %.2f (",__FUNCTION__,nvect,maxVal,triggerLevel);
-//
-//		for (int pt = 0; pt < npts; pt++){
-//			printf(" %.2f",COEFF_ACCESS(pt,nvect)-COEFF_ACCESS(0,nvect));
-//		}
-//		printf(")\n");
-
-		for (int pt = 0; pt < npts; pt++){
-			if(fabs(COEFF_ACCESS(pt,nvect)-COEFF_ACCESS(0,nvect)) > triggerLevel){
-				t0IdxEst[nvect] = pt;
-//				printf("%s: vect %d --> %d\n",__FUNCTION__,nvect,t0IdxEst[nvect]);
-				break;
-			}
-		}
-	}
-	for (int nvect = 0; nvect < num_interesting_nvect; nvect++)
-	{
-		t0 += t0IdxEst[nvect];
-	}
-	t0 /= (float)num_interesting_nvect;
-	t0Int = (int)(t0+0.5f);
-//	printf("%s(%d): t0 %.1f --> %d\n",__FUNCTION__,num_interesting_nvect,t0,t0Int);
-
-
-	if(t0Int < 0)
-		t0Int = 0;
-	if(t0Int >= npts)
-		t0Int = npts-1;
-	// second, clear the average trace up to t0.
-	for(int pt=1;pt<t0Int;pt++){
-		mean_trc[pt] = mean_trc[0];
-	}
-}
-
 
 void AdvCompr::ParseOptions(char *options)
 {
@@ -909,20 +564,26 @@ void AdvCompr::ParseOptions(char *options)
 //	const char *dflt_options="pcaReal=5,pcaFake=4,pcaSpline=0,SplineSt=no-knots";
 	const char *pcaRealOpt="pcaReal=";     // real pca basis vectors
 	const char *pcaFakeOpt="pcaFake=";     // made up pca basis vectors
+#ifdef PCASPLINE
 	const char *pcaSplineOpt="pcaSpline="; // real pca basis vectors from spline code
 	const char *SplineStOpt="SplineSt=";   // spline knot basis vector strategy
 	const char *SplineTikOpt="SplineTik="; // spline knot basis vector strategy
 	const char *SplineOrdOpt="SplineOrd=";
+#endif
+	const char *CorrectRowNoiseOpt="CorrectRowNoise";
 //	const char *DfcCoeffOpt="DfcCoeff=";  // number of dfc coefficients
 
 	// set up the defaults
 	strcpy(SplineStrategy,"no-knots");
 	nPcaBasisVectors=6;
 	nPcaFakeBasisVectors=0;
+#ifdef PCASPLINE
 	nPcaSplineBasisVectors=0;
 	nSplineBasisVectors=0;
 	spline_order = -1;
 	tikhonov_k = -1;
+#endif
+	//	CorrectRowNoise = 1;
 	if(options == NULL)
 		return;
 
@@ -939,6 +600,7 @@ void AdvCompr::ParseOptions(char *options)
 		ptr += strlen(pcaFakeOpt);
 		sscanf(ptr,"%d,",&nPcaFakeBasisVectors);
 	}
+#ifdef PCASPLINE
 	ptr = strstr(options,pcaSplineOpt);
 	if(ptr)
 	{
@@ -980,6 +642,11 @@ void AdvCompr::ParseOptions(char *options)
         AdvComprPrintf("Using PcaSpline: %d basis vec %.2f tikhonov for %d pca, %s knots order %d\n",
 			       nSplineBasisVectors + nPcaSplineBasisVectors, tikhonov_k, nPcaSplineBasisVectors, SplineStrategy, spline_order);
 			       
+	}
+#endif
+	if(strstr(options,CorrectRowNoiseOpt))
+	{
+		CorrectRowNoise = 0;
 	}
 
 
@@ -1121,43 +788,48 @@ int AdvCompr::PopulateTraceBlock_ComputeMean()
 	int r, c, pt;
 	double start = AdvCTimer();
 	float meanPt;
-	v8f_u lowV, highV,meanV;
-	highV.V = LD_VEC8F(ADV_COMPR_PIN_HIGH);
-	lowV.V = LD_VEC8F(ADV_COMPR_PIN_LOW);
+	v8f_u meanV;
+//	v8f dymmy = {};
 
 	ntrcs = ntrcsL = (hdr.rend - hdr.rstart) * (hdr.cend - hdr.cstart);
 	if (ntrcs % (VEC8_SIZE * 4))
 		ntrcsL = (ntrcs + (VEC8_SIZE * 4)) & (~((VEC8_SIZE * 4) - 1));
 
-	memset(trcs_state,0,trcs_state_len);
-//	pinnedTrcs=0;
-	for (pt = 0; pt < npts; pt++)
+	// copy trcs_state from mMask
+	{
+		v8i *pinnedV = (v8i *) &trcs_state[0];
+		for (r = hdr.rstart; r < hdr.rend; r++)	{
+			c = hdr.cstart;
+			v8i *maskV = (v8i *) &mMask[r*w+c];
+			for (; c < hdr.cend;c += VEC8_SIZE){
+				*pinnedV++ = *maskV++;
+			}
+		}
+	}
+
+	for (pt = 1; pt < npts; pt++)
 	{
 		meanV.V=LD_VEC8F(0);
 		itrc = 0;
 		for (r = hdr.rstart; r < hdr.rend; r++)
 		{
 			c = hdr.cstart;
-			v8f *lgcV = (v8f *) &gainCorr[r * w + c];
 			rtrc = &raw[pt * frameStride + r * w + c];
+			v8f rowNoiseV;
+			if(CorrectRowNoise)
+				rowNoiseV = LD_VEC8F(NOISE_ACC(r,pt));// row noise for this point..
+			else
+				rowNoiseV = LD_VEC8F(0); // no row noise
+
 			v8f *tPtrV = (v8f *) &TRCS_ACCESS(itrc,pt);
-			v8f *pinnedV = (v8f *) &trcs_state[itrc];
-			for (; c < hdr.cend;
-					c += VEC8_SIZE,rtrc += VEC8_SIZE,pinnedV++, lgcV++, tPtrV++)
+			for (; c < hdr.cend; c += VEC8_SIZE, rtrc += VEC8_SIZE, tPtrV++)
 			{
 				LD_VEC8S_CVT_VEC8F(rtrc, tmpV);
 
-				// now, do the pinned pixel comparisons
-#if 0 //def __AVX__
-				*pinnedV += __builtin_ia32_cmpps256(tmpV.V , lowV.V, _CMP_LT_OS);
-				*pinnedV += __builtin_ia32_cmpps256(highV.V, tmpV.V, _CMP_LT_OS);
-#else
-				for(int k=0;k<VEC8_SIZE;k++)
-					trcs_state[itrc+k] += (tmpV.A[k] < lowV.A[k]) | (tmpV.A[k] > highV.A[k]);
-#endif
+				tmpV.V -= rowNoiseV;
 
-				// gain correct
-//				tmpV.V *= *lgcV;
+//				tmpV.V = LD_VEC8F(mCorr_sigs[r*npts+pt]); //DEBUG
+
 				meanV.V += tmpV.V; //sum all wells for mean trace
 				*tPtrV = tmpV.V;
 				itrc += VEC8_SIZE;
@@ -1169,6 +841,15 @@ int AdvCompr::PopulateTraceBlock_ComputeMean()
 		mean_trc[pt] = meanPt/(float)ntrcs;
 	}
 
+	// copy the second point to the first
+	mean_trc[0] = mean_trc[1];
+	v8f *rtrcV0 = (v8f *) &TRCS_ACCESS(0,0);
+	v8f *rtrcV1 = (v8f *) &TRCS_ACCESS(0,1);
+
+	for(int idx=0;idx<ntrcs/8;idx++){
+		*rtrcV0++ = *rtrcV1++;
+	}
+
 	// now, remove the dc component from the mean trace
 	float meanAvg=0;
 	for (pt = 0; pt < npts; pt++)
@@ -1177,13 +858,6 @@ int AdvCompr::PopulateTraceBlock_ComputeMean()
 	for (pt = 0; pt < npts; pt++)
 		mean_trc[pt] -= meanAvg;
 
-
-//	int pinnedCnt=0;
-//	for(itrc=0;itrc<ntrcs;itrc++){
-//		if(trcs_state[itrc])
-//			pinnedCnt++;
-//	}
-//	printf("%s: pinned=%d notpinned=%d\n",__FUNCTION__,pinnedCnt,ntrcs-pinnedCnt);
 	timing.populate += AdvCTimer() - start;
 	return 1;
 }
@@ -1247,7 +921,7 @@ void AdvCompr::SubtractMeanFromTraces()
 	// now re-zero all pinned traces
 	for (itrc = 0; itrc < ntrcs; itrc++)
 	{
-		if (trcs_state[itrc])
+		if (trcs_state[itrc]==0)
 		{
 			for (pt = 0; pt < npts; pt++)
 				TRCS_ACCESS(itrc,pt) = 0;
@@ -1318,9 +992,6 @@ int AdvCompr::CompressBlock()
 	// call specific compress
 	if (nPcaBasisVectors || nPcaFakeBasisVectors)
 	{
-//	  PCACompr pca(nPcaBasisVectors, nPcaFakeBasisVectors,
-//		       npts, ntrcs, ntrcsL, t0est,
-//		       trcs, trcs_coeffs, trcs_state, basis_vectors);
 	  PCACompr pca(nPcaBasisVectors, nPcaFakeBasisVectors,
 		       npts, nSamples, nSamples, t0estIdx,
 		       sampleMatrix, trcs_coeffs, basis_vectors);
@@ -1329,16 +1000,8 @@ int AdvCompr::CompressBlock()
   	  timing.CompressBlock += AdvCTimer() - start;
 
 	  ExtractVectors();
-#ifdef PCA_CONVERGE_BASIS_VECTORS
-	  for(int vect=0;vect<(nPcaBasisVectors+nPcaFakeBasisVectors);vect++){
-		  basis_vectors[(vect*npts)+npts-1] =  0;
-		  basis_vectors[(vect*npts)+npts-2] *= 0.25f;
-		  basis_vectors[(vect*npts)+npts-3] *= 0.5f;
-		  basis_vectors[(vect*npts)+npts-4] *= 0.75f;
-	  }
-//	  printf("smoothing the end of basis vectors %d [%f %f %f %f]\n",(nPcaBasisVectors+nPcaFakeBasisVectors),basis_vectors[npts-4],basis_vectors[npts-3],basis_vectors[npts-2],basis_vectors[npts-1]);
-#endif
 	}
+#ifdef PCASPLINE
 	else if (nSplineBasisVectors+nPcaSplineBasisVectors)
 	{
 	  PcaSpline compressor(nPcaSplineBasisVectors, SplineStrategy);
@@ -1351,42 +1014,13 @@ int AdvCompr::CompressBlock()
 							  compressor.GetOrder(), SplineStrategy);
 	  compressed.basis_vectors = basis_vectors; // needs to be aligned
 	  compressed.coefficients = trcs_coeffs;
-//	  CreateSampleMatrix(hdr.nBasisVec);
-//	  compressor.SampleImageMatrix(ntrcs, npts, trcs, trcs_state, sample_target_size, n_sample, &sample_mem);
 	  compressor.LossyCompress(ntrcs, npts, trcs, nSamples, sampleMatrix, compressed);
 
   	  timing.CompressBlock += AdvCTimer() - start;
-//	  NormalizeVectors();
-//	  ExtractVectors();
-
 	}
-
+#endif
 
 	return (total_iter);
-}
-
-void AdvCompr::NormalizeVectors()
-{
-	for(int nvect=0;nvect<hdr.nBasisVec;nvect++)
-	{
-		float ssq=0.0f;
-		for (int i=0;i < npts;i++)
-		   ssq += COEFF_ACCESS(i,nvect)*COEFF_ACCESS(i,nvect);
-
-		if (ssq == 0.0f)
-		{
-		   // woah..it's not at all orthogonal to the vectors we already have...
-		   // bail out....
-			AdvComprPrintf("************* %s: vec %d has no magnitude *************\n",__FUNCTION__,nvect);
-		}
-		else
-		{
-			float tmag = sqrt(ssq);
-
-			for (int i=0;i < npts;i++)
-			   COEFF_ACCESS(i,nvect) /= tmag;
-		}
-	}
 }
 
 void AdvCompr::CreateSampleMatrix()
@@ -1398,29 +1032,22 @@ void AdvCompr::CreateSampleMatrix()
 	while (state_begin != state_end)
 	{
           // count good wells and fill them in with number of basis vectors
-          if (*state_begin == 0){
+          if (*state_begin){
             good_wells++;
-//            *state_begin = hdr.nBasisVec; // update state to indicate the number of basis vectors now
           }
           state_begin++;
 	}
-//	int sample_rate = 16;//std::max(1, good_wells / (int)TARGET_SAMPLES)+1;
-//	int n_sample_rows = (int) (ceil((float) good_wells / nSamples));
-	int sample_rate=/*good_wells*/ntrcs/nSamples;
+	int sample_rate=ntrcs/nSamples;
 	for (int i = 0; i < npts; i++)
 	{
 		float *__restrict col_start = &TRCS_ACCESS(0,i);
 		float *__restrict col_end = col_start + ntrcs;
-//		state_begin = trcs_state;
 		float *__restrict sample_col_begin = sampleMatrix + nSamples * i;
 		uint32_t check_count = 0;
-//		int good_count = sample_rate - 1;
 		for(int nt=0;nt<ntrcs;nt+=sample_rate)
 		{
-//			if (/*state_begin[nt] >= 0 &&*/ ++good_count == sample_rate)
 			{
 				*sample_col_begin++ = *col_start;
-//				good_count = 0;
 				check_count++;
 				if(check_count == nSamples)
 					break;
@@ -1437,28 +1064,6 @@ void AdvCompr::CreateSampleMatrix()
 	timing.createSample += AdvCTimer() - start;
 }
 
-void AdvCompr::ComputeEmphasisVector(float *gv, float mult, float adder, float width)
-{
-//	   float dt;
-//	   const float width=10.0f;
-	   float gvssq = 0.0f;
-	   int t0estLocal=t0estIdx+7;// needs to point to the middle of the incorporation
-
-	   for (int i=0;i < npts;i++)
-	   {
-	      float dt=i-t0estLocal;
-	      gv[i]=mult*exp(-dt*dt/width)+adder;
-//	      ptgv[i]=COEFF_ACCESS(i,nvect)*gv[i];
-	      gvssq += gv[i]*gv[i];
-	   }
-	   gvssq = sqrt(gvssq);
-
-	  for (int i=0;i < npts;i++)
-//		 gv[i]/=gvssq;
-		  gv[i] = 1.0f;
-}
-
-
 float AdvCompr::ExtractVectors()
 
 {
@@ -1470,8 +1075,6 @@ float AdvCompr::ExtractVectors()
 
 	for (pt = 0; pt < npts; pt++)
 		gv[pt] = 1.0f;
-
-//	ComputeEmphasisVector(gv, 2.0f, 1.4f, 10.0f);
 
 	for (int nvect = 0; nvect < hdr.nBasisVec; nvect++)
 	{
@@ -1544,7 +1147,7 @@ int AdvCompr::GetBitsNeeded()
 	{
 		for (i = 0; i < ntrcs; i++)
 		{
-			if (trcs_state[i])
+			if (trcs_state[i]==0)
 				continue;
 			if (TRC_COEFF_ACC(nv,i) > maxVals[nv])
 				maxVals[nv] = TRC_COEFF_ACC(nv,i);
@@ -1679,7 +1282,7 @@ uint64_t AdvCompr::PackBits(uint64_t *buffer, uint64_t *bufferEnd)
 	{
 		nlvec = nvec;
 
-		if (trcs_state[itrc] == 0)
+		if (trcs_state[itrc])
 		{
 			for (nv = 0; nv < nlvec; nv++)
 			{
@@ -1854,7 +1457,7 @@ int AdvCompr::WriteTraceBlock()
 	// write out the bits needed per vec
 	Write(fd, bitsNeeded, sizeof(bitsNeeded[0]) * nvect);
 
-	if(frameRate != 15){
+	if(frameRate != 15 && timeTransform){
 		float nMeanTrc[npts_newfr];
 		TimeTransform_trace(npts,npts_newfr,timestamps_compr,timestamps_newfr,mean_trc,nMeanTrc,1);
 
@@ -1863,14 +1466,6 @@ int AdvCompr::WriteTraceBlock()
 
 		float nBasisVects[nvect*npts_newfr];
 		TimeTransform_trace(npts,npts_newfr,timestamps_compr,timestamps_newfr,basis_vectors,nBasisVects,nvect);
-
-//		printf("new basis_vectors:\n");
-//		for(int bv=0;bv<nvect;bv++){
-//			printf("  %d) ",bv);
-//			for(int pt=0;pt<npts_newfr;pt++)
-//				printf(" %.02f",nBasisVects[bv*npts_newfr+pt]);
-//			printf("\n");
-//		}
 
 		// write out the basis vectors
 		Write(fd, nBasisVects, sizeof(nBasisVects));
@@ -1882,14 +1477,6 @@ int AdvCompr::WriteTraceBlock()
 		// write out the pca vectors
 		Write(fd, basis_vectors, sizeof(float) * nvect * npts);
 	}
-//	printf("basis_vectors:\n");
-//	for(int bv=0;bv<nvect;bv++){
-//		printf("  %d) ",bv);
-//		for(int pt=0;pt<npts;pt++)
-//			printf(" %.02f",basis_vectors[bv*npts+pt]);
-//		printf("\n");
-//	}
-
 	// write out the min vectors
 	Write(fd, minVals, sizeof(float) * nvect);
 
@@ -1940,37 +1527,6 @@ void AdvCompr::ComputeGain()
 	// so the next func doesnt' subtract the mean.
 	SetMeanOfFramesToZero_SubMean(npts);
 
-#if 0
-	// first, set mean of frames to zero
-	for(pt=0;pt<npts;pt++)
-	{
-//		saved_mean_trc[pt] = mean_trc[pt];
-		mean_trc[pt]=0;
-	}
-
-	SetMeanOfFramesToZero_SubMean(t0estIdx);
-
-	ComputeMeanTrace();
-//	// now, put the mean trace back
-//	for(pt=0;pt<npts;pt++)
-//		 mean_trc[pt] = saved_mean_trc[pt];
-
-	mean_lowest_point = 0.0f;
-	for (pt = 0; pt < npts; pt++)
-	{
-		if (mean_trc[pt] < mean_lowest_point)
-			mean_lowest_point = mean_trc[pt];
-	}
-
-	if (mean_lowest_point == 0.0f)
-	{
-		AdvComprPrintf("mean_lowest_point= 0.0; t0est=%d ",t0est);
-		for (pt = 0; pt < npts; pt++)
-			AdvComprPrintf("%.0lf ",mean_trc[pt]);
-		AdvComprPrintf("\n");
-	}
-#endif
-
 	itrc = 0;
 	// gain is ratio of mean to local trace
 	for (r = hdr.rstart; r < hdr.rend; r++)
@@ -1979,7 +1535,7 @@ void AdvCompr::ComputeGain()
 		float *gcP = &gainCorr[r * w + c];
 		for (; c < hdr.cend; c++,gcP++)
 		{
-			if (trcs_state[itrc] == 0) // don't do pinned pixels
+			if (trcs_state[itrc]) // don't do pinned pixels
 			{
 				lowest_point = 0.0f;
 				highest_point = 0.0f;
@@ -2033,11 +1589,7 @@ void AdvCompr::doTestComprPre()
 		ComputeMeanTrace();
 		t0est = findt0(&t0estIdx);
 
-		//  	ClearFrontPorch();
-		//    ComputeMeanTrace();
-
 		SubtractMeanFromTraces();
-//	    CheckTraceBlock();
 		for (int i = 0; i < npts; i++)
 			mean_trc[i] += 8192; // add back some dc offset
 
@@ -2050,21 +1602,12 @@ void AdvCompr::doTestComprPost()
 
 	if (testType == 1)
 	{
-//			for (int i = 0; i < npts; i++)
-//				mean_trc[i] += 8192; // add back some dc offset
-//		for(int itrc=0;itrc<ntrcs;itrc++)
-//		{
-//			if(trcs_state[itrc]==0)
-//				trcs_state[itrc]=(hdr.nPcaVec+hdr.nSpline);
-//		}
 		ExtractTraceBlock(); // extract into image
 	}
 	else if (testType == 4)
 	{
 		short int *oldRaw=raw;
 		raw = (short int *)malloc(2*w*h*npts);
-//		for (int i = 0; i < npts; i++)
-//			mean_trc[i] = 0;
 		ExtractTraceBlock(); // extract into image
 		for(int frame=0;frame<npts;frame++){
 			short int *ptr1=&raw[frame*w*h];
@@ -2077,7 +1620,6 @@ void AdvCompr::doTestComprPost()
 		}
 		free(raw);
 		raw=oldRaw;
-//		SaveResidual(1);
 	}
 	else if (testType == 5)
 	{
@@ -2217,7 +1759,7 @@ float FindT0Specific(float *trace, uint32_t trace_length,
 //				fprintf(logfp,"  slope1=%.2lf offset1=%.2lf\n",slope1,offset1);
 //				fprintf(logfp,"  slope2=%.2lf offset2=%.2lf\n",slope2,offset2);
 //			}
-			if (slope1 != 0 && offset1 != 0 && slope2 != 0 && slope2 != 0
+			if (slope1 != 0 && offset1 != 0 && slope2 != 0 && offset2 != 0
 					&& slope1 != slope2)
 			{
 				T0Specific = -(offset1 - offset2) / (slope1 - slope2);
@@ -2318,12 +1860,17 @@ struct lsrow_header {
 void AdvCompr::WriteGain(int region, int w, int h, char *destPath)
 {
 	char fnBuf[512];
-	float *LCorr = gainCorrection[region];
+	float *LCorr = AllocateGainCorrection(region,w*h*sizeof(float));
 
-	if(LCorr == NULL)
+	if(LCorr == NULL){
+		AdvComprPrintf("%s: not writing region %d (%p)\n",__FUNCTION__,region,gainCorrection[region]);
 		return;
+	}
 
-	sprintf(fnBuf,"%s/Gain.lsr",destPath);
+	if(region < 97)
+		sprintf(fnBuf,"%s/Gain.lsr",destPath);
+	else
+		sprintf(fnBuf,"%s/Gain_spatial.lsr",destPath);
 	FILE *fp = fopen(fnBuf,"wb");
 	if(fp)
 	{
@@ -2337,9 +1884,16 @@ void AdvCompr::WriteGain(int region, int w, int h, char *destPath)
 		if (fp)
 		{
 			fwrite(&hdr,sizeof(hdr),1,fp);
-			fwrite(LCorr,sizeof(float),h * w,fp);
+			fwrite(LCorr,h * w,sizeof(float),fp);
 			fclose(fp);
 		}
+		int nonone=0;
+		for(int idx=0;idx<w*h;idx++){
+			if(LCorr[idx] != 1.0)
+				nonone++;
+		}
+
+		AdvComprPrintf("%s: wrote %s (%p) valid=%d\n",__FUNCTION__,fnBuf,gainCorrection[region],nonone);
 	}
 
 }
@@ -2385,18 +1939,16 @@ float *AdvCompr::ReadGain(int region, uint32_t cols, uint32_t rows, char *srcPat
 
 float *AdvCompr::ReSetGain(int region, int w, int h, float *gainPtr)
 {
-	uint32_t len=w*h*sizeof(float);
+//	uint32_t len=w*h*sizeof(float);
 	int high=0;
 	int low=0;
 	int justRight=0;
 	int nanCnt=0;
 
-	if(gainCorrection[region] == NULL || gainCorrectionSize[region] != len)
-	{
-		gainCorrection[region] = (float *) memalign(VEC8F_SIZE_B,len);
-		gainCorrectionSize[region] = len;
-	}
-	float *LCorr = gainCorrection[region];
+	float *LCorr = AllocateGainCorrection(region,w*h*sizeof(float));
+
+	if(LCorr == NULL)
+		return NULL;
 
 	for (int i=0;i<(w*h);i++)
 	{
@@ -2419,26 +1971,24 @@ float *AdvCompr::ReSetGain(int region, int w, int h, float *gainPtr)
 		else
 			justRight++;
 	}
-	AdvComprPrintf("  SetGain %d) nan:%d %d/%d/%d [%f %f %f %f]  [%f %f %f %f]\n",
+	AdvComprPrintf("  ReSetGain %d) nan:%d %d/%d/%d [%f %f %f %f]  [%f %f %f %f]\n",
 			region,nanCnt,high,justRight,low,gainPtr[0],gainPtr[1],gainPtr[2],gainPtr[3],LCorr[0],LCorr[1],LCorr[2],LCorr[3]);
 	return LCorr;
 }
 
 void AdvCompr::SetGain(int region, int w, int h, float conv, uint16_t *gainPtr)
 {
-	uint32_t len=w*h*sizeof(float);
+//	uint32_t len=w*h*sizeof(float);
 	int high=0;
 	int low=0;
 	int justRight=0;
 	int nanCnt=0;
 	int zero=0;
 
-	if(gainCorrection[region] == NULL || gainCorrectionSize[region] != len)
-	{
-		gainCorrection[region] = (float *) memalign(VEC8F_SIZE_B,len);
-		gainCorrectionSize[region] = len;
-	}
-	float *LCorr = gainCorrection[region];
+	float *LCorr = AllocateGainCorrection(region,w*h*sizeof(float));
+
+	if(LCorr == NULL)
+		return;
 
 	for (int i=0;i<(w*h);i++)
 	{
@@ -2469,13 +2019,14 @@ void AdvCompr::SetGain(int region, int w, int h, float conv, uint16_t *gainPtr)
 
 	// now, replace all of the
 
-	AdvComprPrintf("  SetGain %d) nan:%d %d/%d/%d/%d [%d %d %d %d] conv=%f  [%f %f %f %f]\n",
-			region,nanCnt,high,justRight,low,zero, gainPtr[0],gainPtr[1],gainPtr[2],gainPtr[3],conv,LCorr[0],LCorr[1],LCorr[2],LCorr[3]);
+	AdvComprPrintf("  SetGain %d) %p nan:%d %d/%d/%d/%d [%d %d %d %d] conv=%f  [%f %f %f %f]\n",
+			region,gainPtr,nanCnt,high,justRight,low,zero, gainPtr[0],gainPtr[1],gainPtr[2],gainPtr[3],conv,LCorr[0],LCorr[1],LCorr[2],LCorr[3]);
 
 }
 
 void AdvCompr::ClearGain(int region)
 {
+	AdvComprPrintf("%s: clearing region %d(%p)\n",__FUNCTION__,region,gainCorrection[region]);
 	if(gainCorrection[region] != NULL)
 	{
 		free(gainCorrection[region]);
@@ -3086,7 +2637,7 @@ typedef struct {
 void AdvCompr::TimeTransform(int *timestamps, int *newtimestamps,
 		int frameRate, int &tmp_npts, int &tmp_nUncompImgPts)
 {
-	if(frameRate==15){
+	if(frameRate==15 || !timeTransform){
 		// just copy timestamps to newtimestamps
 		memcpy(newtimestamps,timestamps,tmp_npts*sizeof(timestamps[0]));
 	}
@@ -3243,4 +2794,296 @@ void AdvCompr::xtalkCorrect_raw(float xtalk_fraction, int w, int h, int npts, sh
         }
     }
 }
+
+
+void AdvCompr::ApplyGain_FullChip_xtalkcorr_sumRows(float xtalk_fraction, int w, int h, int npts, short unsigned int *raw)
+{
+	int frameStride=w*h;
+	v8f_u tmpV1,tmpV2;
+	v8s_u tmpVS1,tmpVS2;
+	v8f_u tmpO1,tmpO2;
+	v8f   sumV1,sumV2;
+	short unsigned int *rtrc1,*rtrc2;
+	v8f   xtf=LD_VEC8F(xtalk_fraction);
+	v8f   oomxtf=LD_VEC8F(1.0f/(1.0f-xtalk_fraction));
+	v8f_u rowSumCntrs1[npts];
+	v8f_u rowSumCntrs2[npts];
+	v8f_u maskV1,maskV2;
+
+	for (int y=0;y<h;y+=2){//int itrc = 0; itrc < frameStride; itrc+=8,lgcV++)
+		// zero the row sum counters for these two rows.
+		memset(rowSumCntrs1,0,sizeof(rowSumCntrs1));
+		memset(rowSumCntrs2,0,sizeof(rowSumCntrs2));
+
+		for(int x=0;x<w;x+=8){
+			 // load the first frame as our subtract point
+			int itrc1=y*w+x;
+			int itrc2=itrc1+w;
+			rtrc1 = &raw[itrc1];
+			rtrc2 = &raw[itrc2];
+			LD_VEC8S_CVT_VEC8F(rtrc1, tmpV1);
+			LD_VEC8S_CVT_VEC8F(rtrc2, tmpV2);
+			sumV1 = tmpV1.V;
+			sumV2 = tmpV2.V;
+
+			v8f lgcV1 = *((v8f *) &gainCorr[itrc1]);
+			v8f lgcV2 = *((v8f *) &gainCorr[itrc2]);
+			maskV1 = *((v8f_u *) &mMask[itrc1]);
+			maskV2 = *((v8f_u *) &mMask[itrc2]);
+
+			for (int pt = 0; pt < npts; pt++,rtrc1+=frameStride,rtrc2+=frameStride)
+			{
+
+				LD_VEC8S_CVT_VEC8F(rtrc1, tmpV1);
+				LD_VEC8S_CVT_VEC8F(rtrc2, tmpV2);
+
+				// subtract off the static offset
+				tmpV1.V -= sumV1;
+				tmpV2.V -= sumV2;
+
+				// do gain correction
+				tmpV1.V *= lgcV1;
+				tmpV2.V *= lgcV2;
+
+				// now do xtalk correction
+                tmpO1.V = ((tmpV1.V - xtf * tmpV2.V ) * oomxtf);//((1.0f-xtalk_fraction)*p1-xtalk_fraction*p2)/denominator;
+                tmpO2.V = ((tmpV2.V - xtf * tmpV1.V ) * oomxtf);//((1.0f-xtalk_fraction)*p2-xtalk_fraction*p1)/denominator;
+
+
+				// add back the offset
+                tmpO1.V += sumV1;
+                tmpO2.V += sumV2;
+
+				// sum up the row averages..
+                rowSumCntrs1[pt].V += (tmpO1.V * maskV1.V);
+				rowSumCntrs2[pt].V += (tmpO2.V * maskV2.V);
+
+				//  put it back
+				CVT_VEC8F_VEC8S(tmpVS1,tmpO1);
+				CVT_VEC8F_VEC8S(tmpVS2,tmpO2);
+				*(v8s *)rtrc1 = tmpVS1.V;
+				*(v8s *)rtrc2 = tmpVS2.V;
+			}
+		}
+
+		v8f_u num_non_pinnedV1, num_non_pinnedV2;
+		v8f *maskV1=(v8f *)&mMask[y*w];
+		v8f *maskV2=(v8f *)&mMask[(y+1)*w];
+
+		num_non_pinnedV1.V = LD_VEC8F(0);
+		num_non_pinnedV2.V = LD_VEC8F(0);
+
+		for(int x=0;x<(w/8);x++){
+			num_non_pinnedV1.V += *maskV1++;
+			num_non_pinnedV2.V += *maskV2++;
+		}
+
+		float num_non_pinned1 = V8_SUM(num_non_pinnedV1);
+		float num_non_pinned2 = V8_SUM(num_non_pinnedV2);
+
+		// populate mCorr_sigs
+		// need number of non-pinned signals to divide by...
+		for(int pt=0;pt<npts;pt++){
+			mCorr_sigs[y*npts+pt]     = V8_SUM(rowSumCntrs1[pt])/num_non_pinned1;
+			mCorr_sigs[(y+1)*npts+pt] = V8_SUM(rowSumCntrs2[pt])/num_non_pinned2;
+		}
+	}
+}
+
+void AdvCompr::ApplyGain_FullChip_xtalkcorr(float xtalk_fraction, int w, int h, int npts, short unsigned int *raw)
+{
+	int frameStride=w*h;
+	v8f_u tmpV1,tmpV2;
+	v8s_u tmpVS1,tmpVS2;
+	v8f_u tmpO1,tmpO2;
+	v8f   sumV1,sumV2;
+	short unsigned int *rtrc1,*rtrc2;
+	v8f   xtf=LD_VEC8F(xtalk_fraction);
+	v8f   oomxtf=LD_VEC8F(1.0f/(1.0f-xtalk_fraction));
+	v8f_u maskV1,maskV2;
+
+
+	for (int y=0;y<h;y+=2){//int itrc = 0; itrc < frameStride; itrc+=8,lgcV++)
+
+		for(int x=0;x<w;x+=8){
+			 // load the first frame as our subtract point
+			int itrc1=y*w+x;
+			int itrc2=itrc1+w;
+			rtrc1 = &raw[itrc1];
+			rtrc2 = &raw[itrc2];
+			LD_VEC8S_CVT_VEC8F(rtrc1, tmpV1);
+			LD_VEC8S_CVT_VEC8F(rtrc2, tmpV2);
+			sumV1 = tmpV1.V;
+			sumV2 = tmpV2.V;
+
+			v8f lgcV1 = *((v8f *) &gainCorr[itrc1]);
+			v8f lgcV2 = *((v8f *) &gainCorr[itrc2]);
+			maskV1 = *((v8f_u *) &mMask[itrc1]);
+			maskV2 = *((v8f_u *) &mMask[itrc2]);
+
+			for (int pt = 0; pt < npts; pt++,rtrc1+=frameStride,rtrc2+=frameStride)
+			{
+
+				LD_VEC8S_CVT_VEC8F(rtrc1, tmpV1);
+				LD_VEC8S_CVT_VEC8F(rtrc2, tmpV2);
+
+				// subtract off the static offset
+				tmpV1.V -= sumV1;
+				tmpV2.V -= sumV2;
+
+				// do gain correction
+				tmpV1.V *= lgcV1;
+				tmpV2.V *= lgcV2;
+
+				// now do xtalk correction
+                tmpO1.V = ((tmpV1.V - xtf * tmpV2.V ) * oomxtf);//((1.0f-xtalk_fraction)*p1-xtalk_fraction*p2)/denominator;
+                tmpO2.V = ((tmpV2.V - xtf * tmpV1.V ) * oomxtf);//((1.0f-xtalk_fraction)*p2-xtalk_fraction*p1)/denominator;
+
+
+				// add back the offset
+                tmpO1.V += sumV1;
+                tmpO2.V += sumV2;
+
+				//  put it back
+				CVT_VEC8F_VEC8S(tmpVS1,tmpO1);
+				CVT_VEC8F_VEC8S(tmpVS2,tmpO2);
+				*(v8s *)rtrc1 = tmpVS1.V;
+				*(v8s *)rtrc2 = tmpVS2.V;
+			}
+		}
+	}
+}
+
+
+void AdvCompr::findPinned()
+{
+
+	uint16_t *fptr;
+	uint16_t high = 16380;
+	uint16_t low = 5;
+	int pinned=0;
+//	int pre_pinned=0;
+//	int post_pinned=0;
+
+//	for(int y=0;y<h;y++){
+//		for(int x=0;x<w;x++){
+//			if(mMask[y*w+x])
+//				pre_pinned++;
+//		}
+//	}
+
+	for(int idx=0;idx<w*h;idx++){
+		mMask[idx]=1.0f;
+	}
+
+	for(int frame = 0;frame<npts;frame+=(npts-1)){ // first and last frame
+		fptr = (uint16_t *)&raw[frame*h*w];
+		for(int idx=0;idx<w*h;idx++){
+				if(fptr[idx] > high || fptr[idx] < low){
+					if(mMask[idx]){
+						pinned++;
+						mMask[idx] = 0;
+					}
+				}
+		}
+	}
+//	printf("adv: pinned: %d\n",pinned);
+
+//	for(int y=0;y<h;y++){
+//		for(int x=0;x<w;x++){
+//			if(mMask[y*w+x])
+//				post_pinned++;
+//		}
+//	}
+//	printf("%s: pre=%d post=%d\n",__FUNCTION__,pre_pinned,post_pinned);
+
+}
+
+
+// neighbor-subtract the comparator signals to get a noise correction
+void AdvCompr::NNSubtractComparatorSigs(int span) {
+
+    // Create an initial sum from 0 to span for each frame
+    // Store the initial sums in an array
+    int start_ry 	= std::max(0-span,0);
+    int end_ry   	= std::min(0+span,h);
+	float nn_sum[npts];
+	float nn_avg 	= 0;
+	for (int frame = 0; frame < npts; frame++) {
+		nn_sum[frame] = 0;
+		for (int ry=start_ry; ry<=end_ry; ry++) {
+			nn_sum[frame] += SIGS_ACC(ry, frame);
+		}
+	}
+
+	// For each y, shift the initial sum as needed
+	// to avoid recalculating the whole thing
+	for (int y = 0; y < h; y++) {
+		int start_y = std::max(y-span,0);
+		int end_y   = std::min(y+span,h);
+
+		for (int frame = 0; frame < npts; frame++) {
+			// We already calculated the sum when y == 0
+			// as the initial values in nn_sum
+			if (y>0) {
+				if (y-span > 0) {
+					nn_sum[frame] -= SIGS_ACC(start_y-1, frame);
+				}
+				if (y+span <= h) {
+					nn_sum[frame] += SIGS_ACC(end_y, frame);
+				}
+			}
+			nn_avg = nn_sum[frame];
+			nn_avg /= (float)(end_y-start_y);
+			float tmp = SIGS_ACC(y,frame) - nn_avg;
+			if(tmp != tmp)
+				tmp=0;
+			NOISE_ACC(y,frame) = tmp;
+
+		}
+	}
+
+#if 0
+	// apply the correction right here..
+	v8s *srcPtr = (v8s *)&raw[0];
+	int frameStrideV=(h*w/8);
+
+	for (int y = 0; y < h; y++) {
+		for(int x=0;x<w;x+=8,srcPtr++){
+			for (int frame = 1; frame < npts; frame++)
+			{
+				v8s corr=LD_VEC8S((short int)(NOISE_ACC(y,frame)));
+				srcPtr[frame*frameStrideV] -= corr;
+			}
+		}
+	}
+#endif
+
+}
+
+// neighbor-subtract the comparator signals to get a noise correction
+void AdvCompr::NNSubtractComparatorSigs_tn(int span)
+{
+	for (int y = 0; y < h; y++) {
+		int start_y = std::max(y-span,0);
+		int end_y   = std::min(y+span,h);
+		// keep the ns within the 100x100 block
+
+		start_y = y - y%100; // the beginning of the 100x100 block
+		end_y=start_y+100;
+
+		for (int frame = 0; frame < npts; frame++){
+			float nn_avg=0;
+			for(int ry=start_y;ry<end_y;ry++){
+				nn_avg += SIGS_ACC(ry,frame);
+			}
+			nn_avg /= (float)(end_y-start_y);
+			float tmp = SIGS_ACC(y,frame) - nn_avg;
+			if(tmp != tmp)
+				tmp=0;
+			NOISE_ACC(y,frame) = tmp;
+		}
+	}
+}
+
 

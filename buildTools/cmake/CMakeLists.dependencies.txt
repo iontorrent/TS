@@ -92,10 +92,10 @@ mark_as_advanced(ION_USE_SYSTEM_BOOST)
 option(ION_USE_SYSTEM_PICARD "Use picard system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_PICARD)
 
-set(cuda_proj_version "7.5.18-19867135")
-set(cuda_toolkit_tar_file "cuda-linux64-rel-7.5.18-19867135.tar.gz")
-set(cuda_toolkit_patch_file "cuda_toolkit-7.5.18.patch")
-set(CUDA_VERSION "7.5")
+set(cuda_proj_version "8.0.44-21122537")
+set(cuda_toolkit_tar_file "cuda-linux64-16.04-rel-8.0.44-21122537.tar.gz")
+set(CUDA_VERSION "8.0")
+
 
 set(cuda_toolkit "cuda_toolkit")
 set(cuda_toolkit_version "${cuda_toolkit}-${cuda_proj_version}")
@@ -118,7 +118,7 @@ if(ION_USE_CUDA)
             CONFIGURE_COMMAND ""
             BUILD_COMMAND ""
             INSTALL_COMMAND ""
-            PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/${cuda_toolkit_patch_file}"
+            #PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/${cuda_toolkit_patch_file}"
         )
 
 
@@ -156,18 +156,19 @@ if(NOT ION_USE_SYSTEM_HDF5)
     --prefix=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
   )
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
-  set(ION_HDF5_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libhdf5.a")
-  set(ION_HDF5_HL_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libhdf5_hl.a")
+  set(HDF5_LIBRARIES "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libhdf5.a")
+  set(HDF5_HL_LIBRARIES "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libhdf5_hl.a")
+  set(ION_HDF5_LIBS "${HDF5_HL_LIBRARIES};${HDF5_LIBRARIES}")
 else()
   add_custom_target(hdf5_proj)
-  set(HDF5_USE_STATIC_LIBRARIES True)
+  set(HDF5_USE_STATIC_LIBRARIES OFF)
   find_package(HDF5 REQUIRED)
   if (${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
       ${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
       ${LSB_RELEASE_CODENAME} STREQUAL "xenial")
-    set(ION_HDF5_LIBS "hdf5;${HDF5_LIBRARIES}")
+    set(ION_HDF5_LIBS "hdf5;hdf5_hl;${HDF5_LIBRARIES}")
   else()
-    set(ION_HDF5_LIBS "${HDF5_LIBRARIES}")
+    set(ION_HDF5_LIBS "${HDF5_HL_LIBRARIES};${HDF5_LIBRARIES}")
   endif()
   if (${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
       ${LSB_RELEASE_CODENAME} STREQUAL "xenial")

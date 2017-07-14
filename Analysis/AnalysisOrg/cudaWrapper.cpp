@@ -124,8 +124,9 @@ void gpuDeviceConfig::initDeviceContexts(){
       it++;
     }
     catch(cudaException &e) {
+      //throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
       cout << e.what() << endl;
-      cout << "CUDA "<< *it << ": Context could not be created. Can't use this GPU." << *it << endl;
+      cout << "CUDA "<< *it << ": gpuDeviceConfig::initDeviceContexts: Context could not be created. removing device with id: "<<  *it << " from valid device list" << endl;
       it = validDevices.erase (it);
     }
   }
@@ -196,7 +197,7 @@ bool gpuDeviceConfig::setValidDevices(std::vector<int> &CmdlineDeviceList, bool 
 
   initDeviceContexts();
 
-  if(! validDevices.size() > 0 )
+  if(! (validDevices.size() > 0) )
     cout << "CUDA: gpuDeviceConfig: no context could be created, defaulting to CPU only execution" << endl;
   else
     cudaSetValidDevices( &validDevices[0], int( validDevices.size()));

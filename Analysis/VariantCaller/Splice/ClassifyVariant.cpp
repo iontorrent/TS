@@ -6,7 +6,7 @@
 
 #include "ClassifyVariant.h"
 #include "ErrorMotifs.h"
-#include "StackEngine.h"
+#include "CrossHypotheses.h"
 
 // This function only works for the 1Base -> 1 Base snp representation
 void AlleleIdentity::SubCategorizeSNP(const LocalReferenceContext &reference_context) {
@@ -202,35 +202,26 @@ void AlleleIdentity::SubCategorizeMNP(const LocalReferenceContext &reference_con
 // Test whether this is an HP-InDel
 void AlleleIdentity::IdentifyHPdeletion(const LocalReferenceContext& reference_context) {
 
-  // Get right anchor for better HP-InDel classification
-  right_anchor = 0;
-  // It's a deletion, so reference allele must be longer than alternative allele
-  int shorter_test_pos = altAllele.length() - 1;
-  int longer_test_pos  = reference_context.reference_allele.length() - 1;
-  while (shorter_test_pos >= left_anchor and
-         altAllele[shorter_test_pos] == reference_context.reference_allele[longer_test_pos]) {
-    right_anchor++;
-    shorter_test_pos--;
-    longer_test_pos--;
-  }
-
-  if (left_anchor+right_anchor < (int)altAllele.length()){
+  if (left_anchor+right_anchor != (int) altAllele.length()){
     // If the anchors do not add up to the length of the shorter allele,
     // a more complex substitution happened and we don't classify as HP-InDel
     status.isHPIndel = false;
   }
   else {
-    status.isHPIndel = reference_context.my_hp_length[left_anchor] > 1;
-    for (int i_base=left_anchor+1; (status.isHPIndel and i_base<(int)reference_context.reference_allele.length()-right_anchor); i_base++){
-	    status.isHPIndel = status.isHPIndel and (reference_context.my_hp_length[left_anchor] > 1);
-    }
+    //status.isHPIndel = (left_anchor+right_anchor) == (int) altAllele.length();
+    //for (int i_base=left_anchor+1; (status.isHPIndel and i_base<(int)reference_context.reference_allele.length()-right_anchor); i_base++){
+	//    status.isHPIndel = status.isHPIndel and (reference_context.my_hp_length[left_anchor] > 1);
+    //}
+	  string padding_ref = string(1, reference_context.ref_left_hp_base) + reference_context.reference_allele + string(1, reference_context.ref_right_hp_base);
+	  string padding_alt = string(1, reference_context.ref_left_hp_base) + altAllele + string(1, reference_context.ref_right_hp_base);
+	  status.isHPIndel = IsHpIndel(padding_ref, padding_alt);
   }
-  inDelLength = reference_context.reference_allele.length() - altAllele.length();
+  inDelLength = abs((int) reference_context.reference_allele.length() - (int) altAllele.length());
 }
 
 // Test whether this is an HP-InDel
 void AlleleIdentity::IdentifyHPinsertion(const LocalReferenceContext& reference_context,
-    const ReferenceReader &ref_reader, int chr_idx) {
+    const ReferenceReader &ref_reader) {
 
   char ref_base_right_of_anchor;
   int ref_right_hp_length = 0;
@@ -254,7 +245,7 @@ void AlleleIdentity::IdentifyHPinsertion(const LocalReferenceContext& reference_
     status.isHPIndel = true;
     ref_hp_length = ref_right_hp_length;
   }
-  inDelLength  = altAllele.length() - reference_context.reference_allele.length();
+  inDelLength  = abs((int) altAllele.length() - (int) reference_context.reference_allele.length());
 
   if (status.isHPIndel) {
     for (int b_idx = left_anchor + 1; b_idx < left_anchor + inDelLength; b_idx++) {
@@ -263,7 +254,7 @@ void AlleleIdentity::IdentifyHPinsertion(const LocalReferenceContext& reference_
     }
   } else if (inDelLength == 1) {
     status.isHPIndel = IdentifyDyslexicMotive(altAllele[left_anchor], reference_context.position0+left_anchor,
-        ref_reader, chr_idx);
+        ref_reader, reference_context.chr_idx);
   }
 }
 
@@ -318,7 +309,7 @@ bool AlleleIdentity::IdentifyDyslexicMotive(char base, int position,
 
 // We categorize InDels
 bool AlleleIdentity::SubCategorizeInDel(const LocalReferenceContext& reference_context,
-    const ReferenceReader &ref_reader, int chr_idx) {
+    const ReferenceReader &ref_reader) {
 
   // These fields are set no matter what
   status.isDeletion  = (reference_context.reference_allele.length() > altAllele.length());
@@ -329,7 +320,7 @@ bool AlleleIdentity::SubCategorizeInDel(const LocalReferenceContext& reference_c
 	ref_hp_length = reference_context.my_hp_length[left_anchor];
   }
   else { // Insertion
-    IdentifyHPinsertion(reference_context, ref_reader, chr_idx);
+    IdentifyHPinsertion(reference_context, ref_reader);
   }
 
   if (DEBUG > 0){
@@ -345,7 +336,7 @@ bool AlleleIdentity::SubCategorizeInDel(const LocalReferenceContext& reference_c
 
 
 bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &reference_context,
-    const ReferenceReader &ref_reader, int chr_idx)
+    const ReferenceReader &ref_reader)
 {
   //cout << "Hello from CharacterizeVariantStatus; " << altAllele << endl;
   bool is_ok = true;
@@ -356,37 +347,58 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
   status.isPaddedSNP   = false;
   status.doRealignment = false;
 
-  // Get Anchor length
+  if (altAllele == reference_context.reference_allele){
+	  status.isNoVariant = true;
+	  status.isProblematicAllele = true;
+	  status.isSNP = (altAllele.size() == 1);
+	  status.isMNV = not (status.isSNP);
+	  is_ok = false;
+	  // I don't want to continue since it is not a variant.
+	  return is_ok;
+  }
+
+  // Get left anchor length
   ref_hp_length = reference_context.my_hp_length[0];
   left_anchor = 0;
-  unsigned int a_idx = 0;
-  while (a_idx < altAllele.length() and a_idx < reference_context.reference_allele.length()
-         and altAllele[a_idx] == reference_context.reference_allele[a_idx]) {
-    a_idx++;
-    left_anchor++;
+  while (left_anchor < (int) altAllele.length() and left_anchor < ref_length
+         and altAllele[left_anchor] == reference_context.reference_allele[left_anchor]) {
+    ++left_anchor;
   }
+  // Get right anchor length
+  // right anchor is obtained after I remove left anchor, which implies I prefer left alignment.
+  right_anchor = 0;
+  // It's a deletion, so reference allele must be longer than alternative allele
+  int alt_test_pos = (int) altAllele.length() - 1;
+  int ref_test_pos  = ref_length - 1;
+  while (alt_test_pos >= left_anchor
+		  and ref_test_pos >= left_anchor
+		  and altAllele[alt_test_pos] == reference_context.reference_allele[ref_test_pos]) {
+    right_anchor++;
+    alt_test_pos--;
+    ref_test_pos--;
+  }
+  // Calculate the variant window (in reference coordinate)
+  start_variant_window = position0 + num_padding_added.first;
+  end_variant_window = position0 + ref_length - num_padding_added.second;
+  if (num_padding_added.first > 0 or num_padding_added.second > 0){
+	  assert(reference_context.reference_allele.substr(0, num_padding_added.first) == altAllele.substr(0,  num_padding_added.first));
+	  assert(reference_context.reference_allele.substr((int) reference_context.reference_allele.size() -  num_padding_added.second) == altAllele.substr((int) altAllele.size() - num_padding_added.second));
+	  assert(start_variant_window < end_variant_window);
+  }
+
   if (DEBUG > 0)
-    cout << "- Alternative Allele " << altAllele << " (anchor length " << left_anchor << ") ";
+    cout << "- Alternative Allele " << altAllele << " (left anchor length = " << left_anchor << " , right anchor length = " << right_anchor << ")";
 
-
-  const string& ref_allele = reference_context.reference_allele;
-  const string& alt_allele = altAllele;
-  int ref_length = ref_allele.length();
-  int alt_length = alt_allele.length();
-  while (alt_length > 1 and ref_length > 1 and alt_allele[alt_length-1] == ref_allele[ref_length-1]) {
-    --alt_length;
-    --ref_length;
-  }
-  int prefix = 0;
-  while (prefix < alt_length and prefix < ref_length and alt_allele[prefix] == ref_allele[prefix])
-    ++prefix;
-  ref_length -= prefix;
-  alt_length -= prefix;
+  // ref_length is the length of the anchor-removed reference allele
+  int ref_length = (int) reference_context.reference_allele.length() - (left_anchor + right_anchor);
+  // alt_length is the length of the anchor-removed alt allele
+  int alt_length = (int) altAllele.length() - (left_anchor + right_anchor);
+  assert(ref_length >= 0 and alt_length >= 0);
 
   // Change classification to better reflect what we can get with haplotyping
   if (altAllele.length() != reference_context.reference_allele.length()) {
     status.isIndel = true;
-    is_ok = SubCategorizeInDel(reference_context, ref_reader, chr_idx);
+    is_ok = SubCategorizeInDel(reference_context, ref_reader);
 
   } else if ((int)altAllele.length() == 1) { // Categorize function only works with this setting
     status.isSNP = true;
@@ -396,8 +408,7 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
   } else {
     status.isMNV = true;
     ref_hp_length = reference_context.my_hp_length[left_anchor];
-    if (ref_length == 1 and alt_length == 1)
-      status.isPaddedSNP = true;
+    status.isPaddedSNP = (ref_length == 1 and alt_length == 1);
     SubCategorizeMNP(reference_context);
     if (DEBUG > 0)
       cout << " is an MNP." << endl;
@@ -434,28 +445,34 @@ bool AlleleIdentity::getVariantType(
   const TIonMotifSet & ErrorMotifs,
   const ClassifyFilters &filter_variant,
   const ReferenceReader &ref_reader,
-  int chr_idx) {
+  const pair<int, int> &alt_orig_padding) {
 
   altAllele = _altAllele;
-  bool is_ok = reference_context.context_detected;
+  position0 = (int) reference_context.position0;
+  ref_length = (int) reference_context.reference_allele.length();
+  chr_idx = reference_context.chr_idx;
+  num_padding_added = alt_orig_padding;
 
-  if ((reference_context.position0 + (long)altAllele.length()) > ref_reader.chr_size(chr_idx)) {
-    is_ok = false;
-  }
+  bool is_ok = reference_context.context_detected;
+  // check position does not beyond the chromosome
+  is_ok *=  not ((reference_context.position0 + (long) altAllele.length()) > ref_reader.chr_size(reference_context.chr_idx));
+
+  // check alternative allele contains TACG only
+  is_ok *= CheckValidAltAllele(reference_context);
 
   // We should now be guaranteed a valid variant position in here
   if (is_ok) {
-    is_ok = CharacterizeVariantStatus(reference_context, ref_reader, chr_idx);
-    PredictSequenceMotifSSE(reference_context, ErrorMotifs, ref_reader, chr_idx);
+    is_ok = CharacterizeVariantStatus(reference_context, ref_reader);
   }
-  is_ok = is_ok and CheckValidAltAllele(reference_context);
 
-  if (!is_ok) {
+  if (is_ok) {
+    PredictSequenceMotifSSE(reference_context, ErrorMotifs, ref_reader);
+  }else{
     status.isProblematicAllele = true;
     filterReasons.push_back("BADCANDIDATE");
   }
 
-  return(is_ok);
+  return is_ok;
 }
 
 
@@ -474,54 +491,45 @@ void AlleleIdentity::ModifyStartPosForAllele(int variantPos) {
 // Logic: When shifting a window of the same period as the MNR, the base entering the window has to be equal to the base leaving the window.
 // example with period 2: XYZACACA|CA|CACAIJK
 bool AlleleIdentity::IdentifyMultiNucRepeatSection(const LocalReferenceContext &seq_context, unsigned int rep_period,
-    const ReferenceReader &ref_reader, int chr_idx) {
+    const ReferenceReader &ref_reader) {
 
   //cout << "Hello from IdentifyMultiNucRepeatSection with period " << rep_period << "!"<< endl;
   unsigned int variantPos = seq_context.position0 + left_anchor;
-  if (variantPos + rep_period >= (unsigned long)ref_reader.chr_size(chr_idx))
-    return (false);
+  if (variantPos + rep_period >= (unsigned long)ref_reader.chr_size(seq_context.chr_idx))
+    return false;
 
-  CircluarBuffer<char> window(rep_period);
-  for (unsigned int idx = 0; idx < rep_period; idx++)
-    window.assign(idx, ref_reader.base(chr_idx,variantPos+idx));
-
-  // Investigate (inclusive) start position of MNR region
-  start_window = variantPos - 1; // 1 anchor base
-  window.shiftLeft(1);
-  while (start_window > 0 and window.first() == ref_reader.base(chr_idx,start_window)) {
-    start_window--;
-    window.shiftLeft(1);
-  }
+  CircluarBuffer<char> window(0);
+  start_splicing_window = seq_context.FindSplicingStartForMNR(ref_reader, variantPos, rep_period, window);
 
   // Investigate (exclusive) end position of MNR region
-  end_window = variantPos + rep_period;
-  if (end_window >= ref_reader.chr_size(chr_idx))
+  end_splicing_window = variantPos + rep_period;
+  if (end_splicing_window >= ref_reader.chr_size(seq_context.chr_idx))
     return false;
   for (unsigned int idx = 0; idx < rep_period; idx++)
-    window.assign(idx, ref_reader.base(chr_idx,variantPos+idx));
+    window.assign(idx, ref_reader.base(seq_context.chr_idx,variantPos+idx));
   window.shiftRight(1);
-  while (end_window < ref_reader.chr_size(chr_idx) and window.last() == ref_reader.base(chr_idx,end_window)) {
-    end_window++;
+  while (end_splicing_window < ref_reader.chr_size(seq_context.chr_idx) and window.last() == ref_reader.base(seq_context.chr_idx,end_splicing_window)) {
+    end_splicing_window++;
     window.shiftRight(1);
   }
 
   //cout << "Found repeat stretch of length: " << (end_window - start_window) << endl;
   // Require that a stretch of at least 3*rep_period has to be found to count as a MNR
-  if ((end_window - start_window) >= (3*(int)rep_period)) {
+  if ((end_splicing_window - start_splicing_window) >= (3*(int)rep_period)) {
 
     // Correct start and end of the window if they are not fully outside variant allele
-    if (start_window >= seq_context.position0)
-        start_window = seq_context.my_hp_start_pos[0] - 1;
-    if (end_window <= seq_context.right_hp_start) {
+    if (start_splicing_window >= seq_context.position0)
+        start_splicing_window = seq_context.StartSplicingExpandFromMyHpStart0();
+    if (end_splicing_window <= seq_context.right_hp_start) {
       if (status.isInsertion)
-        end_window = seq_context.right_hp_start + seq_context.right_hp_length + 1;
+        end_splicing_window = seq_context.right_hp_start + seq_context.right_hp_length + 1;
       else
-        end_window = seq_context.right_hp_start + 1;
+        end_splicing_window = seq_context.right_hp_start + 1;
     }
-    if (start_window < 0)
-      start_window = 0;
-    if (end_window > ref_reader.chr_size(chr_idx))
-      end_window = ref_reader.chr_size(chr_idx);
+    if (start_splicing_window < 0)
+      start_splicing_window = 0;
+    if (end_splicing_window > ref_reader.chr_size(seq_context.chr_idx))
+      end_splicing_window = ref_reader.chr_size(seq_context.chr_idx);
     return (true);
   }
   else
@@ -532,26 +540,27 @@ bool AlleleIdentity::IdentifyMultiNucRepeatSection(const LocalReferenceContext &
 // -----------------------------------------------------------------
 
 
-void AlleleIdentity::CalculateWindowForVariant(const LocalReferenceContext &seq_context, int DEBUG,
-    const ReferenceReader &ref_reader, int chr_idx) {
+void AlleleIdentity::CalculateWindowForVariant(const LocalReferenceContext &seq_context,
+    const ReferenceReader &ref_reader) {
 
   // If we have an invalid vcf candidate, set a length zero window and exit
   if (!seq_context.context_detected or status.isProblematicAllele) {
-    start_window = seq_context.position0;
-    end_window = seq_context.position0;
+	  cout <<" I am probematic!" <<endl;
+    start_splicing_window = seq_context.StartSplicingNoExpansion();
+    end_splicing_window = seq_context.position0;
     return;
   }
 
   // Check for MNRs first, for InDelLengths 2,3,4,5
   if (status.isIndel and !status.isHPIndel and inDelLength < 5)
-    for (int rep_period = 2; rep_period < 6; rep_period++)
-      if (IdentifyMultiNucRepeatSection(seq_context, rep_period, ref_reader, chr_idx)) {
+    for (int rep_period = seq_context.min_mnr_rep_period; rep_period <= seq_context.max_mnr_rep_period; rep_period++)
+      if (IdentifyMultiNucRepeatSection(seq_context, rep_period, ref_reader)) {
         if (DEBUG > 0) {
           cout << "MNR found in allele " << seq_context.reference_allele << " -> " << altAllele << endl;
-          cout << "Window for allele " << altAllele << ": (" << start_window << ") ";
-          for (int p_idx = start_window; p_idx < end_window; p_idx++)
-            cout << ref_reader.base(chr_idx,p_idx);
-          cout << " (" << end_window << ") " << endl;
+          cout << "Window for allele " << altAllele << ": (" << start_splicing_window << ") ";
+          for (int p_idx = start_splicing_window; p_idx < end_splicing_window; p_idx++)
+            cout << ref_reader.base(seq_context.chr_idx,p_idx);
+          cout << " (" << end_splicing_window << ") " << endl;
         }
         return; // Found a matching period and computed window
       }
@@ -559,44 +568,47 @@ void AlleleIdentity::CalculateWindowForVariant(const LocalReferenceContext &seq_
   // not an MNR. Moving on along to InDels.
   if (status.isIndel) {
 	// Default variant window
-    end_window = seq_context.right_hp_start +1; // Anchor base to the right of allele
-    start_window = seq_context.position0;
+    end_splicing_window = seq_context.right_hp_start +1; // Anchor base to the right of allele
+    start_splicing_window = seq_context.StartSplicingNoExpansion();
 
     // Adjustments if necessary
     if (status.isDeletion)
       if (seq_context.my_hp_start_pos[left_anchor] == seq_context.my_hp_start_pos[0])
-        start_window = seq_context.my_hp_start_pos[0] - 1;
+        start_splicing_window = seq_context.StartSplicingExpandFromMyHpStart0();
 
     if (status.isInsertion) {
       if (left_anchor == 0) {
-        start_window = seq_context.my_hp_start_pos[0] - 1;
+        start_splicing_window = seq_context.StartSplicingExpandFromMyHpStart0();
       }
       else if (altAllele[left_anchor] == altAllele[left_anchor - 1] and
           seq_context.position0 > (seq_context.my_hp_start_pos[left_anchor - 1] - 1)) {
-        start_window = seq_context.my_hp_start_pos[left_anchor - 1] - 1;
+        start_splicing_window = seq_context.StartSplicingExpandFromMyHpStartLeftAnchor(left_anchor);
       }
       if (altAllele[altAllele.length() - 1] == seq_context.ref_right_hp_base) {
-        end_window += seq_context.right_hp_length;
+        end_splicing_window += seq_context.right_hp_length;
       }
     }
 
     // Safety
-    if (start_window < 0)
-      start_window = 0;
-    if (end_window > ref_reader.chr_size(chr_idx))
-      end_window = ref_reader.chr_size(chr_idx);
+    if (start_splicing_window < 0)
+      start_splicing_window = 0;
+    if (end_splicing_window > ref_reader.chr_size(seq_context.chr_idx))
+      end_splicing_window = ref_reader.chr_size(seq_context.chr_idx);
   }
   else {
     // SNPs and MNVs are 1->1 base replacements
-    start_window = seq_context.position0;
-    end_window = seq_context.position0 + seq_context.reference_allele.length();
-  } // */
+    start_splicing_window = seq_context.StartSplicingNoExpansion();
+    end_splicing_window = seq_context.position0 + seq_context.reference_allele.length();
+  }
+
+  // Final safety: splicing window is a super set of the interval spanned by the reference allele.
+  assert(start_splicing_window <= (int) seq_context.position0 and end_splicing_window >= (int) seq_context.position0 + (int) seq_context.reference_allele.length());
 
   if (DEBUG > 0) {
-    cout << "Window for allele " << altAllele << ": (" << start_window << ") ";
-    for (int p_idx = start_window; p_idx < end_window; p_idx++)
-      cout << ref_reader.base(chr_idx,p_idx);
-    cout << " (" << end_window << ") " << endl;
+    cout << "Window for allele " << altAllele << ": (" << start_splicing_window << ") ";
+    for (int p_idx = start_splicing_window; p_idx < end_splicing_window; p_idx++)
+      cout << ref_reader.base(seq_context.chr_idx,p_idx);
+    cout << " (" << end_splicing_window << ") " << endl;
   }
 }
 
@@ -606,7 +618,7 @@ void AlleleIdentity::CalculateWindowForVariant(const LocalReferenceContext &seq_
 
 void AlleleIdentity::PredictSequenceMotifSSE(const LocalReferenceContext &reference_context,
                              const TIonMotifSet & ErrorMotifs,
-                             const ReferenceReader &ref_reader, int chr_idx) {
+                             const ReferenceReader &ref_reader) {
 
   //cout << "Hello from PredictSequenceMotifSSE" << endl;
   sse_prob_positive_strand = 0;
@@ -622,7 +634,7 @@ void AlleleIdentity::PredictSequenceMotifSSE(const LocalReferenceContext &refere
 
     unsigned context_left = var_position >= 10 ? 10 : var_position;
     //if (var_position + reference_context.my_hp_length.at(left_anchor) + 10 < ref_reader.chr_size(chr_idx))
-      seqContext = ref_reader.substr(chr_idx, var_position - context_left, context_left + (unsigned int)reference_context.my_hp_length[left_anchor] + 10);
+      seqContext = ref_reader.substr(reference_context.chr_idx, var_position - context_left, context_left + (unsigned int)reference_context.my_hp_length[left_anchor] + 10);
     //  else
     //  seqContext = ref_reader.substr(chr_idx, var_position - context_left);
 
@@ -651,104 +663,163 @@ void AlleleIdentity::DetectLongHPThresholdCases(const LocalReferenceContext &seq
   }
 }
 
+void AlleleIdentity::DetectHpIndelCases(const vector<int> &hp_indel_hrun, const vector<int> &hp_ins_len, const vector<int> &hp_del_len) {
+	if (status.isIndel && status.isHPIndel and inDelLength > 0) {
+		assert((hp_indel_hrun.size() == hp_ins_len.size()) and (hp_indel_hrun.size() == hp_del_len.size()));
+		for (unsigned int i_hp = 0; i_hp < hp_indel_hrun.size(); ++i_hp) {
+			if (ref_hp_length == hp_indel_hrun[i_hp]){
+				if (status.isInsertion and inDelLength <= hp_ins_len[i_hp]){
+				    filterReasons.push_back("HPINSLEN");
+				    status.isProblematicAllele = true;
+				}
+				else if (status.isDeletion and inDelLength <= hp_del_len[i_hp]){
+				    filterReasons.push_back("HPDELLEN");
+				    status.isProblematicAllele = true;
+				}
+			}
+		}
+	}
+}
+
+
 void AlleleIdentity::DetectNotAVariant(const LocalReferenceContext &seq_context) {
-  if (altAllele.compare(seq_context.reference_allele) == 0) {
+  if (status.isNoVariant) {
     //incorrect allele status is passed thru make it a no call
     status.isProblematicAllele = true;
     filterReasons.push_back("NOTAVARIANT");
   }
 }
 
-
-void AlleleIdentity::DetectCasesToForceNoCall(const LocalReferenceContext &seq_context, const ClassifyFilters &filter_variant,
+void AlleleIdentity::DetectCasesToForceNoCall(const LocalReferenceContext &seq_context, const ControlCallAndFilters& my_controls,
     const VariantSpecificParams& variant_specific_params)
 {
   DetectNotAVariant(seq_context);
   DetectLongHPThresholdCases(seq_context, variant_specific_params.hp_max_length_override ?
-      variant_specific_params.hp_max_length : filter_variant.hp_max_length);
+			  variant_specific_params.hp_max_length : my_controls.filter_variant.hp_max_length);
+  DetectHpIndelCases(my_controls.filter_variant.filter_hp_indel_hrun, my_controls.filter_variant.filter_hp_ins_len, my_controls.filter_variant.filter_hp_del_len);
 }
+
 
 // ====================================================================
 
 
-void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
-                                                 const InputStructures  &global_context,
-                                                 const ReferenceReader &ref_reader,
-                                                 int chr_idx)
+
+
+// win_1 = [win1_start, win1_end), win_2 = [win2_start, win2_end),
+// return (win_1 \cap win_2 != \emptyset) where \cap is the set intersection operator.
+template <typename MyIndexType>
+bool IsOverlappingWindows(MyIndexType win1_start, MyIndexType win1_end, MyIndexType win2_start, MyIndexType win2_end)
 {
-  seq_context.DetectContext(*variant, global_context.DEBUG, ref_reader, chr_idx);
-  allele_identity_vector.resize(variant->alt.size());
-
-  if (global_context.DEBUG > 0 and variant->alt.size()>0) {
-    cout << "Investigating variant candidate " << seq_context.reference_allele
-         << " -> " << variant->alt[0];
-    for (uint8_t i_allele = 1; i_allele < allele_identity_vector.size(); i_allele++)
-      cout << ',' << variant->alt[i_allele];
-    cout << endl;
-  }
-
-  //now calculate the allele type (SNP/Indel/MNV/HPIndel etc.) and window for hypothesis calculation for each alt allele.
-  for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
-
-    // TODO: Hotspot should be an allele property but we only set all or none to Hotspots, depending on the vcf record
-    allele_identity_vector[i_allele].status.isHotSpot = variant->isHotSpot;
-    allele_identity_vector[i_allele].filterReasons.clear();
-    allele_identity_vector[i_allele].DEBUG = global_context.DEBUG;
-
-    allele_identity_vector[i_allele].indelActAsHPIndel = parameters.my_controls.filter_variant.indel_as_hpindel;
-
-    allele_identity_vector[i_allele].getVariantType(variant->alt[i_allele], seq_context,
-        global_context.ErrorMotifs,  parameters.my_controls.filter_variant, ref_reader, chr_idx);
-    allele_identity_vector[i_allele].CalculateWindowForVariant(seq_context, global_context.DEBUG, ref_reader, chr_idx);
-  }
-
-  //GetMultiAlleleVariantWindow();
-  multiallele_window_start = -1;
-  multiallele_window_end   = -1;
-
-
-  // Mark Ensemble for realignment if any of the possible variants should be realigned
-  // TODO: Should we exclude already filtered alleles?
-  for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
-    //if (!allele_identity_vector[i_allele].status.isNoCallVariant) {
-    if (allele_identity_vector[i_allele].start_window < multiallele_window_start or multiallele_window_start == -1)
-      multiallele_window_start = allele_identity_vector[i_allele].start_window;
-    if (allele_identity_vector[i_allele].end_window > multiallele_window_end or multiallele_window_end == -1)
-      multiallele_window_end = allele_identity_vector[i_allele].end_window;
-
-    if (allele_identity_vector[i_allele].ActAsSNP() && parameters.my_controls.filter_variant.do_snp_realignment) {
-      doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
-    }
-    if (allele_identity_vector[i_allele].ActAsMNP() && parameters.my_controls.filter_variant.do_mnp_realignment) {
-      doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
-    }
-  }
-  // Hack: pass allele windows back down the object
-  for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
-    allele_identity_vector[i_allele].start_window = multiallele_window_start;
-    allele_identity_vector[i_allele].end_window = multiallele_window_end;
-  }
-
-
-  if (global_context.DEBUG > 0) {
-	cout << "Realignment for this candidate is turned " << (doRealignment ? "on" : "off") << endl;
-    cout << "Final window for multi-allele: " << ": (" << multiallele_window_start << ") ";
-    for (int p_idx = multiallele_window_start; p_idx < multiallele_window_end; p_idx++)
-      cout << ref_reader.base(chr_idx,p_idx);
-    cout << " (" << multiallele_window_end << ") " << endl;
-  }
+	if (win1_start >= win1_end or win2_start >= win2_end){
+		// win_1 or win_2 is an empty set => empty set intersects any set is always empty
+		return false;
+	}
+	return (win1_start < win2_end) and (win1_end > win2_start);
 }
 
-// ------------------------------------------------------------
-
-void EnsembleEval::FilterAllAlleles(const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params) {
-  if (seq_context.context_detected) {
-    for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
-      allele_identity_vector[i_allele].DetectCasesToForceNoCall(seq_context, filter_variant, variant_specific_params[i_allele]);
-    }
-  }
+// Is there splicing hazard of this allele interfered by alt_x?
+// Splicing hazard happened if the (my splicing window) \cap (my variant window)^c overlaps (alt_x's variant window)
+// where \cap means intersection, ^c means complement.
+bool AlleleIdentity::DetectSplicingHazard(const AlleleIdentity& alt_x) const{
+	bool is_splicing_hazard = IsOverlappingWindows(start_splicing_window, start_variant_window, alt_x.start_variant_window, alt_x.end_variant_window)
+				or  IsOverlappingWindows(end_variant_window, end_splicing_window, alt_x.start_variant_window, alt_x.end_variant_window);
+	return is_splicing_hazard;
 }
 
+// The two alleles are connected (i.e., need to be evaluated together) if any of the following conditions is satisfied
+// a) (variant window of alt1) intersects (variant window of alt2)
+// b) There is splicing hazard of alt1 interfered by alt2.
+// c) There is splicing hazard of alt2 interfered by alt1.
+// Note: Fake HS allele means the HS allele has no read support. It won't interfere other alleles. But I need to make sure other alleles don't interfere it.
+bool IsAllelePairConnected(const AlleleIdentity& alt1, const AlleleIdentity& alt2)
+{
+	bool debug = alt1.DEBUG or alt2.DEBUG;
+    // Alleles start at the same position should be evaluated together.
+	bool is_connect = alt1.start_variant_window == alt2.start_variant_window;
 
+	// Print the allele information for debug
+	if (debug){
+		cout << "+ Detecting connectivity of the allele pair (altX, altY) = ("
+			 << alt1.altAllele << "@[" << alt1.position0 << ", " <<  alt1.position0 + alt1.ref_length << "), "
+			 << alt2.altAllele << "@[" << alt2.position0 << ", " <<  alt2.position0 + alt2.ref_length << "))" << endl;
+		cout << "  - (altX, altY) is Fake HS Allele? (" << alt1.status.isFakeHsAllele << ", " << alt2.status.isFakeHsAllele <<")" << endl;
+	}
 
+	// Rule number one: start at the same position must be connected.
+	if (is_connect){
+		if (debug){
+			cout << "  - Connected: altX and altY start at the same position." << endl;
+		}
+		return is_connect;
+	}
+
+	// Exception for problematic alleles
+	if (alt1.status.isProblematicAllele or alt2.status.isProblematicAllele){
+		if (debug){
+			cout << (is_connect? "  - Connected: altX or altY is problematic at the same position." : "  - Not connected: altX or altY is problematic.") << endl;
+		}
+		return is_connect;
+	}
+
+	// Exceptions for Fake HS alleles
+	if (alt1.status.isFakeHsAllele and alt2.status.isFakeHsAllele){
+		if (debug){
+			cout << (is_connect? "  - Connected: both fake HS at the same position." : "  - Not connected: both fake HS." ) << endl;
+		}
+		return is_connect;
+	}else if (alt1.status.isFakeHsAllele and alt1.ref_length >= 10 and (not alt1.status.doRealignment)
+				and alt2.status.isHPIndel and alt2.inDelLength == 1){
+		if (debug){
+			cout << (is_connect? "  - Connected: altX and altY start at the same position." : "  - Not connected: long Fake HS altX meets 1-mer HP-INDEL altY." ) << endl;
+		}
+		return is_connect;
+	}else if (alt2.status.isFakeHsAllele and alt2.ref_length >= 10 and (not alt2.status.doRealignment)
+				and alt1.status.isHPIndel and alt1.inDelLength == 1){
+		if (debug){
+			cout << (is_connect? "  - Connected: altX and altY start at the same position." : "  - Not connected: 1-mer HP-INDEL altX meets long Fake HS altY." ) << endl;
+		}
+		return is_connect;
+	}
+
+	// Condition a)
+	bool is_variant_window_overlap = IsOverlappingWindows(alt1.start_variant_window, alt1.end_variant_window, alt2.start_variant_window, alt2.end_variant_window);
+	// Condition b)
+	bool is_alt1_interfered_by_alt2 = false;
+	if (not alt2.status.isFakeHsAllele){
+		is_alt1_interfered_by_alt2 = alt1.DetectSplicingHazard(alt2);
+	}
+	// Condition c)
+	bool is_alt2_interfered_by_alt1 = false;
+	if (not alt1.status.isFakeHsAllele){
+		is_alt2_interfered_by_alt1 = alt2.DetectSplicingHazard(alt1);
+	}
+	is_connect = is_variant_window_overlap or is_alt1_interfered_by_alt2 or is_alt2_interfered_by_alt1;
+
+	// Print debug message
+	if (debug){
+		if (not is_connect){
+			cout << "  - Not connected." << endl;
+		}
+		else{
+			if (is_variant_window_overlap){
+				cout << "  - Connected: Overlapping variant windows: "
+					 <<	"var_win_X = [" << alt1.start_variant_window << ", "<< alt1.end_variant_window << "), "
+					 << "var_win_Y = [" << alt2.start_variant_window << ", "<< alt2.end_variant_window << ")" << endl;
+			}
+			if (is_alt1_interfered_by_alt2){
+				cout << "  - Connected: Splicing hazard of altX interfered by altY: "
+					 << "splice_win_X = [" << alt1.start_splicing_window << ", "<< alt1.end_splicing_window << "), "
+					 << "var_win_X = [" << alt1.start_variant_window << ", "<< alt1.end_variant_window << "), "
+					 << "var_win_Y = [" << alt2.start_variant_window << ", "<< alt2.end_variant_window << ")" << endl;
+			}
+			if (is_alt2_interfered_by_alt1){
+				cout << "  - Connected: Splicing hazard of altY interfered by altX: "
+					 <<	"splice_win_Y = [" << alt2.start_splicing_window << ", "<< alt2.end_splicing_window << "), "
+					 << "var_win_Y = [" << alt2.start_variant_window << ", "<< alt2.end_variant_window << "), "
+					 << "var_win_X = [" << alt1.start_variant_window << ", "<< alt1.end_variant_window << ")" << endl;
+			}
+		}
+	}
+	return is_connect;
+}
 

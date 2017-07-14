@@ -70,7 +70,7 @@
 
 # SPECIAL CASE: Only make this edit if /etc/sysctl.d/30-postgresql-shm.conf file exists
 - name: Test for {{ postgres_sysctl_file }}
-  stat: path="{{postgres_sysctl_file}}"
+  stat: path="{{ postgres_sysctl_file }}"
   register: p
 
 - name: Modify postgresql.conf - modify shared_buffers

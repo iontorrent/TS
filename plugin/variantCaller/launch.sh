@@ -8,7 +8,7 @@
 #ulimit -s 8192
 #$ -l mem_free=22G,h_vmem=22G,s_vmem=22G
 #normal plugin script
-VERSION="5.2.2.41"
+VERSION="5.4.0.46"
 
 echo ${DIRNAME}/variant_caller_plugin.py \
   --install-dir   ${DIRNAME} \

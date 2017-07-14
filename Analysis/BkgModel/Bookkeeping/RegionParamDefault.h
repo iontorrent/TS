@@ -23,8 +23,8 @@ struct RegionParamDefault{
   float tau_R_o_default;
   float tau_E_default;
   float min_tauB_default;
-
   float max_tauB_default;
+  float tauB_smooth_range_default;
   float tshift_default;
 
   float krate_default[NUMNUC];

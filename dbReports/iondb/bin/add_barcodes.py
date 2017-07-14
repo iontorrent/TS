@@ -13,7 +13,15 @@ from iondb.rundb.configure.views import _validate_barcode
 import sys
 
 
-def command_line_add_barcode(name, dest_path):
+def _get_new_or_db_barcode(name, index):
+    if (name and index):
+        barcodes = dnaBarcode.objects.filter(name = name, index = index)
+        if barcodes:
+            print ("db barcode FOUND for name=%s; index=%s" %(name, index))
+            return barcodes[0]
+    return dnaBarcode()
+
+def command_line_add_barcode(name, dest_path, is_override):
     """add the barcodes, with CSV validation"""
 
     # name = request.POST.get('name', '')
@@ -34,14 +42,21 @@ def command_line_add_barcode(name, dest_path):
         return
     expectedHeader = ["id_str", "type", "sequence", "floworder",
         "index", "annotation", "adapter", "score_mode", "score_cutoff"]
-    if sorted(firstCSV[0]) != sorted(expectedHeader):
-        print("Barcode csv header is not as expected. Please try again starting with the provided example")
-        return
+    ##if sorted(firstCSV[0]) != sorted(expectedHeader):
+    ##    print("Barcode csv header is not as expected. Please try again starting with the provided example")
+    ##    return
+
     # test if the barcode set name has been used before
     barCodeSet = dnaBarcode.objects.filter(name=name)
-    if barCodeSet:
-        print("Error: Barcode set with the same name already exists")
-        return
+    if barCodeSet and not is_override:
+        print("Nothing to do: Barcode set with the same name %s already exists" %name)
+        return True
+
+    is_override_option = is_override
+    if is_override and not barCodeSet:
+        is_override_option = False
+        
+    print(">>> Start processing barcode set %s" %name)
     index = 0
     barCodes = []
     failed = {}
@@ -52,7 +67,9 @@ def command_line_add_barcode(name, dest_path):
         if invalid:  # don't make dna object or add it to the list
             failed[index] = invalid
             continue
-        newBarcode = dnaBarcode()
+        
+        newBarcode = _get_new_or_db_barcode(name, index)
+
         newBarcode.name = name  # set the name
         newBarcode.index = index  # set index this can be overwritten later
         nucs = ["sequence", "floworder", "adapter"]  # fields that have to be uppercase
@@ -102,11 +119,24 @@ def command_line_add_barcode(name, dest_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: add_barcode.py NAME BARCODE_CSV_PATH")
+    if len(sys.argv) < 2 or len(sys.argv) > 4:
+        print("Usage: add_barcode.py BARCODE_KIT_NAME BARCODE_CSV_PATH or  add_barcode.py BARCODE_KIT_NAME BARCODE_CSV_PATH OVERRIDE")
         sys.exit(1)
-    name, path = sys.argv[1:3]
-    if command_line_add_barcode(name, path):
+
+    is_override = False
+    isDone = False
+    if len(sys.argv) == 3:
+        name, path = sys.argv[1:3]
+        if command_line_add_barcode(name, path, is_override):
+            isDone = True
+    elif len(sys.argv) == 4:
+        name, path, option = sys.argv[1:4]
+        is_override = (option.lower() == "override")
+        
+        if command_line_add_barcode(name, path, is_override):
+            isDone = True
+    
+    if isDone:
         print("Completed successfully")
         sys.exit(0)
     else:

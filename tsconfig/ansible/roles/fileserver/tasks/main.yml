@@ -9,6 +9,7 @@
 #============================================================================
 - name: /etc/resolv.conf needs to be symbolic link
   file: path=/etc/resolv.conf state=link src=/run/resolvconf/resolv.conf force=True
+  when: docker_image == False
   notify: resolvconf update
   tags: network-reset
 
@@ -33,16 +34,19 @@
 #============================================================================
 # network interfaces configuration
 #============================================================================
-- name: stop default network interface - {{default_interface}}
-  shell: bash -lc "ifdown {{default_interface}}"
+
+- name: stop default network interface - {{ default_interface }}
+  shell: bash -lc "ifdown {{ default_interface }}"
   tags: network-reset
   when: edit_interfaces|bool == True
+
 - name: Edit /etc/network/interfaces and restart networking
   template: src=interfaces.j2 dest=/etc/network/interfaces mode=0644 backup=yes
   tags: network-reset
   when: edit_interfaces|bool == True
-- name: start default network interface - {{default_interface}}
-  shell: bash -lc "ifup {{default_interface}}"
+
+- name: start default network interface - {{ default_interface }}
+  shell: bash -lc "ifup {{ default_interface }}"
   tags: network-reset
   when: edit_interfaces|bool == True
 
@@ -60,7 +64,7 @@
 
 # Create ftp user
 - name: initialize ftp system user
-  user: name={{ftp_username}} password={{ftp_password}} shell=/bin/sh update_password=on_create state=present
+  user: name={{ ftp_username }} password={{ ftp_password }} shell=/bin/sh update_password=on_create state=present
 
 - name: Test if DenyUsers directive exists
   command: grep -q ^DenyUsers /etc/ssh/sshd_config
@@ -87,7 +91,7 @@
   when: p.stat.exists
 
 - name: ftp download directory symlink to /results
-  file: src=/results dest=/home/{{ftp_username}}/results state=link
+  file: src=/results dest=/home/{{ ftp_username }}/results state=link
   when: p.stat.exists
 
 - name: Test if /rawdata directory exists
@@ -99,7 +103,7 @@
   when: p.stat.exists
 
 - name: ftp download directory symlink to /rawdata
-  file: src=/rawdata dest=/home/{{ftp_username}}/results state=link
+  file: src=/rawdata dest=/home/{{ ftp_username }}/results state=link
   when: p.stat.exists
 
 - name: configure allowed_users file
@@ -138,20 +142,25 @@
 #============================================================================
 - name: install dnsmasq package
   apt: name=dnsmasq state=present
+  when: enable_dhcp|bool == True
 
 - name: dnsmasq configuration
   template: src=ion-dhcp.j2 dest=/etc/dnsmasq.d/ion-dhcp mode=0644
+  when: enable_dhcp|bool == True
 
 - name: hosts configuration
   template: src=hosts-dnsmasq.j2 dest=/etc/hosts-dnsmasq mode=0644
+  when: enable_dhcp|bool == True
 
 - name: enable dnsmasq configuration subdirectory
   lineinfile: dest=/etc/dnsmasq.conf
                 regexp="^.*conf-dir=.*"
                 line="conf-dir=/etc/dnsmasq.d"
+  when: enable_dhcp|bool == True
 
 - name: restart dnsmasq service
   service: name=dnsmasq state=restarted
+  when: enable_dhcp|bool == True
 
 #============================================================================
 # ntp configuration
@@ -162,8 +171,8 @@
 
 - name: Edit ntp.conf
   lineinfile: dest=/etc/ntp.conf
-                regexp="^restrict {{b_subnet}}.*"
-                line="restrict {{b_subnet}}.0.0 mask 255.255.0.0 nomodify notrap"
+                regexp="^restrict {{ b_subnet }}.*"
+                line="restrict {{ b_subnet }}.0.0 mask 255.255.0.0 nomodify notrap"
   notify: restart ntp
 
 
@@ -182,8 +191,8 @@
 - name: Exporting /results file system
   lineinfile: dest=/etc/exports
                 state=present
-                regexp='/results.*{{ansible_default_ipv4.network}}.*'
-                line='/results {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check,no_root_squash)'
+                regexp='/results.*{{ ansible_default_ipv4.network }}.*'
+                line='/results {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
   when: export_results == True and p.stat.exists
   notify: restart exportfs
 
@@ -198,14 +207,7 @@
 - name: Exporting /rawdata file system
   lineinfile: dest=/etc/exports
                 state=present
-                regexp='/rawdata.*{{ansible_default_ipv4.network}}.*'
-                line='/rawdata {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check,no_root_squash)'
+                regexp='/rawdata.*{{ ansible_default_ipv4.network }}.*'
+                line='/rawdata {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
   when: export_results == True and p.stat.exists
   notify: restart exportfs
-
-#============================================================================
-# Copy /etc/hosts to compute nodes.  Cluster config only
-#============================================================================
-- name: Install /etc/hosts
-  when: enable_hosts_copy == True
-  template: src=hosts.j2 dest=/etc/hosts mode=0644 owner=root group=root backup=yes

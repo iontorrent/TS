@@ -246,21 +246,6 @@
           "librarykey"
         ],
         [
-          "add_librarykit",
-          "rundb",
-          "librarykit"
-        ],
-        [
-          "change_librarykit",
-          "rundb",
-          "librarykit"
-        ],
-        [
-          "delete_librarykit",
-          "rundb",
-          "librarykit"
-        ],
-        [
           "add_location",
           "rundb",
           "location"
@@ -531,21 +516,6 @@
           "samplesetitem"
         ],                                
         [
-          "add_sequencingkit",
-          "rundb",
-          "sequencingkit"
-        ],
-        [
-          "change_sequencingkit",
-          "rundb",
-          "sequencingkit"
-        ],
-        [
-          "delete_sequencingkit",
-          "rundb",
-          "sequencingkit"
-        ],
-        [
           "add_template",
           "rundb",
           "template"
@@ -619,21 +589,6 @@
           "delete_userprofile",
           "rundb",
           "userprofile"
-        ],
-        [
-          "add_variantfrequencies",
-          "rundb",
-          "variantfrequencies"
-        ],
-        [
-          "change_variantfrequencies",
-          "rundb",
-          "variantfrequencies"
-        ],
-        [
-          "delete_variantfrequencies",
-          "rundb",
-          "variantfrequencies"
         ]
       ]
     }

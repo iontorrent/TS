@@ -16,8 +16,9 @@ endif(LSB_RELEASE_COMMAND)
 
 # Common compiler flags
 # char is per default signed on x86_64 systems but unsigned on ARM, use signed-char
-if (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -fPIC -fsigned-char")
+if (${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "xenial")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -fPIC -fsigned-char -Wno-deprecated-declarations")
 else()
     set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC -fsigned-char")
 endif()
@@ -78,13 +79,14 @@ set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
 ## NOTE: -O2 enables strict-aliasing, and code is not clean
 SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
-                     "-std=c++11" "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
+                     "-D_MWAITXINTRIN_H_INCLUDED" "-D_FORCE_INLINES" "-std=c++11" "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
                      "-gencode=arch=compute_20,code=sm_20"
                      "-gencode=arch=compute_30,code=sm_30"
                      "-gencode=arch=compute_35,code=sm_35"
                      "-gencode=arch=compute_50,code=sm_50"
                      "-gencode=arch=compute_52,code=sm_52"
                      "-gencode=arch=compute_52,code=compute_52"
+                     "-gencode=arch=compute_61,code=sm_61"
                      "-maxrregcount=48" )
 
 ## If user set CXX on command line, make sure NVCC respects it

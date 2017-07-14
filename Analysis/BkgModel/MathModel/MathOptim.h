@@ -136,6 +136,12 @@ private:
 
 float ErfApprox ( float x );
 float Expm2Approx ( float x );
-float ExpApprox ( float x );
+inline float ExpApprox ( float x )
+{
+	  x = 1.0 + x / 256.0;
+	  x *= x; x *= x; x *= x; x *= x;
+	  x *= x; x *= x; x *= x; x *= x;
+	  return x;
+}
 
 #endif // MATHOPTIM_H

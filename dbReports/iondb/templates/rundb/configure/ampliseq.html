@@ -44,99 +44,13 @@
         <div class="span6">
             <h3>Manual Upload <small> AmpliSeq.com export zip</small></h3>
             <p>Upload a design or panel's zip archive exported from AmpliSeq.com</p>
-            <div style="margin: 10px 0; min-height: 150px">
-                <div id="bedPublish">
-                    <div>
-                        <span id="file_info">No file selected.</span>
-                        <span id="file_progress"></span>
-                    </div>
-                    <button class="btn" id="pickfiles">Select File</button>
-                    <p>
-                    <div>Select which instrument/chip this panel is intended for:</div>
-                    <div>
-                            <table><tr>
-                            <td style="padding-right:20px;"><span class=label>PGM: </span></td><td>
-                            <label class="radio inline"><input id="pgm_choice" type="radio" name="instrument_choice" value="pgm" checked /><div>  314 / 316 / 318</div></label></td>
-                            </tr><tr>
-                            <td style="padding-right:20px;"><span class=label>Proton: </span></td><td>
-                            <label class="radio inline"><input type="radio" name="instrument_choice" value="p1" /><div> PI</div></label>
-                            </tr><tr>
-                            <td style="padding-right:20px;"><span class=label>S5/S5XL: </span></td><td><div>
-                            <label class="radio inline"><input type="radio" name="instrument_choice" value="520" /> 520</label>
-                            <label class="radio inline"><input type="radio" name="instrument_choice" value="530" /> 530</label>
-                            <label class="radio inline"><input type="radio" name="instrument_choice" value="540" /> 540</label>
-                            </div></td></tr></table>
-                    </div>
-                </div>
-            </div>
+            	{% include "rundb/common/plan_template_zip_bundle_upload.html" %}
             <div class="form-actions">
                 <button class="btn btn-primary" id="upload_button">Upload</button>
             </div>
             <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-            <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
-            <script type="text/javascript">
-            $(function() {
-              uploader = new plupload.Uploader({
-                container : 'bedPublish',
-                max_file_size : '1000mb',
-                runtimes: 'html5,flash,silverlight',
-                browse_button: 'pickfiles',
-                url: '/rundb/publish/plupload/BED/',
-                chunk_size: '10mb',
-                unique_names: false,
-                multi_selection: false,
-                multiple_queues: false,
-                multipart_params: {meta: '{}'},
-                silverlight_xap_url: '{% static "jquery/js/plupload/plupload.silverlight.xap"%}',
-                flash_swf_url: '{% static "jquery/js/plupload/plupload.flash.swf"%}'
-              });
-
-              uploader.bind('Init', function(up, params) {
-                // Don't do anyting special on init.
-              });
-
-              $('#upload_button').click(function() {
-                uploader.settings.multipart_params.meta = JSON.stringify({
-                  hotspot: false,
-                  reference: null,
-                  choice: $('input:radio[name=instrument_choice]:checked').val()
-                });
-                uploader.start();
-                return false;
-              });
-
-              uploader.init();
-
-              uploader.bind('FilesAdded', function(up, files) {
-                var file = files[0];
-                if (up.files.length > 1) {
-                  up.removeFile(up.files[0]);
-                }
-                console.log(up.files);
-                $('#file_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
-                $('#file_progress').html('');
-                up.refresh(); // Reposition Flash/Silverlight
-              });
-
-              uploader.bind('UploadProgress', function(up, file) {
-                $('#file_progress').html(file.percent + "%");
-              });
-
-              uploader.bind('Error', function(up, err) {
-                $('#file_info').append("<div>There was an error during your upload.  Please refresh the page and try again.</div>");
-              });
-
-              uploader.bind('FileUploaded', function(up, file) {
-                $('#file_progress').html("100%").delay(500).html("");
-                $("#file_info").delay(500).html("File uploaded successfully.  Upload another or check the appropriate reference page for processing status.")
-              });
-              $('#hotspot_help_text').hide();
-              $('#hotspot_help_button').click(function(){
-                $('#hotspot_help_text').slideToggle(300);
-                return false;
-              });
-            });
-            </script>
+            <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
+            <script type="text/javascript" src="{% static "resources/scripts/common/plan_template_zip_bundle_upload.js"%}"></script>
         </div>
     </div>
     {% else %}
@@ -153,10 +67,12 @@
                             <td style="padding-right:50px;"><span class=label>Proton: </span></td><td>
                             <label class="radio inline"><input type="radio" name="_instrument_choice" value="p1" /><div> PI</div></label>
                             </tr><tr>
-                            <td style="paddingi-right:50px;"><span class=label>S5/S5XL: </span></td><td><div>
-                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="520" /> 520</label>
-                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="530" /> 530</label>
-                            <label class="radio inline"><input type="radio" name="_instrument_choice" value="540" /> 540</label></div>
+                            <td style="paddingi-right:50px;"><span class=label>S5/S5XL: </span></td><td>
+                            <div>                            
+                            {% for s5_chip in s5_chips %}
+       							<label class="radio inline"><input type="radio" name="_instrument_choice" value="{{s5_chip}}" /> {{s5_chip}}</label>
+                            {% endfor %}                          
+                            </div>
                             </td></tr></table>
                     </div>
                 {% if ordered_solutions %}
@@ -210,6 +126,7 @@
                             </tr>
                         </thead>
                         <tbody>
+
                             {% for design in fixed_solutions %}
                                 <tr>
                                     <td>
@@ -348,7 +265,7 @@ $(document).ready(function() {
 
     }
     function chipTypeFilterWrapper(selected){
-        var fixed = "{{fixed_solution}}";
+        var fixed = "{{fixed_ids_choices}}";
         chipTypeFilter(fixed, selected);
         var unordered = "{{unordered_solution}}";
         chipTypeFilter(unordered, selected);

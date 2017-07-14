@@ -12,7 +12,7 @@ using namespace std;
 RcppExport SEXP SimulateCAFIE(SEXP Rseq, SEXP RflowOrder, SEXP Rcf, SEXP Rie, SEXP Rdr, SEXP Rnflows, SEXP RhpSignal, SEXP RsigMult)
 {
   SEXP ret = R_NilValue;
-  char *exceptionMesg = NULL;
+  //char *exceptionMesg = NULL;
 
   try {
     const char* seq     = Rcpp::as<const char*>(Rseq);
@@ -30,7 +30,7 @@ RcppExport SEXP SimulateCAFIE(SEXP Rseq, SEXP RflowOrder, SEXP Rcf, SEXP Rie, SE
       temp << MAX_MER;
       std::string exception = "hpSignal must be of length " + temp.str();
       cerr << exception << endl;
-      exceptionMesg = strdup(exception.c_str());
+      //exceptionMesg = strdup(exception.c_str());
     } else {
       double *hpSignal = new double[nHpSignal];
       for(int i=0; i<nHpSignal; i++)

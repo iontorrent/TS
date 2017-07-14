@@ -11,3 +11,27 @@ h1, h2, h3, h4, h5, h6 { margin: 10px 0; font-family: inherit; text-rendering: o
 .span12 { width: 940px }
 .row { margin-left: -20px }
 
+body {
+  font: .875em/1.4 Arial,"Helvetica Neue",Helvetica,sans-serif;
+  background: #fff;
+}
+
+* {
+  margin: 0;
+}
+
+.footer {
+  color: #fff;
+  background: #070a33;
+  height: 105px;
+}
+
+.footer .container {
+  padding-top: 25px;
+}
+
+a:link, a:visited, .btn-group>a.btn {
+  font-size: 12px;
+  font-weight: bold;
+  text-decoration: none;
+}

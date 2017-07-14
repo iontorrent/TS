@@ -25,7 +25,7 @@ $(function(){
             var status = exp.ftpStatus;
             context = {
                 exp: exp,
-                "prettyExpName": TB.prettyPrintRunName(exp.expName),
+                "prettyExpName": exp.displayName,
                 "king_report": this.model && this.model.toJSON(),
                 "date_string": kendo.toString(exp.date, "MM/dd/yy hh:mm tt"),
                 "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
@@ -114,7 +114,7 @@ $(function(){
             var status = exp.ftpStatus;
             context = {
                 exp: exp,
-                "prettyExpName": TB.prettyPrintRunName(exp.expName),
+                "prettyExpName": exp.displayName,
                 "king_report": this.model && this.model.toJSON(),
                 "date_string": kendo.toString(this.model.get("timeStamp"), "MM/dd/yy hh:mm tt"),
                 "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
@@ -249,12 +249,12 @@ $(function(){
         toggle_live_update: function() {
             if (this.live_update !== null) {
                 this.clear_update();
-                this.$("#live_button").addClass('btn-success').text('Auto Update');
+                this.$("#live_button").addClass('btn-success').text('Auto Refresh');
                 this.$("#update_status").text('Page is static until refreshed');
 
             } else {
                 this.start_update();
-                this.$("#live_button").removeClass('btn-success').text('Stop Updates');
+                this.$("#live_button").removeClass('btn-success').text('Stop Refresh');
                 this.$("#update_status").text('Page is updating automatically');
             }
         },

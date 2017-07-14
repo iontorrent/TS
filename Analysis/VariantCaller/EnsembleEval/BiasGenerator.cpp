@@ -2,9 +2,6 @@
 
 #include "BiasGenerator.h"
 
-
-
-
 // bias generator handles latent variables representing sources of bias in measurement
 // the trivial example is by strand
 void BasicBiasGenerator::GenerateBiasByStrand(int i_hyp, HiddenBasis &delta_state,  vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions){
@@ -53,7 +50,7 @@ void BasicBiasGenerator::AddOneUpdate(HiddenBasis &delta_state, const vector<vec
 
 
 void BasicBiasGenerator::AddCrossUpdate(CrossHypotheses &my_cross){
-   AddOneUpdate(my_cross.delta_state, my_cross.residuals, my_cross.test_flow, my_cross.strand_key, my_cross.responsibility);
+   AddOneUpdate(my_cross.delta_state, my_cross.residuals, my_cross.test_flow, my_cross.strand_key, my_cross.weighted_responsibility);
 }
 
 
@@ -83,6 +80,15 @@ void BasicBiasGenerator::DoStepForBias(ShortStack &total_theory) {
   UpdateBiasGenerator(total_theory);
   UpdateResidualsFromBias(total_theory);
   total_theory.UpdateRelevantLikelihoods();
+  PrintDebug();
+}
+
+void BasicBiasGenerator::PrintDebug(bool print_updated){
+  if(DEBUG > 1){
+	  cout << "    + Latent bias"<< (print_updated? " updated:" : ":") << endl
+		   << "      - FWD: latent_bias = " << PrintIteratorToString(latent_bias[0].begin(), latent_bias[0].end()) <<endl
+	       << "      - REV: latent_bias = " << PrintIteratorToString(latent_bias[1].begin(), latent_bias[1].end()) <<endl;
+  }
 }
 
 void BasicBiasGenerator::ResetActiveBias(ShortStack &total_theory) {
@@ -90,7 +96,6 @@ void BasicBiasGenerator::ResetActiveBias(ShortStack &total_theory) {
   UpdateResidualsFromBias(total_theory);
   total_theory.UpdateRelevantLikelihoods();
 }
-
 
 void BasicBiasGenerator::DoUpdate(){
   for (unsigned int i_strand=0; i_strand<2; i_strand++){
@@ -205,7 +210,7 @@ HiddenBasis &delta_state = my_theory.my_hypotheses[i_read].delta_state;
 
 
 void BiasChecker::AddCrossUpdate(CrossHypotheses &my_cross){
-  AddOneUpdate(my_cross.delta_state, my_cross.residuals, my_cross.test_flow,  my_cross.responsibility);
+  AddOneUpdate(my_cross.delta_state, my_cross.residuals, my_cross.test_flow,  my_cross.weighted_responsibility);
 }
 
 // note that this will have to be updated for the new multi-allele world

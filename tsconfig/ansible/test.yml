@@ -1,0 +1,10 @@
+---
+# file: test.yml
+- hosts: headnode
+  vars:
+    - startline: "#start TSconfig added mountpoints"
+    - endline: "#end TSconfig added mountpoints"
+  tasks:
+    - name:
+      include: globals.yml
+

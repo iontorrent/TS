@@ -78,6 +78,7 @@ function outbound_net_port()
 #=====================================================================
 function enable_nfs_rule()
 {
+    # NOTE: Now assumes that this method is called with root access
     PORT=$(outbound_net_port)
     FILE=/etc/iptables.custom
     if [ -e $FILE ]; then
@@ -96,11 +97,11 @@ function enable_nfs_rule()
         
         cat $TMPFILE >> /tmp/iptables.custom.new
         rm -f $TMPFILE
-        sudo cp /tmp/iptables.custom.new $FILE
+        cp /tmp/iptables.custom.new $FILE
         rm /tmp/iptables.custom.new
         
-        sudo iptables-restore < /etc/iptables.rules
-        sudo iptables-restore --noflush < $FILE
+        iptables-restore < /etc/iptables.rules
+        iptables-restore --noflush < $FILE
     fi
 }
 

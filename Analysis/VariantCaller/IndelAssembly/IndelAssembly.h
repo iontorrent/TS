@@ -249,7 +249,7 @@ public:
   int getSoftStart(BamAlignment& alignment);
   void SetReferencePoint(BamAlignment& read);
   void map(BamAlignment& read);
-  void onTraversalDone();
+  void onTraversalDone(bool do_assembly);
   void cleanCounts();
   void shiftCounts(int delta);
   void DetectCandidateRegions(int wsize);

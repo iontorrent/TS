@@ -33,6 +33,9 @@ class ReferenceFieldNames():
     MIXED_TYPE_RNA_TARGET_BED_FILE = "mixedTypeRNA_targetBedFile"
     MIXED_TYPE_RNA_TARGET_BED_FILE_MISSING = "mixedTypeRNA_targetBedFileMissing"
 
+    SSE_BED_FILE = "sseBedFile"
+    SSE_BED_FILE_DICT = "sseBedFileDict"
+
     REFERENCE = 'default_reference'
     REFERENCES = 'references'
     REFERENCE_MISSING = 'referenceMissing'
@@ -70,7 +73,7 @@ class ReferenceStepData(AbstractStepData):
         self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = ""
         self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = ""
         self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = False
-
+        self.prepopulatedFields[ReferenceFieldNames.SSE_BED_FILE_DICT] = {}
         self.prepopulatedFields[ReferenceFieldNames.REFERENCE_SHORT_NAMES] = [ref.short_name for ref in references]
 
         self.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_REFERENCE] = ""
@@ -197,4 +200,9 @@ class ReferenceStepData(AbstractStepData):
             self.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
 
 
-        # logger.debug("EXIT reference_step_data.updateFromStep() self.savedFields=%s" %(self.savedFields))
+    def get_sseBedFile(self, targetRegionBedFile):
+        sse = ''
+        if targetRegionBedFile and self.prepopulatedFields[ReferenceFieldNames.SSE_BED_FILE_DICT]:
+            sse = self.prepopulatedFields[ReferenceFieldNames.SSE_BED_FILE_DICT].get(targetRegionBedFile.split('/')[-1], '')
+        return sse
+

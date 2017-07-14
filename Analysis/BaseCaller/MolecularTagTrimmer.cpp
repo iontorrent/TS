@@ -33,22 +33,24 @@ MolecularTagTrimmer::MolecularTagTrimmer()
 
 void MolecularTagTrimmer::PrintHelp(bool tvc_call)
 {
+  string space1_for_tvc = tvc_call? "           " : "";
+  string space2_for_tvc = tvc_call? " " : "";
+
   cout << "Molecular tagging options:" << endl;
+  // Both
+  cout << "     --suppress-mol-tags     " << space1_for_tvc << "BOOL"   << space2_for_tvc << "       Ignore tag information [false]" << endl;
+  cout << "     --tag-trim-method       " << space1_for_tvc << "STRING" << space2_for_tvc << "     Method to trim tags. Options: {strict-trim, sloppy-trim} [sloppy-trim]" << endl;
   // TVC only options
   if (tvc_call)
-    cout << "     --min-tag-fam-size      INT        Minimum required size of molecular tag family [3]" << endl;
-
+    cout << "     --min-tag-fam-size      " << space1_for_tvc << "INT" << space2_for_tvc << "        Minimum required size of molecular tag family [3]" << endl;
   // BaseCaller only options
   else{
     cout << "     --prefix-mol-tag        STRING     Structure of prefix molecular tag {ACGTN bases}" << endl;
     cout << "     --suffix-mol-tag        STRING     Structure of suffix molecular tag {ACGTN bases}" << endl;
-    cout << "     --tag-trim-method       STRING     Method to trim tags. Options: {strict-trim, sloppy-trim} [sloppy-trim]" << endl;
-    cout << "     --heal-tag-hp-indel     Bool       Heal hp indel on tags [true]" << endl;
+    cout << "     --heal-tag-hp-indel     BOOL       Heal hp indel on tags [true]" << endl;
+    cout << "     --tag-filter-method     STRING     Filter reads based on tags. Options: {need-prefix, need-suffix, need-all} [need-all]" << endl;
+    cout << endl;
   }
-  // Both
-  cout << "     --suppress-mol-tags     BOOL       Ignore tag information [false]" << endl;
-  cout << "     --tag-filter-method     STRING     Filter reads based on tags. Options: {need-prefix, need-suffix, need-all} [need-all]" << endl;
-  cout << endl;
 }
 
 
@@ -256,12 +258,12 @@ void MolecularTagTrimmer::PrintOptionValues(bool tvc_call)
   // Verbose output XXX do not say anything if there are no tags
   if (num_read_groups_with_tags_ > 0) {
     cout << "MolecularTagTrimmer settings:" << endl;
-    cout << "  found " << num_read_groups_with_tags_ << " read groups with tags." << endl;
-    cout << "  suppress-mol-tags : " << (suppress_mol_tags_ ? "on" : "off") << endl;
+    cout << "    found " << num_read_groups_with_tags_ << " read groups with tags." << endl;
+    cout << "    suppress-mol-tags : " << (suppress_mol_tags_ ? "on" : "off") << endl;
 
     if (not tvc_call) {
       cout << "    heal-tag-hp-indel : " << (heal_tag_hp_indel_? "on": "off") << endl;
-      cout << "    tag-trim-method : ";
+      cout << "      tag-trim-method : ";
       switch (tag_trim_method_){
         case kSloppyTrim : cout << "sloppy-trim" << endl; break;
         case kStrictTrim : cout << "strict-trim" << endl; break;
@@ -571,6 +573,14 @@ string MolecularTagTrimmer::GetPrefixTag (string read_group_name) const
 
 // -------------------------------------------------------------------------
 
+string MolecularTagTrimmer::GetPrefixTag (int read_group_idx) const
+{
+  string tag = tag_structure_.at(read_group_idx).prefix_mol_tag;
+  return tag;
+}
+
+// -------------------------------------------------------------------------
+
 string MolecularTagTrimmer::GetSuffixTag (string read_group_name) const
 {
   string tag;
@@ -578,6 +588,14 @@ string MolecularTagTrimmer::GetSuffixTag (string read_group_name) const
   if (idx_it != read_group_name_to_index_.end()){
     tag = tag_structure_.at(idx_it->second).suffix_mol_tag;
   }
+  return tag;
+}
+
+// -------------------------------------------------------------------------
+
+string MolecularTagTrimmer::GetSuffixTag (int read_group_idx) const
+{
+  string tag = tag_structure_.at(read_group_idx).suffix_mol_tag;
   return tag;
 }
 

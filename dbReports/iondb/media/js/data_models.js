@@ -404,6 +404,9 @@ $(function(){
     });
 
     Run = TastyModel.extend({
+        url: function () {
+            return this.baseUrl + this.get("id") + "/"
+        },
         initialize: function () {
             if (this.get('results')) {
                     this.reports = new ReportList(this.get('results'), {
@@ -415,9 +418,18 @@ $(function(){
                 });
             }
         },
-
+        // When getting runs from the mesh, they can have the same id. We need a new id that is unique.
+        idAttribute: 'uid',
         parse: function (response) {
+            // For local runs the uid can just be the id.
+            var uid = response.id;
+            // For mesh runs the uid needs to be the combination of host and id.
+            if(response._host){
+                uid = response._host + ":" + response.id;
+                console.log("uid", uid)
+            }
             return _.extend(response, {
+                uid: uid,
                 date: new Date(Date._parse(response.date)),
                 resultDate: new Date(Date._parse(response.resultDate))
             });

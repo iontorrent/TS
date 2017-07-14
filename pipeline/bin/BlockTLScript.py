@@ -4,6 +4,7 @@
 __version__ = filter(str.isdigit, "$Revision$")
 
 import os
+import re
 import sys
 import time
 import argparse
@@ -161,7 +162,25 @@ if __name__ == "__main__":
         except Exception as err:
             printtime("Bead Density Plot generation failure: %s" % err)
             traceback.print_exc()
-
+    
+    def get_block_offset():
+        try:
+            [(x, y)] = re.findall('block_X(.*)_Y(.*)', os.getcwd())
+            if x.isdigit():
+                block_col_offset = int(x)
+            else:
+                block_col_offset = 0
+            if y.isdigit():
+                block_row_offset = int(y)
+            else:
+                block_row_offset = 0
+        except:
+            block_col_offset = 0
+            block_row_offset = 0
+        return (block_col_offset,block_row_offset)
+    
+    my_block_offset = get_block_offset()
+    
     if args.do_sigproc:
 
         set_result_status('Beadfind')
@@ -170,7 +189,8 @@ if __name__ == "__main__":
             env['libraryKey'],
             env['tfKey'],
             env['pathToRaw'],
-            env['SIGPROC_RESULTS'])
+            env['SIGPROC_RESULTS'],
+            my_block_offset)
         add_status("Beadfind", status)
 
         if status != 0:
@@ -314,6 +334,7 @@ if __name__ == "__main__":
                         prebasecallerArgs = prebasecallerArgs + " --calibration-training=100000"
 
                 basecaller.basecalling(
+                    my_block_offset,
                     env['SIGPROC_RESULTS'],
                     prebasecallerArgs,
                     env['libraryKey'],
@@ -440,6 +461,7 @@ if __name__ == "__main__":
         set_result_status('Base Calling')
         try:
             basecaller.basecalling(
+                my_block_offset,
                 env['SIGPROC_RESULTS'],
                 env['basecallerArgs'] + additional_basecallerArgs,
                 env['libraryKey'],

@@ -79,7 +79,10 @@ uint8_t realigner_compute_alignment (RealignProxy* r,
                                      unsigned cigar_sz, 
                                      uint32_t** cigar_dest, 
                                      unsigned* cigar_dest_sz, 
-                                     int* new_r_pos,
+                                     unsigned* new_r_pos,
+                                     unsigned* new_q_pos,
+                                     unsigned* new_r_len,
+                                     unsigned* new_q_len,
                                      uint64_t* num_realign_already_perfect,
                                      uint64_t* num_realign_not_clipped,
                                      uint64_t* num_realign_sw_failures,
@@ -90,7 +93,7 @@ uint8_t realigner_compute_alignment (RealignProxy* r,
     bool alignment_failed = false;
     bool unclip_failed = false;
 
-    bool result = r->compute_alignment (q_seq, q_len, r_seq, r_len, r_pos, (bool) forward, cigar, cigar_sz, *cigar_dest, *cigar_dest_sz, *new_r_pos, already_perfect, clip_failed, alignment_failed, unclip_failed);
+    bool result = r->compute_alignment (q_seq, q_len, r_seq, r_len, r_pos, (bool) forward, cigar, cigar_sz, *cigar_dest, *cigar_dest_sz, *new_r_pos, *new_q_pos, *new_r_len, *new_q_len, already_perfect, clip_failed, alignment_failed, unclip_failed);
 
     if (num_realign_already_perfect && already_perfect) ++(*num_realign_already_perfect);
     if (num_realign_not_clipped && clip_failed) ++(*num_realign_not_clipped);

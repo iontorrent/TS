@@ -7,7 +7,7 @@
     
   tasks:      
     - name: Restart primary network interface
-      shell: bash -lc "ifdown {{ansible_default_ipv4.alias}} && ifup {{ansible_default_ipv4.alias}}"
+      shell: bash -lc "ifdown {{ ansible_default_ipv4.alias }} && ifup {{ ansible_default_ipv4.alias }}"
       when: "ansible_default_ipv4.alias is defined"
       register: output
     - debug: var=output.stderr
@@ -48,8 +48,8 @@
                     state=present
                     create=yes
                     owner=ionadmin group=ionadmin mode=0644
-                    regexp="^{{item}}.*"
-                    line="{{item}} = '{{ groups.headnode[0] }}'"
+                    regexp="^{{ item }}.*"
+                    line="{{ item }} = '{{ groups.headnode[0] }}'"
       with_items:
         - PLUGINSERVER_HOST
         - JOBSERVER_HOST
@@ -64,7 +64,7 @@
     - name: Shutdown gridengine-exec on compute node
       service: name=gridengine-exec state=stopped
     - name: Edit act_qmaster file on compute node
-      shell: bash -lc "echo {{groups.headnode[0]}} > /var/lib/gridengine/iontorrent/common/act_qmaster"
+      shell: bash -lc "echo {{ groups.headnode[0] }} > /var/lib/gridengine/iontorrent/common/act_qmaster"
     - name: Execute the gridengine-clients playbook
       include: roles/gridengine_clients/tasks/main.yml
 

@@ -22,6 +22,8 @@ import subprocess
 from iondb.utils.utils import getPackageName
 logger = logging.getLogger(__name__)
 
+LEGACY_PLUGIN_SCRIPT = "launch.sh"
+
 class PluginManager(object):
     """Class for managing plugin installation and versioning activities.
 
@@ -42,17 +44,8 @@ class PluginManager(object):
     """
 
     def __init__(self, gc=None):
-        if not gc:
-            try:
-                gc = iondb.rundb.models.GlobalConfig.get()
-                default_plugin_script = gc.default_plugin_script
-            except:
-                default_plugin_script = "launch.sh"
-        else:
-            default_plugin_script = gc.default_plugin_script
-
-        self.default_plugin_script = default_plugin_script
-        self.pluginroot = os.path.normpath(settings.PLUGIN_PATH or os.path.join("/results", gc.plugin_folder))
+        self.default_plugin_script = LEGACY_PLUGIN_SCRIPT
+        self.pluginroot = os.path.normpath(settings.PLUGIN_PATH or "/results/plugins/")
 
     def rescan(self):
         """ Convenience function to purge missing and find new plugins. Logs info message"""

@@ -51,7 +51,8 @@ def UpdatePluginStatus_XMLRPC(pk, status, store=None, jobid=None, host=PLUGINSER
     while attempts < retries:
         try:
             conn = xmlrpclib.ServerProxy("http://%s:%d" % (host,port), verbose=False, allow_none=True)
-            ret = conn.updatePR(pk, status, store)
+            grid_engine_job_id = os.environ['JOB_ID']
+            ret = conn.updatePR(pk, grid_engine_job_id, status, store)
             LOG.debug("Plugin Update XMLRPC call returns: '%s'", ret)
             break
         except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:

@@ -207,9 +207,8 @@ void GlobalDefaultsForBkgModel::GoptDefaultsFromJson(char *fname){
 }
 
 
-
 // Load optimized defaults from GeneticOptimizer runs
-void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
+void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname, char *results_folder )
 {
   if(fname == NULL)
     return;
@@ -222,13 +221,17 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
   if(isJson){
     GoptDefaultsFromJson(fname);
   } else{
-
     printf("Abort: %s not a json file", fname);
     exit(1);
-
   }
-  region_param_start.BadIdeaComputeDerivedInput();
+  
   DumpExcitingParameters("default");
+  region_param_start.BadIdeaComputeDerivedInput();
+  // emphasis_vector.txt file used in gopt to change the default gopt params
+  //bool modified = ReadEmphasisVectorFromFile (results_folder);   //GeneticOptimizer run - load its vector
+  bool modified = ReadEmphasisVectorFromJson (results_folder);   //GeneticOptimizer run - load its vector
+  if (modified)
+	DumpExcitingParameters("modified");
 }
 
 void GlobalDefaultsForBkgModel::DumpExcitingParameters(const char *fun_string)
@@ -237,7 +240,7 @@ void GlobalDefaultsForBkgModel::DumpExcitingParameters(const char *fun_string)
     printf ( "%s parameters used: \n",fun_string );
 
     region_param_start.DumpPoorlyStructuredText();
-    data_control.DumpPoorlyStructuredText();
+    data_control.emphasis_params.DumpPoorlyStructuredText();
     fitter_defaults.DumpPoorlyStructuredText();
 
     printf ( "\n" );
@@ -275,7 +278,7 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 
 			char *tmp_config_file = NULL;
 			tmp_config_file = GetIonConfigFile (filename.c_str());
-			SetGoptDefaults(tmp_config_file);
+			SetGoptDefaults(tmp_config_file,(char*)(results_folder.c_str()));
 			if (tmp_config_file)
 			  free(tmp_config_file);
 		}
@@ -295,21 +298,20 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 				tmp_config_file = GetIonConfigFile (filename.c_str());
 			}
 
-			SetGoptDefaults(tmp_config_file);
+			SetGoptDefaults(tmp_config_file,(char*)(results_folder.c_str()));
 			if (tmp_config_file)
 			  free(tmp_config_file);
-
 		}
 		else
 		{
-		    SetGoptDefaults ((char*)(gopt.c_str())); //parameter file provided cmd-line
-
+		    SetGoptDefaults ((char*)(gopt.c_str()),(char*)(results_folder.c_str())); //parameter file provided cmd-line
+			//ReadEmphasisVectorFromFile ((char*)(results_folder.c_str()));   //GeneticOptimizer run - load its vector
 		}
 	}
 
 	signal_process_control.SetOpts(opts, json_params);
 	bool dont_emphasize_by_compression = RetrieveParameterBool(opts, json_params, '-', "bkg-dont-emphasize-by-compression", false);
-	data_control.point_emphasis_by_compression = (!dont_emphasize_by_compression);
+  data_control.emphasis_params.point_emphasis_by_compression = (!dont_emphasize_by_compression);
 
 	// from SetupXtalkParametersForBkgModel
 	string trace_xtalk_name = RetrieveParameterString(opts, json_params, '-', "xtalk", "disable");
@@ -379,4 +381,200 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
   {
     // nothing: no barcodes, don't do anything
   }
+}
+
+
+// This function is used during GeneticOptimizer runs in which case the above SetGoptDefaults is disabled
+
+bool GlobalDefaultsForBkgModel::ReadEmphasisVectorFromJson ( char *experimentName )
+{
+	char fname[512];
+	sprintf ( fname,"%s/gopt.delta.json", experimentName );
+
+	struct stat fstatus;
+	int status = stat ( fname,&fstatus );
+	bool modified = false;
+
+	if ( status == 0 )    // file exists
+	{
+	Json::Value all_params;
+	std::ifstream in(fname, std::ios::in);
+
+	if (!in.good()) {
+	printf("Opening gopt delta file %s unsuccessful. Aborting\n", fname);
+	exit(1);
+	} else {  
+	modified = true;
+    printf ( "loading emphasis vector parameters from %s\n",fname );
+	}
+	in >> all_params;
+	in.close();
+  
+    // map param to index
+    const static std::map<std::string,int> string_to_case{
+        {"km_const[0]",1},
+        {"km_const[1]",2},
+        {"km_const[2]",3},
+        {"km_const[3]",4},
+        {"krate[0]",6},
+        {"krate[1]",7},
+        {"krate[2]",8},
+        {"krate[3]",9},
+        {"d_coeff[0]",11},
+        {"d_coeff[1]",12},
+        {"d_coeff[2]",13},
+        {"d_coeff[3]",14},
+        {"sigma_mult[0]",16},
+        {"sigma_mult[1]",17},
+        {"sigma_mult[2]",18},
+        {"sigma_mult[3]",19},
+        {"t_mid_nuc_delay[0]",21},
+        {"t_mid_nuc_delay[1]",22},
+        {"t_mid_nuc_delay[2]",23},
+        {"t_mid_nuc_delay[3]",24},
+        {"sens",25},
+        {"tau_R_m",26},
+        {"tau_R_o",27},
+        {"emphasis[0]",28},
+        {"emphasis[1]",29},
+        {"emphasis[2]",30},
+        {"emphasis[3]",31},
+        {"emphasis[4]",32},
+        {"emphasis[5]",33},
+        {"emphasis[6]",34},
+        {"emphasis[7]",35},
+        {"emp_amplitude",36},
+        {"emp_width",37},
+        {"clonal_call_scale[0]",38},
+        {"clonal_call_scale[1]",39},
+        {"clonal_call_scale[2]",40},
+        {"clonal_call_scale[3]",41},
+        {"clonal_call_scale[4]",42},
+        {"min_tauB",43},
+        {"max_tauB",44},
+        {"mid_tauB",45},
+        {"tauB_smooth_range",46}
+    };
+
+	// Loop over each element in the object. 
+    for(auto iter = all_params.begin(); iter != all_params.end(); ++iter)
+	{
+		// Make sure to get the value as const reference otherwise you will end up copying 
+		// the whole JSON value recursively which can be expensive if it is a nested object. 
+		//const Json::Value &str = iter->first;
+		//const Json::Value &v = iter->second;
+
+		// Perform actions here to process each string and value in the JSON object...
+        string key = iter.key().asString();
+        cout << "ReadEmphasisVectorFromJson... " << key << ":" << all_params[key] << endl;
+        float v = all_params[key].asFloat();
+        int iCase = string_to_case.count(key) ? string_to_case.at(key) : 0;
+        set_GoptParameter_byIndex(iCase,v);
+	}
+ }
+  return modified;
+}
+
+
+void GlobalDefaultsForBkgModel::set_GoptParameter_byIndex(int iCase, float v)
+{
+	// note case 0,5,10,15,20 are not handled
+    switch(iCase) {
+    case 1: region_param_start.kmax_default[0] *= v; break;
+    case 2: region_param_start.kmax_default[1] *= v; break;
+    case 3: region_param_start.kmax_default[2] *= v; break;
+    case 4: region_param_start.kmax_default[3] *= v; break;
+    case 6: region_param_start.krate_default[0] *= v; break;
+    case 7: region_param_start.krate_default[1] *= v; break;
+    case 8: region_param_start.krate_default[2] *= v; break;
+    case 9: region_param_start.krate_default[3] *= v; break;
+    case 11: region_param_start.d_default[0] *= v; break;
+    case 12: region_param_start.d_default[1] *= v; break;
+    case 13: region_param_start.d_default[2] *= v; break;
+    case 14: region_param_start.d_default[3] *= v; break;
+    case 16: region_param_start.sigma_mult_default[0] *= v; break;
+    case 17: region_param_start.sigma_mult_default[1] *= v; break;
+    case 18: region_param_start.sigma_mult_default[2] *= v; break;
+    case 19: region_param_start.sigma_mult_default[3] *= v; break;
+    case 21: region_param_start.t_mid_nuc_delay_default[0] *= v; break;
+    case 22: region_param_start.t_mid_nuc_delay_default[1] *= v; break;
+    case 23: region_param_start.t_mid_nuc_delay_default[2] *= v; break;
+    case 24: region_param_start.t_mid_nuc_delay_default[3] *= v; break;
+    case 25: region_param_start.sens_default *= v; break;
+    case 26: region_param_start.tau_R_m_default *= v; break;
+    case 27: region_param_start.tau_R_o_default *= v; break;
+    case 28: data_control.emphasis_params.emp[0] *= v; break;
+    case 29: data_control.emphasis_params.emp[1] *= v; break;
+    case 30: data_control.emphasis_params.emp[2] *= v; break;
+    case 31: data_control.emphasis_params.emp[3] *= v; break;
+    case 32: data_control.emphasis_params.emp[4] *= v; break;
+    case 33: data_control.emphasis_params.emp[5] *= v; break;
+    case 34: data_control.emphasis_params.emp[6] *= v; break;
+    case 35: data_control.emphasis_params.emp[7] *= v; break;
+    case 36: data_control.emphasis_params.emphasis_ampl_default *= v; break;
+    case 37: data_control.emphasis_params.emphasis_width_default *= v; break;
+    case 38: fitter_defaults.clonal_call_scale[0] *= v; break;
+    case 39: fitter_defaults.clonal_call_scale[1] *= v; break;
+    case 40: fitter_defaults.clonal_call_scale[2] *= v; break;
+    case 41: fitter_defaults.clonal_call_scale[3] *= v; break;
+    case 42: fitter_defaults.clonal_call_scale[4] *= v; break;
+    case 43: region_param_start.tau_E_default *= v; break;
+    case 44: region_param_start.min_tauB_default *= v; break;
+    case 45: region_param_start.max_tauB_default *= v; break;
+    case 46: region_param_start.tauB_smooth_range_default *= v; break;
+    case 0:
+    default:
+        cout << "ReadEmphasisVectorFromJson...cannot handle parameter index " << iCase << ":" << v << endl;
+        exit(1);
+    }
+}
+
+
+// note: ReadEmphasisVectorFromFile() could be removed and replaced by ReadEmphasisVectorFromJson() 
+// keep it for now in case we have problem with ReadEmphasisVectorFromJson()
+// note case 0,5,10,15,20 are not handled in ReadEmphasisVectorFromJson()
+#define MAX_LINE_LEN    2048
+#define MAX_DATA_PTS	80
+void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentName )
+{
+  char fname[512];
+  FILE *evect_file;
+  char *line = new char[MAX_LINE_LEN];
+  float read_data[MAX_DATA_PTS];
+  int nChar = MAX_LINE_LEN;
+
+  struct stat fstatus;
+  sprintf ( fname,"%s/emphasis_vector.txt", experimentName );
+  int status = stat ( fname,&fstatus );
+  //bool modified = false;
+  if ( status == 0 )    // file exists
+  {
+	//modified = true;
+    printf ( "loading emphasis vector parameters from %s\n",fname );
+    evect_file=fopen ( fname,"rt" );
+    // first line contains the number of points
+    int bytes_read = getline ( &line, ( size_t * ) &nChar,evect_file );
+    if ( bytes_read > 0 )
+    {
+      int evect_size;
+      sscanf ( line,"%d",&evect_size );
+      printf ("nps=%d",evect_size);
+      for (int i=0; ( i < evect_size ) && ( i < MAX_DATA_PTS );i++ )
+      {
+        bytes_read = getline ( &line, ( size_t * ) &nChar,evect_file );
+        sscanf ( line,"%f",&read_data[i] );
+        printf ("\t%f",read_data[i]);
+      }
+      printf ("\n");
+      for (int i=0; ( i < evect_size ) && ( i < MAX_DATA_PTS );i++ )
+      {
+        if (read_data[i] != 1) {
+            printf ("Setting parameter %d *= %f\n",i,read_data[i]);
+            set_GoptParameter_byIndex(i, read_data[i]);
+        }
+      }
+    }
+ }
+  delete [] line;
+  //return modified;
 }

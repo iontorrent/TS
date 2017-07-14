@@ -48,6 +48,10 @@
       toggle_network_fields();
       $('input[name=network-mode]').change(toggle_network_fields);
 
+      {% if is_TsVm %}
+        $('input').attr('readonly',true).attr('disabled',true);
+      {% endif %}
+
       friends = [
         "rssh.iontorrent.com:22",
         "drm.appliedbiosystems.com:443",
@@ -208,7 +212,7 @@
 
 {% block content %}
   <div id="content-main">
-    <h1>Network Settings</h1>
+    <h1>Network Settings {% if is_TsVm %} (View Only on S5) {% endif %} </h1>
 
     <div>
       {% if errors %}

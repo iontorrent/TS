@@ -5,12 +5,65 @@
 #ifndef ION_ANALYSIS_UNIFY_VCF_H
 #define ION_ANALYSIS_UNIFY_VCF_H
 
+#include "Realigner.h"
+
 class bgzf_stream;
 class VcfOrderedMerger;
 class PriorityQueue;
 class ComparableVcfVariant;
 
 void build_index(const string &path_to_gz);
+
+// ---------------------------------------------------------------------------------------
+
+class AlleleSubsetCheck
+{
+private:
+  Realigner aligner_;
+
+  // dummy variables for aligner
+  vector<CigarOp>    cigar_data;
+  vector<MDelement>  md_data;
+
+  // accounting variables
+  unsigned int counter_num_align_checks;
+  unsigned int counter_num_align_subsets;
+  unsigned int counter_num_mnp_checks;
+  unsigned int counter_num_mnp_subsets;
+  unsigned int counter_failures;
+  bool failure_;
+
+  bool   mnp_subset_check(const string & ref, const string &subset, const string &super);
+  bool   conditional_alignment_subset_check(const string & ref, const string &subset, const string &super);
+  bool   is_match(const string & pretty_a, int aidx);
+  bool   have_matches(const string & pretty_a, int aidx, const string & pretty_b, int bidx);
+  bool   anchor_sanity_check(const string & ref, const string &subset, const string &super);
+  string get_mnp_pretty_align(const string & allele1, const string & allele2);
+  string get_cond_superset_alignment(const string & pretty_ref, const string &pretty_super);
+
+public:
+         AlleleSubsetCheck();
+
+  // The main function to check if a subset allele hypothesis is in fact a subset of a superset allele
+  bool   is_allele_subset(const string & ref, const string &subset, const string &super);
+
+  // Adjusts Smith-Waterman penalties - match
+  void   SetAlignerScores(const vector<int> & scores)
+  {
+    aligner_.SetScores(scores);
+  }
+
+  void   reset_counters();
+  void   print_stats();
+
+  bool   check_enabled;
+  bool   simple_mnp_alignment;
+  bool   debug; // If enabled shows information about failures as well as conditional subset alignments
+
+};
+
+
+// ---------------------------------------------------------------------------------------
 
 struct CoverageInfoEntry {
   string sequenceName;
@@ -35,6 +88,8 @@ struct CoverageEntryComparator {
   bool operator()(const CoverageInfoEntry& lhs, const CoverageInfoEntry& rhs) { return lhs.cov < rhs.cov; }
 };
 
+// ---------------------------------------------------------------------------------------
+
 class bgzf_stream {
   BGZF *bgzf;
   string data;
@@ -55,6 +110,8 @@ private:
   int write(int length);
 };
 
+// ---------------------------------------------------------------------------------------
+
 class ComparableVcfVariant : public vcf::Variant {
   const VcfOrderedMerger& merger;
   unsigned long _t;
@@ -65,11 +122,15 @@ public:
   bool operator<(ComparableVcfVariant& b);
 };
 
+// ---------------------------------------------------------------------------------------
+
 class VariantComparator {
 public:
   VariantComparator() {}
   bool operator()(ComparableVcfVariant* lhs, ComparableVcfVariant* rhs) { return (*lhs)<(*rhs); }
 };
+
+// ---------------------------------------------------------------------------------------
 
 typedef priority_queue<ComparableVcfVariant*, vector<ComparableVcfVariant*>, VariantComparator> variant_queue;
 
@@ -91,7 +152,10 @@ public:
                 bool parse_samples = false)
       : variant_queue(VariantComparator()),
         _size(w), _vc(0), _current(NULL), left_align_enabled(la), enabled(!filename.empty()),
-        merger(merger), reference_reader(reader) { open_vcf_file(file, filename, parse_samples); }
+        merger(merger), reference_reader(reader)
+  {
+    open_vcf_file(file, filename, parse_samples);
+  }
 
   ~PriorityQueue() { while (_current) next(); }
 
@@ -117,6 +181,8 @@ private:
   void delete_current() { delete_variant(_current); }
 };
 
+// ---------------------------------------------------------------------------------------
+
 class VcfOrderedMerger {
 public:
   VcfOrderedMerger(string& novel_tvc,
@@ -138,7 +204,11 @@ public:
   template <typename T>
   bool is_within_target_region(T *variant);
 
+  void SetVCFrecordFilters(bool filt_by_target, bool hotspot_pos_only, bool hotspot_var_only);
   void perform();
+
+  AlleleSubsetCheck  allele_subset;
+
 private:
 
   istream* depth_in;
@@ -148,20 +218,40 @@ private:
   bool left_align_enabled;
   size_t window_size, minimum_depth;
   PriorityQueue novel_queue, assembly_queue, hotspot_queue;
-  vector<vcf::Variant> hotspots_;
+  list<vcf::Variant> hotspots_;
   ofstream bgz_out;
   vector<MergedTarget>::iterator current_target;
   CoverageInfoEntry* current_cov_info;
 
+  // VCF record filters (applied during vcf merging)
+  bool    filter_by_target;          // Filter records based on mets information in target bed info field
+  bool    hotspot_positions_only;    // Output only vcf lines with the infoFlag 'HS'
+  bool    hotspot_variants_only;     // Suppress hotspot reference calls and no-calls from the final output vcf
+
+  // Accounting variables
+  unsigned int num_records;
+  unsigned int num_filtered_records;
+  unsigned int num_off_target;
+
+  // Function that determines if a vcf record should be filtered
+  bool filter_VCF_record(vcf::Variant* record) const;
+
   void write_header(vcf::VariantCallFile& vcf, string json_path);
 
   vcf::Variant* merge_overlapping_variants();
+  list<vcf::Variant> variant_list;
 
   void span_ref_and_alts();
+  bool too_far(vcf::Variant*, vcf::Variant*);
 
   void generate_novel_annotations(vcf::Variant* variant);
 
   void merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf::Variant* hotspot);
+  void merge_annotation_into_vcf(vcf::Variant* hotspot) {  merge_annotation_into_vcf(NULL, hotspot);};
+  void flush_vcf(vcf::Variant* latest);
+  void annotate_subset(vcf::Variant* variant);
+  bool find_match(vcf::Variant* merged_entry, string &hotspot_ref,vector<string>::iterator oid, vector<string>::iterator opos, vector<string>::iterator oref, vector<string>::iterator oalt, string *omapalt, int record_ref_extension, string &annotation_ref_extension);
+
 
   void process_and_write_vcf_entry(vcf::Variant* current);
 
@@ -189,6 +279,8 @@ private:
   void gvcf_finish_region();
 };
 
+// ---------------------------------------------------------------------------------------
+
 void push_value_to_entry(vcf::Variant& gvcf_entry, size_t value, string key);
 void push_value_to_entry(vcf::Variant& gvcf_entry, string value, string key);
 void push_info_field(vcf::Variant& gvcf_entry, string value, string key);
@@ -204,7 +296,7 @@ template <typename T1, typename T2>
 int compare(const T1& p11, const T2& p12, const T1& p21, const T2& p22);
 
 void push_value_to_vector(vector<string>& v, long index, const string& entry);
-void extend_header(vcf::VariantCallFile &vcf);
+void extend_header(vcf::VariantCallFile &vcf, bool add_subset);
 void parse_parameters_from_json(string filename, vcf::VariantCallFile& vcf);
 
 bool validate_filename_parameter(string filename, string param_name);

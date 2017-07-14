@@ -5,6 +5,7 @@
 extern "C" {
 #include "../samtools/bam.h"
 #include "../util/tmap_error.h"
+#include "../io/tmap_file.h"
 }
 
 #include <cassert>
@@ -56,7 +57,7 @@ const char* clip_seq (const char* qry, const uint32_t* cigar, unsigned cigar_sz,
     return qry + noclip_beg;
 }
 
-unsigned roll_cigar (uint32_t* cigar, unsigned max_cigar_len, unsigned& cigar_len, const BATCH* batches, unsigned bno, unsigned clean_qry_len, EndClips& clip_store, unsigned& x_off, unsigned& y_off)
+unsigned roll_cigar (uint32_t* cigar, unsigned max_cigar_len, unsigned& cigar_len, const BATCH* batches, unsigned bno, unsigned clean_qry_len, EndClips& clip_store, unsigned& x_off, unsigned& y_off, unsigned& xlen, unsigned& ylen)
 {
     // add beginning clips if any
     // x is 1st is query, y is 2nd is reference
@@ -114,9 +115,15 @@ unsigned roll_cigar (uint32_t* cigar, unsigned max_cigar_len, unsigned& cigar_le
     }
     if (cur_x > clean_qry_len)
     {
-        std::cerr << "Aligned query portion extends over clipped query length\n";
+        tmap_file_fprintf (tmap_file_stderr, "Aligned query portion extends over clipped query length\n");
         tmap_bug ();
     }
+
+    xlen = cur_x - x_off;
+    ylen = cur_y - y_off;
+
+    // shift x_off by the 5' soft clip 
+    x_off += clip_store.soft_beg_;
 
     // add ending clips if any
     if (clip_store.soft_end_ + (clean_qry_len - cur_x))

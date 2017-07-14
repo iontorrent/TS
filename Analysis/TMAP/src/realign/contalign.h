@@ -83,6 +83,7 @@ public:
     // on a diagonal band (len, diag-width:diag+width_right)
     // returns maximum local alignment score
     // NOTE: batch xpos, ypos, len should be inside X and Y sequences, width > 0
+    // 02/28/2017 : Changing semantics of tobeg / toend to only apply to X sequence (read in TMAP)
     double align_band (const char* xseq, int xlen, const char* yseq, int ylen, int xpos, int ypos, int len, int width, int width_right = -1, bool tobeg = false, bool toend = false);
 
     // checks if enough matrix space is present for alignment

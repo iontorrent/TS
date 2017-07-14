@@ -15,7 +15,7 @@ set -x
 # Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
 . /lib/lsb/init-functions
 
-DAEMON='/usr/share/ion/oia/oiad.py'
+DAEMON='/software/oia/oiad.py'
 DAEMON_NAME='oia'
 USERID='root'
 PIDFILE="/var/run/${DAEMON_NAME}.pid"

@@ -111,6 +111,10 @@ def generate_wells_beadogram2(basecaller, sigproc, beadogram_path=None):
 
 def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
     beadogram_path = beadogram_path or os.path.join(basecaller, "wells_beadogram.png")
+    generate_wells_beadogram_all_or_basic(basecaller, sigproc, beadogram_path, True)
+    
+
+def generate_wells_beadogram_all_or_basic(basecaller, sigproc, beadogram_path, is_full_details = True):
     basecaller = load_json(basecaller, "BaseCaller.json")
     beadfind = load_ini(sigproc, "analysis.bfmask.stats")
 
@@ -153,6 +157,7 @@ def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
     # Row 3: Clonality
     polyclonal_wells = int(basecaller["Filtering"]["LibraryReport"]["filtered_polyclonal"])
     clonal_wells = enriched_wells - polyclonal_wells
+
     if enriched_wells > 0:
         clonal_percent = int(round(100.0 * float(clonal_wells) / float(enriched_wells)))
         polyclonal_percent = 100 - clonal_percent
@@ -165,11 +170,18 @@ def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
     final_tf_wells = int(basecaller["Filtering"]["ReadDetails"]["tf"]["valid"])
     dimer_wells = int(basecaller["Filtering"]["LibraryReport"]["filtered_primer_dimer"])
     low_quality_wells = clonal_wells - final_library_wells - final_tf_wells - dimer_wells
+
+    if not is_full_details:
+        low_quality_wells += polyclonal_wells
+        
     if clonal_wells > 0:
         final_library_percent = int(round(100.0 * float(final_library_wells) / float(clonal_wells)))
         final_tf_percent = int(round(100.0 * float(final_tf_wells) / float(clonal_wells)))
         dimer_percent = int(round(100.0 * float(dimer_wells) / float(clonal_wells)))
         low_quality_percent = 100 - final_library_percent - final_tf_percent - dimer_percent
+
+        if not is_full_details:
+            low_quality_percent = int(round(100.0 * float(low_quality_wells) / float(clonal_wells)))
     else:
         final_library_percent = 0.0
         final_tf_percent = 0.0
@@ -180,25 +192,58 @@ def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
     color_gray = "#808080"
 
     fontsize_big = 22
-    fontsize_small = 14
+    fontsize_small = 12
     fontsize_medium = 16
 
     fig = pyplot.figure(figsize=(6, 4), dpi=100)
+
+    #  "111" means "1x1 grid, first subplot"
     ax = fig.add_subplot(111, frame_on=False, xticks=[], yticks=[], position=[0, 0, 1, 1])
 
-    ax.barh(
-        bottom=[3, 2, 1, 0],
-        left=[0, 0, 0, 0],
-        width=[loaded_wells/float(available_wells), enriched_wells/float(available_wells), clonal_wells/float(available_wells), final_library_wells/float(available_wells)],
-        height=0.8, color=color_blue, linewidth=0, zorder=1)
 
-    ax.barh(
-        bottom=[3, 2, 1, 0],
-        left=[loaded_wells/float(available_wells), enriched_wells/float(available_wells), clonal_wells/float(available_wells), final_library_wells/float(available_wells)],
-        width=[empty_wells/float(available_wells), unenriched_wells/float(available_wells), polyclonal_wells/float(available_wells),
-               (final_tf_wells+dimer_wells+low_quality_wells)/float(available_wells)],
-        height=0.8, color=color_gray, linewidth=0, zorder=1)
+    # horizontal bar plot
+    # http://matplotlib.org/api/pyplot_api.html#matplotlib.pyplot.barh
+    # matplotlib.pyplot.barh(bottom, width, height=0.8, left=None, hold=None, **kwargs)
+    # bottom : scalar or array-like; the y coordinate(s) of the bars
+    # width : scalar or array-like; the width(s) of the bars
+    # height : sequence of scalars, optional, default: 0.8; the heights of the bars
+    # left : sequence of scalars; the x coordinates of the left sides of the bars
+    
+    if is_full_details:
+        ax.barh(
+            bottom=[3, 2, 1, 0],
+            left=[0, 0, 0, 0],
+            width=[loaded_wells/float(available_wells), enriched_wells/float(available_wells), clonal_wells/float(available_wells), final_library_wells/float(available_wells)],
+            height=0.8, color=color_blue, linewidth=0, zorder=1)
 
+        ax.barh(
+            bottom=[3, 2, 1, 0],
+            left=[loaded_wells/float(available_wells), enriched_wells/float(available_wells), clonal_wells/float(available_wells), final_library_wells/float(available_wells)],
+            width=[empty_wells/float(available_wells), unenriched_wells/float(available_wells), polyclonal_wells/float(available_wells),
+                   (final_tf_wells+dimer_wells+low_quality_wells)/float(available_wells)],
+            height=0.8, color=color_gray, linewidth=0, zorder=1)
+    else:  
+        ax.barh(
+            bottom=[3, 2, 1],
+            left=[0, 0, 0],
+            width=[loaded_wells/float(available_wells), enriched_wells/float(available_wells), final_library_wells/float(available_wells)],
+            height=0.8, color=color_blue, linewidth=0, zorder=1)
+    
+        ax.barh(
+            bottom=[3, 2, 1],
+            left=[loaded_wells/float(available_wells), enriched_wells/float(available_wells), final_library_wells/float(available_wells)],
+            width=[empty_wells/float(available_wells), unenriched_wells/float(available_wells), 
+                   (final_tf_wells+dimer_wells+low_quality_wells)/float(available_wells)],
+            height=0.8, color=color_gray, linewidth=0, zorder=1)
+        
+
+    # http://matplotlib.org/api/pyplot_api.html#matplotlib.pyplot.text
+    # matplotlib.pyplot.text(x, y, s, fontdict=None, withdash=False, **kwargs)
+    # x, y : scalars; data coordinates
+    # s : string; text
+    # fontdict : dictionary, optional, default: None; A dictionary to override the default text properties. If fontdict is None, the defaults are determined by your rc parameters.
+    # withdash : boolean, optional, default: False; Creates a TextWithDash instance instead of a Text instance.
+    
     ax.text(-0.21, 3.1, 'Loading', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_blue, weight='bold', stretch='condensed')
     ax.text(-0.21, 3.4, ' %d%%' % loaded_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_blue, weight='bold', stretch='condensed')
     ax.text(1.21, 3.1, 'Empty Wells', horizontalalignment='center', verticalalignment='center',
@@ -218,41 +263,62 @@ def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
     ax.text(0.04, 2.4, intWithCommas(enriched_wells), horizontalalignment='left', verticalalignment='center',
             fontsize=fontsize_medium, zorder=0.5, color='black', weight='bold', stretch='condensed')
 
-    ax.text(-0.21, 1.1, 'Clonal', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_blue, weight='bold', stretch='condensed')
-    ax.text(-0.21, 1.4, ' %d%%' % clonal_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_blue, weight='bold', stretch='condensed')
-    ax.text(max(0.6, 0.21+enriched_wells/float(available_wells)), 1.1,
-            'Polyclonal', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_gray, weight='bold', stretch='condensed')
-    ax.text(max(0.6, 0.21+enriched_wells/float(available_wells)), 1.4,
-            ' %d%%' % polyclonal_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_gray, weight='bold', stretch='condensed')
-    ax.text(0.04, 1.4, intWithCommas(clonal_wells), horizontalalignment='left', verticalalignment='center',
-            fontsize=fontsize_medium, zorder=2, color='white', weight='bold', stretch='condensed', alpha=0.7)
-    ax.text(0.04, 1.4, intWithCommas(clonal_wells), horizontalalignment='left', verticalalignment='center',
-            fontsize=fontsize_medium, zorder=0.5, color='black', weight='bold', stretch='condensed')
+    bottom_bar_y1 = 0.1
+    bottom_bar_y2 = 0.4
+    bottom_text_y1 = 0.65
+    bottom_text_y2 = 0.4
+    bottom_text_y3 = 0.15
+            
+    if is_full_details:
+        ax.text(-0.21, 1.1, 'Clonal', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_blue, weight='bold', stretch='condensed')
+        ax.text(-0.21, 1.4, ' %d%%' % clonal_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_blue, weight='bold', stretch='condensed')
+        ax.text(max(0.6, 0.21+enriched_wells/float(available_wells)), 1.1,
+                'Polyclonal', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_gray, weight='bold', stretch='condensed')
+        ax.text(max(0.6, 0.21+enriched_wells/float(available_wells)), 1.4,
+                ' %d%%' % polyclonal_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_gray, weight='bold', stretch='condensed')
 
-    ax.text(-0.21, 0.1, 'Final Library', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_blue, weight='bold', stretch='condensed')
-    ax.text(-0.21, 0.4, ' %d%%' % final_library_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_blue, weight='bold', stretch='condensed')
+        ax.text(0.04, 1.4, intWithCommas(clonal_wells), horizontalalignment='left', verticalalignment='center',
+                fontsize=fontsize_medium, zorder=2, color='white', weight='bold', stretch='condensed', alpha=0.7)
+        ax.text(0.04, 1.4, intWithCommas(clonal_wells), horizontalalignment='left', verticalalignment='center',
+                fontsize=fontsize_medium, zorder=0.5, color='black', weight='bold', stretch='condensed')
 
-    ax.text(max(0.45, 0.05+clonal_wells/float(available_wells)), 0.65,
+    else:
+        bottom_bar_y1 = 1.1
+        bottom_bar_y2 = 1.4
+        bottom_text_y1 = 1.65
+        bottom_text_y2 = 1.4
+        bottom_text_y3 = 1.15
+                
+    ax.text(-0.21, bottom_bar_y1, 'Final Library', horizontalalignment='center', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_blue, weight='bold', stretch='condensed')
+    ax.text(-0.21, bottom_bar_y2, ' %d%%' % final_library_percent, horizontalalignment='center', verticalalignment='center', fontsize=fontsize_big, zorder=2, color=color_blue, weight='bold', stretch='condensed')
+
+    ax.text(max(0.90, 0.05+clonal_wells/float(available_wells)), bottom_text_y1,
             '% 2d%% Test Fragments' % final_tf_percent,
             horizontalalignment='left', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_gray, weight='bold', stretch='condensed')
 
-    ax.text(max(0.45, 0.05+clonal_wells/float(available_wells)), 0.4,
+    ax.text(max(0.90, 0.05+clonal_wells/float(available_wells)), bottom_text_y2,
             '% 2d%% Adapter Dimer' % dimer_percent,
             horizontalalignment='left', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_gray, weight='bold', stretch='condensed')
 
-    ax.text(max(0.45, 0.05+clonal_wells/float(available_wells)), 0.15,
+    ax.text(max(0.90, 0.05+clonal_wells/float(available_wells)), bottom_text_y3,
             '% 2d%% Low Quality' % low_quality_percent,
             horizontalalignment='left', verticalalignment='center', fontsize=fontsize_small, zorder=2, color=color_gray, weight='bold', stretch='condensed')
 
-    ax.text(0.04, 0.4, intWithCommas(final_library_wells), horizontalalignment='left', verticalalignment='center',
+    ax.text(0.04, bottom_bar_y2, intWithCommas(final_library_wells), horizontalalignment='left', verticalalignment='center',
             fontsize=fontsize_medium, zorder=2, color='white', weight='bold', stretch='condensed', alpha=0.7)
-    ax.text(0.04, 0.4, intWithCommas(final_library_wells), horizontalalignment='left', verticalalignment='center',
+    ax.text(0.04, bottom_bar_y2, intWithCommas(final_library_wells), horizontalalignment='left', verticalalignment='center',
             fontsize=fontsize_medium, zorder=0.5, color="#000000", weight='black', stretch='condensed')
 
     ax.set_xlim(-0.42, 1.42)
 
     fig.patch.set_alpha(0.0)
     pyplot.savefig(beadogram_path)
+
+
+def generate_wells_beadogram_basic(basecaller, sigproc, beadogram_path=None):
+    beadogram_path = beadogram_path or os.path.join(basecaller, "wells_beadogram_basic.png")
+    generate_wells_beadogram_all_or_basic(basecaller, sigproc, beadogram_path, is_full_details = False)
+
 
 
 if __name__ == "__main__":

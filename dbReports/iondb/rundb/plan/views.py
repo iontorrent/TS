@@ -7,36 +7,31 @@ from django.shortcuts import render_to_response, get_object_or_404, \
     get_list_or_404, render
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.views.generic.detail import DetailView
 from django.core.exceptions import ValidationError
 
 from iondb.rundb.api import PlannedExperimentResource
 from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, SharedServer, \
-    ReferenceGenome, Content, KitInfo, VariantFrequencies, dnaBarcode, \
+    ReferenceGenome, Content, KitInfo, dnaBarcode, PlanSession, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
     PlannedExperimentQC, Sample, GlobalConfig, Message, Experiment, Results, EventLog, common_CV
 from django.db.models import Q
+from distutils.version import StrictVersion, LooseVersion
 
 from traceback import format_exc
 import json
-from urllib import unquote_plus
 import simplejson
 import uuid
 
 import logging
-from django.core import serializers
 from django.core.serializers.json import DjangoJSONEncoder
-from iondb.rundb.api import PlannedExperimentResource, RunTypeResource, \
-    dnaBarcodeResource, ChipResource, ApplicationGroupResource, SampleGroupType_CVResource
 
 from django.core.urlresolvers import reverse
 
-from iondb.utils import toBoolean
 from iondb.rundb.plan.views_helper import get_projects, dict_bed_hotspot, isOCP_enabled, is_operation_supported, getChipDisplayedNamePrimaryPrefix, \
     getChipDisplayedNameSecondaryPrefix, getChipDisplayedVersion, get_template_categories
 
-from iondb.utils.validation import is_valid_chars, is_valid_leading_chars, is_valid_length
 from iondb.utils.utils import convert
 from iondb.utils.prepopulated_planning import apply_prepopulated_values_to_step_helper
 
@@ -45,16 +40,16 @@ from iondb.rundb.plan.plan_csv_writer import PlanCSVcolumns, get_template_data_f
 from iondb.rundb.plan.plan_csv_validator import validate_csv_plan, get_bedFile_for_reference
 from iondb.rundb.plan import plan_validator
 from iondb.utils import utils, toBoolean
+from iondb.utils.TaskLock import TaskLock
 
 import os
-import string
 import traceback
 import tempfile
 import csv
 import io
+import collections
 import zipfile
 
-from django.core.exceptions import ValidationError
 from iondb.rundb.plan.page_plan.step_helper import StepHelper
 from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 from iondb.rundb.plan.page_plan.step_helper_db_loader import StepHelperDbLoader
@@ -101,8 +96,11 @@ def plan_templates(request):
     """
     plan template home page
     """
+    s5_chips_plan_json_upload = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540"], instrumentType= "S5").values_list('name', flat=True).order_by('name')
+
     ctxd = {
-        'categories': get_template_categories()
+        'categories': get_template_categories(),
+        's5_chips': s5_chips_plan_json_upload
     }
     return render_to_response("rundb/plan/plan_templates.html", context_instance=RequestContext(request, ctxd))
 
@@ -145,6 +143,8 @@ def page_plan_new_template(request, code=None):
             step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, applicationGroupName="PGx")
         elif (code == "11"):
             step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, applicationGroupName="HID")
+        elif (code == "12"):
+            step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("5").pk, applicationGroupName="immune_repertoire")
         else:
             step_helper = StepHelperDbLoader().getStepHelperForRunType(_get_runtype_from_code(code).pk)
     else:
@@ -174,7 +174,8 @@ def page_plan_new_plan(request, template_id):
 
     apply_prepopulated_values_to_step_helper(request, step_helper)
 
-    ctxd = handle_step_request(request, 'Save_plan', step_helper)
+    next_step_name = redirect_step('Save_plan', step_helper)
+    ctxd = handle_step_request(request, next_step_name, step_helper)
     ctxd['step'].validationErrors.clear()  # Remove validation errors found during wizard initialization
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
 
@@ -196,7 +197,8 @@ def page_plan_new_plan_by_sample(request, template_id, sampleset_id):
                                                                                  sampleset_id=sampleset_id)
     apply_prepopulated_values_to_step_helper(request, step_helper)
 
-    ctxd = handle_step_request(request, 'Barcode_by_sample', step_helper)
+    next_step_name = redirect_step('Barcode_by_sample', step_helper)
+    ctxd = handle_step_request(request, next_step_name, step_helper)
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
 
 
@@ -213,6 +215,8 @@ def page_plan_new_plan_from_code(request, code):
         step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="PGx")
     elif (code == "11"):
         step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="HID")
+    elif (code == "12"):
+        step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("5").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="immune_repertoire")
     else:
         runType = _get_runtype_from_code(code)
         step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
@@ -297,7 +301,9 @@ def page_plan_copy_plan(request, plan_id):
     if plan.sampleSets.exists():
         return HttpResponseRedirect(reverse('page_plan_copy_plan_by_sample', args=(plan_id,)))
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.COPY_PLAN)
-    ctxd = handle_step_request(request, 'Save_plan', step_helper)
+
+    next_step_name = redirect_step('Save_plan', step_helper)
+    ctxd = handle_step_request(request, next_step_name, step_helper)    
     ctxd['step'].validationErrors.clear()  # Remove validation errors as this the user is just now seeing the plan.
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
 
@@ -310,7 +316,9 @@ def page_plan_copy_plan_by_sample(request, plan_id):
         return render_to_response("501.html")
 
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.COPY_PLAN_BY_SAMPLE)
-    ctxd = handle_step_request(request, 'Barcode_by_sample', step_helper)
+    
+    next_step_name = redirect_step('Barcode_by_sample', step_helper)
+    ctxd = handle_step_request(request, next_step_name, step_helper)
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
 
 
@@ -428,8 +436,9 @@ def page_plan_save(request, exp_id=None):
             logger.exception(format_exc())
             Message.error("There was an error saving your plan/template.")
 
-        # this plan is done, remove it from sessions
-        request.session['plan_sessions'].pop(request.session['current_plan_key'])
+        # this plan is done, delete its session
+        plan_session_key = request.session['plan_session_key']
+        PlanSession.objects.filter(session_key = request.session.session_key, plan_key=plan_session_key).delete()
 
         # return response if initiated from prepopulated session API
         if "post_planning_redirect_url" in request.session:
@@ -460,9 +469,8 @@ def page_plan_save(request, exp_id=None):
 
 def handle_step_request(request, next_step_name, step_helper=None):
 
-    # find out which step we came from
     current_step_name = request.POST.get('stepName', None)
-    step_helper = _update_plan_session(request, step_helper)
+    step_helper, plan_session = _update_plan_session(request, step_helper)
 
     if not step_helper:
         step_helper = StepHelper()
@@ -476,14 +484,11 @@ def handle_step_request(request, next_step_name, step_helper=None):
     application_step_data = step_helper.steps['Application']
     applProduct = application_step_data.savedObjects['applProduct']
 
-    # logger.debug("views.handle_step_request() applProduct=%s" %(applProduct))
-
     # update the step helper with the input from the step we came from
     updated = step_helper.updateStepFromRequest(request, current_step_name)
     # raise RuntimeError("what" + '%s' % updated)
     logger.debug("Step: %s, Updated: %s" % (current_step_name, str(updated)))
     if updated:
-
         request.session.modified = True
 
     if current_step_name and step_helper.steps[current_step_name].hasErrors():
@@ -491,14 +496,20 @@ def handle_step_request(request, next_step_name, step_helper=None):
             next_step_name = current_step_name
         elif step_helper.steps[current_step_name].hasStepSections():
             next_step_name = current_step_name
-            # logger.debug("views.handle_step_request() AFTER hasStepSections() next_step_name=%s" %(next_step_name))
-        # else:
-        #    logger.debug("views.handle_step_request() NO-OP next_step_name=%s" %(next_step_name))
 
-        # logger.debug("EXIT views.handle_step_request() next_step_name=%s" %(next_step_name))
-
-    ctxd = _create_context_from_session(request, next_step_name)
+    plan_session.set_data(step_helper)
+    ctxd = _create_context_from_session(request, next_step_name, step_helper)
     return ctxd
+
+
+def redirect_step(next_step_name, step_helper):
+    # redirects next step if warnings exist
+    redirect = next_step_name
+    for name, step in step_helper.steps.iteritems():
+        if len(step.warnings) > 0 or name == next_step_name:
+            redirect = name
+            break
+    return redirect
 
 
 def update_plan_log(saved_plans, step_helper, username):
@@ -523,54 +534,18 @@ def update_plan_log(saved_plans, step_helper, username):
         plan = PlannedExperiment.objects.get(pk=edited_plan_pk)
         state = 'Run' if step_helper.isEditRun() else 'Planned Run'
         msg = 'Updated %s: %s (%s).' % (state, plan.planName, plan.pk)
-
-        # log old/new values for changed fields
-        changed = step_helper.getChangedFields()
-        changed_msg = {}
-        for key, values in changed.items():
-            if key == 'pluginIds':
-                # convert plugin ids to names
-                plugins = step_helper.steps['Plugins'].prepopulatedFields['plugins']
-                old = [plugin.name for plugin in plugins if values[0] and str(plugin.id) in values[0].replace(' ', '').split(',')]
-                new = [plugin.name for plugin in plugins if values[1] and str(plugin.id) in values[1].replace(' ', '').split(',')]
-                changed_msg['plugins'] = [', '.join(old), ', '.join(new)]
-            elif key.startswith('plugin_config'):
-                try:
-                    old = json.loads(values[0])
-                    new = json.loads(values[1])
-                    if old != new:
-                        changed_msg[key] = [json.dumps(old, indent=1), json.dumps(new, indent=1)]
-                except:
-                    changed_msg[key] = [values[0], values[1]]
-            elif key == 'projects':
-                # convert project ids to names
-                projects = step_helper.steps['Output'].prepopulatedFields['projects']
-                old = [project.name for project in projects if values[0] and (project.id in values[0] or str(project.id) in values[0])]
-                new = [project.name for project in projects if values[1] and (project.id in values[1] or str(project.id) in values[1])]
-                changed_msg[key] = [', '.join(old), ', '.join(new)]
-            else:
-                changed_msg[key] = [values[0], values[1]]
-
-        if changed_msg:
-            EventLog.objects.add_entry(plan, json.dumps(changed_msg), username)
-            EventLog.objects.add_entry(plan, msg, username)
+        EventLog.objects.add_entry(plan, msg, username)
 
 
 def toggle_template_favorite(request, template_id):
     '''
     toggle a template to set/unset the favorite tag with id template_id
     '''
-    ctxd = {}
-
     plan_template = get_object_or_404(PlannedExperiment, pk=template_id)
-
-    toggle_favorite = False if (plan_template.isFavorite) else True
-    plan_template.isFavorite = toggle_favorite
-
+    plan_template.isFavorite = False if (plan_template.isFavorite) else True
     plan_template.save()
 
-    ctx = RequestContext(request, ctxd)
-    return render_to_response("rundb/plan/plan_templates.html", context_instance=ctx, mimetype="text/html")
+    return HttpResponse()
 
 
 def _get_runtype_from_code(code):
@@ -585,17 +560,16 @@ def _get_runtype_from_code(code):
         '8': "AMPS_DNA_RNA",
         #'9': PGx - AMPS_DNA
         '10': "TAG_SEQUENCING",
-        '11': "HID"
+        '11': "HID",
+        '12': "AMPS_RNA"
     }
     product_code = codes.get(code, "GENS")
     return RunType.objects.get(runType=product_code)
 
 
-def _create_context_from_session(request, next_step_name):
-    key = request.session['current_plan_key']
-    step_helper = request.session['plan_sessions'][key]
+def _create_context_from_session(request, next_step_name, step_helper):
     ctxd = {
-        'plan_session_key': key,
+        'plan_session_key': request.session['plan_session_key'],
         'helper': step_helper,
         'step': step_helper.steps.get(next_step_name)
     }
@@ -603,24 +577,18 @@ def _create_context_from_session(request, next_step_name):
 
 
 def _update_plan_session(request, step_helper):
-    if 'plan_sessions' not in request.session:
-        request.session['plan_sessions'] = {}
-        # expire session after 3 hrs inactive
-        request.session.set_expiry(10800)
-
-    # find or generate unique plan session id
+    # get or create unique plan session id
     key = request.POST.get('plan_session_key')
     if not key and step_helper:
         key = '%s-%s' % (step_helper.sh_type, datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
 
-    request.session['current_plan_key'] = key
+    request.session['plan_session_key'] = key
 
-    if key not in request.session['plan_sessions']:
-        request.session['plan_sessions'][key] = step_helper
-    else:
-        step_helper = request.session['plan_sessions'][ key ]
+    ps, created = PlanSession.objects.get_or_create(session_key = request.session.session_key, plan_key=key)
+    if not created:
+        step_helper = ps.get_data()
 
-    return step_helper
+    return step_helper, ps
 
 @login_required
 def planned(request):
@@ -658,104 +626,6 @@ def delete_plan_template(request, pks=None):
     return render_to_response("rundb/common/modal_confirm_delete.html", context_instance=ctx)
 
 
-# def  _handle_request_preProcess_failure():
-# result = HttpResponse("error message here", content_type="text/plain")
-# result.status_code = 417
-# return result
-def _get_runtype_json(request, runType):
-    rtr = RunTypeResource()
-    base_bundle = rtr.build_bundle(request=request)
-    rt = rtr.obj_get(bundle=base_bundle, runType=runType)
-    rtr_bundle = rtr.build_bundle(obj=rt, request=request)
-    rt_json = rtr.serialize(None, rtr.full_dehydrate(rtr_bundle), 'application/json')
-    return rt_json
-
-
-def _get_dnabarcode_json(request, barcodeId):
-    dnar = dnaBarcodeResource()
-    base_bundle = dnar.build_bundle(request=request)
-    dna = dnar.obj_get_list(bundle=base_bundle, name=barcodeId, request=request).order_by('index')
-    dna_bundles = [dnar.build_bundle(obj=x, request=request) for x in dna]
-    dna_json = dnar.serialize(None, [dnar.full_dehydrate(bundle) for bundle in dna_bundles], 'application/json')
-    return dna_json
-
-
-def _get_chiptype_json(request, chipType, plan):
-    chipResource = ChipResource()
-    chipResource_serialize_json = None
-    if chipType:
-        try:
-            base_bundle = chipResource.build_bundle(request=request)
-            try:
-                chip = chipResource.obj_get(bundle=base_bundle, name=chipType)
-            except Chip.DoesNotExist:
-                chip = chipResource.obj_get(bundle=base_bundle, name=chipType[:3])
-
-            chipResource_bundle = chipResource.build_bundle(obj=chip, request=request)
-            chipResource_serialize_json = chipResource.serialize(None, chipResource.full_dehydrate(chipResource_bundle), 'application/json')
-        except Chip.DoesNotExist:
-            logger.error("views._get_chiptype_json() Plan.pk=%d; name=%s has invalid chip type=%s" % (plan.id, plan.planName, chipType))
-            chipResource_bundle = None
-            chipResource_serialize_json = json.dumps("INVALID")
-    else:
-        chipResource_bundle = None
-        chipResource_serialize_json = json.dumps(None)
-    return chipResource_serialize_json
-
-
-def _get_stripped_chipType(chipType):
-    '''
-    some historical runs are found to have chipType is extra double quotes and/or backslash with quotes
-    0047_ migration script should have fixed the extra double quotes problems. For defensive coding, double check here
-    '''
-    if chipType:
-        return chipType.replace('\\', '').replace('"', '')
-    else:
-        return chipType
-
-
-def _get_applicationGroup_json(request, applicationGroup_id):
-    applicationGroupResource = ApplicationGroupResource()
-    applicationGroupResource_serialize_json = None
-
-    if applicationGroup_id:
-        try:
-            base_bundle = applicationGroupResource.build_bundle(request=request)
-
-            applicationGroup = applicationGroupResource.obj_get(bundle=base_bundle, id=applicationGroup_id)
-
-            applicationGroupResource_bundle = applicationGroupResource.build_bundle(obj=applicationGroup, request=request)
-            applicationGroupResource_serialize_json = applicationGroupResource.serialize(None, applicationGroupResource.full_dehydrate(applicationGroupResource_bundle), 'application/json')
-        except:
-            applicationGroupResource_bundle = None
-            applicationGroupResource_serialize_json = json.dumps(None)
-    else:
-        applicationGroupResource_bundle = None
-        applicationGroupResource_serialize_json = json.dumps(None)
-    return applicationGroupResource_serialize_json
-
-
-def _get_sampleGrouping_json(request, sampleGroup_id):
-    sampleGroupResource = SampleGroupType_CVResource()
-    sampleGroupResource_serialize_json = None
-
-    if sampleGroup_id:
-        try:
-            base_bundle = sampleGroupResource.build_bundle(request=request)
-
-            sampleGroup = sampleGroupResource.obj_get(bundle=base_bundle, id=sampleGroup_id)
-
-            sampleGroupResource_bundle = sampleGroupResource.build_bundle(obj=sampleGroup, request=request)
-            sampleGroupResource_serialize_json = sampleGroupResource.serialize(None, sampleGroupResource.full_dehydrate(sampleGroupResource_bundle), 'application/json')
-        except:
-            sampleGroupResource_bundle = None
-            sampleGroupResource_serialize_json = json.dumps(None)
-    else:
-        sampleGroupResource_bundle = None
-        sampleGroupResource_serialize_json = json.dumps(None)
-    return sampleGroupResource_serialize_json
-
-
 class PlanDetailView(DetailView):
     model = PlannedExperiment
     template_name = 'rundb/plan/modal_plannedexperiment_detail.html'
@@ -782,6 +652,13 @@ class PlanDetailView(DetailView):
         context['state'] = state
         context['eas'] = eas
         context['runType'] = RunType.objects.filter(runType=plan.runType)
+
+        if plan.runType:
+            runType = str(plan.runType)
+            context['applicationCategoryDisplayedName'] = PlannedExperiment.get_validatedApplicationCategoryDisplayedName(plan.categories, runType)
+        else:
+            context['applicationCategoryDisplayedName'] = PlannedExperiment.get_applicationCategoryDisplayedName(plan.categories)
+        
         context['samplePrepKit'] = KitInfo.objects.filter(name=plan.samplePrepKitName)
         context['libraryKit'] = KitInfo.objects.filter(name=eas.libraryKitName)
         context['templatingKit'] = KitInfo.objects.filter(name=plan.templatingKitName)
@@ -826,20 +703,20 @@ class PlanDetailView(DetailView):
             columns = []
             if (isinstance(config_dict, dict)):
                 for column, key in iru_display_keys:
-                    if key in config_dict:
+                    if key == 'Workflow' and config_dict.get(key) == '':
+                        config_dict['Workflow'] = 'Upload Only'
+                    if key in config_dict and config_dict[key]:
                         params[column] = config_dict[key]
                         columns.append(column)
                         if key == 'setid':
                             params['Set ID'] = config_dict['setid'].split('_')[0]
-                        if key == 'Workflow' and config_dict[key] == '':
-                            params['Workflow'] = 'Upload Only'
             else:
                 logger.debug("views.PlanDetailView - SKIPPED -  config_dict.type=%s" % (type(config_dict)))
 
             if params:
                 barcoded = config_dict.get('barcodeId') or 'nobarcode'
                 context['iru_config'][barcoded] = params
-                context['iru_columns'] = columns
+                context['iru_columns'] = [v[0] for v in iru_display_keys if v[0] in columns]
 
         # QC thresholds
         context['qcValues'] = []
@@ -866,41 +743,39 @@ class PlanDetailView(DetailView):
             context['projects'] = ', '.join([p.name for p in plan.projects.all().order_by('-modified')])
 
         # barcodes
-        if eas.barcodeKitName:
+        if eas.barcodeKitName and eas.barcodedSamples:
             barcodedSamples = {}
             columns = []
             applicationGroup = plan.applicationGroup.name if plan.applicationGroup else ""
-            if eas.barcodedSamples:
-                bcsamples_display_keys = (
-                    ('Control Type', 'controlType'),
-                    ('Sample ID', 'externalId'),
-                    ('Sample Description', 'description'),
-                    ('DNA/Fusions' if applicationGroup == 'DNA + RNA' else 'DNA/RNA', 'nucleotideType'),
-                    ('Reference', 'reference'),
-                    ('Target Regions', 'targetRegionBedFile'),
-                    ('Hotspot Regions', 'hotSpotRegionBedFile'),
-                )
+            bcsamples_display_keys = (
+                ('Control Type', 'controlType'),
+                ('Sample Description', 'description'),
+                ('Sample ID', 'externalId'),
+                ('DNA/Fusions' if applicationGroup == 'DNA + RNA' else 'DNA/RNA', 'nucleotideType'),
+                ('Reference', 'reference'),
+                ('Target Regions', 'targetRegionBedFile'),
+                ('Hotspot Regions', 'hotSpotRegionBedFile'),
+            )
+            for sample, info in eas.barcodedSamples.items():
+                for bcId in info.get('barcodes', []):
+                    barcodedSamples[bcId] = {}
+                    barcodedSamples[bcId]['sample'] = sample
 
-                for sample, info in eas.barcodedSamples.items():
-                    for bcId in info.get('barcodes', []):
-                        barcodedSamples[bcId] = {}
-                        barcodedSamples[bcId]['sample'] = sample
+                    barcodeSampleInfo = info.get('barcodeSampleInfo', {}).get(bcId, {})
+                    for column, key in bcsamples_display_keys:
+                        if key in barcodeSampleInfo and barcodeSampleInfo[key]:
+                            if column not in columns:
+                                columns.append(column)
 
-                        barcodeSampleInfo = info.get('barcodeSampleInfo', {}).get(bcId, {})
-                        for column, key in bcsamples_display_keys:
-                            if key in barcodeSampleInfo and barcodeSampleInfo[key]:
-                                if column not in columns:
-                                    columns.append(column)
+                            value = barcodeSampleInfo[key]
+                            if key in ['targetRegionBedFile', 'hotSpotRegionBedFile']:
+                                value = os.path.basename(barcodeSampleInfo[key])
+                            elif key == "nucleotideType" and value == "RNA" and applicationGroup == 'DNA + RNA':
+                                value = "Fusions"
 
-                                value = barcodeSampleInfo[key]
-                                if key in ['targetRegionBedFile', 'hotSpotRegionBedFile']:
-                                    value = os.path.basename(barcodeSampleInfo[key])
-                                elif key == "nucleotideType" and value == "RNA" and applicationGroup == 'DNA + RNA':
-                                    value = "Fusions"
+                            barcodedSamples[bcId][column] = value
 
-                                barcodedSamples[bcId][column] = value
-
-            context['bcsamples_columns'] = columns
+            context['bcsamples_columns'] = [v[0] for v in bcsamples_display_keys if v[0] in columns]
             context['barcodedSamples'] = barcodedSamples
             context['barcodes'] = dnaBarcode.objects.filter(name=eas.barcodeKitName, id_str__in=barcodedSamples.keys()).order_by('id_str')
 
@@ -923,128 +798,15 @@ class PlanDetailView(DetailView):
                 context['tsVersion'] = planMeta[1]
 
         # log
-        history = EventLog.objects.for_model(plan)
+        history = EventLog.objects.for_model(plan).order_by('-created')
         for log in history:
             try:
-                log.json_log = json.loads(log.text)
+                log.json_log = convert(json.loads(log.text))
             except:
                 pass
         context['event_log'] = history
 
         return context
-
-
-def _plan_template_helper(request, _id, isForTemplate, intent):
-    data = _get_allApplProduct_data(isForTemplate)
-    planTemplate = get_object_or_404(PlannedExperiment, pk=_id)
-    runType = get_object_or_404(RunType, runType=planTemplate.runType)
-
-    # add experiment attributes
-    experiment = planTemplate.experiment
-    exp_keys = [
-        ('autoAnalyze', 'autoAnalyze'),
-        ('flows', 'flows'),
-        ('notes', 'notes'),
-        ('sequencekitname', 'sequencekitname'),
-    ]
-    for plankey, key in exp_keys:
-        setattr(planTemplate, plankey, getattr(experiment, key, ''))
-
-    chipResource = ChipResource()
-    base_bundle = chipResource.build_bundle(request=request)
-    try:
-        chip = chipResource.obj_get(bundle=base_bundle, name=experiment.chipType)
-        if chip:
-            setattr(planTemplate, "chipType", experiment.chipType)
-    except Chip.DoesNotExist:
-        try:
-            chip = chipResource.obj_get(bundle=base_bundle, name=experiment.chipType[:3])
-            if chip:
-                setattr(planTemplate, "chipType", experiment.chipType[:3])
-        except Chip.DoesNotExist:
-            setattr(planTemplate, "chipType", experiment.chipType)
-
-    setattr(planTemplate, "sample", experiment.get_sample())
-    setattr(planTemplate, "sampleDisplayedName", experiment.get_sampleDisplayedName())
-
-    setattr(planTemplate, "isIonChef", planTemplate.is_ionChef())
-
-    # add EAS attributes
-    if experiment:
-        eas = experiment.get_EAS()
-    else:
-        eas = None
-
-    eas_keys = [
-        ('barcodedSamples', 'barcodedSamples'),
-        ('barcodeId', 'barcodeKitName'),
-        ('bedfile', 'targetRegionBedFile'),
-        ('forward3primeadapter', 'threePrimeAdapter'),
-        ('libraryKey', 'libraryKey'),
-        ('librarykitname', 'libraryKitName'),
-        ('regionfile', 'hotSpotRegionBedFile'),
-        ('selectedPlugins', 'selectedPlugins'),
-        ('isDuplicateReads', 'isDuplicateReads')
-    ]
-    for plankey, key in eas_keys:
-        setattr(planTemplate, plankey, getattr(eas, key, ''))
-
-    if eas:
-        setattr(planTemplate, "library", eas.reference if eas.reference != "none" else '')
-    else:
-        setattr(planTemplate, "library", "")
-
-    chipTypeDetails = None
-    if planTemplate.chipType:
-        chipTypeDetails = get_object_or_404(Chip, name=planTemplate.chipType)
-
-    selectedProjectNames = [selectedProject.name for selectedProject in list(planTemplate.projects.all())]
-    logger.debug("views._plan_template_helper selectedProjectNames=%s" % selectedProjectNames)
-
-    # mark plugins selected if any
-    for plugin in data['plugins']:
-        if plugin.name in planTemplate.selectedPlugins.keys():
-            plugin.selected = True
-            plugin.userInput = json.dumps(planTemplate.selectedPlugins[plugin.name].get('userInput', None))
-        else:
-            plugin.selected = False
-
-    # mark uploaders selected if any
-    for plugin in data['uploaders']:
-        if plugin.name in planTemplate.selectedPlugins.keys():
-            plugin.selected = True
-
-            # in case we're copying old plans that have dict {} data type for userInput. new format is list of dict [{}]
-            userInput = planTemplate.selectedPlugins[plugin.name].get('userInput', None)
-
-            plugin.userInput = json.dumps(userInput)
-
-            if (isinstance(userInput, dict)):
-                plugin.userInput = json.dumps([userInput])
-
-            if 'IonReporter' in plugin.name:
-                data['irConfigSaved'] = plugin.userInput
-                data['irConfigSaved_version'] = 1.0 if plugin.name == 'IonReporterUploader_V1_0' else plugin.version
-
-        else:
-            plugin.selected = False
-
-    globalConfig_isDuplicateReads = GlobalConfig.get().mark_duplicates
-
-    # planTemplateData contains what are available for selection
-    # and what each application product's characteristics and default selection
-    ctxd = {
-        "intent": intent,
-        "planTemplateData": data,
-        "selectedApplProductData": "",
-        "selectedPlanTemplate": planTemplate,
-        "selectedRunType": runType,
-        "selectedProjectNames": selectedProjectNames,
-        "selectedChipTypeDetails": chipTypeDetails,
-        "globalConfig_isDuplicateReads": globalConfig_isDuplicateReads
-    }
-    context = RequestContext(request, ctxd)
-    return context
 
 
 @login_required
@@ -1068,16 +830,37 @@ def batch_plans_from_template(request, template_id):
 def getCSV_for_batch_planning(request, templateId, count, uploadtype="single"):
     """
     To create csv file for batch planning based on an existing template
+    From Rel 5.4 onwards : The download option supports only column based CSV download for batch planning
     """
-    def create_csv(output, version, hdr, body):
+    def create_csv(output, version, hdr, body, isSampleFile = None):
         writer = csv.writer(output)
         writer.writerow(version)
-        writer.writerow(hdr)
-        for row in body:
-            writer.writerow(row)
+
+        if isSampleFile:
+            writer.writerow(hdr)
+            for row in body:
+                writer.writerow(row)
+        else:
+            colbased_plan_csv_headingRow = [PlanCSVcolumns.COLUMN_PLAN_HEADING_KEY]
+            if len(body):
+                for index, item in enumerate(body, start=1):
+                    planValueHeading = "%s%d" % (PlanCSVcolumns.COLUMN_PLAN_HEADING_VALUE, index)
+                    colbased_plan_csv_headingRow.append(planValueHeading)
+            writer.writerow(colbased_plan_csv_headingRow)
+
+            for head_index, item in enumerate(hdr):
+                row = []
+                row.append(item)
+                for body_index, body_item in enumerate(body):
+                    for eachColIndex, eachColItem in enumerate(body_item):
+                        if eachColIndex == head_index:
+                            row.append(body_item[eachColIndex])
+                            break
+                writer.writerow(row)
 
     single_file = (uploadtype == 'single')
-    batch_filename = 'batchPlanning_%s' % str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    filename = 'tsPlan_%s' % str(datetime.now().strftime("%Y%m%d_%H%M%S"))
+    batch_filename = filename.replace("tsPlan", "tsBatchPlanning")
     plan_csv_version = get_plan_csv_version()
 
     hdr, body = get_template_data_for_batch_planning(templateId, single_file)
@@ -1094,18 +877,18 @@ def getCSV_for_batch_planning(request, templateId, count, uploadtype="single"):
         rows = []
         samples_hdr, samples_body = get_samples_data_for_batch_planning(templateId)
         for n in range(int(count)):
-            name = batch_filename + '_samples_%02d.csv' % (n+1)
+            name = filename + '_plan_%02d_samples.csv' % (n+1)
             body[hdr.index(PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER)] = name
             rows.append(list(body))
             # create and add samples CSV file
             csv_output = io.BytesIO()
-            create_csv(csv_output, plan_csv_version, samples_hdr, samples_body)
+            create_csv(csv_output, plan_csv_version, samples_hdr, samples_body, isSampleFile = True)
             zip_file.writestr(name, csv_output.getvalue())
 
         # create and add plan CSV file
         csv_output = io.BytesIO()
         create_csv(csv_output, plan_csv_version, hdr, rows)
-        zip_file.writestr(batch_filename + ".csv", csv_output.getvalue())
+        zip_file.writestr(filename + "_master.csv", csv_output.getvalue())
 
     return response
 
@@ -1121,12 +904,10 @@ def upload_plans_for_template(request):
     context = RequestContext(request, ctxd)
     return render_to_response("rundb/plan/modal_batch_planning_upload.html", context_instance=context)
 
-
 @login_required
 @transaction.commit_manually
 def save_uploaded_plans_for_template(request):
     """add plans, with CSV validation"""
-
     def _close_files(files, temp_file):
         for csvfile in files.values():
             if not csvfile.closed:
@@ -1141,6 +922,40 @@ def save_uploaded_plans_for_template(request):
         error = {"status": status, "failed": failed}
         logger.info("views.save_uploaded_plans_for_template() error=%s" % (error))
         return HttpResponse(json.dumps(error), mimetype="text/html")
+
+    def _get_reader_for_v2(columnBasedReader):
+        """
+            Get the reader Dict for the column based CSV
+              - csv module handles data row-wise
+              - process the column based data set and return the dict
+              - this function is called only for main plan csv file, not for the samples csv
+        """
+        rowBasedReader = []
+        for colInput in columnBasedReader:
+            rowBasedReader.append(tuple(colInput))
+
+        #null values gets trimmed when no input in the last row
+        #parse it and handle gracefully
+        if len(rowBasedReader[-1]) != len(rowBasedReader[0]):
+            missingelement = len(rowBasedReader[0]) - len(rowBasedReader[-1])
+            lastElement = list(rowBasedReader[-1])
+            lastElement.extend([""]*missingelement)
+            rowBasedReader[-1] = tuple(lastElement)
+
+        converted = zip(*rowBasedReader)
+        headers = list(converted.pop(0))
+
+        v2_reader = []
+        for row in converted:
+            processed_dictReader = {}
+            planDetails = list(row)
+            for rowIndex, rowValue in enumerate(planDetails):
+                for headerIndex, headerItem in enumerate(headers):
+                    if rowIndex == headerIndex:
+                        processed_dictReader[headerItem] = rowValue
+                        break
+            v2_reader.append(processed_dictReader)
+        return v2_reader
 
     postedfile = request.FILES['postedfile']
     destination = tempfile.NamedTemporaryFile(delete=False)
@@ -1166,7 +981,6 @@ def save_uploaded_plans_for_template(request):
     single_file = len(files) == 1
     failed = {}
     isToAbort = False
-
     # validate files contents and CSV version
     csv_version_header = get_plan_csv_version()[0]
     for filename, csvfile in files.items():
@@ -1186,13 +1000,38 @@ def save_uploaded_plans_for_template(request):
         return _fail(files, destination, "", failed)
 
     samples = {}
+    input_plan_count = 0
+    isRowBased = False
+
     if single_file:
-        reader = csv.DictReader(files.values()[0])
+        if StrictVersion(str(float(csv_version_row[1]))) >= "2.0":
+            # Column based CSV version : 2.0
+            columnBasedReader = csv.reader(files.values()[0])
+            reader = _get_reader_for_v2(columnBasedReader)
+            input_plan_count = len(reader)
+        else:
+            isRowBased = True
+            # Row Based : Support backward compatibility for CSV version 1
+            reader = csv.DictReader(files.values()[0])
     else:
         reader = None
         for filename, csvfile in files.items():
-            test = csv.DictReader(csvfile)
-            if PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER in test.fieldnames:
+            if StrictVersion(str(float(csv_version_row[1]))) >= "2.0":
+                # Column based CSV version : 2.0
+                test = csv.DictReader(csvfile)
+                fieldnames = test.fieldnames
+                if PlanCSVcolumns.COLUMN_PLAN_HEADING_KEY in fieldnames:
+                    # process only main plan CSV Data set
+                    columnBasedReader = io.TextIOWrapper(csvfile)
+                    columnBasedReader = csv.reader(columnBasedReader)
+                    test = _get_reader_for_v2(columnBasedReader)
+                    input_plan_count = len(test)
+                    fieldnames = test[0].keys()
+            else:
+                isRowBased = True
+                test = csv.DictReader(csvfile)
+                fieldnames = test.fieldnames
+            if PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER in fieldnames:
                 if reader:
                     return _fail(files, destination, "Error: multiple batch planning files found")
                 else:
@@ -1209,15 +1048,25 @@ def save_uploaded_plans_for_template(request):
     plans = []
     rawPlanDataList = []
     username = request.user.username if request.user else ""
+
     # process and validate Plans
     for index, row in enumerate(reader, start=2):
-
+        if isRowBased:
+            if 'Plan Parameters' in row:
+                # this happens rarely, If user updates the csv version to old version and keeps it column based, then exit
+                logger.error("views.save_uploaded_plans_for_template(): User has wrongly manipulated the uploaded CSV file")
+                errorMsg = "Error: CSV file is invalid due to unsupported header info. Please download the latest CSV version and reload."
+                return HttpResponse(json.dumps({"status": errorMsg}), mimetype="text/html")
+            input_plan_count += 1
         samples_contents = samples.get(row[PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER]) if not single_file else None
-        errorMsg, aPlanDict, rawPlanDict, isToSkipRow = validate_csv_plan(row, username, single_file, samples_contents)
+        errorMsg, aPlanDict, rawPlanDict, isToSkipRow = validate_csv_plan(row, username, single_file, samples_contents, httpHost=request.get_host())
 
         logger.info("views.save_uploaded_plans_for_template() index=%d; errorMsg=%s; planDict=%s" % (index, errorMsg, rawPlanDict))
         if errorMsg:
-            failed['Row %d' % (index+1)] = errorMsg
+            row_or_column = "Row"
+            if StrictVersion(str(float(csv_version_row[1]))) >= "2.0":
+                row_or_column = "Column" # currently supporting backward compatabilty
+            failed['%s%d' % (row_or_column, index)] = errorMsg
             continue
         elif isToSkipRow:
             logger.info("views.save_uploaded_plans_for_template() SKIPPED ROW index=%d; row=%s" % (index, row))
@@ -1232,8 +1081,43 @@ def save_uploaded_plans_for_template(request):
     if index == 0:
         return HttpResponse(json.dumps({"status": "Error: There must be at least one plan! Please reload the page and try again with more plans."}), mimetype="text/html")
 
+    #get the total no. of failures
     if failed:
-        r = {"status": "Plan validation failed. The plans have not been saved.", "failed": failed}
+        total_error_count = 0
+        for key, value in failed.iteritems():
+            errorDict = dict(value)
+            if single_file:
+                total_error_count += len(errorDict)
+            else:
+                for key, value in errorDict.iteritems():
+                    if "Sample CSV File Name" in key:
+                        continue
+                    try:
+                        total_error_count += len(json.loads(value))
+                    except Exception, err:
+                        if isinstance(value, basestring):
+                            total_error_count += 1
+                        else:
+                            total_error_count += len(value)
+                        logger.debug(err)
+
+        #Sort the error plans irrespective of row and column
+        errorPlansSorted = []
+        for plan in failed:
+            errorPlansSorted.append(plan)
+        errorPlansSorted.sort(key=lambda x: '{0:0>10}'.format(x).lower())
+
+        failedOrderedDict = collections.OrderedDict()
+        for errorPlan in errorPlansSorted:
+            failedOrderedDict[errorPlan] = failed[errorPlan]
+
+        r = {"status": "Plan validation failed. The plans have not been saved.",
+             "failed": failedOrderedDict,
+             "plansFailed": len(errorPlansSorted),
+             "inputPlanCount": input_plan_count,
+             "totalErrors": total_error_count,
+             "singleCSV": single_file}
+
         logger.info("views.save_uploaded_plans_for_template() failed=%s" % (r))
 
         transaction.rollback()
@@ -1324,523 +1208,6 @@ def save_uploaded_plans_for_template(request):
         transaction.commit()
         r = {"status": "Plans Uploaded! The plans will be listed on the planned run page.", "failed": failed}
         return HttpResponse(json.dumps(r), mimetype="text/html")
-
-
-@login_required
-def get_application_product_presets(request):
-    data = _get_allApplProduct_data(True)
-    json_serializer = serializers.get_serializer("json")()
-    fields = data.keys()
-    result = json_serializer.serialize(data, fields=fields)
-    return HttpResponse(result, mimetype="application/json")
-
-
-def _get_allApplProduct_data(isForTemplate):
-    def pretty(d, indent=0):
-        if d:
-            for key, value in d.iteritems():
-                logger.debug('\t' * indent + str(key))
-                if isinstance(value, dict):
-                    pretty(value, indent + 1)
-                else:
-                    logger.debug('\t' * (indent + 1) + str(value))
-
-    data = _get_base_planTemplate_data(isForTemplate)
-
-    runTypes = list(RunType.objects.all())
-    for appl in runTypes:
-
-        applType = appl.runType
-
-        try:
-            # we should only have 1 default per application. TODO: add logic to ApplProduct to ensure that
-            defaultApplProduct = list(ApplProduct.objects.filter(isActive=True, isDefault=True, applType=appl))
-            if defaultApplProduct[0]:
-
-                applData = {}
-
-                applData["runType"] = defaultApplProduct[0].applType
-                applData["reference"] = defaultApplProduct[0].defaultGenomeRefName
-                applData["targetBedFile"] = defaultApplProduct[0].defaultTargetRegionBedFileName
-                applData["hotSpotBedFile"] = defaultApplProduct[0].defaultHotSpotRegionBedFileName
-                applData["seqKit"] = defaultApplProduct[0].defaultSequencingKit
-                applData["libKit"] = defaultApplProduct[0].defaultLibraryKit
-                applData["peSeqKit"] = defaultApplProduct[0].defaultPairedEndSequencingKit
-                applData["peLibKit"] = defaultApplProduct[0].defaultPairedEndLibraryKit
-                applData["chipType"] = defaultApplProduct[0].defaultChipType
-
-                if defaultApplProduct[0].defaultChipType:
-                    applData["chipTypeDetails"] = get_object_or_404(Chip, name=defaultApplProduct[0].defaultChipType)
-                else:
-                    applData["chipTypeDetails"] = None
-
-                applData["isPairedEndSupported"] = defaultApplProduct[0].isPairedEndSupported
-                applData["isDefaultPairedEnd"] = defaultApplProduct[0].isDefaultPairedEnd
-
-                applData['flowCount'] = defaultApplProduct[0].defaultFlowCount
-                applData['peAdapterKit'] = defaultApplProduct[0].defaultPairedEndAdapterKit
-                applData['defaultOneTouchTemplateKit'] = defaultApplProduct[0].defaultTemplateKit
-                applData['controlSeqKit'] = defaultApplProduct[0].defaultControlSeqKit
-                applData['isHotspotRegionBEDFileSupported'] = defaultApplProduct[0].isHotspotRegionBEDFileSuppported
-
-                applData['isDefaultBarcoded'] = defaultApplProduct[0].isDefaultBarcoded
-                applData['defaultBarcodeKitName'] = defaultApplProduct[0].defaultBarcodeKitName
-
-                applData['defaultIonChefKit'] = defaultApplProduct[0].defaultIonChefPrepKit
-                applData['defaultSamplePrepKit'] = defaultApplProduct[0].defaultSamplePrepKit
-
-                # 20120619-TODO-add compatible plugins, default plugins
-
-                data[applType] = applData
-
-#                if applType == 'AMPS':
-#                    pretty(data[applType])
-            else:
-                data[applType] = 'none'
-        except:
-            data[applType] = 'none'
-
-    return data
-
-
-def _get_base_planTemplate_data(isForTemplate):
-    data = {}
-
-    # per requirement, we want to display Generic Sequencing as the last entry in the selection list
-    data["runTypes"] = list(RunType.objects.all().exclude(runType="GENS").order_by('nucleotideType', 'runType'))
-    data["secondaryRunTypes"] = list(RunType.objects.filter(runType="GENS"))
-
-    data["barcodes"] = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
-
-    # barcodeKitNames = dnaBarcode.objects.values_list('name', flat=True).distinct().order_by('name')
-    # for barcodeKitName in barcodeKitNames:
-    # data[barcodeKitName] = dnaBarcode.objects.filter(name=barcodeKitName).order_by('index')
-
-    # barcodeKitInfo not currently used now that we have removed ability to select barcode kit from the sample config page
-    # data["barcodeKitInfo"] = list(dnaBarcode.objects.values('name', 'index', 'id_str', 'sequence').order_by('name', 'index'))
-
-    references = list(ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION))
-    data["references"] = references
-    data["referenceShortNames"] = [ref.short_name for ref in references]
-
-    data.update(dict_bed_hotspot())
-
-    data["seqKits"] = KitInfo.objects.filter(kitType='SequencingKit', isActive=True).order_by("name")
-    data["libKits"] = KitInfo.objects.filter(kitType='LibraryKit', isActive=True).order_by("name")
-
-    data["variantfrequencies"] = VariantFrequencies.objects.all().order_by("name")
-
-    # the entry marked as the default will be on top of the list
-    data["forwardLibKeys"] = LibraryKey.objects.filter(direction='Forward', runMode='single').order_by('-isDefault', 'name')
-    data["forward3Adapters"] = ThreePrimeadapter.objects.filter(direction='Forward', runMode='single').order_by('-isDefault', 'name')
-
-    # pairedEnd does not have special forward library keys
-    # for TS-4669: remove paired-end from wizard, if there are no active PE lib kits, do not prepare pe keys or adapters
-    peLibKits = KitInfo.objects.filter(kitType='LibraryKit', runMode='pe', isActive=True)
-    if (peLibKits.count() > 0):
-        data["peForwardLibKeys"] = LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
-        data["peForward3Adapters"] = ThreePrimeadapter.objects.filter(direction='Forward', runMode='pe').order_by('-isDefault', 'name')
-        data["reverseLibKeys"] = LibraryKey.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
-        data["reverse3Adapters"] = ThreePrimeadapter.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
-    else:
-        data["peForwardLibKeys"] = None
-        data["peForward3Adapters"] = None
-        data["reverseLibKeys"] = None
-        data["reverse3Adapters"] = None
-
-    # chip types
-    # note: customer-facing chip names are no longer unique
-    data['chipTypes'] = list(Chip.objects.filter(isActive=True).order_by('description', 'name').distinct('description'))
-    # QC
-    data['qcTypes'] = list(QCType.objects.all().order_by('qcName'))
-    # project
-    data['projects'] = list(Project.objects.filter(public=True).order_by('name'))
-
-    # templating kit selection
-    data["templateKits"] = KitInfo.objects.filter(kitType='TemplatingKit', isActive=True).order_by("name")
-    # control sequence kit selection
-    data["controlSeqKits"] = KitInfo.objects.filter(kitType='ControlSequenceKit', isActive=True).order_by("name")
-
-    # ionChef kit selection
-    data["ionChefKits"] = KitInfo.objects.filter(kitType='IonChefPrepKit', isActive=True).order_by("name")
-
-    # pairedEnd library adapter selection
-    # for TS-4669: remove paired-end from wizard, if there are no active PE seq kits, do not prepare pe keys or adapters
-    if (peLibKits.count() > 0):
-        data["pairedEndLibAdapters"] = KitInfo.objects.filter(kitType='AdapterKit', runMode="pe", isActive=True).order_by('name')
-    else:
-        data["pairedEndLibAdapters"] = None
-
-    # samplePrep kits
-    data["samplePrepKits"] = KitInfo.objects.filter(kitType='SamplePrepKit', isActive=True).order_by('name')
-
-    # to allow data entry for multiple non-barcoded samples at the plan wizard
-    data['nonBarcodedSamples_irConfig_loopCounter'] = [i + 1 for i in range(20)]
-
-    return data
-
-
-@login_required
-@transaction.commit_manually
-def save_plan_or_template(request, planOid):
-    """
-    Saving new or edited plan/template to db (source: plan template wizard)
-    Editing a planned run from having 1 sample to 2 samples will result in one edited planned run and one new planned run
-    """
-    def isReusable(submitIntent):
-        return not (submitIntent == 'savePlan' or submitIntent == 'updatePlan')
-
-    if request.method != 'POST':
-        logger.exception(format_exc())
-        return HttpResponse(json.dumps({"error": "Error, unsupported HTTP Request method (%s) for plan update." % request.method}), mimetype="application/json")
-
-    # Process Inputs
-
-    # pylint:disable=E1103
-    json_data = simplejson.loads(request.body)
-    submitIntent = json_data.get('submitIntent', '')
-    logger.debug('views.save_plan_or_template POST.body... simplejson Data: "%s"' % json_data)
-    logger.debug("views.save_plan_or_template submitIntent=%s" % submitIntent)
-    # saving Template or Planned Run
-    isReusable = isReusable(submitIntent)
-    runModeValue = json_data.get('runMode', 'single')
-    isPlanGroupValue = runModeValue == 'pe' and not isReusable
-    libraryKeyValue = json_data.get('libraryKey', '')
-    forward3primeAdapterValue = json_data.get('forward3primeAdapter', '')
-    flowsInOrderValue = jaon_data.get("flowOrder", "")
-
-    msgvalue = 'Run Plan' if not isReusable else 'Template'
-    if runModeValue == 'pe':
-        return HttpResponse(json.dumps({"error": "Error, paired-end plan is no longer supported. %s will not be saved." % (msgvalue)}), mimetype="application/html")
-
-    planDisplayedNameValue = json_data.get('planDisplayedName', '').strip()
-    noteValue = json_data.get('notes_workaround', '')
-
-    # perform server-side validation to avoid things falling through the crack
-    if not planDisplayedNameValue:
-        return HttpResponse(json.dumps({"error": "Error, please enter a %s Name." % (msgvalue)}), mimetype="application/html")
-
-    if not is_valid_chars(planDisplayedNameValue):
-        return HttpResponse(json.dumps({"error": "Error, %s Name" % (msgvalue) + ERROR_MSG_INVALID_CHARS}), mimetype="application/html")
-
-    if not is_valid_length(planDisplayedNameValue, MAX_LENGTH_PLAN_NAME):
-        return HttpResponse(json.dumps({"error": "Error, %s Name" % (msgvalue) + ERROR_MSG_INVALID_LENGTH % (str(MAX_LENGTH_PLAN_NAME))}), mimetype="application/html")
-
-    if noteValue:
-        if not is_valid_chars(noteValue):
-            return HttpResponse(json.dumps({"error": "Error, %s note" % (msgvalue) + ERROR_MSG_INVALID_CHARS}), mimetype="application/html")
-
-        if not is_valid_length(noteValue, MAX_LENGTH_NOTES):
-            return HttpResponse(json.dumps({"error": "Error, Note" + ERROR_MSG_INVALID_LENGTH % (str(MAX_LENGTH_NOTES))}), mimetype="application/html")
-
-    # Projects
-    projectObjList = get_projects(request.user, json_data)
-
-    # IonReporterUploader configuration and samples
-    selectedPlugins = json_data.get('selectedPlugins', {})
-    IRconfigList = json_data.get('irConfigList', [])
-
-    IRU_selected = False
-    for uploader in selectedPlugins.values():
-        if 'ionreporteruploader' in uploader['name'].lower() and uploader['name'] != 'IonReporterUploader_V1_0':
-            IRU_selected = True
-
-    if IRU_selected:
-        samples_IRconfig = json_data.get('sample_irConfig', '')
-
-        if samples_IRconfig:
-            samples_IRconfig = ','.join(samples_IRconfig)
-
-        # generate UUID for unique setIds
-        id_uuid = {}
-        setids = [ir.get('setid', "") for ir in IRconfigList]
-
-        if setids:
-            for setid in set(setids):
-                if setid:
-                    id_uuid[setid] = str(uuid.uuid4())
-            for ir_config in IRconfigList:
-                setid = ir_config.get('setid', '')
-
-                if setid:
-                    ir_config['setid'] += '__' + id_uuid[setid]
-
-        if not samples_IRconfig:
-            # if more than one IRU version is set to autorun and user does not explicitly select one,
-            # gui shows workflow config for IRU v1.0
-            samples_IRconfig = json_data.get('samples_workaround', '')
-
-    # Samples
-    barcodeIdValue = json_data.get('barcodeId', '')
-    barcodedSamples = ''
-    sampleValidationErrorMsg = ''
-    sampleValidationErrorMsg_leadingChars = ''
-    sampleValidationErrorMsg_length = ''
-
-    sampleTubeLabelValidationErrorMsg_length = ''
-
-    # one Plan will be created per entry in sampleList
-    # samples for barcoded Plan have a separate field (barcodedSamples)
-
-    sampleTubeLabelList = []
-
-    if isReusable:
-        # samples entered only when saving planned run (not template)
-        sampleList = ['']
-    elif barcodeIdValue:
-        # a barcode Set is selected
-        sampleTubeLabelValue = json_data.get('sampleTubeLabel', '')
-        if sampleTubeLabelValue:
-            if not is_valid_length(sampleTubeLabelValue, MAX_LENGTH_PLAN_NAME):
-                transaction.rollback()
-                return HttpResponse(json.dumps({"error": "Error, %s sample tube label" % (msgvalue) + ERROR_MSG_INVALID_LENGTH % (str(MAX_LENGTH_SAMPLE_TUBE_LABEL))}), mimetype="application/html")
-            else:
-                sampleTubeLabelList.append(sampleTubeLabelValue)
-
-        sampleList = ['']
-        bcSamplesValues = json_data.get('bcSamples_workaround', '')
-        bcDictionary = {}
-        bcId = ""
-        for token in bcSamplesValues.split(","):
-            if ((token.find("bcKey|")) == 0):
-                bcId, bcId_str = token.split("|")[1:]
-            else:
-                sample = token.strip()
-                if bcId and sample:
-                    if not is_valid_chars(sample):
-                        sampleValidationErrorMsg += sample + ', '
-                    elif not is_valid_leading_chars(sample):
-                        sampleValidationErrorMsg_leadingChars += sample + ", "
-                    elif not is_valid_length(sample, MAX_LENGTH_SAMPLE_NAME):
-                        sampleValidationErrorMsg_length += sample + ", "
-
-                    bcDictionary.setdefault(sample, {}).setdefault('barcodes', []).append(bcId_str)
-                bcId = ""
-
-        barcodedSamples = simplejson.dumps(bcDictionary)
-        logger.debug("views.save_plan_or_template after simplejson.dumps... barcodedSamples=%s;" % (barcodedSamples))
-
-        if not bcDictionary:
-            transaction.rollback()
-            return HttpResponse(json.dumps({"error": "Error, please enter at least one barcode sample name."}), mimetype="application/html")
-
-    else:
-        # Non-barcoded samples
-        sampleList = []
-        sampleTubeLabels = ''
-
-        if IRU_selected:
-            samples = samples_IRconfig
-        else:
-            samples = json_data.get('samples_workaround', '')
-
-        sampleTubeLabels = json_data.get('irSampleTubeLabels_workaround', '') if IRU_selected else json_data.get('nonIrSampleTubeLabels_workaround', '')
-
-        logger.debug("views.save_plan_or_template json_data.get() IRU_selected=%s; sampleTubeLabels=%s " % (str(IRU_selected), sampleTubeLabels))
-
-        sampleTubeLabelList = sampleTubeLabels.split(",")
-
-        i = 0
-        for sample in samples.split(','):
-            if sample.strip():
-                if not is_valid_chars(sample):
-                    sampleValidationErrorMsg += sample + ', '
-                elif not is_valid_leading_chars(sample):
-                    sampleValidationErrorMsg_leadingChars += sample + ", "
-                elif not is_valid_length(sample, MAX_LENGTH_SAMPLE_NAME):
-                    sampleValidationErrorMsg_length += sample + ", "
-                else:
-                    sampleList.append(sample)
-
-                    if (len(sampleTubeLabelList) > i):
-                        sampleTubeLabel = sampleTubeLabelList[i]
-
-                        if sampleTubeLabel.strip():
-                            if not is_valid_length(sampleTubeLabel, MAX_LENGTH_SAMPLE_TUBE_LABEL):
-                                sampleTubeLabelValidationErrorMsg_length += sampleTubeLabel + ", "
-                    else:
-                        sampleTubeLabelList.append("")
-            i += 1
-
-        if len(sampleList) == 0 and not sampleValidationErrorMsg and not sampleValidationErrorMsg_leadingChars and not sampleValidationErrorMsg_length:
-            transaction.rollback()
-            return HttpResponse(json.dumps({"error": "Error, please enter a sample name for the run plan."}), mimetype="application/html")
-
-        logger.debug("views.save_plan_or_template sampleList=%s " % (sampleList))
-
-        if sampleTubeLabelValidationErrorMsg_length:
-            transaction.rollback()
-            return HttpResponse(json.dumps({"error": "Error, sample tube label %s" % (sampleTubeLabelValidationErrorMsg_length) + ERROR_MSG_INVALID_LENGTH % (str(MAX_LENGTH_SAMPLE_TUBE_LABEL))}), mimetype="application/html")
-
-    # Samples validation
-    if sampleValidationErrorMsg or sampleValidationErrorMsg_leadingChars or sampleValidationErrorMsg_length:
-        message = ""
-        if sampleValidationErrorMsg:
-            message = "Error, sample name" + ERROR_MSG_INVALID_CHARS
-            message = message + ' <br>Please fix: ' + sampleValidationErrorMsg + '<br>'
-        if sampleValidationErrorMsg_leadingChars:
-            message = message + "Error, sample name" + ERROR_MSG_INVALID_LEADING_CHARS
-            message = message + ' <br>Please fix: ' + sampleValidationErrorMsg_leadingChars + '<br>'
-        if sampleValidationErrorMsg_length:
-            message = message + "Error, sample name" + ERROR_MSG_INVALID_LENGTH % (str(MAX_LENGTH_SAMPLE_NAME))
-            message = message + ' <br>Please fix: ' + sampleValidationErrorMsg_length
-
-        transaction.rollback()
-        return HttpResponse(json.dumps({"error": message}), mimetype="application/html")
-
-    selectedPluginsValue = json_data.get('selectedPlugins', {})
-
-    # end processing input data
-
-    # Edit/Create Plan(s)
-
-    if int(planOid) == 0:
-        edit_existing_plan = False
-    else:
-        edit_existing_plan = True
-
-    for i, sample in enumerate(sampleList):
-        logger.debug("...LOOP... views.save_plan_or_template SAMPLE=%s; isSystem=%s; isReusable=%s; isPlanGroup=%s "
-                     % (sample.strip(), json_data["isSystem"], isReusable, isPlanGroupValue))
-
-        # add IonReporter config values for each sample
-        if len(IRconfigList) > 0:
-            for uploader in selectedPluginsValue.values():
-                if 'ionreporteruploader' in uploader['name'].lower():
-                    if len(IRconfigList) > 1 and not barcodeIdValue:
-                        uploader['userInput'] = [IRconfigList[i]]
-                    else:
-                        uploader['userInput'] = IRconfigList
-
-        if len(sampleList) > 1:
-            inputPlanDisplayedName = planDisplayedNameValue + '_' + sample.strip()
-        else:
-            inputPlanDisplayedName = planDisplayedNameValue
-
-        selectedTemplatingKit = json_data.get('templatekitname', '')
-        samplePrepInstrumentType = json_data.get('samplePrepInstrumentType', '')
-        if samplePrepInstrumentType == 'ionChef':
-            selectedTemplatingKit = json_data.get('templatekitionchefname', '')
-
-        sampleTubeLabel = ''
-        if (sampleTubeLabelList and len(sampleTubeLabelList) >= i):
-            sampleTubeLabel = sampleTubeLabelList[i].strip()
-
-        # logger.debug("plan/views - i=%d; sample=%s, sampleTubeLabel=%s" %(i, sample, sampleTubeLabel))
-
-        # PDD-TODO: remove the x_ prefix. the x_ prefix is just a reminder what the obsolete attributes to remove during the next phase
-        kwargs = {
-            'planDisplayedName': inputPlanDisplayedName,
-            "planName": inputPlanDisplayedName.replace(' ', '_'),
-            'usePreBeadfind': toBoolean(json_data['usePreBeadfind'], False),
-            'usePostBeadfind': toBoolean(json_data['usePostBeadfind'], False),
-            'preAnalysis': True,
-            'runType': json_data['runType'],
-            'templatingKitName': selectedTemplatingKit,
-            'controlSequencekitname': json_data.get('controlsequence', ''),
-            'runMode': runModeValue,
-            'isSystem': toBoolean(json_data['isSystem'], False),
-            'isReusable': isReusable,
-            'isPlanGroup': isPlanGroupValue,
-            'username': request.user.username,
-            'isFavorite': toBoolean(json_data.get('isFavorite', 'False'), False),
-            'pairedEndLibraryAdapterName': json_data.get('pairedEndLibraryAdapterName', ''),
-            'samplePrepKitName': json_data.get('samplePrepKitName', ''),
-            'planStatus': "planned",
-            'sampleTubeLabel': sampleTubeLabel,
-
-            'x_autoAnalyze': True,
-            'x_barcodedSamples': barcodedSamples,
-            'x_barcodeId': barcodeIdValue,
-            'x_bedfile': json_data.get('bedfile', ''),
-            'x_chipType': json_data.get('chipType', ''),
-            'x_flows': json_data.get('flows', None),
-            'x_forward3primeadapter': forward3primeAdapterValue,
-            'x_flowsInOrder': flowsInOrderValue,
-            # '_isReverseRun':  = self.isReverseRun
-            'x_library': json_data.get('library', ''),
-            'x_libraryKey': libraryKeyValue,
-            'x_librarykitname': json_data.get('librarykitname', ''),
-            'x_notes': noteValue,
-            'x_regionfile': json_data.get('regionfile', ''),
-            'x_sample': sample.strip().replace(' ', '_'),
-            'x_sampleDisplayedName': sample.strip(),
-            'x_selectedPlugins': selectedPluginsValue,
-            'x_sequencekitname': json_data.get('sequencekitname', ''),
-            'x_variantfrequency': json_data.get('variantfrequency', ''),
-            'x_isDuplicateReads': json_data.get('isDuplicateReads', False)
-        }
-
-        planTemplate = None
-        logger.debug("KWARGS ARE: %s" % str(kwargs))
-        for key, value in sorted(kwargs.items()):
-            logger.debug('KWARG %s: %s' % (str(key), str(value)))
-        # if we're changing a plan from having 1 sample to say 2 samples, we need to UPDATE 1 plan and CREATE 1 plan!!
-        try:
-            if not edit_existing_plan:
-                planTemplate, extra_kwargs = PlannedExperiment.objects.save_plan(-1, **kwargs)
-            else:
-                planTemplate, extra_kwargs = PlannedExperiment.objects.save_plan(planOid, **kwargs)
-
-                edit_existing_plan = False
-
-            # Update QCtype thresholds
-            qcTypes = QCType.objects.all()
-            for qcType in qcTypes:
-                qc_threshold = json_data.get(qcType.qcName, '')
-                if qc_threshold:
-                    # get existing PlannedExperimentQC if any
-                    plannedExpQcs = PlannedExperimentQC.objects.filter(plannedExperiment=planTemplate.id, qcType=qcType.id)
-                    if len(plannedExpQcs) > 0:
-                        for plannedExpQc in plannedExpQcs:
-                            plannedExpQc.threshold = qc_threshold
-                            plannedExpQc.save()
-                    else:
-                        kwargs = {
-                            'plannedExperiment': planTemplate,
-                            'qcType': qcType,
-                            'threshold': qc_threshold
-                        }
-                        plannedExpQc = PlannedExperimentQC(**kwargs)
-                        plannedExpQc.save()
-
-            # add/remove projects
-            if projectObjList:
-                # TODO: refactor this logic to simplify using django orm
-                projectNameList = [project.name for project in projectObjList]
-                for currentProject in planTemplate.projects.all():
-                    if currentProject.name not in projectNameList:
-                        planTemplate.projects.remove(currentProject)
-                for projectObj in projectObjList:
-                    planTemplate.projects.add(projectObj)
-            else:
-                planTemplate.projects.clear()
-
-        except ValidationError, err:
-            transaction.rollback()
-            logger.exception(format_exc())
-
-            message = "Internal error while trying to save the plan. "
-            for msg in err.messages:
-                message += str(msg)
-                message += " "
-
-            return HttpResponse(json.dumps({"error": message}), mimetype="application/json")
-
-        except Exception as excp:
-            transaction.rollback()
-            logger.exception(format_exc())
-
-            message = "Internal error while trying to save the plan. %s" % (excp.message)
-            return HttpResponse(json.dumps({"error": message}), mimetype="application/json")
-        except:
-            transaction.rollback()
-            logger.exception(format_exc())
-            return HttpResponse(json.dumps({"error": "Internal error while trying to save the plan."}), mimetype="application/json")
-        else:
-            transaction.commit()
-
-    return HttpResponse(json.dumps({"status": "plan template updated successfully"}), mimetype="application/json")
 
 
 @login_required
@@ -1994,28 +1361,45 @@ def page_plan_load_samples_table(request):
                     row_errors.extend(nuctype_err)
 
                 if key == 'reference' and value:
+                    if value.strip().lower() == 'none':
+                        processed_row[key] = ""
+                        continue
                     ref_err, processed_row[key] = plan_validator.validate_reference(value, runType, applicationGroup)
                     row_errors.extend(ref_err)
                     if default_reference != processed_row[key]:
                         ret['same_ref_and_bedfiles'] = False
 
                 if key == 'targetRegionBedFile' and value:
-                    validated = get_bedFile_for_reference(value, processed_row.get('reference'), hotspot=False)
-                    if validated:
-                        processed_row[key] = validated
-                        if default_targetBedFile != processed_row[key]:
-                            ret['same_ref_and_bedfiles'] = False
+                    if value.strip().lower() == 'none':
+                        processed_row[key] = ""
+                        continue
+                    inputRef = processed_row.get('reference')
+                    if not inputRef:
+                        row_errors.append('Invalid/Missing reference for target regions BED file %s' % value)
                     else:
-                        row_errors.append('Target regions BED file not found for %s' % value)
+                        validated = get_bedFile_for_reference(value, inputRef, hotspot=False)
+                        if validated:
+                            processed_row[key] = validated
+                            if default_targetBedFile != processed_row[key]:
+                                ret['same_ref_and_bedfiles'] = False
+                        else:
+                            row_errors.append('Target regions BED file not found for %s' % value)
 
                 if key == 'hotSpotRegionBedFile' and value:
-                    validated = get_bedFile_for_reference(value, processed_row.get('reference'), hotspot=True)
-                    if validated:
-                        processed_row[key] = validated
-                        if default_hotSpotBedFile != processed_row[key]:
-                            ret['same_ref_and_bedfiles'] = False
+                    if value.strip().lower() == 'none':
+                        processed_row[key] = ""
+                        continue
+                    inputRef = processed_row.get('reference')
+                    if not inputRef:
+                        row_errors.append('Invalid/Missing reference for hotspot regions BED file %s' % value)
                     else:
-                        row_errors.append('Hotspot regions BED file not found for %s' % value)
+                        validated = get_bedFile_for_reference(value, inputRef, hotspot=True)
+                        if validated:
+                            processed_row[key] = validated
+                            if default_hotSpotBedFile != processed_row[key]:
+                                ret['same_ref_and_bedfiles'] = False
+                        else:
+                            row_errors.append('Hotspot regions BED file not found for %s' % value)
 
                 if key == 'controlType' and value:
                     controltype_err, processed_row[key] = plan_validator.validate_sampleControlType(value)
@@ -2169,7 +1553,14 @@ def plan_template_import(request):
             except ValidationError as err:
                 errors['status'] = 'failed'
                 errors['status_msg'] = 'Template import failed validation.'
-                errors.setdefault('msg',{})['Row %d' % (index+1)] = json.loads(err.message).values()
+                invalidErrors = json.loads(err.message)
+                if "runType" in invalidErrors:
+                    runTypeError = ' '.join(invalidErrors["runType"])
+                    invalidErrors["runType"] = runTypeError.replace("Run Type", "Target Technique")
+                if "applicationGroupDisplayedName" in invalidErrors:
+                    applicationError =  ' '.join(invalidErrors["applicationGroupDisplayedName"])
+                    invalidErrors["applicationGroupDisplayedName"] = applicationError.replace("Application Group", "Application")
+                errors.setdefault('msg',{})['Row %d' % (index+1)] = invalidErrors.values()
             else:
                 validated.append(bundle)
 
@@ -2215,3 +1606,156 @@ def plan_template_import(request):
     except Exception as err:
         logger.error(format_exc())
         return http.HttpResponseServerError(repr(err))
+
+
+@login_required
+def upload_and_install_files(request):
+    " Install preloaded Ion reference and BED files"
+    from iondb.rundb.configure.genomes import get_references, new_reference_genome
+    from iondb.rundb.tasks import install_BED_files, release_tasklock
+    
+    try:
+        reference_json = get_references()
+    except:
+        reference_json = []
+
+    def get_ref_info(reference):
+        ret = [d for d in reference_json if d['meta']['short_name'] == reference ]
+        return ret[0] if ret else {}
+
+    if request.method == "GET":
+        # check if requested files are available for install from Ion source
+        # check if requested files are being processed already
+        ctxd = {}
+        ctxd['files'] = {'references':[], 'bedfiles':[], 'not_found':[] }
+
+        for reference in request.GET.getlist('references[]',[]):
+            if get_ref_info(reference):
+                ctxd['files']['references'].append(reference)
+            else:
+                ctxd['files']['not_found'].append(reference)
+
+        for bedfile in request.GET.getlist('bedfiles[]',[]):
+            reference = bedfile.split('/')[1]
+            info = get_ref_info(reference)
+            bedfile_available = False
+
+            if info and info.get('bedfiles'):
+                for available_bedfile in info['bedfiles']:
+                    if os.path.basename(bedfile) == os.path.basename(available_bedfile['source']):
+                        ctxd['files']['bedfiles'].append(bedfile)
+            
+            if not bedfile_available:
+                ctxd['files']['not_found'].append(bedfile)
+
+        ctxd['available'] = len(ctxd['files']['references']) > 0 or len(ctxd['files']['bedfiles']) > 0
+        ctxd['files_json'] = json.dumps(ctxd['files'])
+
+        return render_to_response("rundb/plan/modal_upload_and_install_files.html", context_instance=RequestContext(request, ctxd))
+
+    elif request.method == "POST":
+
+        application = request.POST.get('application')
+        parent_lock = TaskLock(application)
+        if not parent_lock.lock():
+            return http.HttpResponseServerError('Previous install is in progress for %s' % application)
+        else:
+            logger.debug('upload_and_install_files: created install files lock for %s' % application)
+
+        bedfiles_to_install = {}
+        for bedfile in request.POST.getlist('bedfiles[]'):
+            reference = bedfile.split('/')[1]
+            bedfiles_to_install.setdefault(reference,[]).append(os.path.basename(bedfile))
+        
+        started = { "references": [], "bedfiles": [], "lock_ids": [] }
+        error = []
+
+        # process references and any BED files that are dependent on them
+        for reference in request.POST.getlist('references[]'):
+            requested_bedfiles = bedfiles_to_install.pop(reference, None)
+            
+            info = get_ref_info(reference)
+            if not info:
+                error.append("Unable to retrieve reference information for %s" % reference)
+                continue
+
+            tasklock_id = application + "_" + reference
+            applock = TaskLock(tasklock_id)
+            if not applock.lock():
+                error.append("Previous install is in progress for %s %s" % (application, reference))
+                continue
+
+            logger.debug('upload_and_install_files: new reference install: %s' % reference)
+            unlock_task = release_tasklock.subtask((tasklock_id, application), immutable=True)
+            callback = unlock_task
+            bedfileList = []
+            if requested_bedfiles:
+                for available_bedfile in info['bedfiles']:
+                    if os.path.basename(available_bedfile['source']) in requested_bedfiles:
+                        bedfileList.append(available_bedfile)
+
+                if bedfileList:
+                    # task will install BED files after reference is done
+                    callback = install_BED_files.subtask((bedfileList, unlock_task), immutable=True)
+                    logger.debug('upload_and_install_files: new bedfiles install for %s reference: %s' %
+                            (reference, ','.join([b['source'] for b in bedfileList])))
+
+            try:
+                # create reference and start install
+                new_reference_genome(info['meta'], info['url'], reference_mask_filename=info.get('reference_mask'), callback_task=callback )
+            except Exception as e:
+                logger.error(traceback.format_exc())
+                error.append(repr(e))
+                applock.unlock()
+            else:
+                started['references'].append(reference)
+                started['lock_ids'].append(tasklock_id)
+                if bedfileList:
+                    started['bedfiles'].extend([os.path.basename(bed['source']) for bed in bedfileList])
+
+        # process BED files that have references already installed
+        bedfileList = []
+        for reference, requested_bedfiles in bedfiles_to_install.items():
+            info = get_ref_info(reference)
+            for available_bedfile in info['bedfiles']:
+                if os.path.basename(available_bedfile['source']) in requested_bedfiles:
+                    bedfileList.append(available_bedfile)
+
+        if bedfileList:
+            tasklock_id = application + "_bedfiles"
+            applock = TaskLock(tasklock_id)
+            if not applock.lock():
+                error.append("Previous install is in progress for %s BED files" % application, reference)
+            else:
+                unlock_task = release_tasklock.subtask((tasklock_id, application), immutable=True)
+                logger.debug('upload_and_install_files: new bedfiles install: %s' % ', '.join([b['source'] for b in bedfileList]))
+                try:
+                    install_BED_files.delay(bedfileList, callback=unlock_task)
+                except Exception as e:
+                    logger.error(traceback.format_exc())
+                    error.append(repr(e))
+                    applock.unlock()
+                else:
+                    started['lock_ids'].append(tasklock_id)
+                    started['bedfiles'].extend([os.path.basename(bed['source']) for bed in bedfileList])
+
+        # update parent lock
+        if started['lock_ids']:
+            logger.debug("Started reference and BED files install parent lock: %s, child locks: %s" % (application, ','.join(started['lock_ids'])) )
+            parent_lock.update(started['lock_ids'])
+        else:
+            parent_lock.unlock()
+
+        # show message
+        msg = []
+        if started["references"]:
+            msg.append("Started download and install Genome Reference(s): %s" % ", ".join(started["references"]))
+        if started["bedfiles"]:
+            msg.append("Started download and install BED File(s): %s" % ", ".join(started["bedfiles"]) )
+
+        if msg:
+            Message.info('<br>'.join(msg), tags="install_"+application)
+            logger.info(' '.join(msg))
+
+        return HttpResponse(json.dumps({"error": '<br>'.join(error), "started": started}), mimetype="application/json")
+    

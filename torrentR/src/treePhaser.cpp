@@ -192,7 +192,7 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     unsigned int get_states     = Rcpp::as<int>(RgetStates);
     unsigned int diagonalStates = Rcpp::as<int>(RdiagonalStates);
 
-    // Recalibration Variables
+    // -----------  Recalibration Variables
     string model_file      = Rcpp::as<string>(RmodelFile);
     int model_threshold    = Rcpp::as<int>(RmodelThreshold);
     Rcpp::IntegerVector      x_values(Rxval);
@@ -202,6 +202,35 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
       calibModel.InitializeModelFromTxtFile(model_file, model_threshold);
     }
 
+    // Variably load a json or legacy text file for calibration
+    if (model_file.length() > 0) {
+
+      // See if we can load a json file
+      calibModel.SetHPthreshold(model_threshold);
+      ifstream calibration_file(model_file.c_str(), ifstream::in);
+
+      if (calibration_file.good()) {
+        Json::Value temp_calibraiton_file;
+        Json::Reader json_reader;
+        bool success = json_reader.parse(calibration_file, temp_calibraiton_file, false);
+
+        if (success and temp_calibraiton_file.isMember("LinearModel")){
+          calibModel.InitializeModelFromJson(temp_calibraiton_file["LinearModel"]);
+        }
+      }
+      calibration_file.close();
+
+      // If the loading from json was not successful, we assume we have a legacy text file
+      if (not calibModel.is_enabled())
+        calibModel.InitializeModelFromTxtFile(model_file, model_threshold);
+
+      // And if that also didn't work we print a warning
+      if (not calibModel.is_enabled())
+        cout << "ERROR initializing calibration model from file " << model_file << endl;
+
+    }
+    // ------------------------------------
+
     ion::FlowOrder flow_order(flowCycle, flowCycle.length());
     unsigned int nFlow = flow_order.num_flows();
     unsigned int nRead = sequences.size();
@@ -209,6 +238,7 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
 
     // Prepare objects for holding and passing back results
     Rcpp::NumericMatrix       predicted_out(nRead,nFlow);
+    Rcpp::NumericMatrix       inphase_out(nRead,nFlow);
     vector<vector<float> >    query_states;
     vector<int>               hp_lengths;
 
@@ -231,6 +261,8 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
       for(unsigned int iBase=0; iBase<mySequence.length() and iBase<max_length; ++iBase){
         read.sequence.push_back(mySequence.at(iBase));
       }
+      read.state_inphase.assign(nFlow, 1.0);
+
       // Set phasing parameters for this read
       if (per_read_phasing)
         dpTreephaser.SetModelParameters((double)cf_vec(0,iRead), (double)ie_vec(0,iRead), (double)dr_vec(0,iRead));
@@ -253,11 +285,17 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
       if (nRead == 1 and get_states > 0)
         dpTreephaser.QueryAllStates(read, query_states, hp_lengths, max_flows);
       else
-        dpTreephaser.Simulate(read, max_flows);
+        dpTreephaser.Simulate(read, max_flows, true);
 
       for(unsigned int iFlow=0; iFlow<nFlow and iFlow<max_flows; ++iFlow){
 		predicted_out(iRead,iFlow) = (double) read.prediction.at(iFlow);
       }
+      if (nRead > 1 and get_states > 0){
+        for(unsigned int iFlow=0; iFlow<nFlow and iFlow<max_flows; ++iFlow){
+          inphase_out(iRead,iFlow) = (double) read.state_inphase.at(iFlow);
+    	}
+      }
+
     }
 
     // Store results
@@ -269,10 +307,15 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
         for (unsigned int iFlow=0; iFlow<nFlow; iFlow++)
           states(iHP, iFlow) = (double)query_states.at(iHP).at(iFlow);
       }
-      ret = Rcpp::List::create(Rcpp::Named("sig")  = predicted_out,
-                               Rcpp::Named("states")  = states,
-                               Rcpp::Named("HPlengths")  = HPlengths);
-    } else {
+      ret = Rcpp::List::create(Rcpp::Named("sig")       = predicted_out,
+                               Rcpp::Named("states")    = states,
+                               Rcpp::Named("HPlengths") = HPlengths);
+    } else if (get_states > 0){
+      ret = Rcpp::List::create(Rcpp::Named("inphase") = inphase_out,
+                               Rcpp::Named("sig")     = predicted_out);
+
+    }
+    else {
       ret = Rcpp::List::create(Rcpp::Named("sig")  = predicted_out);
     }
 

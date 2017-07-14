@@ -2,6 +2,10 @@ String.prototype.endsWith = function(suffix) {
     return this.indexOf(suffix, this.length - suffix.length) !== -1;
 };
 
+function jqid (id) {
+  return (!id) ? null : '#' + id.replace(/(:|\.|\[|\]|,|=|@)/g, '\\$1');
+}
+
 var mainRuns = null;
 
 $(function () {
@@ -34,7 +38,7 @@ $(function () {
                 "exp_name_prefix": this.options.exp_name_prefix, //Mesh
                 "report": this.model.toJSON(),
                 "total_q20bp": function(){
-                    return this.quality_metrics && precisionUnits(this.quality_metrics.q20_bases);
+                	return (this.isShowAllMetrics) ? this.quality_metrics && precisionUnits(this.quality_metrics.q20_bases) : "---";
                 },
                 "total_q0bp": function(){
                     return this.quality_metrics && precisionUnits(this.quality_metrics.q0_bases);
@@ -261,7 +265,7 @@ $(function () {
                 "url_prefix": url_prefix, //Mesh
                 "exp_name_prefix": exp_name_prefix, //Mesh
                 "exp": this.model.toJSON(),
-                "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
+                "prettyExpName": this.model.get('displayName'),
                 "date_string": kendo.toString(this.model.get("date"),"MM/dd/yy hh:mm tt"),
                 "king_report": this.model.reports.length > 0 ? this.model.reports.at(0).toJSON() : null,
                 "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
@@ -299,6 +303,10 @@ $(function () {
         },
 
         toggle_star: function () {
+            if(this.model.get("_host")){
+                alert("Runs can only be starred on thier originating Torrent Server.");
+                return;
+            }
             if (this.model.get("star")) {
                 this.model.patch({star: false});
             } else {
@@ -307,6 +315,10 @@ $(function () {
         },
 
         change_representative: function(report) {
+            if(this.model.get("_host")){
+                alert("Reports can only be marked as representative on thier originating Torrent Server.");
+                return;
+            }
             console.log("Toggling experiment");
             var url = report.url() + 'representative/';
             var data;
@@ -403,7 +415,8 @@ $(function () {
             'click .edit-run': 'edit'
         },
 
-        initialize: function () {
+        initialize: function (options) {
+            this.options = options;
             _.bindAll(this, 'render', 'destroy_view', 'toggle_star', 'edit');
             this.model.bind('change', this.render);
             this.model.bind('remove', this.destroy_view);
@@ -422,20 +435,28 @@ $(function () {
                 url_prefix = "http://" + this.model.get('_host');
                 exp_name_prefix = "<strong>" + this.model.get('_host') + "</strong> "
             }
+            var other_reports = this.model.reports.map(function (report) {
+                return report.toJSON()
+            }).filter(function (report) {
+                if (king_report && king_report.id == report.id) {
+                    return false;
+                }
+                return true;
+            });
             display_host =
             this.$el.html(this.template.render({
                 "exp": this.model.toJSON(),
                 "is_local": is_local, //Mesh
                 "url_prefix": url_prefix, //Mesh
                 "exp_name_prefix": exp_name_prefix, //Mesh
-                "run_date_string": this.model.get('date').toString("MM/dd/yy"),
-                "result_date_string": this.model.get('resultDate').toString("MM/dd/yy"),
+                "run_date_string": this.model.get('date').toString("MMM d yyyy"),
+                "result_date_string": this.model.get('resultDate').toString("MMM d yyyy"),
                 "king_report": king_report,
                 "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / this.model.get('flows')) * 100),
                 "in_progress": !isNaN(parseInt(status)),
                 "total_q20bp": function () {
-                    return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q20_bases);
+                    return (king_report && king_report.isShowAllMetrics) ? king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q20_bases) : "---";
                 },
                 "total_q0bp": function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_bases);
@@ -445,11 +466,14 @@ $(function () {
                 },
                 "read_length": function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_mean_read_length);
-                }
+                },
+                "other_reports": other_reports,
+                "has_other_reports": other_reports.length > 0,
+                more_columns: this.options.more_columns
             }));
             var samples = this.$el.children('.samples')
             samples.html(this.sample_template(this.model.toJSON()));
-            samples.find('[rel=popover]').popover({content: samples.find('#sample' + this.model.id).html()});
+            samples.find('[rel=popover]').popover({content: samples.find(jqid('sample' + this.model.id)).html()});
         },
 
         edit: function (e) {
@@ -492,11 +516,14 @@ $(function () {
         events: {
             'change .search-field': 'search',
             'click #search_text_go': 'search',
+            'keypress #search_text' : 'check_search_key',
             'click #clear_filters': 'clear_filters',
             'click #live_button': 'toggle_live_update',
             'click #download_csv': 'csv_download',
             'click .sort_link': 'sort',
-            'change #id_data_source': 'data_source_update'
+            'change #id_data_source': 'data_source_update',
+            'click #toggle_more_filters': 'toggle_more_filters',
+            'click #toggle_more_columns': 'toggle_more_columns'
         },
 
         initialize: function () {
@@ -508,7 +535,18 @@ $(function () {
             $(".chzn-select").chosen({no_results_text:"No results matched", "allow_single_deselect":true});
             $('.chzn-drop').css('width', $(".chzn-select").outerWidth()-2);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
             $('.chzn-search input').css('width', $(".chzn-select").outerWidth()*.815);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
-            $('#rangeA').daterangepicker({dateFormat: 'mm/dd/yy'});
+            today = Date.parse('today');
+            now = new Date();
+            $('#rangeA').daterangepicker({
+                dateFormat: 'M d yy',
+                presetRanges: [
+                    {text: 'Today', dateStart: today, dateEnd: today},
+                    {text: 'Last 7 Days', dateStart: 'today-7days', dateEnd: today},
+                    {text: 'Last 30 Days', dateStart: 'today-30days', dateEnd: today},
+                    {text: 'Last 60 Days', dateStart: 'today-60days', dateEnd: today},
+                    {text: 'Last 90 Days', dateStart: 'today-90days', dateEnd: today}
+                ],
+            });
             this.current_view = null;
             this.collection.bind('add', this.addRun);
             this.collection.bind('reset', this.render);
@@ -519,7 +557,96 @@ $(function () {
             this.router.on("route:full_view", this.view_full);
             this.router.on("route:table_view", this.view_table);
             this.live_update = null;
+
+            // Load the more_* attributes in html storage
+            this.more_filters = false;
+            if (localStorage.getItem('data-more-filters') == "true") {
+                this.toggle_more_filters();
+            }
+            this.more_columns = false;
+            if (localStorage.getItem('data-more-columns') == "true") {
+                this.toggle_more_columns();
+            }
+
+            this.isLocalDataSource = true;
+            this.updateSortIndicators();
             //this.countdown_update();
+            this.meshValues = null;
+            this.prefetchMeshValues();
+            this.meshDropdowns = [
+                {element: $("#id_project"), key: "projects"},
+                {element: $("#id_sample"), key: "samples"},
+                {element: $("#id_pgm"), key: "rigs"},
+                {element: $("#id_reference"), key: "references"},
+            ];
+
+            // If there are form fields with values loaded from the browser cache, we need to re fetch the table data
+            if (!$.isEmptyObject(this._get_query())) {
+                console.log("Search fields are not empty on page load. Running search.");
+                this.search();
+            }
+
+        },
+
+        prefetchMeshValues: function () {
+            $.ajax({
+                url: "/rundb/api/mesh/v1/meshprefetch/",
+                dataType: "json"
+            }).done(function (response) {
+                //Save values
+                this.meshValues = response.values;
+                //Side effect to show error message
+                if (response.warnings && response.warnings.length > 0) {
+                    response.warnings.map(function (warningText) {
+                        console.log(warningText)
+                    });
+                }
+                //Enable mesh dropdown if we have any mesh nodes
+                var haveCompatibleNodes = false;
+                Object.keys(response.nodes).map(function (host) {
+                    var optionElement = $("<option/>", {value: response.nodes[host].id})
+                    if (response.nodes[host].compatible) {
+                        optionElement.text(host);
+                        haveCompatibleNodes = true;
+                    } else {
+                        var warningText = "Incompatible";
+                        if(response.nodes[host].warnings.length > 0){
+                            warningText = response.nodes[host].warnings[0]
+                        }
+                        optionElement.text(host + " (" + warningText + ")");
+                        optionElement.prop('disabled', true);
+                    }
+                    $("#id_data_source").append(optionElement);
+                })
+                if (haveCompatibleNodes) {
+                    $("#id_data_source").attr("disabled", false).selectpicker('refresh');
+                }
+            }.bind(this));
+        },
+
+        addMeshValuesToDropdowns: function () {
+            this.meshDropdowns.map(function (dropdown) {
+                var existingValues = $.map(dropdown.element.children(), function (option) {
+                    return option.value
+                });
+                this.meshValues[dropdown.key].map(function (value) {
+                    if ($.inArray(value, existingValues) == -1) {
+                        $("<option/>", {
+                            text: value,
+                            value: value,
+                            "data-mesh": true
+                        }).appendTo(dropdown.element);
+                    }
+                });
+                dropdown.element.selectpicker("refresh");
+            }.bind(this));
+        },
+
+        removeMeshValuesFromDropdowns: function () {
+            this.meshDropdowns.map(function (dropdown) {
+                dropdown.element.find("[data-mesh='true']").remove();
+                dropdown.element.selectpicker("refresh");
+            })
         },
 
         render: function () {
@@ -530,13 +657,13 @@ $(function () {
 
         addRun: function (run, collection, options) {
             options = options || {index: 0};
-            var tmpView = new this.RunView({model: run});
+            var tmpView = new this.RunView({model: run, more_columns: this.more_columns});
             tmpView.render();
             $("#main_list > div", this.el).eq(options.index).before(tmpView.el);
         },
 
         appendRun: function (run, index) {
-            var tmpView = new this.RunView({model: run});
+            var tmpView = new this.RunView({model: run, more_columns: this.more_columns});
             tmpView.render();
             $("#main_list", this.el).append(tmpView.el);
         },
@@ -548,7 +675,7 @@ $(function () {
         },
 
         fetchAlways: function () {
-            console.log("fetching finished");
+            console.log("Fetching finished", this.collection.length);
             $('#myBusyDiv').remove();
         },
 
@@ -563,6 +690,8 @@ $(function () {
             this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
             this.pager.render();
             $('#pager').show();
+            // disable more columns link
+            $("#toggle_more_columns_container").addClass("disabled");
         },
 
         view_full: function() {
@@ -577,14 +706,16 @@ $(function () {
             if(this.pager !== null) {
                 this.pager.destroy_view();
             }
-            var template = $("#experiment_list_table_template").html();
-            $("#data_panel").html(template);
+            var template = Hogan.compile($("#experiment_list_table_template").html());
+            $("#data_panel").html(template.render({more_columns: this.more_columns}));
             this.RunView = DevRunView;
             $("#view_table").addClass('active');
             $("#view_full").removeClass('active');
             this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
             this.pager.render();
             $('#pager').show();
+            // enable more columns link
+            $("#toggle_more_columns_container").removeClass("disabled");
         },
 
         view_table: function () {
@@ -626,14 +757,43 @@ $(function () {
         toggle_live_update: function() {
         	if (this.live_update !== null) {
                 this.clear_update();
-                this.$("#live_button").addClass('btn-success').text('Auto Update');
+                this.$("#live_button").addClass('btn-success').text('Auto Refresh');
                 this.$("#update_status").text('Page is static until refreshed');
 
             } else {
                 this.start_update();
-                this.$("#live_button").removeClass('btn-success').text('Stop Updates');
+                this.$("#live_button").removeClass('btn-success').text('Stop Refresh');
                 this.$("#update_status").text('Page is updating automatically');
             }
+        },
+
+        toggle_more_filters: function() {
+            var toggle_button = $("#toggle_more_filters");
+            var optional_filters = $(".search-field.optional");
+        	if (this.more_filters) {
+                this.more_filters = false;
+                toggle_button.text(toggle_button.data("more-text"));
+                optional_filters.addClass("hide");
+            } else {
+                this.more_filters = true;
+                toggle_button.text(toggle_button.data("less-text"));
+                optional_filters.removeClass("hide");
+            }
+            localStorage.setItem('data-more-filters', this.more_filters);
+        },
+
+        toggle_more_columns: function() {
+            var toggle_button = $("#toggle_more_columns");
+        	if (this.more_columns) {
+                this.more_columns = false;
+                toggle_button.text(toggle_button.data("more-text"));
+            } else {
+                this.more_columns = true;
+                toggle_button.text(toggle_button.data("less-text"));
+            }
+            this.setup_table_view();
+        	this.render();
+        	localStorage.setItem('data-more-columns', this.more_columns);
         },
 
         clear_filters: function() {
@@ -645,43 +805,63 @@ $(function () {
             var current_sort = $("#order_by").val();
             if (current_sort == name) {
                 $("#order_by").val('-' + name);
-            } else if (current_sort == '-' + name) {
-                $("#order_by").val("-resultDate");
             } else {
                 $("#order_by").val(name);
             }
-            $("#order_by").trigger('liszt:updated');
+            $("#order_by").selectpicker('refresh');
             this.search();
         },
 
-        _get_query: function (isLocalDataSource) {
-            //Date requires extra formatting
+        updateSortIndicators: function(){
+            var current_sort = $("#order_by").val();
+            var icon_class = "k-icon k-i-arrow-a";
+            if (current_sort[0] == "-"){
+                current_sort = current_sort.substring(1);
+                icon_class = "k-icon k-i-arrow-s";
+            }
+            $(".order_indicator").html("");
+            $("<span/>", {
+                class: icon_class
+            }).appendTo($("a[data-name='" + current_sort + "'] span.order_indicator"));
+        },
+
+        _array_to_query_string_value: function(array){
+            if(array){
+                return array.join(",")
+            } else{
+                return ""
+            }
+        },
+
+        _get_query: function () {
             var params = {
-                'all_date': $("#rangeA").val(),
-                'result_status': $("#id_status").val(),
+                //Top Row
                 'star': $("#id_star:checked").exists(),
-                'results__projects__name': $("#id_project").val(),
-                'samples__name': $("#id_sample").val(),
-                'chipType': $("#id_chip").val(),
-                'pgmName': $("#id_pgm").val(),
-                'results__eas__reference': $("#id_reference").val(),
-                'flows': $("#id_flows").val(),
+                'all_text': $("#search_text").val(),
+                'all_date': $("#rangeA").data("daterange"),
+                'result_status': $("#id_status").val(),
+                'results__projects__name__in': this._array_to_query_string_value($("#id_project").val()),
+
+                //Sort
                 'order_by': $("#order_by").val(),
+
+                //Bottom Row
+                'samples__name__in': this._array_to_query_string_value($("#id_sample").val()),
+                'results__eas__reference__in': this._array_to_query_string_value($("#id_reference").val()),
+                'flows__in': this._array_to_query_string_value($("#id_flows").val()),
+                'chipType__in': this._array_to_query_string_value($("#id_chip").val()),
+                'pgmName__in': this._array_to_query_string_value($("#id_pgm").val()),
+                'sample_prep': $("#id_sample_prep").val()
             };
 
-            sampleTube = $("#search_subject_nav").attr("title");
-            if (sampleTube == 'Search by sample tube label') {
-               params['plan__sampleTubeLabel__icontains'] = $("#search_text").val();
+            //Mesh hosts
+            if(!this.isLocalDataSource) {
+                params["mesh_node_ids"] = this._array_to_query_string_value($("#id_data_source").val());
             }
-            else {
-               params['all_text'] = $("#search_text").val();
-            }
-
             if (params['all_date']) {
-                if (!/ - /.test(params['all_date'])) {
-                    params['all_date'] = params['all_date'] + ' - ' + params['all_date'];
-                }
-                params['all_date'] = params['all_date'].replace(/ - /," 00:00,") + " 23:59";
+                var start = params['all_date'].start;
+                var end = params['all_date'].end.addHours(23).addMinutes(59);
+                params['all_date'] = start.toString('MM/dd/yyyy HH:mm') + "," + end.toString('MM/dd/yyyy HH:mm');
             }
             if (params['order_by'] == '-resultDate') {
                 params['order_by'] = '';
@@ -694,38 +874,35 @@ $(function () {
 		},
 
         data_source_update: function() {
-            var isLocalDataSource = $("#id_data_source").val() == "local";
-            // disable some dropdowns on remote
-            [
-                $("#id_project"),
-                $("#id_sample"),
-                $("#id_reference"),
-                $("#id_pgm"),
-            ].map(function (field) {
-                if (isLocalDataSource != undefined && !isLocalDataSource) {
-                    field.attr("disabled", "disabled").val("");
+            var dataSourceValues = $("#id_data_source").val();
+            // default to local data source
+            this.isLocalDataSource = true;
+            if(dataSourceValues) {
+                // if the only selected option is "local" we can still enable local only features
+                if (dataSourceValues.length == 1 && dataSourceValues[0] == "local") {
+                    this.isLocalDataSource = true;
                 } else {
-                    field.removeAttr("disabled");
+                    this.isLocalDataSource = false;
                 }
-                field.trigger("liszt:updated");
-            });
-            if (isLocalDataSource != undefined && !isLocalDataSource) {
+            }
+            if (!this.isLocalDataSource) {
+                this.addMeshValuesToDropdowns();
+            }else{
+                this.removeMeshValuesFromDropdowns();
+            }
+            if (!this.isLocalDataSource) {
                 $("#download_csv").hide();
             }else{
                 $("#download_csv").show();
             }
         },
 
-		csv_download: function() {
-			var q = this._get_query();
-			q = $.extend({'format':'csv'}, q);
-			var params = $.param(q);
-			if (params.length > 0)
-				params = '&' + params
-			var url = '/data/getCSV.csv';
-			jQuery.download(url, q, 'POST');
+        csv_download: function () {
+            var q = this._get_query();
+            var url = '/data/getCSV.csv?' + $.param(q);
+            jQuery.download(url, 'POST');
             return false;
-		},
+        },
 
 		_table_filter: function() {
     		var q = this._get_query();
@@ -745,9 +922,13 @@ $(function () {
 
 		},
 
+        check_search_key: function (event) {
+            if (event.which == 13 || event.keyCode == 13) this.search();
+        },
+
         search: function() {
-            var isLocalDataSource = $("#id_data_source").val() == "local";
-            this.collection.filtrate(this._get_query(isLocalDataSource), isLocalDataSource);
+            this.updateSortIndicators();
+            this.collection.filtrate(this._get_query(), this.isLocalDataSource);
         }
 
     });

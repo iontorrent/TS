@@ -1,7 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <iomanip>
 #include "BeadTracker.h"
-#include "mixed.h"
+#include "ClonalFilter/mixed.h"
 #include "ImageLoader.h"
 #include "MathUtil.h"
 #include "LevMarState.h"

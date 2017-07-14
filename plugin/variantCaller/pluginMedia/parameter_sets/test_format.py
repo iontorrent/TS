@@ -19,67 +19,116 @@ sections={"torrent_variant_caller": [],
           "freebayes": []
           }
 
-sections["torrent_variant_caller"]=["data_quality_stringency",
-                                    "hp_max_length",
-                                    "filter_unusual_predictions",
-                                    "filter_insertion_predictions",
-                                    "filter_deletion_predictions", 
-                                    "indel_as_hpindel",
-                                    "snp_min_cov_each_strand",
-                                    "snp_min_variant_score",
+sections["torrent_variant_caller"]=[
+                                    # allele classification parameters
+                                    "use_fd_param",
+                                    "min_ratio_for_fd",                                        
+                                    "indel_as_hpindel",                                     
+                                    # Allele specific parameters
+                                    ## indel parameters
+                                    "indel_min_allele_freq",
+                                    "indel_min_variant_score",
+                                    "indel_min_coverage",
+                                    "indel_min_cov_each_strand",   
+                                    "indel_strand_bias", 
+                                    "indel_strand_bias_pval",                                    
+                                    ## snp parameters
                                     "snp_min_allele_freq",
+                                    "snp_min_variant_score",
                                     "snp_min_coverage",
+                                    "snp_min_cov_each_strand",   
                                     "snp_strand_bias", 
                                     "snp_strand_bias_pval",
-                                    "mnp_min_cov_each_strand",
-                                    "mnp_min_variant_score",
+                                    ## mnp parameters
                                     "mnp_min_allele_freq",
+                                    "mnp_min_variant_score",
                                     "mnp_min_coverage",
+                                    "mnp_min_cov_each_strand",   
                                     "mnp_strand_bias", 
                                     "mnp_strand_bias_pval",
-                                    "indel_min_cov_each_strand",
-                                    "indel_min_variant_score",
-                                    "indel_min_allele_freq",
-                                    "indel_min_coverage",
-                                    "indel_strand_bias",
-                                    "indel_strand_bias_pval",
-                                    "hotspot_min_cov_each_strand",
-                                    "hotspot_min_variant_score",
+                                    ## hotspot parameters
                                     "hotspot_min_allele_freq",
+                                    "hotspot_min_variant_score",
                                     "hotspot_min_coverage",
-                                    "hotspot_strand_bias",
+                                    "hotspot_min_cov_each_strand",   
+                                    "hotspot_strand_bias", 
                                     "hotspot_strand_bias_pval",
-                                    "downsample_to_coverage",
-                                    "outlier_probability",
+                                    # SNP/MNP realignment parameters 
                                     "do_snp_realignment",
                                     "do_mnp_realignment",
-                                    "realignment_threshold",
+                                    "realignment_threshold",                                       
+                                    # Flow evaluation parameters
+                                    "downsample_to_coverage",
+                                    "heavy_tailed",
+                                    "outlier_probability",
+                                    "prediction_precision",
+                                    "min_detail_level_for_fast_scan",
+                                    "max_flows_to_test",                                    
+                                    "suppress_recalibration",
+                                    # HP length filters
+                                    "hp_max_length",
+                                    "hp_indel_hrun",
+                                    "hp_ins_len",
+                                    "hp_del_len",
+                                    # Flow evaluation filters
+                                    "data_quality_stringency",
+                                    "filter_unusual_predictions",
+                                    "filter_deletion_predictions",
+                                    "filter_insertion_predictions",
+                                    # Position bias filters
                                     "use_position_bias",
                                     "position_bias",
                                     "position_bias_pval",
-                                    "position_bias_ref_fraction",
+                                    "position_bias_ref_fraction",                                    
+                                    # SSE filters
+                                    "error_motifs",                                    
                                     "sse_prob_threshold",
-                                    "prediction_precision",
-                                    "heavy_tailed",
-                                    "suppress_recalibration"]
+                                    # Others
+                                    "report_ppa",
+                                    ]
 sections["long_indel_assembler"]=["kmer_len",
+                                  "min_var_freq",                                  
                                   "min_var_count",
                                   "short_suffix_match",
                                   "min_indel_size",
                                   "max_hp_length",
-                                  "min_var_freq",
                                   "relative_strand_bias",
-                                  "output_mnv"]
+                                  "output_mnv",
+                                  ]
 sections["freebayes"]=["allow_indels",
                        "allow_snps",
                        "allow_mnps",
                        "allow_complex",
+                       "gen_min_alt_allele_freq",                       
+                       "gen_min_indel_alt_allele_freq",
+                       "gen_min_coverage",
                        "min_mapping_qv",
                        "read_snp_limit",
-                       "gen_min_alt_allele_freq",
-                       "read_max_mismatch_fraction",
-                       "gen_min_indel_alt_allele_freq",
-                       "gen_min_coverage"]
+                       "read_max_mismatch_fraction",                       
+                       ]
+
+def tagseq_param(my_sections):
+    my_sections['long_indel_assembler'] = []
+    if 'torrent_variant_caller' not in my_sections:
+        my_sections["torrent_variant_caller"] = []
+    my_sections["torrent_variant_caller"] += ['min_tag_fam_size',
+                                              'indel_func_size_offset',
+                                              'tag_trim_method',
+                                              'snp_min_var_coverage',
+                                              'indel_min_var_coverage',
+                                              'mnp_min_var_coverage',
+                                              'hotspot_min_var_coverage',
+                                              'fd_nonsnp_min_var_cov',
+                                              'tag_sim_max_cov',
+                                              'use_lod_filter',
+                                              'lod_multiplier',
+                                              'try_few_restart_freq',
+                                              ]
+    if 'freebayes' not in my_sections:
+        my_sections["freebayes"] = []    
+    my_sections['freebayes'] += ['read_mismatch_limit',
+                                 'min_cov_fraction',
+                                 ]
 
 def main(argv):
     if not argv:
@@ -93,7 +142,12 @@ def main(argv):
         except:
             print "Failure to load %s" % (inputfile)
             raise
-
+        
+        # Is it a tagseq parameter file?
+        library_list = [lib.lower().replace(' ', '_') for lib in d.get('meta', {}).get('compatibility', {}).get('library', [])]
+        if 'tagseq' in library_list or 'tag_sequencing' in library_list or 'tag_seq' in library_list:
+             tagseq_param(sections)
+        
         # test for typos
         error = False
         for section, val in sections.iteritems():
@@ -123,7 +177,7 @@ def main(argv):
             print "No error"
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+    main(sys.argv[1:])
 
 
 

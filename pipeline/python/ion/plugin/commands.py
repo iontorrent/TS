@@ -3,7 +3,7 @@
 import sys
 import argparse
 import atexit
-
+import json
 import types
 import inspect
 
@@ -84,13 +84,20 @@ class PluginCLI(object):
             print PluginInfo.from_instance(plugin)
             return self.EXIT_SUCCESS
 
+        if self.options.bctable_columns:
+            from ion.plugin.barcodetable_columns import available_columns
+            print json.dumps(available_columns(), indent=1)
+            return
+
         if self.options.runmode == "launch":
             return plugin.launch_wrapper(dry_run=self.options.dry_run)
+
         if self.options.runmode == "block":
             if not self.options.block:
                 LOG.fatal("Block runmode requires --block identifier")
                 return self.EXIT_ERROR
             return plugin.block(self.options.block)
+
 
     def parse_command_line(self):
         version = getattr(self.cls, '__version__', getattr(self.cls, 'version', "(Unknown)"))
@@ -103,6 +110,7 @@ class PluginCLI(object):
         parser.add_argument('--inspect', '--info', action='store_true')
         parser.add_argument('--runmode', default="launch")
         parser.add_argument('--block', default=None)
+        parser.add_argument('--bctable-columns', action='store_true')
         self.options = parser.parse_args()
 
         log_lvl = logging.ERROR

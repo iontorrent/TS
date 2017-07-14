@@ -41,36 +41,22 @@ with ``sudo apt-get install python-twisted``.
 """
 import datetime
 import json
-import simplejson
 import os
-import uuid
 from os import path
 import re
 import signal
 import subprocess
 import sys
 import threading
-import tempfile
 import traceback
 import logging
-from logging import handlers as loghandlers
+from logging import handlers
 
 from twisted.web import xmlrpc, server
 
 #for tmap queue
-import urllib
-import urllib2
-from twisted.internet import utils, reactor
-from twisted.web import xmlrpc, server
-from twisted.application import service
-from twisted.internet import defer, utils
-from twisted.python import log
-import shutil
-from random import choice
-import string
+from twisted.internet import reactor
 
-#import libs to zip with
-import zipfile
 
 LOG_FILENAME = '/var/log/ion/jobserver.log'
 logger = logging.getLogger(__name__)
@@ -86,9 +72,14 @@ logger.addHandler(cachehandle)
 REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 
 import iondb.anaserve.djangoinit
-import iondb.rundb.models
-
-__version__ = filter(str.isdigit, "$Revision$")
+#from iondb.bin import djangoinit
+#from iondb.rundb import models
+try:
+    import iondb.version as version  # @UnresolvedImport
+    GITHASH = version.IonVersionGetGitHash()
+except:
+    GITHASH = ""
+__version__ = GITHASH
 
 
 # local settings
@@ -450,7 +441,7 @@ class DRMAnalysis(Analysis):
                     try:
                         logger.debug("terminate job %s, status %s" % (blockjobid, _session.jobStatus(blockjobid)))
                         _session.control(blockjobid, drmaa.JobControlAction.TERMINATE)
-                    except Exception as err:
+                    except Exception:
                         logger.error("Failed to terminate %s" % blockjobid)
             except:
                 logger.error("DRMAA terminate error reading from %s" % joblistfile)
@@ -521,7 +512,7 @@ class LocalAnalysis(Analysis):
             return False
         try:
             self.proc.send_signal(signal.SIGSTOP)
-        except Exception as err:
+        except Exception:
             logger.warning("SIGSTOP failed")
             return False
         return self._running()
@@ -532,7 +523,7 @@ class LocalAnalysis(Analysis):
             return False
         try:
             self.proc.send_signal(signal.SIGCONT)
-        except Exception as err:
+        except Exception:
             logger.warning("SIGCONT failed")
             return False
         return True
@@ -752,7 +743,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
         from ion.reports import uploadMetrics
         try:
             uploadMetrics.updateStatus(primarykeyPath, status, reportLink)
-        except Exception as err:
+        except Exception:
             logger.error("Update status failed")
             return traceback.format_exc()
         return 0
@@ -893,14 +884,14 @@ class AnalysisServer(xmlrpc.XMLRPC):
             update_dmfilestat_diskusage.delay(pk)
         except:
             logger.warn("update_diskusage celery task failed to launch")
-    
+
         # Generate serialized json file for future Data Management Import
         try:
             from iondb.rundb.data.tasks import save_serialized_json
             save_serialized_json.delay(pk)
         except:
             logger.warn("save_serialized_json celery task failed")
-        
+
         return 0
 
 

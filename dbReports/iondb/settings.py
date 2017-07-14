@@ -160,7 +160,9 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     'django.contrib.messages',
+    'iondb.ftpserver',
     'iondb.rundb',
+    'iondb.security',
     'tastypie',
     'south',
 )
@@ -285,7 +287,7 @@ IPLUGIN_HOST = HOSTNAME
 IPLUGIN_PORT = 9191
 IPLUGIN_STR = "http://%s:%s" % (IPLUGIN_HOST, IPLUGIN_PORT)
 
-DEFAULT_NO_PROXY="localhost,127.0.0.1,127.0.1.1,::1"
+DEFAULT_NO_PROXY = "localhost,127.0.0.1,127.0.1.1,::1"
 
 # SGE settings - all you need to run SGE
 SGE_ROOT = "/var/lib/gridengine"
@@ -296,7 +298,10 @@ SGE_EXECD_PORT = 6445
 SGE_ENABLED = True
 DRMAA_LIBRARY_PATH = "/usr/lib/libdrmaa.so"
 
-TMAP_VERSION = dj_config.get_tmap_version()
+try:
+    TMAP_VERSION = dj_config.get_tmap_version()
+except:
+    TMAP_VERSION = 'tmap-f3'
 TMAP_DIR = '/results/referenceLibrary/%s/' % TMAP_VERSION
 TMAP_DISABLED_DIR = '/results/referenceLibrary/disabled/%s/' % TMAP_VERSION
 TEMP_PATH = "/results/referenceLibrary/temp/"
@@ -333,9 +338,12 @@ REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.
 
 PRODUCT_UPDATE_BASEURL = "http://ionupdates.com/"
 PRODUCT_UPDATE_PATH = "products/main.json"
+EULA_TEXT_URL = "products/LICENSE.txt"
 
-PLAN_CSV_VERSION = "1.0"
+PLAN_CSV_VERSION = "2.0"
+SUPPORTED_PLAN_CSV_VERSION = ["1.0","2.0"]
 SAMPLE_CSV_VERSION = "1.0"
+SUPPORTED_SAMPLE_CSV_VERSION = ["1.0"]
 
 ABSOLUTE_URL_OVERRIDES = {
     'auth.user': lambda u: urlresolvers.reverse('configure_account'),
@@ -367,6 +375,13 @@ CACHES = {
 }
 NOSE_ARGS = ['--nocapture', '--nologcapture', ]
 
+# Fetch uuid for this system. Used for TS mesh.
+SYSTEM_UUID = None
+try:
+    SYSTEM_UUID = subprocess.check_output(['sudo', '-n', 'dmidecode', '-s', 'system-uuid']).strip()
+except Exception as e:
+    pass
+
 # Load context sensitive help map. Installed by ion-docs package.
 # JSON file contains an object with TS url patterns as keys and help system GUIDs as values.
 HELP_URL_MAP = {}
@@ -380,6 +395,13 @@ ALLOWED_HOSTS = ['*']
 
 DEBUG_APPS = None
 DEBUG_MIDDLE = None
+
+# if the instance is a vm in a S5 we will need to masquerade address for the publicly facing IP address
+FTPSERVER_MASQUERADE_ADDRESS = dj_config.get_s5_ip_addr() if dj_config.is_s5_tsvm() else None
+FTPSERVER_HOST = "0.0.0.0"
+FTPSERVER_PORT = 8021
+FTPSERVER_DAEMONIZE = False
+FTPSERVER_PASSIVE_PORTS = "20000-20100"
 
 # OPTIONAL: this is the pattern to be used by the python-apt method "get_changelog" (https://apt.alioth.debian.org/python-apt-doc/library/apt.package.html)
 # this should be where all of the changelogs are held for the plugin sets, should be setup in local_settings
@@ -400,3 +422,4 @@ try:
 
 except ImportError:
     pass
+

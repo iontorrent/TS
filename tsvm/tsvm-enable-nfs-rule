@@ -1,0 +1,13 @@
+#!/bin/bash
+# Copyright (C) 2014 Life Technologies Inc. All Rights Reserved
+#
+# This will enable nfs rules for the vm
+#
+
+WHERE=$(dirname $(readlink -f $0))
+
+#=======================================================================
+# Common variables
+#=======================================================================
+source ${WHERE}/tsvm-include
+enable_nfs_rule

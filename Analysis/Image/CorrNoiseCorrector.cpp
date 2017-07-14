@@ -78,7 +78,7 @@ double CorrNoiseCorrector::CorrectCorrNoise(RawImage *raw, int correctRows, int 
 
 
 double CorrNoiseCorrector::CorrectCorrNoise(short *_image, int _rows, int _cols, int _frames, int correctRows,
-		int _thumbnail, bool override, bool verbose, int threadNum, int avg)
+		int _thumbnail, bool override, bool verbose, int threadNum, int avg, int frame_mult)
 {
 	char *allocPtr;
 	double rc=0;
@@ -102,6 +102,8 @@ double CorrNoiseCorrector::CorrectCorrNoise(short *_image, int _rows, int _cols,
 	rows=_rows;
 	cols=_cols;
 	frames=_frames;
+	if(frame_mult)
+		fmult=frame_mult;
 
 	mCorr_mask_len = rows*cols*2;
 	mCorr_mask=(short int *)memalign(64,mCorr_mask_len);
@@ -350,7 +352,7 @@ void CorrNoiseCorrector::DebugSaveRowNoise(int correctRows)
 // make sure our applied correction won't pin any currently un-pinned pixels
 void CorrNoiseCorrector::FixouterPixels()
 {
-	int frameStride=rows*cols;
+	int frameStride=rows*cols*fmult;
 	int endFrmOffset = (frames-1)*frameStride;
 	for (int idx = 0; idx < rows*cols; idx++){
 		short int *srcPtr = (short int *) (&image[idx]);
@@ -403,7 +405,7 @@ void CorrNoiseCorrector::FixouterPixels()
 
 void CorrNoiseCorrector::ReZeroPinnedPixels_cpFirstFrame()
 {
-	int frameStride=rows*cols;
+	int frameStride=rows*cols*fmult;
 #ifdef SCALE_TRACES
 	int64_t avg_height=0;
 	int64_t avg_cnt=0;
@@ -497,8 +499,8 @@ void CorrNoiseCorrector::ReZeroPinnedPixels_cpFirstFrame()
 double CorrNoiseCorrector::ApplyCorrection_rows()
 {
 	int y;
-	int frameStride=rows*cols;
-	int frameStrideV=rows*cols/8;
+	int frameStride=rows*cols*fmult;
+	int frameStrideV=(rows*cols/8)*fmult;
 	double startTime = CNCTimer();
 	double TotalAvgNoiseSq=0;
 	double TotalAvgNoiseSum=0;
@@ -574,7 +576,7 @@ void CorrNoiseCorrector::ApplyCorrection_cols()
 	{
 		for(int y=0 ;y< rows; y++){
 			v8f_u *corr=(v8f_u *)&NOISE_ACC(0,0,frame);
-			v8s *srcPtr=(v8s *)&image[frame*rows*cols + y*cols];
+			v8s *srcPtr=(v8s *)&image[frame*fmult*rows*cols + y*cols];
 			for(int x=0 ;x< cols; x+=8,corr++,srcPtr++){
 				v8s_u corrS;
 				CVT_VEC8F_VEC8S(corrS,(*corr));
@@ -622,7 +624,7 @@ void CorrNoiseCorrector::SumRows()
 	for (frame = 0; frame < frames; frame++)
 	{
 		for (y = 0; y < rows; y++){
-			short int *sptr = (short int *) (&image[frame * cols*rows + y * cols]);
+			short int *sptr = (short int *) (&image[frame * fmult * cols*rows + y * cols]);
 			v8s  *maskSumPtr=(v8s *)&mCorr_mask[y*cols];
 			for(int reg=0;reg<ncomp;reg++){
 				v8s_u maskSum;
@@ -692,7 +694,7 @@ void CorrNoiseCorrector::SumCols()
 			v8f_u valU;
 
 
-			short int *sptr = (short int *) (&image[frame*cols*rows + x]);
+			short int *sptr = (short int *) (&image[frame*fmult*cols*rows + x]);
 //			v8s  *maskSumPtr=(v8s *)&mCorr_mask[x];
 			for(int reg=0;reg<ncomp;reg++){
 //				v8s_u maskSum;

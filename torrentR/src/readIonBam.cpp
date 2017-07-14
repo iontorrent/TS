@@ -154,6 +154,24 @@ RcppExport SEXP readBamHeader(SEXP RbamFile) {
                               Rcpp::Named("GroupOrder") = GroupOrder);
 }
 
+// Reading flowgram information like ZM from BAM
+bool ReadFlowgram(string tag, const BamTools::BamAlignment & alignment, Rcpp::NumericMatrix & out_data, unsigned int num_flows, unsigned int read_idx){
+
+  std::vector<int16_t> flowMeasured; // round(256*val), signed
+  bool success = alignment.GetTag(tag, flowMeasured);
+
+  if(success){
+    unsigned int i=0;
+    for(; i<std::min(num_flows,(unsigned int)flowMeasured.size()); i++)
+      out_data(read_idx,i) = flowMeasured[i]/256.0;
+      while(i<num_flows)
+        out_data(read_idx,i++) = 0; // which is bad because will lead to biases in extrapolation
+    }
+
+  return success;
+}
+
+
 class UsefulBamData{
 public:
 		std::map< std::string, int > keyLen;
@@ -272,12 +290,21 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		Rcpp::IntegerVector    out_adapterOverlap(nReadOut);
 		Rcpp::IntegerVector    out_flowClipLeft(nReadOut);
 		Rcpp::IntegerVector    out_flowClipRight(nReadOut);
+		Rcpp::IntegerVector    out_lastInsertFlow(nReadOut);
+		Rcpp::IntegerVector    out_adapterType(nReadOut);
 		Rcpp::NumericMatrix    out_flow(nReadOut,my_cache.nFlowFZ);
 		Rcpp::NumericMatrix    out_meas(nReadOut,my_cache.nFlowZM);
 		Rcpp::NumericMatrix    out_phase(nReadOut, my_cache.nPhase);
 		Rcpp::StringVector     out_base(nReadOut);
 		Rcpp::IntegerMatrix    out_qual(nReadOut,maxBases);
 		Rcpp::IntegerMatrix    out_flowIndex(nReadOut,maxBases);
+
+		// Debug normalization values
+		Rcpp::NumericMatrix    out_additive(nReadOut,my_cache.nFlowZM);
+		Rcpp::NumericMatrix    out_multiplicative(nReadOut,my_cache.nFlowZM);
+		Rcpp::NumericMatrix    out_key_norm(nReadOut,my_cache.nFlowZM);
+		Rcpp::NumericMatrix    out_uncalibrated(nReadOut,my_cache.nFlowZM);
+
 		// Alignment-related data
 		Rcpp::IntegerVector    out_aligned_flag(nReadOut);
 		Rcpp::StringVector     out_aligned_base(nReadOut);
@@ -298,6 +325,17 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		Rcpp::IntegerVector    out_q20Len(nReadOut);
 		Rcpp::IntegerVector    out_q47Len(nReadOut);
 
+		// Structures Reads: Read hard clipped sequence bits from tags
+		Rcpp::StringVector     out_startUMI(nReadOut);       // ZT tag
+		Rcpp::StringVector     out_endUMI(nReadOut);         // YT tag
+		Rcpp::StringVector     out_ExtraClipLeft(nReadOut);  // ZE tag
+		Rcpp::StringVector     out_ExtraClipRight(nReadOut); // YE tag
+
+		bool                   have_startUMI       = false;
+		bool                   have_endUMI         = false;
+		bool                   have_ExtraClipLeft  = false;
+		bool                   have_ExtraClipRight = false;
+
 		// Extra tags for reading the spades file into R XXX
 		//Rcpp::NumericVector    out_SpadesDelta(nReadOut);
 		//Rcpp::NumericVector    out_SpadesFit(nReadOut);
@@ -311,6 +349,9 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		unsigned int nReadsFromBam=0;
 		BamTools::BamAlignment alignment;
 		bool haveMappingData=false;
+		bool have_debug_bam= false;
+		bool have_uncalibrated_flows = false;
+
 		while(getNextAlignment(alignment,bamReader,my_cache.groupID,alignmentSample,wellIndex,nSample)) {
 			int thisCol = 0;
 			int thisRow = 0;
@@ -347,6 +388,35 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			getTagParanoid(alignment,"ZG",flowClipRight);
 			out_flowClipRight(nReadsFromBam) = flowClipRight;
 
+			std::vector<int32_t> zm_tag_vec;
+			if(alignment.GetTag("ZC", zm_tag_vec)){
+				out_lastInsertFlow(nReadsFromBam) = zm_tag_vec.at(1);
+				out_adapterType(nReadsFromBam)    = zm_tag_vec.at(3);
+			}
+
+			// Not every read is guaranteed to have structures detected
+			string temp_tag;
+
+			if (alignment.GetTag("ZT", temp_tag)){
+			  have_startUMI = true;
+			  out_startUMI(nReadsFromBam) = temp_tag;
+			}
+
+			if (alignment.GetTag("YT", temp_tag)){
+			  have_endUMI = true;
+			  out_endUMI(nReadsFromBam) = temp_tag;
+			}
+
+			if (alignment.GetTag("ZE", temp_tag)){
+			  have_ExtraClipLeft = true;
+			  out_ExtraClipLeft(nReadsFromBam) = temp_tag;
+			}
+
+			if (alignment.GetTag("YE", temp_tag)){
+			  have_ExtraClipRight = true;
+			  out_ExtraClipRight(nReadsFromBam) = temp_tag;
+			}
+
 			// Read extra spades tags XXX
             //float spades_delta = 0;
             //if (alignment.GetTag("YD", spades_delta))
@@ -367,15 +437,16 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					out_flow(nReadsFromBam,i++) = 0;
 			}
 
-			// experimental tag for Project Razor: "measured" values
-			std::vector<int16_t> flowMeasured; // round(256*val), signed
-			if(alignment.GetTag("ZM", flowMeasured)){
-				unsigned int i=0;
-				for(; i<std::min(my_cache.nFlowZM,(unsigned int)flowMeasured.size()); i++)
-					out_meas(nReadsFromBam,i) = flowMeasured[i]/256.0;
-				while(i<my_cache.nFlowZM)
-					out_meas(nReadsFromBam,i++) = 0; // which is bad because will lead to biases in extrapolation
-			} 
+			// Read normalized measurements in ZM tag
+			ReadFlowgram("ZM", alignment, out_meas, my_cache.nFlowZM, nReadsFromBam);
+
+			// Read debug quantities if they are available
+            have_debug_bam = ReadFlowgram("Ya", alignment, out_additive, my_cache.nFlowZM, nReadsFromBam);
+            if (have_debug_bam){
+              ReadFlowgram("Yb", alignment, out_multiplicative, my_cache.nFlowZM, nReadsFromBam);
+              ReadFlowgram("Yw", alignment, out_key_norm, my_cache.nFlowZM, nReadsFromBam);
+              have_uncalibrated_flows = ReadFlowgram("Yx", alignment, out_uncalibrated, my_cache.nFlowZM, nReadsFromBam);
+            }
 
 			// experimental tag for Project Razor: "phase" values
 			std::vector<float> flowPhase;
@@ -482,10 +553,16 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
             Rcpp::IntegerVector    out2_adapterOverlap(nReadsFromBam);
 			Rcpp::IntegerVector    out2_flowClipLeft(nReadsFromBam);
 			Rcpp::IntegerVector    out2_flowClipRight(nReadsFromBam);
+			Rcpp::IntegerVector    out2_lastInsertFlow(nReadsFromBam);
+			Rcpp::IntegerVector    out2_adapterType(nReadsFromBam);
 			Rcpp::NumericMatrix    out2_flow(nReadsFromBam,my_cache.nFlowFZ);
 			//razor
 			Rcpp::NumericMatrix    out2_meas(nReadsFromBam,my_cache.nFlowZM);
 			Rcpp::NumericMatrix    out2_phase(nReadsFromBam,my_cache.nPhase);
+			Rcpp::NumericMatrix    out2_additive(nReadsFromBam,my_cache.nFlowZM);
+			Rcpp::NumericMatrix    out2_multiplicative(nReadsFromBam,my_cache.nFlowZM);
+			Rcpp::NumericMatrix    out2_key_norm(nReadsFromBam,my_cache.nFlowZM);
+			Rcpp::NumericMatrix    out2_uncalibrated(nReadsFromBam,my_cache.nFlowZM);
 			// end
 			Rcpp::StringVector     out2_base(nReadsFromBam);
 			Rcpp::IntegerMatrix    out2_qual(nReadsFromBam,maxBases);
@@ -508,6 +585,11 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			Rcpp::IntegerVector    out2_q20Len(nReadsFromBam);
 			Rcpp::IntegerVector    out2_q47Len(nReadsFromBam);
 
+			Rcpp::StringVector     out2_startUMI(nReadOut);
+			Rcpp::StringVector     out2_endUMI(nReadOut);
+			Rcpp::StringVector     out2_ExtraClipLeft(nReadOut);
+			Rcpp::StringVector     out2_ExtraClipRight(nReadOut);
+
 			// Spades XXX
 			//Rcpp::NumericVector    out2_SpadesDelta(nReadsFromBam);
 			//Rcpp::NumericVector    out2_SpadesFit(nReadsFromBam);
@@ -523,9 +605,14 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 				out2_clipQualRight(i)    = out_clipQualRight(i);
 				out2_clipAdapterLeft(i)  = out_clipAdapterLeft(i);
 				out2_clipAdapterRight(i) = out_clipAdapterRight(i);
-                		out2_adapterOverlap(i)   = out_adapterOverlap(i);
+                out2_adapterOverlap(i)   = out_adapterOverlap(i);
 				out2_flowClipLeft(i)     = out_flowClipLeft(i);
 				out2_flowClipRight(i)    = out_flowClipRight(i);
+
+				out2_lastInsertFlow(i)   = out_lastInsertFlow(i);
+				out2_adapterType(i)      = out_adapterType(i);
+
+
 				out2_length(i)           = out_length(i);
 				out2_fullLength(i)       = out_fullLength(i);
 				out2_base(i)             = out_base(i);
@@ -539,6 +626,12 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					out2_qual(i,j)         = out_qual(i,j);
 					out2_flowIndex(i,j)    = out_flowIndex(i,j);
 				}
+
+				out2_startUMI(i) = out_startUMI(i);
+				out2_endUMI(i) = out_endUMI(i);
+				out2_ExtraClipLeft(i) = out_ExtraClipLeft(i);
+				out2_ExtraClipRight(i) = out_ExtraClipRight(i);
+
 				if(haveMappingData) {
 					out2_aligned_flag(i)       = out_aligned_flag(i);
 					out2_aligned_base(i)       = out_aligned_base(i);
@@ -564,12 +657,24 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					//out2_SpadesFit(i) = out_SpadesFit(i);
 					//out2_SpadesAlt(i) = out_SpadesAlt(i);
 				}
+
+				if (have_debug_bam){
+					for(unsigned int j=0; j<my_cache.nFlowZM; j++){
+						out2_additive(i,j) = out_additive(i,j);
+						out2_multiplicative(i,j) = out_multiplicative(i,j);
+						out2_key_norm(i,j) = out_key_norm(i,j);
+					}
+					if (have_uncalibrated_flows){
+						for(unsigned int j=0; j<my_cache.nFlowZM; j++)
+							out2_uncalibrated(i,j) = out_uncalibrated(i,j);
+					}
+				}
 			}
 
             /// map data
             map["nFlow"]            = Rcpp::wrap( (int) std::max(my_cache.nFlowFZ,my_cache.nFlowZM));
             map["id"]               = Rcpp::wrap( out2_id );
-             map["readGroup"]        = Rcpp::wrap( out2_groupID );
+            map["readGroup"]        = Rcpp::wrap( out2_groupID );
 	        map["col"]              = Rcpp::wrap( out2_col );
 	        map["row"]              = Rcpp::wrap( out2_row );
 		    map["length"]           = Rcpp::wrap( out2_length );
@@ -585,6 +690,16 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 	        map["phase"]            = Rcpp::wrap( out2_phase );
 	        map["base"]             = Rcpp::wrap( out2_base );
 	        map["qual"]             = Rcpp::wrap( out2_qual );
+
+	        // Structured reads, report tags only if present in BAM
+	        if (have_startUMI)
+	          map["startTag"]       = Rcpp::wrap( out2_startUMI );
+	        if (have_endUMI)
+	          map["endTag"]         = Rcpp::wrap( out2_endUMI );
+	        if (have_ExtraClipLeft)
+	          map["extraClipLeft"]  = Rcpp::wrap( out2_ExtraClipLeft );
+	        if (have_ExtraClipRight)
+	          map["extraClipRight"] = Rcpp::wrap( out2_ExtraClipRight );
 
 			if(haveMappingData) {
               map["alignFlag"]       = Rcpp::wrap( out2_aligned_flag );
@@ -607,7 +722,13 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
               //map["SpadesDelta"]     = Rcpp::wrap( out2_SpadesDelta );
               //map["SpadesFit"]      = Rcpp::wrap( out2_SpadesFit );
               //map["SpadesAlt"]      = Rcpp::wrap( out2_SpadesAlt );
-
+			}
+			if (have_debug_bam){
+				map["normAdditive"]       = Rcpp::wrap( out2_additive );
+				map["normMultiplicative"] = Rcpp::wrap( out2_multiplicative );
+				map["keyNorm"]            = Rcpp::wrap( out2_key_norm );
+				if (have_uncalibrated_flows)
+					map["uncalibrated"]       = Rcpp::wrap( out2_uncalibrated );
 			}
 		} else {
              map["nFlow"]            = Rcpp::wrap( (int) std::max(my_cache.nFlowFZ,my_cache.nFlowZM) );
@@ -624,12 +745,25 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
              map["clipAdapterRight"] = Rcpp::wrap( out_clipAdapterRight );
              map["flowClipLeft"]     = Rcpp::wrap( out_flowClipLeft );
              map["flowClipRight"]    = Rcpp::wrap( out_flowClipRight );
+             map["lastInsertFlow"]   = Rcpp::wrap( out_lastInsertFlow );
+             map["adapterType"]      = Rcpp::wrap( out_adapterType );
              map["flow"]             = Rcpp::wrap( out_flow );
              map["measured"]         = Rcpp::wrap( out_meas );
              map["phase"]            = Rcpp::wrap( out_phase );
              map["base"]             = Rcpp::wrap( out_base );
              map["qual"]             = Rcpp::wrap( out_qual );
              map["flowIndex"]        = Rcpp::wrap( out_flowIndex );
+
+ 	         // Structured reads, report tags only if present in BAM
+ 	         if (have_startUMI)
+ 	           map["startTag"]       = Rcpp::wrap( out_startUMI );
+ 	         if (have_endUMI)
+ 	           map["endTag"]         = Rcpp::wrap( out_endUMI );
+ 	         if (have_ExtraClipLeft)
+ 	           map["extraClipLeft"]  = Rcpp::wrap( out_ExtraClipLeft );
+ 	         if (have_ExtraClipRight)
+ 	           map["extraClipRight"] = Rcpp::wrap( out_ExtraClipRight );
+
 			if(haveMappingData) {
               map["alignFlag"]         = Rcpp::wrap( out_aligned_flag );
               map["alignBase"]         = Rcpp::wrap( out_aligned_base );
@@ -651,6 +785,13 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
               //map["SpadesDelta"]     = Rcpp::wrap( out_SpadesDelta );
               //map["SpadesFit"]      = Rcpp::wrap( out_SpadesFit );
               //map["SpadesAlt"]      = Rcpp::wrap( out_SpadesAlt );
+			}
+			if (have_debug_bam){
+				map["normAdditive"]       = Rcpp::wrap( out_additive );
+				map["normMultiplicative"] = Rcpp::wrap( out_multiplicative );
+				map["keyNorm"]            = Rcpp::wrap( out_key_norm );
+				if (have_uncalibrated_flows)
+					map["uncalibrated"]       = Rcpp::wrap( out_uncalibrated );
 			}
 		}
         ret = Rcpp::wrap( map );

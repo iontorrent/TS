@@ -41,6 +41,15 @@ def create_user_profiles():
             print "Added missing userprofile for: %s" % user.username
 
 
+def default_location():
+    loc = models.Location.objects.filter(defaultlocation=True) or models.Location.objects.filter(name='Home')
+    if loc:
+        loc = loc[0]
+    else:
+        loc = models.Location.objects.all()[0]
+    return loc
+    
+
 def add_fileserver(_name, _path):
     fs = models.FileServer.objects.all()
     if len(fs) == 0:
@@ -58,7 +67,7 @@ def add_fileserver(_name, _path):
     if not exists:
         fs = models.FileServer(name=_name,
                                filesPrefix=_path,
-                               location=models.Location.objects.all()[0])
+                               location=default_location() )
         fs.save()
 
     else:
@@ -180,15 +189,11 @@ def add_global_config(configs):
     defaultStore = 'A'    
     kwargs = {'name': 'Config',
               'selected': False,
-              'plugin_folder': 'plugins',
-              'fasta_path': '',
-              'reference_path': '',
               'records_to_display': 20,
               'default_test_fragment_key': 'ATCG',
               'default_library_key': 'TCAG',
               'default_flow_order': 'TACG',
               'plugin_output_folder': 'plugin_out',
-              'default_plugin_script': 'launch.sh',
               'web_root': '',
               'site_name': 'Torrent Server',
               'default_storage_options': defaultStore,
@@ -213,38 +218,6 @@ def runtype_add_obsolete(type, description):
         rt = models.RunType(runType=type, description=description)
         rt.save()
         # print type, " RunType added"
-
-
-def VariantFrequencies_add(name):
-    """Helper function to add VariantFrequencies"""
-
-    vf = models.VariantFrequencies.objects.filter(name=name)
-
-    if vf:
-        # print "VariantFrequency" , vf[0],  "exists"
-        pass
-    else:
-        vf = models.VariantFrequencies(name=name)
-        vf.save()
-        # print name, " VariantFrequency added"
-
-
-def create_default_pgm(pgmname, comment=''):
-    pgms = models.Rig.objects.all()
-    for pgm in pgms:
-        if pgm.name == pgmname:
-            # print "PGM named %s already exists" % pgmname
-            return True
-    locs = models.Location.objects.all()
-    if locs:
-        loc = locs[locs.count() - 1]
-        pgm = models.Rig(name=pgmname,
-                         location=loc,
-                         comments=comment)
-        pgm.save()
-    else:
-        print "Error: No Location object exists in database!"
-        return 1
 
 
 def add_or_update_barcode_set(blist, btype, name, adapter):
@@ -1542,13 +1515,13 @@ def add_or_update_ioncode_tagseq_dnabarcode_set():
     # mark barcodes 1-96 within a plate.
     index = 0
     index = add_or_update_barcode_set2(
-        blist[0: 96], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 101, index, True)
+        blist[0: 96], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 101, index, False)
     index = add_or_update_barcode_set2(
-        blist[96: 96 * 2], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 201, index, True)
+        blist[96: 96 * 2], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 201, index, False)
     index = add_or_update_barcode_set2(
-        blist[96 * 2: 96 * 3], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 301, index, True)
+        blist[96 * 2: 96 * 3], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 301, index, False)
     index = add_or_update_barcode_set2(
-        blist[96 * 3: 96 * 4], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 401, index, True)
+        blist[96 * 3: 96 * 4], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 401, index, False)
 
     return
 
@@ -1778,25 +1751,6 @@ def add_libraryKey(direction, name, sequence, description, isDefault):
         libKey.save()
 
 
-def add_barcode_args():
-    # print "Adding barcode_args"
-    try:
-        gc = models.GlobalConfig.get()
-        try:
-            barcode_args = gc.barcode_args
-        except AttributeError:
-            print "barcode_args field does not exist"
-            return 1
-        # Only add the argument if it does not exist
-        if "doesnotexist" in str(gc.barcode_args.get('filter', "doesnotexist")):
-            gc.barcode_args['filter'] = 0.01
-            gc.save()
-            print "added barcodesplit:filter"
-    except:
-        print "There is no GlobalConfig object in database"
-        print traceback.format_exc()
-
-
 def add_sequencing_kit_info(name, description, flowCount):
     # print "Adding sequencing kit info"
     try:
@@ -1986,21 +1940,11 @@ if __name__ == "__main__":
 #        print 'Adding runType failed'
 #        print traceback.format_exc()
 #        sys.exit(1)
-    # try to add variant frequencies
-    try:
-        VariantFrequencies_add("Germ Line")
-        VariantFrequencies_add("Somatic")
-    except:
-        print 'Adding VariantFrequencies failed'
-        print traceback.format_exc()
-        sys.exit(1)
 
     # try to add PGMs
     try:
-        create_default_pgm('default', comment="This is a model PGM.  Do not delete.")
-        # causes errors if system is not completely configured and auto-analysis
-        # kicks off.
-        # create_default_pgm('PGM_test',comment = "This is a test pgm for staging sample datasets.")
+        models.Rig.objects.get_or_create(name = 'default', defaults={'location': default_location(),
+                         'comments': "This is a model PGM.  Do not delete." })
     except:
         print 'Adding default PGM failed'
         print traceback.format_exc()
@@ -2105,13 +2049,6 @@ if __name__ == "__main__":
 #        sys.exit(1)
 
     try:
-        add_barcode_args()
-    except:
-        print "Modifying barcode-args list failed"
-        print traceback.format_exc()
-        sys.exit(1)
-
-    try:
         add_libraryKey('Forward', 'Ion TCAG', 'TCAG', 'Default forward library key', True)
         add_libraryKey('Reverse', 'Ion Paired End', 'TCAGC', 'Default reverse library key', True)
         add_libraryKey('Forward', 'Ion TCAGT', 'TCAGT', 'Ion TCAGT', False)
@@ -2130,5 +2067,22 @@ if __name__ == "__main__":
     for chip in models.Chip.objects.all():
         chip.delete()
 
+    load_dbData("rundb/fixtures/ts_dbData_chips_kits.json")
     load_dbData("rundb/fixtures/ts_dbData.json")
+    load_dbData("rundb/fixtures/ts_dbData_analysisargs.json")    
     load_dbData("rundb/fixtures/ionusers_group.json")
+
+    # Setup an ion mesh user for mesh authed api calls to use
+    load_dbData("rundb/fixtures/ionmesh_group.json")
+    try:
+        user, is_newly_added = add_user("ionmesh", "ionmesh")
+        if is_newly_added:
+            user.set_unusable_password()
+            group = Group.objects.get(name='ionmesh')
+            if group and user.groups.count() == 0:
+                user.groups.add(group)
+            user.save()
+    except:
+        print 'Adding ionmesh user failed'
+        print traceback.format_exc()
+        sys.exit(1)

@@ -23,7 +23,8 @@ case "$1" in
         ionPlugin
         celeryd
         celerybeat
-        )
+        DjangoFTP
+    )
     for DAEMON in ${DAEMONS[@]}; do
         update-rc.d -f ${DAEMON} remove || true
     done
@@ -32,6 +33,7 @@ case "$1" in
     if [ -h /usr/lib64/libsysfs.so.2.0.2 ]; then
         rm -f /usr/lib64/libsysfs.so.2.0.2
     fi
+
     ;;
 esac
 

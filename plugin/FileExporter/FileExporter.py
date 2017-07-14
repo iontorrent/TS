@@ -14,7 +14,7 @@ from ion.utils import blockprocessing
 from subprocess import *
 
 class FileExporter(IonPlugin):
-    version = '5.2.0.1'
+    version = '5.4.0.0'
     runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
     runlevels = [ RunLevel.DEFAULT ]
 

@@ -30,7 +30,7 @@ inline string  itos(int i){ stringstream s; s << i; return s.str();}
 inline string  ctos(char * c, int len){ stringstream s; for(int i=0;i<len;i++) s << (char)c[i]; return s.str();}
 //-----------------------------------------------------
 
-string vartypes[5]{"SNP","DEL","INS","MNP","OTHER"};
+string vartypes[5]{"del","snp","ins","mnp","complex"};
 string acgt="ACGT";
 inline int vartype(const string ref, const string alt)
 {
@@ -1384,6 +1384,7 @@ void report_consensus_counts(string & ref_seq, string ref_name, map<unsigned,Pil
 			 int allele_type = alt_allele[0]=='-'?0:(alt_allele[0]=='+'?2:1); // del=0,snp=1;ins=2
 		     string ref_allele = (allele_type==0?(ref_seq.substr(i,1)+alt_allele.substr(1)):ref_seq.substr(i,1));
 			 if(allele_type==2) alt_allele=ref_seq.substr(i,1) + alt_allele.substr(1); else  if(alt_allele[0]=='-') alt_allele = ref_seq.substr(i,1);
+			 if(allele_type==1 && ref_allele.length()>1) allele_type = 3; // mnp=3
              
 			if(faf >= min_freq)
 			   {
@@ -1401,8 +1402,8 @@ void report_consensus_counts(string & ref_seq, string ref_name, map<unsigned,Pil
 					  }
 				 } 	  
 
-	     		if(filter_out)var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << ref_allele << "\t" << alt_allele << "\t" << qual << "\tNOCALL\tDP=" << cons_sz[i] << ";AO=" << global_consensus[12*i+j] << ";AF=" << af << ";MDP=" << functional_counts << ";MAO=" << alt_key->second << ";MAF=" << faf << ";LOD=" << output_lod << ";FR=systematic_error\tGT:DP:AO:AF:FS\t" << "./.:" << cons_sz[i] << ":" << global_consensus[12*i+j] << ":" << af << ":";
-				else var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << ref_allele << "\t" << alt_allele << "\t" << qual << "\tPASS\tDP=" << cons_sz[i] << ";AO=" << global_consensus[12*i+j] << ";AF=" << af << ";MDP=" << functional_counts << ";MAO=" << alt_key->second << ";MAF=" << faf << ";LOD=" << output_lod << "\tGT:DP:AO:AF:FS\t" << (faf>0.999?"1/1:":"0/1:") << cons_sz[i] << ":" << global_consensus[12*i+j] << ":" << af << ":";
+	     		if(filter_out)var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << ref_allele << "\t" << alt_allele << "\t" << qual << "\tNOCALL\tDP=" << cons_sz[i] << ";AO=" << global_consensus[12*i+j] << ";AF=" << af << ";MDP=" << functional_counts << ";MAO=" << alt_key->second << ";MAF=" << faf << ";LOD=" << output_lod << ";TYPE=" << vartypes[allele_type] << ";FR=systematic_error\tGT:DP:AO:AF:FS\t" << "./.:" << cons_sz[i] << ":" << global_consensus[12*i+j] << ":" << af << ":";
+				else var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << ref_allele << "\t" << alt_allele << "\t" << qual << "\tPASS\tDP=" << cons_sz[i] << ";AO=" << global_consensus[12*i+j] << ";AF=" << af << ";MDP=" << functional_counts << ";MAO=" << alt_key->second << ";MAF=" << faf << ";LOD=" << output_lod << ";TYPE=" << vartypes[allele_type] << "\tGT:DP:AO:AF:FS\t" << (faf>0.999?"1/1:":"0/1:") << cons_sz[i] << ":" << global_consensus[12*i+j] << ":" << af << ":";
 				for(int k=0;k<9;k++) var_calls << functional_pileup[i][k].get_allele_read_counts(alt_key->first) << ",";
 				var_calls << functional_pileup[i][9].get_allele_read_counts(alt_key->first) << endl;
 				reported = true;
@@ -1410,7 +1411,7 @@ void report_consensus_counts(string & ref_seq, string ref_name, map<unsigned,Pil
 
 		    else if(!hs_mask_only && hotspot_pos.size() > 0 && strcmp(hotspot_rec[h-1].get_ref(0).c_str(),ref_allele.c_str()) == 0 && strcmp(hotspot_rec[h-1].get_alt(0).c_str(),alt_allele.c_str()) == 0)
 			{
-				var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << ref_allele << "\t" << alt_allele << "\t" << 0 << "\tNOCALL\tDP=" << cons_sz[i] << ";AO=" << global_consensus[12*i+j] << ";AF=" << af << ";MDP=" << functional_counts << ";MAO=" << alt_key->second << ";MAF=" << faf << ";LOD=" << output_lod << ";FR=MAF<"<< faf <<";HS\tGT:DP:AO:AF:FS\t" << "./.:" << cons_sz[i] << ":" << global_consensus[12*i+j] << ":" << af << ":";
+				var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << ref_allele << "\t" << alt_allele << "\t" << 0 << "\tNOCALL\tDP=" << cons_sz[i] << ";AO=" << global_consensus[12*i+j] << ";AF=" << af << ";MDP=" << functional_counts << ";MAO=" << alt_key->second << ";MAF=" << faf << ";LOD=" << output_lod << ";FR=MAF<"<< faf << ";TYPE=" << vartypes[allele_type] <<";HS\tGT:DP:AO:AF:FS\t" << "./.:" << cons_sz[i] << ":" << global_consensus[12*i+j] << ":" << af << ":";
 				for(int k=0;k<9;k++) var_calls << functional_pileup[i][k].get_allele_read_counts(alt_key->first) << ",";
 				var_calls << functional_pileup[i][9].get_allele_read_counts(alt_key->first) << endl;
 				reported = true;
@@ -1419,9 +1420,15 @@ void report_consensus_counts(string & ref_seq, string ref_name, map<unsigned,Pil
      	  } 
      	  if (hs_pos && !reported && !hs_mask_only)
 		  {
-				var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << hotspot_rec[h-1].get_ref(0) << "\t" << hotspot_rec[h-1].get_alt(0) << "\t" << 0 << "\tREF\tDP=" << cons_sz[i] << ";AO=.;AF=.;MDP=" << functional_counts << ";MAO=.;MAF=.;LOD=" << output_lod  << ";HS\tGT:DP:AO:AF:FS\t" << "0/0:" << cons_sz[i] << ":.:.:";
+			    for(int a=0;a<hotspot_rec[h-1].alt_count() && a<1 /*output just one allele, requires more work to output more alleles*/;a++)
+				{	
+			    int allele_type = hotspot_rec[h-1].get_ref(a).length()>hotspot_rec[h-1].get_alt(a).length()?0:(hotspot_rec[h-1].get_ref(a).length()<hotspot_rec[h-1].get_alt(a).length()?2:1); // del=0,snp=1;ins=2
+				if(allele_type==1 && hotspot_rec[h-1].get_ref(a).length()>1) allele_type = 3; // mnp
+				if((allele_type==0 && (hotspot_rec[h-1].get_alt(a).length()>1 || hotspot_rec[h-1].get_alt(a)[0]!=hotspot_rec[h-1].get_ref(a)[0])) || (allele_type==2 && (hotspot_rec[h-1].get_ref(a).length()>1 || hotspot_rec[h-1].get_alt(a)[0]!=hotspot_rec[h-1].get_ref(a)[0]))) allele_type = 4; // complex
+				var_calls << ref_name << "\t" << (start_pos+i+1) << "\t.\t"  << hotspot_rec[h-1].get_ref(a) << "\t" << hotspot_rec[h-1].get_alt(a) << "\t" << 0 << "\tREF\tDP=" << cons_sz[i] << ";AO=.;AF=.;MDP=" << functional_counts << ";MAO=.;MAF=.;LOD=" << output_lod  << ";TYPE=" << vartypes[allele_type] << ";HS\tGT:DP:AO:AF:FS\t" << "0/0:" << cons_sz[i] << ":.:.:";
 				for(int k=0;k<9;k++) var_calls << functional_pileup[i][k].get_allele_read_counts(ref_seq.substr(i,1)) << ",";
 				var_calls << functional_pileup[i][9].get_allele_read_counts(ref_seq.substr(i,1)) << endl;
+				}
 		  }
 	    }	
     }
@@ -1703,13 +1710,19 @@ int main(int argc, char *argv[])
     var_calls << "##fileformat=VCFv4.1" << endl;
     var_calls << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl;
     var_calls << "##FORMAT=<ID=FS,Number=A,Type=Integer,Description=\"Counts for families of size min_size, min_size+1, min_size+2,....\">" << endl;
-    var_calls << "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Read Depth\">" << endl;
+    var_calls << "##FORMAT=<ID=AO,Number=A,Type=Integer,Description=\"Alternate allele observation count\">" << endl;
+    var_calls << "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read Depth\">" << endl;
+    var_calls << "##FORMAT=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency based on Flow Evaluator observation counts\">" << endl;
+	var_calls << "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Read Depth\">" << endl;
     var_calls << "##INFO=<ID=AO,Number=A,Type=Integer,Description=\"Alternate allele observation count\">" << endl;
     var_calls << "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency based on all reads\">" << endl;
     var_calls << "##INFO=<ID=MDP,Number=1,Type=Integer,Description=\"Molecular depth\">" << endl;
     var_calls << "##INFO=<ID=MAO,Number=A,Type=Integer,Description=\"Molecular counts for alternative allele. Number of molecules containing alternative allele.\">" << endl;
     var_calls << "##INFO=<ID=MAF,Number=A,Type=Float,Description=\"Molecular frequency of alternative allele. Ratio between the number of molecules containing alternative allele and the number of other molecules at that location\">" << endl;
 	var_calls << "##INFO=<ID=LOD,Number=A,Type=Float,Description=\"Limit of Detection at genomic location. This number is calculated based on the number of identified unique molecules.\">" << endl;
+	var_calls << "##INFO=<ID=TYPE,Number=A,Type=String,Description=\"The type of allele, either snp, mnp, ins, del, or complex.\">" << endl;
+	var_calls << "##INFO=<ID=HS,Number=0,Type=Flag,Description=\"Indicate it is at a hot spot\">" << endl;
+	var_calls << "##INFO=<ID=FR,Number=.,Type=String,Description=\"Reason why the variant was filtered.\">" << endl;
 	var_calls << "##Tagged Molecule Caller tool v." << full_version_string  << endl;
 	var_calls << "##Tagging Method=" << tag_method  << endl;
 	var_calls << "##Tagging Level=" << tag_level << endl;

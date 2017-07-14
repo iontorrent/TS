@@ -1,18 +1,16 @@
 #!/usr/bin/env python
-# Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
+# Copyright (C) 2017 Thermo Fisher Scientific. All Rights Reserved.
 
 import dbus, gobject, avahi
 from dbus.mainloop.glib import DBusGMainLoop
 import threading
 import time
 import copy
+import socket
 
 
 class IonMeshDiscoveryManager(threading.Thread):
-
-    """
-    This class will monitor avahi via dbus in order to detect the current mesh network setup
-    """
+    """This class will monitor avahi via dbus in order to detect the current mesh network setup"""
 
     # singleton instance
     __singleton = None
@@ -26,6 +24,9 @@ class IonMeshDiscoveryManager(threading.Thread):
     # thread lock
     __threadLock = threading.Lock()
 
+    # local host name
+    __localhost = ''
+
     def __new__(cls, *args, **kwargs):
         if not cls.__singleton:
             cls.__singleton = super(IonMeshDiscoveryManager, cls).__new__(cls, *args, **kwargs)
@@ -33,8 +34,7 @@ class IonMeshDiscoveryManager(threading.Thread):
 
             # setup dbus stuff
             cls.__singleton.__bus = dbus.SystemBus(mainloop=DBusGMainLoop())
-            cls.__singleton.__server = dbus.Interface(cls.__singleton.__bus.get_object(
-                avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+            cls.__singleton.__server = dbus.Interface(cls.__singleton.__bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
 
             # Look for self.regtype services and hook into callbacks
             cls.__singleton.__browser = dbus.Interface(cls.__singleton.__bus.get_object(avahi.DBUS_NAME, cls.__singleton.__server.ServiceBrowserNew(
@@ -49,17 +49,20 @@ class IonMeshDiscoveryManager(threading.Thread):
 
         return cls.__singleton
 
+
     def stop(self):
         """
         Call this to stop the thread as one would expect
         """
         self.__loop.quit()
 
+
     def run(self):
         """
         Method called with the thread object's "start" method is called
         """
         self.__loop.run()
+
 
     def getMeshComputers(self):
         """
@@ -72,20 +75,20 @@ class IonMeshDiscoveryManager(threading.Thread):
         finally:
             self.__threadLock.release()
 
+
+    def getLocalComputer(self):
+        """Gets the localhost name"""
+        return self.__localhost or socket.getfqdn()
+
+
     def __serviceFound(self, interface, protocol, name, stype, domain, flags):
-        """
-        Callback for when a service needs to be added to the mesh list
-        :param interface:
-        :param protocol:
-        :param name:
-        :param stype:
-        :param domain:
-        :param flags:
-        """
+        """Callback for when a service needs to be added to the mesh list"""
         # skip local services
         # http://sources.debian.net/src/avahi/0.6.32-1/avahi-python/avahi/__init__.py/?hl=50#L50
         if flags & avahi.LOOKUP_RESULT_LOCAL:
+            self.__localhost = str(name)
             return
+
         # add the computer name to the list of mesh computers
         self.__threadLock.acquire()
         try:
@@ -93,6 +96,7 @@ class IonMeshDiscoveryManager(threading.Thread):
                 self.__meshComputers.append(str(name))
         finally:
             self.__threadLock.release()
+
 
     def __serviceRemoved(self, interface, protocol, name, stype, domain, flags):
         """

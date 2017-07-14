@@ -1,103 +1,208 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
+
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
 <base target="_parent"/>
-<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css">
-<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet">
-<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet">
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css">
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+<!--<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />-->
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+
+<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
 
 <style type="text/css">
-p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
-.zebra {  background-color: #E1EFFA;}
-.table_hover{    color: #009;    background-color: #6DBCEE;}
-</style></head>
-<body style="background:white">
+    body {background:white}
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+</style>
 
+</head>
+<title>Torrent Variant Caller Report</title>
+<body>
+
+<div class="container-fluid">
 
 	<table>
-
-      {% if options.configurations %}
-        <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
-	  {% else %}
+		{% if error_msg != '' %}
+	      <tr><td><strong>ERROR:</strong></td>          <td><strong>{{error_msg}}</strong></td></tr>
+		{% endif %}
+	    {% if warning_msg != '' %}
+	      <tr><td><strong>WARNING:</strong></td>          <td><strong>{{warning_msg}}</strong></td></tr>
+	    {% endif %}				
 	    <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
-	    <tr><td>Reference genome:</td>             <td>{{options.reference_genome_name}}</td></tr>
-
-	    {% if options.has_targets %}
-	      <tr><td>Targeted regions:</td>    <td>{{options.targets_name}}</td></tr>
-	    {% else %}
-	      <tr><td>Targeted regions:</td>    <td>None</td></tr>
-	    {% endif %}
-	    {% if options.has_hotspots %}
-	      <tr><td>Hotspot regions:</td>     <td>{{options.hotspots_name}}</td></tr>
-	    {% else %}
-	      <tr><td>Hotspot regions:</td>     <td>None</td></tr>
-	    {% endif %}
+	    <tr><td>Reference genome:</td>      <td>{{options.reference_genome_name}}</td></tr>
+        <tr><td>Targeted regions:</td>      <td>{{options.targets_name}}</td></tr>
+        <tr><td>Hotspot regions:</td>       <td>{{options.hotspots_name}}</td></tr>
 	    <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
-  	    <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
-	  {% endif %}
-      <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
-                                              <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
-                                              <a class="btn" href="{{options.run_name}}.xls">XLS</a>
-                                              <a class="btn" href="{{options.run_name}}.cov.xls">COV</a></td></tr>
-      {% if options.barcode_mode == "match" %}
-      <tr><td>Please note:</td>           <td>Variant calling was carried out only for barcodes with both reference genome and targeted regions matching those specified above</td></tr>
-      {% else %}
-      <tr><td>Please note:</td>           <td>Variant calling was carried out for all barcodes with reference genome as specified above</td></tr>
-      {% endif %}
-	</table>
+  	    <tr><td>Output directory:</td>      <td>{{output_dir}}</td></tr>
+  	    {% if options.barcoded_run %}
+          <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
+                                                  <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
+                                                  <a class="btn" href="{{options.run_name}}.xls">XLS</a>
+                                                  <a class="btn" href="{{options.run_name}}.cov.xls">COV</a></td></tr>
+        {% endif %}  
+        <tr><td>Please note:</td>           <td>Variant calling was carried out for all barcodes with reference genome as specified above</td></tr>
 
-<div class="k-widget k-grid">
-  <table class="table-striped">
-    <thead class="k-grid-header">
-      <tr>
-        <th class="k-header"><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
-        <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
-        {% if options.library_type == "tagseq" %}
-			<th class="k-header"><span class="help" title="Median number of reads covering on target position">Median Read Cov</span></th>
-			<th class="k-header"><span class="help" title="Median number of Molecules per target">Median Mol Cov</span></th>
-            <th class="k-header"><span class="help" title="Targets with Molecular coverage above 80% of Median">Targets >0.8MM Cov</span></th>
-        {% endif %}
-        <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
-        {% if options.has_hotspots %}
-        <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
-        {% endif %}
-        <th class="k-header"><span class="help" title="Download links">Download Links</span></th>
-      </tr>
-    </thead>
+	</table>
+	
+<script type="text/javascript">
+  function numberWithCommas(x) {
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+  }
+  function numberToPercent(x) {
+    if( isNaN(x) ) return x;
+    return (100 * x)+"%";
+  }
+</script>
+
+<!-- Capture django variable in to javascript -->
+<script>
+  var barcodes_json = [];
+  var index = 0;
     {% for barcode in barcode_data %}
       {% if barcode.status == "completed" %}
-       <tr>
-          <td style="text-align:left"><a href="{{barcode.name}}/variantCaller.html">
-            <span title="Click to view the detailed coverage report for barcode {{barcode.name}}">{{barcode.name}}</span></a>
-          </td>
-
-          <td>{{barcode.summary.sample_name}}</td>
-
+	  var barcode_json = {};
+	  {% if options.barcoded_run %}
+      	barcode_json['barcode_details'] = "<a target='_parent' href='{{barcode.summary.barcode_details}}' class='help'><span title='Click to view the detailed report for barcode {{barcode.name}}'>{{barcode.name}}</span><a>";	  
+	  	barcode_json['sample'] = "{{barcode.summary.sample_name}}";
+	  {% else %}
+    	  barcode_json['sample'] = "<a target='_parent' href='{{barcode.summary.barcode_details}}' class='help'><span title='Click to view the detailed report'>{{barcode.sample}}</span><a>";
+	  {% endif %}
           {% if options.library_type == "tagseq" %}
-			<td>{{barcode.summary.median_depth}}</td>
-			<td>{{barcode.summary.median_num_fam3}}</td>
-			<td>{{barcode.summary.fm3_pass80}}</td>
+		  barcode_json['median_depth'] = {{barcode.summary.median_depth}};
+		  barcode_json['median_num_fam3'] = {{barcode.summary.median_num_fam3}};
+		  barcode_json['fm3_pass80'] = "{{barcode.summary.fm3_pass80}}";
           {% endif %}
-          <td>{{barcode.summary.variants_total.variants}}</td>
-
-          {% if options.has_hotspots %}
-            <td>{{barcode.summary.hotspots_total.variants}}</td>
-          {% endif %}
-
-          <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
-              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
-              {% if options.library_type != "tagseq" %}
-              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz">gVCF.GZ</a>
-              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.genome.vcf.gz.tbi">gVCF.GZ.TBI</a>
-			  {% endif %}
-              <a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a></td>
-        </tr>
+	  barcode_json['index'] = index;
+	  barcode_json['barcode_name'] = "{{barcode.name}}";
+	  barcode_json['variants'] = {{barcode.summary.variants_total.variants}};
+      {% if options.has_hotspots %}
+        {% if barcode.summary.has_hotspots %}
+		  barcode_json['hotspot_variants'] = '{{barcode.summary.hotspots_total.variants}}';
+		{% else %}
+		  barcode_json['hotspot_variants'] = '-';
+		{% endif %}
+      {% endif %}
+	  barcode_json['exports'] = '<a class="btn" href="{{barcode.summary.variants_vcf_gz_link}}">VCF.GZ</a> &nbsp <a class="btn" href="{{barcode.summary.variants_tbi_link}}">VCF.GZ.TBI</a> &nbsp';
+	  
+      {% if options.library_type != "tagseq" %}
+	  barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_vcf_gz_link}}">gVCF.GZ</a> &nbsp';
+	  barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_tbi_link}}">gVCF.GZ.TBI</a> &nbsp';
+      {% endif %}
+      barcode_json['exports'] += '<a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a> &nbsp';
+      barcodes_json.push(barcode_json);
+	  index += 1;
       {% endif %}
     {% endfor %}
+
+</script>
+
+<script type="text/javascript">
+$(document).ready(function() {
+    if (typeof barcodes_json !== 'undefined'){
+
+    $("#barcodes").kendoGrid({
+      height: 'auto',
+      groupable: false,
+      scrollable: false,
+      selectable: false,
+      sortable: { mode: "multiple", allowUnsort: true },
+      pageable : { pageSizes:[5,10,20,50,100,1000] },
+      dataSource: {
+        data: barcodes_json,
+        schema: { model: { fields: {
+          {% if options.barcoded_run %}
+            barcode_name: {type:"string"},
+          {% endif %}
+          sample: {type:"string"},
+          {% if options.library_type == "tagseq" %}
+		  median_depth: {type:"number"},
+		  median_num_fam3: {type:"number"},
+		  fm3_pass80: {type:"string"},
+          {% endif %}
+          variants: {type:"number"},
+      {% if options.has_hotspots %}
+          hotspot_variants: {type:"string"},      
+	  {% endif %}
+          exports: {type:"string"}
+        } } },
+        pageSize: 20
+      },
+      columns: [
+        {% if options.barcoded_run %}
+          {field:"barcode_name",width:"15%"},
+        {% endif %}
+        {field:"sample",width:"15%"},
+          {% if options.library_type == "tagseq" %}
+        {field:"median_depth"},
+        {field:"median_num_fam3"},
+        {field:"fm3_pass80"},  
+          {% endif %}    
+        {field:"variants"},
+      {% if options.has_hotspots %}
+        {field:"hotspot_variants"},     
+	  {% endif %}
+        {field:"exports",width:"40%"}
+      ],
+      rowTemplate: kendo.template($("#barcodesRowTemplate").html())
+    });
+  }
+});
+</script>
+
+<div>
+  <table id="barcodes" style="width:100%">
+    <thead>
+    <tr>
+      {% if options.barcoded_run %} 
+        <th title="Name of the barcode sequence and link to detailed report for reads associated with that barcode.">Barcode Name</th>
+      {% endif %}
+      <th title="Sample Name associated with this barcode in the experiment plan.">Sample</th>
+          {% if options.library_type == "tagseq" %}
+	  <th title="Median number of reads covering on target position">Median Read Cov</th>
+	  <th title="Median number of Molecules per target">Median Mol Cov</th>
+	  <th title="Limits of Detection (median - high) %">LOD %</th>
+          {% endif %}
+      <th title="Number of variants">Variants</th>
+	      {% if options.has_hotspots %}
+      <th title="Number of hotspot variants">Hotspot Variants</th>
+          {% endif %}
+	  <th title="Exports">Downloads</th>
+    </tr>
+    </thead>
+    <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
+      <tr>
+        {% if options.barcoded_run %}     
+          <td> #= barcode_details #</td>
+        {% endif %}
+        <td> #= (sample) ? sample : "None" #</td>
+          {% if options.library_type == "tagseq" %}
+			<td> #= numberWithCommas(median_depth) # </td>
+			<td> #= numberWithCommas(median_num_fam3) # </td>
+			<td> #= fm3_pass80 # </td>
+          {% endif %}
+        <td> #= numberWithCommas(variants) # </td>
+          {% if options.has_hotspots %}
+     	<td> #= numberWithCommas(hotspot_variants) # </td>
+          {% endif %}
+		<td> #= exports #</td>
+      </tr>
+    </script>
   </table>
 </div>
 
+</div>
 </body>
 </html>
-

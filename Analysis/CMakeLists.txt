@@ -68,8 +68,8 @@ if(ION_USE_CUDA)
         #install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64
         #        DESTINATION /usr/local/cuda)
 
-        install(FILES ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.7.5
-                      ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.7.5.18
+        install(FILES ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.8.0
+                      ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.8.0.44
                 DESTINATION
                       /usr/local/cuda/lib64)
 
@@ -87,21 +87,22 @@ if(ION_USE_CUDA)
     install(PROGRAMS pynvml/pynvml_test.py         DESTINATION /usr/local/bin)
     install(PROGRAMS pynvml/nvidia_smi_test.py     DESTINATION /usr/local/bin)
 
-    CUDA_ADD_EXECUTABLE(xtalk_sim
-                        xtalk_sim/xtalk_sim.cpp
-                        xtalk_sim/DiffEqModel_Init.cpp
-                        xtalk_sim/DiffEqModel.cpp
-                        xtalk_sim/DelsqCUDA.cu
-                        xtalk_sim/utils.cpp
-                        xtalk_sim/xtalk_sim.cpp
-                        xtalk_sim/sim_incorp_flux.cpp
-                        xtalk_sim/WorkerInfoQueue.cpp)
-
-    target_link_libraries(xtalk_sim pthread)
-
-    add_dependencies(xtalk_sim     cuda_toolkit)
-
-    install(PROGRAMS ${PROJECT_BINARY_DIR}/xtalk_sim     DESTINATION gpu)
+#
+#     CUDA_ADD_EXECUTABLE(xtalk_sim
+#                         xtalk_sim/xtalk_sim.cpp
+#                         xtalk_sim/DiffEqModel_Init.cpp
+#                         xtalk_sim/DiffEqModel.cpp
+#                         xtalk_sim/DelsqCUDA.cu
+#                         xtalk_sim/utils.cpp
+#                         xtalk_sim/xtalk_sim.cpp
+#                         xtalk_sim/sim_incorp_flux.cpp
+#                         Util/WorkerInfoQueue.cpp)
+# 
+#     target_link_libraries(xtalk_sim pthread)
+# 
+#     add_dependencies(xtalk_sim     cuda_toolkit)
+# 
+#     install(PROGRAMS ${PROJECT_BINARY_DIR}/xtalk_sim     DESTINATION gpu)
 
 endif()
 
@@ -259,9 +260,10 @@ add_library(ion-analysis
     LinuxCompat.cpp
     Stats.cpp
 
-    LevMarFitterV2.cpp
+    BkgModel/Fitters/LevMarFitterV2.cpp
     
-    mixed.cpp
+    ClonalFilter/mixed.cpp
+    ClonalFilter/polyclonal_filter.cpp
     # T0CalcMt.cpp
     
     BaseCaller/PIDloop.cpp
@@ -365,9 +367,9 @@ endif()
 
 # armadillo doesn't provide those libs?
 if(ION_USE_MKL)
-    set(EXTRA_LIBS iomp5 mkl_intel_lp64)
+    set(EXTRA_LIBS m iomp5 mkl_intel_lp64)
 else()
-    set(EXTRA_LIBS blas lapack)
+    set(EXTRA_LIBS m blas lapack)
 endif()
 
 target_link_libraries(ion-analysis ${ION_HDF5_LIBS} dl ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${EXTRA_LIBS} file-io z)
@@ -429,17 +431,17 @@ target_link_libraries(Thumbnail ion-analysis pthread dl)
 install(TARGETS Thumbnail DESTINATION bin)
 
 # If doing pca spline trial
-add_executable(PcaSplineExample Image/PcaSplineExample.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(PcaSplineExample IONVERSION)
+#add_executable(PcaSplineExample Image/PcaSplineExample.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+#add_dependencies(PcaSplineExample IONVERSION)
 # If defined while running cmake look for mkl
 # e.g. -DMKL_INSTALL_PATH=/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl
-if (DEFINED MKL_INSTALL_PATH)
-  message("Compiling PcaSplineExample with mkl")
-  target_link_libraries(PcaSplineExample ion-analysis ${MKL_LINK_LIBS} -lpthread -lm  dl z)
-else()
-  message("Compiling PcaSplineExample with eigen only")
-  target_link_libraries(PcaSplineExample ion-analysis file-io pthread m dl z)
-endif()
+#if (DEFINED MKL_INSTALL_PATH)
+#  message("Compiling PcaSplineExample with mkl")
+#  target_link_libraries(PcaSplineExample ion-analysis ${MKL_LINK_LIBS} -lpthread -lm  dl z)
+#else()
+#  message("Compiling PcaSplineExample with eigen only")
+#  target_link_libraries(PcaSplineExample ion-analysis file-io pthread m dl z)
+#endif()
 
 # If doing DfcCompr trial
 #add_executable(DfcComprExample Image/DfcComprExample.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
@@ -535,12 +537,11 @@ include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Bookkeeping")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Reads")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Splice")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Filter")
+include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Consensus")
 include_directories("${PROJECT_SOURCE_DIR}/realignment")
 include_directories("${PROJECT_SOURCE_DIR}/Calibration")
 
 set(tvcSRCS
-  VariantCaller/IndelAssembly/IndelAssembly.cpp
-  VariantCaller/tvcutils/unify_vcf.cpp
   VariantCaller/VariantCaller.cpp
   VariantCaller/BAMWalkerEngine.cpp
   VariantCaller/OrderedBAMWriter.cpp
@@ -549,26 +550,28 @@ set(tvcSRCS
   VariantCaller/HandleVariant.cpp
   VariantCaller/HotspotReader.cpp
   VariantCaller/MetricsManager.cpp
-
+  VariantCaller/HypothesisEvaluator.cpp
+  VariantCaller/MolecularTag.cpp
+  
   VariantCaller/Bookkeeping/MiscUtil.cpp
   VariantCaller/Bookkeeping/ExtendParameters.cpp 
   VariantCaller/Bookkeeping/InputStructures.cpp
   VariantCaller/Bookkeeping/VcfFormat.cpp
 
   VariantCaller/Reads/ExtendedReadInfo.cpp
-
+  
+  VariantCaller/IndelAssembly/IndelAssembly.cpp
+  
+  VariantCaller/tvcutils/unify_vcf.cpp
+  VariantCaller/tvcutils/prepare_hotspots.cpp
+  
   VariantCaller/Splice/ErrorMotifs.cpp
   VariantCaller/Splice/LocalContext.cpp
   VariantCaller/Splice/ClassifyVariant.cpp
-  VariantCaller/Splice/ErrorMotifs.cpp
   VariantCaller/Splice/SpliceVariantHypotheses.cpp
 
   VariantCaller/Filter/DecisionTreeData.cpp
   VariantCaller/Filter/VariantAssist.cpp
-
-  VariantCaller/HypothesisEvaluator.cpp
-  
-  VariantCaller/MolecularTag.cpp
 
   VariantCaller/EnsembleEval/DiagnosticJSON.cpp
   VariantCaller/EnsembleEval/BiasGenerator.cpp
@@ -578,6 +581,10 @@ set(tvcSRCS
   VariantCaller/EnsembleEval/ShortStack.cpp
   VariantCaller/EnsembleEval/StackEngine.cpp
   VariantCaller/EnsembleEval/CrossHypotheses.cpp
+
+  VariantCaller/Consensus/Consensus.cpp
+  VariantCaller/Consensus/FlowSpaceConsensus.cpp
+  VariantCaller/Consensus/ConsensusParameters.cpp
 
   # TODO: Actually build vcflib as a static library and link to variant caller.
   # TODO2: Resolve bgzf.c collisions between vcflib and bamtools
@@ -598,6 +605,7 @@ set(tvcSRCS
   Calibration/LinearCalibrationModel.cpp
   Calibration/FlowAlignment.cpp
   Util/OptArgs.cpp
+  AnalysisOrg/IO/OptBase.cpp
   realignment/Realigner.cpp
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
@@ -613,20 +621,29 @@ target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z file-io pthread)
 add_dependencies(tvc IONVERSION bamtools armadillo_proj htslib_proj)
 install(TARGETS tvc DESTINATION bin)
 
-
 ## tmol executable ##
+# include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/tmol")
+#set(tmolSRCS
+#  VariantCaller/tmol/tmol.cpp
+#  ${PROJECT_BINARY_DIR}/IonVersion.cpp
+#)
+#add_executable(tmol ${tmolSRCS})
+#target_link_libraries(tmol ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z pthread)
+#add_dependencies(tmol IONVERSION bamtools)
+#install(TARGETS tmol DESTINATION bin)
 
-include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/tmol")
+## vcfcomp executable ##
+include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/vcfcomp")
 
-set(tmolSRCS
-  VariantCaller/tmol/tmol.cpp
+set(vcfcompSRCS
+  VariantCaller/vcfcomp/vcfcomp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
 
-add_executable(tmol ${tmolSRCS})
-target_link_libraries(tmol ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z pthread)
-add_dependencies(tmol IONVERSION bamtools)
-install(TARGETS tmol DESTINATION bin)
+add_executable(vcfcomp ${vcfcompSRCS})
+target_link_libraries(vcfcomp ${ION_SAMTOOLS_LIBS} ${ION_HTSLIB_LIBS} z pthread)
+add_dependencies(vcfcomp IONVERSION samtools)
+install(TARGETS vcfcomp DESTINATION bin)
 
 
 # bbctools
@@ -653,6 +670,8 @@ bbctools/src/RegionCoverage.cpp
 bbctools/src/RegionCoverage.h
 bbctools/src/RegionStatistics.cpp
 bbctools/src/RegionStatistics.h
+bbctools/src/TrackReads.cpp
+bbctools/src/TrackReads.h
 )
 
 add_executable(bbctools ${bbctools_src})
@@ -697,6 +716,7 @@ add_executable(tvcutils
   VariantCaller/tvcutils/unify_vcf.cpp
   VariantCaller/tvcutils/split_vcf.cpp
   VariantCaller/TargetsManager.cpp
+  realignment/Realigner.cpp
   Util/OptArgs.cpp
 #  Util/Utils.cpp
   ${ION_VCFLIB_DIR}/Variant.cpp
@@ -929,7 +949,7 @@ if(GTEST_FOUND)
 
         add_executable(DualGaussMixModel_Test utest/DualGaussMixModel_Test.cpp)
         target_link_libraries(DualGaussMixModel_Test ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
-        add_test(DualGaussMixModelTest DualGaussMixModel_Test --gtest_output=xml:./)
+#         add_test(DualGaussMixModelTest DualGaussMixModel_Test --gtest_output=xml:./)
 
         # add_executable(ZeromerDiff_Test utest/ZeromerDiff_Test.cpp)
         # target_link_libraries(ZeromerDiff_Test ion-analysis ${GTEST_BOTH_LIBRARIES}  )
@@ -983,6 +1003,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_324.bin" DESTINATION $
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_p1.1.17.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_p1.0.19.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_p1.0.20.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_PQ.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_510.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_520.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_550.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_521.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_522.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_530.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1028,6 +1052,9 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.316v2.B5.h5" DESTINATION 
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.316v2.B5.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.318.B5.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.318.B5.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.318D.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.318D.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.900" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.900.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1162,6 +1189,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/args_P2.3.1_beadfind.json" DESTINATI
 #
 #gopt parameters by chip type
 #gopt parameters
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318D.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_314v2_Hi-Q.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316v2_Hi-Q.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318v2_Hi-Q.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1205,6 +1233,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.520.json" DESTINATION ${
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.521.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.522.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.530.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.550.well.settings.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p2.3.1.well.settings.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 # Recalibration Panel
 install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1236,12 +1266,9 @@ endif()
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libatlas3gf-base,
-    libblas3gf,
-    libc6,
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6,
     libgcc1,
     libgfortran3,
-    liblapack3gf,
     libstdc++6,
     perl,
     ion-gpu (>=2.5.0)")

@@ -78,6 +78,8 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.useMeshNeighbors = 0;
   opts.regionXSize = inception_state.loc_context.regionXSize;
   opts.regionYSize = inception_state.loc_context.regionYSize;
+  opts.beadfindAcqThreshold = inception_state.bfd_control.beadfindAcqThreshold;
+  opts.beadfindBfThreshold = inception_state.bfd_control.beadfindBfThreshold;
 
   // For saving dcOffset and NucStep
   opts.nucStepDir = string ( opts.analysisDir + string ( "/NucStepFromBeadfind" ));
@@ -209,7 +211,7 @@ void IsolatedBeadFind (
   char *results_folder, string &analysisLocation,
   SeqListClass &my_keys,
   TrackProgress &my_progress,
-  string& chipTpye)
+  string& chipType)
 {
   /*********************************************************************
   // Beadfind Section
@@ -217,7 +219,7 @@ void IsolatedBeadFind (
   Mask bfmask ( 1, 1 );
   Mask *maskPtr = &bfmask;
   // beadfind has responsibility for defining the exclusion mask
-  SetExcludeMask ( inception_state.loc_context,maskPtr,(char*)chipTpye.c_str(),my_image_spec.rows,my_image_spec.cols );
+  SetExcludeMask ( inception_state.loc_context,maskPtr,(char*)chipType.c_str(),my_image_spec.rows,my_image_spec.cols, inception_state.bfd_control.exclusionMaskFile, inception_state.bfd_control.beadfindThumbnail );
   bool beadfind_done = false;
   if ( inception_state.mod_control.reusePriorBeadfind )
   {

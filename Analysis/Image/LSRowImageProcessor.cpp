@@ -246,7 +246,7 @@ bool LSRowImageProcessor::GenerateGroupCorrection(int group_num,float *vect_outp
 
     // make sure derived coefficients are valid
     for(int row=0;row < nLen;row++)
-        if(isnan(coeffs(row)))
+        if(std::isnan(coeffs(row)))
         {
             result_ok = false;
             break;

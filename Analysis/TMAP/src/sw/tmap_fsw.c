@@ -942,7 +942,7 @@ tmap_fsw_path2cigar(const tmap_fsw_path_t *path, int32_t path_len, int32_t *n_ci
       }
       *n_cigar = n;
       cigar = tmap_malloc(*n_cigar * 4, "cigar");
-          
+
       // get the last type
       dpscore_last_type = tmap_fsw_path2cigar_get_type(path[path_len-1].ctype);
       cigar[0] = 1u << 4 | dpscore_last_type;

@@ -38,7 +38,7 @@
 
     <!--In the header of your page, paste the following for Kendo UI Web styles-->
     <link href="{% static "resources/kendo/styles/kendo.common.min.css"%}" rel="stylesheet" />
-    <link href="{% static "resources/less/kendo.tb.min.css"%}" rel="stylesheet" />
+    <link href="{% static "resources/kendo/styles/kendo.bootstrap.min.css"%}" rel="stylesheet" />
     {% block extra_head_styles %}{% endblock extra_head_styles %}
 
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.min.css"%}" />
@@ -103,7 +103,7 @@
                 {% endif %}
                     <li class="dropdown">
                         <a class="dropdown-toggle" data-toggle="dropdown" href="#" style="margin-top: 2px;">
-                        Help {% if help_urls %}<span class="badge" style="line-height:10px">{{ help_urls|length }}</span>{% endif %}
+                        Help {% if help_urls %}<span class="badge" style="margin-left: 3px; line-height:10px">{{ help_urls|length }}</span>{% endif %}
                         <b class="caret"></b>
                         </a>
                         <ul class="dropdown-menu">
@@ -114,20 +114,11 @@
                                 <li class="divider"></li>
                             {% endif %}
                             <li><a target="_blank" href="/ion-docs/">Software Help</a></li>
-                            <li class="dropdown-submenu">
-                                <a tabindex="-1" href="#">Protocols</a>
-                                <ul class="dropdown-menu">
-                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/s5-protocols">S5/S5 XL Protocols</a></li>
-                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/chef-protocols">Ion Chef Protocols</a></li>
-                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/pgm-protocols">PGM Protocols</a></li>
-                                    <li><a target="_blank" href="https://ioncommunity.thermofisher.com/community/protocols-home/proton-protocols">Proton Protocols</a></li>
-                                </ul>
-                            </li>
-                            <li><a target="_blank" href="https://ioncommunity.thermofisher.com/welcome">Ion Community</a></li>
-                            <li><a target="_blank" href="https://ioncommunity.thermofisher.com/docs/DOC-9594">Ion Reporter Help</a></li>
+                            <li><a target="_blank" href="http://www.thermofisher.com/us/en/home/technical-resources/technical-reference-library/next-generation-sequencing-support-center/ngs-support.html">Sequencing Protocols</a></li>
+                            <li><a target="_blank" href="https://www.thermofisher.com/order/catalog/product/4487118?ICID=search-product">Ion Reporter Help</a></li>
                             <li><a target="_blank" href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html#tab-2">Support</a></li>
                             <li><a target="_blank" href="https://www.ampliseq.com">AmpliSeq Designer</a></li>
-                            <li><a target="_blank" href="http://ioncommunity.thermofisher.com/docs/DOC-1556">SDK Documentation</a></li>
+                            <li><a target="_blank" href="http://ion-torrent-sdk.readthedocs.io">SDK Documentation</a></li>
                             <li class="divider"></li>
                             <li><a href="/configure/info">System Support Diagnostics</a></li>
                             <li><a href="/configure/chips">Instrument Diagnostics</a></li>
@@ -146,32 +137,18 @@
                 {% block nav %}
                     <div class="">
                     <ul class=" nav nav-tabs pull-left">
-                        <li id="plan-menu" class="dropdown {% block plan_menu %}{% endblock %}">
-                            <a href="/plan" class="dropdown-toggle nav-tab" data-toggle="dropdown">Plan</a>
-                            <ul class="dropdown-menu">
-                                <li><a href="{% url "samplesets" %}">Samples</a></li>
-                                <li><a href="{% url "plan_templates" %}">Templates</a></li>
-                                <li><a href="{% url "planned" %}">Planned Run List</a></li>
-                          </ul>
+                        <li id="plan-menu" class="{% block plan_menu %}{% endblock %}">
+                            <a href="{% url "planRuns" %}" class="nav-tab">Plan</a>
                         </li>
-                        <li id="monitor-menu" class="dropdown {% block monitor_menu %}{% endblock %}">
-                            <a href="/monitor" class="dropdown-toggle nav-tab" data-toggle="dropdown">Monitor</a>
-                            <ul class="dropdown-menu">
-                                <li class=""><a href="{% url "monitor" %}">Runs in Progress</a></li>
-                                <li class=""><a href="{% url "monitor_chef" %}">Ion Chef</a></li>
-                          </ul>
+                        <li id="monitor-menu" class="{% block monitor_menu %}{% endblock %}">
+                            <a href="{% url "monitor" %}" class="nav-tab">Monitor</a>
                         </li>
-                        <li id="data-menu" class="dropdown yamm-fullwidth {% block data_menu %}{% endblock %}">
-                            <a href="/data" class="dropdown-toggle nav-tab" data-toggle="dropdown">Data</a>
-                            <ul class="dropdown-menu">
-                                <li><a href="{% url "data" %}">Completed Runs & Results</a></li>
-                                <li><a href="{% url "projects" %}">Projects</a></li>
-                                <li><a href="{% url "datamanagement" %}">Data Management</a></li>
-                          </ul>
+                        <li id="data-menu" class="{% block data_menu %}{% endblock %}">
+                            <a href="{% url "data" %}" class="nav-tab">Data</a>
                         </li>
                     </ul>
                     <ul class="nav nav-tabs pull-right" id="configureNav">
-                        <li rel="tooltip" title="News and Announcements" data-placement="top" class="{% block news_menu %}{% endblock %}"><a href="{% url 'news' %}" class="nav-tab"><i class="icon-bullhorn icon-white"></i>{% if unread_news %} {{ unread_news }}{% endif %}</a></li>
+                        <li class="{% block news_menu %}{% endblock %}"><a href="{% url 'news' %}" class="nav-tab">News{% if unread_news %} <span class="badge badge-dark" style="margin-left: 3px; line-height:10px;">{{ unread_news }}</span>{% endif %}</a></li>
                         <li id="configure-menu" class="dropdown {% block configure_menu %}{% endblock %}">
                             <a id="configure" class="dropdown-toggle nav-tab" data-toggle="dropdown" data-target="#" href="{% url "configure_about" %}">
                             <div id="gear" class="gear-inactive"><b class="caret"></b></div>
@@ -182,6 +159,7 @@
                                 <li><a href="{% url "configure_references" %}">References</a></li>
                                 <li><a href="{% url "configure_services" %}">Services</a></li>
                                 <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+                                <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
                                 <li><a href="{% url "configure_configure" %}">Configure</a></li>
                                 <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
                                 <li><a href="{% url "configure_account" %}">Accounts</a></li>
@@ -232,8 +210,8 @@
                 <img class="pull-left" src="{% static "resources/img/ion-by-thermo-logo-125px.png"%}" border="0">
                 <div class="pull-right">
                     <p>For Research Use Only. Not for use in diagnostic procedures.</p>
-                    <p><span class="copyright">&copy; 2015 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
-                    <a href="http://ioncommunity.thermofisher.com/community/products/torrent_suite">Ion Community Support Site</a> |
+                    <p><span class="copyright">&copy; 2017 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
+                    <a href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html">Technical Support</a> |
                     <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a>
                     </p>
                 </div>

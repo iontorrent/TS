@@ -7,7 +7,7 @@
 
 - name: set_fact S5_virtual_guest
   set_fact:
-    S5_virtual_guest: "{{p.stat.exists|bool}}"
+    S5_virtual_guest: "{{ p.stat.exists|bool }}"
 
 - debug: var=S5_virtual_guest
 
@@ -21,9 +21,9 @@
 
 # Load the platform-specific variables, if the file exists
 - name:
-  stat: path='group_vars/{{ansible_product_name}}'
+  stat: path='group_vars/{{ ansible_product_name }}'
   register: p
-- include_vars: 'group_vars/{{ansible_product_name}}'
+- include_vars: 'group_vars/{{ ansible_product_name }}'
   when: p.stat.exists
 # ...or if its an S5, load the S5 variables
 - include_vars: 'group_vars/S5'
@@ -45,19 +45,18 @@
   set_fact: default_interface=em1
   when: ansible_product_name != "Precision WorkStation T7500"
 - name: set the default_interface
-  set_fact: default_interface={{ansible_default_ipv4.interface|default(default_interface)}}
+  set_fact: default_interface={{ ansible_default_ipv4.interface|default(default_interface) }}
 - debug: var=default_interface
 
 # Define CIDR variable needed when exporting directories via /etc/exports
 # Default netmask is needed when current network settings are unavailable
 - name: Determine CIDR from network netmask
-  cidr: netmask={{ansible_default_ipv4.netmask|default("255.255.0.0")}}
+  cidr: netmask={{ ansible_default_ipv4.netmask|default("255.255.0.0") }}
   register: cidr_response
   ignore_errors: yes
 
 - name: set fact CIDR
-  set_fact: CIDR="{{cidr_response.maskbit}}"
+  set_fact: CIDR="{{ cidr_response.maskbit }}"
   when: cidr_response|success
 
 - debug: var=CIDR
-

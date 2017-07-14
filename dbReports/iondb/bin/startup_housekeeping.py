@@ -31,7 +31,7 @@ def bother_the_user():
         info.extend([profile.phone_number, profile.user.email])
     if not any(info):
         models.Message.info("""Please supply some customer support contact info.
-<br/><a href="/rundb/config">Add contact information.</a>""")
+<br/><a href="/configure/configure">Add contact information.</a>""")
 
 
 def events_from_settings():

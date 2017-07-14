@@ -3,7 +3,6 @@
 # To Modify the timeout value, set environment variable tsec on the
 # command line, for example: "tsec=120 /usr/sbin/grp_mount_test"
 #
-
 set -u
 tsec=${tsec-30} # timeout in seconds, defaults to 30
 
@@ -31,7 +30,7 @@ function nfs_mount_test()
     # Restore the mangled mountname variable
     mountname=$1
 	if ! $isremote; then
-        echo "$mountname is not a mountpoint">&2
+        echo "$mountname is not available">&2
         return 1
     fi
 
@@ -90,4 +89,5 @@ elif [[ $returncode -gt 0 ]]; then
 else
     nfs_mount_test "$mountname"
 fi
+
 exit

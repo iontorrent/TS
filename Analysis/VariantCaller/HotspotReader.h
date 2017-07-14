@@ -38,7 +38,16 @@ enum AlleleHint {
   REV_BAD_HINT = 2,
   BOTH_BAD_HINT = 3
 };
-  
+
+class hint_item {
+ public:
+  int chr_ind;
+  long int pos;
+  long int value;
+  long int rlen;
+  string alt;
+}; 
+ 
 class HotspotReader {
 public:
   HotspotReader();
@@ -54,10 +63,12 @@ public:
   int next_chr() const { return next_chr_; }
   int next_pos() const { return next_pos_; }
 
-  vector< vector<long int> >     hint_vec;
-  int hint_chr_index() const { return (int)hint_vec[hint_cur_][0]; }
-  long int hint_position() const { return hint_vec[hint_cur_][1]; }
-  long int hint_value() const { return hint_vec[hint_cur_][2]; }
+  vector< hint_item >     hint_vec;
+  int hint_chr_index() const { return (int)hint_vec[hint_cur_].chr_ind; }
+  long int hint_position() const { return hint_vec[hint_cur_].pos; }
+  long int hint_value() const { return hint_vec[hint_cur_].value; }
+  long int  hint_rlen() const { return hint_vec[hint_cur_].rlen; }
+  string hint_alt() const { return hint_vec[hint_cur_].alt; }
   bool hint_empty() const { return hint_vec.empty() || hint_header_ >=  hint_vec.size();}
   void hint_pop() { hint_header_++;}
   void hint_next() { hint_cur_++;}

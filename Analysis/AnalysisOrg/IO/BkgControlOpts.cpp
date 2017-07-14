@@ -156,75 +156,39 @@ void TraceControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 void BkgModelControlOpts::PrintHelp()
 {
     printf ("     BkgModelControlOpts\n");
-    printf ("     --mixed-first-flow      INT               mixed first flow of polyclonal filter [12]\n");
-    printf ("     --mixed-last-flow       INT               mixed last flow of polyclonal filter [72]\n");
-    printf ("     --max-iterations        INT               max iterations of polyclonal filter [30]\n");
-    printf ("     --mixed-model-option    INT               mixed model option of polyclonal filter [0]\n");
-    printf ("     --mixed-stringency      DOUBLE            mixed stringency of polyclonal filter [0.5]\n");
     printf ("     --nokey                 BOOL              nokey [false]\n");
     printf ("     --xtalk-correction      BOOL              enable trace xtalk correction [false for Proton; true for P-zero and PGM]\n");
     printf ("     --n-unfiltered-lib      INT               number of unfiltered library random samples [100000]\n");
     printf ("     --bkg-dont-emphasize-by-compression INT   emphasize by compression [1]\n");
-    printf ("     --clonal-filter-bkgmodel            BOOL  enable polyclonal filter [false for Proton; true for PGM]\n");
-    printf ("     --clonal-filter-debug            BOOL  enable polyclonal filter debug output \n");
-    printf ("     --clonal-filter-use-last-iter-params           BOOL  use last EM iteration cluster parameters if no convergence \n");
-    printf ("     --filter-extreme-ppf-only           BOOL  Skip polyclonal filter training and filter for extreme ppf only \n");
     printf ("     --sigproc-regional-smoothing-alpha  FLOAT sigproc regional smoothing alpha [1.0]\n");
     printf ("     --sigproc-regional-smoothing-gamma  FLOAT sigproc regional smoothing gamma [1.0]\n");
     printf ("     --restart-reg-params-file STRING json file to input/output regional parameters\n");
     printf ("\n");
 
+    polyclonal_filter.PrintHelp(true);
     signal_chunks.PrintHelp();
     trace_control.PrintHelp();
     pest_control.PrintHelp();
     gpuControl.PrintHelp();
 }
 
-void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
+void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params, int num_flows)
 {
 	gpuControl.SetOpts(opts, json_params);
 	signal_chunks.SetOpts(opts, json_params);
 	pest_control.SetOpts(opts, json_params);
 	trace_control.SetOpts(opts, json_params);
+	polyclonal_filter.SetOpts(true, opts,json_params, num_flows);
+
 	//jz the following comes from CommandLineOpts::GetOpts
 	unfiltered_library_random_sample = RetrieveParameterInt(opts, json_params, '-', "n-unfiltered-lib", 100000);
 	enable_trace_xtalk_correction = RetrieveParameterBool(opts, json_params, '-', "xtalk-correction", true);
 	emphasize_by_compression = RetrieveParameterInt(opts, json_params, '-', "bkg-dont-emphasize-by-compression", 1);
 	nokey = RetrieveParameterBool(opts, json_params, '-', "nokey", false);
 
+
     washout_threshold = RetrieveParameterFloat(opts, json_params, '-', "bkg-washout-threshold", WASHOUT_THRESHOLD);
     washout_flow_detection = RetrieveParameterInt(opts, json_params, '-', "bkg-washout-flow-detection", WASHOUT_FLOW_DETECTION);
-
-	polyclonal_filter.enable = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", true);
-	polyclonal_filter.mixed_first_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-first-flow", 12);
-	polyclonal_filter.mixed_last_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-last-flow", 72);
-	polyclonal_filter.max_iterations = RetrieveParameterInt(opts, json_params, '-', "max-iterations", 30);
-	polyclonal_filter.mixed_model_option = RetrieveParameterInt(opts, json_params, '-', "mixed-model-option", 0);
-	polyclonal_filter.verbose = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-debug", false);
-	polyclonal_filter.use_last_iter_params = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-use-last-iter-params", true);
-	polyclonal_filter.filter_extreme_ppf_only = RetrieveParameterBool(opts, json_params, '-', "filter-extreme-ppf-only", false);
-	double stringency = RetrieveParameterDouble(opts, json_params, '-', "mixed-stringency", 0.5);
-	if(stringency < 0)
-	{
-		stringency = 0;
-	}
-	if(stringency > 1)
-	{
-		stringency = 1;
-	}
-	//transform it to log scale
-	if(stringency > 0.5)
-	{
-		polyclonal_filter.mixed_stringency = 0.5 * std::log10((stringency - 0.5)*18 + 1) + 0.5;
-	}
-	else if (stringency< 0.5)
-	{
-		polyclonal_filter.mixed_stringency = 0.5 - 0.5 * std::log10(( 0.5 - stringency)*18 + 1);
-	} 
-	else
-	{
-		polyclonal_filter.mixed_stringency = 0.5;
-	}
 
 	regional_smoothing.alpha = RetrieveParameterFloat(opts, json_params, '-', "sigproc-regional-smoothing-alpha", 1.0f);
 	regional_smoothing.gamma = RetrieveParameterFloat(opts, json_params, '-', "sigproc-regional-smoothing-gamma", 1.0f);

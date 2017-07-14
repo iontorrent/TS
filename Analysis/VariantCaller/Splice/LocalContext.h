@@ -19,6 +19,7 @@
 
 #include <Variant.h>
 #include "ReferenceReader.h"
+#include "MiscUtil.h"
 
 using namespace std;
 
@@ -44,7 +45,9 @@ class LocalReferenceContext{
 	// all positions in this object are zero based so that they correspond to reference in memory.
     long     position0;                 //!< Zero based allele start position.
     string   contigName;                //!< Contig Name from VCF
+    int      chr_idx;                   //!< index associated with contigName
     bool     context_detected;          //!< Check to see if the reference allele matches the given genome position.
+
 
     // Information about the bases in the reference allele
     string       reference_allele;      //!< The reference allele for this variant
@@ -59,11 +62,15 @@ class LocalReferenceContext{
     char     ref_right_hp_base;         //!< Base comprising the HP to the right of the one containing the vcf position
     int      right_hp_length;           //!< Length of the HP to the left of of the HP encompassing position
     int      right_hp_start;
+    // MNR
+    int min_mnr_rep_period;
+    int max_mnr_rep_period;
 
   LocalReferenceContext(){
     my_hp_length.clear();
     my_hp_start_pos.clear();
     context_detected = false;
+    chr_idx                    = -1;
     position0                  = -1;
 	ref_left_hp_base           = 'X'; // Something that can't occur in the reference
 	ref_right_hp_base          = 'X';
@@ -71,17 +78,30 @@ class LocalReferenceContext{
     left_hp_length             = 0;
     right_hp_start             = 0;
     right_hp_length            = 0;
+    min_mnr_rep_period         = 2;
+    max_mnr_rep_period         = 5;
   }
 
   //! @brief  Fills in the member variables
   void DetectContext(const vcf::Variant &candidate_variant, int DEBUG,
-      const ReferenceReader &ref_reader, int chr_idx);
-
+      const ReferenceReader &ref_reader);
+  //! @brief  Detect the context for the single base reference at position0 (zero-based) only.
+  void DetectContextAtPosition(const ReferenceReader &ref_reader, int my_chr_idx, int position0, int ref_len);
   //! @brief  Basic sanity checks on the provided vcf positions
   //! Sets member context_detected to true if sanity checks are passed.
   //! Returns false if VCF position is not valid.
   bool ContextSanityChecks(const vcf::Variant &candidate_variant,
-      const ReferenceReader &ref_reader, int chr_idx);
+      const ReferenceReader &ref_reader);
+  //! @brief  Calculate the left bound of the splicing window start in this context
+  int SplicingLeftBound(const ReferenceReader &ref_reader) const;
+  //! @brief  Calculate the splicing window start for MNR (if any) in this context
+  int FindSplicingStartForMNR(const ReferenceReader &ref_reader, int variant_pos, int rep_period, CircluarBuffer<char>& window) const;
+  //! @brief  Calculate the splicing window start if I don't want to expand the splicing window to the left (primarily for SNP, MNP)
+  int StartSplicingNoExpansion() const;
+  //! @brief  Calculate the splicing window start if I want to expand the splicing window to the left from the start position (primarily for INDEL)
+  int StartSplicingExpandFromMyHpStart0() const;
+  //! @brief  Calculate the splicing window start if I want to expand the splicing window to the left from the anchor-removed start position (primarily for some INS)
+  int StartSplicingExpandFromMyHpStartLeftAnchor(int left_anchor) const;
 };
 
 #endif //LOCALCONTEXT_H

@@ -20,7 +20,7 @@
 #include "SeqList.h"
 #include "GpuControlOpts.h"
 #include "DebugMe.h"
-#include "polyclonal_filter.h"
+#include "ClonalFilter/polyclonal_filter.h"
 #include "FlowSequence.h"
 #include "OptBase.h"
 
@@ -94,7 +94,7 @@ class BkgModelControlOpts{
 
     void DefaultBkgModelControl(void);
 	void PrintHelp();
-    void SetOpts(OptArgs &opts, Json::Value& json_params);
+    void SetOpts(OptArgs &opts, Json::Value& json_params, int num_flows);
 };
 
 #endif // BKGCONTROLOPTS_H

@@ -3,6 +3,17 @@
 {% load static from staticfiles %}
 {% load pagetools %}
 
+{% block extra_head %}
+    {{ block.super }}
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "js/iframe.js"%}"></script>
+{% endblock %}
+
+{% block extra_head_styles %}
+    <link type="text/css" rel="stylesheet" media="all"
+          href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css" %}"/>
+{% endblock extra_head_styles %}
+
 {% block main-title %}
 <div class="row-fluid">
     <div class="clearfix">
@@ -40,13 +51,13 @@
 {% endfor %}
 </div>
 <input id="pluginIds" name="pluginIds" value="" class="hide" type="hidden"/>
-<div id="configModal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="configModalLabel" aria-hidden="true">
+<div id="configModal" class="modal container hide modal-overflow" tabindex="-1" role="dialog" aria-labelledby="configModalLabel" aria-hidden="true" data-modal-overflow="true">
      <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal">x</button>
-        <h3 id="configModalLabel">Plugin Configuration</h3>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3 id="configModalLabel">Configure Plugin</h3>
     </div>
     <div class="modal-body">
-        <iframe width="820" height="350" id="pluginConfigIframe">
+        <iframe id="pluginConfigIframe" class="" scrolling="no" frameborder="0">
             WARNING: Your browser does not support iFrames.
         </iframe>
     </div>

@@ -5,7 +5,8 @@
 #include "Mask.h"
 #include "CommandLineOpts.h"
 
-void SetExcludeMask(SpatialContext &loc_context, Mask *maskPtr, char *chipType, int rows, int cols);
+void SetExcludeMask(SpatialContext &loc_context, Mask *maskPtr, char *chipType, int rows, int cols,
+                    std::string exclusionMaskFileName, bool beadfindThumbnail);
 
 
 #endif // MASKFUNCTIONS_H

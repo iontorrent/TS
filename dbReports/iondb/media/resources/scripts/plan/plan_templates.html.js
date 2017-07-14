@@ -1,8 +1,4 @@
-
 function commonKendoGrid(target, url, msg) {
-	//console.log("ENTER commaonKendoGrid url=", url);
-	//console.log("commaonKendoGrid msg=", msg);
-	
     return {
         dataSource : {
             type : "json",
@@ -35,6 +31,10 @@ function commonKendoGrid(target, url, msg) {
                             type : "string",
                             editable : false
                         },
+                        applicationCategoryDisplayedName : {
+                            type : "string",
+                            editable : false
+                        },                        
                         barcodeKitName : {
                             type : "string",
                             editable : true
@@ -96,16 +96,11 @@ function commonKendoGrid(target, url, msg) {
             
             serverPaging : true,
             pageSize : 10,
-            serverSorting : false
+            serverSorting : true,
+            sort: { field: "date", dir: "desc" }
         },
-        sortable: {
-        	mode : "multiple",
-        	allowUnsort : true
-        },
+        sortable: true,
         height : '460',
-//        scrollable: {
-//            virtual: true
-//        },
         scrollable : {
             virtual : false
         },
@@ -120,14 +115,22 @@ function commonKendoGrid(target, url, msg) {
             template : kendo.template($("#PlanDisplayedNameTemplate").html())
         }, {
         	field : "sequencingInstrumentType",
-        	title : "Instr.",
+        	title : "Instr",
             width : "5%",
+            sortable : false,
         	template : kendo.template($("#SeqInstrumentTemplate").html())
         }, {
         	field : "templatePrepInstrumentType",
         	title : "OT/IC",
-            width : "5%",        	      	
-        	template : kendo.template($("#TemplatePrepInstrumentTemplate").html())        	
+            width : "5%",
+            sortable : false,
+        	template : kendo.template($("#TemplatePrepInstrumentTemplate").html())
+         }, {        	
+        	field : "runType",
+        	title: "App",
+            width : "5%",
+            sortable : false,
+        	template : kendo.template($("#RunTypeColumnTemplate").html())         	
         }, {        	
         	field : "barcodeKitName",
         	title: "Barcode Kit",
@@ -139,8 +142,9 @@ function commonKendoGrid(target, url, msg) {
             width : "13%",
         	template : kendo.template($("#ReferenceTemplate").html())                 
         }, {
-        	field : "irAccountName",
-        	title : "Ion Reporter Account", 
+            field : "irAccountName",
+            title : "Ion Reporter Account",
+            sortable : false,
             width : "13%",
         }, {
         	field : "irworkflow",
@@ -158,7 +162,7 @@ function commonKendoGrid(target, url, msg) {
         	template : kendo.template($("#IsSystemTemplate").html())                 
         }, {        	
             title : " ",
-            width : '4%',
+            width : "55px",
             sortable : false,
             template : kendo.template($("#ActionColumnTemplate").html())
         }],
@@ -401,6 +405,17 @@ function bindActions(source) {
             console.log("error:", data);
         });
     });
+    
+    $(source + ' .toggle-template-favorite').click(function(e) {
+        e.preventDefault();
+        var url = $(this).attr('href');
+        $.get(url, function(data) {
+            window.location.reload();
+        }).fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+        });
+    });
 }
 
 
@@ -429,14 +444,58 @@ $(function () {
     $("#"+selectedTab+"_nav").addClass("active");
     $("#tab_contents > div").hide();
     $("#"+selectedTab+"_tab").show();
-    
-    var basePlannedExperimentUrl = "/rundb/api/v1/plantemplatebasicinfo/?format=json&planExecuted=False&isSystemDefault=False";
-    var orderByOptions = "&order_by=-date&order_by=planDisplayedName";
+
+    var basePlannedExperimentUrl = "/rundb/api/v1/plantemplatebasicinfo/";
 
     var $selectedNav = $("#"+selectedTab+"_nav")
     var grid = $("#"+selectedTab).kendoGrid( commonKendoGrid("#"+selectedTab,
-    	        basePlannedExperimentUrl + $selectedNav.data('api_filter') + orderByOptions,
-    	        "No" + $selectedNav.text() + "Templates") );
+                basePlannedExperimentUrl + "?format=json" + $selectedNav.data('api_filter'),
+                "No" + $selectedNav.text() + "Templates") );
+
+    // show warnings if missing files
+    var checkFilesUrl = basePlannedExperimentUrl + "check_files" + "?format=json" + $selectedNav.data('api_filter') + "&application="+selectedTab;
+    var $warnings = $("#"+selectedTab +"_tab .template_warnings");
+    var install_url = "/plan/plan_templates/install_files/";
+    $warnings.empty().hide();
+
+    $.get(checkFilesUrl, function(files){
+        if (selectedTab == "recently_created")
+            // skip if viewing "All" tab
+            return
+
+        var install_btn = "";
+        if (files.install_lock){
+            install_btn = '<a href="#" class="btn install_files" style="margin-left:10px;" disabled>Installing ...</a>';
+        } else if (files.files_available) {
+            install_btn = '<a href="'+install_url+'" class="btn install_files" style="margin-left:10px;">Install</a>';
+        }
+
+        if (files.references.length > 0){
+            $warnings.append('References are not installed: ');
+            $warnings.append(install_btn);
+            $warnings.append("<ul><li>" + files.references.join('</li><li>') + '</li></ul></div>');
+            $warnings.show();
+        }
+        if (files.bedfiles.length > 0){
+            $warnings.append("BED files are not installed:");
+            if (files.references.length == 0) $warnings.append(install_btn);
+            $warnings.append("<ul><li>" + files.bedfiles.join('</li><li>') + '</li></ul></div>');
+            $warnings.show();
+        }
+        $warnings.children('.btn').off('click').on('click', function(e){
+            e.preventDefault();
+            if($(this).attr('disabled') == 'disabled')
+                return false;
+            
+            $('#error-messages').hide().empty();
+            $('body #modal_upload_and_install_files').remove();
+            $.get(install_url, files, function(data){
+                $('body').append(data);
+                $('#modal_upload_and_install_files').modal("show");
+                return false;
+            });
+        });
+    });
   };
   
   window.onhashchange = function(e) { 

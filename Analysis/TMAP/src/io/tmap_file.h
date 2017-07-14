@@ -189,8 +189,12 @@ tmap_file_fflush(tmap_file_t *fp, int32_t gz_flush);
 void tmap_log_enable (FILE* fp);
 void tmap_log_disable ();
 int32_t tmap_log_enabled ();
+void tmap_log_record_begin ();
+void tmap_log_record_end ();
 int32_t tmap_log (const char* format, ...);
 int32_t tmap_vlog (const char* format, va_list ap);
+int32_t tmap_log_s (const char* format, ...);
+int32_t tmap_vlog_s (const char* format, va_list ap);
 
 
 #endif // TMAP_FILE_H

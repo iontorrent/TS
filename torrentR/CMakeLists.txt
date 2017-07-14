@@ -33,6 +33,8 @@ set(ENV{BKGMODEL_FITTERS_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Fitter
 set(ENV{BKGMODEL_WRITERS_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Writers")
 set(ENV{BKGMODEL_BOOK_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Bookkeeping")
 set(ENV{PHASE_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BaseCaller")
+set(ENV{RECALIBRATION_INC}="${PROJECT_SOURCE_DIR}/../Analysis/Calibration")
+set(ENV{CLONALFILTER_INC}="${PROJECT_SOURCE_DIR}/../Analysis/ClonalFilter")
 set(ENV{UTIL_INC}="${PROJECT_SOURCE_DIR}/../Analysis/Util")
 set(ENV{WELLS_INC}="${PROJECT_SOURCE_DIR}/../Analysis/Wells")
 set(ENV{ANALYSIS_LIB}="${PROJECT_BINARY_DIR}/Analysis")
@@ -42,6 +44,7 @@ include_directories( ${PROJECT_SOURCE_DIR}/../Analysis )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/AnalysisOrg )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BaseCaller )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Calibration )
+include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/ClonalFilter )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Image )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Mask )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel )
@@ -51,7 +54,7 @@ include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/MathModel )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Bookkeeping )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Util )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Wells )
-include_directories( /usr/local/lib/R/site-library/Rcpp/lib )
+#include_directories(/usr/lib/R/site-library/Rcpp/include/Rcpp )
 include_directories( ${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1 )
 
 
@@ -61,7 +64,7 @@ add_custom_target(LIBTORRENTRCLEAN ALL
 
 add_custom_target(LIBTORRENTR ALL
            COMMAND "mkdir" "-p" "rlib"
-           COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." MAKE="make -j4" "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
+           COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." MAKE="$(MAKE) -j$(nproc)" "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_dependencies(LIBTORRENTR LIBTORRENTRCLEAN)
@@ -73,40 +76,65 @@ install(DIRECTORY ${PROJECT_BINARY_DIR}/rlib/torrentR DESTINATION .
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "g++,
-    r-base,
+    libhdf5-serial-dev,
+    libgcc1,
+    libgfortran3,
+    libstdc++6,
+    gfortran,
+    libcurl4-openssl-dev,
+    libxml2-dev,
     r-base-core,
     r-base-dev,
     r-base-html,
     r-doc-html,
-    r-recommended,
+    r-bioc-annotationdbi,
+    r-bioc-biobase,
+    r-bioc-biocgenerics,
+    r-bioc-biostrings,
+    r-bioc-genomicranges,
+    r-bioc-iranges,
+    r-bioc-rsamtools,
+    r-bioc-shortread,
     r-cran-boot,
     r-cran-class,
     r-cran-cluster,
     r-cran-codetools,
+    r-cran-dbi,
+    r-cran-gdata,
+    r-cran-getopt,
+    r-cran-ggplot2,
+    r-cran-gtable,
     r-cran-foreign,
+    r-cran-formula,
+    r-cran-hdf5,
+    r-cran-hwriter,
     r-cran-kernsmooth,
     r-cran-lattice,
+    r-cran-latticeextra,
     r-cran-mass,
     r-cran-matrix,
     r-cran-mgcv,
     r-cran-nlme,
     r-cran-nnet,
+    r-cran-plyr,
+    r-cran-rcolorbrewer,
+    r-cran-rjson,
     r-cran-rpart,
+    r-cran-scales,
     r-cran-spatial,
+    r-cran-stringr,
     r-cran-survival,
-    libblas3gf,
-    libc6,
-    libhdf5-serial-dev,
-    libgcc1,
-    libgfortran3,
-    liblapack3gf,
-    libstdc++6,
-    gfortran,
-    libcurl4-openssl-dev,
-    libxml2-dev")
+    r-cran-reshape2,
+    r-cran-rcpp,
+    r-cran-rcurl,
+    r-cran-rsqlite")
+# these two packages have been removed because it causes a bug in aptitude
+# TS-14064 which makes the package always upgradable
+#    r-cran-xml,
+#    r-cran-xtable")
 
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "r-cran-bitops, r-cran-catools, r-cran-gdata, r-cran-gplots, r-cran-gtools, r-cran-rocr")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "r-cran-bitops, r-cran-catools, r-cran-gdata, r-cran-gplots, r-cran-gtools, r-cran-rocr")
+set(CPACK_DEBIAN_PACKAGE_CONFLICTS "r-cran-gplots")
+set(CPACK_DEBIAN_PACKAGE_REPLACES  "r-cran-gplots")
 
 set(CPACK_PACKAGE_DESCRIPTION "A package for the statistical program R which provides methods for working with, analyzing, and visualizing Ion Torrent data.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

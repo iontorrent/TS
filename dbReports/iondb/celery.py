@@ -24,7 +24,7 @@ app.conf.update(
     CELERY_RESULT_BACKEND='cache+memcached://127.0.0.1:11211/',
 
     # Avoid indefinite hangs by forcing results to expire after 30 minutes
-    CELERY_TASK_RESULT_EXPIRES=180,
+    CELERY_TASK_RESULT_EXPIRES=1800,
 
     # Tracking rate limits is expensive, not used
     CELERY_DISABLE_RATE_LIMITS=True,

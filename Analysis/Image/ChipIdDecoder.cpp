@@ -22,6 +22,7 @@ ChipIdDecodeArrayType ChipIdDecoder::chip_id_str_lookup_array[] =
   { "p2.2.2", ChipId2_2_2    },
   { "900", ChipId_old_P1    },  //for backward compatibility  and basecalling of old old chips
   { "p1.0.20", ChipId1_0_20    },
+  { "560", ChipId560    },
   { "550", ChipId550    },
   { "540", ChipId540    },
   { "530", ChipId530    },
@@ -93,6 +94,7 @@ bool ChipIdDecoder::IsProtonChip(){
     case ChipId1_0_19:
     case ChipId1_0_20:
     case ChipId_old_P1:
+    case ChipId560:
     case ChipId550:
     case ChipId540:
     case ChipId530:
@@ -150,8 +152,8 @@ bool ChipIdDecoder::IsPtwo(){
     case ChipId1_2_18:
     case ChipId2_2_1:
     case ChipId2_2_2:
-    case ChipId550:
     case ChipId551:
+    case ChipId560:
       return true;
       break;
     default:
@@ -213,6 +215,7 @@ bool ChipIdDecoder::BigEnoughForGPU(){
     case ChipId2_2_1:
     case ChipId2_2_2:
     case ChipId_old_P1:
+    case ChipId560:
     case ChipId550:
     case ChipId540:
     case ChipId530:

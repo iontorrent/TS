@@ -1304,15 +1304,15 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
 void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
 {
   static const char nuc_int_to_char[5] = "ACGT";
-
-  read.state_inphase.assign(flow_order_.num_flows(), 1);
-  read.state_total.assign(flow_order_.num_flows(), 1);
+  int num_flows = flow_order_.num_flows();
+  read.state_inphase.assign(num_flows, 1);
+  read.state_total.assign(num_flows, 1);
 
   if (read.sequence.empty())
     return;
-
-  read.penalty_mismatch.assign(read.sequence.size(), 0);
-  read.penalty_residual.assign(read.sequence.size(), 0);
+  int num_bases = read.sequence.size();
+  read.penalty_mismatch.assign(num_bases, 0);
+  read.penalty_residual.assign(num_bases, 0);
 
   PathRec RESTRICT_PTR parent = sv_PathPtr[0];
   PathRec RESTRICT_PTR children[4] = {sv_PathPtr[1], sv_PathPtr[2], sv_PathPtr[3], sv_PathPtr[4]};
@@ -1332,33 +1332,27 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
   float recent_state_total = 1;
 
   // main loop for base calling
-  for (int solution_flow = 0, base = 0; solution_flow < flow_order_.num_flows(); ++solution_flow) {
-    for (; base < (int)read.sequence.size() and read.sequence[base] == flow_order_[solution_flow]; ++base) {
+  for (int solution_flow = 0, base = 0; solution_flow < num_flows; ++solution_flow) {
+      for (; base<num_bases and read.sequence[base]==flow_order_[solution_flow]; ++base) {
+          if(recalibrate_predictions_) {
+            parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
+            parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
+          }
+          // compute child path flow states, predicted signal,negative and positive penalties
+          advanceState4(parent, num_flows);
 
-      float penalty[4] = { 0, 0, 0, 0 };
-
-      int called_nuc = -1;
-
-      if(recalibrate_predictions_) {
-        parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-        parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-      }
-
-      // compute child path flow states, predicted signal,negative and positive penalties
-      advanceState4(parent, flow_order_.num_flows());
-
+          float penalty[4] = { 0, 0, 0, 0 };
+          int called_nuc = -1;
       for(int nuc = 0; nuc < 4; ++nuc) {
         PathRec RESTRICT_PTR child = children[nuc];
-
         if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
           called_nuc = nuc;
-
         child->flow = min(ad_Idx.A[nuc], flow_order_.num_flows());
         child->window_end = min(ad_End.A[nuc], flow_order_.num_flows());
         child->window_start = min(ad_Beg.A[nuc], child->window_end);
 
         // Apply easy termination rules
-        if (child->flow >= flow_order_.num_flows() || parent->last_hp >= MAX_HPXLEN ) {
+        if (child->flow >= num_flows || parent->last_hp >= MAX_HPXLEN ) {
           penalty[nuc] = 25; // Mark for deletion
           continue;
         }
@@ -1420,10 +1414,9 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
       parent = children[called_nuc];
       children[called_nuc] = swap;
     }
-
     read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
     read.state_total[solution_flow] = max(recent_state_total, 0.01f);
-  }
+    }
 
   if(recalibrate_predictions_) {
     RecalibratePredictions(parent);
@@ -1433,6 +1426,161 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
   copySSE(&read.prediction[0], parent->pred, parent->window_end*sizeof(float));
 }
 
+
+void  TreephaserSSE::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_)
+{
+  static const char nuc_int_to_char[5] = "ACGT";
+  int num_flows = flow_order_.num_flows();
+  read.state_inphase.assign(num_flows, 1);
+  read.state_total.assign(num_flows, 1);
+
+  if (read.sequence.empty())
+    return;
+  int num_bases = read.sequence.size();
+  read.penalty_mismatch.assign(num_bases, 0);
+  read.penalty_residual.assign(num_bases, 0);
+  if (flow_predictors_) {
+      read.penalty_mismatch_flow.assign(num_flows, 0);
+      read.penalty_residual_flow.assign(num_flows, 0);
+  }
+
+  PathRec RESTRICT_PTR parent = sv_PathPtr[0];
+  PathRec RESTRICT_PTR children[4] = {sv_PathPtr[1], sv_PathPtr[2], sv_PathPtr[3], sv_PathPtr[4]};
+  parent->flow = 0;
+  parent->window_start = 0;
+  parent->window_end = 1;
+  parent->res = 0.0f;
+  parent->metr = 0.0f;
+  parent->flowMetr = 0.0f;
+  parent->dotCnt = 0;
+  parent->state[0] = 1.0f;
+  parent->sequence_length = 0;
+  parent->last_hp = 0;
+  parent->pred[0] = 0.0f;
+
+  float recent_state_inphase = 1;
+  float recent_state_total = 1;
+
+  // main loop for base calling
+  for (int solution_flow = 0, base = 0; solution_flow < num_flows; ++solution_flow) {
+      for (; base<num_bases and read.sequence[base]==flow_order_[solution_flow]; ++base) {
+          if(recalibrate_predictions_) {
+            parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
+            parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
+          }
+          // compute child path flow states, predicted signal,negative and positive penalties
+          advanceState4(parent, num_flows);
+
+          float penalty[4] = { 0, 0, 0, 0 };
+          int called_nuc = -1;
+      for(int nuc = 0; nuc < 4; ++nuc) {
+        PathRec RESTRICT_PTR child = children[nuc];
+        if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
+          called_nuc = nuc;
+        child->flow = min(ad_Idx.A[nuc], flow_order_.num_flows());
+        child->window_end = min(ad_End.A[nuc], flow_order_.num_flows());
+        child->window_start = min(ad_Beg.A[nuc], child->window_end);
+
+        // Apply easy termination rules
+        if (child->flow >= num_flows || parent->last_hp >= MAX_HPXLEN ) {
+          penalty[nuc] = 25; // Mark for deletion
+          continue;
+        }
+
+        // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
+//        char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
+
+        // sum of squared residuals for positive residuals for flows < child->flow
+        float penPar = pres_Buf[child->flow-parent->window_start].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+(AD_PRES_OFS)+(child->flow-parent->window_start-1)*16));
+
+        // sum of squared residuals for negative residuals for flows < child->window_end
+        float penNeg = nres_Buf[child->window_end-parent->window_start].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+AD_NRES_OFS+(child->window_end-parent->window_start-1)*16));
+
+        penalty[nuc] = penPar + penNeg;
+      }
+
+      // find current incorporating base
+      assert(called_nuc > -1);
+      assert(children[called_nuc]->flow == solution_flow);
+
+      PathRec RESTRICT_PTR childToKeep = children[called_nuc];
+      //copy
+//      char RESTRICT_PTR p = ad_Buf+ called_nuc*4 + AD_STATE_OFS;
+
+      recent_state_total = 0;
+      for(int i = parent->window_start, j = 1, e = childToKeep->window_end; i < e; ++i, j ++) {
+        childToKeep->state[i] = state_Buf[j].A[called_nuc];// *((float*)(p+j*16));
+        childToKeep->pred[i] = pred_Buf[j].A[called_nuc];// *((float*)(p+j*16+(AD_PRED_OFS-AD_STATE_OFS)));
+        recent_state_total += childToKeep->state[i];
+      }
+      //sse implementation with aligned memory; no gain as the number of elements to be summed up is small
+//      recent_state_total = vecSumSSE(state_Buf, countStates);
+
+      copySSE(childToKeep->pred, parent->pred, parent->window_start << 2);
+
+      if (childToKeep->flow == parent->flow)
+        childToKeep->last_hp = parent->last_hp + 1;
+      else
+        childToKeep->last_hp = 1;
+
+      recent_state_inphase = childToKeep->state[solution_flow];
+
+      // Get delta penalty to next best solution
+      read.penalty_mismatch[base] = -1; // min delta penalty to earlier base hypothesis
+      read.penalty_residual[base] = 0;
+
+      if (solution_flow - parent->window_start > 0)
+        read.penalty_residual[base] = penalty[called_nuc] / (solution_flow - parent->window_start);
+
+      for (int nuc = 0; nuc < 4; ++nuc) {
+        if (nuc == called_nuc)
+            continue;
+        float penalty_mismatch = penalty[called_nuc] - penalty[nuc];
+        read.penalty_mismatch[base] = max(read.penalty_mismatch[base], penalty_mismatch);
+      }
+
+      // Called state is the starting point for next base
+      PathRec RESTRICT_PTR swap = parent;
+      parent = children[called_nuc];
+      children[called_nuc] = swap;
+    }
+    read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
+    read.state_total[solution_flow] = max(recent_state_total, 0.01f);
+    }
+
+  if (flow_predictors_) { //if (flow_predictors_)
+      //vector<int> flows_to_proc;
+      for (int solution_flow = 0; solution_flow < num_flows; ++solution_flow) {
+          int curr_base = flow_to_base[solution_flow];
+          if (curr_base >= 0) {
+              // copy from what's stored in read.penalty_mismatch[base]
+              read.penalty_mismatch_flow[solution_flow] = read.penalty_mismatch[curr_base];
+              read.penalty_residual_flow[solution_flow] = read.penalty_residual[curr_base];
+              /*
+              int nFlows = flows_to_proc.size();
+              if (nFlows>0) {
+              for (int i=0; i<nFlows; ++i) {
+                  int flow = flows_to_proc[i];
+                  read.penalty_mismatch_flow[flow] = 0;
+                  read.penalty_residual_flow[flow] = 0;
+                  }
+              flows_to_proc.clear();
+              */
+              }
+          else {
+              //flows_to_proc.push_back(solution_flow);
+              continue;
+            }
+          }
+      }
+
+  if(recalibrate_predictions_) {
+    RecalibratePredictions(parent);
+    ResetRecalibrationStructures(num_flows_);
+  }
+  setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
+  copySSE(&read.prediction[0], parent->pred, parent->window_end*sizeof(float));
+}
 
 
 

@@ -31,7 +31,6 @@ typedef int32_t (*tmap_map_driver_func_init)(void **data, tmap_refseq_t *refseq,
  */
 typedef int32_t (*tmap_map_driver_func_thread_init)(void **data, 
                                                     tmap_map_opt_t *opt);
-
 /*!
   This function will be invoked to map a sequence.
   @param  data    the thread persistent data

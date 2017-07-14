@@ -1,28 +1,35 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
-#set -x
-echo "preinst $@"
+
 case "$1" in
 	install|upgrade)
-    if [ -e	"/etc/init.d/ionCrawler" ]; then
-		invoke-rc.d ionCrawler stop
-	fi
-	if [ -e	"/etc/init.d/ionJobServer" ]; then
-		invoke-rc.d ionJobServer stop
-	fi
-	if [ -e	"/etc/init.d/ionPlugin" ]; then
-		invoke-rc.d ionPlugin stop
-	fi
-	
-    invoke-rc.d apache2 stop
-    if [ -d @ION_INSTALL_PREFIX@/iondb/ ]; then
-        find @ION_INSTALL_PREFIX@/iondb/ -name '*.pyc' -delete
-    fi
-    
-    # ionArchive is removed as of this version - make sure sysv links are gone
-    update-rc.d -f ionArchive remove
+
+        if [ -e	"/etc/init.d/ionCrawler" ]; then
+            invoke-rc.d ionCrawler stop
+        fi
+        if [ -e	"/etc/init.d/ionJobServer" ]; then
+            invoke-rc.d ionJobServer stop
+        fi
+        if [ -e	"/etc/init.d/ionPlugin" ]; then
+            invoke-rc.d ionPlugin stop
+        fi
+
+        invoke-rc.d apache2 stop
+        if [ -d @ION_INSTALL_PREFIX@/iondb/ ]; then
+            find @ION_INSTALL_PREFIX@/iondb/ -name '*.pyc' -delete
+        fi
+
+        # ionArchive is removed as of this version - make sure sysv links are gone
+        update-rc.d -f ionArchive remove
+
+        invoke-rc.d celerybeat stop || true
+        update-rc.d -f celerybeat remove
+
+        invoke-rc.d celeryd stop || true
+        update-rc.d -f celeryd remove
+
+        invoke-rc.d DjangoFTP stop || true
+        update-rc.d -f DjangoFTP remove
 	;;
 esac
-
-exit 0

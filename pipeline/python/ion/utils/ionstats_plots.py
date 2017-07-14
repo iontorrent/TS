@@ -65,7 +65,8 @@ def read_length_sparkline(ionstats_basecaller_filename, output_png_filename, max
         ax = fig.add_subplot(111, frame_on=False, xticks=[], yticks=[], position=[0, 0, 1, 1])
         ax.bar(histogram_x, histogram_y, width=6.5, color="#2D4782", linewidth=0, zorder=2)
 
-        for idx in range(0, max_length, 50):
+        vline_step = 50 if (max_length < 650) else 100
+        for idx in range(0, max_length, vline_step):
             label_bottom = str(idx)
             ax.text(idx, max_y*0.70, label_bottom, horizontalalignment='center', verticalalignment='center',
                     fontsize=8, zorder=1)

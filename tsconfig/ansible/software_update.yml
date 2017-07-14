@@ -21,31 +21,31 @@
     # Replace official ubuntu repo with Ion-sourced ubuntu repo
     - name: Disable /etc/apt/sources.list
       template: src=templates/sources.list.j2
-                dest=/etc/apt/sources.list{{FUNKYEXT|default('')}}
+                dest=/etc/apt/sources.list{{ FUNKYEXT|default('') }}
                 owner=root group=root mode=644
 
     - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
       template: src=templates/iontorrent-ubuntu.j2
-                dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{FUNKYEXT|default('')}}
+                dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
                 owner=root group=root mode=644
 
     # Adding IonReporter plugin repository
     - name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
       template: src=templates/ionreporter-plugin.j2
-                dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{FUNKYEXT|default('')}}
+                dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{ FUNKYEXT|default('') }}
                 owner=root group=root mode=644
 
-    - name: 
+    - name:
       apt: update_cache=yes
 
     - name: apt-get autoclean
       shell: bash -c 'apt-get autoclean'
 
     - name: Set tmpreaper package preseed values
-      script: '{{ansible_env.PWD}}/roles/common/files/tmpreaper.preseed'
+      script: '{{ ansible_env.PWD }}/roles/common/files/tmpreaper.preseed'
 
     - name: Set grub-pc package preseed values
-      script: 'files/grub-pc.preseed \"{{GRUB_BOOT_DEVICE}}\" '
+      script: 'files/grub-pc.preseed \"{{ GRUB_BOOT_DEVICE }}\" '
       when: GRUB_BOOT_DEVICE is defined
 
     # Make a backup of the postgres database.  Pkg ion-dbreports typically makes
@@ -55,26 +55,28 @@
 
     # Install or Update all packages listed
     - name: Install common system packages
-      apt: name={{item}} state=latest force=yes
-      with_items: common_syspkg_list
+      apt: name={{ item }} state=latest force=yes
+      with_items: "{{ common_syspkg_list }}"
       when: item != ''
     - name: Install system packages for head node
       apt: name={{ item }} state=latest force=yes
-      with_items: ionmaster_syspkg_list
+      with_items: "{{ ionmaster_syspkg_list }}"
       when: item != ''
     - name: Install Ion packages for head node
       apt: name={{ item }} state=latest force=yes
-      with_items: ionmaster_ionpkg_list
+      with_items: "{{ ionmaster_ionpkg_list }}"
       when: item != ''
     - name: Install 3rd party plugin packages
       apt: name={{ item }} state=latest force=yes
-      with_items: ionmaster_pluginpkg_list
+      with_items: "{{ ionmaster_pluginpkg_list }}"
       when: item != ''
       ignore_errors: yes
 
     # Packages to remove from system
+    # this step needs to be after ion-dbreports>=5.2.x install
+    # samtools is required by ion-dbreports<5.2
     - name: Packages Removal Process
-      apt: name={{item}} state=absent
+      apt: name={{ item }} state=absent
       with_items:
         - samtools
 
@@ -120,14 +122,14 @@
     # Replace sources.list with empty file
     - name: Disable /etc/apt/sources.list
       template: src=templates/sources.list.j2
-                dest=/etc/apt/sources.list{{FUNKYEXT|default('')}}
+                dest=/etc/apt/sources.list{{ FUNKYEXT|default('') }}
                 owner=root group=root mode=644
 
     - name: Purge compute node's /etc/apt/sources.list.d directory
       shell: bash -lc "rm -f /etc/apt/sources.list.d/*"
 
     - name: Replicating head node's /etc/apt/source.list.d/
-      copy: src={{item}} dest=/etc/apt/sources.list.d/ mode=0644
+      copy: src={{ item }} dest=/etc/apt/sources.list.d/ mode=0644
       with_fileglob:
         - /etc/apt/sources.list.d/*
 
@@ -139,21 +141,21 @@
 
     # Install or Update all packages listed
     - name: Install common system packages
-      apt: name={{item}} state=latest force=yes
-      with_items: common_syspkg_list
+      apt: name={{ item }} state=latest force=yes
+      with_items: "{{ common_syspkg_list }}"
       when: item != ''
     - name: Install system packages for compute resource - apt
       apt: name={{ item }} state=latest force=yes
-      with_items: ioncompute_syspkg_list
+      with_items: "{{ ioncompute_syspkg_list }}"
       when: item != ''
     - name: Install Ion packages for compute resource - apt
       apt: name={{ item }} state=latest force=yes
-      with_items: ioncompute_ionpkg_list
+      with_items: "{{ ioncompute_ionpkg_list }}"
       when: item != ''
 
     # Packages to remove from system
     - name: Packages Removal Process
-      apt: name={{item}} state=absent
+      apt: name={{ item }} state=absent
       with_items:
         - samtools
 

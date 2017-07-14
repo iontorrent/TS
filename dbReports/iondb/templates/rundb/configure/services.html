@@ -369,7 +369,7 @@ $(document).ready(function () {
         </h1>
         <table class="table table-condensed table-hover">
             {% for node in crunchers %}
-                <tr class="{{node.get_state_display}} openclose">
+                <tr class="{{node.get_state_display}} openclose {% if node.info.queues.disabled > 0 %}warning{%endif%}">
                     <td><i class="icon-plus"></i></td>
                     <td>{{node.name}}</td>
                     <td>{{node.comments}}</td>

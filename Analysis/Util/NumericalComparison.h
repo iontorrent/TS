@@ -4,6 +4,7 @@
 #include <ostream>
 #include <stdio.h>
 #include <stdint.h>
+#include <cmath>
 #include "SampleStats.h"
 
 #define NC_CORRELATION_EPSILON .00001
@@ -48,10 +49,10 @@ public:
    * particiular x & y are closer than epsilon, false otherwise.
   */
   bool AddPair(const T &x, const T &y) {
-    if (isnan(x) && isnan(y)) {
+    if (std::isnan(x) && std::isnan(y)) {
       return true;
     }
-    if (isinf(x) && isinf(y)) {
+    if (std::isinf(x) && std::isinf(y)) {
       return true;
     }
     bool closeEnough = true;

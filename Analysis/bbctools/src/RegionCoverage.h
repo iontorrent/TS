@@ -25,6 +25,7 @@ class RegionCoverage
 
     protected:
         struct TargetRegion {
+        	uint32_t       trgIdx;
         	uint32_t       trgSrt;
             uint32_t       trgEnd;
             vector<string> auxData;
@@ -33,7 +34,8 @@ class RegionCoverage
             TargetRegion  *next;
 
             TargetRegion( uint32_t srt, uint32_t end, const vector<string>& aux )
-                : trgSrt(srt)
+                : trgIdx(0)
+                , trgSrt(srt)
                 , trgEnd(end)
             	, auxData(aux)
             	, extData(NULL)
@@ -54,8 +56,7 @@ class RegionCoverage
 				, revReads(0)
 				, fwdTrgReads(0)
 				, revTrgReads(0)
-				, targetRegionHead(NULL)
-				, targetRegionArray(NULL) {}
+				, targetRegionHead(NULL) {}
 
 			~TargetContig(void) {
 				TargetRegion *nrg = targetRegionHead;
@@ -64,7 +65,6 @@ class RegionCoverage
 					delete nrg;
 					nrg = next;
 				}
-				delete [] targetRegionArray;
 			}
 
 			// Resulting link list starting at targetRegionHead will be in reverse order of target regions.
@@ -72,7 +72,7 @@ class RegionCoverage
 			// reverse order f to top of the list given pre-ordered target regions.
 			void AddRegion( TargetRegion *nrg ) {
 				if( !nrg ) return;
-				++numRegions;
+				nrg->trgIdx = ++numRegions;	// initially set to order loaded
 				if( !targetRegionHead ) {
 					targetRegionHead = nrg;
 					return;
@@ -95,37 +95,27 @@ class RegionCoverage
 				nrg->next = cur;
 			}
 
-			// convert linked list into array and forward list for quick access
-			void MakeSortedArray(void) {
-				delete targetRegionArray;
-				if( !numRegions ) {
-					targetRegionArray = NULL;
-					return;
+			// convert reverse ordered linked list to be forward ordered and reset region index
+			void ReverseSort( uint32_t idxOffset = 0 ) {
+				TargetRegion *prv = NULL, *nxt;
+				idxOffset += numRegions;
+				for( TargetRegion *cur = targetRegionHead; cur; cur = nxt ) {
+					cur->trgIdx = idxOffset--;
+					nxt = cur->next;
+					cur->next = prv;
+					prv = cur;
 				}
-				targetRegionArray = new TargetRegion*[numRegions];
-				TargetRegion *cur = targetRegionHead;
-				int lastReg = (int)numRegions-1;
-				for( int i = lastReg; i >= 0; --i ) {
-					targetRegionArray[i] = cur;
-					cur = cur->next;
-				}
-				// reverse order of linked list so this may be used in addition to array
-				targetRegionHead = cur = targetRegionArray[0];
-				for( int i = 0; i < lastReg; ++i ) {
-					cur = cur->next = targetRegionArray[i+1];
-				}
-				cur->next = NULL;
+				targetRegionHead = prv;
 			}
 
 			string id;
 			int32_t length;
-			size_t numRegions;
+			uint32_t numRegions;
 			uint64_t fwdReads;
 			uint64_t revReads;
 			uint64_t fwdTrgReads;
 			uint64_t revTrgReads;
 			TargetRegion *targetRegionHead;
-			TargetRegion **targetRegionArray;
         };
 
         size_t               m_numRefContigs;
@@ -140,6 +130,7 @@ class RegionCoverage
         TargetRegion        *m_bcovRegion;
         uint32_t             m_rcovContigIdx;
         TargetRegion        *m_rcovRegion;
+        TargetRegion        *m_lastRegionAssigned;
 
         // common optional depth at coverage stats
         size_t      m_numAuxFields;
@@ -168,6 +159,9 @@ class RegionCoverage
         // Return a comma separated list for up to maxValues of (first) loaded auxiliary fields spanned by
         // the given locus. If more than maxValues then return <first>,...(N)...,<last> (N>1).
         string FieldsOnRegion( uint32_t contigIdx, uint32_t readSrt, uint32_t readEnd, uint32_t maxValues = 3 );
+
+        // Return the target index for the region the last call to ReadOnRegion() mapped to, or 0 if none
+        uint32_t GetLastReadOnRegionIdx(void) const;
 
         // An iterator of all target regions returning false for a call after the last region is returned.
         // The optional start argument may be used to reset this iterator to the first region.

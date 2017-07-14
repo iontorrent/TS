@@ -495,55 +495,64 @@ int32_t tmap_log_enabled ()
   return logging_enabled;
 }
 
+// waits for a logging mutex to get released, then acquires it
+void tmap_log_record_begin ()
+{
+#ifdef HAVE_LIBPTHREAD
+    pthread_mutex_lock (&log_mutex);
+#endif
+}
+
+// releases logging mutex
+void tmap_log_record_end ()
+{
+#ifdef HAVE_LIBPTHREAD
+    pthread_mutex_unlock (&log_mutex);
+#endif
+}
+
 int32_t tmap_log (const char* format, ...)
 {
-  int32_t n = 0;
-  va_list ap;
-  if (!logging_enabled) 
+    int32_t n = 0;
+    va_list ap;
+    va_start (ap, format);
+    n = tmap_vlog (format, ap);
+    va_end (ap);
     return n;
-#ifdef HAVE_LIBPTHREAD
-  pthread_mutex_lock (&log_mutex);
-#endif
-  va_start(ap, format);
-  if (!log_file_pointer)
-  {
-    n = vprintf(format, ap);
-    fflush (stdout);
-  }
-  else
-  {
-    n = vfprintf(log_file_pointer, format, ap);
-    fflush (log_file_pointer);
-  }
-  va_end(ap);
-#ifdef HAVE_LIBPTHREAD
-  pthread_mutex_unlock (&log_mutex);
-#endif
-  return n;
 }
 int32_t tmap_vlog (const char* format, va_list ap)
 {
-  int32_t n = 0;
-  if (!logging_enabled) 
+    int32_t n = 0;
+    if (!logging_enabled) 
+        return n;
+    if (!log_file_pointer)
+    {
+        n = vprintf(format, ap);
+        fflush (stdout);
+    }
+    else
+    {
+        n = vfprintf(log_file_pointer, format, ap);
+        fflush (log_file_pointer);
+    }
     return n;
-#ifdef HAVE_LIBPTHREAD
-  pthread_mutex_lock (&log_mutex);
-#endif
-  if (!log_file_pointer)
-  {
-    n = vprintf(format, ap);
-    fflush (stdout);
-  }
-  else
-  {
-    n = vfprintf(log_file_pointer, format, ap);
-    fflush (log_file_pointer);
-  }
-
-#ifdef HAVE_LIBPTHREAD
-  pthread_mutex_unlock (&log_mutex);
-#endif
-  return n;
 }
 
+int32_t tmap_log_s (const char* format, ...)
+{
+    int32_t n = 0;
+    va_list ap;
+    va_start (ap, format);
+    n = tmap_vlog_s (format, ap);
+    va_end (ap);
+    return n;
+}
+
+int32_t tmap_vlog_s (const char* format, va_list ap)
+{
+    tmap_log_record_begin ();
+    int32_t n = tmap_vlog (format, ap);
+    tmap_log_record_end ();
+    return n;
+}
 

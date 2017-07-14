@@ -32,6 +32,8 @@ int PCACompr::Compress()
 		else
 			ComputeOrderVect(nvect, order++);
 
+		smoothNextVector(nvect,1);
+
 		EnsureOrthogonal(nvect, (nvect < nRvect));
 
 		SubtractVector(nvect, 1);
@@ -48,6 +50,28 @@ int PCACompr::Compress()
 //	ExtractVectors((nRvect+nFvect),1);
 
    return(total_iter);
+}
+
+void PCACompr::smoothNextVector(int nvect, int blur)
+{
+	float trc[npts];
+
+	for (int j=0;j < npts;j++)
+	   trc[j] = COEFF_ACCESS(j,nvect);
+
+	for (int j=0;j < npts;j++){
+		float sum=0.0f;
+		int start_frame = std::max(0,j-blur);
+		int end_frame = std::min(npts,j+blur+1);
+		for(int fr=start_frame;fr<end_frame;fr++){
+			sum += trc[fr];
+		}
+
+		COEFF_ACCESS(j,nvect) = sum/(float)(end_frame-start_frame);
+
+	}
+
+
 }
 
 
@@ -106,7 +130,7 @@ int PCACompr::ComputeNextVector(int nvect, int skip)
 //         PCAPRINTF("%s: nv %d iter=%d tmag=%.04f %.04f\n",__FUNCTION__,nvect,iter,fabs(tmag - last_tmag)/tmag, tmag);
          iter++;
       }
-      while (((fabs(tmag - last_tmag)/tmag > end_threshold) && (iter < 10)) && (!failed));
+      while (((fabs(tmag - last_tmag)/tmag > end_threshold) && (iter < 20)) && (!failed));
 
       if (failed)
       {

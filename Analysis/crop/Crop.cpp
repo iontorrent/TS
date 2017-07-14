@@ -374,6 +374,9 @@ int main ( int argc, char *argv[] )
     	else
     		options.applyXtalkCorrection2 = 0.2;
     	break;
+    case 'N':
+    	options.doGainCorrection = 1;
+    	break;
     case 'O':
     	options.doGainCorrection_bf = 1;
     	break;

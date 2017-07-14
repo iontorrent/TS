@@ -18,10 +18,11 @@
 #
 import sys
 import traceback
-from djangoinit import *
+from iondb.bin import djangoinit
+from iondb import settings
 from iondb.rundb import models
 from iondb.rundb.data import dmactions_types
-
+#pylint: disable=W1401
 DM_FILE_SETS = [
     {
         'type': dmactions_types.SIG,
@@ -31,11 +32,14 @@ DM_FILE_SETS = [
             'X\d+_Y\d+.*\.dat',
             'thumbnail.*\.dat',
             'thumbnail/explog_final.txt',
+            'thumbnail/explog_final.json',
             #'.[^/]*?\.txt',    need to be specific
             '.[^/]*?alW1Step_explog\.txt',
             '.[^/]*?hecksum_status\.txt',
             '.[^/]*?xplog\.txt',
+            '.[^/]*?xplog\.json',
             '.[^/]*?xplog_final\.txt',
+            '.[^/]*?xplog_final\.json',
             '.[^/]*?nitLog.*?txt',
             '.[^/]*?nitValsW.*?txt',
             '.[^/]*?awInit\.txt',
@@ -59,6 +63,7 @@ DM_FILE_SETS = [
         'keepwith':{
             dmactions_types.BASE: [
                 '.[^/]*?xplog\.txt',
+                '.[^/]*?xplog\.json',
             ],
         },
         'version': settings.RELVERSION,
@@ -97,16 +102,19 @@ DM_FILE_SETS = [
             'onboard_results/sigproc_results/avgNukeTrace_TCAG\.txt',
             'onboard_results/sigproc_results/Bead_density_.*?\.png',
             '.[^/]*?xplog\.txt',
+            '.[^/]*?xplog\.json',
             ],
         'exclude':[
             ],
         'keepwith':{
             dmactions_types.OUT: [
                 'sigproc_results/analysis\.bfmask\.stats',
+                'onboard_results/sigproc_results/analysis\.bfmask\.stats',
                 'sigproc_results/Bead_density_.*?\.png',
             ],
             dmactions_types.SIG:[
                 '.[^/]*?xplog\.txt',
+                '.[^/]*?xplog\.json',
             ],
         },
         'version': settings.RELVERSION,
@@ -151,6 +159,7 @@ DM_FILE_SETS = [
             'basecaller_results/.[^/]*\.bam',
             'sigproc_results/.[^/]*?\.json',
             'sigproc_results/analysis.bfmask.stats',
+            'onboard_results/sigproc_results/analysis\.bfmask\.stats',
             'sigproc_results/Bead_density_.*?\.png',
             'bc_files/.*?',
             'bc_filtered/.*?',
@@ -170,6 +179,7 @@ DM_FILE_SETS = [
         'keepwith':{
             dmactions_types.BASE: [
                 'sigproc_results/analysis.bfmask.stats',
+                'onboard_results/sigproc_results/analysis\.bfmask\.stats',
                 'sigproc_results/Bead_density_.*?\.png',
             ],
         },
@@ -211,10 +221,13 @@ DM_FILE_SETS = [
             'X\d+_Y\d+.*\.dat',
             'thumbnail.*\.dat',
             'thumbnail/explog_final.txt',
+            'thumbnail/explog_final.json',
             '.*?CalW1Step_explog\.txt',
             '.*?checksum_status\.txt',
             '.*?explog\.txt',
+            '.*?explog\.json',
             '.*?explog_final\.txt',
+            '.*?explog_final\.json',
             '.*?InitLog.*?txt',
             '.*?InitValsW.*?txt',
             '.*?RawInit\.txt',

@@ -12,25 +12,30 @@
 // const string& force_sample_name,
 // const string& sample_name,
 
+// -----------------------------------------------------------------------------------------
+// Function extracts the samples associated with read groups in bam_header
+// primary_sample_name [in]: sets a primary sample name (default is first found in header)
+//                           only the primary sample will be analyzed if we don't specify multi-sample analysis
+// force_sample_name   [in]: ignores all information in the BAM and force analyzes as one sample
+// multisample     [in/out]: activates multi-sample analysis for more than one sample in BAM
 
-void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name, const string& force_sample_name)
+
+void SampleManager::Initialize (const SamHeader& bam_header, const string& primary_sample_name, const string& force_sample_name, bool &multisample)
 {
 
+  // Iterate through samples in BAM header to extract sample information
   num_samples_ = 0;
-
+  primary_sample_name_ = primary_sample_name;
+  
   for (SamReadGroupConstIterator read_group = bam_header.ReadGroups.Begin(); read_group < bam_header.ReadGroups.End(); ++read_group) {
-    string barcode = read_group->PlatformUnit;
-    string::size_type pos = barcode.rfind("/");
-    if (pos != string::npos) {barcode = barcode.substr(pos + 1);}
+
     string sample_name;
     if (force_sample_name.empty()) {
-      //sample_name = read_group->Sample + "." + barcode;
       sample_name = read_group->Sample;
     }
     else {
       sample_name = force_sample_name;
     }
-
 
     if (read_group->ID.empty()) {
       cerr << "ERROR: One of BAM read groups is missing ID tag" << endl;
@@ -65,46 +70,57 @@ void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name
       // if it's the same sample name and RG combo, no worries
       // TODO: what about other tags
     }
+    //cout << "SampleManager: Read group " << read_group->ID << " is associated with sample " << sample_name << endl;
+
   }
 
   if (num_samples_ == 0) {
     cerr << "ERROR: BAM file(s) do not have any read group definitions" << endl;
     exit(1);
   }
+  // Do we have a multi-sample analysis?
+  else if (num_samples_ > 1) {
+	  if (not multisample and primary_sample_name_.empty()){
+        cerr << "ERROR: SampleManager: Multiple Samples (" << num_samples_ << ") found in BAM file/s provided. "<< endl;
+        //cerr << "ERROR: But neither a primary sample was provided nor multi-sample analysis enabled." << endl;
+        cerr << "ERROR: Please select primary sample name to process using the \"--sample-name\" parameter. " << endl;
+        //cerr << "ERROR: AND/OR enable multi-sample analysis using  the \"--multisample-analysis\" parameter. " << endl;
+        exit(EXIT_FAILURE);
+	  }
+  }
+  else // We only have one sample
+    multisample = false;
 
+  // Search for specified primary sample or select a default primary (first available)
 
   bool default_sample = false;
-  //now check if there are multiple samples in the BAM file and if so user should provide a sampleName to process
-  if (num_samples_ == 1 && sample_name.empty()) {
-    sample_name = sample_names_[0];
+  if (primary_sample_name_.empty()) {
+    primary_sample_name_ = sample_names_[0];
     default_sample = true;
-
-  } else if (num_samples_ > 1 && sample_name.empty())  {
-      sample_name = sample_names_[0];
-      //cerr << "ERROR: Multiple Samples found in BAM file/s provided. Torrent Variant Caller currently supports variant calling on only one sample. " << endl;
-      //cerr << "ERROR: Please select sample name to process using -g parameter. " << endl;
-      //exit(1);
   }
 
   bool primary_sample_found = false;
   for (int i = 0; i < num_samples_; ++i) {
-    if (sample_names_[i] == sample_name) {
+    if (sample_names_[i] == primary_sample_name_) {
       primary_sample_ = i;
       primary_sample_found = true;
     }
+    // AWalt added this because of IR-19679?
+    // TODO investigate why this is actually necessary?
     else {
-      string test = sample_name + ".";
+      string test = primary_sample_name_ + ".";
       if (strncmp(sample_names_[i].c_str(), test.c_str(), test.length()) == 0) {
         primary_sample_ = i;
         primary_sample_found = true;
+        primary_sample_name_ = sample_names_[primary_sample_];
       }
     }
   }
 
   if (!primary_sample_found) {
-    cerr << "ERROR: Sample " << sample_name << " provided using -g option "
+    cerr << "ERROR: Sample " << primary_sample_name << " provided using \"--sample-name\" option "
          << "is not associated with any read groups in BAM file(s)" << endl;
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   //now find the read group ID associated with this sample name
@@ -113,20 +129,22 @@ void SampleManager::Initialize (const SamHeader& bam_header, string& sample_name
     if (primary_sample_ == p->second)
       num_primary_read_groups++;
 
+  if (multisample)
+    cout << "SampleManager: Multi-sample analysis enabled." << endl;
   if (!force_sample_name.empty())
     cout << "SampleManager: All read groups forced to assume sample name " <<  force_sample_name << endl;
 
   cout << "SampleManager: Found " << read_group_to_sample_idx_.size() << " read group(s) and " << num_samples_ << " sample(s)." << endl;
   if (default_sample)
-    cout << "SampleManager: Primary sample \"" << sample_name << "\" (default) present in " << num_primary_read_groups << " read group(s)" << endl;
+    cout << "SampleManager: Primary sample \"" << primary_sample_name_ << "\" (default) present in " << num_primary_read_groups << " read group(s)" << endl;
   else
-    cout << "SampleManager: Primary sample \"" << sample_name << "\" (set via -g) " << num_primary_read_groups << " read group(s)" << endl;
+    cout << "SampleManager: Primary sample \"" << primary_sample_name_ << "\" (set via -g) " << num_primary_read_groups << " read group(s)" << endl;
 
 }
 
+// --------------------------------------------------------------------
+// This function populates sample_index and primary_sample flag for read alignment objects
 
-
-//bool SampleManager::IdentifySample(Alignment& ra) const
 bool SampleManager::IdentifySample(const BamAlignment& alignment, int& sample_index, bool& primary_sample) const
 {
 

@@ -18,6 +18,8 @@ TARGET_REGION_FILEPATH = 'target_region_filepath'
 TARGET_REGION_BED = 'targetRegionBedFile'
 HOT_SPOT_FILE_PATH = 'hotspot_filepath'
 HOT_SPOT_BED = 'hotSpotRegionBedFile'
+SSE_BED_FILEPATH = 'sse_filepath'
+SSE_BED = 'sseBedFile'
 BAM = 'bam_file'
 BAM_FULL_PATH = 'bam_filepath'
 NON_BARCODED = 'nonbarcoded'
@@ -113,6 +115,7 @@ class BarcodeSampleInfo(object):
         unbarcodedEntry[HOT_SPOT_FILE_PATH] = singleDataset[HOT_SPOT_BED] if HOT_SPOT_BED in singleDataset else self.eas.hotSpotRegionBedFile
         unbarcodedEntry[READ_COUNT] = singleReadGroup[READ_COUNT]
         unbarcodedEntry[TARGET_REGION_FILEPATH] = self.eas.targetRegionBedFile
+        unbarcodedEntry[SSE_BED_FILEPATH] = self.eas.sseBedFile
         unbarcodedEntry[NUCLEOTIDE_TYPE] = ''
         unbarcodedEntry[CONTROL_SEQUENCE_TYPE] = ''
         unbarcodedEntry[SAMPLE] = singleReadGroup[SAMPLE]
@@ -198,6 +201,7 @@ class BarcodeSampleInfo(object):
             # these can be overridden by the sample barcode data
             barcodeEntry[TARGET_REGION_FILEPATH] = self.eas.targetRegionBedFile
             barcodeEntry[HOT_SPOT_FILE_PATH] = self.eas.hotSpotRegionBedFile
+            barcodeEntry[SSE_BED_FILEPATH] = self.eas.sseBedFile
 
             # in order to get information out of the EAS.barcodedSamples data structure there needs to be
             # a reverse lookup since the barcode name is a child of the sample id
@@ -218,6 +222,10 @@ class BarcodeSampleInfo(object):
                     barcodeEntry[HOT_SPOT_FILE_PATH] = barcodedSample.get(HOT_SPOT_BED, barcodeEntry[HOT_SPOT_FILE_PATH])
                     barcodeEntry[REFERENCE] = barcodedSample.get(REFERENCE, barcodeEntry[REFERENCE])
                     barcodeEntry[NTC_CONTROL] = barcodedSample.get('controlType', barcodeEntry[NTC_CONTROL])
+                    if SSE_BED in barcodedSample:
+                        barcodeEntry[SSE_BED_FILEPATH] = barcodedSample[SSE_BED]
+                    elif barcodeEntry[TARGET_REGION_FILEPATH] != self.eas.targetRegionBedFile:
+                        barcodeEntry[SSE_BED_FILEPATH] = ''
                 except:
                     # intentionally do nothing....
                     pass

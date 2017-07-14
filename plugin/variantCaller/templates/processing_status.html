@@ -1,0 +1,150 @@
+
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+<!--<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />-->
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+
+<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+
+<style type="text/css">
+    body {background:white}
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+</style>
+
+</head>
+<title>Torrent Variant Caller Report</title>
+<body>
+
+<strong>Plugin is in progress: {{status.barcodes_carried_out}} out of {{status.num_barcodes}} barcodes have been carried out ...</strong>
+<div class="container-fluid">
+	<table style="width:auto">
+	    <tr><td>Total number of barcodes: </td>            <td>{{status.num_barcodes}}</td></tr>
+	    <tr><td>Number of barcodes filtered out: </td>     <td>{{status.filtered_barcodes}}</td></tr>
+        <tr><td>Number of barcodes processed: </td>        <td>{{status.barcodes_processed}}</td></tr>
+        <tr><td>Number of barcodes in the queue: </td>     <td>{{status.queued_barcodes}}</td></tr>
+        <tr><td>Output directory: </td>                    <td>{{output_dir}}</td></tr>
+	</table>
+	
+<script type="text/javascript">
+  function numberWithCommas(x) {
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+  }
+  function numberToPercent(x) {
+    if( isNaN(x) ) return x;
+    return (100 * x)+"%";
+  }
+</script>
+
+<!-- Capture django variable in to javascript -->
+<script>
+  var barcodes_json = [];
+  var index = 0;
+    {% for barcode in barcode_data %}
+	  var barcode_json = {};	    
+	  barcode_json['sample'] = "{{barcode.summary.sample_name}}";
+	  barcode_json['index'] = index;
+	  barcode_json['barcode_name'] = "{{barcode.name}}";
+	  {% if barcode.status == "in_progress" %}
+	    barcode_json['status'] = "in progress" 
+	  {% else %}
+	    barcode_json['status'] = "{{barcode.status}}";
+	  {% endif %}
+	  
+	  {% if barcode.status == "completed" %}
+      	barcode_json['barcode_details'] = "<a target='_parent' href='{{barcode.summary.barcode_details}}' class='help'><span title='Click to view the detailed report for barcode {{barcode.name}}'>{{barcode.name}}</span><a>";	  	  
+	    barcode_json['variants'] = '{{barcode.summary.variants_total.variants}}';
+	    barcode_json['exports'] = '<a class="btn" href="{{barcode.summary.variants_vcf_gz_link}}">VCF.GZ</a> &nbsp <a class="btn" href="{{barcode.summary.variants_tbi_link}}">VCF.GZ.TBI</a> &nbsp';
+        {% if options.library_type != "tagseq" %}
+	      barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_vcf_gz_link}}">gVCF.GZ</a> &nbsp';
+	      barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_tbi_link}}">gVCF.GZ.TBI</a> &nbsp';
+        {% endif %}
+          barcode_json['exports'] += '<a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a> &nbsp';
+      {% else %}
+        barcode_json['barcode_details'] = "{{barcode.name}}";
+        barcode_json['variants'] = 'N/A';
+        barcode_json['exports'] = 'N/A' 
+      {% endif %}
+      barcodes_json.push(barcode_json);
+	  index += 1;
+    {% endfor %}
+
+</script>
+
+<script type="text/javascript">
+$(document).ready(function() {
+    if (typeof barcodes_json !== 'undefined'){
+
+    $("#barcodes").kendoGrid({
+      height: 'auto',
+      groupable: false,
+      scrollable: false,
+      selectable: false,
+      sortable: { mode: "multiple", allowUnsort: true },
+      pageable : { pageSizes:[5,10,20,50,100,1000] },
+      dataSource: {
+        data: barcodes_json,
+        schema: { model: { fields: {
+          barcode_name: {type:"string"},
+          sample: {type:"string"},
+          status: {type: "string"},
+          variants: {type:"string"},
+          exports: {type:"string"}
+        } } },
+        pageSize: 20
+      },
+      columns: [
+        {field:"barcode_name",width:"15%"},
+        {field:"sample",width:"15%"},
+        {field:"status", width:"20%"},
+        {field:"variants"},
+        {field:"exports",width:"40%"}
+      ],
+      rowTemplate: kendo.template($("#barcodesRowTemplate").html())
+    });
+  }
+});
+</script>
+
+<div>
+  <table id="barcodes" style="width:100%">
+    <thead>
+    <tr>
+      <th title="Name of the barcode sequence and link to detailed report for reads associated with that barcode.">Barcode Name</th>
+      <th title="Sample Name associated with this barcode in the experiment plan.">Sample</th>
+      <th title="Status of the barcode">Status</th>
+      <th title="Number of variants">Variants</th>
+	  <th title="Exports">Downloads</th>
+    </tr>
+    </thead>
+    <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
+      <tr>
+        <td> #= barcode_details #</td>
+        <td> #= (sample) ? sample : "None" #</td>
+        <td> #= status #</td>
+        <td> #= numberWithCommas(variants) # </td>
+		<td> #= exports #</td>
+      </tr>
+    </script>
+  </table>
+</div>
+
+</div>
+</body>
+</html>

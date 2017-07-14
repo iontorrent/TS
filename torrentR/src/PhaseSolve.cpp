@@ -164,12 +164,12 @@ unsigned int PhaseSolve::GreedyBaseCall (
       weight_t secondSmallestDelta = FLT_MAX;
       weight_t secondSmallestAbsDelta = FLT_MAX;
       hpLen_t bestHpLen = 0;
-      hpLen_t secondBestHpLen = 0;
+      //hpLen_t secondBestHpLen = 0;
       // tempHpLen records the currently-assumed hpLength at flow iFlow.
       // hpFlow records the state of the sequence guess going into the iteration over all flows.
       // hpFlow won't be updated until after the iteration over all flows.
       hpLen_t tempHpLen = hpFlow[iFlow];
-      weight_t predictedSigZeroMer = -1;
+      //weight_t predictedSigZeroMer = -1;
       weight_t predictedSigOneMer  = -1;
       weight_t predictedSigTwoMer  = -1;
       bool alreadySeenNegativeDelta = false; // used to control early exit from loop over HPs
@@ -234,9 +234,10 @@ unsigned int PhaseSolve::GreedyBaseCall (
         assert(hpWeightOK());
 #endif
         testSignal = applyFlow(iFlow, (firstCycle ? thisExtendAdvancerFirst : thisExtendAdvancer), (firstCycle ? thisDroopAdvancerFirst : thisDroopAdvancer), testOnly, newHpWeight, newPosWeight);
-        if(testHpLen==0) {
-          predictedSigZeroMer = testSignal;
-        } else if(testHpLen==1) {
+        //if(testHpLen==0) {
+        //  predictedSigZeroMer = testSignal;
+        //} else
+        if(testHpLen==1) {
           predictedSigOneMer = testSignal;
         } else if(testHpLen==2) {
           predictedSigTwoMer = testSignal;
@@ -257,7 +258,7 @@ unsigned int PhaseSolve::GreedyBaseCall (
           // move the best into the second-best slot
           secondSmallestDelta = smallestDelta;
           secondSmallestAbsDelta = smallestAbsDelta;
-          secondBestHpLen = bestHpLen;
+          //secondBestHpLen = bestHpLen;
           // store the new best
           smallestDelta = delta;
           smallestAbsDelta = absDelta;
@@ -266,7 +267,7 @@ unsigned int PhaseSolve::GreedyBaseCall (
           // update the second-best stats
           secondSmallestDelta = delta;
           secondSmallestAbsDelta = absDelta;
-          secondBestHpLen = testHpLen;
+          //secondBestHpLen = testHpLen;
         }
 
         // If the nuc to test is one that we have flowed already and we haven't seen any incorporations

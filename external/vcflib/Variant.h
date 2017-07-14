@@ -181,6 +181,7 @@ public:
     string id;
     string ref;
     vector<string> alt;      // a list of all the alternate alleles present at this locus
+    vector<pair<int, int> > alt_orig_padding; // the prefix, suffix padding of each allele, not always set, need to check size
     vector<string> alleles;  // a list all alleles (ref + alt) at this locus
                              // the indicies are organized such that the genotype codes (0,1,2,.etc.)
                              // correspond to the correct offest into the allelese vector.
@@ -219,6 +220,8 @@ public:
     VariantCallFile* vcf;
     bool isFiltered;
     bool isHotSpot;
+    vector<bool> isAltHotspot; // Indicates whether the alt alleles in vector<string>alt are HS or not.
+    vector<bool> isAltFakeHotspot;
     //void addInfoInt(string& tag, int value);
     //void addInfoFloat(string& tag, double value);
     //void addInfoString(string& tag, string& value);

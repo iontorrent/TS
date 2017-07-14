@@ -3,6 +3,7 @@
 
 # Execute a command with a timeout
 
+# License: LGPLv2
 # Author:
 #    http://www.pixelbeat.org/
 # Notes:

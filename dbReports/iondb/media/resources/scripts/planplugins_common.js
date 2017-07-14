@@ -10,21 +10,25 @@ serializeIframe = function(iframe){
 
 // load plugin configuration json into an iframe
 updateIframe = function(iframe, href, json_obj){
-    iframe.attr("src", href);
     iframe.unbind();
-    
-    if (json_obj) {
-        iframe.one("load", function(){
-            if ($.isFunction(iframe[0].contentWindow.restoreForm)){
+    iframe.css("height", 0);
+    iframe.hide();
+    iframe.attr("src", href);
+    enableIframeResizing(iframe);
+    iframe.on("load", function () {
+        iframe.show();
+        if (json_obj) {
+            if ($.isFunction(iframe[0].contentWindow.restoreForm)) {
                 // use plugin's restoreForm function if exists
                 iframe[0].contentWindow.restoreForm(json_obj);
             } else {
-                // call generic form json restore                      
+                // call generic form json restore
                 $(iframe[0].contentDocument.forms).restoreJSON(json_obj);
                 iframe[0].contentWindow.$(':input').trigger('change');
             }
-        });
-    }    
+        }
+    });
+
 };
 
 // generic restore serialized form

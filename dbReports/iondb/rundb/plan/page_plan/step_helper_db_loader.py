@@ -418,9 +418,11 @@ class StepHelperDbLoader():
             selectedApplicationGroup = selectedRunType.applicationGroups.first()
 
         if selectedApplicationGroup:
-            appl_product = ApplProduct.objects.get(applType__runType=selectedRunType.runType, applicationGroup=selectedApplicationGroup, isDefault=True, isActive=True, isVisible=True)
             application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = selectedApplicationGroup.name
-        else:
+
+        try:
+            appl_product = ApplProduct.objects.get(applType__runType=selectedRunType.runType, applicationGroup=selectedApplicationGroup, isDefault=True, isActive=True, isVisible=True)
+        except:
             appl_product = ApplProduct.objects.get(applType__runType=selectedRunType.runType, isDefault=True, isActive=True, isVisible=True)
 
         # logger.debug("step_helper_db_loader._updateUniversalStep_applicationData() saving appl_product now!!")
@@ -510,11 +512,7 @@ class StepHelperDbLoader():
         kits_step_data.savedFields[KitsFieldNames.REALIGN] = planned_experiment.do_realign()
         kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOL] = planned_experiment.samplePrepProtocol
         
-        avalanche3PrimeAdapters = ThreePrimeadapter.objects.filter(direction='Forward', runMode='single', chemistryType='avalanche').order_by('-isDefault', 'name')
-        kits_step_data.savedFields[KitsFieldNames.AVALANCHE_FORWARD_3_PRIME_ADAPTER] = avalanche3PrimeAdapters[0].sequence
-        if appl_product.defaultAvalancheSequencingKit:
-            kits_step_data.savedFields[KitsFieldNames.AVALANCHE_SEQUENCE_KIT_NAME] = appl_product.defaultAvalancheSequencingKit.name
-
+        kits_step_data.prepopulatedFields[KitsFieldNames.PLAN_CATEGORIES] = planned_experiment.categories or ''
         kits_step_data.prepopulatedFields[KitsFieldNames.IS_BARCODE_KIT_SELECTION_REQUIRED] = appl_product.isBarcodeKitSelectionRequired
 
     def _updateUniversalStep_kitData_for_edit(self, step_helper, planned_experiment, appl_product, application_step_data, kits_step_data):
@@ -537,10 +535,8 @@ class StepHelperDbLoader():
             kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KITS] |= savedtemplatekit
             oneTouchKits = kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH][KitsFieldNames.KIT_VALUES]
             ionChefKits = kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ION_CHEF][KitsFieldNames.KIT_VALUES]
-            avalancheKits = kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH_AVALANCHE][KitsFieldNames.KIT_VALUES]
             kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH][KitsFieldNames.KIT_VALUES] |= savedtemplatekit.filter(kitType__in=oneTouchKits.values_list('kitType', flat=True))
             kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ION_CHEF][KitsFieldNames.KIT_VALUES] |= savedtemplatekit.filter(kitType__in=ionChefKits.values_list('kitType', flat=True))
-            kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH_AVALANCHE][KitsFieldNames.KIT_VALUES] |= savedtemplatekit.filter(kitType__in=avalancheKits.values_list('kitType', flat=True))
 
             available_dnaBarcodes = dnaBarcode.objects.filter(Q(active=True) | Q(name=planned_experiment.get_barcodeId()))
 
@@ -567,6 +563,11 @@ class StepHelperDbLoader():
         reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = planned_experiment.get_bedfile()
         reference_step_data.savedFields[ReferenceFieldNames.REFERENCE] = planned_experiment.get_library()
         reference_step_data.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = planned_experiment.get_regionfile()
+
+        sseBedFile = planned_experiment.get_sseBedFile()
+        targetRegionBEDFile = reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE]
+        if sseBedFile and targetRegionBEDFile:
+            reference_step_data.prepopulatedFields[ReferenceFieldNames.SSE_BED_FILE_DICT][targetRegionBEDFile.split('/')[-1]] = sseBedFile
 
         mixedTypeRNA_targetRegion = planned_experiment.get_mixedType_rna_bedfile()
         reference_step_data.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_TARGET_BED_FILE] = "" if mixedTypeRNA_targetRegion is None else mixedTypeRNA_targetRegion
@@ -1264,6 +1265,8 @@ class StepHelperDbLoader():
         else:
             self.updateTemplateSpecificStepHelper(step_helper, planned_experiment)
 
+        self.generate_warnings(step_helper)
+
         return step_helper
 
     def getStepHelperForPlanPlannedExperiment(self, pe_id, step_helper_type=StepHelperType.EDIT_PLAN):
@@ -1295,4 +1298,53 @@ class StepHelperDbLoader():
         else:
             raise ValueError("Can not create templates from plans.")
 
+        self.generate_warnings(step_helper)
+
         return step_helper
+
+
+    def generate_warnings(self, step_helper):
+        ''' add step warnings if any selections are obsolete '''
+
+        if step_helper.isEditRun():
+            return
+
+        msg_not_found = "Selected %s %s is not found"
+        msg_inactive = "Selected %s %s is not active"
+
+        kits_step_data = step_helper.steps[StepNames.KITS]
+        check_kitInfo = [
+            ('Library Kit', ['LibraryKit', 'LibraryPrepKit'], kits_step_data.savedFields[KitsFieldNames.LIBRARY_KIT_NAME]),
+            ('Template Kit', ['TemplatingKit','IonChefPrepKit'], kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_NAME]),
+            ('Sequencing Kit', ['SequencingKit'], kits_step_data.savedFields[KitsFieldNames.SEQUENCE_KIT_NAME]),
+            ('Control Sequence', ['ControlSequenceKit'], kits_step_data.savedFields[KitsFieldNames.CONTROL_SEQUENCE]),
+            ('Sample Preparation Kit', ['SamplePrepKit'], kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT]),
+        ]
+        for display, types, kit in check_kitInfo:
+            if kit:
+                qs = KitInfo.objects.filter(name=kit, kitType__in=types)
+                if qs:
+                    if not qs[0].isActive:
+                        kits_step_data.warnings.append(msg_inactive % (display, kit))
+                else:
+                    kits_step_data.warnings.append(msg_not_found % (display, kit))
+
+        # barcode set
+        barcodeKit = kits_step_data.savedFields[KitsFieldNames.BARCODE_ID]
+        if barcodeKit:
+            qs = dnaBarcode.objects.filter(name=barcodeKit)
+            if qs:
+                if not qs.filter(active=True):
+                    kits_step_data.warnings.append(msg_inactive % ('Barcode Set', barcodeKit))
+            else:
+                kits_step_data.warnings.append(msg_not_found % ('Barcode Set', barcodeKit))
+
+        # chip
+        chip = kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE]
+        if chip:
+            qs = Chip.objects.filter(name=chip)
+            if qs:
+                if not qs.filter(isActive=True):
+                    kits_step_data.warnings.append(msg_inactive % ('Chip Type', chip))
+            else:
+                kits_step_data.warnings.append(msg_not_found % ('Chip Type', chip))

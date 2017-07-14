@@ -25,11 +25,15 @@
       <tr>
         <td><h3>{{tf_name}}</h3></td>
         <td><h3>{{tf_data.num_reads|intcomma}}</h3></td>
-        <td><h3>{{tf_data.conversion_50AQ17}}%</h3></td>
-        <td><h3>{{tf_data.conversion_100AQ17}}{% if tf_data.conversion_100AQ17 != "---" and tf_data.conversion_100AQ17 != "N/A" %}%{% endif %}</h3></td>        
-        <td class="tf_image" data-img="{{report.reportWebLink}}/{{tf_data.histogram_filename}}">
-                <img onclick="modal_tf('{{tf_name}}', '{{report.reportWebLink}}/{{tf_data.histogram_filename}}');" height="100" width="800" src="{{report.reportWebLink}}/{{tf_data.histogram_filename}}"></img>
-        </td>
+        <td><h3>{{tf_data.conversion_50AQ17}}{% if tf_data.conversion_50AQ17 != "pass" and tf_data.conversion_50AQ17 != "further investigation needed" %}%{% endif %}</h3></td>
+        <td><h3>{{tf_data.conversion_100AQ17}}{% if tf_data.conversion_100AQ17 != "---" and tf_data.conversion_100AQ17 != "N/A" %}%{% endif %}</h3></td>
+        {% if tf_data.histogram_filename != "---" and tf_data.histogram_filename != "N/A" %}
+        	<td class="tf_image" data-img="{{report.reportWebLink}}/{{tf_data.histogram_filename}}">
+            	<img onclick="modal_tf('{{tf_name}}', '{{report.reportWebLink}}/{{tf_data.histogram_filename}}');" height="100" width="800" src="{{report.reportWebLink}}/{{tf_data.histogram_filename}}"></img>
+            </td>
+        {% else %}
+            <td><h3>{{tf_data.histogram_filename}}</h3></td>
+        {% endif %}
       </tr>
     {% endfor %}
     </tbody>

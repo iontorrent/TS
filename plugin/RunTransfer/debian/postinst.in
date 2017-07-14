@@ -1,0 +1,23 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+case "$1" in
+    configure)
+    
+        # Only necessary for first time bare-bones installs
+        [[ -d /results/pluginMedia ]] || mkdir -p -m 0777 /results/pluginMedia
+
+        if [ -d @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@/pluginMedia ]; then
+            # remove to old symlink before attempting to create the new one
+            rm -f /results/pluginMedia/@PLUGIN_NAME@
+
+            # create the new symlink
+            ln -sf @CPACK_PACKAGE_INSTALL_DIRECTORY@/@PLUGIN_NAME@/pluginMedia /results/pluginMedia/@PLUGIN_NAME@
+        fi
+
+    ;;
+esac
+
+exit 0

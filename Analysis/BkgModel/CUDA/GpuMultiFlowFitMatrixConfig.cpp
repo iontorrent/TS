@@ -3,27 +3,27 @@
 #include "CudaDefines.h"
 #include "GpuMultiFlowFitMatrixConfig.h"
 
-GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(fit_descriptor* fd, CpuStep* Steps, int maxSteps, int flow_key, int flow_block_size)
+GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(const std::vector<fit_descriptor>& fds, CpuStep* Steps, int maxSteps, int flow_key, int flow_block_size)
 {
    // num of partial derivative steps to compute for this fit descriptor
-   _numSteps = BkgFitStructures::GetNumParDerivStepsForFitDescriptor(fd);
+   _numSteps = BkgFitStructures::GetNumParDerivStepsForFitDescriptor(fds);
 
    // number of actual partial derivative steps to compute
    _numSteps = _numSteps + 2; // Need to calculate FVAL and YERR always
 
    // calculate num of params to fit based on param sensitivity classification
-   _numParamsToFit = BkgFitStructures::GetNumParamsToFitForDescriptor(fd, flow_key, flow_block_size);
+   _numParamsToFit = BkgFitStructures::GetNumParamsToFitForDescriptor(fds, flow_key, flow_block_size);
 
    // collect partial derivative steps from Steps structure in 
    // BkgFitStructures.cpp for this fit
-   CreatePartialDerivStepsVector(fd, Steps, maxSteps);
+   CreatePartialDerivStepsVector(fds, Steps, maxSteps);
    
   _paramIdxMap = new unsigned int[_numParamsToFit];
   _affectedFlowsForParamsBitMap = new unsigned int[_numParamsToFit];
   _paramToStepMap = new unsigned int[_numParamsToFit];
   _jtjMatrixBitMap = new unsigned int[_numParamsToFit*_numParamsToFit];
 
-  CreateAffectedFlowsVector(fd, flow_key, flow_block_size);
+  CreateAffectedFlowsVector(fds, flow_key, flow_block_size);
   CreateBitMapForJTJMatrixComputation();
 }
 
@@ -36,7 +36,7 @@ GpuMultiFlowFitMatrixConfig::~GpuMultiFlowFitMatrixConfig()
   delete [] _paramToStepMap;
 }
 
-void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(fit_descriptor* fd, CpuStep* Steps, int maxSteps)
+void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(const std::vector<fit_descriptor>& fds, CpuStep* Steps, int maxSteps)
 {
   _partialDerivSteps = new CpuStep[_numSteps];
 
@@ -46,11 +46,11 @@ void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(fit_descriptor* 
   if (Steps[maxSteps - 1].PartialDerivMask == YERR) 
     _partialDerivSteps[_numSteps - 1] = Steps[maxSteps - 1];
   
-  for (int i=1; fd[i-1].comp != TBL_END; ++i) 
+  for (int i=1; fds[i-1].comp != TBL_END; ++i) 
   {
     for (int j=0; j<maxSteps; ++j) 
     {
-      if ((unsigned int)fd[i-1].comp == Steps[j].PartialDerivMask)
+      if ((unsigned int)fds[i-1].comp == Steps[j].PartialDerivMask)
       {
         _partialDerivSteps[i] = Steps[j];
         break;
@@ -60,7 +60,7 @@ void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(fit_descriptor* 
 }
 
 void GpuMultiFlowFitMatrixConfig::CreateAffectedFlowsVector(
-    fit_descriptor* fd, 
+    const std::vector<fit_descriptor>& fds, 
     int flow_key, 
     int flow_block_size
   )
@@ -70,13 +70,13 @@ void GpuMultiFlowFitMatrixConfig::CreateAffectedFlowsVector(
 
   unsigned int paramIdx = 0;  
   unsigned int actualStep = 1;
-  for (int i=0; fd[i].comp != TBL_END; ++i)
+  for (int i=0; fds[i].comp != TBL_END; ++i)
   {
     // Calculate a base index for reaching into the BeadParams / reg_params structure.
-    unsigned int baseIndex = fd[i].bead_params_func ? ( dummyBead.*( fd[i].bead_params_func ))() - reinterpret_cast< float * >( & dummyBead )
-                                                    : ( dummyReg .*( fd[i].reg_params_func  ))() - reinterpret_cast< float * >( & dummyReg );
+    unsigned int baseIndex = fds[i].bead_params_func ? ( dummyBead.*( fds[i].bead_params_func ))() - reinterpret_cast< float * >( & dummyBead )
+                                                    : ( dummyReg .*( fds[i].reg_params_func  ))() - reinterpret_cast< float * >( & dummyReg );
             
-    switch(fd[i].ptype)
+    switch(fds[i].ptype)
     {
       case ParamTypeAllFlow:
         _paramIdxMap[paramIdx] = baseIndex;

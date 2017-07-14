@@ -172,16 +172,24 @@ $(function () {
             
         };
 
-        TB.runTypeApplicationDescription = function(runType, application) {
+        TB.runTypeApplicationDescription = function(runType, application, applicationCategoryName) {
             var helper = function() {
                 if (TB._RunTypes && TB._ApplicationGroups) {
                     for (i in TB._ApplicationGroups) {
                         if (TB._ApplicationGroups[i] && (TB._ApplicationGroups[i].name == application || TB._ApplicationGroups[i].description == application)) {
                         	if (TB._ApplicationGroups[i].applications.length <= 1) {
-                            	return TB._ApplicationGroups[i].description;
+                        	    if (applicationCategoryName) {                   	    
+                            		return applicationCategoryName + " | " + TB._ApplicationGroups[i].description;
+                            	} else {
+                            		return TB._ApplicationGroups[i].description;
+                            	}
                             }
                             else {
-                            	return TB.runTypeDescription(runType);
+                            	if (applicationCategoryName) { 
+                            		return applicationCategoryName + " | " + TB.runTypeDescription(runType);
+                            	} else {
+                            		return TB.runTypeDescription(runType);
+                            	}
                             }
                         }
                     }

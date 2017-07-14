@@ -9,6 +9,8 @@
 using namespace std;
 //#define DEBUG_BKTRC 1
 
+#define WITH_SUBTRACT 1
+
 double GenAllBtrc_time=0;
 double ReZero_time=0;
 
@@ -1014,16 +1016,22 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
 }
 
 //#define BEADTRACE_CHKBOTH_DBG 1
-void BkgTrace::GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, int flow_block_size)
+void BkgTrace::GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer,
+		int flow_block_size, float t_start, float t_end)
 {
 #ifndef BEADTRACE_CHKBOTH_DBG
 //	Timer t;
 //	t.restart();
 	if(/*0 && */(((region->w % VEC8_SIZE) == 0) &&
-	   ((img->GetImage()->cols % VEC8_SIZE) == 0))) // check that pointers are alligned too.
-	   GenerateAllBeadTrace_vec(region,my_beads,img,iFlowBuffer,fg_buffers, flow_block_size);
-   else
+	   ((img->GetImage()->cols % VEC8_SIZE) == 0))) {// check that pointers are alligned too.
+	   GenerateAllBeadTrace_vec(region,my_beads,img,iFlowBuffer,fg_buffers, flow_block_size, t_start, t_end);
+#ifndef WITH_SUBTRACT
+	   RezeroBeads (t_start, t_end, iFlowBuffer,flow_block_size);
+#endif
+	}else{
 	   GenerateAllBeadTrace_nonvec(region,my_beads,img,iFlowBuffer,fg_buffers, flow_block_size);
+	   RezeroBeads (t_start, t_end, iFlowBuffer,flow_block_size);
+   }
 
 //	cout << "Generate Bead Trace: " << t.elapsed() << "s" << endl;
 
@@ -1198,77 +1206,108 @@ void BkgTrace::GenerateAllBeadTraceAnRezero (Region *region, BeadTracker &my_bea
 
 
 void BkgTrace::GenerateAllBeadTrace_vec (Region *region, BeadTracker &my_beads,
-		Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size)
+		Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size,
+		float t_start, float t_end)
 {
     // these are used by both the background and live-bead
-	int k;
+	uint k;
 	int nbdx=0;
     int npts=time_cp->npts();
-    FG_BUFFER_TYPE *fgPtr;
-    float localT0;
+    FG_BUFFER_TYPE *fgPtr  __attribute__ ((aligned(16)));
+	int16_t *sptr  __attribute__ ((aligned(16)));
+	int16_t *imgPtr  __attribute__ ((aligned(16)));
     const RawImage *raw = img->GetImage();
+    float localT0;
     int x,y;
-	int t0ShiftWhole;
-	float multT;
-	float t0ShiftFrac;
+	int t0ShiftWhole=0;
+	float t0ShiftFrac=0;
 	int my_frame = 0,compFrm,curFrms,curCompFrms;
-	v8f_u prev;
-	v8f_u next;
-	v8f_u tmpAdder;
-	v8f_u mult;
-	v8f_u curCompFrmsV;
+
+#define MY_VEC_SIZE 8
+#define MY_VECF v8f_u
+#define MY_VECS v8s_u
+
+
+	MY_VECF prev;
+	MY_VECF next;
+	MY_VECF dummy={};
+	MY_VECF tmpAdder;
+#ifdef WITH_SUBTRACT
+	MY_VECF tmpTrace[npts];
+	MY_VECS tmpTraceS[npts];
+#endif
+
 	int frameStride=raw->rows*raw->cols;
 	int interf,lastInterf=-1;
-	int16_t *sptr, *imgPtr;
-	int storeIdx[VEC8_SIZE];
+	int storeIdx[MY_VEC_SIZE];
     Timer tmr;
+
+#ifdef WITH_SUBTRACT
+	int start_pt=0;
+	int end_pt=0;
+	float dc_cnt;
+    float overhang_start=0.0f;
+    float overhang_end=0.0f;
+    int overhang_start_pt=1;
+    int overhang_end_pt=1;
+
+    ComputeDcOffset_params(t_start, t_end, start_pt, end_pt, dc_cnt,
+    		overhang_start, overhang_end);
+
+    if(start_pt > 0)
+    	overhang_start_pt = start_pt-1;
+    else
+    	overhang_start_pt = 0;
+
+    if(end_pt > 0 && end_pt < npts)
+    	overhang_end_pt = end_pt;
+    else
+    	overhang_end_pt=0;
+	MY_VECF ohsv;
+	MY_VECF ohev;
+	ohsv.V = dummy.V + overhang_start;
+    ohev.V = dummy.V + overhang_end;
+#endif
 
 	fgPtr = &fgb[npts * flow_block_size*nbdx+npts*iFlowBuffer];
     for (y = 0; y < region->h; y++)
     {
     	imgPtr = &raw->image[(y+region->row)*raw->cols+region->col];
-        for (x = 0;x < region->w && nbdx < numLBeads; x+=VEC8_SIZE,imgPtr+=VEC8_SIZE)
+        for (x = 0;x < region->w && nbdx < numLBeads; x+=MY_VEC_SIZE,imgPtr+=MY_VEC_SIZE)
         {
-#ifdef BEADTRACE_DBG
- 			int doDebug=0;
-    		if(my_beads.params_nn[nbdx].x == 1 && my_beads.params_nn[nbdx].y == 0 &&
-    				region->row == DBG_ROW && region->col == DBG_COL)
-			{
-    			doDebug=1;
-			}
-#endif
     		int incr=0;
     		int nbdxCopy=nbdx;
         	float localT0Cnt=0.0f;
         	localT0=0.0f;
-    		for(k=0;k<VEC8_SIZE;k++)
-    			storeIdx[k]=-1; // initialize to not used..
+			for(k=0;k<MY_VEC_SIZE;k++)
+				storeIdx[k]=-1; // initialize to not used..
 
-    		for(k=0;k<VEC8_SIZE && nbdx < my_beads.numLBeads;k++)
-    		{
-    	   		if ((my_beads.params_nn[nbdx].x == (x+k)) &&
-    	   			(my_beads.params_nn[nbdx].y == y))
-    	   		{
-                    //localT0 += t0_map[nbdx]; //BUG!! t0_map is a 2D map containing all beads not only live beads.
-    	   		        localT0 += t0_map[y*region->w+(x+k)]; //BUG!! t0_map is a 2D map containing all beads not only live beads.
-                    localT0Cnt += 1.0f;
-    	   			storeIdx[k]=incr++;
-    	   			nbdx++;
-    	   		}
-    		}
+			for(k=0;k<MY_VEC_SIZE && nbdx < my_beads.numLBeads;k++)
+			{
+				if ((my_beads.params_nn[nbdx].x == (x+(int)k)) &&
+					(my_beads.params_nn[nbdx].y == y))
+				{
+					localT0 += t0_map[y*region->w+(x+k)]; //BUG!! t0_map is a 2D map containing all beads not only live beads.
+					localT0Cnt += 1.0f;
+					storeIdx[k]=incr++;
+					nbdx++;
+				}else{
+//	   		        printf("%d/%d: %f\n",y,x+k,t0_map[y*region->w+(x+k)]);
+				}
+			}
     		if(nbdxCopy == nbdx)
     			continue; // there are no live beads in this chunk
 
     		localT0 /= localT0Cnt;
 
-		//allow for negative t0shift, faster traces
+		    //allow for negative t0shift, faster traces
     		if(localT0 < 0-(raw->uncompFrames-2))
                   localT0 = 0-(raw->uncompFrames-2);
     		if(localT0 > (raw->uncompFrames-2))
     			localT0 = (raw->uncompFrames-2);
 
-        //by using floor() instead of (int) here
-        //we now can allow for negative t0Shifts  
+            //by using floor() instead of (int) here
+            //we now can allow for negative t0Shifts
     		t0ShiftWhole=floor(localT0);
     		t0ShiftFrac = localT0 - (float)t0ShiftWhole;
 
@@ -1277,85 +1316,122 @@ void BkgTrace::GenerateAllBeadTrace_vec (Region *region, BeadTracker &my_beads,
 
     		my_frame = raw->interpolatedFrames[StartAtFrame]-1;
     		compFrm = 0;
-    		tmpAdder.V=LD_VEC8F(0.0f);
-    		prev.V=LD_VEC8F(0.0f);
+			tmpAdder.V=0.0f+dummy.V;
+			prev.V=0.0f+dummy.V;
     		curFrms=0;
     		curCompFrms=time_cp->frames_per_point[compFrm];
 
 
-  		interf= raw->interpolatedFrames[my_frame];
-  		sptr = &imgPtr[interf*frameStride];
+    		interf= raw->interpolatedFrames[my_frame];
+			sptr = &imgPtr[interf*frameStride];
 
-  		LD_VEC8S_CVT_VEC8F(sptr,next);
+			LD_VS_VF(sptr, next);
 
-  		while ((my_frame < raw->uncompFrames) && (compFrm < npts))
-    		{
-    		  interf= raw->interpolatedFrames[my_frame];
+			while ((my_frame < raw->uncompFrames) && (compFrm < npts)) {
+				interf= raw->interpolatedFrames[my_frame];
 
-    		  if(interf != lastInterf)
-    		  {
-    			  sptr = &imgPtr[interf*frameStride];
-				  prev.V = next.V;
-				  LD_VEC8S_CVT_VEC8F(sptr,next);
-    		  }
+				if(interf != lastInterf) {
+					sptr = &imgPtr[interf*frameStride];
+					prev.V = next.V;
+					LD_VS_VF(sptr, next);
+				}
 
-    		  // interpolate
-    		  multT=raw->interpolatedMult[my_frame] - (t0ShiftFrac/raw->interpolatedDiv[my_frame]);
-    		  mult.V = LD_VEC8F(multT);
-    		  tmpAdder.V += ( (prev.V)-(next.V) ) * (mult.V) + (next.V);
-#ifdef BEADTRACE_DBG
-    		  if(doDebug)
-    			  printf("  tmpAddr(%f) += (%f-%f) * %f + %f\n",tmpAdder.A[0],prev.A[0],next.A[0],mult.A[0],next.A[0]);
-#endif
-    		  if(++curFrms >= curCompFrms)
-    		  {
-    			  curCompFrmsV.V = LD_VEC8F((float)curCompFrms);
-    			  tmpAdder.V /= curCompFrmsV.V;
-    			  // now, turn it back into short int's
-    			  v8s_u svalV;
-    			  CVT_VEC8F_VEC8S(svalV,tmpAdder);
+				// interpolate
+				MY_VECF mult;
+				float tmpMult = (raw->interpolatedMult[my_frame]
+														- (t0ShiftFrac/raw->interpolatedDiv[my_frame]));
+				mult.V = dummy.V + tmpMult;
+				//BC_VEC(mult,&tmpMult);
+				tmpAdder.V += ((prev.V)-(next.V) ) * (mult.V) + (next.V);
+				if(++curFrms >= curCompFrms) {
+					tmpAdder.V = tmpAdder.V / ((float )curCompFrms);
 
-    			  for(k=0;k<VEC8_SIZE;k++)
+#ifdef WITH_SUBTRACT
+					tmpTrace[compFrm].V = tmpAdder.V;
+#else
+    			  MY_VECS svalV;
+    			  CVT_VF_VS(svalV,tmpAdder);
+
+    			  for(k=0;k<MY_VEC_SIZE;k++)
     			  {
     				  if(storeIdx[k] >= 0)
     					  fgPtr[storeIdx[k]*npts*flow_block_size+compFrm] = svalV.A[k];
-//    					  fgPtr[storeIdx[k]*npts*flow_block_size+compFrm] = tmpAdder.A[k];
     			  }
-#ifdef BEADTRACE_DBG
-           		  if(doDebug)
-            			  printf("V  Writing %d\n",svalV.A[0]);
 #endif
-    			  compFrm++;
-    			  curCompFrms = time_cp->frames_per_point[compFrm];
-    			  curFrms=0;
-    	          tmpAdder.V = LD_VEC8F(0.0f);
-    		  }
-    		  //reuse current my_frame while not compensated for negative t0 shift
-          if(t0ShiftWhole < 0)
-	          t0ShiftWhole++;
-	        else
-	          my_frame++;
+					compFrm++;
+					curCompFrms = time_cp->frames_per_point[compFrm];
+					curFrms=0;
+					tmpAdder.V = dummy.V + 0.0f;
+				}
+				//reuse current my_frame while not compensated for negative t0 shift
+				if(t0ShiftWhole < 0)
+					t0ShiftWhole++;
+				else
+					my_frame++;
 
-    		}
+			}
     		if(compFrm > 0 && compFrm < npts)
     		{
     			for(;compFrm < npts;compFrm++)
     			{
-    				for(k=0;k<VEC8_SIZE;k++)
+#ifdef WITH_SUBTRACT
+   					tmpTrace[compFrm].V = tmpTrace[compFrm-1].V;
+#else
+    				for(k=0;k<MY_VEC_SIZE;k++)
     				{
       				if(storeIdx[k] >= 0)
       					fgPtr[storeIdx[k]*npts*flow_block_size + compFrm] = 
                     fgPtr[storeIdx[k]*npts*flow_block_size + compFrm-1];
 
     				}
+
+#endif
     			}
+			}
+
+#ifdef WITH_SUBTRACT
+    		// do the trace zeroing...
+    		{
+    			MY_VECF dc_zero;
+				dc_zero.V=dummy.V + 0.0f;
+
+    	        for (int pt = start_pt; pt < end_pt; pt++){
+       				dc_zero.V += (tmpTrace[pt].V);
+    	        }
+
+    	        // add end interpolation parts
+				dc_zero.V += ohsv.V*(tmpTrace[overhang_start_pt].V);
+				dc_zero.V += ohev.V*(tmpTrace[overhang_end_pt].V);
+
+    	        // make it into an average
+				dc_zero.V /= dummy.V + dc_cnt;
+
+    			// now, subtract the dc offset from all the points
+    	        for (int pt = 0;pt < npts;pt++){   // over real data
+   					tmpTrace[pt].V -= dc_zero.V;
+   					CVT_VF_VS(tmpTraceS[pt],tmpTrace[pt]);
+    	        }
     		}
-			for(k=0;k<VEC8_SIZE;k++)
+		// now, turn it back into short int's and save to fg_buffer
+			for (k = 0; k < MY_VEC_SIZE; k++) {
+				if (storeIdx[k] >= 0){
+					int stidx=storeIdx[k] * npts * flow_block_size;
+
+					for (int frm=0; frm < compFrm; frm++) {
+						fgPtr[stidx + frm] = tmpTraceS[frm].V[k];
+//						fgPtr[stidx + frm] = tmpTrace[frm].V[k];
+					}
+				}
+			}
+#endif
+
+			for(k=0;k<MY_VEC_SIZE;k++)
 			{
 				  if(storeIdx[k] >= 0)
 					  fgPtr += npts * flow_block_size; // advance one bead
 			}
-    	}
+		}
+    	
     }
 
 /*

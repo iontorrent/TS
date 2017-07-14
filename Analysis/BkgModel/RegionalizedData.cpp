@@ -118,7 +118,7 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
 
     if (global_defaults.signal_process_control.recompress_tail_raw_trace)
       // Generate emphasis vector object for standard time compression
-      SetUpEmphasisForStandardCompression(global_defaults);
+      std_time_comp_emphasis.SetUpEmphasis(global_defaults.data_control, time_c);
   }
   else
     // check the points that we need
@@ -129,35 +129,41 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
       // assuming that our t_mid_nuc estimation is decent
       // see what the emphasis functions needed for "detailed" results are
       // and assume the "coarse" blank emphasis function will work out fine.
-      trial_emphasis.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
-      trial_emphasis.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
-      trial_emphasis.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
-      //    trial_emphasis.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
+      trial_emphasis.SetUpEmphasis(global_defaults.data_control,time_c);
       trial_emphasis.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
-      //time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
       time_c.SetStandardFrames(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR));
       time_c.UseStandardCompression();
-
-      // don't bother monitoring this now
-      //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
-      // now give the emphasis data structure (and everything else) using the "used" number of points
     }
 
-  emphasis_data.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
-  emphasis_data.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
-  emphasis_data.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
-  //  emphasis_data.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
+  emphasis_data.SetUpEmphasis(global_defaults.data_control, time_c);
   emphasis_data.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
 
-#if 0
-  static int doneOnce=0;
-  if(!doneOnce){
-    doneOnce=1;
-    emphasis_data.SaveEmphasisVector();
-  }
-#endif
 }
 
+
+void RegionalizedData::SetCrudeEmphasisVectors()
+{
+  // head off bad behaviour if this region was skipped during processing of previous block of flows.
+  // not clear this is such a great way to solve this problem.
+  if(my_beads.numLBeads != 0)
+    emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), CRUDEXEMPHASIS); // why is this not per nuc?
+}
+
+void RegionalizedData::SetFineEmphasisVectors()
+{
+  emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), FINEXEMPHASIS);
+}
+
+void RegionalizedData::GenerateFineEmphasisForStdTimeCompression()
+{
+  std_time_comp_emphasis.BuildCurrentEmphasisTable (
+        GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)),
+        FINEXEMPHASIS);
+}
+
+void RegionalizedData::SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgModel &global_defaults)
+{
+}
 
 void RegionalizedData::SetupTimeAndBuffers (
     GlobalDefaultsForBkgModel &global_defaults,float sigma_guess,
@@ -277,31 +283,17 @@ void RegionalizedData::UpdateTracesFromImage (Image *img, FlowBufferInfo &my_flo
   float t_offset_beads = my_regions.rp.nuc_shape.sigma;
 
 #if 1
+
   // populate bead traces from image file and
   // time-shift traces for uniform start times; compress traces to flows buffer
-  my_trace.GenerateAllBeadTrace (region,my_beads,img, my_flow.flowBufferWritePos, flow_block_size);
+  my_trace.GenerateAllBeadTrace (region,my_beads,img, my_flow.flowBufferWritePos, flow_block_size,time_c.time_start, t_mid_nuc-t_offset_beads);
   // subtract mean signal in time before flow starts from traces in flows buffer
-  my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
-                        my_flow.flowBufferWritePos, flow_block_size);
-                        
-#if 0
-  if(flow > 19){
-  std::cout << "Sampled for Flow " << flow << std::endl;
-  int nPts = my_trace.time_cp->npts();
-  FG_BUFFER_TYPE *fgPtr = &my_trace.fg_buffers[my_flow.flowBufferWritePos*nPts];
-  for(int n = 0; n < my_beads.numLBeads; n++){
-    if(my_beads.Sampled(n)){
-      std::cout << "regId," << 0 <<",x,"<< my_beads.params_nn[n].x << ",y,"<< my_beads.params_nn[n].y;
-      for (int pt = 0;pt < nPts;pt++){   // over real data
-              std::cout << "," << fgPtr[pt];
-            }
-            std::cout << std::endl;
-          }
-    fgPtr += my_trace.npts * flow_block_size;
-    }
 
-  }
-#endif
+//  now the RezeroBeads is done in GereateAllBeadTrace
+//  my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
+//                        my_flow.flowBufferWritePos, flow_block_size);
+
+
 #else
   //Do it all at once.. generate bead trace and rezero like it is done in the new GPU pipeline
   my_trace.GenerateAllBeadTraceAnRezero(region,my_beads,img, my_flow.flowBufferWritePos, flow_block_size,
@@ -345,7 +337,7 @@ void RegionalizedData::PickRepresentativeHighQualityWells (float copy_stringency
     my_beads.my_mean_copy_count = my_beads.KeyNormalizeSampledReads ( true, flow_block_size );
     float stringent_filter = my_beads.my_mean_copy_count;
     int num_sampled = my_beads.NumberSampled(); // weird that I need to know this
-   if (copy_stringency>0.0f){
+    if (copy_stringency>0.0f){
 
       // make filter >stringent< as though the average bead were a certain copy count
       // this replicates a 'bug' that led to stringent filtering and slight performance changes
@@ -354,7 +346,7 @@ void RegionalizedData::PickRepresentativeHighQualityWells (float copy_stringency
 
     // but if we wet the filter to be too stringent, we can lose all beads in a region
     // set a minimum number of beads to succeed with and we can move on
-   // technically, I'm setting the minimum >rank< here
+    // technically, I'm setting the minimum >rank< here
     float min_percentage = min_beads;
     min_percentage /= num_sampled;
     min_percentage = 1.0f-min_percentage;
@@ -567,25 +559,6 @@ RegionalizedData::~RegionalizedData()
 }
 
 
-void RegionalizedData::SetCrudeEmphasisVectors()
-{
-  // head off bad behaviour if this region was skipped during processing of previous block of flows.
-  // not clear this is such a great way to solve this problem.
-  if(my_beads.numLBeads != 0)
-    emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), CRUDEXEMPHASIS); // why is this not per nuc?
-}
-
-void RegionalizedData::SetFineEmphasisVectors()
-{
-  emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), FINEXEMPHASIS);
-}
-
-void RegionalizedData::GenerateFineEmphasisForStdTimeCompression()
-{
-  std_time_comp_emphasis.BuildCurrentEmphasisTable (
-        GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)),
-        FINEXEMPHASIS);
-}
 
 
 
@@ -599,20 +572,6 @@ void RegionalizedData::DumpEmptyTrace (FILE *my_fp, int flow_block_size)
   }
 }
 
-void RegionalizedData::SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgModel &global_defaults)
-{
-  std_time_comp_emphasis.SetDefaultValues (
-        global_defaults.data_control.emp,
-        global_defaults.data_control.emphasis_ampl_default,
-        global_defaults.data_control.emphasis_width_default);
-  std_time_comp_emphasis.SetupEmphasisTiming (
-        time_c.GetStdFrames(),
-        &((time_c.GetStdFramesPerPoint())[0]),
-      &((time_c.GetStdFrameNumber())[0]));
-  std_time_comp_emphasis.point_emphasis_by_compression =
-      global_defaults.data_control.point_emphasis_by_compression;
-
-}
 
 
 bool RegionalizedData::isRegionCenter(int ibd)

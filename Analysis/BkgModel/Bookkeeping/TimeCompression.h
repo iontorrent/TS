@@ -12,7 +12,7 @@
 #include "Serialization.h"
 #include "IonErr.h"
 #include "VectorMacros.h"
-#include "Image.h"
+//#include "Image.h"
 
 #if defined( __SSE__ ) && !defined( __CUDACC__ )
     #include <x86intrin.h>

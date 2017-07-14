@@ -23,70 +23,42 @@
  <script>
   $(function() {
 
-    function populateLibType(selectorID) {
-      if( selectorID == '' ) return;
-      $('#'+selectorID).empty();
-      var runtypeUrl = '/rundb/api/v1/runtype/?format=json';
-      $.get( runtypeUrl, function(data) {
-        $.each( data.objects, function(intIndex,result) {
-          var runType = result.runType;
-          var selName = result.description.trim();
-          // debar unsuported applications here, e.g. runType != "GENS"
-          if( selName != "" ) {
-            $('#'+selectorID).append("<option value='"+runType+"'>"+selName+"</option>");
-          }
-        });
+    var runTypes = {};
+    $.ajaxSetup( {async:false} );
+    $.get( '/rundb/api/v1/runtype/?format=json', function(data) {
+      $.each( data.objects, function(intIndex,result) {
+        var runType = result.runType;
+        var selName = result.description.trim();
+        // debar unsuported applications here, e.g. runType != "GENS"
+        if( selName != "" ) {
+          runTypes[runType] = selName;
+        }
       });
-      orderSelectorList(selectorID, "As Planned");
-    }
+    });
 
-    function orderSelectorList(selectorID,firstItem) {
-      var lst = $('#'+selectorID+' option');
-      lst.sort(function(a,b) {
-        if( a.text > b.text ) return 1;
-        if( a.text < b.text ) return -1;
-        return 0;
-      });
-      $('#'+selectorID).empty();
-      if( firstItem ) {
-        $('#'+selectorID).append("<option value=''>"+firstItem+"</option>");
-      }
-      $('#'+selectorID).append(lst);
-      if( $('#'+selectorID+' option').size() > 0 )
-        $('#'+selectorID+' option')[0].selected = true;
-    }
-
-    function setOptionDefaults(libType) {
-      $("#libtypesel").val(libType);
+    function setOptionDefaults(runType) {
+      //alert(runType+" -> "+runTypes[runType]);
+      $("#libtypetxt").html(runTypes[runType]);
 
       var showchecks = 'NYYY';
-      if( libType == "AMPS_RNA" ) {
+      if( runType == "AMPS_RNA" ) {
         showchecks = 'YNNN';
-      } else if( libType.substr(0,4) == "AMPS" ) {
+      } else if( runType.substr(0,4) == "AMPS" ) {
         showchecks = 'YNYN';
-      } else if( libType == "TARS_16S" || libType == "RNA" ) {
+      } else if( runType == "TARS_16S" || runType == "RNA" ) {
         showchecks = 'NNNN';
-      } else if( libType == "") {
+      } else if( runType == "") {
         showchecks = 'YYYY';
       }
 
-      $("#sampid").toggle(showchecks[0]=='Y');
-      $("#tpadding").toggle(showchecks[1]=='Y');
-      $("#uniquereads").toggle(showchecks[2]=='Y');
-      $("#nondups").toggle(showchecks[3]=='Y');
+      $(".sampid").toggle(showchecks[0]=='Y');
+      $(".tpadding").toggle(showchecks[1]=='Y');
+      $(".uniquereads").toggle(showchecks[2]=='Y');
+      $(".nondups").toggle(showchecks[3]=='Y');
     }
 
-    $("#libtypesel").change(function() {
-      var libType = $("#libtypesel option:selected").val();
-      setOptionDefaults(libType);
-    });
-
-    // populate Library Type selector
-    populateLibType("libtypesel");
-
-    // populate Plan default selececkedions
-    var pluginLibType = "";
-    setOptionDefaults(pluginLibType);
+    // populate settings avaialble to the current Run Plan application type
+    setOptionDefaults(TB_plan_json.runType);
 
   });
  </script>
@@ -100,29 +72,39 @@
   </div>
    <table class="center" cellpadding="5px">
     <tr>
-     <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
-     <td><select id="libtypesel"></select></td> </tr>
-    <tr id="sampid" style="display:none">
+     <td><span class="help" title="The application (aka library, run or enrichment) type currently selected in the run. Available plugin options are dependent on the application.">Library Type:</span></td>
+     <td><span id="libtypetxt">As Planned</span></tr>
+    <tr class="sampid" style="display:none">
      <td><span class="help"
        title="Check if this AmpliSeq library employed sampleID tracking amplicons.">
        Sample Tracking:</span></td>
      <td><input type="checkbox" id="sampleid" name="sampleid" value="Yes"/></td> </tr>
-    <tr id="tpadding" style="display:none">
+    <tr class="tpadding" style="display:none">
      <td><span class="help"
        title="Specifiy the number of bases for option target padding. See Description and Notes below.">
        Target Padding:</span></td>
      <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></td> </tr>
-    <tr id="uniquereads">
+    <tr class="uniquereads">
      <td><span class="help"
        title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
        Use Only Uniquely Mapped Reads:</span></td>
      <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes"/></td> </tr>
-    <tr id="nondups" style="display:none">
+    <tr class="nondups" style="display:none">
      <td><span class="help"
        title="Check to analyze only reads that are not demarked as duplicate reads. See Description and Usage Notes below.">
        Use Only Non-duplicate Reads:</span></td>
      <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/>
      &nbsp;(Requires alignments with Mark Duplicates applied.)</td> </tr>
+    <tr id="alignlen">
+     <td><span class="help"
+       title="Specifiy the minimum aligned length a that read must have to be included in analysis.">
+       Minimum Aligned Length:</span></td>
+     <td><input type="text" size=6 id="minalignlen" name="minalignlen" value=0></select></td> </tr>
+    <tr id="mapq">
+     <td><span class="help"
+       title="Specifiy the minimum mapping quality (MAPQ) that a read must have to be included in analysis. Using value of 1 (or higher) is equivalent to checking the 'Use Only Uniquely Mapped Reads' option.">
+       Minimum Mapping Quality:</span></td>
+     <td><input type="text" size=6 id="minmapqual" name="minmapqual" value=0></select></td> </tr>
    </table>
    <input type="hidden" id="launch_mode" name="launch_mode" value="Autostart with plan plugin configuration"/>
    <br/>
@@ -131,30 +113,29 @@
     <p>
 This plugin generates statistics, downloadable data files and interactive visualization of coverage over
 targeted regions of the reference genome.</p>
-    <p>
-The Library Type should be set to the type of enriched fragment library used for the run (aka 'Run Type').
-This is provided so that you may specify the options below that are dependent on the selection made.
-The actual Library Type used at (auto) run time will be overriden by that specified in the Run Plan.
-If this is different any non-applicable selections made will be ignorred in favor of the apropriate default settings.
-    <p>
-The SampleID Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
+    <p class="sampid">
+The Sample Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
 This will inform the analysis to produce an extra statistic for reads mapped to these targets so that
-the true level of 'off-target' reads is accurately represented.</p>
-    <p>
+the true level of 'off-target' reads is accurately represented. This option is only effective for reads aligned
+to the human hg19 reference.</p>
+    <p class="tpadding">
 The Target Padding value is only available for the library types reporting with respect to targetted base coverage.
 This specifies a number of bases to expand each individual target by at both 3' and 5' ends and is
 applied to the selected target regions before coverage analysis is performed. A setting more than 0 is
 not recommended for standard coverage analysis but a value of 100 or 150 may be useful for determining
 the degree of near-target base reads.</p>
-    <p>
-The 'Uniquely Mapped Reads' and 'Non-duplicate Reads' options are used to specify coverage analysis on a filtered
-subset of reads. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
+    <p class="uniquereads">
+Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
 in the whole genome and are typically mapped randomly to one of these locations. Such reads are typically
 no use for unambiguously locating variants and may result in a lower estimation of coverage for enriched libraries.
-For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.
+For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.</p>
+    <p class="nondups">
 Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option
-to use these is only effective if duplicate reads were so marked during the alignment process. This option is not
+to use only these reads is only effective if duplicate reads were so marked during the alignment process. This option is not
 available for Ion AmpliSeq since (PCR) duplicate reads are anticipated and a necessary requirement for coverage.</p>
+    <p>
+The 'Minimum Aligned Length' and 'Minimum Mapping Quality' options may be used with any library type to filter out
+reads that do not meet the specified alignment or quality values.</p>
    </div>
  </form>
 </body>

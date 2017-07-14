@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Ion Torrent Systems, Inc. All Rights Reserved
 
+from __future__ import print_function
 import urllib2 as u
 import traceback
 import json
@@ -9,8 +10,7 @@ import os
 NEXENTACRED = "/etc/torrentserver/nms_access"
 #NEXENTACRED = "./nms_access"
 
-class Nexenta_nms(object):
-
+class Nexentanms(object):
     'Class for access to Nexenta Storage Devices'
     headers = {
         'Content-Type': 'application/json',
@@ -24,8 +24,8 @@ class Nexenta_nms(object):
 
     def get_something(self, data, verbose=True, debug=False):
         'Generic information fetching function'
-        r = u.Request(self.url, data, self.headers)
-        resp = u.urlopen(r)
+        robj = u.Request(self.url, data, self.headers)
+        resp = u.urlopen(robj)
         respstr = resp.read()
         result = json.loads(respstr).get('result')
         error = json.loads(respstr).get('error')
@@ -115,22 +115,27 @@ class Nexenta_nms(object):
                 allvols_status.update({volume: volume_dict})
         return allvols_status
 
-    def blink_all(self):
-        'Blink the LEDs'
-        #Get the LUNs
-        data = json.dumps({'object': 'volume', 'method': 'get_luns_for_all_volumes', 'params': []})
-        result, error = self.get_something(data, debug=True)
-        if error:
-            print(error.get('message'))
-        if result:
-            for drive in result:
-                #start the blinking on all
-                data = json.dumps({'object': 'lun',
-                                   'method': 'blink_start',
-                                   'params': [drive, {'attempts':5, 'pause': 1, 'blink_time': 1}]})
-                result, error = self.get_something(data, debug=True)
-                if error:
-                    print(error.get('message'))
+    # def blink_start(self, disk_id):
+    #     'Blink the LED'
+    #     data = json.dumps({'object': 'racadm',
+    #                        'method': 'blink_on',
+    #                        'params': ["Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.8-1"]})
+    #     _, error = self.get_something(data, debug=True)
+    #     if error:
+    #         print(error.get('message'))
+    #
+    # def blink_stop(self, disk_id):
+    #     '''Stop LED blink'''
+    #     data = json.dumps({'object': 'racadm',
+    #                        'method': 'blink_off',
+    #                        'params': ["Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.8-1"]})
+    #     _, error = self.get_something(data, debug=True)
+    #     if error:
+    #         print(error.get('message'))
+
+#------------------------------------------------------------------------------
+# End of class definition
+#------------------------------------------------------------------------------
 
 
 def get_all_torrentnas_data():
@@ -141,19 +146,20 @@ def get_all_torrentnas_data():
     try:
         with open(NEXENTACRED, 'r') as fh:
             tnazzes = json.load(fh)
-    except:
-        return data
-    for tnas in tnazzes.get('appliances'):
-        torrentNas = Nexenta_nms(tnas.get('ipaddress'),
-                                 tnas.get('username'),
-                                 tnas.get('password'))
-        try:
-            result = torrentNas.state_complete(tnas.get('ipaddress'))
-            data.append(result)
-        except u.URLError as err:
-            errors.append("nexenta_nms, %s: %s" % (tnas.get('ipaddress'), err))
-        except:
-            errors.append(traceback.format_exc())
+    except IOError as error:
+        errors.append(str(error))
+    else:
+        for tnas in tnazzes.get('appliances'):
+            torrentnas = Nexentanms(tnas.get('ipaddress'),
+                                     tnas.get('username'),
+                                     tnas.get('password'))
+            try:
+                result = torrentnas.state_complete(tnas.get('ipaddress'))
+                data.append(result)
+            except u.URLError as err:
+                errors.append("Nexentanms, %s: %s" % (tnas.get('ipaddress'), err))
+            except:
+                errors.append(traceback.format_exc())
     return data, errors
 
 
@@ -168,27 +174,40 @@ def this_is_nexenta(ipaddress):
     # Nexenta appliances have management port.  If we connect, its Nexenta
     try:
         r = requests.get("http://%s:8457" % (ipaddress))
-        return r.status_code == requests.codes.ok
+        return r.status_code == requests.codes.get('ok')
     except requests.exceptions.ConnectionError:
         return False
     except:
         return False
 
 
-def blink_all_drives():
-    'Blink the LED on all the drives'
-    nexentacred = "/etc/torrentserver/nms_access"
-    tnazzes = None
-    try:
-        with open(nexentacred, 'r') as fh:
-            tnazzes = json.load(fh)
-    except:
-        return
-    for tnas in tnazzes.get('appliances'):
-        torrentNas = Nexenta_nms(tnas.get('ipaddress'),
-                                 tnas.get('username'),
-                                 tnas.get('password'))
-        torrentNas.blink_all()
+# def blink_the_drive(appliance_id, disk_id, disable=False):
+#     '''Blink a specified drive.  Set disable=True to stop blink'''
+#     tnazzes = None
+#     try:
+#         with open(NEXENTACRED, 'r') as fh:
+#             tnazzes = json.load(fh)
+#     except (OSError, ValueError) as error:
+#         print(error)
+#     except:
+#         print(traceback.format_exc())
+#         return
+#     for tnas in tnazzes.get('appliances'):
+#         if tnas.get('ipaddress') == appliance_id:
+#             torrentnas = Nexentanms(tnas.get('ipaddress'),
+#                                      tnas.get('username'),
+#                                      tnas.get('password'))
+#             break
+#     if torrentnas:
+#         if disable:
+#             torrentnas.blink_stop(disk_id)
+#             print("stopped blink on %s" % disk_id)
+#         else:
+#             torrentnas.blink_start(disk_id)
+#             print("started blink on %s" % disk_id)
+#     else:
+#         print("Not found: %s" % appliance_id)
+#     return
 
 
 if __name__ == '__main__':
@@ -196,4 +215,7 @@ if __name__ == '__main__':
     seethis = get_all_torrentnas_data()
     pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(seethis)
-    #blink_all_drives()
+    #import time
+    #blink_the_drive('10.25.2.128', u'c0t7d1')
+    #time.sleep(20)
+    #blink_the_drive('10.25.2.128', u'c0t7d1', disable=True)

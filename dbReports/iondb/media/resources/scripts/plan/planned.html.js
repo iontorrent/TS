@@ -277,7 +277,7 @@ $(document).ready(function() {
             sortable : true
         }, {
             field : "runType",
-            title : "Application",
+            title : "App",
             sortable : true,
             width: '75px',
             template : kendo.template($('#RunTypeColumnTemplate').html())
@@ -310,7 +310,7 @@ $(document).ready(function() {
             sortable : false,
         }, {
             field : "chipBarcode",
-            title : "Chip ID",
+            title : "Chip Barcode",
             sortable : false,
         }, {
             field : "date",
@@ -408,6 +408,27 @@ $(document).ready(function() {
     $(document).bind('modal_confirm_delete_done modal_plan_wizard_done modal_plan_transfer_done', function(e) {
         console.log(e.target, e.relatedTarget);
         refreshKendoGrid('#grid');
+    });
+
+    //Force plan link. Used to force plans from pending -> planned which is normally done by chef
+    $("#grid").on("click", ".force-planned", function (event) {
+        var confirmText = "Are you sure?";
+        event.preventDefault();
+        if (confirm(confirmText)) {
+            //Show busy div
+            var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+            $('body').prepend(busyDiv);
+            $.ajax({
+                url: "/rundb/api/v1/plannedexperiment/" + $(this).data("id") + "/",
+                type : 'PATCH',
+                data: JSON.stringify({planStatus: "planned"}),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+            }).always(function () {
+                $('body').remove('.myBusyDiv');
+                refreshKendoGrid('#grid');
+            });
+        }
     });
 
 });

@@ -102,6 +102,24 @@ tmap_error_cmd_check_int64(int64_t val, int64_t lower, int64_t upper, char *opti
   @param  error_type     the error type 
   */
 void 
-tmap_error_full(const char *file, const unsigned int line, const char *function_name, const char *variable_name, int action_type, int error_type);
+tmap_error_full (const char *file, const unsigned int line, const char *function_name, const char *variable_name, int action_type, int error_type);
+
+
+
+void 
+tmap_fail (int fail, const char* fname, const char* func_name, int lineno, const char *fmt, ...);
+
+void 
+tmap_warn (const char* fname, const char* func_name, int lineno, const char *fmt, ...);
+
+
+#define tmap_conderr(quit, fmt, args...) \
+    tmap_fail (quit, __FILE__, __func__, __LINE__, fmt, args)
+
+#define tmap_failure(fmt, args...) \
+    tmap_fail (1, __FILE__, __func__, __LINE__, fmt, args)
+
+#define tmap_warning(fmt, args...) \
+    tmap_warn (__FILE__, __func__, __LINE__, fmt, args)
 
 #endif // TMAP_ERROR_H

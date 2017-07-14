@@ -40,7 +40,6 @@ def update_Result(saved_objs):
     result.reportstorage = storage
     result.reportLink = os.path.join(
         storage.webServerPath, location.name, "%s_%03d" % (result.resultsName, result.pk), "")
-    result.sffLink = os.path.join(result.reportLink, os.path.basename(result.sffLink))
 
     # update metrics FKs on Results
     result.analysismetrics = saved_objs['analysis metrics']

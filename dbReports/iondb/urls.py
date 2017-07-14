@@ -28,6 +28,7 @@ urlpatterns = patterns(
     (r'^sample/', include('iondb.rundb.sample.urls')),
     (r'^report/', include('iondb.rundb.report.urls')),
     (r'^rundb/', include('iondb.rundb.urls')),
+    (r'^security/', include('iondb.security.urls')),
     # From extra/
     url(r'^news/$', 'iondb.rundb.extra.views.news', name="news"),
     # Admin
@@ -51,7 +52,15 @@ urlpatterns = patterns(
     url(r'^admin/tsvm/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm/(?P<action>\w+)/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm_log/(.+)/$', 'iondb.rundb.admin.tsvm_get_log', name="tsvm_log"),
-    (r'^admin/', include(admin.site.urls), {'extra_context': {'is_VM': is_TsVm() }}),
+
+    # password change doesn't accept extra_context
+    (r'^admin/password_change/done/', admin.site.password_change_done),
+    (r'^admin/password_change/', admin.site.password_change),
+    (r'^admin/logout/', admin.site.logout),
+    (r'^admin/$', admin.site.index, {'extra_context': {'is_VM': is_TsVm() }}),
+    (r'^admin/(?P<app_label>\w+)/$', admin.site.app_index, {'extra_context': {'is_VM': is_TsVm() }}),
+    (r'^admin/', include(admin.site.urls)),
+
     (r'^(?P<urlpath>output.*)$', serve_wsgi_location),
     (r'^(?P<urlpath>chef_logs.*)$', serve_wsgi_location),
     (r'^(?P<urlpath>ot_logs.*)$', serve_wsgi_location),

@@ -5,7 +5,7 @@
 echo "postinst $@"
 case "$1" in
     configure)
-        chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@
+        chown -R www-data.www-data @ION_INSTALL_PREFIX@
         chmod 777 @ION_INSTALL_PREFIX@  # How to do this in CMake?
                 
         # Customize the CPU and RAM based on actual availability on the host

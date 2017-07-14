@@ -1,5 +1,8 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
+#include <cstddef>
+#include <string>
+#include <vector>
 #include "BkgFitStructures.h"
 
 using namespace std;
@@ -53,7 +56,7 @@ CpuStep BkgFitStructures::Steps[] =
 int BkgFitStructures::NumSteps = sizeof(Steps) /sizeof(Steps[FIRSTINDEX]);
 
 
-
+/*
 fit_descriptor BkgFitStructures::fit_well_ampl_descriptor[] =
 {
 //{PartialDerivComponent, bead_params_func, reg_params_func, ParameterSensitivityClassification}
@@ -454,48 +457,39 @@ fit_descriptor BkgFitStructures::fit_region_full_taue_NoRDR_NoD_descriptor[] =
   {TBL_END,  0,     0,                                                            ParamTableEnd    },
 };
 
-int BkgFitStructures::GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_block_size)
+master_fit_type_entry master_fit_type_table::base_bkg_model_fit_type[] =
 {
-  int numParamsToFit = 0;
-  for (int i=0; fd[i].comp != TBL_END; ++i) 
-  {
-    switch (fd[i].ptype)
-    {
-      case ParamTypeAFlows:
-      case ParamTypeCFlows:
-      case ParamTypeGFlows:
-      case ParamTypeAllFlow:
-        numParamsToFit++;
-      break;
-      case ParamTypeNotKey:
-        numParamsToFit += max( 0, flow_block_size-flow_key );
-      break;
-      case ParamTypePerFlow:
-        numParamsToFit += flow_block_size;
-      break;
-      case ParamTypePerNuc:
-        numParamsToFit += NUMNUC;
-      break;
-      case ParamTypeAllButFlow0:
-        numParamsToFit += flow_block_size-1;
-      break;
-      default:
-        break;
-    }
-  }
-  return numParamsToFit;
-}
+//{"name",                     &fit_descriptor,                              NULL, {NULL,0,NULL,0}},
+  // individual well fits
+  {"FitWellAmpl",               BkgFitStructures::fit_well_ampl_descriptor,                    NULL, {NULL,0,NULL,0}},
+  {"FitWellAmplBuffering",      BkgFitStructures::fit_well_ampl_buffering_descriptor,          NULL, {NULL,0,NULL,0}},
+  {"FitWellPostKey",            BkgFitStructures::fit_well_post_key_descriptor,                NULL, {NULL,0,NULL,0}},
+  {"FitWellPostKeyNoDmult",     BkgFitStructures::fit_well_post_key_descriptor_nodmult,        NULL, {NULL,0,NULL,0}},
 
-int BkgFitStructures::GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd) {
-  int numParDerivSteps = 0;
-  for (int i=0; fd[i].comp != TBL_END; ++i) 
-  {
-    numParDerivSteps++;
-  }
-  return numParDerivSteps;
-}
+  // region-wide fits
+  {"FitRegionTmidnucPlus",      BkgFitStructures::fit_region_tmidnuc_plus_descriptor,          NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2",            BkgFitStructures::fit_region_init2_descriptor,                 NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2TauE",        BkgFitStructures::fit_region_init2_taue_descriptor,            NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2TauENoRDR",   BkgFitStructures::fit_region_init2_taue_NoRDR_descriptor,      NULL, {NULL,0,NULL,0}},
+  {"FitRegionFull",             BkgFitStructures::fit_region_full_descriptor,                  NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauE",         BkgFitStructures::fit_region_full_taue_descriptor,             NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauENoRDR",    BkgFitStructures::fit_region_full_taue_NoRDR_descriptor,       NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2NoRDR",       BkgFitStructures::fit_region_init2_noRatioDrift_descriptor,    NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullNoRDR",        BkgFitStructures::fit_region_full_noRatioDrift_descriptor,     NULL, {NULL,0,NULL,0}},
+  {"FitRegionTimeVarying",      BkgFitStructures::fit_region_time_varying_descriptor,          NULL, {NULL,0,NULL,0}},
+  {"FitRegionDarkness",         BkgFitStructures::fit_region_darkness_descriptor,              NULL, {NULL,0,NULL,0}},
 
-//#define NUMERIC_PartialDeriv_CALC
+  //region-wide fits without diffusion
+  {"FitRegionInit2TauENoD",     BkgFitStructures::fit_region_init2_taue_NoD_descriptor,        NULL, {NULL,0,NULL,0}},
+  {"FitRegionInit2TauENoRDRNoD",BkgFitStructures::fit_region_init2_taue_NoRDR_NoD_descriptor,  NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauENoD",      BkgFitStructures::fit_region_full_taue_NoD_descriptor,         NULL, {NULL,0,NULL,0}},
+  {"FitRegionFullTauENoRDRNoD", BkgFitStructures::fit_region_full_taue_NoRDR_NoD_descriptor,   NULL, {NULL,0,NULL,0}},
+
+  { NULL, NULL, NULL, {NULL,0,NULL,0} },  // end of table
+};
+*/
+
+
 void BuildMatrix(BkgFitMatrixPacker *fit,bool accum, bool debug)
 {
 #if 1
@@ -535,4 +529,50 @@ void BuildMatrix(BkgFitMatrixPacker *fit,bool accum, bool debug)
 #endif
 }
 
+int BkgFitStructures::GetNumParamsToFitForDescriptor(
+  const std::vector<fit_descriptor>& fds, 
+  int flow_key, 
+  int flow_block_size)
+{
+  int numParamsToFit = 0;
+  if (fds.size() > 0) {
+    for (int i=0; fds[i].comp != TBL_END; ++i) 
+    {
+      switch (fds[i].ptype)
+      {
+        case ParamTypeAFlows:
+	case ParamTypeCFlows:
+	case ParamTypeGFlows:
+	case ParamTypeAllFlow:
+          numParamsToFit++;
+	  break;
+	case ParamTypeNotKey:
+	  numParamsToFit += max( 0, flow_block_size-flow_key );
+	  break;
+	case ParamTypePerFlow:
+	  numParamsToFit += flow_block_size;
+	  break;
+	case ParamTypePerNuc:
+	  numParamsToFit += NUMNUC;
+	  break;
+	case ParamTypeAllButFlow0:
+	  numParamsToFit += flow_block_size-1;
+	  break;
+	default:
+	  break;
+      }
+    }
+  }
+  return numParamsToFit;
+}
 
+int BkgFitStructures::GetNumParDerivStepsForFitDescriptor(const std::vector<fit_descriptor>& fds) {
+  int numParDerivSteps = 0;
+  if (fds.size() > 0) {
+    for (int i=0; fds[i].comp != TBL_END; ++i) 
+    {
+      numParDerivSteps++;
+    }
+  }
+  return numParDerivSteps;
+}

@@ -31,9 +31,7 @@
 	</ul>				
 	<div id="ReportDetailsTabContent" class="tab-content">
 		<div id="PluginOutput" data-title="Plugin Output" class="tab-pane active in">
-
 			<a class="btn pluginDialogButton">Select Plugins to Run</a>
-
 			<div class="pull-right">
 				<div class="btn-group">
 					<button class="btn" id="pluginExpandAll">+ Expand All</button>
@@ -66,50 +64,55 @@ function precisionUnits(num, div) {
 </script>
 
 <script type="text/x-kendo-template" id="pluginStatusTemplate">
-		<div class='pluginGroup'>
-				<div class='pluginGroupHead'>
-						<div class='pluginGroupHeadInner clearfix'>
-							# if (!data.Major) { #
-								<button class="btn plugin-collapse">#= (data.show)? "-" : "+" #</button>
-							# } else { #
-								<div style="width: 34px; display: inline-block;"> </div>
-							# } #
-								<strong> #= data.Name # </strong> <small>(v#=data.Version#)</small>
-								<small><!-- #=data.starttime# &mdash; #=data.endtime# --> [ #=data.id# ] </small>
-								# if (data.Major) { #
-										<a href="\##= data.Name #">See plugin results above</a>
-								# } #
-								<div class="pull-right">
-								# if (data.State.match("^(Completed|Error|Timed Out)")) { #
-										<span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">#= precisionUnits(data.Size, 1024) #B</span>
-								# } else if (data.jobid && data.State.match("^(Queued|Started)") ) { #
-										<button class="pluginCancel btn btn-small btn-primary" title="Terminate SGE Job #= data.jobid #" data-id="#=data.id#" data-jobid="#=data.jobid#"><i class="icon-white icon-remove"></i> Stop</button>
-								# } #
-								<span> #= data.State # </span>
-										#= plugin_dropdown_template(data) #
-								</div>
-						</div>
-				</div>
-# if (!data.Major) { #
-				<div class="pluginGroupList" id="#= data.Name #" style="display: #= (data.show)? 'block' : 'none' #;">
-# if (data.Files && !data.State.match("^(Pending|Queued)")) { #
-#   for (var j = 0; j < data.Files.length; j++) { #
-		#     if ( data.Files[j].endsWith("_block.html") || data.Files[j].endsWith("_block.php") ) {#
-		#         if (!data.Major) { #
-						<div class="pluginBlock"><iframe id="#= data.Name #" class="pluginBlock"
-										src="#= data.URL ##= data.Files[j] #"
-										width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #"></iframe></div>
-		#         } #
-		#     } else { #
-						<div class="pluginFile">&bull;<a href="#= data.URL ##= data.Files[j] #">#=data.Files[j]#</a></div>
-		#     } #
-		#   } #
-		# } else { #
-						<div>No Data</div>
-		# } #
-				</div>
-# } #
-		</div>
+    <div class='pluginGroup'>
+        <div class='pluginGroupHead'>
+            <div class='pluginGroupHeadInner clearfix'>
+                # if (!data.Major) { #
+                    <button class="btn plugin-collapse">#= (data.show)? "-" : "+" #</button>
+                # } else { #
+                    <div style="width: 34px; display: inline-block;"> </div>
+                # } #
+                <strong> #= data.Name # </strong>
+                <small>(#=data.Version#)</small>
+                <small> Id[ #=data.id# ] </small>
+                # if (data.Major) { #
+                    <a href="\##= data.Name #">See plugin results above</a>
+                # } #
+                <div class="pull-right">
+                    <span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">  #= data.State #</span>
+                    # if (!data.can_terminate) { #
+                        <span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">#= precisionUnits(data.Size, 1024) #B</span>
+                    # } #
+                    #= plugin_dropdown_template(data) #
+                </div>
+                # if (data.can_terminate) { #
+                    <div class="pull-right">
+                        <button class="pluginCancel btn btn-small btn-primary" data-id="#=data.id#" ><i class="icon-white icon-remove"></i>Stop</button>
+                    </div>
+                # } #
+            </div>
+        </div>
+
+        # if (!data.Major) { #
+            <div class="pluginGroupList" id="#= data.Name #" style="display: block">
+                # if (data.Files) { #
+                    # for (var j = 0; j < data.Files.length; j++) { #
+                        # if ( data.Files[j].endsWith("_block.html") || data.Files[j].endsWith("_block.php") ) { #
+                            <div class="pluginBlock">
+                                <iframe id="#= data.Name #" class="pluginBlock" src="#= data.URL ##= data.Files[j] #"width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #">
+                                </iframe>
+                            </div>
+                        # } else { #
+                            <div class="pluginFile">&bull;<a href="#= data.URL ##= data.Files[j] #">#=data.Files[j]#</a></div>
+                        # } #
+                    # } #
+                # } else { #
+                    <div>No Data</div>
+                # } #
+            </div>
+        # } #
+        </div>
+    </div>
 </script>
 <script type="text/x-kendo-template" id="pluginMajorBlockTemplate">
     <div class="pluginGroup">
@@ -130,10 +133,12 @@ function precisionUnits(num, div) {
             <li>
                 <a class="pluginLog" title="Log File for #= Name #" href="#= URL #drmaa_stdout.txt"><i class="icon-file"></i> View Plugin Log</a>
             </li>
-            <li class="divider"></li>
-            <li>
-                <a class="pluginRemove" title="Delete plugin #= Name #" href="/rundb/api/v1/pluginresult/#= id #/"><i class="icon-trash"></i> Delete this plugin result</a>
-            </li>
+            # if (!data.can_terminate) { #
+                <li class="divider"></li>
+                <li>
+                    <a class="pluginRemove" title="Delete plugin #= Name #" href="/rundb/api/v1/pluginresult/#= id #/delete/"><i class="icon-trash"></i>Delete this plugin result</a>
+                </li>
+            # } #
         </ul>
     </div>
 </script>
@@ -195,7 +200,7 @@ function precisionUnits(num, div) {
 				<tr><td>Flow Order</td><td>{{experiment.flowsInOrder}}</td></tr>
 				<tr><td>Library Key</td><td>{{report.eas.libraryKey}}</td></tr>
 				<tr><td>TF Key</td><td>{{report.eas.tfKey|default:"ATCG"}}</td></tr>
-				<tr><td>Chip ID</td>
+				<tr><td>Chip Barcode</td>
 					<td>
 					{% if experiment %}
 						{{experiment.chipBarcode}}
@@ -214,7 +219,20 @@ function precisionUnits(num, div) {
 				</tr>
 				<tr><td>Chip Type</td><td>{{experiment.chipType}}</td></tr>
 				<tr><td>Chip Data</td><td>{{experiment.rawdatastyle}}</td></tr>
-				<tr><td>Chip Lot Number</td> <td>{{chipLot}}</td></tr>
+                <tr><td>Chip Lot Number</td> <td>
+					{%if "Missing" in chipLot %}
+						<span class="text-error">{{chipLot}}</span>
+					{% else %}
+						{{chipLot}}
+					{% endif %}
+				</td></tr>
+				<tr><td>Chip Wafer</td><td>
+					{%if "Missing" in chipWafer %}
+						<span class="text-error">{{chipWafer}}</span>
+					{% else %}
+						{{chipWafer}}
+					{% endif %}
+				</td></tr>
 				<tr><td>Barcode Set</td><td>{{report.eas.barcodeKitName}}</td></tr>
 				<tr><td>Analysis Name</td><td>{{report.resultsName}}</td></tr>
 				<tr><td>Analysis Date</td><td>{{report.timeStamp}}</td></tr>
@@ -342,6 +360,7 @@ function precisionUnits(num, div) {
 	</div>
 </section>
 
+{# This modal is used to display links to re launch plugins. It is controlled by js #}
 
 <div class="modal hide" id="plugin-modal">
   <div class="modal-header">
@@ -349,6 +368,22 @@ function precisionUnits(num, div) {
 	<h3 id="modal-header"></h3>
   </div>
   <div class="modal-body" id="modal-body" style="height: 450px; overflow-y: scroll;">
+  </div>
+  <div class="modal-footer">
+	<a href="#" class="btn" data-dismiss="modal">Close</a>
+  </div>
+</div>
+
+{# This modal is used to display a specific plugins iframe. It is controlled by js #}
+
+<div class="modal container hide" id="plugin-iframe-modal" data-modal-Overflow="true">
+  <div class="modal-header">
+	<button class="close" data-dismiss="modal">&times;</button>
+	<h3 id="modal-header">Configure Plugin</h3>
+  </div>
+  <div class="modal-body">
+      <div id="plugin_barcodes_table"></div>
+      <iframe src="" class="auto-height" scrolling="no" frameborder="0" style="height: 400px;"></iframe>
   </div>
   <div class="modal-footer">
 	<a href="#" class="btn" data-dismiss="modal">Close</a>

@@ -1,0 +1,110 @@
+{
+    "meta":{
+        "name"          : "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)",
+        "tooltip"       : "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA",
+        "configuration" : "tagseq_cfdna",
+        "ts_version"    : "5.4",
+        "compatibility" : {
+          "chip"        : ["520","530","540","pgm"],
+          "library"     : ["tag_sequencing"],
+          "frequency"   : ["rare_somatic"],
+          "stringency"  : ["low"],
+          "panel"       : true
+        },
+        "tvcargs"       : "tvc",
+        "tmapargs"      : "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4",
+        "unifyargs"     : "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on"
+    },
+    "torrent_variant_caller":{     
+        "use_fd_param": 0,
+        "min_ratio_for_fd": 0.1,
+        "indel_as_hpindel": 0,        
+        
+		"snp_min_allele_freq": 0.0035,
+		"snp_min_cov_each_strand": 0,
+		"snp_min_coverage": 3,
+		"snp_min_var_coverage": 2,
+		"snp_min_variant_score": 6,
+		"snp_strand_bias": 1,
+		"snp_strand_bias_pval": 0,
+		
+		"mnp_min_allele_freq": 0.0035,
+		"mnp_min_cov_each_strand": 0,
+		"mnp_min_coverage": 3,
+		"mnp_min_var_coverage": 2,
+		"mnp_min_variant_score": 6,
+		"mnp_strand_bias": 1,
+		"mnp_strand_bias_pval": 0,
+        
+		"indel_min_allele_freq": 0.0035,
+		"indel_min_cov_each_strand": 0,
+		"indel_min_coverage": 3,
+		"indel_min_var_coverage": 2,
+		"indel_min_variant_score": 10,
+		"indel_strand_bias": 1,
+		"indel_strand_bias_pval": 0,
+        
+		"hotspot_min_allele_freq": 0.0035,
+		"hotspot_min_cov_each_strand": 0,
+		"hotspot_min_coverage": 3,
+		"hotspot_min_var_coverage": 2,
+		"hotspot_min_variant_score": 3,
+		"hotspot_strand_bias": 1,
+		"hotspot_strand_bias_pval": 0,
+
+        "use_position_bias": 0,
+        "position_bias": 0.75,
+        "position_bias_pval": 0.05,
+        "position_bias_ref_fraction": 0.05,
+        
+        "tag_trim_method": "sloppy-trim",        
+        "min_tag_fam_size": 3,
+        "indel_func_size_offset": 0,
+        "tag_sim_max_cov": 10,
+        "use_lod_filter": 1,
+        "lod_multiplier": 0.6,
+        "fd_nonsnp_min_var_cov": 1,
+        
+        "downsample_to_coverage": 20000,        
+        "try_few_restart_freq": 1,
+        "min_detail_level_for_fast_scan": 0,
+        "suppress_recalibration": 0,
+    	"do_snp_realignment": 0,
+        "do_mnp_realignment": 0,
+        "realignment_threshold": 0,
+        "max_flows_to_test": 10,
+		"report_ppa": 0,
+		
+		"hp_max_length": 5,
+        "hp_indel_hrun": [],
+        "hp_del_len": [],
+        "hp_ins_len": [],
+        
+        "data_quality_stringency": 20.0,
+        "outlier_probability": 0.001,
+        "prediction_precision": 1.0,
+        "heavy_tailed": 3,
+        "filter_unusual_predictions": 0.1,
+        "filter_insertion_predictions": 0.2,
+        "filter_deletion_predictions": 0.2,
+        
+        "error_motifs": "",
+        "sse_prob_threshold": 1.0
+    },
+    "long_indel_assembler":{
+    },
+    "freebayes":{
+		"allow_indels": 1,
+        "allow_snps": 1,
+        "allow_mnps": 1,    
+        "allow_complex": 0,
+        "min_mapping_qv": 4,
+        "read_snp_limit": 10,
+        "gen_min_coverage": 4,
+        "gen_min_alt_allele_freq": 0.0025,
+        "gen_min_indel_alt_allele_freq": 0.003,
+        "read_max_mismatch_fraction": 1.0,
+        "read_mismatch_limit": 7,
+        "min_cov_fraction": 0.9
+    }
+}

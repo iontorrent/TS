@@ -337,6 +337,7 @@ void ProgramState::SetLocContext(Json::Value &json, SpatialContext &loc_context)
     loc_context.cropRegions[r].w = json["cropRegions"]["w"][r].asInt();
     loc_context.cropRegions[r].h = json["cropRegions"]["h"][r].asInt();
     loc_context.cropRegions[r].index = json["cropRegions"]["index"][r].asInt();
+    loc_context.isCropped = true;
   }
   
   loc_context.cropped_region_x_offset = json["cropped_region_x_offset"].asInt();

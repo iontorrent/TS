@@ -1295,9 +1295,13 @@ void IndelAssemblyArgs::processParameters(OptArgs& opts) {
     }
   }
   
-  void IndelAssembly::onTraversalDone() {
+// -----------------------------------------------------------------------------
+// The function takes a boolean signalling whether assembly output is desired
+
+void IndelAssembly::onTraversalDone(bool do_assembly) {
+  if (do_assembly)
     DetectCandidateRegions(WINDOW_SIZE);
 
-    out.close();
-  }
+  out.close();
+}
   

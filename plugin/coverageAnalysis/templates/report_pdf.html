@@ -4,11 +4,6 @@
 <base target="_parent"/>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
 <head>
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
-
 <link type="text/css" rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
 <link rel="stylesheet" type="text/css" href="lifechart/lifegrid.css"/>
 <link rel="stylesheet" type="text/css" href="flot/css/smoothness/jquery-ui-1.8.20.custom.css"/>
@@ -192,6 +187,8 @@
       <td class="inright">{{Amplicons_with_no_strand_bias|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.nAmplicons_reading_end_to_end}}">Amplicons reading end-to-end</span></td>
       <td class="inright">{{Amplicons_reading_end_to_end|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicon_base_composition_bias}}">Amplicon base composition bias</span></td>
+      <td class="inright">{{Amplicon_base_composition_bias}}</td></tr>
  {% else %}
   <tr><td class="inleft"><span title="{{help_dict.Percent_assigned_amplicon_reads}}">Percent assigned amplicon reads</span></td>
       <td class="inright">{{Percent_assigned_amplicon_reads}}</td></tr>
@@ -211,6 +208,8 @@
       <td class="inright">{{Amplicons_with_no_strand_bias}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Amplicons_reading_end_to_end}}">Amplicons reading end-to-end</span></td>
       <td class="inright">{{Amplicons_reading_end_to_end}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicon_base_composition_bias}}">Amplicon base composition bias</span></td>
+      <td class="inright">{{Amplicon_base_composition_bias}}</td></tr>
  {% endif %}
   </table></div></td>
 {% elif trg_stats %}
@@ -235,6 +234,8 @@
       <td class="inright">{{Targets_with_no_strand_bias}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Targets_with_full_coverage}}">Targets with full coverage</span></td>
       <td class="inright">{{Targets_with_full_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Target_base_composition_bias}}">Target base composition bias</span></td>
+      <td class="inright">{{Target_base_composition_bias}}</td></tr>
   </table></div></td>
 {% endif %}
 {% if wgn_stats %}
@@ -282,6 +283,7 @@
   {% else %}
     <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
   {% endif %}
+  <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
  </table></div></td>
 {% endif %}
  </tr>
@@ -320,7 +322,7 @@
 <div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
   <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
   <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
-  <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+
   <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
 </div> </div> </div> </div>
 <br/>

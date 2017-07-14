@@ -30,7 +30,8 @@ typedef enum
   ChipId2_1_1 = 21,
   ChipId2_3_1 = 22,
   ChipId1_1_541 = 23,
-  ChipId522 = 24 
+  ChipId522 = 24, 
+  ChipId560 = 25
 } ChipIdEnum;
 
 typedef struct

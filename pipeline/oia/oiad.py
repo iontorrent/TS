@@ -15,6 +15,7 @@ import random
 import fnmatch
 import re
 import json
+import socket
 
 from collections import deque
 
@@ -23,9 +24,9 @@ from threading import Thread
 import multiprocessing
 
 
-from ion.utils.explogparser import load_log
-from ion.utils.explogparser import parse_log
-from ion.utils import explogparser
+#from ion.utils.explogparser import load_log
+#from ion.utils.explogparser import parse_log
+#from ion.utils import explogparser
 
 
 import logging
@@ -37,6 +38,7 @@ try:
 except:
     pynvml_available = False
 
+LowMemRetry=0
 
 class Worker(Thread):
     """Thread executing tasks from a given tasks queue"""
@@ -61,6 +63,9 @@ class Worker(Thread):
             if 'Analysis' in block.command:
                 self.pool.analysis_counter += 1
                 block.status = "performAnalysis"
+            if 'BaseCaller' in block.command:
+                self.pool.basecaller_counter += 1
+                block.status = "performPhaseEstimation"
 
             logger.info("%s: T1: %s" % (self.id, block))
             starttime = time.localtime()
@@ -70,20 +75,20 @@ class Worker(Thread):
                     os.makedirs(block.sigproc_results_path_tmp)
                     logger.debug('mkdir %s' % block.sigproc_results_path_tmp)
 
-                try:
-                    if 'justBeadFind' in block.command and block.run.exp_ecc_enabled:
-                        outfile = open(os.path.join(block.sigproc_results_path_tmp, 'ecc.log'), "a")
-                        ecc_command = "/usr/share/ion/oia/ecc.py -i %s -o %s" % (
-                            block.dat_path, block.sigproc_results_path_tmp)
-                        args = shlex.split(ecc_command.encode('utf8'))
-                        logger.info("%s: run process: %s" % (self.id, args))
-                        p = subprocess.Popen(args, stdout=outfile, stderr=subprocess.STDOUT)
-                        # add popen process to block
-                        block.process = p
-                        ret = p.wait()
-                except:
-                    logger.error(traceback.format_exc())
-                    pass
+                #try:
+                #    if 'justBeadFind' in block.command and block.run.exp_ecc_enabled == "yes":
+                #        outfile = open(os.path.join(block.sigproc_results_path_tmp, 'ecc.log'), "a")
+                #        ecc_command = "/usr/share/ion/oia/ecc.py -i %s -o %s" % (
+                #            block.dat_path, block.sigproc_results_path_tmp)
+                #        args = shlex.split(ecc_command.encode('utf8'))
+                #        logger.info("%s: run process: %s" % (self.id, args))
+                #        p = subprocess.Popen(args, stdout=outfile, stderr=subprocess.STDOUT)
+                #        # add popen process to block
+                #        block.process = p
+                #        ret = p.wait()
+                #except:
+                #    logger.error(traceback.format_exc())
+                #    pass
 
                 logger.info("%s: run process: %s" % (self.id, block))
 
@@ -106,7 +111,7 @@ class Worker(Thread):
                 # else:
                 #    ret = 0
 
-                if ret == 0 and block.flow_start < 180 and block.flow_end > 180:
+                if 0 and ret == 0 and block.flow_start < 180 and block.flow_end > 180:
                     try:
                         phase_estimation_cmd = "nice -n 1 %s --just-phase-estimation --num-threads %s --input-dir=%s --output-dir=%s" % (
                             block.run.exp_prebasecallerArgs_block, cpu_cores, block.sigproc_results_path_tmp, block.sigproc_results_path_tmp)
@@ -141,6 +146,9 @@ class Worker(Thread):
                 self.pool.beadfind_counter -= 1
             if 'Analysis' in block.command:
                 self.pool.analysis_counter -= 1
+            if 'BaseCaller' in block.command:
+                self.pool.basecaller_counter -= 1
+                block.basecaller_done=True
 
             stoptime = time.localtime()
             block.jobtiming.append((starttime, stoptime, block.info, block.ret, self.id))
@@ -153,6 +161,7 @@ class ThreadPool:
         self.tasks = Queue(num_threads)  # limit the queue to the number of threads
         self.beadfind_counter = 0
         self.analysis_counter = 0
+        self.basecaller_counter = 0
 
         for threadid in range(num_threads): Worker(threadid, self.tasks, self, logger)
 
@@ -178,9 +187,9 @@ def getSeparatorCommand(config, block):
     # command = "strace -o %s/strace.log %s" %
     # (block.sigproc_results_path_tmp,block.run.exp_beadfindArgs_block)
     if block.name == "thumbnail":
-        command = "nice -n 1 %s" % block.run.exp_beadfindArgs_thumbnail
+        command = "nice -n 3 %s" % block.run.exp_beadfindArgs_thumbnail
     else:
-        command = "nice -n 1 %s" % block.run.exp_beadfindArgs_block
+        command = "nice -n 3 %s" % block.run.exp_beadfindArgs_block
     command += " --local-wells-file false"
     command += " --beadfind-num-threads %s" % config.get('global', 'nb_beadfind_threads')
     command += " --no-subdir"
@@ -192,6 +201,8 @@ def getSeparatorCommand(config, block):
     command += " %s" % block.dat_path
     logger.debug('beadfindArgs(PR):"%s"' % command)
     return command
+
+
 
 
 def getAnalysisCommand(config, block):
@@ -217,6 +228,15 @@ def getAnalysisCommand(config, block):
     logger.debug('analysisArgs(PR):"%s"' % command)
     return command
 
+def getBaseCallerCommand(config, block):
+    # command = "strace -o %s/strace.log %s" %
+    # (block.sigproc_results_path_tmp,block.run.exp_beadfindArgs_block)
+    command =  "nice -n 3 %s --just-phase-estimation" % (block.run.exp_prebasecallerArgs_block)
+    command += " --num-threads %s" % (cpu_cores) #config.get('global', 'nb_beadfind_threads'))
+    command += " --input-dir=%s --output-dir=%s" % (
+                       block.sigproc_results_path_tmp, block.sigproc_results_path_tmp)
+    logger.debug('BaseCallerArgs(PR):"%s"' % command)
+    return command
 
 def Transfer(run_name, directory_to_transfer, file_to_transfer):
     if directory_to_transfer and file_to_transfer:
@@ -261,8 +281,8 @@ class Run:
         self.name = name
         self.dat_path = os.path.join(config.get('global', 'results'), name)
         self.analysis_path = os.path.join(config.get('global', 'analysisresults'), name)
-        self.sigproc_results_path = os.path.join(
-            config.get('global', 'analysisresults'), name, "onboard_results", "sigproc_results")
+	self.sigproc_results_path = os.path.join(
+       		config.get('global', 'analysisresults'), name, "onboard_results", "sigproc_results")
         self.status = 'new'
         self.last_flow = -1
 
@@ -272,10 +292,10 @@ class Run:
         except:
             logger.error(traceback.format_exc())
 
-        explog_file = os.path.join(self.analysis_path, "explog.txt")
+        explog_file = os.path.join(self.analysis_path, "explog.json")
         if not os.path.exists(explog_file):
-            shutil.copyfile(os.path.join(self.dat_path, "explog.txt"),
-                            os.path.join(self.analysis_path, "explog.txt"))
+            shutil.copyfile(os.path.join(self.dat_path, "explog.json"),
+                            os.path.join(self.analysis_path, "explog.json"))
         if not os.path.exists(explog_file):
             raise Exception("%s doesn't exist" % explog_file)
 
@@ -290,20 +310,24 @@ class Run:
             self.explog_file = explog_file
 
             # parse explog.txt
-            (head, tail) = os.path.split(explog_file)
-            explogtext = load_log(head, tail)
+            #(head, tail) = os.path.split(explog_file)
+            #explogtext = load_log(head, tail)
 
-            self.explogdict = parse_log(explogtext)
-            self.exp_flows = int(self.explogdict["flows"])
-            self.exp_oninstranalysis = 'yes' in self.explogdict.get('oninstranalysis', 'no')
-            self.exp_usesynchdats = 'yes' in self.explogdict.get('use_synchdats', 'no')
-            self.exp_oia_during_run = 'yes' in self.explogdict.get('oia_during_run', 'yes')
-            self.exp_ecc_enabled = 'yes' in self.explogdict.get('ecc_enabled', 'no')
-            self.exp_planned_run_guid = self.explogdict.get('planned_run_guid', '')
-            self.exp_chiptype = self.explogdict["chiptype"]
-            self.exp_seqkitplanname = self.explogdict.get('seqkitplanname', '')
+            f=open(explog_file,'r')
+            contents=f.read()
+            f.close()
+            contents = contents.replace('\\','\\\\')
+            self.explogdict = json.loads(contents, strict=False)
+            #parse_log(explogtext)
+            self.exp_flows = int(self.explogdict["Flows"])
+            self.exp_oninstranalysis = self.explogdict['OnInstrAnalysis']
+            self.exp_oia_during_run = self.explogdict['OIA_During_Run']
+            self.exp_ecc_enabled = self.explogdict['ECC Enabled']
+            self.exp_planned_run_guid = self.explogdict['Planned Run GUID']
+            self.exp_chiptype = self.explogdict["ChipType"]
+            self.exp_seqkitplanname = self.explogdict['SeqKitPlanName']
 
-            self.exp_chipversion = self.explogdict.get('chipversion', '')
+            self.exp_chipversion = self.explogdict['ChipVersion']
             if not self.exp_chipversion:
                 self.exp_chipversion = self.exp_chiptype
 
@@ -416,7 +440,7 @@ class Run:
     def killAnalysis(self):
         for block in self.blocks:
             try:
-                if block.status == 'performJustBeadFind' or block.status == 'performAnalysis':
+                if block.status == 'performJustBeadFind' or block.status == 'performAnalysis' or block.status == 'performPhaseEstimation':
                     logger.debug("kill pid:%s, %s" % (block.process.pid, block))
                     block.process.kill()
                     # block.status = 'idle'
@@ -424,8 +448,7 @@ class Run:
                 logger.error(traceback.format_exc())
 
     def block_name_to_block_dir(self, block_name):
-        block_dir = '%s_%s' % (self.explogdict[block_name].split(
-            ',')[0], self.explogdict[block_name].split(',')[1].strip())
+        block_dir = 'X%s_Y%s' % (self.explogdict[block_name]['X'],self.explogdict[block_name]['Y'])
         return block_dir
 
     def discover_blocks(self):
@@ -474,7 +497,7 @@ class Run:
     def __str__(self):
         s = "    run:" + self.name
         s += " status:" + self.status
-        s += " use_synchdats:" + str(self.exp_usesynchdats)
+        s += " use_synchdats:0"
         s += "\n"
         for block in self.blocks:
             s += str(block)
@@ -491,6 +514,8 @@ class Block:
         self.run = run
         self.run_name = run_name
         self.beadfind_done = False
+        self.analysis_done = False
+        self.basecaller_done = False
         self.successful_processed = 0
         self.nb_attempts = nb_attempts
         self.flows_total = flows_total
@@ -540,6 +565,10 @@ class App():
 
         self.nb_max_beadfind_jobs = config.getint('global', 'nb_max_beadfind_jobs')
         logger.info('nb_max_beadfind_jobs: %s' % self.nb_max_beadfind_jobs)
+        
+	self.nb_max_basecaller_jobs = config.getint('global', 'nb_max_basecaller_jobs')
+        logger.info('nb_max_basecaller_jobs: %s' % self.nb_max_basecaller_jobs)
+
 
         self.flowblocks = config.getint('global', 'flowblocks')
 
@@ -558,8 +587,8 @@ class App():
             with open("/software/config/OIAStatus", 'w') as f:
                 f.write("# this is a comment\n")
                 f.write("Timestamp:%s\n" % time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()))
-                f.write("# Processes can be Analysis or justBeadFind\n")
-                f.write("Processes:%s\n" % str(self.pool.beadfind_counter + self.pool.analysis_counter))
+                f.write("# Processes can be Analysis, justBeadFind or BaseCaller\n")
+                f.write("Processes:%s\n" % str(self.pool.beadfind_counter + self.pool.analysis_counter + self.pool.basecaller_counter))
         except:
             logger.error(traceback.format_exc())
 
@@ -580,20 +609,26 @@ class App():
         # what kind of jobs are allowed to run?
         beadfind_request = True
         analysis_request = True
+        basecaller_request = True
 
-        if self.pool.beadfind_counter + self.pool.analysis_counter >= self.nb_max_jobs:
+        if self.pool.beadfind_counter + self.pool.analysis_counter + self.pool.basecaller_counter >= self.nb_max_jobs:
             logger.debug('max jobs limit reached (total)')
             beadfind_request = False
             analysis_request = False
+            basecaller_request = False
 
         if self.pool.beadfind_counter >= self.nb_max_beadfind_jobs:
             logger.debug('max jobs limit reached (beadfind)')
             beadfind_request = False
+            basecaller_request = False # don't run basecaller and justBeadFind at the same time..
 
         if self.pool.analysis_counter >= self.nb_max_analysis_jobs:
             logger.debug('max jobs limit reached (analysis)')
             analysis_request = False
 
+        if (self.pool.beadfind_counter + self.pool.basecaller_counter) >= self.nb_max_basecaller_jobs:
+            logger.debug('max jobs limit reached (basecaller)')
+            basecaller_request = False
         # 6 analysis jobs are too much for some GPU's # find . -name sigproc.log | xargs grep -i StreamResources
         # sigproc.log:CUDA 0 StreamManager: No StreamResources could be aquired!
         # retry pending. jobs will he handled by CPU for now!
@@ -628,7 +663,7 @@ class App():
 
         anablock = None
 
-        if not beadfind_request and not analysis_request:
+        if not beadfind_request and not analysis_request and not basecaller_request:
             # full queues
             return anablock
 
@@ -645,19 +680,34 @@ class App():
                 runblocks, key=lambda block: block.run.last_flow-block.successful_processed, reverse=rev)
 
             try:
+                nb_max_jobs = config.getint(run.exp_chipversion, 'nb_max_jobs')
                 nb_max_beadfind_jobs = config.getint(run.exp_chipversion, 'nb_max_beadfind_jobs')
                 nb_max_analysis_jobs = config.getint(run.exp_chipversion, 'nb_max_analysis_jobs')
+                nb_max_basecaller_jobs = config.getint(run.exp_chipversion, 'nb_max_basecaller_jobs')
             except:
+                nb_max_jobs = config.getint('DefaultChip', 'nb_max_jobs')
                 nb_max_beadfind_jobs = config.getint('DefaultChip', 'nb_max_beadfind_jobs')
                 nb_max_analysis_jobs = config.getint('DefaultChip', 'nb_max_analysis_jobs')
+                nb_max_basecaller_jobs = config.getint('DefaultChip', 'nb_max_basecaller_jobs')
 
             if self.pool.beadfind_counter >= nb_max_beadfind_jobs:
                 logger.debug('max beadfind jobs limit reached (%s)' % run.exp_chipversion)
                 beadfind_request = False
+                basecaller_request = False  # don't run beadfind and basecaller at the same time
 
             if self.pool.analysis_counter >= nb_max_analysis_jobs:
                 logger.debug('max analysis jobs limit reached (%s)' % run.exp_chipversion)
                 analysis_request = False
+
+            if self.pool.basecaller_counter >= nb_max_basecaller_jobs:
+                logger.debug('max basecaller jobs limit reached (%s)' % run.exp_chipversion)
+                basecaller_request = False
+            
+            if (self.pool.analysis_counter + self.pool.beadfind_counter + self.pool.basecaller_counter) >= nb_max_jobs:
+                logger.debug('max jobs limit reached (%s)' % run.exp_chipversion)
+                analysis_request = False
+                beadfind_request = False
+                basecaller_request = False
 
             for block in sorted_blocks:
 
@@ -666,7 +716,12 @@ class App():
                     continue
 
                 # Analysis
-                if analysis_request and block.beadfind_done:
+                if basecaller_request and block.beadfind_done and not block.basecaller_done and block.flow_end > 170:
+                    block.command = getBaseCallerCommand(config, block)
+                    anablock = block
+                    return anablock
+
+                if analysis_request and block.beadfind_done and not block.analysis_done:
 
                     # how far can I go?
 
@@ -696,6 +751,12 @@ class App():
                     anablock = block
                     return anablock
 
+    def updateUsage(self):
+        os.system("nvidia-smi --query-gpu=timestamp,utilization.gpu --format=csv | grep -v timestamp >> /var/log/gpu_util.log&")
+        os.system("date >> /var/log/cpu_util.log")
+        os.system("top -b -d 2 -n 2  | grep 'Cpu(s)' | tail -n+2 >> /var/log/cpu_util.log&")
+        os.system("date >> /var/log/disk_util.log; vmstat -d | grep sd >> /var/log/disk_util.log")
+        
     def getCurrentRunInformation(self):
         CurExp = ""
         CurFlow = 0
@@ -716,6 +777,7 @@ class App():
         return [CurExp, CurFlow]
 
     def run(self):
+        global LowMemRetry
         logger.info("Start OIA daemon")
 
         while not os.path.isdir(config.get('global', 'analysisresults')):
@@ -723,6 +785,18 @@ class App():
             time.sleep(10)
 
         while True:
+
+ 
+            if os.path.isfile("/software/config/OIALargeChip"):
+                # increase the retry count because our jobs were killed
+                LowMemRetry = LowMemRetry + 1
+                while os.path.isfile("/software/config/OIALargeChip"):
+                    self.update_oiastatus_file()
+                    logger.info("/software/config/OIALargeChip exists. LowMemRetry=%d sleeping..." % LowMemRetry)
+                    time.sleep(15)
+            elif (self.pool.beadfind_counter + self.pool.analysis_counter) == 0:
+                # logger.info("resetting LowMemRetry counter")
+                LowMemRetry = 0 # reset the counter after all the analysis are complete
 
             if log_memory_usage:
                 try:
@@ -734,9 +808,6 @@ class App():
 
             [CurExp, CurFlow] = self.getCurrentRunInformation()
 
-            if os.path.isfile("/software/config/OIALargeChip"):
-                time.sleep(10)
-                continue
 
             all_run_dirs = self.get_run_dirs()
             logger.debug('RUNS DIRECTORIES: %s' % all_run_dirs)
@@ -834,7 +905,8 @@ class App():
                     logger.error(traceback.format_exc())
                     continue
 
-                if CurExp and not arun.exp_oia_during_run:
+                logger.info('exp_oia_during_run = %s' % arun.exp_oia_during_run)
+                if CurExp and arun.exp_oia_during_run == "no":
                     continue
 
                 if CurExp == arun.name and CurFlow < 1:
@@ -850,14 +922,18 @@ class App():
                     self.runs_processed.append(arun)
                     continue
 
+                #don't let the utilization logs get too big.
+                os.system("mv /var/log/cpu_util.log /var/log/cpu_util.bak")
+                os.system("mv /var/log/gpu_util.log /var/log/gpu_util.bak")
+                os.system("mv /var/log/disk_util.log /var/log/disk_util.bak")
                 self.runs_in_process.append(arun)
 
                 logger.info('arun.exp_oninstranalysis: %s' % arun.exp_oninstranalysis)
-                if not arun.exp_oninstranalysis:
+                if arun.exp_oninstranalysis == "no":
                     continue
 
                 # ignore autoanalyze option in explog.txt
-                logger.info('autoanalyze: %s' % arun.explogdict['autoanalyze'])
+                logger.info('autoanalyze: %s' % arun.explogdict['AutoAnalyze'])
                 # if not arun.explogdict['autoanalyze']: # contains True,False instead of yes, no
                 #    continue
 
@@ -873,10 +949,16 @@ class App():
             logger.info('time since last run check %s' % timestamp)
             while self.blocks_to_process:
                 # wait a while before checking if queue is empty
-                time.sleep(3)
+                self.updateUsage()
+                time.sleep(5)
 
-                logger.info('Status:        Blocks: {0:3d}  Beadfind: {1:2d}/{2:2d}  Analysis: {3:2d}/{4:2d}  Total: {5:2d}/{6:2d}'.format(
-                    len(self.blocks_to_process), self.pool.beadfind_counter, self.nb_max_beadfind_jobs, self.pool.analysis_counter, self.nb_max_analysis_jobs, self.pool.beadfind_counter+self.pool.analysis_counter, self.nb_max_jobs))
+                if os.path.isfile("/software/config/OIALargeChip"):
+                    break
+
+                logger.info('Status:        Blocks: {0:3d}  Beadfind: {1:2d}/{2:2d}  Analysis: {3:2d}/{4:2d}  BaseCaller: {5:2d}/{6:2d} Total: {7:2d}/{8:2d}'.format(
+                    len(self.blocks_to_process), self.pool.beadfind_counter, self.nb_max_beadfind_jobs, self.pool.analysis_counter, self.nb_max_analysis_jobs, 
+                    self.pool.basecaller_counter,self.nb_max_basecaller_jobs,
+                    self.pool.beadfind_counter+self.pool.analysis_counter+self.pool.basecaller_counter, self.nb_max_jobs))
 
                 predicted_total_HOST_memory = 0
                 predicted_total_GPU_memory = 0
@@ -888,15 +970,21 @@ class App():
                         [i for i in self.blocks_to_process if i.run == run and i.status == 'performJustBeadFind'])
                     an = len(
                         [i for i in self.blocks_to_process if i.run == run and i.status == 'performAnalysis'])
+                    bc = len(
+                        [i for i in self.blocks_to_process if i.run == run and i.status == 'performPhaseEstimation'])
                     try:
+                        nb_max_jobs = config.getint(run.exp_chipversion, 'nb_max_jobs')
                         nb_max_beadfind_jobs = config.getint(run.exp_chipversion, 'nb_max_beadfind_jobs')
                         nb_max_analysis_jobs = config.getint(run.exp_chipversion, 'nb_max_analysis_jobs')
+                        nb_max_basecaller_jobs = config.getint(run.exp_chipversion, 'nb_max_basecaller_jobs')
                     except:
+                        nb_max_jobs = config.getint('DefaultChip', 'nb_max_jobs')
                         nb_max_beadfind_jobs = config.getint('DefaultChip', 'nb_max_beadfind_jobs')
                         nb_max_analysis_jobs = config.getint('DefaultChip', 'nb_max_analysis_jobs')
+                        nb_max_basecaller_jobs = config.getint('DefaultChip', 'nb_max_basecaller_jobs')
                     if len(blocks_per_run):
-                        logger.info('Chip: {0:8} Blocks: {1:3d}  Beadfind: {2:2d}/{3:2d}  Analysis: {4:2d}/{5:2d}  ({6})'.format(
-                            run.exp_chipversion, len(blocks_per_run), bf, nb_max_beadfind_jobs, an, nb_max_analysis_jobs, run.name))
+                        logger.info('Chip: {0:8} Blocks: {1:3d}  Beadfind: {2:2d}/{3:2d}  Analysis: {4:2d}/{5:2d} BaseCaller: {6:2d}/{7:2d} Total: {8:2d}/{9:2d}  ({10})'.format(
+                            run.exp_chipversion, len(blocks_per_run), bf, nb_max_beadfind_jobs, an, nb_max_analysis_jobs, bc, nb_max_basecaller_jobs, an+bf,nb_max_jobs, run.name))
                     try:
                         HOST_memory_requirement_beadfind = config.getint(
                             run.exp_chipversion, 'HOST_memory_requirement_beadfind')
@@ -940,13 +1028,17 @@ class App():
                             else:
                                 block.successful_processed = block.flow_end+1
                             if block.successful_processed == block.flows_total:
-                                block.status = 'sigproc_done'
+				block.analysis_done = True
+                                if block.basecaller_done == True or block.flows_total < 170:
+	                            block.status = 'sigproc_done'
                         else:
                             logger.error('Block %s failed with return code %s' % (block.name, block.ret))
                             block.nb_attempts += 1
                             block.sigproc_results_path_tmp = block.sigproc_results_path + \
                                 "." + str(block.nb_attempts)
                             block.beadfind_done = False
+                            block.analysis_done = False
+                            block.basecaller_done = False
                             block.successful_processed = 0
                             block.flow_start = -1
                             block.flow_end = -1
@@ -958,9 +1050,11 @@ class App():
                         # 1. rename block / last sigproc attempt
                         try:
                             if not os.path.exists(block.sigproc_results_path):
-                                logger.info('rename block %s %s %s' % (
+                                logger.info('rename block LowMemRetry=%d %s %s %s' % (
+                                    (config.getint('global', 'nb_retries') + LowMemRetry),
                                     block.name, block.sigproc_results_path_tmp, block.sigproc_results_path))
-                                if block.nb_attempts >= config.getint('global', 'nb_retries'):
+                                 
+                                if block.nb_attempts >= (config.getint('global', 'nb_retries') + LowMemRetry):
                                     shutil.move(block.sigproc_results_path + "." + str(
                                         block.nb_attempts-1), block.sigproc_results_path)
                                 else:
@@ -1033,7 +1127,7 @@ class App():
                     logger.error(traceback.format_exc())
 
                 if ablock:
-                    if ablock.nb_attempts >= config.getint('global', 'nb_retries'):
+                    if ablock.nb_attempts >= (config.getint('global', 'nb_retries') + LowMemRetry):
                         ablock.status = 'sigproc_failed'
                     else:
                         ablock.status = 'queued'
@@ -1060,6 +1154,7 @@ def print_oiaconfig(config, logger):
 
 if __name__ == '__main__':
 
+    os.system("nvidia-smi -pm 1; nvidia-smi -e 0; if [ \"`nvidia-smi | grep 'Tesla K40c'`\" != \"\" ]; then nvidia-smi -ac 3004,875; fi");
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', dest='verbose', action='store_true')
     args = parser.parse_args()

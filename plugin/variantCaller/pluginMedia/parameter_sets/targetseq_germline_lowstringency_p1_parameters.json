@@ -3,23 +3,27 @@
         "name"          : "TargetSeq - Proton - Germ Line - Low Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants and minimum false negatives on TargetSeq libraries and Proton chips",
         "configuration" : "germline_low_stringency_targetseq",
-        "ts_version"    : "5.2",
+        "ts_version"    : "5.4",
         "compatibility" : {
           "chip"        : ["540","proton_p1"],
           "library"     : ["targetseq","wholegenome"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]
-
         }
     },
     "torrent_variant_caller":{
-
         "data_quality_stringency":5.0,
         "hp_max_length":8,
         "filter_unusual_predictions":0.25,
-        "filter_insertion_predictions": 0.2,
-        "filter_deletion_predictions": 0.2,
-        "indel_as_hpindel": 1,
+        "filter_insertion_predictions":0.2,
+        "filter_deletion_predictions":0.2,
+        "indel_as_hpindel":1,
+		"use_fd_param":0,
+		"min_ratio_for_fd":0.1,
+		"hp_indel_hrun":[],
+		"hp_del_len":[],
+		"hp_ins_len":[],
+		"report_ppa":0,
 
         "snp_min_cov_each_strand":0,
         "snp_min_variant_score":15.0,
@@ -63,7 +67,10 @@
         "sse_prob_threshold":0.2,
         "prediction_precision":1.0,
         "heavy_tailed":3,
-        "suppress_recalibration":0
+        "suppress_recalibration":0,
+		"min_detail_level_for_fast_scan":0,
+		"max_flows_to_test":10,
+		"error_motifs":"motifset.txt"
     },
     "long_indel_assembler":{
         "kmer_len":19,

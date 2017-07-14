@@ -47,7 +47,6 @@ import requests
 import feedparser
 import dateutil
 import urlparse
-from ion.utils.timeout import timeout
 from iondb.utils import raid as raid_utils
 from iondb.utils import files as file_utils
 from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest, queue_info, sge_ctrl
@@ -122,8 +121,6 @@ else:
             self.zobj.close()
 
 # Unified unzip function
-
-
 def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
     """ unzip files in archive to destination folder
     extracting only files in prefix and omitting prefix from output path.
@@ -247,7 +244,7 @@ def echo(message, wait=0.0):
 @app.task
 def delete_that_folder(directory, message):
     def delete_error(func, path, info):
-        logger.error("Failed to delete %s: %s", path, message)
+        logger.error("Failed to delete %s: %s: %s", path, message, info)
 
     if os.path.exists(directory):
         logger.info("Deleting %s", directory)
@@ -293,7 +290,7 @@ def downloadChunks(url):
         with open(file, 'wb') as fp:
             shutil.copyfileobj(req, fp, CHUNK)
         url = req.geturl()
-    except urllib2.HTTPError, e:
+    except urllib2.HTTPError as e:
         logger.error("HTTP Error: %d '%s'", e.code, url)
         delete_that_folder(temp_path_uniq, "after download error")
         return False
@@ -387,109 +384,6 @@ def contact_info_flyaway():
     if stderr:
         logger.warning("updateContactInfo.py output error information:\n%s" % stderr)
     return stdout
-
-
-@app.task
-def static_ip(address, subnet, gateway, nameserver=None, search=None):
-    """Usage: TSstaticip [options]
-         --ip         Define host IP address
-         --nm         Define subnet mask (netmask)
-         --gw         Define gateway/router IP address
-         --nameserver Specify one or more nameserver IP addresses
-         --search     Specify one or more search domains
-    """
-    cmd = ["/usr/sbin/TSstaticip",
-           "--ip", address,
-           "--nm", subnet,
-           "--gw", gateway,
-           ]
-    if nameserver:
-        cmd += ["--nameserver", nameserver]
-    if search:
-        cmd += ["--search", search]
-    logger.info("Network: Setting host static, '%s'" % " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
-    if stderr:
-        logger.warning("Network error: %s" % stderr)
-    return stdout
-
-
-@app.task
-def dhcp():
-    """Usage: TSstaticip [options]
-        --remove  Sets up dhcp, removing any static IP settings
-    """
-    cmd = ["/usr/sbin/TSstaticip", "--remove"]
-    logger.info("Network: Setting host DHCP, '%s'" % " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
-    if stderr:
-        logger.warning("Network error: %s" % stderr)
-    return stdout
-
-
-@app.task
-def proxyconf(address, port, username, password):
-    """Usage: TSsetproxy [options]
-         --address     Proxy address (http://proxy.net)
-         --port        Proxy port number
-         --username    Username for authentication
-         --password    Password for authentication
-         --no_proxy    no_proxy setting
-         --remove      Removes proxy setting
-    """
-    cmd = ["/usr/sbin/TSsetproxy",
-           "--address", address,
-           "--port", port,
-           "--username", username,
-           "--password", password
-           ]
-    logger.info("Network: Setting proxy settings, '%s'" % " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
-    if stderr:
-        logger.warning("Network error: %s" % stderr)
-    return stdout
-
-
-@app.task
-def noproxyconf(no_proxy):
-    """Usage: TSsetnoproxy [options]
-         --no_proxy    no_proxy setting
-         --remove      Removes no_proxy setting
-    """
-    if no_proxy:
-        cmd = ["/usr/sbin/TSsetnoproxy",
-               "--no_proxy", no_proxy,
-               ]
-    else:
-        cmd = ["/usr/sbin/TSsetnoproxy",
-               "--remove",
-               ]
-    logger.info("Network: Setting no_proxy settings, '%s'" % " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
-    if stderr:
-        logger.warning("Network error: %s" % stderr)
-    return stdout
-
-
-@app.task
-def ax_proxy():
-    """Usage: TSsetproxy [options]
-         --remove      Removes proxy setting
-    """
-    cmd = ["/usr/sbin/TSsetproxy", "--remove"]
-    logger.info("Network: Removing proxy settings, '%s'" % " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
-    if stderr:
-        logger.warning("Network error: %s" % stderr)
-    return stdout
-
 
 @app.task
 def updateOneTouch():
@@ -670,6 +564,37 @@ def IonReporterVersion(plugin):
 
 
 @periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
+def diskspace_status():
+    '''Record disk space in a file for historical data
+       For every entry in File Servers and Report Storage'''
+    from iondb.rundb import models
+    import datetime as dt
+    directories = []
+    newlines = []
+    try:
+        for repstor in models.ReportStorage.objects.all():
+            directories.append(repstor.dirPath)
+    except:
+        pass
+    try:
+        for filestor in models.FileServer.objects.all():
+            directories.append(filestor.filesPrefix)
+    except:
+        pass
+    for entry in directories:
+        q = subprocess.Popen(["df", entry], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = q.communicate()
+        if q.returncode == 0:
+            device, size, used, available, _, _ = stdout.split("\n")[1].split()
+            newlines.append("%s,%s,%s,%s,%s" % (dt.date.today(), device, size, used, available))
+        else:
+            newlines.append("%s,%s" % (dt.date.today(), stderr))
+    with open("/var/log/ion/diskspace.log", "ab") as fh:
+        for entry in list(set(newlines)):
+            fh.write(entry + "\n")
+
+
+@periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
 def scheduled_update_check():
     from iondb.rundb import models
     try:
@@ -681,7 +606,7 @@ def scheduled_update_check():
             download_now = models.GlobalConfig.get().enable_auto_pkg_dl
             if download_now:
                 async = download_updates.delay()
-                logger.debug("Auto starting download of %d packages in task %s" % (len(packages), async.task_id))
+                logger.debug("Auto starting download of %d packages in task %s" % (packages, async.task_id))
         else:
             upgrade_message.delete()
     except Exception as err:
@@ -698,7 +623,6 @@ def check_updates():
     from iondb.rundb import models
     from iondb.utils.files import rename_extension
     try:
-        import ion_tsconfig.TSconfig
         from iondb.utils.usb_check import getUSBinstallerpath, change_list_files
 
         path = getUSBinstallerpath()
@@ -709,82 +633,78 @@ def check_updates():
             if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
                 os.remove('/etc/apt/sources.list.d/usb.list')
 
-        tsconfig = ion_tsconfig.TSconfig.TSconfig()
-        enable_security_update = models.GlobalConfig.get().enable_auto_security
-        tsconfig.set_securityinstall(enable_security_update)
-        packages = tsconfig.TSpoll_pkgs()
+        cmd = ['sudo', '/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--poll']
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate()
+        if p.returncode != 0:
+            raise Exception(stderr)
+        else:
+            return int(stdout)
     except Exception as err:
         rename_extension('etc/apt/', '.USBinstaller', '')
         if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
             os.remove('/etc/apt/sources.list.d/usb.list')
         logger.error("TSConfig raised '%s' during update check." % err)
-        models.GlobalConfig.objects.update(ts_update_status="Update failure")
+        models.GlobalConfig.objects.update(ts_update_status=str(err))
         raise
-
-    return packages
 
 
 @app.task
 def download_updates(auto_install=False):
+    """ Downloads new packages
+        If auto_install=True:
+            updates ion-tsconfig package then starts software upgrade in a separate process
+    """
     from iondb.rundb import models
+
     try:
-        import ion_tsconfig.TSconfig
-        tsconfig = ion_tsconfig.TSconfig.TSconfig()
-        enable_security_update = models.GlobalConfig.get().enable_auto_security
-        tsconfig.set_securityinstall(enable_security_update)
-        downloaded = tsconfig.TSexec_download()
+        cmd = ['sudo', '/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--download']
+        if auto_install:
+            cmd += ['--refresh']
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate()
+        if p.returncode != 0:
+            raise Exception(stderr)
     except Exception as err:
         logger.error("TSConfig raised '%s' during a download" % err)
-        models.GlobalConfig.objects.update(ts_update_status="Download failure")
+        models.GlobalConfig.objects.update(ts_update_status=str(err))
         raise
 
-    logger.debug("Finished downloading %d packages" % len(downloaded))
-    async = None
-    if downloaded and auto_install:
-        new_tsconfig = tsconfig.TSexec_update_tsconfig()
-        if new_tsconfig:
-            logger.debug("Installed ion-tsconfig package")
+    if auto_install:
         async = install_updates.delay()
-        logger.debug("Auto starting install of %d packages in task %s" % (len(downloaded), async.task_id))
-
-    return downloaded, async
+        logger.debug("Auto starting software upgrade in task %s" % async.task_id)
 
 
 def _do_the_install():
     """This function is expected to be run from a daemonized process"""
     from iondb.rundb import models
     try:
-        import ion_tsconfig.TSconfig
-        tsconfig = ion_tsconfig.TSconfig.TSconfig()
-        enable_security_update = models.GlobalConfig.get().enable_auto_security
-        tsconfig.set_securityinstall(enable_security_update)
-
-        success = tsconfig.TSexec_update()
+        cmd = ['sudo', '/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--upgrade']
+        p = subprocess.check_call(cmd)
+        logger.info('TSConfig install success!')
+        success = True
     except Exception as err:
-        models.GlobalConfig.objects.update(ts_update_status="Install failure")
-        raise
-    else:
-        from django.db import connection
-        connection.close() # refresh dbase connection
-
-        if success:
-            models.GlobalConfig.objects.update(ts_update_status="Finished installing")
-            models.Message.success("Upgrade completed successfully!")
-        else:
-            models.GlobalConfig.objects.update(ts_update_status="Install failure")
-            models.Message.error("Upgrade failed during installation.")
-        models.Message.objects.filter(expires="system-update-finished").delete()
-        models.Message.objects.filter(tags__contains="new-upgrade").delete()
+        success = False
+        logger.error(traceback.format_exc())
     finally:
         from iondb.utils.files import rename_extension
         #undo edits
         rename_extension('etc/apt/', '.USBinstaller', '')
         if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
             os.remove('/etc/apt/sources.list.d/usb.list')
-        # This will start celeryd if it is not running for any reason after
-        # attempting installation.
-        call('service', 'celeryd', 'start')
-        call('service', 'celerybeat', 'start')
+
+    # update status
+    from django.db import connection
+    connection.close() # refresh dbase connection
+
+    if success:
+        models.GlobalConfig.objects.update(ts_update_status="Finished installing")
+        models.Message.success("Upgrade completed successfully!")
+    else:
+        models.GlobalConfig.objects.update(ts_update_status="Install failure")
+        models.Message.error("Upgrade failed during installation.")
+    models.Message.objects.filter(expires="system-update-finished").delete()
+    models.Message.objects.filter(tags__contains="new-upgrade").delete()
 
 
 @app.task
@@ -1291,18 +1211,6 @@ def install_reference(args, reference_id, reference_mask_filename=None):
         reference.save()
 
 
-@app.task
-def get_raid_stats():
-    raidCMD = ["/usr/bin/ion_raidinfo"]
-    q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
-    stdout, stderr = q.communicate()
-    if q.returncode == 0:
-        raid_stats = stdout
-    else:
-        raid_stats = None
-    return raid_stats
-
-
 @app.task (queue="w1", soft_time_limit=60)
 def get_raid_stats_json():
     '''Wrapper to bash script calling MEGAraid tool'''
@@ -1365,6 +1273,9 @@ def update_news_posts():
                 "title": article.get('title', 'Untitled'),
                 "link": article.get('link', '')
             }
+            # The news feed has been updated to include html content sections
+            if len(article.get('content', [])) > 0:
+                post_defaults["summary"] = article['content'][0].get('value', '')
             post, created = models.NewsPost.objects.get_or_create(guid=article.get('id', None), defaults=post_defaults)
         now = timezone.now()
         one_month = timedelta(days=30)
@@ -1448,22 +1359,6 @@ def writeError(errorFileName, gpuFound, allRevsValid):
 
 
 @app.task
-def hide_apt_sources():
-    filename = "/etc/apt/sources.list"
-    hidden = filename+".hide"
-    os.rename(filename, hidden)
-    return
-
-
-@app.task
-def restore_apt_sources():
-    filename = "/etc/apt/sources.list"
-    hidden = filename+".hide"
-    os.rename(hidden, filename)
-    return
-
-
-@app.task
 def lock_ion_apt_sources(enable=False):
     """Set sources.list to point to Ion archive location for current version
     Change from:
@@ -1473,44 +1368,10 @@ def lock_ion_apt_sources(enable=False):
     -or-
         vicey-versy
     """
-    # get Torrent Suite version string.
-    from ion import version
-    ts_version = version
-
-    # get distribution string
-    def get_distrib_name():
-        with open('/etc/lsb-release', 'r') as fp:
-            for line in fp.readlines():
-                if line.startswith('DISTRIB_CODENAME'):
-                    return line.split('=')[1].strip()
-        return 'trusty'  # failsafe default which may work
-
-    os_codename = get_distrib_name()
-
-    if enable:
-        find_string = "updates\/software.*%s\/" % (os_codename)
-        replace_string = "updates\/software\/archive\/%s %s\/" % (ts_version, os_codename)
-    else:
-        find_string = "updates\/software\/archive\/%s.*" % (ts_version)
-        replace_string = "updates\/software %s\/" % (os_codename)
-    sed_string = "s/%s/%s/g" % (find_string, replace_string)
-
-    # Possible locations of Ion Apt repository strings:
-    #     /etc/apt/sources.list
-    #     /etc/apt/sources.list.d/*.list
-    #
-    filepaths = [os.path.join("/etc/apt/sources.list.d", x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list']
-    filepaths.append("/etc/apt/sources.list")
-    for filepath in filepaths:
-        logger.debug("Looking in %s" % filepath)
-        cmd = ["sed", "-i", sed_string, filepath]
-        try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-        except:
-            logger.error("%s: cmd = '%s'" % (sys._getframe().f_code.co_name, cmd))
-        if proc.returncode:
-            logger.error("%s: %s" % (sys._getframe().f_code.co_name, stderr))
+    process = subprocess.Popen(['sudo', '/opt/ion/iondb/bin/lock_ion_apt_sources.py', str(enable)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, err = process.communicate()
+    logger.info(output)
+    logger.error(err)
 
 
 @periodic_task(run_every=timedelta(minutes=10), expires=300, queue="periodic")
@@ -1563,13 +1424,15 @@ def post_run_nodetests():
     else:
         message.delete()
 
-    # refresh queue info
-    cluster_queue_info()
-
 
 @task(queue='w1', soft_time_limit=60, expires=600)
 def test_node_and_update_db(node, head_versions):
-    '''run tests'''
+    """
+    Test connectivity to a cluster node
+    :parameter node: Host name of the cluster node to probe
+    :parameter head_versions: a dictionary of version of packages on the head node
+    """
+
     logger.info("Testing node: %s" % node.name)
     node_status = {
         'name': node.name,
@@ -1604,39 +1467,33 @@ def test_node_and_update_db(node, head_versions):
         # TODO
         pass
 
+    # update queue state
+    node_status["queues"] = queue_info(node.name)
+
     # update cruncher database entry
     node.state = node_status['status'][0].upper()
     node.info = node_status
     node.save()
 
-    return (node.name, node_status['status'])
+    return node.name, node_status['status']
 
 
 @periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result=True)
 def check_cluster_status():
+    """
+    Runs a periodic test for all cluster nodes.
+    """
     # run tests for cluster nodes
     from ion.utils.TSversion import findVersions
     from iondb.rundb.models import Cruncher
 
     nodes = Cruncher.objects.all().order_by('pk')
-    if not nodes:
-        pass
-    else:
+    if nodes:
         # launch parallel celery tasks to test all nodes
         # Note that parallelism will be limited by the number of workers in a queue.
         head_versions, _ = findVersions()
         result = group(test_node_and_update_db.s(node, head_versions) for node in nodes).apply_async()
         return result
-
-
-def cluster_queue_info():
-    ''' run qstat and update database objects '''
-    from iondb.rundb.models import Cruncher
-
-    info = queue_info()
-    for node in Cruncher.objects.all():
-        node.info["queues"] = info.get(node.name)
-        node.save()
 
 
 @app.task(queue='w1')
@@ -1646,7 +1503,7 @@ def cluster_ctrl_task(action, name, username):
 
     nodes = Cruncher.objects.filter(name=name) if name != "all" else Cruncher.objects.all()
     if not nodes:
-        return "Node %s not found" % node
+        return "Node %s not found" % name
 
     errors = []
     info = queue_info()
@@ -1666,6 +1523,12 @@ def cluster_ctrl_task(action, name, username):
             EventLog.objects.add_entry(node, msg, username)
         else:
             errors.append(error)
+
+    # update queue info after changing state
+    info = queue_info()
+    for node in nodes:
+        node.info["queues"] = info.get(node.name)
+        node.save()
 
     return errors
 
@@ -1762,7 +1625,7 @@ def check_gunzip(gunZipFile, logger=None):
 @app.task
 def new_annotation_download(annot_url, updateVersion, **reference_args):
     ref_short_Name = reference_args['short_name']
-    from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
+    from iondb.rundb.models import ReferenceGenome, Publisher
     from django.core.files import File
     from iondb.rundb import publishers
     fileToRegister = None
@@ -1789,7 +1652,7 @@ def new_annotation_download(annot_url, updateVersion, **reference_args):
         meta = {"publisher": pub_name, "reference": ref_short_Name, "annotation_url": annot_url, "upload_type": "Annotation"}
         try:
             pub = Publisher.objects.get(name=pub_name)
-            contentUpload, async_upload = publishers.edit_upload(pub, upload, json.dumps(meta))
+            contentUpload, _ = publishers.edit_upload(pub, upload, json.dumps(meta))
             return contentUpload
         except:
             logger.debug("Publisher does not exists {0}".format(pub_name))
@@ -1798,7 +1661,7 @@ def new_annotation_download(annot_url, updateVersion, **reference_args):
 
 
 def start_annotation_download(annot_url, reference, callback=None, updateVersion=None, monitor=None):
-    from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
+    from iondb.rundb.models import FileMonitor
     import mimetypes
     tagsInfo = "reference_annotation_{0}".format(float(updateVersion))
     monitor = FileMonitor(url=annot_url, tags=tagsInfo)
@@ -1823,7 +1686,7 @@ def start_annotation_download(annot_url, reference, callback=None, updateVersion
         if async_result.status == 'PENDING':
             try:
                 async_result.get()
-            except Exception, err:
+            except Exception as err:
                 monitor.status = "Download Error"
                 monitor.save()
                 logger.error("Error in Download File '{0}': {1}".format(annot_url, err))
@@ -1856,115 +1719,53 @@ def start_annotation_download(annot_url, reference, callback=None, updateVersion
 
 @app.task(queue="w1")
 def set_timezone(request):
-    logger.debug("MY ERROR")
+    """
+    Sets the timezone data
+    """
     with open ('/etc/timezone', 'w') as f:
         f.write(request)
     reconfig = subprocess.Popen(['dpkg-reconfigure', '-f', "noninteractive", "tzdata"], stdout=subprocess.PIPE)
-    configOut, configErr = reconfig.communicate()
-    reconfig.wait()
-    logger.debug("MY ERROR %s" % configOut)
-    logger.debug("MY ERROR %s" % configErr)
-
+    reconfig.communicate()
     return reconfig.returncode
 
 
-def run_ansible_playbook(playbook):
-    '''Run ansible-playbook in a subshell'''
-    # Which hosts file to use
-    hosts_file = '/usr/share/ion-tsconfig/ansible/torrentsuite_hosts'
-    if os.path.isfile(hosts_file+'_local'):
-        inventory_file = hosts_file+'_local'
+@app.task
+def install_BED_files(bedfileList, callback=None):
+    '''
+        Launches a set of tasks to download and install multiple BED files
+        Optionally adds a callback to run after all install tasks are complete
+    '''
+    from iondb.rundb.models import FileMonitor
+    from iondb.rundb.publishers import publish_file
+
+    logger.info('install_BED_files: received files to process %s' % ', '.join([b['source'] for b in bedfileList]))
+    bedfile_tasks = []
+    for info in bedfileList:
+        monitor = FileMonitor(url=info['source'], tags="bedfile")
+        monitor.save()
+
+        publish_task = publish_file.s('BED', json.dumps(info))
+        bedfile_tasks.append( download_something.subtask((monitor.url, monitor.id), link=publish_task) )
+
+    if callback:
+        async_result = chord( bedfile_tasks )(callback)
     else:
-        inventory_file = hosts_file
-    # Run ansible-playbook in a subshell since running it from python celery task is broken
-    cmd = "ansible-playbook -i %s %s --sudo" % (inventory_file, playbook)
-    p = subprocess.Popen(cmd.split(),
-                         cwd="/usr/share/ion-tsconfig/ansible",
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
-    stdout, stderr = p.communicate()
-    if p.returncode == 0:
-        pass
-    else:
-        pass
-    with open("/tmp/run_ansible_playbook_%s.debug" % playbook, "w") as log:
-        log.write(datetime.now().ctime()+'\n')
-        log.write("STDOUT\n\n")
-        log.write(stdout)
-        log.write("STDERR\n\n")
-        log.write(stderr)
-    #    # Run ansible-playbook - nfs_client.yml
-    #    # http://oriolrius.cat/blog/2015/01/21/using-ansible-like-library-programming-in-python/
-    #    # Here is the bug which prevents ansible-playbooks from running in celery task:
-    #    # https://github.com/celery/celery/issues/1709
-    #    from datetime import datetime
-    #    from ansible.playbook import PlayBook
-    #    from ansible import callbacks
-    #    from ansible import utils
-    #    stats = callbacks.AggregateStats()
-    #    playbook_cb = callbacks.PlaybookCallbacks(verbose=utils.VERBOSITY)
-    #    runner_cb = callbacks.PlaybookRunnerCallbacks(stats, verbose=utils.VERBOSITY)
-    #    pb = PlayBook(playbook='/usr/share/ion-tsconfig/ansible/nfs_client.yml',
-    #                  host_list=inventory_file,
-    #                  sudo=True,
-    #                  remote_user='ionadmin',
-    #                  private_key_file='/home/ionadmin/.ssh/ansible_rsa_key',
-    #                  stats=stats,
-    #                  callbacks=playbook_cb,
-    #                  runner_callbacks=runner_cb)
-    #    #Note: this will dump ansible output to stdout - it gets lost.
-    #    results = pb.run()
-    #    #This merely captures the final status of ansible-playbook
-    #    with open("/tmp/add_nfs_mount.task.ansible.out", "a") as log:
-    #        log.write(datetime.now().ctime()+'\n')
-    #        log.write(json.dumps(results)+'\n')
+        async_result = group( bedfile_tasks )()
+    return async_result
 
 
-@app.task(queue="w1")
-def add_nfs_mount(servername, sharename, mountpoint):
-    '''Modifies all_local file and calls ansible-playbook to enable a new NFS mount
-       Needs celery task because needs superuser privilege'''
-    try:
-        # create all_local from all
-        filename = "/usr/share/ion-tsconfig/ansible/group_vars/all_local"
-        tempfile = "/usr/share/ion-tsconfig/ansible/group_vars/all_local.temp"
-        if not os.path.isfile(filename):
-            shutil.copy2("/usr/share/ion-tsconfig/ansible/group_vars/all", filename)
-        # Line to add - spaces are important!
-        new_nas = "  - { name: %s, directory: %s, mountpoint: %s, options: %s }" % (servername, sharename, mountpoint, "defaults")
-        # Check if line exists.  This is a small file so we can do this cheat
-        with open(filename, 'r') as fh:
-            if new_nas in fh.read():
-                logger.warn("This line: '%s'. Already exists in all_local." % (new_nas))
-            else:
-                fh.seek(0)
-                # Insert line after pattern ^nas_mounts:
-                with open(tempfile, "w") as out:
-                    for line in fh:
-                        out.write(line)
-                        if 'nas_mounts:' in line:
-                            out.write(new_nas+'\n')
-                shutil.move(tempfile, filename)
-        run_ansible_playbook('nfs_client.yml')
-    except:
-        logger.error(traceback.format_exc())
+@app.task
+def release_tasklock(lock_id, parent_lock_id=''):
+    from iondb.utils.TaskLock import TaskLock
+    from iondb.rundb.models import Message
+    applock = TaskLock(lock_id)
+    applock.unlock()
+    logger.info("Worker PID %d lock_id unlocked %s" % (os.getpid(), lock_id))
 
-
-@app.task(queue="w1")
-def remove_nas_storage(mountpoint):
-    '''Edit all_local, run nfs_clients.yml playbook'''
-    try:
-        filename = "/usr/share/ion-tsconfig/ansible/group_vars/all_local"
-        tempfile = "/tmp/all_local.temp"
-        # Delete the line matching the pattern
-        with open(tempfile, "w") as out, open(filename, "r") as fh:
-            for line in fh:
-                if mountpoint in line:
-                    pass
-                else:
-                    out.write(line)
-        shutil.move(tempfile, filename)
-        run_ansible_playbook('nfs_client.yml')
-    except:
-        logger.error(traceback.format_exc())
-
+    # if all children processes are done can release the parent lock
+    if parent_lock_id:
+        parent_lock = TaskLock(parent_lock_id)
+        if all([ TaskLock(child_id).get() is None for child_id in parent_lock.get()]):
+            parent_lock.unlock()
+            logger.info("Worker PID %d parent lock_id unlocked %s" % (os.getpid(), parent_lock_id))
+            Message.info("Reference and BED files installation complete for %s" % parent_lock_id, tags="install_"+parent_lock_id)

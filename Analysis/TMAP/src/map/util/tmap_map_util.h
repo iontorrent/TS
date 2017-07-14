@@ -4,9 +4,12 @@
 
 #include <sys/types.h>
 #include "../../util/tmap_rand.h"
+#include "../../sw/tmap_sw.h"
 #include "../../sw/tmap_fsw.h"
 #include "../../sw/tmap_vsw.h"
 #include "tmap_map_opt.h"
+#include "tmap_map_stats.h"
+
 
 #define __map_util_gen_ap(par, opt) do { \
     int32_t i; \
@@ -90,8 +93,14 @@ typedef struct {
     int32_t score_subo; /*!< the alignment score of the sub-optimal hit */
     int32_t n_cigar; /*!< the number of cigar operators */
     uint32_t *cigar; /*!< the cigar operator array */
+    int32_t n_orig_cigar;
+    uint32_t *orig_cigar; 
+    uint32_t orig_pos;
     uint16_t target_len; /*!< internal variable, the target length estimated by the seeding step */ 
     uint16_t n_seeds; /*!< the number seeds in this hit */
+    uint16_t fivep_offset; /*!< number of additional ref bases aligned if 5' not softclipped */
+    uint32_t mapper_pos;
+    uint32_t mapper_tlen;
     union {
         tmap_map_map1_aux_t *map1_aux; /*!< auxiliary data for map1 */
         tmap_map_map2_aux_t *map2_aux; /*!< auxiliary data for map2 */
@@ -127,7 +136,7 @@ typedef struct {
     bam1_t **bams; /*!< the bam records */
     int32_t n; /*!< the number of hits */
 } tmap_map_bam_t;
-    
+
 /*!
   The multi-end BAM record structure
   */
@@ -135,6 +144,33 @@ typedef struct {
     tmap_map_bam_t **bams;  /*!< the bam hits */
     int32_t n; /*!< the number of records (multi-end) */
 } tmap_map_bams_t;
+
+/*!
+ Control structure for reference sequence buffer
+ */
+typedef struct {
+    uint8_t* buf;       /*!< pointer to the address of the memory buffer for unpacked reference sequence */
+    uint32_t buf_sz;    /*!< pointer to the variable contining presently allocated size of target_buf */
+    uint8_t* data;      /*!< pointer into buffer where actual requested fragment starts */
+    uint32_t data_len;  /*!< length of last requested data */
+    uint32_t seqid;     /*!< sequence Id for the fragment stored in data member, 1-based */
+    uint32_t seq_start; /*!< offset of the first base of fragment stored in buf, 1-based */
+    uint32_t seq_end;   /*!< offset of the last base stored in buf, 1-based */
+} ref_buf_t;
+
+/*!
+  populates the ref_buf_t so that the data 
+  @param dest (ref_buf_t*) the reference cache control structure
+  @param refseq (tmap_refseq_t *) pointer to the the reference server control structure
+  @param seqid (uint32_t) sequence id to cache, 1-based, 
+  @param seq_start (uint32_t) position of first base in a fragment to cache, 1-based
+  @param seq_end (uint32_t) poition of last base of a fragment to cache, 1-based
+  */
+
+void target_cache_init (ref_buf_t* target);
+void target_cache_free (ref_buf_t* target);
+void cache_target (ref_buf_t* target, tmap_refseq_t *refseq, uint32_t seqid, uint32_t seq_start, uint32_t seq_end);
+
 
 /*!
   initializes
@@ -369,7 +405,8 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, 
   @param  num_after_grouping used to return the number seeds after grouping
   @return               the locally aligned sams
   */
-tmap_map_sams_t *
+
+tmap_map_sams_t*
 tmap_map_util_sw_gen_score(tmap_refseq_t *refseq,
                            tmap_seq_t *seq,
                            tmap_map_sams_t *sams,
@@ -377,6 +414,84 @@ tmap_map_util_sw_gen_score(tmap_refseq_t *refseq,
                            tmap_rand_t *rand,
                            tmap_map_opt_t *opt,
                            int32_t *num_after_grouping);
+
+void tmap_map_util_populate_sw_par (
+    tmap_sw_param_t* par, 
+    tmap_map_opt_t* opt
+);
+
+/*!
+  find alignment starts for raw mappings
+  @details              generates the cigar after tmap_map_util_sw_gen_score has been called
+  @param  refseq        the reference sequence
+  @param  sams          the seeded sams
+  @param  seq           the original query sequence 
+  @param  seqs          the query sequence (forward, reverse compliment, reverse, and compliment)
+  @param  opt           the program parameters
+  @param  target        reference data
+  @param  stat          statistics
+  @return               the locally aligned sams
+  */
+
+tmap_map_sams_t*
+tmap_map_util_find_align_starts (
+    tmap_refseq_t *refseq,      // reference server
+    tmap_map_sams_t *sams,      // initial rough mapping 
+    tmap_seq_t *seq,            // read
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    tmap_map_opt_t *opt,        // tmap parameters
+    ref_buf_t* target,          // reference data
+    tmap_map_stats_t *stat      // statistics
+);
+
+void tmap_map_util_align (
+    tmap_refseq_t *refseq,      // reference server
+    tmap_map_sams_t *sams,      // mappings to compute alignments for
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    ref_buf_t* target,          // reference data 
+    tmap_sw_path_t** path_buf,  // buffer for traceback path
+    int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
+    tmap_sw_param_t* par,        // Smith-Waterman scopring parameters
+    tmap_map_stats_t *stat      // statistics
+);
+
+void tmap_map_util_salvage_edge_indels (
+    tmap_refseq_t *refseq,      // reference server
+    tmap_map_sams_t *sams,      // mappings to compute alignments for
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    tmap_map_opt_t *opt,        // tmap parameters
+    tmap_sw_param_t* par,       // Smith-Waterman scopring parameters
+    ref_buf_t* target,          // reference data cache
+    tmap_sw_path_t** path_buf,  // buffer for traceback path
+    int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
+    tmap_map_stats_t *stat      // statistics
+);
+
+void tmap_map_util_cure_softclips (
+    tmap_map_sams_t *sams,      // mappings to compute alignments for
+    tmap_seq_t **seqs          // array of size 4 that contains pre-computed inverse / complement combinations
+);
+
+void tmap_map_util_trim_key (
+    tmap_map_sams_t *sams,      // mappings to compute alignments for
+    tmap_seq_t *seq,            // read
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    tmap_refseq_t *refseq,      // reference server
+    ref_buf_t* target,          // reference data cache
+    tmap_map_stats_t *stat      // statistics
+);
+
+void tmap_map_util_end_repair_bulk (
+    tmap_refseq_t *refseq,      // reference server
+    tmap_map_sams_t *sams,      // mappings to compute alignments for
+    tmap_seq_t *seq,            // read
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    tmap_map_opt_t *opt,        // tmap parameters
+    ref_buf_t* target,          // reference data cache
+    tmap_sw_path_t** path_buf,  // buffer for traceback path
+    int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
+    tmap_map_stats_t *stat      // statistics
+);
 
 /*!
   perform local alignment
@@ -386,14 +501,18 @@ tmap_map_util_sw_gen_score(tmap_refseq_t *refseq,
   @param  seq           the original query sequence 
   @param  seqs          the query sequence (forward, reverse compliment, reverse, and compliment)
   @param  opt           the program parameters
+  @param  stat          statistics
   @return               the locally aligned sams
   */
 tmap_map_sams_t *
-tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
-                 tmap_map_sams_t *sams, 
-                 tmap_seq_t *seq,
-                 tmap_seq_t **seqs,
-                 tmap_map_opt_t *opt);
+tmap_map_util_sw_gen_cigar (
+    tmap_refseq_t *refseq,
+    tmap_map_sams_t *sams, 
+    tmap_seq_t *seq,
+    tmap_seq_t **seqs,
+    tmap_map_opt_t *opt,
+    tmap_map_stats_t *stat
+);
 
 /*!
   re-aligns mappings in flow space
@@ -409,11 +528,80 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
   @param  pen_gape       the gap extension penalty
   @param  fscore         the flow penalty
   @param  use_flowgram   1 to use the flowgram if available, 0 otherwise
+  @param  stat           tmap statistics
   @return  1 if successful, 0 otherwise
   */
 int32_t
-tmap_map_util_fsw(tmap_seq_t *seq, tmap_map_sams_t *sams, tmap_refseq_t *refseq,
+tmap_map_util_fsw (tmap_seq_t *seq, tmap_map_sams_t *sams, tmap_refseq_t *refseq,
                   int32_t bw, int32_t softclip_type, int32_t score_thr,
                   int32_t score_match, int32_t pen_mm, int32_t pen_gapo, 
-                  int32_t pen_gape, int32_t fscore, int32_t use_flowgram);
+                  int32_t pen_gape, int32_t fscore, int32_t use_flowgram, tmap_map_stats_t* stat);
+
+
+// updates alignment box (result) from cigar, pos and target_len
+void tmap_map_update_alignment_box (tmap_map_sam_t* sam);
+
+
+/*!
+  turns softclip on 5' into non-clipped alignment
+  @param  refseq         the reference sequence
+  @param  sams           the mappings to adjust 
+  @param  seq            the read
+  @param  seqs           the 'alternate forms' of query sequences (forward, reverse compliment, reverse, and compliment)
+  @param  target         reference data 
+  @param  path_buf       buffer for traceback path
+  @param  path_buf_sz    used portion and allocated size of traceback path. 
+  @param  par            Smith-Waterman scoring parameters
+  @param  opt            the program parameters
+  @param  stat           tmap statistics
+  @return  1 if 5-prime was found and replaced, 0 if there was no 5' softclip
+  */
+
+int32_t
+tmap_map_util_remove_5_prime_softclip 
+(
+    tmap_refseq_t *refseq,      // reference server
+    tmap_map_sam_t *dest_sam,   // mapping to fix
+    tmap_seq_t *seq,            // read
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    ref_buf_t* target,          // reference data cache
+    tmap_sw_path_t** path_buf,  // buffer for traceback path
+    int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
+    tmap_sw_param_t* par,       // Smith-Waterman scoring parameters
+    tmap_map_opt_t *opt,        // tmap options (for this stage)
+    tmap_map_stats_t *stat      // statistics
+);
+
+void 
+cigar_sanity_check 
+(
+    tmap_refseq_t *refseq,      // reference server
+    tmap_map_sam_t *dest_sam,   // mapping to fix
+    tmap_seq_t *seq,            // read
+    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    ref_buf_t* target,          // reference data cache
+    tmap_map_opt_t *opt         // tmap options (for this stage)
+);
+
+typedef struct
+{
+    unsigned xpos;
+    unsigned ypos;
+    unsigned len;
+} 
+AlBatch;
+
+void cigar_log (const uint32_t* cigar, unsigned cigar_sz);
+uint32_t cigar_to_batches (const uint32_t* cigar, uint32_t cigar_sz, uint32_t* x_clip, AlBatch* batches, uint32_t max_batches);
+void log_batches (const char* xseq, unsigned xlen, uint8_t xrev, const char* yseq, unsigned ylen, uint8_t yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff);
+void tmap_map_log_text_align (
+    const char* preceed, 
+    uint32_t* cigar, 
+    uint32_t n_cigar, 
+    const char* query, 
+    uint32_t query_len, 
+    uint32_t forward, 
+    const char* ref, 
+    uint32_t ref_off);
+
 #endif // TMAP_MAP_UTIL_H

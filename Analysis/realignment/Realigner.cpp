@@ -220,11 +220,18 @@ void Realigner::SetSequences(const string& q_seq, const string& t_seq, const str
   if (debug_ and verbose_)
     cout << "Hello from SetSequences." << endl;
 
+  // If we have an empty aln_path, and alignment_bandwidth_>0 we align along the diagonal
+  // Empty aln_path and alignment_bandwidth_==0 evaluates the whole DP matrix
+  if (aln_path.length()==0 and alignment_bandwidth_>0){
+    create_dummy_pretty(t_seq.length(), q_seq.length());
+  }
+  else
+    pretty_aln_ = aln_path;
+
   // We align all sequences in forward direction
-  pretty_aln_ = aln_path;
+  // but have to worry about clipping the correct end of the alignment
   q_seq_ = q_seq;
   t_seq_ = t_seq;
-  // but have to worry about clipping the correct end of the alignment
   if (isForwardStrandRead_ != isForward) {
     ReverseClipping();
     isForwardStrandRead_ = isForward;
@@ -246,6 +253,33 @@ void Realigner::SetSequences(const string& q_seq, const string& t_seq, const str
     cout << "Successfully set sequences." << endl;
 }
 
+// -------------------------------------------------------------------
+// For tubed alignment to work without a prior alignment input
+// Create a pseudo diagonal pretty alignment string for initialization
+
+void Realigner::create_dummy_pretty(unsigned int target_length, unsigned int query_length)
+{
+  pretty_aln_.assign(max(target_length, query_length), '|');
+  unsigned int plen = pretty_aln_.length();
+  char indel = '-';
+  int n_indels = target_length - query_length;
+
+  if (n_indels==0)
+    return;
+  else if (n_indels<0) {
+    indel = '+';
+    n_indels = -n_indels;
+  }
+  int interval = plen / n_indels;
+  unsigned int pos = (plen - ((n_indels-1)*interval))/2;
+  int count = 0;
+
+  while (count<n_indels and pos < plen){
+    pretty_aln_.at(pos) = indel;
+    ++count;
+    pos += interval;
+  }
+}
 
 // -------------------------------------------------------------------
 
@@ -320,8 +354,6 @@ bool Realigner::ComputeTubedAlignmentBoundaries()
 bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>& MD_data,
                        unsigned int& start_pos_update) {
 
-  string dummy_string;
-  
   // Compute boundaries for tubed alignment around previously found alignment
   if (!ComputeTubedAlignmentBoundaries())
     return false;

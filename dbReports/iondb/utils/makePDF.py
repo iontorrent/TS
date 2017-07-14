@@ -104,22 +104,22 @@ def write_plugin_pdf(_result_pk, directory=None):
     # Get list of plugins and their output html pages
     #==========================================================================
     host = "http://%s" % LOCALHOST
-    djangoURL = "%s/rundb/api/v1/results/%s/pluginresults/?format=json" % (host, _result_pk)
+    djangoURL = "%s/rundb/api/v1/pluginresult/?result=%s" % (host, _result_pk)
     pageOpener = urllib2.build_opener()
     jsonPage = pageOpener.open(djangoURL)
     djangoJSON = jsonPage.read()
-    decodedJSON = json.loads(djangoJSON)
+    decodedJSON = json.loads(djangoJSON)['objects']
 
     plugins = []
     for JSON in decodedJSON:
-        files = JSON['Files']
+        files = JSON['files']
         if files:
             filename = files[0]
             plugins.append({
-                'name': JSON['Name'],
+                'name': JSON['pluginName'],
                 'id': JSON['id'],
                 'url': os.path.join(JSON['URL'], filename),
-                'path': os.path.join(JSON['Path'], filename),
+                'path': os.path.join(JSON['path'], filename),
                 'filename': filename
             })
 

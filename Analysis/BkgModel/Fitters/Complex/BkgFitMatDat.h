@@ -4,7 +4,7 @@
 
 #include <armadillo>
 
-class BkgFitMatDat {
+class  BkgFitMatDat {
  public:
   arma::Mat<double> *jtj;
   arma::Col<double> *rhs;

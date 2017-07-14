@@ -49,6 +49,8 @@ public:
   // alleles = 0 (ref), 1,2,... alts
   vector< vector<int> > my_book;
   int invalid_reads;
+  vector<int> tag_similar_counts; // counts for similar molecular tags
+  vector<float> lod; // limit of detection for tag seq
 
   MultiBook();
   void Allocate(int num_hyp);

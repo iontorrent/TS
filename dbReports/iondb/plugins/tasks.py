@@ -4,10 +4,11 @@
 from __future__ import absolute_import
 import os
 import logging
+import traceback
 
 import iondb.celery
 from django.conf import settings
-from celery.task import task
+from celery.task import task, group
 from celery.result import ResultSet
 from celery.utils.log import get_task_logger
 
@@ -84,7 +85,7 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
              pwd.getpwuid(final_uid)[0],
              grp.getgrgid(final_gid)[0])
 
-@task(queue="plugins")
+@task(queue="plugins", soft_time_limit=30)
 def scan_plugin(data, add_to_store=True):
     """
     This method will interogate a specific plugin and get it's information
@@ -102,12 +103,15 @@ def scan_plugin(data, add_to_store=True):
     if os.path.isdir(path):
         path = find_pluginscript(path, name)
 
-    info = get_info_from_script(name, path, context, add_to_store)
+    info = {}
+    try:
+        info = get_info_from_script(name, path, context, add_to_store)
+        if info is not None:
+            info = info.todict()
+    except:
+        logger.error(traceback.format_exc())
 
-    if info is not None:
-        info = info.todict()
-
-    if info is None:
+    if not info:
         logger.info("Failed to get plugininfo: '%s' from '%s'", name, path)
 
     if info and context and 'plugin' in context:
@@ -135,21 +139,20 @@ def scan_all_plugins(plugin_list, add_to_store=True):
     :returns: A dictionary of PluginInfo object for all of the successfully loaded modules keyed by their path
     """
     plugin_info = dict()
-    plugin_scan_tasks = dict()
 
-    # fire off a number of sub-tasks for each plugin to be scanned
-    for data in plugin_list:
-        plugin_scan_tasks[data[1]] = scan_plugin.apply_async(args=[data, add_to_store])
+    # fire off sub-tasks for each plugin to be scanned and collect results
+    plugin_scan_tasks = [scan_plugin.s(data, add_to_store) for data in plugin_list]
+    try:
+        result = group(plugin_scan_tasks).apply_async().join(timeout=300)
+    except Exception as exc:
+        logger.error("Error while scanning plugins: " + str(exc))
+    else:
+        for i, data in enumerate(plugin_list):
+            path = data[1]
+            plugin_info[path] = result[i]
 
-    # wait for all of the tasks in the result set to finish and collect the results
-    for path, async_result in plugin_scan_tasks.iteritems():
-        try:
-            result = async_result.get(timeout=300, propagate=True)
-            plugin_info[path] = result
-        except Exception as exc:
-            logger.error("Error while scanning module at " + path + ": " + str(exc))
+        logger.info("Rescanned %d plugins", len(plugin_list))
 
-    logger.info("Rescanned %d plugins", len(plugin_list))
     return plugin_info
 
 # Helper task to invoke PluginManager rescan, used to rescan after a delay
@@ -163,7 +166,6 @@ def backfill_pluginresult_diskusage():
     '''Due to new fields (inodes), and errors with counting contents of symlinked files, this function
     updates every Result object's diskusage value.
     '''
-    import traceback
     from django.db.models import Q
     from iondb.rundb import models
     from datetime import timedelta
@@ -174,34 +176,31 @@ def backfill_pluginresult_diskusage():
     log = logging.getLogger('backfill_pluginresult_diskusage')
     log.propagate = False
     log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(
-        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1024 * 1024 * 10, backupCount=5)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     log.addHandler(handler)
     log.info("\n===== New Run =====")
     log.info("PluginResults:")
-    obj_list = models.PluginResult.objects.filter(
-        Q(size=-1) | Q(inodes=-1),
+    obj_list = models.PluginResultJob.objects.filter(
+        Q(plugin_result__size=-1) | Q(plugin_result__inodes=-1),
         state__in=('Complete', 'Error'),
         starttime__gte=(timezone.now() - timedelta(days=30)),
     )
     for obj in obj_list:
         try:
-            if not os.path.exists(obj.default_path):
-                continue
-            obj.size, obj.inodes = obj._calc_size
+            obj.UpdateSizeAndINodeCount()
         except OSError:
-            log.exception("Failed to compute plugin size: '%s'", obj.default_path)
             obj.size, obj.inodes = -1
+            obj.save(update_fields=["size", "inodes"])
         except:
             log.exception(traceback.format_exc())
-        log.debug("Scanning: %s at %s -- %d (%d)", str(obj), obj.default_path, obj.size, obj.inodes)
-        obj.save(update_fields=["size", "inodes"])
+
+        log.debug("Scanned: %s at %s -- %d (%d)", str(obj), obj.default_path, obj.size, obj.inodes)
+
 
 @task
 def calc_size(prid):
-    import traceback
     from iondb.rundb.models import PluginResult
     try:
         obj = PluginResult.objects.get(pk=prid)
@@ -229,7 +228,6 @@ def calc_size(prid):
 @task(ignore_result=True)
 def cleanup_pluginresult_state():
     ''' Fix jobs stuck in running states '''
-    import traceback
     from django.db.models import Q
     from iondb.rundb import models
     from datetime import timedelta
@@ -240,43 +238,40 @@ def cleanup_pluginresult_state():
     log = logging.getLogger('backfill_pluginresult_diskusage')
     log.propagate = False
     log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(
-        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1024 * 1024 * 10, backupCount=5)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     log.addHandler(handler)
     log.info("\n===== New Run =====")
 
     transition_states = ('Pending', 'Started', 'Queued')
-    # Jobs with no timestamps - Could be large backlog. prefetch might be a mistake...
-    obj_list = models.PluginResult.objects.filter(
-        starttime__isnull=True,
-    ).prefetch_related('result')
+    # Jobs with no timestamps - Could be large backlog.
+    obj_list = models.PluginResultJob.objects.filter(starttime__isnull=True,)
     for obj in obj_list:
-        obj.starttime = obj.result.timeStamp
+        obj.starttime = obj.plugin_result.result.timeStamp
         endtime = obj.endtime
         # These are handled in next query, but might as well resolve during this pass
         if obj.state in transition_states:
-            obj.complete(state='Error')
+            obj.plugin_result.complete(obj.run_level, state='Error')
             if endtime is None:
                 obj.endtime = obj.starttime + timedelta(hours=24)
         else:
             if endtime is None:
                 obj.endtime = obj.starttime
 
-        log.debug("Backfilling timestamps: %s [%s] -- %s, %s (%s) -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.duration(), obj.size, obj.inodes)
+        log.debug("Backfilling timestamps: %s [%s] -- %s, %s -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.plugin_result.size, obj.plugin_result.inodes)
         obj.save()
 
     # Jobs stuck in SGE states
-    obj_list = models.PluginResult.objects.filter(
+    obj_list = models.PluginResultJob.objects.filter(
         state__in=transition_states,
         starttime__lte=timezone.now() - timedelta(hours=25),
     )
     for obj in obj_list:
         endtime = obj.endtime
-        obj.complete(state='Error') # clears api_key, sets endtime, runs calc_size
+        obj.plugin_result.complete(obj.run_level, state='Error') # clears api_key, sets endtime, runs calc_size
         if endtime is None:
             obj.endtime = obj.starttime + timedelta(hours=24)
 
-        log.debug("Cleaning orphan job: %s [%s] -- %s, %s (%s) -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.duration(), obj.size, obj.inodes)
+        log.debug("Cleaning orphan job: %s [%s] -- %s, %s -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.plugin_result.size, obj.plugin_result.inodes)
         obj.save()

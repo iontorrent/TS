@@ -20,6 +20,7 @@ WSGIDaemonProcess iontorrent threads=6 processes=16 maximum-requests=500 shutdow
 WSGIScriptAlias /data @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /configure @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /rundb @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /security @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /plan @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /sample @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /monitor @ION_INSTALL_PREFIX@/iondb/wsgi.py
@@ -61,16 +62,6 @@ WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi.py
     Allow from 127.0.0.0/8
     Allow from ::1
     Satisfy Any
-
-    # CORS for cross domain json requests
-    # - makes API accessible from other sites
-    <IfModule mod_setenvif.c>
-      <IfModule mod_headers.c>
-        SetEnvIf Origin ":" IS_CORS
-        Header set Access-Control-Allow-Origin "*" env=IS_CORS
-        Header set Access-Control-Allow-Credentials "true" env=IS_CORS
-      </IfModule>
-    </IfModule>
 </Location>
 
 <Location "/ion-docs">

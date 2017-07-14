@@ -136,7 +136,9 @@ class BbcCoarse
 
 		inline void CheckMinorBinPack( int siz ) {
 			if( m_minorBinPackTail + siz > m_minorBinPackSize ) {
-				m_minorBinPackSize <<= 1;
+				// double memory size until enough
+				while( m_minorBinPackTail + siz > m_minorBinPackSize )
+					m_minorBinPackSize <<= 1;
 				m_minorBinPack = (uint8_t *)realloc( m_minorBinPack, m_minorBinPackSize );
 			}
 		}

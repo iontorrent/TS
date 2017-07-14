@@ -5,6 +5,7 @@ set(PROJECT_DESCRIPTION "Ion Torrent GPU Libraries")
 enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
+include(../buildTools/cmake/CMakeLists.compiler.txt)
 
 set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 #set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
@@ -65,8 +66,8 @@ configure_file (
     "${PROJECT_BINARY_DIR}/debian/postrm" @ONLY
 )
 
-set(gpu_devdriver_version "352.41")
-set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-352.41-no-compat32.run")
+set(gpu_devdriver_version "375.26")
+set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-375.26.run")
 
 set(gpu_devdriver "gpu_devdriver")
 set(gpu_devdriver_version "${gpu_devdriver}-${gpu_devdriver_version}")
@@ -88,6 +89,22 @@ install(PROGRAMS ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}/${gpu_devdriv
 install(PROGRAMS create_nvidia_files
         DESTINATION .)
 
+## compile and install deviceQuery and bandwidthTest programs
+message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
+
+include(../buildTools/cmake/CMakeLists.dependencies.txt)
+set (CMAKE_C_FLAGS_RELEASE "")
+set (CMAKE_CXX_FLAGS_RELEASE "")
+include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
+
+CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
+CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
+
+add_dependencies(bandwidthTest cuda_toolkit)
+add_dependencies(deviceQuery cuda_toolkit)
+
+install(PROGRAMS ${PROJECT_BINARY_DIR}/deviceQuery DESTINATION .)
+install(PROGRAMS ${PROJECT_BINARY_DIR}/bandwidthTest DESTINATION .)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")

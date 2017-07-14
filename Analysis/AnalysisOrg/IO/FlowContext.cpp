@@ -36,9 +36,11 @@ void FlowContext::DetectFlowFormula ( char *explog_path )
 // @TODO: obviously needs to be refactored into flow routine
 // expand flow formula = flowOrder into appropriate number of flows
   //Determine total number of flows in experiment or previous analysis
-  if ( true ) {
-    numTotalFlows = GetTotalFlows (explog_path );
-    assert ( numTotalFlows > 0 );
+  numTotalFlows = GetTotalFlows (explog_path );
+  //assert ( numTotalFlows > 0 ); //TS-14040: changed assert to error log and exit
+  if ( numTotalFlows <= 0 ) {
+    fprintf ( stderr, "DetectFlowFormula Error: numTotalFlows=%d<=0\n",numTotalFlows);
+    exit ( EXIT_FAILURE );
   }
 
   //If flow order was not specified on command line,
@@ -47,12 +49,10 @@ void FlowContext::DetectFlowFormula ( char *explog_path )
     if ( flowOrder )
       free ( flowOrder );
     // Get flow order from the explog.txt file
-    if ( true ) {
       flowOrder = GetPGMFlowOrder ( explog_path );
       assert ( flowOrder != NULL );
       numFlowsPerCycle = strlen ( flowOrder );
       assert ( numFlowsPerCycle > 0 );
-    }
   }
 
   // Adjust number of flows according to any command line options which may have been used

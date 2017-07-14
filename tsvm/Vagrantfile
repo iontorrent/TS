@@ -4,25 +4,36 @@
 # Get Host's hostname
 require 'socket'
 host = Socket.gethostname
+
 # Get Hosts' timezone
 timezone = ''
 File.open('/etc/timezone', 'r') do |f1|
   timezone = f1.gets.chomp
 end
+
 # Get TS version (edited by tsvm-setup script)
 TS_VERSION = '4.1'
+
 # Set to false to use vboxsf filesystem mounting
-NFS = true
+NFS = false
+
 # Set to false to disable install of Ion Torrent Suite
 INSTALL_ION = true
+
 # Set to true to setup simple server (edited by tsvm-setup script)
 BASIC = false
+
 # (edited by tsvm-setup script)
 OUTBOUND_PORT = 'eth0'
+
 # set this to the IP address of your LAN's router (edited by tsvm-setup script)
 default_router = '8.8.8.8'
+
 # Set this to the ubuntu distribution version
 DIST = 'trusty'
+
+# generate a serial number from the host
+SERIAL_NUMBER = `sudo dmidecode -s system-serial-number` + 'VM'
 
 # Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
 VAGRANTFILE_API_VERSION = "2"
@@ -34,7 +45,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Ion Torrent box
   config.vm.box_url = "http://" + BOX_URL + "/boxes/"+DIST+"64_TS.box"
   config.ssh.username = 'ionadmin'
-  config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'" # avoids 'stdin: is not a tty' error.
   config.ssh.private_key_path = ["./.vagrant_key_rsa","./.private_key_rsa"]
   config.vm.provision "shell", inline: <<-SCRIPT
     printf "%s\n" "#{File.read("./.vagrant_key_rsa.pub")}" > /home/ionadmin/.ssh/authorized_keys
@@ -101,6 +111,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     vb.customize ["modifyvm", :id, "--nictype2", "virtio"]
     vb.customize ["modifyvm", :id, "--acpi", "on"]
     vb.customize ["modifyvm", :id, "--hwvirtex", "on"]  # Enable VT-x
+
+    vb.customize ["setextradata", :id, "VBoxInternal/Devices/pcbios/0/Config/DmiSystemSerial", SERIAL_NUMBER]
   end
 
 

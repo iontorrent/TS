@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <cstring>
 #include <vector>
+#include <list>
 #include <map>
 #include <deque>
 #include <set>
@@ -34,6 +35,8 @@ void PrepareHotspotsHelp()
   printf ("General options:\n");
   printf ("  -b,--input-bed                 FILE       input is a hotspots BED file (either -b or -v required)\n");
   printf ("  -v,--input-vcf                 FILE       input is a hotspots VCF file (either -b or -v required)\n");
+  printf ("  -p,--input-real-vcf            FILE       input is a real vcf file that we will process (when this is present -b and -v cannot, but -o must present)\n");
+  printf ("  -q,--output-fake-hot-vcf       FILE       output a hotspot file for subset alleles\n"); 
   printf ("  -d,--output-bed                FILE       output left-aligned hotspots in BED format [none]\n");
   printf ("  -o,--output-vcf                FILE       output is a hotspots VCF file. To be used as input to --hotspot-vcf argument of variant_caller_pipeline.py (recommended) [none]\n");
   printf ("  -r,--reference                 FILE       FASTA file containing reference genome (required)\n");
@@ -221,12 +224,126 @@ class junction {
 	vector <junction_chr> junc_;
 };
 
+static bool is_mnp_indel(const char *r, int rl, const char *a, int al)
+{
+    if (rl == al) return true;
+    int i, j, k;
+    for (i = 0; i < rl and i < al; i++) if (r[i] != a[i]) break;
+    for (j = rl-1, k = al-1; j >=i and k >= i; j--, k--) if (r[j] != a[k]) break;
+    if (j < i or k < i) return true;
+    return false;
+}
+
+bool allele_subset(int pos1, const char *ref1, const char *alt1, int pos2, const char *ref2, const char *alt2)
+{
+    int rlen1 = strlen(ref1);
+    int rlen2 = strlen(ref2);
+    if (pos1+rlen1 < pos2+rlen2) return false;
+    if (pos1 > pos2) return false;
+    // pos1 <= pos2
+    int alen1 = strlen(alt1), alen2 = strlen(alt2);
+    if (strncmp(ref1+pos2-pos1, ref2, rlen2)!=0) return false; // not even right
+    const char *s = strstr(alt1, alt2);
+    while (s) { 
+       	// check left right portion 
+     	if (is_mnp_indel(ref1, pos2-pos1, alt1, s-alt1) and is_mnp_indel(ref1+pos2-pos1+rlen2, pos1+rlen1-pos2-rlen2, alt1+(s-alt1+alen2), alen1-(s-alt1+alen2))) return true;
+	s =  strstr(s+1, alt2); // check if there are multiple occurence of the small variant
+    }
+    return false;
+}  
+
+
+class one_vcfline { //ZZ for subset
+    public:
+	one_vcfline(char *r, char *alt, int p, int g1, int g2, char *line) {
+	    strcpy(ref, r);
+    	    //split alt into alts
+	    char *ss;
+	    for (ss = strtok(alt, ","); ss; ss = strtok(NULL, ",")) {
+		alts.push_back(string(ss));
+	    }
+	    pos = p;
+	    affected = false;
+	    gt1 = g1; gt2 = g2;
+	    o_line = string(line);
+	}; 
+        char ref[1024];
+        vector<string> alts;
+	int pos;
+	bool affected;
+	void check_subset(one_vcfline &newline) {
+	    unsigned int i, j;
+	    bool need_pad = false;
+	    for (i = 0; i < newline.alts.size(); ) {
+		if (i+1 != newline.gt1 and i+1 != newline.gt2) {i++; continue;}
+		for (j = 0; j < alts.size(); j++) {
+		    if (j+1 != gt1 and j+1 != gt2) continue;
+		    if (allele_subset(pos, ref, alts[j].c_str(), newline.pos, newline.ref, newline.alts[i].c_str())) break;
+		    if (newline.pos == pos+1 and strlen(ref) < strlen(newline.ref)) {
+			char tmp[1024], tmp2[1024];
+			tmp2[1] = tmp[1] = 0; tmp[0] = tmp2[0] = ref[0]; strcat(tmp, newline.ref); strcat(tmp2, newline.alts[i].c_str());
+			if (allele_subset(pos, tmp, tmp2, pos, ref, alts[j].c_str())) { need_pad = true;break;}
+		    }
+		}
+		if (j < alts.size()) {
+		    if (need_pad) {
+			padding_tail(newline.ref+strlen(ref)-1);
+		    } 
+		    add_one(newline.pos, strlen(newline.ref), newline.alts[i]);
+		    newline.remove_ith_alt(i);
+		    affected = newline.affected = true;
+		    // after erase, no need to do i++;
+		} else {
+		    i++;
+		}
+	    }
+	};
+	void padding_tail(char *addition) {
+	    strcat(ref, addition);
+	    string s(addition);
+	    for (unsigned int i = 0; i < alts.size(); i++) alts[i] += s;
+	};
+	bool produce_hot_vcf(char *chr, FILE *fp, int &hot_n, FILE *hot_p) { // out to a file
+	   if (not affected) {fprintf(fp, "%s", o_line.c_str()); return false;}
+	   fprintf(hot_p,"%s\t%d\thotspot_%d\t%s\t", chr,  pos, hot_n, ref);
+	   hot_n++;
+	   for (unsigned int i = 0; i < alts.size(); i++) {
+		if (i != 0) fprintf(hot_p, ",");
+		fprintf(hot_p, "%s", alts[i].c_str());
+	   }
+	   fprintf(hot_p, "\t.\t.\t.\n");
+	   return true;
+	};
+	bool produce_hot_vcf(char *chr, FILE *fp, int &hot_n) {
+	    return produce_hot_vcf(chr, fp, hot_n, stdout);
+	}
+	void remove_ith_alt(int i) {
+	   alts.erase(alts.begin()+i); 
+	};
+	unsigned int gt1, gt2;
+    protected:
+	void add_one(unsigned int p, unsigned int reflen, string &alt) {
+	    string s;
+	    unsigned int i;
+	    for (i = pos; i < p; i++) s.push_back(ref[i-pos]); //padding front
+	    // add middle
+	    s += alt;
+	    // padding back
+	    for (i = p+reflen; i < pos+strlen(ref); i++) s.push_back(ref[i-pos]);
+	    alts.push_back(s);
+	};
+	string o_line;
+};
+
+
 int PrepareHotspots(int argc, const char *argv[])
 {
   OptArgs opts;
   opts.ParseCmdLine(argc, argv);
   string input_bed_filename       = opts.GetFirstString ('b', "input-bed", "");
   string input_vcf_filename       = opts.GetFirstString ('v', "input-vcf", "");
+  string input_real_vcf_filename  = opts.GetFirstString ('p', "input-real-vcf", "");
+  string output_hot_vcf		  = opts.GetFirstString ('q', "output-fake-hot-vcf", "");
   string output_bed_filename      = opts.GetFirstString ('d', "output-bed", "");
   string output_vcf_filename      = opts.GetFirstString ('o', "output-vcf", "");
   string reference_filename       = opts.GetFirstString ('r', "reference", "");
@@ -236,8 +353,12 @@ int PrepareHotspots(int argc, const char *argv[])
   bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", true);
   opts.CheckNoLeftovers();
 
-  if((input_bed_filename.empty() == input_vcf_filename.empty()) or
+  if((input_bed_filename.empty() == (input_vcf_filename.empty() and input_real_vcf_filename.empty())) or
       (output_bed_filename.empty() and output_vcf_filename.empty()) or reference_filename.empty()) {
+    PrepareHotspotsHelp();
+    return 1;
+  }
+  if ((not input_real_vcf_filename.empty()) and (output_vcf_filename.empty() or not input_vcf_filename.empty())) {
     PrepareHotspotsHelp();
     return 1;
   }
@@ -342,6 +463,13 @@ int PrepareHotspots(int argc, const char *argv[])
         continue;
       }
 
+      // OID= table has special meaning
+      if (string::npos != string(line2).find("OID=")) {
+	line_status.push_back(LineStatus(line_number));
+        line_status.back().filter_message_prefix = "Bed line contains OID=";
+        continue;
+      }
+
       char *current_chr = strtok(line2, "\t\r\n");
       char *current_start = strtok(NULL, "\t\r\n");
       char *current_end = strtok(NULL, "\t\r\n");
@@ -406,6 +534,7 @@ int PrepareHotspots(int argc, const char *argv[])
       for (char *pos = current_alt+4; *pos; ++pos)
         allele.alt += toupper(*pos);
       // here is the place to check the length of the hotspot cover the amplicon junction. ZZ
+      /*
       if (junc.contain(allele.chr_idx, allele.pos, (unsigned int) allele.ref.size())) {
 	line_status.push_back(LineStatus(line_number));
         line_status.back().filter_message_prefix = "hotspot BED line contain the complete overlapping region of two amplicon, the variant cannot be detected by tvc";
@@ -416,6 +545,7 @@ int PrepareHotspots(int argc, const char *argv[])
         line_status.back().filter_message_prefix = "hotspot BED line is not contained in any amplicon, the variant cannot be detected by tvc";
         continue;
       }
+      */
 
       allele.filtered = false;
       line_status.push_back(LineStatus(line_number));
@@ -434,17 +564,50 @@ int PrepareHotspots(int argc, const char *argv[])
   }
 
 
-  if (!input_vcf_filename.empty()) {
 
-    FILE *input = fopen(input_vcf_filename.c_str(),"r");
-    if (!input) {
-      fprintf(stderr,"ERROR: Cannot open %s\n", input_vcf_filename.c_str());
-      return 1;
+  if (!input_vcf_filename.empty() or !input_real_vcf_filename.empty()) {
+
+    bool real_vcf = false;
+    FILE *input;
+    FILE *out_real = NULL;
+    FILE *out_hot = NULL;
+    int fake_ = 0;
+    int hn = 1;
+    if (!input_real_vcf_filename.empty()) {
+	real_vcf = true;
+	input = fopen(input_real_vcf_filename.c_str(),"r");
+	if (!input) {
+	    fprintf(stderr,"ERROR: Cannot open %s\n", input_real_vcf_filename.c_str());
+            return 1;
+	}
+	out_real = fopen(output_vcf_filename.c_str(), "w");
+	if (!out_real) {
+            fprintf(stderr,"ERROR: Cannot open %s\n", output_vcf_filename.c_str());
+            return 1;
+        }
+	if (!output_hot_vcf.empty()) {
+	    out_hot = fopen(output_hot_vcf.c_str(), "w");
+	    if (!out_hot) {
+		fprintf(stderr,"ERROR: Cannot open %s\n", output_hot_vcf.c_str());
+		return 1;
+	    } 
+   	} else out_hot = stdout;
+	fprintf(out_hot, "##fileformat=VCFv4.1\n##allowBlockSubstitutions=true\n#CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO\n");
+    } else {
+        input = fopen(input_vcf_filename.c_str(),"r");
+        if (!input) {
+            fprintf(stderr,"ERROR: Cannot open %s\n", input_vcf_filename.c_str());
+            return 1;
+    	}
     }
 
     char line2[65536];
+    char line3[65536];
     int line_number = 0;
     bool line_overflow = false;
+    list<one_vcfline> vcflist;
+
+    char last_chr[1024] = "";
     while (fgets(line2, 65536, input) != NULL) {
       if (line2[0] and line2[strlen(line2)-1] != '\n' and strlen(line2) == 65535) {
         line_overflow = true;
@@ -462,9 +625,12 @@ int PrepareHotspots(int argc, const char *argv[])
         allow_block_substitutions = true;
         continue;
       }
-      if (line2[0] == '#')
+      if (line2[0] == '#') {
+	if (out_real) { fprintf(out_real, "%s", line2);}
         continue;
+      }
 
+      if (real_vcf) strcpy(line3, line2);
       char *current_chr = strtok(line2, "\t\r\n");
       char *current_start = strtok(NULL, "\t\r\n");
       char *current_id = strtok(NULL, "\t\r\n");
@@ -473,10 +639,13 @@ int PrepareHotspots(int argc, const char *argv[])
       strtok(NULL, "\t\r\n"); // Ignore QUAL
       strtok(NULL, "\t\r\n"); // Ignore FILTER
       char *current_info = strtok(NULL, "\t\r\n");
+      strtok(NULL, "\t\r\n");
+      char *gt = strtok(NULL, "\t\r\n");
 
       if (!current_chr or !current_start or !current_id or !current_ref or !current_alt) {
         line_status.push_back(LineStatus(line_number));
-        line_status.back().filter_message_prefix = "Malformed hotspot VCF line: expected at least 5 fields";
+        if (real_vcf) line_status.back().filter_message_prefix = "Malformed real VCF line: expected at least 5 fields";
+	else line_status.back().filter_message_prefix = "Malformed hotspot VCF line: expected at least 5 fields";
         continue;
       }
 
@@ -505,9 +674,13 @@ int PrepareHotspots(int argc, const char *argv[])
       // Process custom tags
       vector<string>  bstrand;
       vector<string>  hp_max_length;
+      string raw_oid;
+      string raw_omapalt;
+      string raw_oalt;
+      string raw_oref;
+      string raw_opos;
+
       if (current_info) {
-        string raw_oid;
-        string raw_omapalt;
         string raw_bstrand;
         string raw_hp_max_length;
         for (char *next = strtok(current_info, ";"); next; next = strtok(NULL, ";")) {
@@ -526,12 +699,18 @@ int PrepareHotspots(int argc, const char *argv[])
             continue;
           if (strcmp(next, "FR") == 0)
             continue;
-          if (strcmp(next, "OPOS") == 0)
+          if (strcmp(next, "OPOS") == 0) {
+	    raw_opos = value;
             continue;
-          if (strcmp(next, "OREF") == 0)
+	  }
+          if (strcmp(next, "OREF") == 0) {
+	    raw_oref = value;
             continue;
-          if (strcmp(next, "OALT") == 0)
+	  }
+          if (strcmp(next, "OALT") == 0) {
+	    raw_oalt = value;
             continue;
+	  }
           if (strcmp(next, "OID") == 0) {
             raw_oid = value;
             continue;
@@ -557,7 +736,33 @@ int PrepareHotspots(int argc, const char *argv[])
 
       }
 
-
+      if (real_vcf) {
+	//fprintf(stderr, "%s\n", gt);
+        if (gt == NULL) continue;
+	// get gt
+	int g1 = atoi(gt), g2;
+	gt = strchr(gt, '/');
+	if (gt) g2 = atoi(gt+1);
+	else {fprintf(stderr, "GT not formatted right\n"); exit(1);}
+	//if (g1 == 0 and g2 == 0) continue;
+	unsigned int cur_pos = atoi(current_start);
+	one_vcfline newline(current_ref, current_alt, cur_pos, g1, g2, line3);
+	bool new_chr = false;
+	if (strcmp(current_chr, last_chr) != 0) {
+	    new_chr = true;
+	}
+	while (not vcflist.empty()) {
+	    if ((not new_chr) and vcflist.front().pos+strlen(vcflist.front().ref) > cur_pos) break;
+	    if (vcflist.front().produce_hot_vcf(last_chr, out_real, hn, out_hot)) fake_++;
+	    vcflist.pop_front();
+	}
+	if (new_chr) strcpy(last_chr, current_chr);
+	for (list<one_vcfline>::iterator it = vcflist.begin(); it != vcflist.end(); it++) {
+	    it->check_subset(newline);
+	}
+	if (not newline.alts.empty()) vcflist.push_back(newline);
+	continue;
+      } 
       unsigned int allele_idx = 0;
       for (char *sub_alt = strtok(current_alt,","); sub_alt; sub_alt = strtok(NULL,",")) {
 
@@ -597,7 +802,19 @@ int PrepareHotspots(int argc, const char *argv[])
     }
 
     fclose(input);
+    if (real_vcf) {
+        while (not vcflist.empty()) {
+            if (vcflist.front().produce_hot_vcf(last_chr, out_real, hn, out_hot)) fake_++;
+            vcflist.pop_front();
+        }
+	fclose(out_real);
+	fclose(out_hot);
+	if (fake_ > 0) 
+            return 0;
+	else return 1;
+    }
   }
+
 
   // Process by chromosome:
   //   - Verify reference allele
@@ -636,6 +853,19 @@ int PrepareHotspots(int argc, const char *argv[])
   for (int chr_idx = 0; chr_idx < (int)ref_index.size(); ++chr_idx) {
 
     for (deque<Allele>::iterator A = alleles[chr_idx].begin(); A != alleles[chr_idx].end(); ++A) {
+
+      // check bed file
+      if (junc.contain(A->chr_idx, A->pos, (unsigned int) A->ref.size())) {
+	A->filtered = true;
+        A->line_status->filter_message_prefix = "hotspot BED line contain the complete overlapping region of two amplicon, the variant cannot be detected by tvc";
+        continue;
+      }
+      if (not junc.contained_in_ampl(A->chr_idx, A->pos, (unsigned int) A->ref.size())) {
+	A->filtered = true;
+        A->line_status->filter_message_prefix = "hotspot BED line is not contained in any amplicon, the variant cannot be detected by tvc";
+        continue;
+      }
+
 
       // Invalid characters
 
@@ -748,6 +978,7 @@ int PrepareHotspots(int argc, const char *argv[])
 	    alt_end = alt_end_orig;
 	} else {
 	 // left align the indel part, here either ref_end = 0 or alt_end = 0
+	  int opos = A->pos;
           while (A->pos > 0) {
             char nuc = ref_index[chr_idx].base(A->pos-1);
             if (ref_end > 0 and A->ref[ref_end-1] != nuc)
@@ -759,10 +990,20 @@ int PrepareHotspots(int argc, const char *argv[])
             A->pos--;
           }
 	  if (ref_end != ref_end_orig) {
-	    // trailing part is aligned, the whole ref and alt need to be kept.
+	    // trailing part is aligned, the whole ref and alt need to be kept. ZZ
 	    ref_end = A->ref.size();
 	    alt_end = A->alt.size();
 	  } 
+	  if (junc.contain(chr_idx, A->pos, ref_end) or not junc.contained_in_ampl(chr_idx, A->pos, ref_end)) {
+		// after left align the hotspot contain an overlap region, revert to the original ZZ
+		if (opos != A->pos) {
+		    A->ref.erase(0, opos-A->pos);
+		    A->alt.erase(0, opos-A->pos);
+		    A->pos = opos;
+		    ref_end = ref_end_orig;
+		    alt_end = alt_end_orig;
+		}
+	  }
        }
       }
       A->ref.resize(ref_end);

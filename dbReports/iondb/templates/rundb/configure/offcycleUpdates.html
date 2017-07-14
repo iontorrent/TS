@@ -12,6 +12,18 @@
     .k-grid gridcell {
         text-align: left;
     }
+    table {
+        table-layout: fixed;
+    }
+    .col1,.col4 {
+        width: 20%;
+    }
+    .col2,.col5 {
+        width: 100px;
+    }
+    .col3 {
+        width: 40%;
+     }
     
 </style>
 <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
@@ -33,24 +45,20 @@
         {% endif %}
         {% if products.productContents %}
         <table id="products_table">
-            <colgroup>
-                <col style="width:25%"/>
-                <col style="width:50%"/>
-                <col style="width:25%" />
-                <col style="width:100px" />
-            </colgroup>
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Description</th>
-                    <th>Available Version</th>
-                    <th>Update</th>
+                    <th class="col1">Name</th>
+                    <th class="col2"></th>
+                    <th class="col3">Description</th>
+                    <th class="col4">Available Version</th>
+                    <th class="col5">Update</th>
                 </tr>
             </thead>
             <tbody>
                 {% for product in products.productContents %}
                 <tr>
                     <td>{{ product.name }}</td>
+                    <td></td>
                     <td>{{ product.product_desc }}</td>
                     <td>{{ product.update_version }}</td>
                     <td>
@@ -71,9 +79,9 @@
     </div>
 </div>
 
-<div class="content hide"><!--- hide section, no updates available yet TS-12522 --->
+<div class="content">
     <div id = "instruments">
-        <h2>Update Instruments</h2>
+        <h2>Miscellaneous Updates</h2>
         {% if instruments.error %}
             <div class="alert alert-error">{{instruments.error}}</div>
         {% else %}
@@ -81,20 +89,13 @@
         {% endif %}
         {% if instruments.packageContents %}
         <table id="instruments_table">
-            <colgroup>
-                <col style="width:25%"/>
-                <col style="width:100px" />
-                <col style="width:50%"/>
-                <col style="width:25%"/>
-                <col style="width:100px" />
-            </colgroup>
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Version</th>
-                    <th>Description</th>
-                    <th>Available Versions</th>
-                    <th>Update</th>
+                    <th class="col1">Name</th>
+                    <th class="col2">Version</th>
+                    <th class="col3">Description</th>
+                    <th class="col4">Available Versions</th>
+                    <th class="col5">Update</th>
                 </tr>
             </thead>
             <tbody>
@@ -133,7 +134,7 @@
             </tbody>
         </table>
         {% else %}
-            No Instrument updates available at this time
+            No instrument or miscellaneous updates available at this time
         {% endif %}
     </div>
 </div>
@@ -147,21 +148,14 @@
             <div class="alert hide"></div>
         {% endif %}
         {% if plugins.pluginContents %}
-        <table id="plugins_table">
-            <colgroup>
-                <col style="width:25%"/>
-                <col style="width:100px" />
-                <col style="width:50%"/>
-                <col style="width:25%"/>
-                <col style="width:100px" />
-            </colgroup>
+        <table id="plugins_table" >
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Version</th>
-                    <th>Description</th>
-                    <th>Available Versions</th>
-                    <th>Update</th>
+                    <th class="col1">Name</th>
+                    <th class="col2">Version</th>
+                    <th class="col3">Description</th>
+                    <th class="col4">Available Versions</th>
+                    <th class="col5">Update</th>
                 </tr>
             </thead>
             <tbody>

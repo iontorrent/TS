@@ -33,8 +33,8 @@
 #include "tvcutils/unify_vcf.h"
 
 #include "IndelAssembly/IndelAssembly.h"
-
 #include "MolecularTag.h"
+#include "Consensus.h"
 
 using namespace std;
 
@@ -48,9 +48,13 @@ void TheSilenceOfTheArmadillos(ofstream &null_ostream)
 
 void * VariantCallerWorker(void *input);
 
-int main(int argc, char* argv[])
-{
+// --------------------------------------------------------------------------------------------------------------
+// The tvc exectuable is currently overloaded and harbors "tvc consensus" within
+// Below function is the classic tvc main function
 
+
+static int main_tvc(int argc, char* argv[])
+{
   printf("tvc %s-%s (%s) - Torrent Variant Caller\n\n",
          IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
 
@@ -60,37 +64,21 @@ int main(int argc, char* argv[])
 
   time_t start_time = time(NULL);
 
-
+  // Read parameters and create output directories
   ExtendParameters parameters(argc, argv);
-
-
-  mkdir(parameters.outputDir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-
-  if (parameters.program_flow.rich_json_diagnostic || parameters.program_flow.minimal_diagnostic) {
-    // make output directory "side effect bad"
-    parameters.program_flow.json_plot_dir = parameters.outputDir + "/json_diagnostic/";
-    mkdir(parameters.program_flow.json_plot_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  }
 
   ReferenceReader ref_reader;
   ref_reader.Initialize(parameters.fasta);
 
   TargetsManager targets_manager;
-  targets_manager.Initialize(ref_reader, parameters.targets, parameters.trim_ampliseq_primers);
+  targets_manager.Initialize(ref_reader, parameters.targets, parameters.min_cov_fraction, parameters.trim_ampliseq_primers);
 
   BAMWalkerEngine bam_walker;
   bam_walker.Initialize(ref_reader, targets_manager, parameters.bams, parameters.postprocessed_bam, parameters.prefixExclusion);
   bam_walker.GetProgramVersions(parameters.basecaller_version, parameters.tmap_version);
 
   SampleManager sample_manager;
-  string sample_name = parameters.sampleName;
-  sample_manager.Initialize(bam_walker.GetBamHeader(), parameters.sampleName, parameters.force_sample_name);
-  if ((sample_name == "") and (sample_manager.num_samples_ > 1)) {
-	  parameters.multisample = true;
-	  cout << "Multisample run detected." << endl;
-	  cerr << "FATAL ERROR: Multisample runs are not currently supported." << endl;
-	  exit(-1);
-  }
+  sample_manager.Initialize(bam_walker.GetBamHeader(), parameters.sampleName, parameters.force_sample_name, parameters.multisample);
 
   InputStructures global_context;
   global_context.Initialize(parameters, ref_reader, bam_walker.GetBamHeader());
@@ -98,8 +86,16 @@ int main(int argc, char* argv[])
   MolecularTagTrimmer tag_trimmer;
   tag_trimmer.InitializeFromSamHeader(parameters.tag_trimmer_parameters, bam_walker.GetBamHeader());
 
+  MolecularTagManager mol_tag_manager;
+  mol_tag_manager.Initialize(&tag_trimmer, &sample_manager);
+
+  if (tag_trimmer.HaveTags()){
+	  cout << "TVC: Call small variants with molecular tags. Indel Assembly will be turned off automatically." << endl;
+	  parameters.program_flow.do_indel_assembly = false;
+  }
+
   OrderedVCFWriter vcf_writer;
-  vcf_writer.Initialize(parameters.outputDir + "/" + parameters.outputFile, parameters, ref_reader, sample_manager);
+  vcf_writer.Initialize(parameters.outputDir + "/" + parameters.small_variants_vcf, parameters, ref_reader, sample_manager, tag_trimmer.HaveTags());
 
   OrderedBAMWriter bam_writer;
 
@@ -115,14 +111,18 @@ int main(int argc, char* argv[])
   parsed_opts.setReference(parameters.fasta);
   parsed_opts.setBams(parameters.bams);
   parsed_opts.setTargetFile(parameters.targets);
-  parsed_opts.setOutputVcf(parameters.outputDir + "/indel_assembly.vcf");
+  parsed_opts.setOutputVcf(parameters.outputDir + "/" + parameters.indel_assembly_vcf);
   parsed_opts.setParametersFile(parameters_file);
-  parsed_opts.setSampleName(sample_name);
+  // Weird behavior of assembly where an empty sample name enables multi-sample analysis
+  parsed_opts.setSampleName(parameters.multisample ? "" : sample_manager.primary_sample_name_);
   // Print the indel_assembly parameters if do_indel_assembly = true
-  if(parameters.program_flow.do_indel_assembly)
+  if(parameters.program_flow.do_indel_assembly){
+	  cout << "TVC: Parsing Indel Assembly parameters." << endl;
 	  parsed_opts.processParameters(parameters.opts);
-  else
-	  cout<<"TVC: Indel assembly off."<< endl;
+  }
+  else{
+	  cout<<"TVC: Indel Assembly off."<< endl;
+  }
 
   IndelAssembly indel_assembly(&parsed_opts, &ref_reader, &sample_manager, &targets_manager);
   
@@ -143,23 +143,7 @@ int main(int argc, char* argv[])
   vc.metrics_manager = &metrics_manager;
   vc.sample_manager  = &sample_manager;
   vc.indel_assembly = &indel_assembly;
-  vc.tag_trimmer = &tag_trimmer;
-
-  // Will tvc call small variants with mol tags?
-  bool use_molecular_tag = vc.tag_trimmer->HaveTags();
-
-  if(use_molecular_tag){
-      cout<< "TVC: Found "<< vc.tag_trimmer->NumTaggedReadGroups() << " read group(s) with molecular tags. Call small variants using molecular tags." << endl;
-      if(vc.tag_trimmer->NumReadGroups() > vc.tag_trimmer->NumTaggedReadGroups()){
-          cout<< "TVC: Molecular tags not found in read group(s) {";
-          for(int read_group_idx = 0; read_group_idx < vc.tag_trimmer->NumReadGroups(); ++read_group_idx){
-        	  if(not vc.tag_trimmer->HasTags(read_group_idx)){
-        		  cout<<read_group_idx<<",";
-        	  }
-          }
-          cout<<"}. The reads in these group(s) will be filtered out."<<endl;
-      }
-  }
+  vc.mol_tag_manager = &mol_tag_manager;
 
   pthread_mutex_init(&vc.candidate_generation_mutex, NULL);
   pthread_mutex_init(&vc.read_loading_mutex, NULL);
@@ -207,58 +191,62 @@ int main(int argc, char* argv[])
 
   cerr << endl;
   cout << endl;
-  cout << "[tvc] Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
+  time_t indel_start_time = time(NULL);
+  cout << "[tvc] Finished small variants. Processing time: " << (indel_start_time-start_time) << " seconds." << endl;
 
-
-  if(vc.parameters->program_flow.do_indel_assembly){
-	  indel_assembly.onTraversalDone();
-  }
-  else{
-	  indel_assembly.out.close();
-  }
-
-  string novel_vcf = parameters.outputDir + "/" + parameters.outputFile;
-  string assembly_vcf = parameters.outputDir + "/indel_assembly.vcf";
-  string hotspots_file = parameters.variantPriorsFile;
-  string output_vcf = parameters.outputDir + "/TSVC_variants.vcf";
-  string tvc_metrics = parameters.outputDir + "/tvc_metrics.json";
-  string input_depth = parameters.outputDir + "/depth.txt";
-  string output_genome_vcf = parameters.outputDir + "/TSVC_variants.genome.vcf";
+  // --- Indel Assembly
   
-  if (!parameters.postprocessed_bam.empty()) {
-      int return_code = system(string("samtools index " + parameters.postprocessed_bam).c_str());
-  }
+  indel_assembly.onTraversalDone(vc.parameters->program_flow.do_indel_assembly);
+  cout << "[tvc] Finished indel assembly. Processing time: " << (time(NULL)-indel_start_time) << " seconds." << endl;
 
-  { // block serves as isolation of merging and building tabix index
-    // Prepare merger object
-    VcfOrderedMerger merger(novel_vcf, assembly_vcf, hotspots_file, output_vcf, tvc_metrics, input_depth, output_genome_vcf, ref_reader, targets_manager, 10, max(0, parameters.minCoverage), true);
+  // --- VCF post processing & merging steps
+  /*/ XXX Not being done in TVC 5.4 but in the variant caller pipeline
   
-    merger.perform();
-  }
+  time_t post_proc_start = time(NULL);
 
-  build_index(parameters.outputDir + "/TSVC_variants.vcf");
-  build_index(parameters.outputDir + "/TSVC_variants.genome.vcf");
+  string small_variants_vcf = parameters.outputDir + "/" + parameters.small_variants_vcf;
+  string indel_assembly_vcf = parameters.outputDir + "/" + parameters.indel_assembly_vcf;
+  string hotspots_file      = parameters.variantPriorsFile;
+  string merged_vcf         = parameters.outputDir + "/" + parameters.merged_vcf;
+  string tvc_metrics        = parameters.outputDir + "/tvc_metrics.json"; // Name hard coded in metrics manager FinalizeAndSave call
+  string input_depth        = parameters.outputDir + "/depth.txt"; // Name hard coded in BAM walker initialization
+  string output_genome_vcf  = parameters.outputDir + "/" + parameters.merged_genome_vcf;
+
+  // VCF merging & post processing filters / subset annotation
+  VcfOrderedMerger merger(small_variants_vcf, indel_assembly_vcf, hotspots_file, merged_vcf, tvc_metrics, input_depth,
+        output_genome_vcf, ref_reader, targets_manager, 10, max(0, parameters.minCoverage), true);
+  merger.SetVCFrecordFilters(parameters.my_controls.filter_by_target, parameters.my_controls.hotspot_positions_only, parameters.my_controls.hotspot_variants_only);
+  merger.perform();
+
+  build_index(merged_vcf);
+  build_index(output_genome_vcf);
+
+  cout << "[tvc] Finished vcf post processing. Processing time: " << (time(NULL)-post_proc_start) << " seconds." << endl;
+  // */
 
   cerr << endl;
   cout << endl;
-  cout << "[tvc] Normal termination. Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
-
-  return 0;
+  cout << "[tvc] Total Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
+  return EXIT_SUCCESS;
 }
 
+// --------------------------------------------------------------------------------------------------------------
+// The tvc exectuable is currently overloaded and harbors "tvc consensus"
 
+int main(int argc,  char* argv[])
+{
+   if (argc > 1){
+       if (string(argv[1]) == "consensus"){
+           return ConsensusMain(argc - 1, argv + 1);
+       }
+   }
+   return main_tvc(argc, argv);
+}
 
-
-
+// --------------------------------------------------------------------------------------------------------------
 
 void * VariantCallerWorker(void *input)
 {
-  Consensus consensus;
-  list<PositionInProgress> consensus_position;
-  consensus_position.push_back(PositionInProgress());
-  list<PositionInProgress>::iterator new_position_ticket = consensus_position.begin();
-  new_position_ticket->begin = NULL;
-  new_position_ticket->end = NULL;
   BamAlignment alignment;
   VariantCallerContext& vc = *static_cast<VariantCallerContext*>(input);
 
@@ -270,17 +258,31 @@ void * VariantCallerWorker(void *input)
   Alignment * new_read[kReadBatchSize];
   bool success[kReadBatchSize];
   list<PositionInProgress>::iterator position_ticket;
+  int prev_positioin_ticket_begin = -1;  // position_ticket.begin at the previous while loop
+  int prev_positioin_ticket_end = -1;    // position_ticket.end at the previous while loop
   PersistingThreadObjects  thread_objects(*vc.global_context);
+
+  Consensus consensus;
+  consensus.SetFlowConsensus(false);
+  list<PositionInProgress> consensus_position_temp(1);
+  list<PositionInProgress>::iterator consensus_position_ticket = consensus_position_temp.begin();
+  consensus_position_ticket->begin = NULL;
+  consensus_position_ticket->end = NULL;
+
+  CandidateExaminer my_examiner(&thread_objects, &vc);
+
   bool more_positions = true;
-  bool use_molecular_tag = vc.tag_trimmer->HaveTags();
+  // Molecular tagging related stuffs
+  const bool use_molecular_tag = vc.mol_tag_manager->tag_trimmer->HaveTags();
+  vector< vector< vector<MolecularFamily> > > my_molecular_families_multisample;
+  MolecularFamilyGenerator my_family_generator;
 
   pthread_mutex_lock(&vc.bam_walker_mutex);
   MetricsAccumulator& metrics_accumulator = vc.metrics_manager->NewAccumulator();
   pthread_mutex_unlock(&vc.bam_walker_mutex);
 
   while (true /*more_positions*/) {
-
-    // Opportunistic read removal
+	  // Opportunistic read removal
 
     if (vc.bam_walker->EligibleForReadRemoval()) {
       if (pthread_mutex_trylock(&vc.read_removal_mutex) == 0) {
@@ -374,24 +376,33 @@ void * VariantCallerWorker(void *input)
       }
       pthread_mutex_unlock(&vc.read_loading_mutex);
 
-
+      bool more_read_come = false;
       for (int i = 0; i < kReadBatchSize and success[i]; ++i) {
         // 1) Filling in read body information and do initial set of read filters
         if (not vc.candidate_generator->BasicFilters(*new_read[i]))
           continue;
 
         // 2) Alignment information altering methods (can also filter a read)
-        if (not vc.tag_trimmer->GetTagsFromBamAlignment(new_read[i]->alignment, new_read[i]->tag_info)){
+        if (not vc.mol_tag_manager->tag_trimmer->GetTagsFromBamAlignment(new_read[i]->alignment, new_read[i]->tag_info)){
           new_read[i]->filtered = true;
           continue;
         }
+
+        // 3) Filter by target and Trim ampliseq primer here
         vc.targets_manager->TrimAmpliseqPrimers(new_read[i], vc.bam_walker->GetRecentUnmergedTarget());
         if (new_read[i]->filtered)
           continue;
 
-        // 3) Parsing alignment: Read filtering & populating allele specific data types in Alignment object
+
+        // 4) Filter by read mismatch limit (note: NOT the filter for read-max-mismatch-fraction) here.
+        FilterByModifiedMismatches(new_read[i], vc.parameters->read_mismatch_limit, vc.targets_manager);
+        if (new_read[i]->filtered)
+          continue;
+
+        // 5) Parsing alignment: Read filtering & populating allele specific data types in Alignment object
         vc.candidate_generator->UnpackReadAlleles(*new_read[i]);
-        // 4) Unpacking read meta data for evaluator
+
+        // 6) Unpacking read meta data for evaluator
         UnpackOnLoad(new_read[i], *vc.global_context);
       }
 
@@ -419,84 +430,55 @@ void * VariantCallerWorker(void *input)
     vc.bam_walker->BeginPositionProcessingTask(position_ticket);
     pthread_mutex_unlock(&vc.bam_walker_mutex);
 
-    //@TODO: Still not the optimal way to do this.
-    //@TODO: my_molecular_families_multisample should be dynamically updated with BAMWalkerEngine when we add or remove a read.
-    //@TODO: We should declare vector< vector< map<string, MolecularFamily<Alignment*> > > > my_molecular_families_multisample;
-    // Gather the reads into families
-    // my_molecular_families_multisample.size() = # of samples
-    // my_molecular_families_multisample[sample_index].size() = 2 strands, 0 for fwd, 1 for rev
-    // my_molecular_families_multisample[sample_index][strand_key].size() # of families found on the strand
-    vector< vector< vector<MolecularFamily<Alignment*> > > > my_molecular_families_multisample;
-    int sample_num = 1;
     if(use_molecular_tag){
+        int sample_num = 1;
         if (vc.parameters->multisample){
             sample_num = vc.sample_manager->num_samples_;
         }
-        my_molecular_families_multisample.clear();
-        my_molecular_families_multisample.resize(sample_num);
-
-        for (int sample_index = 0; (sample_index < sample_num); ++sample_index) {
-            GenerateMyMolecularFamilies(*position_ticket, my_molecular_families_multisample[sample_index], *(vc.parameters), sample_index);
-            for (vector<vector<MolecularFamily<Alignment*> > >::iterator iter = my_molecular_families_multisample[sample_index].begin(); (iter != my_molecular_families_multisample[sample_index].end()); ++iter) {
-                for (vector<MolecularFamily<Alignment*> >::iterator iter2 = iter->begin(); (iter2 != iter->end()); ++iter2) {
-                    if (iter2->family_members.size() >= (unsigned int)vc.parameters->tag_trimmer_parameters.min_family_size) {
-                        Alignment* alignment = new Alignment;
-                        consensus.CalculateConsensus(*vc.ref_reader, iter2->family_members, *alignment);
-                        if (not vc.candidate_generator->BasicFilters(*alignment)) {delete alignment;}
-                        else {
-                            vc.targets_manager->TrimAmpliseqPrimers(alignment, vc.bam_walker->GetRecentUnmergedTarget());
-                            if (alignment->filtered) {delete alignment;}
-                            else {
-                                if (new_position_ticket->begin == NULL) {new_position_ticket->begin = alignment;}
-                                if (new_position_ticket->end != NULL) {new_position_ticket->end->next = alignment;}
-                                new_position_ticket->end = alignment;
-                            }
-                        }
-                    }
-                }
-            }
+        // No need to generate families if position_ticket is not changed.
+        bool is_position_ticket_changed = true;
+        if (position_ticket->begin != NULL and position_ticket->end != NULL){
+        	is_position_ticket_changed = (prev_positioin_ticket_begin != position_ticket->begin->read_number) or (prev_positioin_ticket_end != position_ticket->end->read_number);
         }
-        new_position_ticket->end = NULL;
+
+        if (is_position_ticket_changed){
+    		for (int sample_index = 0; sample_index < sample_num; ++sample_index) {
+    			int overloaded_sample_index = vc.parameters->multisample ? sample_index : -1;
+    	        my_molecular_families_multisample.resize(sample_num);
+    			my_family_generator.GenerateMyMolecularFamilies(vc.mol_tag_manager, *position_ticket, overloaded_sample_index, my_molecular_families_multisample[sample_index]);
+    		}
+    		GenerateConsensusPositionTicket(my_molecular_families_multisample, vc, consensus, consensus_position_ticket);
+        }
+        if (position_ticket->begin != NULL and position_ticket->end != NULL){
+        	prev_positioin_ticket_begin = position_ticket->begin->read_number;
+        	prev_positioin_ticket_end = position_ticket->end->read_number;
+        }else{
+        	prev_positioin_ticket_begin = -1;
+        	prev_positioin_ticket_end = -1;
+        }
     }
 
+    // Candidate Generation
     int haplotype_length = 1;
-    if (new_position_ticket->begin != NULL) {
-        Alignment* p = new_position_ticket->begin;
-        while ((p != NULL) and (p != new_position_ticket->end)) {
+    if(consensus_position_ticket->begin != NULL){
+  		for (Alignment *p = consensus_position_ticket->begin; p; p = p->next) {
             vc.candidate_generator->UnpackReadAlleles(*p);
-            p = p->next;
         }
-        vc.bam_walker->SetupPositionTicket(new_position_ticket);
-        vc.candidate_generator->GenerateCandidates(variant_candidates, new_position_ticket, haplotype_length);
-        while ((new_position_ticket->begin != NULL) and (new_position_ticket->begin != new_position_ticket->end)) {
-            p = new_position_ticket->begin;
-            new_position_ticket->begin = new_position_ticket->begin->next;
+        vc.bam_walker->SetupPositionTicket(consensus_position_ticket);
+        vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length);
+        while ((consensus_position_ticket->begin != NULL) and (consensus_position_ticket->begin != consensus_position_ticket->end)) {
+            Alignment* p = consensus_position_ticket->begin;
+            consensus_position_ticket->begin = consensus_position_ticket->begin->next;
             delete p;
         }
-/*
-        if ((variant_candidates.size() > 0) and (variant_candidates[0].variant.position == 55259515)) {
-            p = new_position_ticket->begin;
-            while ((p != NULL) and (p != new_position_ticket->end)) {
-               //if (p->alignment.Name == "TSJAM:02884:02345") {
-                    string ref_string = "";
-                    ReferenceReader::iterator ref_ptr  = vc.ref_reader->iter(p->alignment.RefID, p->alignment.Position);
-                    for (unsigned int i = 0; (i < p->alignment.QueryBases.length()); ++i) {
-                        ref_string += *ref_ptr;
-                        ++ref_ptr;
-                    }
-                    if (ref_string != p->alignment.QueryBases) {
-                        cerr << p->alignment.Name << endl;
-                        cerr << "consensus\t" << p->alignment.Position << "\t" << p->alignment.QueryBases << endl;
-                        cerr << "reference\t" << p->alignment.Position << "\t" << ref_string << endl;
-                        cerr << endl;
-                    }
-                //}
-            }
-        }
-*/
+		if (consensus_position_ticket->begin != NULL) {
+			delete consensus_position_ticket->begin;
+			consensus_position_ticket->begin = NULL;
+			consensus_position_ticket->end = NULL;
+		}
     }
-    else {
-        vc.candidate_generator->GenerateCandidates(variant_candidates, position_ticket, haplotype_length);
+    else{
+    	vc.candidate_generator->GenerateCandidates(variant_candidates, position_ticket, haplotype_length, &my_examiner);
     }
 
     pthread_mutex_lock(&vc.bam_walker_mutex);
@@ -532,9 +514,11 @@ void * VariantCallerWorker(void *input)
         if (vc.parameters->multisample) {
           bool pass = false; // if pass == false the no reads for the candidate
           bool filter = true;
+          int evaluator_error_code = 0;
           for (int sample_index = 0; (sample_index < vc.sample_manager->num_samples_); ++sample_index) {
-            if (EnsembleProcessOneVariant(thread_objects, vc, *v, *position_ticket,
-            		my_molecular_families_multisample[sample_index], sample_index)) {pass = true;}
+        	  evaluator_error_code = EnsembleProcessOneVariant(thread_objects, vc, *v, *position_ticket, my_molecular_families_multisample[sample_index], sample_index);
+        	  pass = evaluator_error_code == 0;
+        	//TODO: czb: the logic here is a mess. Need clean-up!
             if (!v->variant.isFiltered) {filter = false;}
             v->variant.isFiltered = false;
           }
@@ -548,14 +532,17 @@ void * VariantCallerWorker(void *input)
           }
           if (!pass) {
             for (int sample_index = 0; (sample_index < vc.sample_manager->num_samples_); ++sample_index) {
-              AutoFailTheCandidate(v->variant, vc.parameters->my_controls.use_position_bias, v->variant.sampleNames[sample_index], use_molecular_tag);
+              string my_reason = evaluator_error_code == 2? "NOVALIDFUNCFAM" : "NODATA";
+              AutoFailTheCandidate(v->variant, vc.parameters->my_controls.use_position_bias, v->variant.sampleNames[sample_index], use_molecular_tag, my_reason);
             }
           }
         }
         else {
-          if (!EnsembleProcessOneVariant(thread_objects, vc, *v, *position_ticket,
-        		  my_molecular_families_multisample[0], 0)) {
-            AutoFailTheCandidate(v->variant, vc.parameters->my_controls.use_position_bias, v->variant.sampleNames[0], use_molecular_tag);
+          // We only call based on the reads of the primary sample if  a sample name was provided
+          int evaluator_error_code = EnsembleProcessOneVariant(thread_objects, vc, *v, *position_ticket, my_molecular_families_multisample[0], vc.sample_manager->primary_sample_);
+          if (evaluator_error_code != 0) {
+            string my_reason = evaluator_error_code == 2? "NOVALIDFUNCFAM" : "NODATA";
+            AutoFailTheCandidate(v->variant, vc.parameters->my_controls.use_position_bias, v->variant.sampleNames[0], use_molecular_tag, my_reason);
           }
         }
         //v->isFiltered = true;

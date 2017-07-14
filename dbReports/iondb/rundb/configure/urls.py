@@ -21,6 +21,7 @@ urlpatterns = patterns(
     url(r'^ampliseq/$', 'views.configure_ampliseq', name='configure_ampliseq'),
 
     url(r'^plugins/$', 'views.configure_plugins', name="configure_plugins"),
+    url(r'^mesh/$', 'views.configure_mesh', name="configure_mesh"),
     url(r'^plugins/plugin/install/$', 'views.configure_plugins_plugin_install', name="configure_plugins_plugin_install"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/$', 'views.configure_plugins_plugin_configure', name="configure_plugins_plugin_configure"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/pluginMedia/(?P<path>.*)$', 'views.configure_plugins_pluginmedia', name="configure_plugins_pluginmedia"),
@@ -51,6 +52,7 @@ urlpatterns = patterns(
     url(r'^references/barcodeset/$', 'views.references_barcodeset_add', name="references_barcodeset_add"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/$', 'views.references_barcodeset', name="references_barcodeset"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/delete/$', 'views.references_barcodeset_delete', name="references_barcodeset_delete"),
+    url(r'^references/barcodeset/(?P<barcodesetid>\d+)/csv/$', 'views.reference_barcodeset_csv', name="references_barcodeset_csv"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/barcode/add/$', 'views.references_barcode_add', name="references_barcode_add"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/barcode/(?P<pk>\d+)/$', 'views.references_barcode_edit', name="references_barcode_edit"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/barcode/(?P<pks>[\d,]+)/delete/$', 'views.references_barcode_delete', name="references_barcode_delete"),

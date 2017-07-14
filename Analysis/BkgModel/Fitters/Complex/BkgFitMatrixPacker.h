@@ -9,6 +9,7 @@
 #include "BkgMagicDefines.h"
 #include "BeadParams.h"
 #include "RegionParams.h"
+#include <map>
 
 class BkgFitMatDat;
 
@@ -81,7 +82,7 @@ public:
     mat_row = mat_col = 0;
     matId = JTJ_MAT;
   }
-  ~mat_assy_input_line() { delete [] affected_flows; }
+  ~mat_assy_input_line() { if (affected_flows) delete [] affected_flows; }
   void realloc( int size ) { delete [] affected_flows; affected_flows = new int[size]; }
 
   PartialDerivComponent comp1;
@@ -93,6 +94,7 @@ public:
   AssyMatID matId;
   int mat_row;
   int mat_col;
+  std::string derivName;
 };
 
 
@@ -115,10 +117,12 @@ struct mat_assembly_instruction {
 // structure that holds the output mapping of the solution matrix (the delta vector)
 // to the params structure
 struct delta_mat_output_line {
+  delta_mat_output_line() : delta_ndx(0), bead_params_func(NULL), reg_params_func(NULL), array_index(0) {}
   int delta_ndx;
   float * ( BeadParams::* bead_params_func )();
   float * ( reg_params::*  reg_params_func  )();
   int array_index;
+  std::string name;
 };
 
 // collection of all input and output instruction information for a single fit configuration
@@ -127,6 +131,13 @@ struct fit_instructions {
   int    input_len;
   struct delta_mat_output_line *output;
   int    output_len;
+
+  fit_instructions() {
+    input = NULL;
+    input_len = 0;
+    output = NULL;
+    output_len = 0;
+  }
 };
 
 typedef enum {
@@ -152,6 +163,7 @@ class BkgFitMatrixPacker
 
   double *GetDestMatrixPtr(AssyMatID mat_id,int row,int col);
 
+  std::vector<std::string> compNames;
 
  private:
 
@@ -175,12 +187,12 @@ class BkgFitMatrixPacker
  public:
 
   fit_instructions& my_fit_instructions;
-  delta_mat_output_line* getOuputList() { return outputList; }
-  mat_assembly_instruction* getInstList() { return instList; }
+  delta_mat_output_line* getOuputList() const { return outputList; }
+  mat_assembly_instruction* getInstList() const { return instList; }
   void BuildMatrix(bool accum);
-  int getNumInstr() { return nInstr; }
-  int getNumOutputs() { return nOutputs; }
-  int getNumException() { return numException; }
+  int getNumInstr() const { return nInstr; }
+  int getNumOutputs() const { return nOutputs; }
+  int getNumException() const { return numException; }
   void resetNumException() { numException = 0; }
   void SetDataRhs(float, int);
   void SetDataJtj(float, int, int);

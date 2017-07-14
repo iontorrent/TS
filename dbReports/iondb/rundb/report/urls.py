@@ -19,5 +19,7 @@ urlpatterns = patterns(
 
     url(r'^(?P<pk>\d+)/getZip/$', 'views.getZip', name="getZip"),
     url(r'^(?P<pk>\d+)/getVCF/$', 'views.getVCF', name="getVCF"),
+    
+    url(r'^(?P<pk>\d+)/plugin/(?P<plugin_pk>\d+)/plugin_barcodes_table$', 'views.plugin_barcodes_table', name='plugin_barcodes_table'),
 )
 

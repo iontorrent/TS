@@ -1,5 +1,5 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from iondb.rundb.models import Project, PlannedExperiment, Content, Plugin, GlobalConfig, Chip, ApplicationGroup
+from iondb.rundb.models import Project, PlannedExperiment, Content, Plugin, GlobalConfig, Chip, ApplicationGroup, common_CV
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 
@@ -49,10 +49,12 @@ def get_projects(username, json_data):
 def dict_bed_hotspot():
     data = {}
     allFiles = Content.objects.filter(publisher__name="BED", path__contains="/unmerged/detail/").order_by('path')
-    bedFiles, hotspotFiles = [], []
+    bedFiles, hotspotFiles, sseFiles = [], [], []
     bedFileFullPaths, bedFilePaths, hotspotFullPaths, hotspotPaths = [], [], [], []
     for _file in allFiles:
-        if _file.meta.get("hotspot", False):
+        if _file.meta.get("sse"):
+            sseFiles.append(_file)
+        elif _file.meta.get("hotspot", False):
             hotspotFiles.append(_file)
             hotspotFullPaths.append(_file.file)
             hotspotPaths.append(_file.path)
@@ -66,6 +68,7 @@ def dict_bed_hotspot():
     data["bedFilePaths"] = bedFilePaths
     data["hotspotFullPaths"] = hotspotFullPaths
     data["hotspotPaths"] = hotspotPaths
+    data["sseFiles"] = sseFiles
     return data
 
 
@@ -144,22 +147,29 @@ def get_default_or_first_IR_account(request):
     return {}
 
 
-def get_default_or_first_IR_account_by_userName(userName):
+def get_default_or_first_IR_account_by_userName(userName, IR_server = None):
     '''
     return the default IR account for the user.
     If no default specified, just return the first IR account defined.
     '''
 
     empty_value = {}
+
     if userName:
         userConfigs = get_IR_accounts_by_userName(userName)
 
         if userConfigs:
             for userConfig in userConfigs:
-                isDefault = userConfig.get("default", False)
-                if isDefault:
-                    return userConfig
-            return userConfigs[0]
+                if IR_server:
+                    existing_IR_name = userConfig.get("name").strip()
+                    if IR_server.strip() == existing_IR_name:
+                        return userConfig
+                else:
+                    isDefault = userConfig.get("default", False)
+                    if isDefault:
+                        return userConfig
+            if not IR_server:
+                return userConfigs[0]
 
     return empty_value
 
@@ -248,7 +258,16 @@ def get_template_categories():
     '''
     applicationGroup_PGx = ApplicationGroup.objects.filter(name='PGx')
     applicationGroup_HID = ApplicationGroup.objects.filter(name='HID')
-    
+    applicationGroup_tagSeq = ApplicationGroup.objects.filter(name='onco_liquidBiopsy')    
+    applicationGroup_immuneRepertoire = ApplicationGroup.objects.filter(name='immune_repertoire')
+
+    category_solidTumor = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_solidTumor")
+    category_immune = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_immune")
+    category_repro = common_CV.objects.filter(cv_type = "applicationCategory", value = "repro")
+    category_16s = common_CV.objects.filter(cv_type = "applicationCategory", value = "16s")
+    category_inheritedDisease = common_CV.objects.filter(cv_type = "applicationCategory", value = "inheritedDisease")
+    category_oncoHeme = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_heme")
+                    
     categories = [
         # Favorites
         {
@@ -311,32 +330,91 @@ def get_template_categories():
         # HID
         {
             'tag': 'hid',
-            'displayedName': 'Human Identification',
+            'displayedName': applicationGroup_HID[0].description,
             'api_filter':'&runType=AMPS&applicationGroup__name__iexact=HID',
             'img': 'resources/img/appl_hid.png',
             'isActive': applicationGroup_HID[0].isActive if applicationGroup_HID else False,
             'ampliSeq_upload': True,            
             'code': 11,
+        },
+        # Immune Repertoire
+        {
+            'tag': 'immune_repertoire',
+            'displayedName': applicationGroup_immuneRepertoire[0].description,
+            'api_filter':'&runType=AMPS_RNA&applicationGroup__name__iexact=immune_repertoire',
+            'img': 'resources/img/appl_immuneRepertoire.png',
+            'isActive': applicationGroup_immuneRepertoire[0].isActive if applicationGroup_immuneRepertoire else False,           
+            'code': 12,
         },                  
+        # Inherited disease
+        {
+            'tag': 'category_inherited_disease',
+            'displayedName': category_inheritedDisease[0].displayedValue if category_inheritedDisease else "--",
+            'api_filter': '&categories__icontains=inheritedDisease',
+            'img': 'resources/img/appl_category_inherited_disease.png',
+            'isActive': category_inheritedDisease[0].isActive if category_inheritedDisease else False,
+            'ampliSeq_upload': True,   
+            'code': 1,
+        },
+        # Oncology - hemeOnc
+        {
+            'tag': 'category_onco_hemeOnc',
+            'displayedName': category_oncoHeme[0].displayedValue if category_oncoHeme else "--",
+            'api_filter': '&categories__icontains=onco_heme',
+            'img': 'resources/img/appl_category_onco_heme.png',
+            'isActive': category_oncoHeme[0].isActive if category_oncoHeme else False,
+            'ampliSeq_upload': True,            
+            'code': 1,
+        },
+        # Oncology - immunology
+        {
+            'tag': 'category_onco_immune',
+            'displayedName': category_immune[0].displayedValue if category_immune else "--",
+            'api_filter': '&categories__icontains=onco_immune',
+            'img': 'resources/img/appl_category_onco_immune.png',
+            'isActive': category_immune[0].isActive if category_immune else False,
+            'ampliSeq_upload': True,            
+            'code': 1,
+        },
         # Oncology - Liquid Biopsy
         {
             'tag': 'onco_liquidBiopsy',
-            'displayedName': 'Oncology - Liquid Biopsy',
-            'api_filter': '&runType=TAG_SEQUENCING',
+            'displayedName': applicationGroup_tagSeq[0].description,
+            'api_filter':'&runType=TAG_SEQUENCING&applicationGroup__name__iexact=onco_liquidBiopsy',
             'img': 'resources/img/appl_tagSequencing.png',
-            'isActive': True,
+            'isActive': applicationGroup_tagSeq[0].isActive if applicationGroup_tagSeq else False,
             'code': 10,
         },
+        # Oncology - solid tumor
+        {
+            'tag': 'category_onco_solidTumor',
+            'displayedName': category_solidTumor[0].displayedValue if category_solidTumor else "--",
+            'api_filter': '&categories__icontains=onco_solidTumor',
+            'img': 'resources/img/appl_category_onco_solid_tumor.png',
+            'isActive': category_solidTumor[0].isActive if category_solidTumor else False,
+            'ampliSeq_upload': True,   
+            'code': 8,
+        },                  
         # Pharmacogenomics
         {
             'tag': 'pharmacogenomics',
-            'displayedName': 'Pharmacogenomics',
+            'displayedName':  applicationGroup_PGx[0].description,
             'api_filter': '&runType=AMPS&applicationGroup__name__iexact=PGx',
             'img': 'resources/img/appl_pgx.png',
             'isActive': applicationGroup_PGx[0].isActive if applicationGroup_PGx else False,
             'ampliSeq_upload': True,
             'code': 9,
         },
+        # Reproductive
+        {
+            'tag': 'category_repro',
+            'displayedName': category_repro[0].displayedValue if category_repro else "--",
+            'api_filter': '&categories__icontains=repro',
+            'img': 'resources/img/appl_category_reproSeq.png',
+            'isActive': category_repro[0].isActive if category_repro else False,
+            'ampliSeq_upload': True,            
+            'code': 3,
+        },                            
         # RNA Seq
         {
             'tag': 'rna_seq',
@@ -364,6 +442,15 @@ def get_template_categories():
             'isActive': True,
             'code': 3,
         },
+        # 16S rRNA profiling
+        {
+            'tag': 'category_16s',
+            'displayedName': category_16s[0].displayedValue if category_16s else "--",
+            'api_filter': '&categories__icontains=16s',
+            'img': 'resources/img/appl_category_16s_profile.png',
+            'isActive': category_16s[0].isActive if category_16s else False,
+            'code': 7,
+        },                     
         # 16S Target Sequencing
         {
             'tag': '16s_targetseq',

@@ -23,13 +23,14 @@ public:
   SampleManager() : num_samples_(0), primary_sample_(0) {}
   ~SampleManager() {}
 
-  void Initialize (const SamHeader& bam_header, string& sample_name, const string& force_sample_name);
+  void Initialize (const SamHeader& bam_header, const string& primary_sample_name, const string& force_sample_name, bool &multisample);
   bool IdentifySample(const BamAlignment& alignment, int& sample_index, bool& primary_sample) const;
 
-  int                 num_samples_;
-  vector<string>      sample_names_;
-  map<string,int>     read_group_to_sample_idx_;
-  int                 primary_sample_;
+  int                 num_samples_;         // Number of samples found in BAM(s)
+  vector<string>      sample_names_;        // Names of samples
+  map<string,int>     read_group_to_sample_idx_; // Map of read group names to sample index
+  int                 primary_sample_;      // index of the primary sample
+  string              primary_sample_name_; // short for sample_names_[primary_sample_]
 };
 
 

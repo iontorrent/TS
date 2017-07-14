@@ -8,7 +8,7 @@
 class GpuMultiFlowFitMatrixConfig
 {
   public:
-    GpuMultiFlowFitMatrixConfig(fit_descriptor*, CpuStep*, int maxSteps, int flow_key, int flow_block_size);
+    GpuMultiFlowFitMatrixConfig(const std::vector<fit_descriptor>& fds, CpuStep*, int maxSteps, int flow_key, int flow_block_size);
     ~GpuMultiFlowFitMatrixConfig();
 
     int GetNumSteps() { return _numSteps; }
@@ -18,8 +18,8 @@ class GpuMultiFlowFitMatrixConfig
     CpuStep* GetPartialDerivSteps() { return _partialDerivSteps; }
 
   private:
-    void CreatePartialDerivStepsVector(fit_descriptor*, CpuStep*, int);
-    void CreateAffectedFlowsVector(fit_descriptor*, int flow_key, int flow_block_size);
+    void CreatePartialDerivStepsVector(const std::vector<fit_descriptor>& fds, CpuStep*, int);
+    void CreateAffectedFlowsVector(const std::vector<fit_descriptor>& fds, int flow_key, int flow_block_size);
     void CreateBitMapForJTJMatrixComputation();
 
   private:

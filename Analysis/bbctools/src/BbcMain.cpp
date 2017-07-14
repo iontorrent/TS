@@ -20,6 +20,7 @@ using namespace BamTools;
 #include "BbcView.h"
 #include "BbcIndex.h"
 #include "BbcDepth.h"
+#include "TrackReads.h"
 
 // Number alignments returned using SetRegion() appears incorrect when using closed regions!
 // It appears to work when using right-open regions but has MASSIVE performance issue.
@@ -33,7 +34,7 @@ const int s_initialMinJumpLen = 1000000;
 const int s_initialMaxReadLen = 1000;
 
 // Current version number string for bbctools executable
-const uint16_t s_versionNumber = 1003;
+const uint16_t s_versionNumber = 1103;
 
 // Forward declarations of functions used by main()
 int bbctools_create( BbcUtils::OptParser &optParser );
@@ -56,7 +57,7 @@ int main( int argc, char* argv[] ) {
 	if( subcmd == "create" ) {
 		subcmdFunc = &bbctools_create;
 		parseString =  "A=annotationFields:B=bbc:C=covStats:D=covDepths:E=e2eGap,L=minAlignLength,M=minPcCov;";
-		parseString += "P=primerLength,Q=minMAPQ,R=regions:S=sumStats:T=readType:a=autoCreateBamIndex ";
+		parseString += "O=readOrigin:P=primerLength,Q=minMAPQ,R=regions:S=sumStats:T=readType:a=autoCreateBamIndex ";
 		parseString += "b=onTargetBases c=coarse i=index d=noDups r=onTargetReads s=samdepth u=unique";
 		maxArgs = 0;
 	} else if( subcmd == "report" ) {
@@ -122,6 +123,7 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 
 	string  sumstatsFile = optParser.getOptValue("sumStats");
 	string  covstatsFile = optParser.getOptValue("covStats");
+	string  readOrigFile = optParser.getOptValue("readOrigin");
 	string  readType     = optParser.getOptValue("readType");
 	string  covDepths    = optParser.getOptValue("covDepths","-");
 	double  minPcCov     = optParser.getOptNumber("minPcCov");
@@ -144,12 +146,12 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 	bool invertOnTarget = false;
 
 	// check basic valid argument values and combinations
-	int numOuts  = !bbcfileRoot.empty() + !covstatsFile.empty() + !sumstatsFile.empty();
-	int numPipes = (bbcfileRoot == "-") + (covstatsFile == "-") + (sumstatsFile == "-");
+	int numOuts  = !bbcfileRoot.empty() + !covstatsFile.empty() + !sumstatsFile.empty() + !readOrigFile.empty();
+	int numPipes = (bbcfileRoot == "-") + (covstatsFile == "-") + (sumstatsFile == "-") + (readOrigFile == "-");
 	if( numOuts == 0 && !f_bci && !f_cbc ) {
 		bbcfileRoot = "-";	// default if no other output specified
 	} else if( numPipes > 1 ) {
-		cerr << "Error: bbctools create: Only one file output (--covStats, --sumStats or --bbc) may be piped to STDOUT." << endl;
+		cerr << "Error: bbctools create: Only one file output (--covStats, --sumStats, --readOrigin or --bbc) may be piped to STDOUT." << endl;
 		return -1;
 	} else if( samdepth && numOuts ) {
 		cerr << "Error: bbctools create: --samdepth (-s) option may only be used without other output options." << endl;
@@ -192,6 +194,10 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 			cerr << "Error: --samdepth option is not supported for BBC source files." << endl;
 			return -1;
 		}
+		if( !readOrigFile.empty() ) {
+			cerr << "Error: --readOrigin option is not supported for BBC source files." << endl;
+			return -1;
+		}
 	} else {
 		// check / open for multiple BAM file inputs
 		if ( !bamReader.Open(cmdArgs) ) {
@@ -209,12 +215,17 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 			errMsg = BbcUtils::stringTrim(errMsg);
 			errMsg[0] = toupper(errMsg[0]);
 			cerr << endl << errMsg << "." << endl;
-			return -1;
+			return 1;
 		}
 	}
 	// grab reference list from either input source
 	const RefVector &references = haveBbcFile ? bbcView.GetReferenceData() : bamReader.GetReferenceData();
-
+	if( !references.size() ) {
+		// Issue would already been detected if input was BBC file
+		cerr << "ERROR: " << (cmdArgs.size() > 1 ? "One or more " : "");
+		cerr << "BAM file contains unaligned reads (no references).\n";
+		return 1;
+	}
 	// check/set up target regions input regions/region statistics output
 	RegionCoverage *regions = NULL;
 	string covstatsStaticFields;
@@ -312,6 +323,15 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 			bbcView.ReadAll();
 		}
 	} else {
+		// Test read tracking option for file write
+		TrackReads *readTracker = NULL;
+		try {
+			if( !readOrigFile.empty() )
+				readTracker = new TrackReads( readOrigFile, regions );
+		} catch( std::runtime_error & ) {
+			cerr << "ERROR: Unable to write to read tracking file " << readOrigFile << endl;
+			return 1;
+		}
 		// BAM reader, BaseCoverage driver, dispatching to BbcCreate and BbcView objects
 		BaseCoverage baseCov(references);
 		baseCov.SetRegionCoverage(regions);
@@ -320,9 +340,10 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 		if( bbcfileRoot == "-" ) {
 			baseCov.SetBbcView(&bbcView);
 		}
+		// Certain options require that all reads are processed, invalidating other performance options
+		bool trackAllReads = !sumstatsFile.empty() || readTracker;
 		// Implicit set of onlyOnTargetReads for performance when only these reads are required
 		bool useBaseCov = (bbcfileRoot == "-" || bbcCreate);
-		bool trackAllReads = !sumstatsFile.empty();
 		if( !targetRegions.empty() && !trackAllReads ) {
 			onlyOnTargetReads |= onlyOnTargetBases;
 			if( samdepth || !useBaseCov ) onlyOnTargetReads = true;
@@ -398,9 +419,8 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 					onlyOnTargetReads = false;
 					if( trackAllReads ) {
 						// force tracking of off-target reads
-						if( trackAllReads ) {
-							regions->TrackReadsOnRegion(aln,endPos);
-						}
+						regions->TrackReadsOnRegion(aln,endPos);
+						if( readTracker ) readTracker->Write(aln,endPos);
 						continue;
 					}
 					break;
@@ -419,6 +439,7 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 					// force tracking of off-target reads
 					if( trackAllReads ) {
 						regions->TrackReadsOnRegion(aln,endPos);
+						if( readTracker ) readTracker->Write(aln,endPos);
 					}
 					continue;	// current is before next target region - fetch the next within bounds
 				}
@@ -435,6 +456,9 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 			// record read coverage and region coverage statistics
 			if( regions ) {
 				regions->TrackReadsOnRegion(aln,endPos);
+			}
+			if( readTracker ) {
+				readTracker->Write(aln,endPos);
 			}
 		}
 		// flush and close objects associated with output
@@ -599,7 +623,7 @@ int bbctools_view( BbcUtils::OptParser &optParser )
 	if( numBins == 0 && binSize == 0 && isolateRegions == false ) {
 		// default view => disallow options dependent on binned-only options
 		if( annotate ) {
-			cerr << "Error: The --annotationFields (-A) option is only valid for binned coverage (with -B, -N or -i options)." << endl;
+			cerr << "Error: The --Fields (-A) option is only valid for binned coverage (with -B, -N or -i options)." << endl;
 			return -1;
 		}
 		if( srtBin ) {

@@ -221,6 +221,9 @@ protected:
   //! @ brief  Spells out the constants representing alignment types
   string PrintAlignType(int align_type);
 
+  //! @ brief - Create a dummy pretty alignment string if none is available
+  void create_dummy_pretty(unsigned int target_length, unsigned int query_length);
+
 
   bool             start_anywhere_in_ref_;  //!< Allow aligned read to start at any point in the reference
   bool             stop_anywhere_in_ref_;   //!< Allow aligned read to end at any point in the reference

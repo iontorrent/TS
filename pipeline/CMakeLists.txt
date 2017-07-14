@@ -33,6 +33,7 @@ set(CPACK_SET_DESTDIR "ON")
 
 add_custom_target(compileall ALL
     COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/python/"
+	COMMAND rm `/usr/bin/find "${PROJECT_SOURCE_DIR}/python/" -name *.pyc -print`
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/oia/oia.config" DESTINATION /usr/share/ion/oia)
@@ -83,14 +84,15 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-matplotlib,
     python-scipy,
     python-django,
-    python-guppy,
     python-imaging,
     python-argparse,
     python-dev")
 
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
     "python-markdown,
-    python-pygments")
+    python-pygments,
+    python-guppy")
+# python-guppy not available in Ubuntu 16.04 at this time
 
 set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-dbreports (<= 2.1.6)")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-dbreports (<= 2.1.6)")

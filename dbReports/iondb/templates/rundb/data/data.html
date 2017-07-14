@@ -4,29 +4,28 @@
 {% load static from staticfiles %}
 {% block extra_head %}
 <link href="{% static "css/chosen.css"%}" rel="stylesheet"/>
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />  <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
         zoom: 1;
         *display: inline;
-        width: 200px;
         height: 30px;
         float: left;
-        margin: 0 15px 15px 0;
+        margin: 0 10px 15px 0;
 	}
     .search-field-run {
         display: inline-block;
         zoom: 1;
         *display: inline;
-        width: 200px;
         height: 30px;
         float: left;
-        margin: 0 15px 15px 0 ;
+        margin: 0 10px 15px 0 ;
     }
     .search-field #rangeA {
         margin: 0;
-        width: 160px;
+        width: 140px;
     }
     .search-field select {
         width: 200px;
@@ -40,6 +39,9 @@
         opacity: 1.0;
         /*Dragging IE into the 21st century*/
         filter: alpha(opacity=100);
+    }
+    .k-grid {
+        margin-top: 6px;
     }
     .k-grid tr td:first-child a img {
         float:none;
@@ -79,11 +81,28 @@
         padding-left: 2px;
         padding-right: 2px;
     }
-    #main_table tbody tr td:nth-child(8) {
-        text-overflow: clip;
+    #toggle_more_columns_container {
+        display: inline-block;
+        width: 100px;
     }
-    #main_table thead th:nth-child(n+12), #main_table thead th:nth-child(n+12) > a {
-        font-size: 10px;
+    #toggle_more_columns_container.disabled > span {
+        display: none;
+    }
+    #id_star {
+        display: none;
+    }
+    #id_star_img {
+        cursor: pointer;
+        width: 18px;
+        border: 0;
+        margin:7px 0px 0px 0px;
+    }
+    .report-select-dropdown {
+        display: inline;
+    }
+    .report-select-dropdown b.caret{
+        opacity: 0.9;
+        margin-top: 5px;
     }
 </style>
 <script type="text/javascript">
@@ -105,181 +124,95 @@
             console.log("Send to project error:", data);
         });
     });
-
-    $(function () {
-        $('.search_sampleTubeLabel').click(function(e) {
-            set_search_subject_sampleTubeLabel(e);
-        });
-    });
-
-    $(function () {
-        $('.search_runName').click(function(e) {
-            set_search_subject_runName(e);
-        });
-    });
   });
-</script>
-<script type="text/javascript">
-
-function set_search_subject_runName(e) {
-    e.preventDefault();
-    $('.search_runName_selected').removeClass("icon-white icon-check");
-    $('.search_runName_selected').addClass("icon-check");
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_sampleTubeLabel_selected').addClass("icon-white");
-
-    $("label[for='searchSubject']").text("runName");
-    $("#search_subject_nav").attr("title", "Search by run name");
-    $("#run_search_dropdown_menu").toggle();
-}
-
-function set_search_subject_sampleTubeLabel(e) {
-    e.preventDefault();
-    $('.search_runName_selected').removeClass("icon-white icon-check");
-    $('.search_runName_selected').addClass("icon-white");
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_sampleTubeLabel_selected').addClass("icon-check");
-
-    $("label[for='searchSubject']").text("sampleTubeLabel");
-    $("#search_subject_nav").attr("title", "Search by sample tube label");
-    $("#run_search_dropdown_menu").toggle();
-}
-
- $(function () {
-        $('#search_subject_nav').click(function(e) {
-            $("#run_search_dropdown_menu").show();
-        });
-    });
-
 </script>
 {% endblock extra_head %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url "data" %}">Completed Runs &amp; Results</a></li>
+    <li class="active"><a href="{% url "data" %}">Completed Runs & Reports</a></li>
     <li><a href="{% url "projects" %}">Projects</a></li>
     <li><a href="{% url "datamanagement" %}">Data Management</a></li>
 {% endblock sub-nav %}
+{%block extra-main-class%}no-padding{%endblock extra-main-class%}
 {% block content %}
 <div id="data_view" class="content group">
     <div class="pull-right">
-        <small id="update_status">Page is static until refreshed</small> <a id='live_button' class="btn btn-success">Auto Update</a>
+        <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;">
+            <a href="#full" id="view_full" class="">List View</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#table" id="view_table" class="active">Table View</a>&nbsp;
+            <span id="toggle_more_columns_container">
+                <span>(<a id="toggle_more_columns" data-more-text="More Columns" data-less-text="Less Columns">More Columns</a>)</span>
+            </span>
+        </div>
+        <a id='live_button' class="btn btn-success">Auto Refresh</a>
     </div>
-    <h1>Completed Runs &amp; Results</h1>
-    <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
-        <a href="#full" id="view_full" class="">List View</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#table" id="view_table" class="active">Table View</a>
-    </div>
-    <br/>
-    <div id="search_bar" class="well" style="margin-top:5px;">
+    <h1>Completed Runs & Reports</h1>
+    <div id="search_bar" class="" style="margin-top:5px;">
         {%spaceless%}
         <div class="row-fluid">
-            <div class="search-field" style="width: 40px;">
-                <img id="id_star_img" width="16" border="0" style="margin:1px 5px 0px 0px;" src="{% static "resources/img/star-blue.png"%}">
+            <div class="search-field">
+                <img rel="tooltip" title="Favorite" data-placement="top" id="id_star_img" src="{% static "resources/img/star_off.png"%}">
                 <input id="id_star" name="star" type="checkbox">
                 <script type="text/javascript">
-                $(document).ready(function(){
-                    $('#id_star_img').click(function(e){
-                        var $checkbox = $("#id_star");
-                        $checkbox.attr('checked', !$checkbox.attr('checked'));
-                        $checkbox.change();
-                    })
-                });
+                    $(document).ready(function () {
+                        $('#id_star_img').click(function (e) {
+                            var $checkbox = $("#id_star");
+                            if ($checkbox.attr('checked')) {
+                                $(this).attr("src", "{% static "resources/img/star_off.png"%}");
+                                $checkbox.attr('checked', false);
+                            } else {
+                                $(this).attr("src", "{% static "resources/img/star-blue.png"%}");
+                                $checkbox.attr('checked', true);
+                            }
+                            $checkbox.change();
+                        })
+                    });
                 </script>
             </div>
-            <div class="search-field" style="width: 160px;">
-                <label for="dateRange" class=" hide">Date</label>
-                <input type="text" name="dateRange" id="rangeA" placeholder="Date"/>
+        	<div class="input-append search-field-run">
+                <label for="searchText" class="hide">Search</label>
+                <input id="search_text" type="text" placeholder="Search" style="width: 140px;" rel="tooltip" title="Searches Run Name, Run Notes, Report Name, Sample Tube Label, Plan Short ID and Chip Barcode" data-delay="500"/>
+                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
             </div>
-			<div class="input-append search-field-run" style="width: 250px;>
-                <label for="searchText" class="hide">Search Names</label>
-                <input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-                <div class="btn-group" style="width: 50px;" >
-                    <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by run name" data-toggle="dropdown" href="\\#">
-                    <i class="icon-search" border="0"></i><span class="caret"></span></a>
-                    <ul id="run_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
-                        <li><a href="#" class="search_runName"><span class="search_runName_selected icon-check"></span>Run name</a></li>
-                        <li><a href="#" class="search_sampleTubeLabel"><span class="search_sampleTubeLabel_selected icon-white"></span>Sample Tube Label</a></li>
-                    </ul>
-                  <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
-                </div>
+            <div class="search-field">
+                <label for="dateRange" class=" hide">Date</label>
+                <input type="text" name="dateRange" id="rangeA" placeholder="Date" style="width: 134px">
+            </div>
+            <div class="search-field">
+                <label for="id_status" class=" hide">Result Status</label>
+                <select id="id_status" name="resultStatus" class="selectpicker" data-width="140px" title="Status:" data-persist-title="true">
+                    <option value="">All</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Progress">Progress</option>
+                    <option value="Error">Error</option>
+                    <option value="Other">Other</option>
+                </select>
             </div>
             <div class="search-field">
                 <label for="id_project" class=" hide">Project</label>
-                <select id="id_project" name="project"
-                        data-placeholder="Any project" class="chzn-select">
-                    <option value=""></option>
+                <select id="id_project" name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true" data-live-search-placeholder="Find Projects..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Project:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for project in search.combined.projects %}
                         <option value="{{ project }}">{{ project }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field">
-                <label for="id_sample" class=" hide">Sample</label>
-                <select id="id_sample" name="sample" data-placeholder="Any Sample" class="chzn-select">
-                    <option value=""></option>
-                    {% for sample in search.experiment.sample %}
-                        <option value="{{ sample }}">{{ sample }}</option>
-                    {% endfor %}
+                <label for="id_data_source" class=" hide">Data Source</label>
+                <select id="id_data_source" disabled="disabled" name="data_source" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search-placeholder="Find Servers..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Server:" data-deselect-all-text="Clear" data-none-selected-text="Local TS" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    <option selected value="local">Local TS</option>
                 </select>
             </div>
             <div class="search-field">
-                <label for="id_reference" class=" hide">Reference</label>
-                <select id="id_reference" name="reference" data-placeholder="Any Reference" class="chzn-select">
-                    <option value=""></option>
-                    {% for reference in search.experiment.library %}
-                        <option value="{{ reference }}">{{ reference }}</option>
-                    {% endfor %}
-                </select>
+                <button id="toggle_more_filters" class="btn btn-primary" type="button" data-more-text="More Filters" data-less-text="Less Filters">More Filters</button>
             </div>
             <div class="search-field">
-                <label for="id_flows" class=" hide">Flow</label>
-                <select id="id_flows" name="flows" data-placeholder="All Flows"
-                        class="chzn-select">
-                    <option value=""></option>
-                    {% for flows in search.combined.flows %}
-                        <option value="{{ flows }}">{{ flows }}</option>
-                    {% endfor %}
-                </select>
+                <button id="clear_filters" class="btn" type="button">Clear All</button>
             </div>
-            <div class="search-field">
-                <label for="id_chip" class=" hide">Chip</label>
-                <select id="id_chip" name="chipType" data-placeholder="Any Chip"
-                        class="chzn-select">
-                    <option value=""></option>
-                    {% for chip in search.experiment.chipType %}
-                        {% if chip == "900" %}
-                            <option value="{{ chip }}">PI</option>
-                        {% else %}
-                            <option value="{{ chip }}">{{ chip }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="search-field">
-                <label for="id_pgm" class=" hide">Instrument</label>
-                <select id="id_pgm" name="pgmName" data-placeholder="Any Instrument"
-                        class="chzn-select">
-                    <option value=""></option>
-                    {% for pgm in search.experiment.pgmName %}
-                        <option value="{{ pgm }}">{{ pgm }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="search-field">
-                <label for="id_status" class=" hide">Result Status</label>
-                <select id="id_status" name="resultStatus" data-placeholder="All Result Status"
-                        class="chzn-select">
-                    <option value=""></option>
-                    <option value="Completed">Completed</option>
-                    <option value="Progress">Progress</option>
-                    <option value="Error">Error</option>
-                </select>
-            </div>
-            <div class="search-field">
-                <label for="order_by" class=" hide">Order By</label>
-                <select id="order_by" name="order_by" class="chzn-select">
-                    <option value="-resultDate">Reports new to old </option>
-                    <option value="resultDate">Reports old to new</option>
-                    <option value="-date">Run Date new to old</option>
-                    <option value="date">Run Date old to new</option>
+            <div class="search-field order-by">
+                <label for="order_by" class=" hide">Sort</label>
+                <select id="order_by" name="order_by" class="selectpicker" title="Sort:" data-width="170px" data-persist-title="true">
+                    <option value="-resultDate">Reports New to Old </option>
+                    <option value="resultDate">Reports Old to New</option>
+                    <option value="-date">Run Date New to Old</option>
+                    <option value="date">Run Date Old to New</option>
                     <option value="expName">Run Name A-Z</option>
                     <option value="-expName">Run Name Z-A</option>
                     <option value="chipType">Chip Asc.</option>
@@ -290,17 +223,61 @@ function set_search_subject_sampleTubeLabel(e) {
                     <option value="-repResult__qualitymetrics__q0_bases">Output Desc.</option>
                 </select>
             </div>
-            <div class="search-field">
-                <label for="id_data_source" class=" hide">Data Source</label>
-                <select id="id_data_source" name="data_source" class="chzn-select">
-                    <option value="local">This Torrent Server</option>
-                    <option value="remote">Shared Torrent Servers</option>
+            <div class="search-field clearfix optional hide">
+                <label for="id_sample" class=" hide">Sample</label>
+                <select id="id_sample" name="sample" data-placeholder="Any Sample" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="194px" data-live-search="true" data-live-search-placeholder="Find Samples..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Sample:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    {% for sample in search.experiment.sample %}
+                        <option value="{{ sample }}">{{ sample }}</option>
+                    {% endfor %}
                 </select>
             </div>
-            <div class="search-field" style="width: 40px;">
-                <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
-                    Clear
-                </button>
+            <div class="search-field optional hide">
+                <label for="id_reference" class=" hide">Reference</label>
+                <select id="id_reference" name="reference" data-placeholder="Any Reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="148px" data-live-search="true" data-live-search-placeholder="Find References..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Reference:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    {% for reference in search.experiment.library %}
+                        <option value="{{ reference }}">{{ reference }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field optional hide">
+                <label for="id_flows" class=" hide">Flow</label>
+                <select id="id_flows" name="flows" data-placeholder="All Flows" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="Find Flows..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Flows:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    {% for flows in search.combined.flows %}
+                        <option value="{{ flows }}">{{ flows }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field optional hide">
+                <label for="id_chip" class=" hide">Chip</label>
+                <select id="id_chip" name="chipType" data-placeholder="Any Chip" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="Find Chips..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Chip:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    {% for chip in search.experiment.chipType %}
+                        {% if chip == "900" %}
+                            <option value="{{ chip }}">PI</option>
+                        {% else %}
+                            <option value="{{ chip }}">{{ chip }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field optional hide">
+                <label for="id_sample_prep" class=" hide">Template Kit</label>
+                <select id="id_sample_prep" name="samplePrep" data-placeholder="Any Sample Prep" class="selectpicker"
+                        data-width="160px" data-actions-box="true" data-dropup-auto="false"
+                        data-dropdown-align-right="auto" style="display:none;" title="Sample Prep:"
+                        data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true"
+                        data-option-size="20">
+                    <option value="">All</option>
+                    <option value="OT">OneTouch</option>
+                    <option value="IC">IonChef</option>
+                </select>
+            </div>
+            <div class="search-field optional hide">
+                <label for="id_pgm" class=" hide">Instrument</label>
+                <select id="id_pgm" name="pgmName" data-placeholder="Any Instrument" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="Find Instruments..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Instrument:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    {% for pgm in search.experiment.pgmName %}
+                        <option value="{{ pgm }}">{{ pgm }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
         <div class="row-fluid">
@@ -313,7 +290,7 @@ function set_search_subject_sampleTubeLabel(e) {
     </div>
 
     <div id="data_panel"></div>
-    <div align='center'><a id="download_csv" href="/data/getCSV.csv">Download CSV</a></div>
+    <div align='center'><a id="download_csv" href="/data/getCSV.csv">Download filtered results as CSV</a></div>
 
     <div id="modal_data_management" title="" class="modal hide">
         <div class="modal-header">
@@ -352,6 +329,7 @@ function set_search_subject_sampleTubeLabel(e) {
 <script src="{% static "js/underscore.js"%}"></script>
 <script src="{% static "js/backbone.js"%}"></script>
 <script src="{% static "js/chosen.jquery.min.js"%}"></script>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 <script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 <!-- iso8601.min.js MUST BE BEFORE date.js so that date.js will place the existing
     iso8601 Date.parse into Date._parse and we're going to use Date._parse within our KendoGrid inside data_tab.js -->
@@ -368,7 +346,6 @@ function set_search_subject_sampleTubeLabel(e) {
 {% comment %} NOTE: UGLY HACK to use django STATIC_URL here {% endcomment %}
 {% raw %}
             <div class="pull-left">
-    {{#is_local}}
                 {{#exp.star}}
 {% endraw %}
                     <img src="{% static "resources/img/star-blue.png"%}" border="0" class="completedrun-star" width="18">
@@ -379,7 +356,7 @@ function set_search_subject_sampleTubeLabel(e) {
                     <img src="{% static "resources/img/star_off.png"%}" border="0" class="completedrun-star" width="18">
 {% raw %}
                 {{/exp.star}}
-    {{/is_local}}
+
                 {{#is_proton}}
 {% endraw %}
                     <img src="{% static "resources/img/proton_jumbo_icon.png"%}" class="pull-left" />
@@ -481,7 +458,7 @@ function set_search_subject_sampleTubeLabel(e) {
 </script>
 <script type="text/template" id="report_template">
     {{#report}}
-        <td>{{#is_local}}<i class="icon-thumbs-up{{^representative}} icon-unchecked{{/representative}}"></i>{{/is_local}}</td>
+        <td><i class="icon-thumbs-up{{^representative}} icon-unchecked{{/representative}}"></i></td>
         <td><span class="pull-left name-shorten"><a href="{{url_prefix}}/report/{{id}}/" target="_blank" alt="Open report in new tab.">{{resultsName}}</a></span></td>
         <td>{{reads_q20}}</td>
         <td>{{read_length}}</td>
@@ -521,43 +498,43 @@ function set_search_subject_sampleTubeLabel(e) {
         <table id="main_table" class='table-striped'>
             <colgroup>
                 <col style="width:2%">
-                <col style="width:17%">
-                <col style="width:4%">
-                <col style="width:4%">
-                <col>
+                <col {{#more_columns}}style="width:15%"{{/more_columns}} {{^more_columns}}style="width:22%"{{/more_columns}}><!--Run Name-->
+                <col style="width:8%">
+                {{#more_columns}}<col style="width:4%">{{/more_columns}}<!--Sample Sets-->
+                <col style="width:2%">
                 <col style="width:5%">
                 <col style="width:5%">
                 <col style="width:6%">
                 <col style="width:4%">
-                <col style="width:11%">
-                <col style="width:7%">
-                <col style="width:6%">
-                <col style="width:5%">
-                <col>
-                <col style="width:4%">
-                <col style="width:4%">
-                <col style="width:4%">
-                <col style="width:4%">
-                <col>
+                <col {{#more_columns}}style="width:11%"{{/more_columns}} {{^more_columns}}style="width:22%"{{/more_columns}}><!--Report Name-->
+                {{#more_columns}}<col style="width:7%">{{/more_columns}}
+                {{#more_columns}}<col style="width:6%">{{/more_columns}}
+                {{#more_columns}}<col style="width:5%">{{/more_columns}}
+                {{#more_columns}}<col style="width:40px">{{/more_columns}}<!--Flows-->
+                {{#more_columns}}<col style="width:4%">{{/more_columns}}<!--Total Reads-->
+                {{#more_columns}}<col style="width:4%">{{/more_columns}}<!--Mean Read Length-->
+                <col style="width:50px">
+                <col style="width:54px">
+                <col style="width:30px">
             </colgroup>
             <thead class="k-grid-header">
                 <tr>
                     <th class="k-header"></th>
                     <th class="k-header"><a class="sort_link" data-name="expName" href="#">Run Name<span class="order_indicator"></span></a></th>
                     <th class="k-header">Sample</th>
-                    <th class="k-header">Sample Set</th>
-                    <th class="k-header">App.</th>
+                    {{#more_columns}}<th class="k-header">Sample Set</th>{{/more_columns}}
+                    <th class="k-header">App</th>
                     <th class="k-header"><a class="sort_link" data-name="date" href="#">Run<span class="order_indicator"></span></a></th>
-                    <th class="k-header"><a class="sort_link" data-name="resultDate" href="#">Analysis<span class="order_indicator"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="resultDate" href="#">Analysis<span class="order_indicator"><span class="k-icon k-i-arrow-s"></span></span></a></th>
                     <th class="k-header">Status</th>
                     <th class="k-header"><a class="sort_link" data-name="chipType" href="#">Chip<span class="order_indicator"></span></a></th>
                     <th class="k-header">Report Name</th>
-                    <th class="k-header">Reference</th>
-                    <th class="k-header">Barcode</th>
-                    <th class="k-header">Sample Tube Label</th>
-                    <th class="k-header"><a class="sort_link" data-name="flows" href="#">Flows<span class="order_indicator"></span></a></th>
-                    <th class="k-header">Total Reads</th>
-                    <th class="k-header">Mean Read Len.</th>
+                    {{#more_columns}}<th class="k-header">Reference</th>{{/more_columns}}
+                    {{#more_columns}}<th class="k-header">Barcodes</th>{{/more_columns}}
+                    {{#more_columns}}<th class="k-header">Sample Tube Label</th>{{/more_columns}}
+                    {{#more_columns}}<th class="k-header"><a class="sort_link" data-name="flows" href="#">Flows<span class="order_indicator"></span></a></th>{{/more_columns}}
+                    {{#more_columns}}<th class="k-header">Total Reads</th>{{/more_columns}}
+                    {{#more_columns}}<th class="k-header">Mean Read Len.</th>{{/more_columns}}
                     <th class="k-header">Q20 Bases</th>
                     <th class="k-header"><a class="sort_link" data-name="repResult__qualitymetrics__q0_bases" href="#">Output<span class="order_indicator"></span></a></th>
                     <th class="k-header"></th>
@@ -582,17 +559,17 @@ function set_search_subject_sampleTubeLabel(e) {
         {{/exp.star}}
     </td>
     <td>
-        {{{ exp_name_prefix }}}{{ exp.expName }}
+        {{{ exp_name_prefix }}}{{ exp.displayName }}
     </td>
     <td class="samples"></td>
-    <td>
+    {{#more_columns}}<td>
     	{{#exp.sampleSetName}}
 			{{exp.sampleSetName}}
 		{{/exp.sampleSetName}}
-    </td>
+    </td>{{/more_columns}}
     <td>
         {{#exp.plan}}
-            <span class="{{exp.plan.runType}}" rel="tooltip" title=""></span>
+            <span class="{{exp.plan.runType}}" rel="tooltip" title="{{exp.applicationCategoryDisplayedName}}"></span>
         {{/exp.plan}}
     </td>
     <td>{{ run_date_string }}</td>
@@ -607,23 +584,31 @@ function set_search_subject_sampleTubeLabel(e) {
         {{^in_progress}}{{ king_report.status }}{{/in_progress}}
     </td>
     <td>{{ exp.chipDescription }}</td>
-    <td>
+    <td style="overflow: visible;">
         {{#king_report}}
-            <a href="{{url_prefix}}/report/{{king_report.id}}/" alt="Open report in new window." title="{{king_report.resultsName}}" target="_blank">{{king_report.resultsName}}</a>
+            <a href="{{url_prefix}}/report/{{king_report.id}}/" alt="Open report in new window." title="{{king_report.resultsName}}">{{king_report.resultsName}}</a>
         {{/king_report}}
+        {{#has_other_reports}}
+            <div class="dropdown report-select-dropdown" >
+                <a class="dropdown-toggle" data-toggle="dropdown" href="#" title="Other Reports"><b class="caret"></b></a>
+                <ul class="dropdown-menu pull-right">
+                    {{#other_reports}}
+                        <li><a href="{{url_prefix}}/report/{{id}}/" alt="Open report in new window." title="{{resultsName}}">{{resultsName}}</a></li>
+                    {{/other_reports}}
+                </ul>
+            </div>
+        {{/has_other_reports}}
     </td>
-    <td>
-        {{ king_report.eas.references }}
-    </td>
-    <td>{{ king_report.eas.barcodeKitName }}</td>
-    <td>
+    {{#more_columns}}<td>{{ king_report.eas.references }}</td>{{/more_columns}}
+    {{#more_columns}}<td>{{ king_report.eas.barcodeKitName }}</td>{{/more_columns}}
+    {{#more_columns}}<td>
         {{#exp.plan}}
            <span class="{{exp.plan.sampleTubeLabel}}" rel="tooltip" title=""> {{exp.plan.sampleTubeLabel}}</span>
         {{/exp.plan}}
-    </td>
-    <td>{{ exp.flows }}</td>
-    <td>{{ reads_q20 }}</td>
-    <td>{{ read_length }}</td>
+    </td>{{/more_columns}}
+    {{#more_columns}}<td>{{ exp.flows }}</td>{{/more_columns}}
+    {{#more_columns}}<td>{{ reads_q20 }}</td>{{/more_columns}}
+    {{#more_columns}}<td>{{ read_length }}</td>{{/more_columns}}
     <td>{{ total_q20bp }}</td>
     <td>{{ total_q0bp }}</td>
     <td>

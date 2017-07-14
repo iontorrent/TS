@@ -22,6 +22,7 @@ class BeadfindControlOpts{
     bool beadfindSmoothTrace;
     std::string filterNoisyCols;
     char *beadMaskFile;
+    std::string exclusionMaskFile;
     bool maskFileCategorized;
     char bfFileBase[MAX_PATH_LENGTH];
     char preRunbfFileBase[MAX_PATH_LENGTH];
@@ -49,6 +50,8 @@ class BeadfindControlOpts{
     int predictFlowEnd;
     int meshStepX;
     int meshStepY;
+    std::vector<float> beadfindAcqThreshold;
+    std::vector<float> beadfindBfThreshold;
     void DefaultBeadfindControl();
     void PrintHelp();
     void SetOpts(OptArgs &opts, Json::Value& json_params);

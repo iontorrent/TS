@@ -30,8 +30,7 @@ from tastypie.bundle import Bundle
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import render_to_response
-from django.http import HttpResponse, StreamingHttpResponse
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, StreamingHttpResponse, HttpResponseRedirect, HttpResponseBadRequest
 from django import forms
 from django.contrib.auth.decorators import login_required
 from django.template import RequestContext, Context
@@ -44,6 +43,10 @@ import json
 from iondb.rundb.ajax import render_to_json
 from celery.utils.log import get_task_logger
 
+
+import httplib2
+import urllib
+from iondb.rundb.json_field import JSONEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +139,14 @@ def write_file(file_data, destination):
     out.close()
 
 
+def validate_plupload(request, pub_name, file_name):
+    if pub_name == "BED":
+        # validate bed file name is unique
+        file_name = os.path.basename(file_name)
+        if models.Content.objects.filter(file__endswith='/'+file_name).count() > 0:
+            raise Exception('ERROR file already exists: %s' % file_name)
+
+
 @login_required
 def write_plupload(request, pub_name):
     """file upload for plupload"""
@@ -152,11 +163,12 @@ def write_plupload(request, pub_name):
             name = uploaded_file.name
         logger.debug("plupload name = '%s'" % name)
 
-        #check to see if a user has uploaded a file before, and if they have
-        #not, make them a upload directory
+        try:
+            validate_plupload(request, pub_name, name)
+        except Exception as err:
+            return HttpResponseBadRequest(str(err))
 
         upload_dir = "/results/referenceLibrary/temp"
-
         if not os.path.exists(upload_dir):
             return render_to_json({"error": "upload path does not exist"})
 
@@ -216,13 +228,17 @@ def new_upload(pub, file_name, meta_data=None):
     meta_path = os.path.join(upload_dir, "meta.json")
     upload.save()
     try:
-        os.makedirs(upload_dir)
+        # set both the user and group to read/write to allow the celery tasks to write to this directory
+        original_umask = os.umask(0)
+        os.makedirs(upload_dir, 0o0775)
         open(meta_path, 'w').write(meta_data)
     except OSError as err:
         logger.exception("File error while saving new %s upload" % pub)
         upload.status = "Error: %s" % err
         upload.save()
         raise
+    finally:
+        os.umask(original_umask)
     return upload
 
 
@@ -245,32 +261,13 @@ def store_upload(pub, file_data, file_name, meta_data=None):
     return upload
 
 
-def run_script(working_dir, script_path, upload_id, upload_dir, upload_path, meta_path):
-    """Run a Publisher's editing script with the uploaded file's information.
-    working_dir = the Publisher's script directory.
-    """
-    script = os.path.basename(script_path)
-    cmd = [script_path, upload_id, upload_dir, upload_path, meta_path]
-    logpath = os.path.join(upload_dir, "publisher.log")
-    # Spawn the test subprocess and wait for it to complete.
-    try:
-        log_out = open(logpath, 'a')
-        proc = subprocess.Popen(cmd, stdout=log_out, stderr=subprocess.STDOUT, cwd=working_dir)
-        result = proc.wait()
-    except Exception as err:
-        print("Publisher error in upload %s: %s" % (upload_id, str(cmd)))
-        raise
-        return False
-    return result == 0
-
-
 @app.task
 def run_pub_scripts(pub, upload):
     """Spawn subshells in which the Publisher's editing scripts are run, with
     the upload's folder and the script's output folder as command line args.
     """
+    task_logger=get_task_logger(__name__)
     try:
-        task_logger = get_task_logger(__name__)
         #TODO: Handle unique file upload instance particulars
         task_logger.info("Editing upload for %s" % pub.name)
         previous_status = upload.status
@@ -286,8 +283,16 @@ def run_pub_scripts(pub, upload):
                 previous_status = stage_name
                 upload.status = stage_name
                 upload.save()
-            success = run_script(pub_dir, script_path, str(upload.id),
-                                                upload_dir, upload_path, meta_path)
+
+            upload_id = str(upload.id)
+            cmd=[script_path, upload_id, upload_dir, upload_path, meta_path]
+            logpath=os.path.join(upload_dir, "publisher.log")
+            # Spawn the test subprocess and wait for it to complete.
+            with open(logpath, 'a') as log_out:
+                proc=subprocess.Popen(cmd, stdout=log_out, stderr=subprocess.STDOUT, cwd=pub_dir)
+                success = proc.wait() == 0
+
+            #success = run_script(pub_dir, script_path, str(upload.id), upload_dir, upload_path, meta_path)
             # The script may have updated the upload during execution, so we reload
             upload = models.ContentUpload.objects.get(pk=upload.pk)
             if success:
@@ -304,10 +309,9 @@ def run_pub_scripts(pub, upload):
         # early due to an error, alright!
         upload.status = "Successfully Completed"
         upload.save()
-    except Exception as error:
+    except Exception:
         tb = "\n".join("    "+s for s in traceback.format_exc().split("\n"))
-        task_logger.error("Exception in %s upload %d during %s\n%s" %
-            (pub.name, upload.id, stage_name, tb))
+        task_logger.error("Exception in %s upload %d during %s\n%s" % (pub.name, upload.id, stage_name, tb))
         upload.status = "Error: processing failed."
         upload.save()
 
@@ -638,3 +642,44 @@ def encode_multipart_formdata(fields, files):
 
 def get_content_type(filename):
     return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+
+@app.task
+def publish_file(args, pub_name, meta):
+    """ This task will process file downloaded via FileMonitor """
+    pub = models.Publisher.objects.get(name=pub_name)
+    full_path, monitor_id = args
+    monitor = models.FileMonitor.objects.get(id=monitor_id)
+    upload = move_upload(pub, full_path, monitor.name, meta)
+    run_pub_scripts(pub, upload)
+
+class call_api():
+    def __init__(self):
+        self.url = "http://localhost/rundb/api/v1/%s/"
+        self.uri = "http://localhost/rundb/api/v1/%s/%s/"
+        self.headers = {"Content-type": "application/json"}
+
+    def post(self, where, **query):
+        """Returns the API URI for the newly created item."""
+        body = json.dumps(query, cls=JSONEncoder)
+        item_url = self.url % where
+        h = httplib2.Http()
+        response, content = h.request(item_url, method="POST", body=body, headers=self.headers)
+        return response["status"] == "201", response, content
+
+    def patch(self, where, item_id, **update):
+        """Returns True if successful; otherwise, False"""
+        body = json.dumps(update, cls=JSONEncoder)
+        item_uri = self.uri % (where, str(item_id))
+        h = httplib2.Http()
+        response, content = h.request(item_uri, method="PATCH", body=body, headers=self.headers)
+        return response["status"] == "202", response, content
+
+    def update_meta(self, meta, args):
+        print("Updating Meta")
+        meta_file_handle = open(args.meta_file, 'w')
+        json.dump(meta, meta_file_handle, cls=JSONEncoder, sort_keys=True, indent=4)
+        meta_file_handle.close()
+        self.patch("contentupload", args.upload_id, meta=meta)
+
+

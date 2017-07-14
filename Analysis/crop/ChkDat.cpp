@@ -41,7 +41,7 @@ uint32_t numAcq = 0;
 int dont_wait = 0;
 char *DstDir  = (char *)".";
 char *oneFile = NULL;
-uint32_t verbose=1;
+uint32_t verbose=0;
 uint32_t Error = 0;
 char  DirList[200][512];
 

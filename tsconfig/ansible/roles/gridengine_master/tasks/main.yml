@@ -10,7 +10,7 @@
   script: "files/gridengine.preseed {{ groups.headnode[0] }}"
   
 - name: Install GridEngine APT packages
-  apt: pkg={{item}} state=present force=yes
+  apt: pkg={{ item }} state=present force=yes
   with_items:
     - gridengine-master
     - gridengine-common
@@ -29,7 +29,7 @@
 - name: Create host_aliases file
   lineinfile: create=yes state=present dest=/var/lib/gridengine/iontorrent/common/host_aliases
                 owner=sgeadmin group=sgeadmin mode=0664
-                line="{{groups.headnode[0]}} localhost"
+                line="{{ groups.headnode[0] }} localhost"
                 regexp=".*localhost.*"
                 
 - name: Set ignore_fqdn to TRUE in bootstrap file
@@ -44,23 +44,23 @@
   
 # add submission host
 - name: Add server as submission host
-  shell: bash -lc 'qconf -as {{ansible_hostname}}'
+  shell: bash -lc 'qconf -as {{ ansible_hostname }}'
 
 # Give compute node permissions to admin the sge configuration
 - name: add admin hosts
-  shell: bash -lc 'qconf -ah {{item}}'
+  shell: bash -lc 'qconf -ah {{ item }}'
   with_items:
-    - '{{groups.computes}}'
-    - '{{groups.headnode}}'
+    - '{{ groups.computes }}'
+    - '{{ groups.headnode }}'
 
 # add user if user does not exist
 - name: upload user configuration file
-  template: src=user.j2 dest=/tmp/user.{{item}}.conf
+  template: src=user.j2 dest=/tmp/user.{{ item }}.conf
   with_items:
     - sge_usernames
   
 - name: add user
-  shell: bash -lc 'if ! qconf -suserl | grep -q {{item}}; then qconf -Auser /tmp/user.{{item}}.conf; fi ; rm /tmp/user.{{item}}.conf'
+  shell: bash -lc 'if ! qconf -suserl | grep -q {{ item }}; then qconf -Auser /tmp/user.{{ item }}.conf; fi ; rm /tmp/user.{{ item }}.conf'
   with_items:
     - sge_usernames
 
@@ -82,9 +82,9 @@
   
 # Stage the queue definition template files
 - name: upload queue configuration files
-  template: src=queue.j2 dest=/tmp/{{item['name']}}.conf
+  template: src=queue.j2 dest=/tmp/{{ item['name'] }}.conf
   with_items:
-    - '{{queues}}'
+    - '{{ queues }}'
 
 # plugin.q queue gets special settings
 - name: upload plugin.q configuration file
@@ -98,15 +98,15 @@
     H_VMEM_LIMIT: 40GB
   
 - name: setup queues
-  shell: bash -lc 'qconf -Aq /tmp/{{item['name']}}.conf; rm /tmp/{{item['name']}}.conf'
+  shell: bash -lc 'qconf -Aq /tmp/{{ item['name'] }}.conf; rm /tmp/{{ item['name'] }}.conf'
   with_items:
-    - '{{queues}}'
+    - '{{ queues }}'
   
 # set default number of slots
 - name: Assign number of slots per queue
-  shell: bash -lc 'qconf -aattr queue slots {{item.slots}} {{item.name}}'
+  shell: bash -lc 'qconf -aattr queue slots {{ item.slots }} {{ item.name }}'
   with_items:
-    - '{{queues}}'
+    - '{{ queues }}'
     
 # Make mem_free a consumable resource
 - name: create consumable resource file
@@ -138,9 +138,9 @@
   shell: bash -lc 'if ! qconf -spl | grep -q ion_pe; then qconf -Ap /tmp/ion_pe.conf; fi ; rm /tmp/ion_pe.conf'
   
 - name: add PE to the queues
-  shell: bash -lc 'qconf -aattr queue pe_list ion_pe {{item['name']}}'
+  shell: bash -lc 'qconf -aattr queue pe_list ion_pe {{ item['name'] }}'
   with_items:
-    - '{{queues}}'
+    - '{{ queues }}'
 
 # add ionadmin as sge admin user
 - name: Add ionadmin user as sge admin
@@ -161,13 +161,13 @@
 
 # Copy gridengine scripts
 - name: Create /usr/share/ion-tsconfig/gridengine-scripts directory
-  file: dest={{SCRIPT_PATH}} state=directory mode=755 owner=root
+  file: dest={{ SCRIPT_PATH }} state=directory mode=755 owner=root
   
 - name: Copy gridengine scripts
-  copy: src={{item['name']}} dest={{item['path']}} force=yes
+  copy: src={{ item['name'] }} dest={{ item['path'] }} force=yes
   with_items:
-    - { 'name':'{{LOCAL_EPILOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{EPILOG_SCRIPT}}' }
-    - { 'name':'{{LOCAL_PROLOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{PROLOG_SCRIPT}}' }
+    - { 'name':'{{ LOCAL_EPILOG_SCRIPT }}', 'path':'{{ SCRIPT_PATH }}/{{ EPILOG_SCRIPT }}' }
+    - { 'name':'{{ LOCAL_PROLOG_SCRIPT }}', 'path':'{{ SCRIPT_PATH }}/{{ PROLOG_SCRIPT }}' }
     
 #    set_sge_open_files
 # The configuration line we want:

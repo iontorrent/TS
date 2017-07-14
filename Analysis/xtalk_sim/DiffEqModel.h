@@ -18,7 +18,7 @@ typedef enum {
 
 #include <stdlib.h>
 #include "xtalk_sim.h"
-#include "WorkerInfoQueue.h"
+#include "../Util/WorkerInfoQueue.h"
 #include "SignalAverager.h"
 #include "WellVoxelTracker.h"
 #include "DelsqCUDA.h"

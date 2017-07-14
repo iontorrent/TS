@@ -44,6 +44,11 @@ then
   BKGMODEL_BOOK_INC=$TS_SOURCE_ROOT/Analysis/BkgModel/Bookkeeping
 fi
 
+if [$CLONALFILTER_INC == ""]
+then
+  CLONALFILTER_INC=$TS_SOURCE_ROOT/Analysis/ClonalFilter
+fi
+
 if [$PHASE_INC == ""]
 then
   PHASE_INC=$TS_SOURCE_ROOT/Analysis/BaseCaller
@@ -108,8 +113,13 @@ then
         HDF5_INC=$TS_BUILD_ROOT/hdf5-1.8.11-install/include
         HDF5_LIB=$TS_BUILD_ROOT/hdf5-1.8.11-install/lib/libhdf5.a
     else
-        HDF5_INC=/usr/include
-        HDF5_LIB=-lhdf5
+        if [ $CODENAME == "xenial"  ]; then
+            HDF5_INC=/usr/include/hdf5/serial
+            HDF5_LIB=/usr/lib/x86_64-linux-gnu/libhdf5_serial.so
+        else
+            HDF5_INC=/usr/include
+            HDF5_LIB=-lhdf5
+        fi
     fi
 fi
 
@@ -126,7 +136,7 @@ then
 fi
 
 
-PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$RECALIBRATION_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$HDF5_INC -I$ARMADILLO_INC -I$JSON_INC -Wall -g -std=c++11"
+PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$CLONALFILTER_INC -I$PHASE_INC -I$RECALIBRATION_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$HDF5_INC -I$ARMADILLO_INC -I$JSON_INC -Wall -g -std=c++11"
 
 CPPFLAGS=-O2
 

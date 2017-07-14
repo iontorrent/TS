@@ -468,6 +468,16 @@
         msg += "\n\nDo you wish to continue?";
         if( !confirm(msg) ) return false;
       }
+      var alnval = $("#minalignlen").val();
+      if( !regex.test(alnval) ) {
+        alert("Minimum align length value must be a non-negative integer (>=0).");
+        return false;
+      }
+      var qval = $("#minmapqual").val();
+      if( !regex.test(qval) ) {
+        alert("Minimum align quality value must be a non-negative integer (>=0).");
+        return false;
+      }
       // pass user selections to variables exported (via name attribute)
       $('#librarytype_id').val(libName);
       $('#targetregions_id').val( $('#targetregions option:selected').text() );
@@ -513,23 +523,23 @@
        Targeted Regions:</span></td>
      <td><select id="targetregions" name="targetregions"></select></td> </tr>
     <tr id="multibed">
-     <td><span class="help"
+     <td style="vertical-align: text-top"><span class="help"
        title="Assign target regions based on assigned barcodes.">
        Barcode-specific Targets:</span></td>
-     <td><input type="checkbox" id="barcodebeds" name="barcodebeds" checked="checked" value="Yes" style="float:left"/>
-       <div class="bcbed-shy" style="margin-left:25px">
+     <td><input type="checkbox" id="barcodebeds" name="barcodebeds" value="Yes" style="float:left"/>
+       <div class="bcbed-shy" style="margin-left:25px;display:none">
          Use the text box below to assign specific target regions to individual barcodes.</div>
-       <div style="font-size:3px">&nbsp;</div>
-       <div class="bcbed-shy">
+       <div style="font-size:3px;display:none">&nbsp;</div>
+       <div class="bcbed-shy" style="display:none">
          <input id="addbcbutton" type="button" title="Add the currently selected target regions for the currently selected barcode to the list of barcode-specific targets." value="Add" style="font-size:13px">
          <select id="barcodeids" style="font-size:13px"></select>
          <span class="custom_fusions" style="display:none"><br/></span>
          <select id="barcodetargets" style="font-size:13px"></select>
        </div>
-       <div class="bcbed-shy">
+       <div class="bcbed-shy" style="display:none">
          <textarea id="bctextarea" rows=20 cols="61" style="font-size:13px;border:5px double #C0C0C0"></textarea>
        </div>
-       <div class="bcbed-shy" style="font-style:italic;max-width:540px">
+       <div class="bcbed-shy" style="font-style:italic;max-width:540px;display:none">
          Un-assigned barcodes will use the Targeted Regions selected when the Submit button is clicked.
          (Set to 'None' to ignore un-assigned barcodes.)</div>
      </td> </tr>
@@ -554,6 +564,16 @@
        Use Only Non-duplicate Reads:</span></td>
      <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/>
      &nbsp;(Requires alignments with Mark Duplicates applied.)</td> </tr>
+    <tr id="alignlen">
+     <td><span class="help"
+       title="Specifiy the minimum aligned length a that read must have to be included in analysis.">
+       Minimum Aligned Length:</span></td>
+     <td><input type="text" size=6 id="minalignlen" name="minalignlen" value=0></select></td> </tr>
+    <tr id="mapq">
+     <td><span class="help"
+       title="Specifiy the minimum mapping quality (MAPQ) that a read must have to be included in analysis. Using value of 1 (or higher) is equivalent to checking the 'Use Only Uniquely Mapped Reads' option.">
+       Minimum Mapping Quality:</span></td>
+     <td><input type="text" size=6 id="minmapqual" name="minmapqual" value=0></select></td> </tr>
    </table>
    <br/>
    <div align="center" id="json_result">
@@ -576,7 +596,8 @@ and the Targeted Regions selected should correspond to the enriched regions of t
 Some options are only presented as available for the Library Type selected, and coverage will only be
 reported over the specified target regions. Typically a Targeted Regions selection is required
 for enriched library types and set to 'None' for Whole Genome runs.
-(The default selections will match those defined by the Run Plan for this report.)</p>
+Note: The default selections will match those defined by the Run Plan for this report but will be overriden
+by whatever is specified here.</p>
     <p>
 If the option for Barcode-specific Targets is presented you may check this option to specify and employ different target
 regions for particular barcodes. Individual barcode reports will depend on the type of reference (DNA/RNA) and whether
@@ -594,7 +615,8 @@ assumed to be produced by PCR amplification.</p>
     <p>
 The SampleID Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
 This will inform the analysis to produce an extra statistic for reads mapped to these targets so that
-the true level of 'off-target' reads is accurately represented.</p>
+the true level of 'off-target' reads is accurately represented. This option is only effective for reads aligned
+to the human hg19 reference.</p>
     <p>
 The Target Padding value is only available for the library types reporting with respect to targetted base coverage.
 This specifies a number of bases to expand each individual target by at both 3' and 5' ends and is 
@@ -610,6 +632,9 @@ For whole genome libraries these reads may still be an accurate estimation of co
 Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option
 to use these is only effective if duplicate reads were so marked during the alignment process. This option is not
 available for Ion AmpliSeq since (PCR) duplicate reads are anticipated and a necessary requirement for coverage.</p>
+    <p>
+The 'Minimum Aligned Length' and 'Minimum Mapping Quality' options may be used with any library type to filter out
+reads that do not meet the specified alignment or quality values.</p>
    </div>
  </form>
 </body>

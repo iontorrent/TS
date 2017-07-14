@@ -1583,7 +1583,7 @@ void CafieSolver::GetCall(int callNum, DNATemplate *call)
 	}
 }
 
-const char *CafieSolver::GetSequence(DNATemplate *dna, int dnalen)
+/*const char *CafieSolver::GetSequence(DNATemplate *dna, int dnalen)
 {
 	// generate, then return a pointer to the sequence string
 
@@ -1612,7 +1612,7 @@ const char *CafieSolver::GetSequence(DNATemplate *dna, int dnalen)
 	seqString[len] = NULL; // make it play nice as a 'C' string
 
 	return seqString;
-}
+}*/
 
 void CafieSolver::SetMeasured(int numMeasured, double *measuredVals)
 {

@@ -8,10 +8,10 @@
 # Replace official ubuntu repo with Ion-sourced ubuntu repo
 #-----------------------------------------------------------------------------
 - name: Disable /etc/apt/sources.list
-  command: "mv /etc/apt/sources.list{{FUNKYEXT|default('')}} /etc/apt/sources.list.orig removes=/etc/apt/sources.list{{FUNKYEXT|default('')}}"
+  command: "mv /etc/apt/sources.list{{ FUNKYEXT|default('') }} /etc/apt/sources.list.orig removes=/etc/apt/sources.list{{ FUNKYEXT|default('') }}"
 - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
   template: src=templates/iontorrent-ubuntu.j2
-            dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{FUNKYEXT|default('')}}
+            dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
             owner=root group=root mode=644
   when: "ansible_hostname == groups.headnode[0]"
 
@@ -20,7 +20,7 @@
 #-----------------------------------------------------------------------------
 - name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
   template: src=templates/ionreporter-plugin.j2
-            dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{FUNKYEXT|default('')}}
+            dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{ FUNKYEXT|default('') }}
             owner=root group=root mode=644
 
 #-----------------------------------------------------------------------------
@@ -31,13 +31,31 @@
   shell: bash -lc "rm -f /etc/apt/sources.list.d/*"
   when: "ansible_hostname != groups.headnode[0]"
 - name: Replicating head node's /etc/apt/source.list.d/
-  copy: src={{item}} dest=/etc/apt/sources.list.d/ mode=0644
+  copy: src={{ item }} dest=/etc/apt/sources.list.d/ mode=0644
   when: "ansible_hostname != groups.headnode[0]"
   with_fileglob:
     - /etc/apt/sources.list.d/*
 
 - name:
   apt: update_cache=yes
+
+#-----------------------------------------------------------------------------
+# On each compute node, replicate the headnode's /etc/hosts file
+#-----------------------------------------------------------------------------
+- name: Copy /etc/hosts to /tmp/hosts
+  when: enable_hosts_copy
+  copy: src=/etc/hosts dest=/tmp/hosts
+- name: Edit /tmp/hosts - change loopback hostname
+  when: enable_hosts_copy
+  lineinfile: state=present
+              dest=/tmp/hosts
+              regexp="^127.0.1.1.*"
+              line="127.0.1.1       {{ ansible_hostname }}"
+              backup=yes
+- name: Copy /tmp/hosts to /etc/hosts
+  when: enable_hosts_copy
+  command: /bin/cp /tmp/hosts /etc/hosts
+
 
 #-----------------------------------------------------------------------------
 # Clean apt cache
@@ -64,12 +82,12 @@
   script: tmpreaper.preseed
 
 - name: Set package preseed values
-  script: "{{ansible_env.PWD}}/files/grub-pc.preseed {{GRUB_BOOT_DEVICE}}"
+  script: "{{ ansible_env.PWD }}/files/grub-pc.preseed {{ GRUB_BOOT_DEVICE }}"
   when: GRUB_BOOT_DEVICE is defined and not docker_image
 
 - name: Install system packages
-  apt: name={{item}} state=installed force=yes
-  with_items: common_syspkg_list
+  apt: name={{ item }} state=installed force=yes
+  with_items: "{{ common_syspkg_list }}"
 
 #=============================================================================
 # Install Perl modules
@@ -79,12 +97,12 @@
   file: name=/tmp/perl state=directory
 
 - name: Copy Perl module files
-  copy: src={{item}} dest=/tmp/perl/{{item | basename}}
+  copy: src={{ item }} dest=/tmp/perl/{{ item | basename }}
   with_fileglob:
     - /usr/share/ion-tsconfig/perl/*.tar.gz
 
 - name: Run script against each Perl module file to install that module
-  script: perl_installation.sh /tmp/perl/{{item | basename}}
+  script: perl_installation.sh /tmp/perl/{{ item | basename }}
   with_fileglob:
     - /usr/share/ion-tsconfig/perl/*.tar.gz
 
@@ -218,19 +236,19 @@
 - name: Set soft limit
   lineinfile: dest={{ security_limits_file }} state=present
                 regexp='.*\*.*soft.*nofile.*$'
-                line="*                soft    nofile          {{MAX_FILES_OPEN}}"
+                line="*                soft    nofile          {{ MAX_FILES_OPEN }}"
                 insertbefore='# End of file'
 
 - name: Set hard limit
   lineinfile: dest={{ security_limits_file }} state=present
                 regexp='.*\*.*hard.*nofile.*$'
-                line='*                hard    nofile          {{MAX_FILES_OPEN}}'
+                line='*                hard    nofile          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
 - name: Set soft limit
   lineinfile: dest={{ security_limits_file }} state=present
                 regexp='.*root.*soft.*nofile.*$'
-                line='root             soft    nofile          {{MAX_FILES_OPEN}}'
+                line='root             soft    nofile          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
 - name: Set hard limit

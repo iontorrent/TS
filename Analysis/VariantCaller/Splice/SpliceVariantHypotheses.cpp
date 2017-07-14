@@ -9,7 +9,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
                         vector<bool> & same_as_null_hypothesis, bool & changed_alignment, const InputStructures &global_context,
-                        const ReferenceReader &ref_reader, int chr_idx)
+                        const ReferenceReader &ref_reader)
 {
 
   // Hypotheses: 1) Null; read as called 2) Reference Hypothesis 3-?) Variant Hypotheses
@@ -51,7 +51,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
   // do realignment of a small region around variant if desired
   if (my_ensemble.doRealignment) {
     pretty_alignment = SpliceDoRealignement(thread_objects, current_read, local_context.position0,
-                                            changed_alignment, global_context.DEBUG, ref_reader, chr_idx);
+                                            changed_alignment, global_context.DEBUG, ref_reader, local_context.chr_idx);
     if (pretty_alignment.empty() and global_context.DEBUG > 0)
       cerr << "Realignment returned an empty string in read " << current_read.alignment.Name << endl;
   }
@@ -70,8 +70,8 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
 
     // Basic sanity checks
     if (read_idx >= read_idx_max
-        or  ref_idx > ref_reader.chr_size(chr_idx)
-        or (ref_idx == ref_reader.chr_size(chr_idx) and pretty_alignment[pretty_idx] != '+')) {
+        or  ref_idx > ref_reader.chr_size(local_context.chr_idx)
+        or (ref_idx == ref_reader.chr_size(local_context.chr_idx) and pretty_alignment[pretty_idx] != '+')) {
       did_splicing = false;
       break;
     }
@@ -93,7 +93,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
     // Have reference bases inside of window but outside of span of reference allele
     if (outside_ref_allele and !outside_of_window and pretty_alignment[pretty_idx] != '+') {
       for (unsigned int i_hyp = 1; i_hyp < my_hypotheses.size(); i_hyp++)
-        my_hypotheses[i_hyp].push_back(ref_reader.base(chr_idx,ref_idx));
+        my_hypotheses[i_hyp].push_back(ref_reader.base(local_context.chr_idx,ref_idx));
     }
 
     // Have read bases as called outside of variant window

@@ -8,7 +8,7 @@
 {% endblock tab-configure-references %}
 {% block extra_head %}
     <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-    <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
     <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
     <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
     
@@ -293,8 +293,8 @@
                         multi_selection: false,
                         multiple_queues: false,
                         multipart_params: {meta: '{}'},
-                        silverlight_xap_url: '{% static "jquery/js/plupload/plupload.silverlight.xap"%}',
-                        flash_swf_url: '{% static "jquery/js/plupload/plupload.flash.swf"%}'
+                        silverlight_xap_url: '{% static "resources/plupload/js/Moxie.xap"%}',
+                        flash_swf_url: '{% static "resources/plupload/js/Moxie.swf"%}'
                       });
 
                       $("#bedUpload").click(function(){
@@ -335,7 +335,11 @@
                       });
 
                       uploader.bind('Error', function(up, err) {
-                        $('#file_info').append("<div>There was an error during your upload.  Please refresh the page and try again.</div>");
+                        var msg = 'There was an error during your upload';
+                        if (err.response && !err.response.startsWith('<!')){
+                          msg = err.response;
+                        }
+                        $('#file_info').append("<div class='alert alert-error'>"+msg+"</div>");
                       });
 
                       uploader.bind('FileUploaded', function(up, file) {

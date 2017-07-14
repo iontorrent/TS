@@ -41,7 +41,7 @@ border-bottom:none;
 height:24px;
 padding-top:16px;
 font-size:13px;
-color: #0088cc;
+color: #333;
 }
 </style>
 
@@ -80,14 +80,15 @@ color: #0088cc;
                 <h3 style="float:left;"><img src="{% static category.img %}" border="0" width='24px;'>&nbsp;{{category.displayedName}}</h3>
                 <div class="clearfix">
                     <div class="pull-right">
-                        <div class="btn-group"><a title="Upload Plan Runs or Template" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">Upload <span class="caret"></span></a>
+                        <div class="btn-group"><a rel="tooltip" title="Upload Plan Runs or Template" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">Upload <span class="caret"></span></a>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url "upload_plans_for_template" %}" class="upload-plan" >Upload Plans</a></li>
                                 <li><a href="#" data-toggle="modal" data-target="#modal_load_template">Upload Template</a></li>
+                                <li><a href="#" data-toggle="modal" data-target="#modal_load_template_json_bundle">Upload Design/Panel Zip Archive</a></li>
                             </ul>
                         </div>
                         {% if category.ampliSeq_upload %}
-                        <div class="btn-group"><a title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>
+                        <div class="btn-group"><a  rel="tooltip" title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
                                 <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
@@ -101,6 +102,7 @@ color: #0088cc;
                         <a href="{% url "page_plan_new_plan_from_code" category.code %}" rel="tooltip" title="Create new plan">Plan New Run</a>
                     </div>
                 </div>
+                <div class="alert alert-warning template_warnings" style="max-height: 100px; overflow-y: scroll;"></div>
                 <div id="{{category.tag}}" class="list_contents"></div>
             </div> 
             {% endif %}
@@ -130,6 +132,21 @@ color: #0088cc;
     <div class="modal-footer">
         <a class="btn" href="#" data-dismiss="modal">Cancel</a>
         <a id="upload_template" class="btn btn-primary" href="#">Load</a>
+        <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">Close</a>
+    </div>
+</div>
+
+<div id="modal_load_template_json_bundle" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Import Panel from Zip Archive</h3>
+    </div>
+    <div class="modal-body">
+    	{% include "rundb/common/plan_template_zip_bundle_upload.html" %}
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Close</a>
+        <a id="upload_button" class="btn btn-primary" >Upload Panel from Zip Archive</a>        
         <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">Close</a>
     </div>
 </div>
@@ -243,8 +260,6 @@ var username = '{{user.username}}';
     </span> 
 </script>
 
-
-
 <script id="IsSystemTemplate" type="text/x-kendo-template">
     # var _isSystem = isSystem;# 
     
@@ -306,6 +321,8 @@ var username = '{{user.username}}';
 </script>
 
 
+{%include "rundb/common/application_kendo_template.html"%}
+
 <script type="text/javascript">
 var username = '{{user.username}}';
 </script>
@@ -318,6 +335,10 @@ var username = '{{user.username}}';
 <script type="text/javascript" src="{% static "resources/scripts/plan/modal_batch_planning_upload.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/plan/modal_batch_planning.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
+
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/common/plan_template_zip_bundle_upload.js"%}"></script>
 
 <script type="text/javascript" src="{% static "resources/scripts/tb-bootstrap-modal.min.js"%}"/></script> <!--must be last to override the bootstrap modal default behavior -->
 

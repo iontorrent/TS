@@ -18,6 +18,7 @@
 #include "IonErr.h"
 #include "RawWells.h"
 #include "Mask.h"
+//#include "Utils.h"
 #include "BaseCallerUtils.h"
 #include "DPTreephaser.h"
 #include "OrderedDatasetWriter.h"
@@ -490,7 +491,7 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
   json["Filtering"]["ReadDetails"][class_name]["quality_trim"]        = (Json::Int64)num_reads_removed_quality_trim_;
   json["Filtering"]["ReadDetails"][class_name]["quality_filter"]      = (Json::Int64)num_reads_removed_quality_filt_;
   json["Filtering"]["ReadDetails"][class_name]["tag_trim"]            = (Json::Int64)num_reads_removed_tag_trim_;
-  json["Filtering"]["ReadDetails"][class_name]["extra_trim"]          = (Json::Int64)num_reads_removed_extra_trim_ + num_reads_removed_extra_trim_;
+  json["Filtering"]["ReadDetails"][class_name]["extra_trim"]          = (Json::Int64)num_reads_removed_extra_trim_;
   json["Filtering"]["ReadDetails"][class_name]["valid"]               = (Json::Int64)num_reads_final_;
 
   // BeadSummary - obsolete me!
@@ -498,7 +499,7 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
   json["BeadSummary"][class_name]["highPPF"]     = (Json::Int64)(num_reads_removed_bkgmodel_high_ppf_ + num_reads_removed_high_ppf_);
   json["BeadSummary"][class_name]["zero"]        = 0;
   json["BeadSummary"][class_name]["short"]       = (Json::Int64)(num_reads_removed_short_ + num_reads_removed_adapter_trim_
-                                                        + num_reads_removed_quality_trim_ + num_reads_removed_tag_trim_);
+                                                        + num_reads_removed_quality_trim_ + num_reads_removed_tag_trim_ +num_reads_removed_extra_trim_);
   json["BeadSummary"][class_name]["badKey"]      = (Json::Int64)(num_reads_removed_bkgmodel_keypass_ + num_reads_removed_keypass_);
   json["BeadSummary"][class_name]["highRes"]     = (Json::Int64)(num_reads_removed_residual_ + num_reads_removed_quality_filt_);
   json["BeadSummary"][class_name]["valid"]       = (Json::Int64)num_reads_final_;
@@ -530,7 +531,7 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
                   num_reads_removed_quality_trim_ +
                   num_reads_removed_quality_filt_ +
                   num_reads_removed_tag_trim_ +
-                  num_bases_removed_extra_trim_);
+                  num_reads_removed_extra_trim_);
     json["Filtering"]["LibraryReport"]["final_library_reads"]   = (Json::Int64)num_reads_final_;
 
     // (3') Bead Adapters
@@ -561,45 +562,43 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
 void BaseCallerFilters::PrintHelp()
 {
   printf ("Read filtering and trimming options:\n");
-  printf ("  -d,--disable-all-filters    on/off     disable all filtering and trimming, overrides other args [off]\n");
+  printf ("  -d,--disable-all-filters     on/off     disable all filtering and trimming, overrides other args [off]\n");
   printf (" Key-pass filter: \n");
-  printf ("  -k,--keypass-filter         on/off     apply keypass filter [on]\n");
-  printf (" Polyclonal filter in BaseCaller:\n");
-  printf ("     --clonal-filter-solve    on/off     apply polyclonal filter [off]\n");
-  printf ("     --clonal-filter-tf       on/off     apply polyclonal filter to TFs [off]\n");
-  printf ("     --clonal-filter-maxreads INT        maximum number of library reads used for polyclonal filter training [100000]\n");
-  printf ("     --min-read-length        INT        apply minimum read length filter [25]\n");
-  printf ("     --cr-filter              on/off     apply cafie residual filter [off]\n");
-  printf ("     --cr-filter-tf           on/off     apply cafie residual filter to TFs [off]\n");
-  printf ("     --cr-filter-max-value    FLOAT      cafie residual filter threshold [0.08]\n");
-  printf ("     --beverly-filter      FLOAT,FLOAT   filter_ratio,trim_ratio / off\n");
-  printf ("                                         apply Beverly filter/trimmer [off]\n");
-  printf ("     --qual-filter            on/off     apply quality filter based on expected number of errors [off]\n");
-  printf ("     --qual-filter-offset     FLOAT      error offset for expected errors quality filter [0.7]\n");
-  printf ("     --qual-filter-slope      FLOAT      expected errors allowed per base for expected errors quality filter [0.02]\n");
+  printf ("  -k,--keypass-filter          on/off     apply keypass filter [on]\n");
+  printf (" Read filter settings:\n");
+  printf ("     --min-read-length         INT        apply minimum read length filter [25]\n");
+  printf ("     --cr-filter               on/off     apply cafie residual filter [off]\n");
+  printf ("     --cr-filter-tf            on/off     apply cafie residual filter to TFs [off]\n");
+  printf ("     --cr-filter-max-value     FLOAT      cafie residual filter threshold [0.08]\n");
+  printf ("     --beverly-filter       FLOAT,FLOAT   filter_ratio,trim_ratio / off\n");
+  printf ("                                          apply Beverly filter/trimmer [off]\n");
+  printf ("     --qual-filter             on/off     apply quality filter based on expected number of errors [off]\n");
+  printf ("     --qual-filter-offset      FLOAT      error offset for expected errors quality filter [0.7]\n");
+  printf ("     --qual-filter-slope       FLOAT      expected errors allowed per base for expected errors quality filter [0.02]\n");
   printf ("\n");
+  PolyclonalFilterOpts::PrintHelp(false);
   printf ("Read trimming options:\n");
-  printf ("     --trim-min-read-len      INT        reads trimmed shorter than this are omitted from output [min-read-length]\n");
-  printf ("     --trim-barcodes          BOOL       trim barcodes and barcode adapters [on]\n");
-  printf ("     --extra-trim-left        INT        Number of additional bases to remove from read start after prefix (key/barcode/tag) [0]\n");
-  printf ("     --extra-trim-right       INT        Number of additional bases to remove from read end before suffix (tag/adapter) [0]\n");
-  printf ("     --save-extra-trim        BOOL       Save extra trimmed bases to BAM tags (left ZE, right YE) [false]\n");
+  printf ("     --trim-min-read-len       INT        reads trimmed shorter than this are omitted from output [min-read-length]\n");
+  printf ("     --trim-barcodes           BOOL       trim barcodes and barcode adapters [on]\n");
+  printf ("     --extra-trim-left         INT        Number of additional bases to remove from read start after prefix (key/barcode/tag) [0]\n");
+  printf ("     --extra-trim-right        INT        Number of additional bases to remove from read end before suffix (tag/adapter) [0]\n");
+  printf ("     --save-extra-trim         BOOL       Save extra trimmed bases to BAM tags (left ZE, right YE) [false]\n");
   printf (" Adapter trimming (turn off by supplying cutoff 0):\n");
-  printf ("     --trim-adapter-mode      INT        0=use simplified metric, 1=use standard metric [1]\n");
-  printf ("     --trim-adapter           STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
-  printf ("     --trim-adapter-tf        STRING/off adapter sequence for test fragments [off]\n");
-  printf ("     --trim-adapter-cutoff    FLOAT      cutoff for adapter trimming, 0=off [16]\n");
-  printf ("     --trim-adapter-min-match INT        minimum adapter bases in the read required for trimming  [6]\n");
+  printf ("     --trim-adapter-mode       INT        0=use simplified metric, 1=use standard metric [1]\n");
+  printf ("     --trim-adapter            STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
+  printf ("     --trim-adapter-tf         STRING/off adapter sequence for test fragments [off]\n");
+  printf ("     --trim-adapter-cutoff     FLOAT      cutoff for adapter trimming, 0=off [16]\n");
+  printf ("     --trim-adapter-min-match  INT        minimum adapter bases in the read required for trimming  [6]\n");
   printf (" Quality trimming (turn off by supplying mode 'off'):\n");
-  printf ("     --trim-qual-mode         STRING     select the method of quality trimming [\"sliding-window\"]\n");
-  printf ("                                         mode \"off\"             :  quality trimming disabled\n");
-  printf ("                                         mode \"sliding-window\"  :  sliding window quality trimming\n");
-  printf ("                                         mode \"expected-errors\" :  quality trimming based on expected number of errors in read\n");
-  printf ("                                         mode \"all\"             :  shortest trimming point of all methods\n");
-  printf ("     --trim-qual-window-size  INT        window size for windowed quality trimming [30]\n");
-  printf ("     --trim-qual-cutoff       FLOAT      cutoff for windowed quality trimming, 100=off [15]\n");
-  printf ("     --trim-qual-offset       FLOAT      error threshold offset for expected error quality trimming [0.7]\n");
-  printf ("     --trim-qual-slope        FLOAT      increase of expected errors allowed for expected error quality trimming [0.005]\n");
+  printf ("     --trim-qual-mode          STRING     select the method of quality trimming [\"sliding-window\"]\n");
+  printf ("                                          mode \"off\"             :  quality trimming disabled\n");
+  printf ("                                          mode \"sliding-window\"  :  sliding window quality trimming\n");
+  printf ("                                          mode \"expected-errors\" :  quality trimming based on expected number of errors in read\n");
+  printf ("                                          mode \"all\"             :  shortest trimming point of all methods\n");
+  printf ("     --trim-qual-window-size   INT        window size for windowed quality trimming [30]\n");
+  printf ("     --trim-qual-cutoff        FLOAT      cutoff for windowed quality trimming, 100=off [15]\n");
+  printf ("     --trim-qual-offset        FLOAT      error threshold offset for expected error quality trimming [0.7]\n");
+  printf ("     --trim-qual-slope         FLOAT      increase of expected errors allowed for expected error quality trimming [0.005]\n");
   printf ("\n");
 }
 
@@ -613,16 +612,16 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   num_classes_ = keys_.size();
   assert(num_classes_ == 2);
   filter_mask_.assign(mask.H()*mask.W(), kUninitialized);
+  Json::Value null_json;
+
+  cout << "Polyclonal filter settings:" << endl;
+  clonal_opts_.SetOpts(false, opts, null_json, flow_order_.num_flows());
 
   // *** Retrieve filter command line options
 
   filter_keypass_enabled_      = opts.GetFirstBoolean('k', "keypass-filter", true);
   filter_min_read_length_      = max(opts.GetFirstInt    ('-', "min-read-length", 25),1);
   trim_min_read_len_           = max(opts.GetFirstInt    ('-', "trim-min-read-len", filter_min_read_length_),1);
-
-  filter_clonal_enabled_tfs_   = opts.GetFirstBoolean('-', "clonal-filter-tf", false);
-  filter_clonal_enabled_       = opts.GetFirstBoolean('-', "clonal-filter-solve", false);
-  filter_clonal_maxreads_      = opts.GetFirstInt    ('-', "clonal-filter-maxreads", 100000);
 
   filter_residual_enabled_     = opts.GetFirstBoolean('-', "cr-filter", false);
   filter_residual_enabled_tfs_ = opts.GetFirstBoolean('-', "cr-filter-tf", false);
@@ -632,7 +631,6 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   filter_quality_offset_       = opts.GetFirstDouble ('-', "qual-filter-offset",0.7);
   filter_quality_slope_        = opts.GetFirstDouble ('-', "qual-filter-slope",0.02);
   filter_quality_quadr_        = opts.GetFirstDouble ('-', "qual-filter-quadr",0.00);
-
 
   // Adapter trimming options
   trim_adapter_                = opts.GetFirstStringVector ('-', "trim-adapter", "ATCACCGACTGCCCATAGAGAGGCTGAGAC");
@@ -682,8 +680,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   // If this flag is set all filters & trimmers will be disabled
   if (disable_all_filters) {
     filter_keypass_enabled_ = false;
-    filter_clonal_enabled_tfs_ = false;
-    filter_clonal_enabled_ = false;
+    clonal_opts_.Disable();
     filter_residual_enabled_ = false;
     filter_residual_enabled_tfs_ = false;
     filter_quality_enabled_ = false;
@@ -697,8 +694,6 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   printf("   --disable-all-filters %s\n", disable_all_filters ? "on (overrides other options)" : "off");
   printf("        --keypass-filter %s\n", filter_keypass_enabled_ ? "on" : "off");
   printf("       --min-read-length %d\n", filter_min_read_length_);
-  printf("   --clonal-filter-solve %s\n", filter_clonal_enabled_ ? "on" : "off");
-  printf("      --clonal-filter-tf %s\n", filter_clonal_enabled_tfs_ ? "on" : "off");
   printf("             --cr-filter %s\n", filter_residual_enabled_ ? "on" : "off");
   printf("          --cr-filter-tf %s\n", filter_residual_enabled_tfs_ ? "on" : "off");
   printf("   --cr-filter-max-value %1.3f\n", filter_residual_max_value_);
@@ -706,6 +701,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   printf("           --qual-filter %s\n", filter_quality_enabled_ ? "on" : "off");
   printf("    --qual-filter-offset %1.4f\n", filter_quality_offset_);
   printf("     --qual-filter-slope %1.4f\n", filter_quality_slope_ );
+  printf("\n");
 
   printf("Adapter trimming settings\n");
   printf("          --trim-adapter ");
@@ -764,17 +760,21 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
 
 // ----------------------------------------------------------------------------
 
-void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask, const PolyclonalFilterOpts & opts)
+void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask)
 {
-  if (!filter_clonal_enabled_ and !filter_clonal_enabled_tfs_)
+
+  if (!(clonal_opts_.enable)){
+    cout << "Polyclonal filter training disabled." << endl;
     return;
+  }
+  cout << "Polyclonal filter training." << endl;
 
   wells.OpenForIncrementalRead();
   vector<int> key_ionogram(keys_[0].flows(), keys_[0].flows()+keys_[0].flows_length());
   filter_counts counts;
   int nlib = mask.GetCount(static_cast<MaskType> (MaskLib));
-  counts._nsamp = min(nlib, filter_clonal_maxreads_);
-  make_filter(clonal_population_, counts, mask, wells, key_ionogram, opts);
+  counts._nsamp = min(nlib, clonal_opts_.filter_clonal_maxreads);
+  make_filter(clonal_population_, counts, mask, wells, key_ionogram, clonal_opts_);
   cout << counts << endl;
   wells.Close();
 }
@@ -888,20 +888,19 @@ void BaseCallerFilters::SetBkgmodelFailedKeypass(int read_index, ReadFilteringHi
 
 // ----------------------------------------------------------------------------
 
-void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_class, ReadFilteringHistory& filter_history,
-    const vector<float>& measurements,
-    const PolyclonalFilterOpts & opts)
+void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_class,
+    ReadFilteringHistory& filter_history, const vector<float>& measurements)
 {
   if (filter_history.is_filtered)
     return;
 
-  if (read_class == 0 and !filter_clonal_enabled_)  // Filter disabled for library?
+  if (read_class == 0 and !(clonal_opts_.filter_clonal_enabled_lib))  // Filter disabled for library?
     return;
-  if (read_class != 0 and !filter_clonal_enabled_tfs_)  // Filter disabled for TFs?
+  if (read_class != 0 and !(clonal_opts_.filter_clonal_enabled_tfs))  // Filter disabled for TFs?
     return;
 
-  vector<float>::const_iterator first = measurements.begin() + opts.mixed_first_flow;
-  vector<float>::const_iterator last  = measurements.begin() + opts.mixed_last_flow;
+  vector<float>::const_iterator first = measurements.begin() + clonal_opts_.mixed_first_flow;
+  vector<float>::const_iterator last  = measurements.begin() + clonal_opts_.mixed_last_flow;
   float ppf = percent_positive(first, last);
   float ssq = sum_fractional_part(first, last);
 
@@ -911,7 +910,7 @@ void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_cla
     filter_history.n_bases_after_high_ppf = 0;
     filter_history.is_filtered = true;
   }
-  else if(!clonal_population_.is_clonal(ppf, ssq)) {
+  else if(!(clonal_opts_.filter_extreme_ppf_only) and !(clonal_population_.is_clonal(ppf, ssq, clonal_opts_.mixed_stringency))) {
     filter_mask_[read_index] = kFilterPolyclonal;
     filter_history.n_bases_filtered = 0;
     filter_history.n_bases_after_polyclonal = 0;
@@ -1058,6 +1057,7 @@ void BaseCallerFilters::FilterFailedKeypass(int read_index, int read_class, Read
 
   if ((int)sequence.size() >= keys_[read_class].bases_length()) {
     int base=0;
+    //while (base < keys_[read_class].bases_length() and isBaseMatch(sequence[base], keys_[read_class].bases()[base]))
     while (base < keys_[read_class].bases_length() and sequence[base] == keys_[read_class].bases()[base])
       ++base;
 

@@ -84,7 +84,16 @@ case "$1" in
         # Edit the rc.local file
         sed -i "/create_nvidia_files/d" /etc/rc.local
         sed -i "s:^exit 0:@ION_INSTALL_PREFIX@/create_nvidia_files\nexit 0:" /etc/rc.local
-    	
+    	if [ -f "/software/datacollect.avx" ]; then
+		# remove xorg.conf (installed by CUDA)
+		rm -rf /etc/X11/xorg.conf
+	
+		if [ "Enabled" == "`nvidia-smi -a | sed -e"/Ecc Mode/{x;N;p};d" | sed -e ':a;N;$!ba;s/\n/ /g' | sed -e 's/.*: //'`" ]; then
+		    # disable ECC support
+		    nvidia-smi -e 0
+		fi
+	fi
+
 	;;
     
     abort-install|abort-upgrade)

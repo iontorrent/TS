@@ -323,7 +323,7 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
                        unsigned int& start_pos_update) {
 
   // string dummy_string;
-  
+
   // Compute boundaries for tubed alignment around previously found alignment
   if (!ComputeTubedAlignmentBoundaries())
     return false;
@@ -491,6 +491,8 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
   int current_move = DP_matrix[t_idx][q_idx].best_path_direction;
   int next_move = FROM_NOWHERE;
   int last_move = -1;
+
+  // DVK: softclip first / last deletes;
 
   while (current_move != FROM_NOWHERE) {
     switch (current_move) {

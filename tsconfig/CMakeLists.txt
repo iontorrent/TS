@@ -31,12 +31,8 @@ configure_file (
 )
 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-ansible" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-legacy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSchkconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip-ansible" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip-legacy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/bin/TSsetproxy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSsetnoproxy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSquery" DESTINATION sbin )
@@ -44,7 +40,6 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSdns" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSwrapper" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSinit" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSaddstorage" DESTINATION sbin )
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TScreateLocalRepository" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/ion" DESTINATION bin )
 install(FILES "${PROJECT_BINARY_DIR}/ts_functions" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/ts_params" DESTINATION share/ion-tsconfig )
@@ -61,6 +56,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_mount_test" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_addnodes.sh" DESTINATION share/ion-tsconfig/tools )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/prep_node_sudo.sh" DESTINATION share/ion-tsconfig/tools )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/add_compute.sh" DESTINATION share/ion-tsconfig/tools )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/del_compute.sh" DESTINATION share/ion-tsconfig/tools )
 install(FILES "${PROJECT_SOURCE_DIR}/README.clusters" DESTINATION share/ion-tsconfig )
 
 # perl modules used by plugins for json file parsing
@@ -89,12 +85,14 @@ execute_process (
 )
 set(PYTHON_SITE_PACKAGES "${PYTHON_SITE_PACKAGES}" CACHE PATH "Python Install Prefix")
 install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
-install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSconfig.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSconfig.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
+
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "whiptail")
 
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")

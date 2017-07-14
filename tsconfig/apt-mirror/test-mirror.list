@@ -1,0 +1,54 @@
+############# config ##################
+#
+set base_path    /var/spool/apt-mirror
+#
+# set mirror_path  $base_path/mirror
+# set skel_path    $base_path/skel
+# set var_path     $base_path/var
+# set cleanscript $var_path/clean.sh
+# set defaultarch  <running host architecture>
+# set postmirror_script $var_path/postmirror.sh
+# set run_postmirror 0
+set nthreads     20
+set _tilde 0
+#
+############# end config ##############
+
+# Ubuntu Mirrors
+deb http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu xenial-security main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu xenial-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu xenial-proposed main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu xenial-backports main restricted universe multiverse
+
+#deb-src http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu xenial-security main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu xenial-updates main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu xenial-proposed main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu xenial-backports main restricted universe multiverse
+
+deb http://archive.ubuntu.com/ubuntu trusty main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu trusty-security main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu trusty-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu trusty-proposed main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse
+
+#deb-src http://archive.ubuntu.com/ubuntu trusty main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu trusty-security main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu trusty-updates main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu trusty-proposed main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse
+
+
+# Ansible
+deb http://ppa.launchpad.net/ansible/ansible/ubuntu trusty main
+deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main
+
+
+# Docker
+deb https://apt.dockerproject.org/repo ubuntu-trusty main
+deb https://apt.dockerproject.org/repo ubuntu-xenial main
+
+clean http://archive.ubuntu.com/ubuntu
+clean http://ppa.launchpad.net/ansible/ansible/ubuntu
+clean http://apt.dockerproject.org/repo

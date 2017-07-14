@@ -28,6 +28,7 @@ OrderedDatasetWriter::OrderedDatasetWriter()
   num_read_groups_       = 0;
   num_datasets_          = 0;
   save_filtered_reads_   = false;
+  compress_bam_          = true;
   num_bamwriter_threads_ = 0;
   pthread_mutex_init(&dropbox_mutex_, NULL);
   pthread_mutex_init(&write_mutex_, NULL);
@@ -46,7 +47,7 @@ OrderedDatasetWriter::~OrderedDatasetWriter()
 void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
      int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
      int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments,
-     MolecularTagTrimmer& tag_trimmer, bool trim_barcodes)
+     MolecularTagTrimmer& tag_trimmer, bool trim_barcodes, bool compress_bam)
 {
   num_regions_ = num_regions;
   num_regions_written_ = 0;
@@ -61,6 +62,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   num_read_groups_ = datasets.num_read_groups();
   num_reads_.resize(num_datasets_,0);
   bam_filename_.resize(num_datasets_);
+  compress_bam_ = compress_bam;
 
   // A negative read group index indicates untrimmed/unfiltered bam files (w. library key) and we save all reads
   if (read_class_idx < 0) {
@@ -314,9 +316,12 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
       // Open Bam for writing
       RefVector empty_reference_vector;
       bam_writer_[target_file_idx] = new BamWriter();
-      bam_writer_[target_file_idx]->SetCompressionMode(BamWriter::Compressed);
+      if (compress_bam_)
+        bam_writer_[target_file_idx]->SetCompressionMode(BamWriter::Compressed);
+      else
+        bam_writer_[target_file_idx]->SetCompressionMode(BamWriter::Uncompressed);
       bam_writer_[target_file_idx]->SetNumThreads(num_bamwriter_threads_);
-      //bam_writer_[ds]->SetCompressionMode(BamWriter::Uncompressed);
+
       if (not bam_writer_[target_file_idx]->Open(bam_filename_[target_file_idx], sam_header_[target_file_idx], empty_reference_vector)) {
         cerr << "BaseCaller IO error: Failed to create bam file " << bam_filename_[target_file_idx] << endl;
         exit(EXIT_FAILURE);

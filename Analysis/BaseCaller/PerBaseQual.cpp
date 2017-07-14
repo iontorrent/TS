@@ -424,15 +424,17 @@ uint8_t PerBaseQual::CalculatePerBaseScore(float* pred) const
 // Predictor 2 - Local noise/flowalign - Maximum residual within +-1 BASE
 
 void PerBaseQual::PredictorLocalNoise(vector<float>& local_noise, int max_base, const vector<int>& base_to_flow,
-                                      const vector<float>& normalized_measurements, const vector<float>& prediction)
+                                      const vector<float>& normalized_measurements, const vector<float>& prediction, const bool flow_predictors_)
 {
   int num_bases = base_to_flow.size();
   for (int base = 0; base < max_base; ++base) {
     int val1 = max(base - 1, 0);
-    int val2 = min(base + 1, num_bases - 1);
+    //int val2 = min(base + 1, num_bases - 1);
+    int val2 = flow_predictors_ ? min(base+1, max_base-1) : min(base+1, num_bases-1);
     float noise = 0;
     for (int j = val1; j <= val2; ++j) {
-      noise = max(noise, fabsf(normalized_measurements[base_to_flow[j]] - prediction[base_to_flow[j]]));
+		int jj = flow_predictors_ ? j : base_to_flow[j];
+		noise = max(noise, fabsf(normalized_measurements[jj] - prediction[jj]));
     }
     local_noise[base] = noise;
   }
@@ -443,7 +445,7 @@ void PerBaseQual::PredictorLocalNoise(vector<float>& local_noise, int max_base, 
 // -(m_1 - m_0 - s_1 - s_0)/m_1
 
 void PerBaseQual::PredictorNoiseOverlap(vector<float>& minus_noise_overlap, int max_base,
-                                        const vector<float>& normalized_measurements, const vector<float>& prediction)
+                                        const vector<float>& normalized_measurements, const vector<float>& prediction, const bool flow_predictors_)
 {
   // 0-mer and 1-mer overlap
   // define 0-mer and 1-mer interval
@@ -513,37 +515,43 @@ void PerBaseQual::PredictorNoiseOverlap(vector<float>& minus_noise_overlap, int 
 
 
 // Predictor 4 - Transformed homopolymer length
-void PerBaseQual::PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector<char>& sequence)
+void PerBaseQual::PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector<char>& sequence, vector<float>& homopolymer_rank_flow, const vector<int>& flow_to_base, int flow_predictors_)
 {
-  int hp_length = 0;
-  for (int base = 0; base < max_base; ++base) {
+    int hp_length = 0;
+    for (int base = 0; base < max_base; ++base) {
     hp_length++;
     // HP 1114
     homopolymer_rank[base] = 1;
     if (sequence[base] != sequence[base+1] or (base+2) == max_base) {
       homopolymer_rank[base] = hp_length;
       hp_length = 0;
+      }
     }
-  }
+    int nFlows = flow_to_base.size();
+    for (int flow=0; flow<nFlows; flow++) {
+        int base = flow_to_base[flow];
+        homopolymer_rank_flow[flow] = (base>=0 && base<max_base) ? homopolymer_rank[base] : 0;
+    }
 }
 
 
 // Predictor 6 - Neighborhood noise - mean of residual within +-5 BASES
 
 void PerBaseQual::PredictorNeighborhoodNoise(vector<float>& neighborhood_noise, int max_base, const vector<int>& base_to_flow,
-                                             const vector<float>& normalized_measurements, const vector<float>& prediction)
+                                             const vector<float>& normalized_measurements, const vector<float>& prediction, const bool flow_predictors_)
 {
   int num_bases = base_to_flow.size();
   for (int base = 0; base < max_base; ++base) {
     int radius = 5;
     // protect at start/end of read
     int val1 = max(base-radius, 0);
-    int val2 = min(base+radius, num_bases-1);
+    int val2 = flow_predictors_ ? min(base+radius, max_base-1) : min(base+radius, num_bases-1);
 
     float noise = 0;
     int count = 0;
     for (int j = val1; j <= val2; j++) {
-      noise += fabsf(normalized_measurements[base_to_flow[j]] - prediction[base_to_flow[j]]);
+	  int jj = flow_predictors_ ? j : base_to_flow[j];
+      noise += fabsf(normalized_measurements[jj] - prediction[jj]);
       count++;
     }
     if (count)
@@ -557,7 +565,7 @@ void PerBaseQual::PredictorNeighborhoodNoise(vector<float>& neighborhood_noise, 
 // Candidate predictor based on Beverly filter
 
 void PerBaseQual::PredictorBeverlyEvents(vector<float>& beverly_events, int max_base, const vector<int>& base_to_flow,
-                                         const vector<float>& scaled_residual)
+                                         const vector<float>& scaled_residual, const bool flow_predictors_)
 {
   const static int flow_window_radius = 10;
 
@@ -568,9 +576,7 @@ void PerBaseQual::PredictorBeverlyEvents(vector<float>& beverly_events, int max_
   int num_beverly_events = 0;
 
   for (int base = 0; base < max_base; ++base) {
-
-    int window_center_flow = base_to_flow[base];
-
+    int window_center_flow = flow_predictors_ ? base : base_to_flow[base];
     // Advance window start
     while (window_start_flow < window_center_flow+flow_window_radius) {
       int hp_length = 0;
@@ -610,60 +616,78 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
                                         const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
                                         const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
                                         const vector<int>& base_to_flow, vector<uint8_t> &quality,
-                                        const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3)
+                                        const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
+                                        const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+                                        const vector<int>& flow_to_base, const bool flow_predictors_)
 {
 
   if (num_bases == 0)
     return;
 
   //! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
-  int max_eligible_base = min(num_bases, (int)(0.75*num_flows) + 1);
-  quality.clear();
+  int last_base_to_flow = base_to_flow.back();
+  int max_eligible_flow = (int)(0.75*num_flows) + 1;
+  max_eligible_flow = min(max_eligible_flow,last_base_to_flow);
+  //save_predictors_ = false; // debugging only
+  int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
+  //int max_eligible_base = min(num_bases, max_eligible_flow); // avoid out of range in debugging
 
+  quality.clear();
   stringstream predictor_dump_block;
 
   for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
-
     float pred[kNumPredictors];
-    pred[1] = predictor2[base];
-    pred[2] = predictor3[base];
-    pred[3] = predictor4[base];
-
+    pred[1] = predictor2[base]; // P2: local noise
+    pred[2] = predictor3[base]; // P3: high-residual events
+    int base_or_flow = flow_predictors_ ? base : base_to_flow[base];
+    /*
     if (save_predictors_) {
       // the following lines are only for predictor_dump_block
       // they are not the same in new QvTables
-      pred[0] = predictor1[base];
-      pred[4] = predictor5[base];
-      pred[5] = predictor6[base];
+      pred[0] = flow_predictors_ ? predictor1_flow[base] : predictor1[base]; // P1: penalty residual
+      pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
+      pred[4] = flow_predictors_ ? predictor5_flow[base] : predictor5[base]; // P5: penalty mismatch
+      pred[5] = predictor6[base]; // P6: neighborhood noise
 
       predictor_dump_block << read_name << " " << base << " ";
       for (int k = 0; k < kNumPredictors; ++k)
         predictor_dump_block << pred[k] << " ";
-      predictor_dump_block << candidate1[base_to_flow[base]] << " ";
-      predictor_dump_block << candidate2[base_to_flow[base]] << " ";
-      predictor_dump_block << candidate3[base_to_flow[base]] << " ";
-      predictor_dump_block << base_to_flow[base] << endl;
+      predictor_dump_block << candidate1[base_or_flow] << " ";
+      predictor_dump_block << candidate2[base_or_flow] << " ";
+      predictor_dump_block << candidate3[base_or_flow] << " ";
+      if (flow_predictors_) {
+          int always_base = flow_predictors_ ? flow_to_base[base] : base;
+          predictor_dump_block << always_base << endl; // could be -1
+      } else {
+          int always_flow = flow_predictors_ ? base : base_to_flow[base];
+          predictor_dump_block << always_flow << endl; // cannot get flow if base=-1
+      }
+      //predictor_dump_block << base_to_flow[base] << endl;
     }
+    */
     // v3.4: p1,2,3,4,6,9
     // the real predictors used in the QvTable
     pred[0] = transform_P1(predictor1[base]);
-    //pred[1] = transform_P2(predictor2[base]); // no transformation might help only if no Recalibration
+    pred[3] = predictor4[base]; // P4: hp
+    //pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
     pred[4] = transform_P6(predictor6[base]);
+    //pred[1] = transform_P2(predictor2[base]); // no transformation might help only if no Recalibration
     //pred[5] = transform_P8(candidate2[base_to_flow[base]]);
-    pred[5] = transform_P9(candidate3[base_to_flow[base]]);
+    pred[5] = candidate3[base_or_flow];
+    pred[5] = transform_P9(pred[5]);
 
     // v3.0: p1,2,3,4,5,6
     //pred[0] = predictor1[base];
     //pred[0] = transform_P1(predictor1[base]);
     //pred[4] = predictor5[base];
     //pred[5] = predictor6[base];
-
     quality.push_back(CalculatePerBaseScore(pred));
   }
 
   for (int base = max_eligible_base; base < num_bases; base++)
     quality.push_back(kMinQuality);
 
+  /*
   if (save_predictors_) {
     predictor_dump_block.flush();
     pthread_mutex_lock(&predictor_mutex_);
@@ -671,8 +695,69 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
     predictor_dump_.flush();
     pthread_mutex_unlock(&predictor_mutex_);
   }
+  */
 }
 
+
+void PerBaseQual::DumpPredictors(const string& read_name, int num_bases, int num_flows,
+                                        const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
+                                        const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
+                                        const vector<int>& base_to_flow, vector<uint8_t> &quality,
+                                        const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
+                                        const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+                                        const vector<int>& flow_to_base, const bool flow_predictors_)
+{
+
+  if (num_bases == 0)
+    return;
+
+  //! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
+  int last_base_to_flow = base_to_flow.back();
+  int max_eligible_flow = (int)(0.75*num_flows) + 1;
+  max_eligible_flow = min(max_eligible_flow,last_base_to_flow);
+  //save_predictors_ = false; // debugging only
+  int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
+  //int max_eligible_base = min(num_bases, max_eligible_flow); // avoid out of range in debugging
+
+  stringstream predictor_dump_block;
+
+  for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
+    float pred[kNumPredictors];
+    pred[1] = predictor2[base]; // P2: local noise
+    pred[2] = predictor3[base]; // P3: high-residual events
+    int always_flow = flow_predictors_ ? base : base_to_flow[base];
+    //if (save_predictors_) {
+      // the following lines are only for predictor_dump_block
+      // they are not the same in new QvTables
+      pred[0] = flow_predictors_ ? predictor1_flow[base] : predictor1[base]; // P1: penalty residual
+      pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
+      pred[4] = flow_predictors_ ? predictor5_flow[base] : predictor5[base]; // P5: penalty mismatch
+      pred[5] = predictor6[base]; // P6: neighborhood noise
+
+      predictor_dump_block << read_name << " " << base << " ";
+      for (int k = 0; k < kNumPredictors; ++k)
+        predictor_dump_block << pred[k] << " ";
+      predictor_dump_block << candidate1[always_flow] << " ";
+      predictor_dump_block << candidate2[always_flow] << " ";
+      predictor_dump_block << candidate3[always_flow] << " ";
+      if (flow_predictors_) {
+          int always_base = flow_predictors_ ? flow_to_base[base] : base;
+          predictor_dump_block << always_base << endl; // could be -1
+      } else {
+          predictor_dump_block << always_flow << endl; // cannot get flow if base=-1
+      }
+      //predictor_dump_block << base_to_flow[base] << endl;
+    //}
+  }
+
+  //if (save_predictors_) {
+    predictor_dump_block.flush();
+    pthread_mutex_lock(&predictor_mutex_);
+    predictor_dump_ << predictor_dump_block.str();
+    predictor_dump_.flush();
+    pthread_mutex_unlock(&predictor_mutex_);
+  //}
+}
 
 
 float PerBaseQual::transform_P1(float p)

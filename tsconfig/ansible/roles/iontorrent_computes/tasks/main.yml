@@ -11,7 +11,7 @@
   
 - name: Install system packages for compute resource - apt
   apt: name={{ item }} state=present force=yes
-  with_items: ioncompute_syspkg_list
+  with_items: "{{ ioncompute_syspkg_list }}"
   when: "item != ''"
 
 #-----------------------------------------------------------------------------
@@ -19,7 +19,7 @@
 #-----------------------------------------------------------------------------
 - name: Install Ion packages for compute resource - apt
   apt: name={{ item }} state=present force=yes
-  with_items: ioncompute_ionpkg_list
+  with_items: "{{ ioncompute_ionpkg_list }}"
   when: "item != '' "
 
 # Set host location of Ion Torrent Server Daemons
@@ -29,8 +29,8 @@
                 state=present
                 create=yes
                 owner=ionadmin group=ionadmin mode=0644
-                regexp="^{{item}}.*"
-                line="{{item}} = '{{ groups.headnode[0] }}'"
+                regexp="^{{ item }}.*"
+                line="{{ item }} = '{{ groups.headnode[0] }}'"
   with_items:
     - PLUGINSERVER_HOST
     - JOBSERVER_HOST

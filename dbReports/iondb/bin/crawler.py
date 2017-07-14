@@ -37,9 +37,11 @@ import traceback
 import urllib
 import argparse
 
-from iondb.bin.djangoinit import *
+#from iondb.bin.djangoinit import *
+from iondb.bin import djangoinit
 from django import db
 from django.db import connection
+from django.conf import settings
 
 from twisted.internet import reactor
 from twisted.internet import task

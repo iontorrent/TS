@@ -860,14 +860,36 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_
 
 void DPTreephaser::Simulate(BasecallerRead& data, int max_flows,bool state_inphase)
 {
+	SimulateStateMatrix(data, max_flows, state_inphase, NULL, 0.0f);
+}
+
+//-------------------------------------------------------------------------
+
+void DPTreephaser::SimulateStateMatrix(BasecallerRead& data, int max_flows,bool state_inphase, vector<vector<pair<int, float> > >* row_linked_state_matrix, float amp_cut_off)
+{
   InitializeState(&path_[0]);
   int   recent_flow = 0;
   float recent_state_inphase = 1.0;
+  bool is_output_state_matrix = (row_linked_state_matrix != NULL);
+  if (is_output_state_matrix){
+	  row_linked_state_matrix->reserve(data.sequence.size());
+  }
 
   for (vector<char>::iterator nuc = data.sequence.begin(); nuc != data.sequence.end()
        and path_[0].flow < max_flows; ++nuc) {
     AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
     path_[0].sequence.push_back(*nuc); // Needed to simulate diagonal states correctly
+
+    if (is_output_state_matrix){
+      vector<pair<int, float> > sparse_matrix_row;
+      sparse_matrix_row.reserve(path_[0].window_end - path_[0].window_start);
+      for (int flow = path_[0].window_start; flow < path_[0].window_end; ++flow){
+        if (path_[0].state[flow] > amp_cut_off){
+    	  sparse_matrix_row.push_back(pair<int, float>(flow, path_[0].state[flow]));
+        }
+      }
+      row_linked_state_matrix->push_back(sparse_matrix_row);
+    }
 
     if (state_inphase and path_[0].flow < max_flows) {
       for (int iFlow=recent_flow+1; iFlow<path_[0].flow; iFlow++)
@@ -1319,9 +1341,10 @@ void  DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 
   if (read.sequence.empty())
     return;
-
-  read.penalty_mismatch.assign(read.sequence.size(), 0);
-  read.penalty_residual.assign(read.sequence.size(), 0);
+  int sz = (int)read.sequence.size();
+	  
+  read.penalty_mismatch.assign(sz, 0);
+  read.penalty_residual.assign(sz, 0);
 
   TreephaserPath *parent = &path_[0];
   TreephaserPath *children[4] = { &path_[1], &path_[2], &path_[3], &path_[4] };
@@ -1335,7 +1358,121 @@ void  DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 
   // main loop for base calling
   for (int solution_flow = 0, base = 0; solution_flow < flow_order_.num_flows(); ++solution_flow) {
-    for (; base < (int)read.sequence.size() and read.sequence[base] == flow_order_[solution_flow]; ++base) {
+    for (; ; ++base) {
+      float penalty[4] = { 0, 0, 0, 0 };
+
+      int called_nuc = 0;
+
+      for (int nuc = 0; nuc < 4; nuc++) {
+
+        TreephaserPath *child = children[nuc];
+
+        AdvanceState(child, parent, nuc_int_to_char_[nuc], flow_order_.num_flows());
+
+        if (nuc_int_to_char_[nuc] == flow_order_[solution_flow])
+          called_nuc = nuc;
+
+        // Apply easy termination rules
+
+        if (child->flow >= flow_order_.num_flows()) {
+          penalty[nuc] = 25; // Mark for deletion
+          continue;
+        }
+
+        if (child->last_hp > kMaxHP) {
+          penalty[nuc] = 25; // Mark for deletion
+          continue;
+        }
+
+        if ((int)parent->sequence.size() >= (2 * flow_order_.num_flows() - 10)) {
+          penalty[nuc] = 25; // Mark for deletion
+          continue;
+        }
+
+        for (int flow = parent->window_start; flow < child->window_end; ++flow) {
+          float residual = read.normalized_measurements[flow] - child->prediction[flow];
+          if (residual <= 0 or flow < child->flow)
+            penalty[nuc] += residual*residual;
+        }
+      } //looping over nucs
+
+
+      // find current incorporating base
+      assert(children[called_nuc]->flow == solution_flow);
+
+      recent_state_inphase = children[called_nuc]->state[solution_flow];
+      recent_state_total = 0;
+      for (int flow = children[called_nuc]->window_start; flow < children[called_nuc]->window_end; ++flow)
+        recent_state_total += children[called_nuc]->state[flow];
+
+      // Get delta penalty to next best solution
+      read.penalty_mismatch[base] = -1; // min delta penalty to earlier base hypothesis
+      read.penalty_residual[base] = 0;
+
+      if (solution_flow - parent->window_start > 0)
+        read.penalty_residual[base] = penalty[called_nuc] / (solution_flow - parent->window_start);
+
+      for (int nuc = 0; nuc < 4; ++nuc) {
+        if (nuc == called_nuc)
+            continue;
+        float penalty_mismatch = penalty[called_nuc] - penalty[nuc];
+        read.penalty_mismatch[base] = max(read.penalty_mismatch[base], penalty_mismatch);
+      }
+
+      // Fill out the remaining portion of the prediction
+      for (int flow = 0; flow < parent->window_start; ++flow)
+        children[called_nuc]->prediction[flow] = parent->prediction[flow];
+
+      for (int flow = children[called_nuc]->window_end; flow < flow_order_.num_flows(); ++flow)
+        children[called_nuc]->prediction[flow] = 0;
+
+      // Called state is the starting point for next base
+      TreephaserPath *swap = parent;
+      parent = children[called_nuc];
+      children[called_nuc] = swap;
+
+    }
+
+    read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
+    read.state_total[solution_flow] = max(recent_state_total, 0.01f);
+  }
+
+  read.prediction.swap(parent->prediction);
+
+}
+
+
+void  DPTreephaser::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_)
+{
+  //static const char nuc_int_to_char[5] = "ACGT";
+  //read.state_total.assign(flow_order_.num_flows(), 1);
+
+  if (read.sequence.empty())
+    return;
+  int sz = (int)read.sequence.size();
+  if (flow_predictors_)
+      sz = flow_order_.num_flows();
+
+  read.penalty_mismatch.assign(sz, 0);
+  read.penalty_residual.assign(sz, 0);
+
+  TreephaserPath *parent = &path_[0];
+  TreephaserPath *children[4] = { &path_[1], &path_[2], &path_[3], &path_[4] };
+
+  if(recalibrate_predictions_)
+    ResetRecalibrationStructures();
+  InitializeState(parent);
+
+  float recent_state_inphase = 1;
+  float recent_state_total = 1;
+
+  // main loop for base calling
+  for (int solution_flow = 0, base = 0; solution_flow < flow_order_.num_flows(); ++solution_flow) {
+    for (; ; ++base) {
+        if (flow_predictors_)
+            break;
+        else if (not (base < sz and read.sequence[base] == flow_order_[solution_flow]))
+            break;
 
       float penalty[4] = { 0, 0, 0, 0 };
 
@@ -1418,6 +1555,7 @@ void  DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
   read.prediction.swap(parent->prediction);
 
 }
+
 
 // ----------------------------------------------------------------------------
 

@@ -43,6 +43,8 @@ struct BasecallerRead {
   vector<float>   state_total;              //!< Fraction of live polymerase
   vector<float>   penalty_residual;         //!< Absolute score of the called nuc hypothesis
   vector<float>   penalty_mismatch;         //!< Score difference to second-best nuc hypothesis
+  vector<float>   penalty_residual_flow;         //!< Absolute score of the called nuc hypothesis
+  vector<float>   penalty_mismatch_flow;         //!< Score difference to second-best nuc hypothesis
 
   // Nuc gain data
   static constexpr float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
@@ -130,6 +132,14 @@ public:
   //! @param[in]  restart_flows   Number of flows to simulate, rather than solve
   void  Solve(BasecallerRead& read, int max_flows, int restart_flows = 0);
 
+  //! @brief  Generate predicted signal and the row-linked sparse state matrix from base sequence
+  //! @param[in]  read.sequence     Base sequence
+  //! @param[out] read.prediction   Predicted signal
+  //! @param[in]  max_flows         Number of flows to process
+  //! @param[out] row_linked_state_matrix     (*row_linked_state_matrix)[nuc][j].second = the amplitude that read.sequence[nuc] contributes to read.prediction[flow] where flow = *(row_linked_state_matrix)[nuc][j].first
+  //! @param[in]  amp_cut_off       Neglect the entry in *row_linked_state_matrix if less than this value.
+  void  SimulateStateMatrix(BasecallerRead& read, int max_flows, bool state_inphase, vector<vector<pair<int, float> > >* row_linked_state_matrix, float amp_cut_off = 0.0f);
+
   //! @brief  Generate predicted signal from base sequence
   //! @param[in]  read.sequence     Base sequence
   //! @param[out] read.prediction   Predicted signal
@@ -160,7 +170,8 @@ public:
   //! @param[out] read.onemer_height    Expected 1-mer signal, used for scaling residuals
   //! @param[out] read.penalty_residual Absolute score of the called nuc hypothesis
   //! @param[out] read.penalty_mismatch Score difference to second-best nuc hypothesis
-  void  ComputeQVmetrics(BasecallerRead& read); // Computes "oneMerHeight" and "deltaPenalty"
+  void ComputeQVmetrics(BasecallerRead& read); // Computes "oneMerHeight" and "deltaPenalty"
+  void ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_=false); // Computes "oneMerHeight" and "deltaPenalty"
 
   //! @brief  Correct for uniform multiplicative scaling
   //! @param[in]  read.prediction               Model-predicted signal

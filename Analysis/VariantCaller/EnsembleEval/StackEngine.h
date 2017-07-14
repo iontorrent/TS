@@ -12,6 +12,7 @@
 #include <iterator>
 #include <math.h>
 #include <vector>
+#include <list>
 
 #include "ExtendedReadInfo.h"
 #include "CrossHypotheses.h"
@@ -47,17 +48,22 @@ public:
     vector<float> ll_at_stage;
     vector<float> start_freq_of_winner;
  
+    int DEBUG;
+
     void FastExecuteInference(ShortStack &total_theory, bool update_frequency, bool update_sigma, vector<float> &start_frequency);
     void LocalExecuteInference(ShortStack &total_theory, bool update_frequency, bool update_sigma, vector<float> &start_frequency);
     void FastStep(ShortStack &total_theory, bool update_frequency, bool update_sigma);
     void DetailedStep(ShortStack &total_theory, bool update_frequency, bool update_sigma);
-    void ScanStrandPosterior(ShortStack &total_theory, bool vs_ref, int max_detail_level);
+    void ScanStrandPosterior(ShortStack &total_theory, bool vs_ref);
     void ResetToOrigin();
     void PropagateTuningParameters(EnsembleEvalTuningParameters &my_params, int num_hyp_no_null);
-    LatentSlate(){
+    void SetAndPropagateDebug(int debug);
+    LatentSlate(int debug = 0){
         max_iterations = 10;
         detailed_integral = true;
         iter_done = 0;
+        DEBUG = debug;
+        SetAndPropagateDebug(DEBUG);
     };
 };
 
@@ -68,6 +74,8 @@ public:
     ShortStack total_theory;
     EnsembleEvalTuningParameters my_params;
     bool try_alternatives;
+    int DEBUG;
+    vcf::Variant* variant; // just for debug message.
 
     vector<float> ll_record;
     vector<vector <float> > try_hyp_freq;
@@ -84,12 +92,12 @@ public:
     void SetAlternateFromMain();
     void ExecuteExtremeInferences();
     void TriangulateRestart();
-    float ExecuteOneRestart(vector<float> &restart_hyp, int max_detail_level = 0);
+    float ExecuteOneRestart(vector<float> &restart_hyp);
     void ExecuteInference();
-    void InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, int num_hyp_no_null, vector<AlleleIdentity> &allele_identity_vector);
+    void InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, vector<AlleleIdentity> &allele_identity_vector);
 
     // tool for posterior density estimation
-    bool CallGermline(float hom_safety, int &genotype_call, float &quasi_phred_quality_score, float &reject_status_quality_score);
+    bool CallByIntegral(float af_cutoff_rej, float af_cutoff_gt, vector<int> &genotype_component, float &quasi_phred_quality_score, float &reject_status_quality_score, int &qual_type);
 
     float ReturnMaxLL();
 };
@@ -108,67 +116,117 @@ public:
     int                    multiallele_window_end;
     vector<string>         info_fields;
     bool                   doRealignment;
+    int                    DEBUG;
     // Allele evaluation information
     HypothesisStack allele_eval;
     vector<int> diploid_choice;
+    vector<bool> is_possible_polyploidy_allele;
+    //@TODO: Use enumerate to represent the fd-code
+    vector<vector<int> > global_flow_disruptive_matrix;
     
     EnsembleEval(vcf::Variant &candidate_variant) {
-        diploid_choice.assign(2,0);
-        diploid_choice[1]=1; // ref = 0, alt = 1
+        diploid_choice.clear();
         variant = &candidate_variant;
+        allele_eval.variant = variant;
         info_fields.clear();
         multiallele_window_start = -1;
         multiallele_window_end = -1;
         doRealignment = false;
-        is_detect_best_multi_allele_pair_done_ = false;
-        is_hard_classification_for_reads_done_ = false;
-        is_hard_classification_for_families_done_ = false;
+        DEBUG = 0;
+        read_id_.clear();
+        strand_id_.clear();
+        dist_to_left_.clear();
+        dist_to_right_.clear();
     };
 
-    //! @brief  Create a detailed picture about this variant and all its alleles
-    void SetupAllAlleles(const ExtendParameters &parameters, const InputStructures &global_context,
-                         const ReferenceReader &ref_reader, int chr_idx);
-    void FilterAllAlleles(const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params);
-    void StackUpOneVariant(const ExtendParameters &parameters, const PositionInProgress& bam_position, int sample_index);
-    void StackUpOneVariantMolTag(const ExtendParameters &parameters, vector< vector< MolecularFamily<Alignment*> > > &my_molecular_families_one_strand, int sample_index);
-    void DoDownSamplingMolTag(const ExtendParameters &parameters, vector< vector< MolecularFamily<Alignment*> > > &my_molecular_families,
-  		                      unsigned int num_reads_available, unsigned int num_func_fam, int strand_key);
+    //! @brief Set the parameters of the evaluator
+    void SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params);
+    //! @brief Generate the base space hypotheses for each read
     void SpliceAllelesIntoReads(PersistingThreadObjects &thread_objects, const InputStructures &global_context,
-                                const ExtendParameters &parameters, const ReferenceReader &ref_reader, int chr_idx);
-    void ApproximateHardClassifierForReads();
-    void ApproximateHardClassifierForFamilies(); // calculate the family id for cfDNA
+                                const ExtendParameters &parameters, const ReferenceReader &ref_reader);
+    //! @brief Get MLLD from the evaluator
     void ScanSupportingEvidence(float &mean_ll_delta, int i_allele);
+    //! @brief Calculate multi-min-allele-freq
+    void MultiMinAlleleFreq(const vector<float>& multi_min_allele_freq);
+    //! @brief Output additional information in the INFO field to make off-line filter possible
+    void GatherInfoForOfflineFiltering(const ControlCallAndFilters &my_controls, int best_allele_index);
+
+    //------------------------------------------------------------------
+    // Functions for molecular tagging
+    //! @brief Set the min family size that will be used in the evaluator.
+    void SetEffectiveMinFamilySize(const ExtendParameters& parameters, const vector<VariantSpecificParams>& variant_specific_params);
+    //! @brief Calculate the tag similarity for molecular tagging
+    void CalculateTagSimilarity(const MolecularTagManager& mol_tag_manager, int max_alt_cov, int sample_idx);
+    //! @brief Calculate the variant family histogram
+    void VariantFamilySizeHistogram();
+    //------------------------------------------------------------------
+    // Functions of allele related (not go to the reads) are defined here
+    //! @brief Setup the alleles, i.e., context investigation, allele classification, etc.
+    void SetupAllAlleles(const ExtendParameters &parameters, const InputStructures &global_context,
+                         const ReferenceReader &ref_reader);
+    //! @brief Filter out undesired alleles
+    void FilterAllAlleles(const ControlCallAndFilters& my_controls, const vector<VariantSpecificParams>& variant_specific_params);
+    //! @brief Calculate the end of the look ahead window (primarily for candidate generator)
+    int CalculateLookAheadEnd0(const ReferenceReader &ref_reader);
+    //! @brief Split the current variant into as many callable smaller variants as possible (primarily for candidate generator))
+    void SplitMyAlleleIdentityVector(list<list<int> >& allele_group, const ReferenceReader &ref_reader, int max_group_size_allowed);
+    //------------------------------------------------------------------
+    // Functions for filling read stack are defined here
+    //! @brief Fill the read stack w/o molecular tagging
+    void StackUpOneVariant(const ExtendParameters &parameters, const PositionInProgress& bam_position, int sample_index);
+    //! @brief Fill the read stack w/ molecular tagging
+    void StackUpOneVariantMolTag(const ExtendParameters &parameters, vector< vector< MolecularFamily> > &my_molecular_families_one_strand, int sample_index);
+    //! @brief Strategic downsampling algorithm for molecular tagging
+    void DoDownSamplingMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size, vector< vector< MolecularFamily> > &my_molecular_families,
+  		                      unsigned int num_reads_available, unsigned int num_func_fam, int strand_key);
+    //------------------------------------------------------------------
+    // Functions of hard classification of reads/families are defined here
+    //! @brief Hard classification of reads
+    void ApproximateHardClassifierForReads();
+    //!@ brief Hard classification of families for molecular tagging
+    void ApproximateHardClassifierForFamilies(); // calculate the family id for mol taging
+    //------------------------------------------------------------------
+    // Functions for high level evaluation results (e.g. QUAL, GT, GQ) are defined here
+    //! @brief Determine the best two alleles
     int DetectBestMultiAllelePair();
-    void ComputePosteriorGenotype(int _alt_allele_index,float local_min_allele_freq, int &genotype_call,
-                                  float &gt_quality_score, float &reject_status_quality_score);
-    void MultiAlleleGenotype(float local_min_allele_freq, vector<int> &genotype_component,
-	                         float &gt_quality_score, float &reject_status_quality_score,
-						     int max_detail_level = 0);
+    //! @brief Determine the best two alleles and output the allele_freq_estimation in the detection of best allele pair
+    int DetectBestMultiAllelePair(vector<float>& allele_freq_estimation);
+    //! @brief Determine possible polyploidy alleles
+    void DetectPossiblePolyploidyAlleles(const vector<float>& allele_freq, const ControlCallAndFilters &my_controls, const vector<VariantSpecificParams>& variant_specific_params);
+    //! @brief Get allele frequency cutoff according to the level of FD or allele type
+    void ServeAfCutoff(const ControlCallAndFilters &my_controls, const vector<VariantSpecificParams>& variant_specific_params,
+    		float& af_cutoff_rej, float& af_cutoff_gt);
+    //! @brief Calculate QUAL, GT, GQ
+    void MultiAlleleGenotype(float af_cutoff_rej, float af_cutoff_gt, vector<int> &genotype_component,
+	                         float &gt_quality_score, float &reject_status_quality_score, int &qualiy_type);
+    //------------------------------------------------------------------
+    // Functions of flow-disruption related are defined here
+    //! @brief Determine the flow-disruptiveness between hypotheses pairs for each read
+    void FlowDisruptivenessInReadLevel(const InputStructures &global_context);
+    //! @brief Determine the flow-disruptiveness between hypotheses pairs by looking at all reads
+    void FlowDisruptivenessInReadStackLevel(float min_ratio_for_fd);
 
     friend void GlueOutputVariant(EnsembleEval &my_ensemble, VariantCandidate &candidate_variant, const ExtendParameters &parameters, int _best_allele_index, int sample_index); // I want to access your private members
 
-// The following private members are used only in the internal steps at
-// a) int DetectBestMultiAllelePair()
-// b) void ApproximateHardClassifierForReads()
-// c) void ApproximateHardClassifierForFamilies()
 private:
-    bool is_detect_best_multi_allele_pair_done_ = false;
-    // Tvc used to compute read_id etc. twice. This is not computationally efficient.
-    // Now we do it just once.
     // The following private members are the results of approximate hard classification for reads
-    bool is_hard_classification_for_reads_done_ = false;
     vector<int> read_id_;        // vector of allele ids per read, -1 = outlier, 0 = ref, >0 real allele
     vector<bool> strand_id_;     // vector of forward (true) or reverse (false) per read
     // for each variant, calculate its' position within the soft clipped read distance to left and distance to right
     vector<int> dist_to_left_;   // vector of distances from allele position to left soft clip per read
     vector<int> dist_to_right_;  // vector of distances from allele position to left soft clip per read
 
-    // The following private members are the results of approximate hard classification for families
-    bool is_hard_classification_for_families_done_ = false;
-    vector<int> family_id_; // similar to read_id, but it is for family
-    vector<bool> family_strand_id_; // similar to strand_id, but it is for family
-    vector<float> max_family_responsibility_; // maximum family responsibility each the family in family_id
+    // The followings are for tag similarity
+    vector<vector<unsigned int> > alt_fam_indices_; // alt_fam_indices_[i_allele] stores the indices of families (of allele_eval.total_theory.my_eval_families) that support i_allele
+    vector<int> tag_similar_counts_;
 };
+
+string PrintVariant(const vcf::Variant& variant); // just for debug message
+
+void FindNodesInIsoSubGraph(const vector<vector<bool> >& connectivity_matrix, list<list<int> >& subgraph_to_nodes, bool sort_by_index);
+void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vector, list<list<int> >& allele_groups, const ReferenceReader& ref_reader, int max_group_size_allowed);
+BasicFilters const * ServeBasicFilterByType(const AlleleIdentity& variant_identity, const ControlCallAndFilters& my_controls);
+float FreqThresholdByType(const AlleleIdentity& variant_identity, const ControlCallAndFilters &my_controls, const VariantSpecificParams& variant_specific_params);
 
 
 #endif // STACKENGINE_H

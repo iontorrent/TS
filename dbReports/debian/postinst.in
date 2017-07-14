@@ -13,6 +13,14 @@ unset CELERY_LOADER
 case "$1" in
     configure)
 
+    KEY_FILE=/var/spool/ion/key
+    if [ ! -f $KEY_FILE ]; then
+        cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 256 | head -n 1 > $KEY_FILE
+        chown www-data:www-data $KEY_FILE
+    fi
+    # updated all instances of the key file to this permission level as per TS-14740
+    chmod 0440 $KEY_FILE
+
     # create or update the off-cycle release source url
     if [ -f /etc/apt/sources.list.d/iontorrent-offcycle.list ]; then
         sed -i "s/deb http:\/\/ionupdates.com\/updates\/software\/offcycle\/[^0-9.]*\([0-9.]*\).*/deb http:\/\/ionupdates.com\/updates\/software\/offcycle\/@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@\/ @LSB_RELEASE_CODENAME@\//" /etc/apt/sources.list.d/iontorrent-offcycle.list
@@ -63,9 +71,16 @@ case "$1" in
     chmod -R 777 /results/referenceLibrary/tmap-f3
     chmod -R 777 /results/referenceLibrary/disabled
     chmod -R 777 /results/referenceLibrary/TestFragment
+
+    chown -R www-data:www-data /results/referenceLibrary/TestFragment
+
     #make pluginMedia dir
     mkdir -p /results/pluginMedia
     chmod -R 777 /results/pluginMedia
+
+    # make the celeryd pid run directory with permissions
+    mkdir -p /var/run/celery
+    chmod ugo+rw /var/run/celery
 
     #	------------------------------------------
     #	Replace existing httpd.conf
@@ -119,16 +134,9 @@ ENDOFAPACHEENV
     /usr/sbin/a2ensite torrent-server.conf
     /usr/sbin/a2ensite torrent-server-ssl.conf
 
-    # Enable config files
-    if [ -x /usr/sbin/a2enconf ]; then
-        # Apache 2.4 on Ubuntu 14.04
-        /usr/sbin/a2enconf h5bp-server.conf
-        /usr/sbin/a2enconf torrent-server-config.conf
-    else
-        # Compat with Apache 2.2 and conf.d on Ubuntu 10.04
-        /bin/ln -snf /etc/apache2/conf-available/h5bp-server.conf /etc/apache2/conf.d/
-        /bin/ln -snf /etc/apache2/conf-available/torrent-server-config.conf /etc/apache2/conf.d/
-    fi
+    # Apache 2.4 on Ubuntu 14.04
+    /usr/sbin/a2enconf h5bp-server.conf
+    /usr/sbin/a2enconf torrent-server-config.conf
 
     # apache2 restarted by invoke-rc.d command below
 
@@ -210,6 +218,16 @@ ENDOFAPACHEENV
     rm -f /results/analysis/output/disabled/tmap-*
     ln -s -f /results/referenceLibrary/disabled/tmap-* /results/analysis/output/disabled
 
+    # ------------------------------------------
+    # Create ionian user if it doesn't exist: user is needed to initialize
+    # ownership of log files below
+    # ------------------------------------------
+    if ! id -u ionian; then
+        # NOTE: non-unique was added as result of TS-11113
+        groupadd ionian --gid=1100 --system
+        useradd --gid ionian --uid=1100 --non-unique --system ionian
+    fi
+
     #---									        				---#
     #---	Configure runlevels to start the Ion daemons at boot	---#
     #---										    				---#
@@ -217,8 +235,6 @@ ENDOFAPACHEENV
         ionCrawler
         ionJobServer
         ionPlugin
-        celeryd
-        celerybeat
         )
     for DAEMON in ${DAEMONS[@]}; do
         # Need to fix the start/kill priority for the daemons
@@ -228,7 +244,6 @@ ENDOFAPACHEENV
         fi
         update-rc.d ${DAEMON} defaults 97 03
     done
-
 
     # ------------------------------------------
     # Create directory for logging
@@ -266,8 +281,13 @@ ENDOFAPACHEENV
     fi
 
     invoke-rc.d apache2 stop
-    invoke-rc.d celerybeat stop
-    invoke-rc.d celeryd stop
+
+    # we are going to have to do an explicit startup of the postgresql system to make sure it's up and going
+    # before we attempt to setup the database environment
+    invoke-rc.d postgresql start
+
+    # doing an explicit wait to make sure that PG is initialized from the previous command
+    sleep 5
 
     # Setup python and database environment
     (
@@ -307,6 +327,12 @@ ENDOFAPACHEENV
         # THIS HAS TO HAPPEN AFTER THE PHP_BASE.HTML FILE IS PUT INTO PLACE DO NOT MOVE
         /usr/bin/python ./bin/install_script.py
 
+		# Load barcode kits to database if needed
+		echo "Going to add barcode kits if needed..."
+		/usr/bin/python ./bin/add_barcodes.py "Ion SingleSeq Barcode set 1-24"  rundb/fixtures/barcodes/SingleSeq_1-24.csv
+		/usr/bin/python ./bin/add_barcodes.py "Ion SingleSeq Barcode set 1-96"  rundb/fixtures/barcodes/SingleSeq_1-96.csv OVERRIDE
+		/usr/bin/python ./bin/add_barcodes.py "TagSequencing"  rundb/fixtures/barcodes/TagSequencing.csv
+						
         # Loads system templates to database if needed
         echo "Going to add or update system plan templates if needed..."
         /usr/bin/python ./bin/add_or_update_systemPlanTemplates.py
@@ -349,7 +375,7 @@ EOF
     invoke-rc.d apache2 start
     invoke-rc.d celeryd start
     invoke-rc.d celerybeat start
-
+    service DjangoFTP start
 
     #load the references for a first time
     (wget -q -O /dev/null http://localhost/configure/references/ > /dev/null) || \
@@ -366,7 +392,6 @@ EOF
     # Check whether or not we're online for CSA support upload
     python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_export as tasks; tasks.poll_support_site.apply_async(countdown=61)'
 
-
     #TS-6081: Create DMFileStat objs for existing Results objs without them.
     echo -n "Migrating to new Data Management..."
     python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_management as dm; dm.backfill_create_dmfilestat()'
@@ -377,6 +402,9 @@ EOF
     invoke-rc.d ionPlugin restart
     invoke-rc.d ionCrawler restart
     invoke-rc.d avahi-daemon restart
+
+    # fire off the grooming script
+    /opt/ion/iondb/bin/grooming.py
     ;;
 esac
 

@@ -54,13 +54,13 @@ body {
   margin-left: 0;
 }
 
-.header .logo {
-  padding-top: 15px;
+.header .nav-tabs {
+  margin-top: 0;
+  margin-bottom: -1px;
 }
 
-.header .nav-tabs {
-  margin-top: 8px;
-  margin-bottom: -1px;
+.header .nav-tabs ul {
+  margin-top: -1px;
 }
 
 .header .nav-tabs li {
@@ -151,6 +151,14 @@ body {
   margin: 0 auto -105px;
 }
 
+.main.no-padding {
+  padding-top: 0;
+}
+
+.main.no-padding .alert {
+  margin-top: 15px;
+}
+
 .report {
   padding-top: 15px;
 }
@@ -187,12 +195,8 @@ section:last-child {
 }
 
 .content {
-  padding: 12px;
   margin-bottom: 20px;
   background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
 .footer {

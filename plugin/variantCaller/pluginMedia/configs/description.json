@@ -118,6 +118,7 @@
                                 "Suggested trial value 1.0"],
 
         "outlier_probability":["A variant evaluation parameter: probability that a read comes from none of the models under consideration",
+                               "Related VCF fields: FXX",
                                "Allowed values: Decimal numbers between 0 and 1.0",
                                "Suggested trial value between 0.005 and 0.01"],
 
@@ -140,11 +141,11 @@
                                        "Allowed values: Decimal numbers >= 0",
                                        "Suggested trial value 0.2"],
 
-        "indel_as_hpindel":["A filter parameter: A flag indicating whether HP indel filters or SNP filters should be applied to non-HP indels",
-                            "Allowed values: 0 = use SNP filter, 1 = use HP indel filter",
+        "indel_as_hpindel":["A filter parameter: A flag indicating whether INDEL filters or SNP filters should be applied to non-HP indels",
+                            "Allowed values: 0 = use SNP filter, 1 = use INDEL filter",
                             "Suggested trial value (AmpliSeq) 1, (other) 0"],
 
-        "hp_max_length":["A filter parameter:  HP indels of more than this length will be filtered out",
+        "hp_max_length":["A filter parameter: HP indels of more than this length will be filtered out",
                          "Related VCF field: HRUN",
                          "Allowed values: Integers >= 1",
                          "Suggested trial value 8"],
@@ -160,11 +161,11 @@
 
         "do_snp_realignment":["A variant candidate evaluating parameter: Realign reads in the vicinity of SNP candidates when set",
                               "Allowed values: 0 = do not realign, 1 = realign",
-                              "Suggested trial value (AmpliSeq) 1, (other) 0"],
+                              "Suggested trial value 0"],
 
         "do_mnp_realignment":["A variant candidate evaluating parameter: Realign reads in the vicinity of MNP candidates when set",
                               "Allowed values: 0 = do not realign, 1 = realign",
-                              "Suggested trial value (AmpliSeq) 1, (other) 0"],
+                              "Suggested trial value 0"],
 
         "realignment_threshold":["A variant candidate evaluating parameter: Maximum allowed fraction of reads where realignment causes an alignment change",
                                  "Allowed values: Decimals between 0 and 1",
@@ -191,40 +192,157 @@
         "position_bias_ref_fraction":["A filter parameter: Skip the position bias filter if (reference read count) / (reference and alt read count) <= this value",
                                       "Allowed values: Decimal numbers between 0 and 1",
                                       "Suggested trial value 0.05"],
-		"min_fam_size":[
-            "Minimum number of reads with same UID required to form a functional family",
+
+		"min_tag_fam_size":[
+            "Minimum number of reads with same molecular tag required to form a functional family",
             "Allowed values: Integers > 0",
             "Suggested trial value between 3 and 7",
-            "Impact: Increasing values make variant calls less sensitive but more specific"],
+            "Impact: Increasing values make variant calls less sensitive but more specific"
+        ],
 
-        "min_var_fam":[
-            "Minimum number of variant supporting functional families required to make a call",
+       "indel_func_size_offset":[
+            "A tagseq parameter: require family of size >= (min_tag_fam_size + this value) to be functional for calling HP-INDEL",
+            "Allowed values: Integers >= 0",
+            "Suggested trial value between 0 and 4",
+            "Impact: Increasing values make variant calls less sensitive but more specific" 
+        ],
+
+        "min_detail_level_for_fast_scan":[
+			"A variant candidate evaluating parameter: The minimum detail-level to trigger the fast scan algorithm that considerably speeds up the evaluator.",
+            "Allowed values: >=0 (0 = always apply the fast scan algorithm)",
+            "Suggested trial value: 0"
+         ],   
+        
+        "tag_trim_method":[
+            "A tagseq parameter: \"strict-trim\" requires that the UID must match the format specified in the run plan, while \"sloppy-trim\" does not.",
+            "Allowed values: \"sloppy-trim\" or \"strict-trim\"",
+            "Suggested trial value: \"sloppy-trim\""
+         ],
+         
+        "snp_min_var_coverage":[
+            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a SNP call",
+            "Related VCF field: FAO",
             "Allowed values: Integers > 0",
             "Suggested trial value between 2 and 10",
-            "Impact: Increasing values make variant calls less sensitive but more specific"],			
-			
-        "min_func_cov":[
-            "Minimum number of functional families per target required for variant calling",
+            "Impact: Increasing values make variant calls less sensitive but more specific"
+        ],
+        
+        "indel_min_var_coverage":[
+            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a INDEL call",
+            "Related VCF field: FAO",
             "Allowed values: Integers > 0",
-            "Suggested trial value between 2 and 10000",
-            "Impact: Increasing values make variant calls less sensitive but more specific"],
+            "Suggested trial value between 2 and 10",
+            "Impact: Increasing values make variant calls less sensitive but more specific"
+        ],
+        
+        "mnp_min_var_coverage":[
+            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a MNP call",
+            "Related VCF field: FAO",
+            "Allowed values: Integers > 0",
+            "Suggested trial value between 2 and 10",
+            "Impact: Increasing values make variant calls less sensitive but more specific"
+        ],         
 
-        "min_func_maf":[
-            "Minimum frequency of the variant allele to be reported",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value between 0.0005 and 0.005",
-            "Impact: Increasing values make variant calls less sensitive but more specific"],
+		"hotspot_min_var_coverage":[
+            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a hotspot call",
+            "Related VCF field: FAO",
+            "Allowed values: Integers > 0",
+            "Suggested trial value between 2 and 10",
+            "Impact: Increasing values make variant calls less sensitive but more specific"
+        ],
+        
+  		"fd_nonsnp_min_var_cov":[
+            "A filter parameter: Override min_var_coverage of the flow-disrupted variants that are not SNPs (0 to disable the override)",
+            "Related VCF field: FAO",
+            "Allowed values: Integers >= 0",
+            "Suggested trial value between 0 and 10",
+            "Impact: Decreasing values make variant calls less specific but more sensitive"
+        ],
+         
+        "tag_sim_max_cov":[
+            "A filter parameter: Check the similarity of UID of variant molecules if the variant molecular coverage <= this value",
+            "Related VCF field: TGSM",
+            "Allowed values: Integers >= 0",
+            "Suggested trial value 20"
+        ],
+        
+        "use_lod_filter":[
+            "A filter parameter: Enable the Limit Of Detection (LOD) filter",
+            "Related VCF field: LOD",
+            "Allowed values: 0 = do not use LOD filter, 1 = use LOD filter",
+            "Suggested trial value (TagSeq) 1, (other) 0"
+        ],
+        
+        "lod_multiplier":[
+            "A filter parameter: Multiplier of LOD for filtering out variants with low alt allele frequency",
+            "Allowed values: Decimal numbers > 0.0",
+            "Suggested trial value 0.6"
+        ],
+              
+        "try_few_restart_freq":[
+            "A variant evaluation parameter: Speed up the evaluator by trying fewer initial guesses of allele frequency",
+            "Allowed values: 0 = normal case, 1 = speed-up",
+            "Suggested trial value (TagSeq) 1, (other) 0"
+        ],
 
-        "hotspots_only":[
-			"Variant calls are reported at hotspot positions only if set to 1, and whole target if set to zero.",
-            "Allowed values: 0 and 1"]
+        "report_ppa":[
+        	"Report Possible Polyploidy Alleles (PPA) in the INFO FIELD of the vcf lines.",
+            "Related VCF field: PPA",        	
+        	"Allowed values: 1 = report PPA, 0 = do not report"
+        ],
+        
+        "min_ratio_for_fd":[
+        	"A filter parameter: Claim flow-disruption if the portion of reads that are flow-disrupted >= this value",
+        	"Allowed values: Decimal numbers between 0 and 1",
+        	"Suggested trial value 0.1"
+        ],
+        
+        "hotspots_as_de_novo ":[
+        	"A filter parameter: Use de novo (snp, mnp, indel) parameter sets for hotspot variants.",
+			"Allowed values: 0 = use hotspot parameter set, 1 = use de novo parameter set.",
+        	"Suggested trial value 0"
+        ],
+        
+        "hp_indel_hrun":[
+        	"A filter parameter: Define the HRUN for filtering HP-INDEL variants with lengths specified by \"hp_del_len\" and \"hp_ins_len\".",
+        	"Allowed values: vector of positive integers (e.g. [1,2,3]) with size matches \"hp_del_len\" and \"hp_ins_len\".",
+        	"Suggested trial value []"
+        ],
+        
+		"hp_ins_len":[
+        	"A filter parameter: Filter out HP-INS variants whose INS length <= the corresponding entry of this vector if the HRUN is defined in \"hp_indel_hrun\".",
+        	"Allowed values: vector of non-negative integers (e.g. [1,2,3]) with size matches \"hp_del_len\" and \"hp_indel_hrun\".",
+        	"Suggested trial value []"		
+		],
+		
+		"hp_del_len":[
+        	"A filter parameter: Filter out HP-DEL variants whose DEL length <= the corresponding entry of this vector if the HRUN is defined in \"hp_indel_hrun\".",
+        	"Allowed values: vector of non-negative integers (e.g. [1,2,3]) with size matches \"hp_ins_len\" and \"hp_indel_hrun\".",
+        	"Suggested trial value []"			
+		],
+		
+        "use_fd_param":[
+            "A filtering parameter: Use Flow Disruptiveness (FD) instead of allele types (INDEL, SNP, MNP) as the criterion to choose the parameter set.",
+            "If turned on, the (non-FD, moderate FD, FD) allele applies the the (INDEL, SNP, MNP) parameters, respectively.",
+            "Allowed values: 0: do not use FD parameters, 1: use FD parameters."
+        ],
+        
+        "max_flows_to_test":[
+        	"A variant candidate evaluating parameter: The maximum number of scoring flows being used.",
+        	"Allowed values: Integers > 0",
+            "Suggested trial value 10 (20 if the Hotspots file contains long variants)"
+        ],
+        
+        "error_motifs":[
+            "The file name of the error motif file."      
+        ]
     },
 
-
     "freebayes":{
-        "read_snp_limit":["Do not use reads with number of snps above this",
-                          "Allowed values: Integers >= 0",
-                          "Suggested trial value 10"],
+        "read_snp_limit":[
+        	"Do not use reads with number of snps above this",
+            "Allowed values: Integers >= 0",
+            "Suggested trial value 10"],
 
         "allow_indels":[
             "Candidate generation parameter: Allow indel candidates to be generated when set",
@@ -269,7 +387,19 @@
         "gen_min_coverage":[
             "A candidate generation parameter: A variant candidate location needs to have coverage depth greater than this value",
             "Allowed values: Integers >= 0",
-            "Suggested trial value 6"]
+            "Suggested trial value 6"],
+            
+       "read_mismatch_limit":[
+            "A read filtering parameter: Do not use reads with number of mismatches (where 1 gap open counts 1) above this value",
+            "Allowed value: Integers >= 0, (0 to disable this filter)",
+            "Suggested trial value (TagSeq) 5, (other) 0"
+        ],
+        
+        "min_cov_fraction":[
+            "A read filtering parameter: Do not use reads with fraction of covering the best assigned unmerged target region below this",
+            "Allowed values: Decimal numbers between 0 and 1",
+            "Suggested trial value (TagSeq) 0.9, (other) 0"
+        ]
     },
 
     "long_indel_assembler":{
@@ -319,6 +449,5 @@
             "Enables reporting of complex variants",
             "Allowed values: 1 = report complex variants, 0 = don't report",
             "Suggested trial value 0"]
-
     }
 }

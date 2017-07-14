@@ -1,6 +1,6 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "ClonalFilter.h"
-#include "mixed.h"
+#include "ClonalFilter/mixed.h"
 #include "hdf5.h"
 
 using namespace std;

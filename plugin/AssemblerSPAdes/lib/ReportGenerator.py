@@ -45,7 +45,7 @@ class Sample(object):
 
         self._has_scaffolds_cache = {}
 
-        params = self._info['params']
+        params = self._info['pluginconfig']
         self._assembly_settings['Fraction of Reads Used'] = \
             params.get('fraction_of_reads') or '1.0'
         self._assembly_settings['RAM'] = params.get('RAM') or '24G'

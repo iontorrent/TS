@@ -16,6 +16,7 @@
 {% if datasets.barcode_config and report.resultsType != 'CombinedAlignments' %}
 <script>
     var barcodes_json = {{barcodes_json|safe}};
+    var isToShowExtraStats = "{{isToShowExtraStats}}" == "True" ? true : false;
 </script>
     <div>
         <div class="spacer clear"></div>
@@ -25,7 +26,9 @@
                 <th>Barcode Name</th>
                 <th>Sample</th>
                 <th rel='tooltip' title="Post filtering base output per barcode">Bases</th>
-                <th>>=Q20 Bases</th>
+                {% if isToShowExtraStats %}
+                	<th>>=Q20 Bases</th>
+                {% endif %}              
                 <th>Reads</th>
                 <th>Mean Read Length</th>
                 <th rel='tooltip' title="Read length for each barcode">Read Length Histogram</th>
@@ -43,7 +46,9 @@
                 <td> #= (barcode_name) ? barcode_name : "No barcode" #</td>
                 <td> #= (barcode_name) ? sample : "None" #</td>
                 <td> #=numberWithCommas(total_bases)# </td>
-                <td> #=numberWithCommas(Q20_bases)# </td>
+                # if (isToShowExtraStats) { #
+                     <td> #=numberWithCommas(Q20_bases)# </td>
+                # } #
                 <td> #=numberWithCommas(read_count)# </td>
                 <td> ${mean_read_length} </td>
                 <td><img onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "No barcode" #', '{{report.reportWebLink}}/basecaller_results/${file_prefix}.read_len_histogram.png')" src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>

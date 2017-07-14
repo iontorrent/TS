@@ -82,6 +82,14 @@ for MODULE in $MODULES; do
   fi
 done;
 
+# if the environmental variable is set to create a repository, we will move all of the packages into that repository and
+# index them so aptitude can read them in as a repository
+if [ ! -z ${MAKE_REPO_DIRECTORY} ]; then
+  mkdir -p ${BUILD_ROOT}/build/repo
+  find ${BUILD_ROOT}/build -type f -iname "*.deb" ! -path "$BUILD_ROOT/build/*" -exec mv {} ${BUILD_ROOT}/build/repo \;
+  cd ${BUILD_ROOT}/build/repo && dpkg-scanpackages -m ./ > ${BUILD_ROOT}/build/repo/Packages
+fi
+
 if [ $ERR != 0 ]; then
   echo -e $ERRMSG
   echo "FAILURES: $ERR modules failed to build."
@@ -89,3 +97,4 @@ if [ $ERR != 0 ]; then
 else
   echo "SUCCESS: All modules built."
 fi
+

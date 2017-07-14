@@ -50,7 +50,7 @@ class Mask
     Mask ( int w, int h );
     Mask ( Mask *origmask );
     Mask ( const char *fileName, bool fillMask=true );
-    virtual ~Mask();
+    virtual ~Mask(){}
     Mask() {
       mask.clear();
     }
@@ -118,6 +118,8 @@ class Mask
     int MaskList ( char *fileName, MaskType these, Region region ) const;
     int WriteRaw ( const char *fileName ) const;
     int SetMask ( const char *fileName );
+    int SetMaskFullChipText(const char *fileName, int offset_x, int offset_y, int size_x, int size_y);
+
     void LoadMaskAndAbortOnFailure(const char *maskFileName);
     void UpdateBeadFindOutcomes( Region &wholeChip, char const *maskFileName, bool not_single_beadfind, int update_stats, char const *maskStatsName);
     int DumpStats ( Region region, char *fileName, bool showWashouts = true ) const;
@@ -137,7 +139,8 @@ class Mask
 //    void OnlySomeWells(std::vector<int> mWellIdx);
 
     std::vector<uint16_t> mask;
-  protected:
+
+protected:
     int32_t w, h;
     int32_t xOffset, yOffset;
     //uint16_t *mask;

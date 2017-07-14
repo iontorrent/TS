@@ -2,9 +2,12 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% block extra_head %}
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
+{% endblock extra_head %}
 {% block content %}
 <div class="content group" id="analyzeDiv">
-    <h1>Run Name : {{ exp.pretty_print_no_space }}</h1>
+    <h1>Run Name : {{ exp.displayName }}</h1>
     <div id="warning" class="alert alert-block hide"></div>
     {% if start_error %}
     <div id="start_error" class="alert alert-block alert-error">

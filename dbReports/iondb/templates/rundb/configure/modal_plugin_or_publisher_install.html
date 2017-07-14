@@ -44,7 +44,7 @@
         <a id="uploadfile" class="btn btn-primary" href="#">Upload and Install</a>
     </div>
 
-<script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
 <script type="text/javascript">
 var file_filters = [];
 {% for ext, label in file_filters %}
@@ -54,7 +54,7 @@ var file_filters = [];
 {% endfor %}
     
 var uploader = new plupload.Uploader({
-    runtimes: 'silverlight, html5, html4',
+    runtimes: 'html5,flash,silverlight',
     filters: file_filters,
     browse_button: 'pickfile',
     url: "{{plupload_url}}",
@@ -62,14 +62,15 @@ var uploader = new plupload.Uploader({
     unique_names: true,
     multi_selection: false,
     multiple_queues: false,
-    silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}'
+    flash_swf_url: '{% static "resources/plupload/js/Moxie.swf"%}',
+    silverlight_xap_url: '{% static "resources/plupload/js/Moxie.xap"%}'
 });
 
 $(function(){
     uploader.bind('FilesAdded', function (up, files) {
         // only one file allowed
-        if(files.length != 1){
-            return;
+        if (up.files.length > 1) {
+            up.removeFile(up.files[0]);
         }
         $('#upload_file').removeClass('alert alert-error');
         $(".file_item").remove();

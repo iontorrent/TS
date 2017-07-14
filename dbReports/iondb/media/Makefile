@@ -32,7 +32,7 @@ hr=--------------------------------------------------
 #
 # BUILD DOCS
 #
-all: |compile-css minify-js
+all: |compile-css #minify-js
 
 compile-css:
 	@echo "\n${HR}"
@@ -112,7 +112,6 @@ minify-js: | bulk-minify-js
 	@echo "Minify'ing random Torrent Browser JS"
 	@uglifyjs -nc runliveness.js > runliveness.min.js 
 	@uglifyjs -nc tbHelper.js > tbHelper.min.js 
-	@uglifyjs -nc resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.js > resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js 
 	@echo "Minify'ing random Torrent Browser JS...               ${CHECK} Done"
 	@echo "${HR}"
 

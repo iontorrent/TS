@@ -60,7 +60,17 @@ public:
       const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
       const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
       const vector<int>& base_to_flow, vector<uint8_t> &quality,
-      const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3);
+      const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
+      const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+      const vector<int>& flow_to_base, const bool flow_predictors_=false);
+
+  void DumpPredictors(const string& read_name, int num_bases, int num_flows,
+      const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
+      const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
+      const vector<int>& base_to_flow, vector<uint8_t> &quality,
+      const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
+      const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+      const vector<int>& flow_to_base, const bool flow_predictors_=false);
 
   //! @brief  Calculate Local Noise predictor for all bases in a read
   //! @param[out] local_noise               Local Noise predictor
@@ -69,7 +79,7 @@ public:
   //! @param[in]  normalized_measurements   Normalized flow signal from wells file
   //! @param[in]  prediction                Model-predicted flow signal
   static void PredictorLocalNoise(vector<float>& local_noise, int max_base, const vector<int>& base_to_flow,
-      const vector<float>& normalized_measurements, const vector<float>& prediction);
+      const vector<float>& normalized_measurements, const vector<float>& prediction, const bool flow_predictors_);
 
   //! @brief  Calculate Noise Overlap predictor shared by all bases in a read
   //! @param[out] minus_noise_overlap       Noise Overlap predictor
@@ -78,13 +88,13 @@ public:
   //! @param[in]  prediction                Model-predicted flow signal
   //! @return Noise Overlap predictor
   static void PredictorNoiseOverlap(vector<float>& minus_noise_overlap, int max_base,
-      const vector<float>& normalized_measurements, const vector<float>& prediction);
+      const vector<float>& normalized_measurements, const vector<float>& prediction, const bool flow_predictors_);
 
   //! @brief  Calculate Homopolymer Rank predictor for all bases in a read
   //! @param[out] homopolymer_rank          Homopolymer Rank predictor
   //! @param[in]  max_base                  Number of bases for which predictor should be calculated
   //! @param[in]  sequence                  Called bases
-  static void PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector<char>& sequence);
+  static void PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector<char>& sequence, vector<float>& homopolymer_rank_flow, const vector<int>& flow_to_base, int flow_predictors_=false);
 
   //! @brief  Calculate Neighborhood Noise predictor for all bases in a read
   //! @param[out] neighborhood_noise        Neighborhood Noise predictor
@@ -93,12 +103,13 @@ public:
   //! @param[in]  normalized_measurements   Normalized flow signal from wells file
   //! @param[in]  prediction                Model-predicted flow signal
   static void PredictorNeighborhoodNoise(vector<float>& neighborhood_noise, int max_base, const vector<int>& base_to_flow,
-      const vector<float>& normalized_measurements, const vector<float>& prediction);
+      const vector<float>& normalized_measurements, const vector<float>& prediction, const bool flow_predictors_);
 
 
   static void PredictorBeverlyEvents(vector<float>& beverly_events, int max_base, const vector<int>& base_to_flow,
-      const vector<float>& scaled_residual);
+      const vector<float>& scaled_residual, const bool flow_predictors_);
 
+  bool toSavePredictors() {return (save_predictors_ ? true:false);}
 
 protected:
 

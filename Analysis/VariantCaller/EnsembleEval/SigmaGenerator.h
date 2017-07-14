@@ -61,7 +61,7 @@ public:
    void AddCrossUpdate(CrossHypotheses &my_cross);
    void AddShiftCrossUpdate(CrossHypotheses &my_cross, float discount);
    void AddNullUpdate(CrossHypotheses &my_cross);
-   void AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals);
+   void AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals, vector<float> &measurements_var);
    void DoLatentUpdate();
    float RetrieveApproximateWeight(float x_val);
    void PushToPrior();
@@ -81,13 +81,17 @@ public:
   BasicSigmaGenerator fwd,rev;
   // if want to revert to old-style
   bool combine_strands;
-
-  StrandedSigmaGenerator(){combine_strands = false;};
+  int DEBUG = 0;
+  StrandedSigmaGenerator(){
+	  combine_strands = false;
+      DEBUG = 0;
+  };
 
   void UpdateSigmaGenerator(ShortStack &total_theory);
   void UpdateSigmaEstimates(ShortStack &total_theory);
   void DoStepForSigma(ShortStack &total_theory);
   void ResetSigmaGenerator();
+  void PrintDebug(bool print_update = true);
 };
 
 

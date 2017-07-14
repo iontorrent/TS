@@ -33,7 +33,7 @@ from iondb.rundb.models import (
     Location,
     ReportStorage,
     EventLog, GlobalConfig, ReferenceGenome, dnaBarcode, KitInfo, ContentType, Plugin, ExperimentAnalysisSettings, Sample,
-    DMFileSet, DMFileStat, FileServer)
+    DMFileSet, DMFileStat, FileServer, IonMeshNode)
 from iondb.rundb.api import CompositeExperimentResource, ProjectResource
 from iondb.rundb.report.analyze import build_result
 from iondb.rundb.report.views import _report_started
@@ -71,26 +71,32 @@ def get_search_parameters():
     eas_keys = [('library', 'reference')]
 
     for key in experiment_params.keys():
-        experiment_params[key] = list(
-            Experiment.objects.values_list(key, flat=True).distinct(key).order_by(key))
+        experiment_params[key] = list(Experiment.objects.values_list(key, flat=True).distinct(key).order_by(key))
+        experiment_params[key] = [value for value in experiment_params[key] if len(str(value).strip()) > 0]
 
     experiment_params['sample'] = list(Sample.objects.filter(
         status="run").values_list('name', flat=True).order_by('name'))
 
     for expkey, key in eas_keys:
         experiment_params[expkey] = list(
-            ExperimentAnalysisSettings.objects.values_list(key, flat=True).distinct(key).order_by(key))
+            ExperimentAnalysisSettings.objects.values_list(key, flat=True).distinct(key).order_by(key)
+        )
+        experiment_params[expkey] = [value for value in experiment_params[expkey] if len(str(value).strip()) > 0]
     for key in report_params.keys():
         report_params[key] = list(Results.objects.values_list(key, flat=True).distinct(key).order_by(key))
     combined_params = {
         'flows': sorted(set(experiment_params['flows'] + report_params['processedflows'])),
         'projects': Project.objects.values_list('name', flat=True).distinct('name').order_by('name')
     }
+    mesh_params = {
+        'nodes': IonMeshNode.objects.all()
+    }
     del experiment_params['flows']
     del report_params['processedflows']
     return {'experiment': experiment_params,
             'report': report_params,
             'combined': combined_params,
+            'mesh': mesh_params
             }
 
 
@@ -214,96 +220,20 @@ def _makeCSVstr(object_list):
 
 
 def getCSV(request):
-    CSVstr = ""
+    # Use the CompositeExperimentResource to generate a queryset from the request args
+    resource_instance = CompositeExperimentResource()
+    request_bundle = resource_instance.build_bundle(request=request)
+    experiment_queryset = resource_instance.obj_get_list(request_bundle)
 
-    if request.method == "GET":
-        qDict = request.GET
-    elif request.method == "POST":
-        qDict = request.POST
-    else:
-        raise ValueError('Unsupported HTTP METHOD')
+    # The CSV is generated from a Results queryset so we need to get a Results queryset from the Experiment queryset
+    experiment_ids = experiment_queryset.values_list('id', flat=True)
+    results_queryset = Results.objects.filter(experiment_id__in=experiment_ids)
 
-    try:
-        base_object_list = Results.objects.select_related('experiment').prefetch_related('libmetrics_set', 'tfmetrics_set', 'analysismetrics_set', 'pluginresult_set__plugin') \
-            .exclude(experiment__expName__exact="NONE_ReportOnly_NONE")
-        if qDict.get('results__projects__name', None) is not None:
-            base_object_list = base_object_list.filter(
-                projects__name__exact=qDict.get('results__projects__name', None))
-        if qDict.get('samples__name', None) is not None:
-            base_object_list = base_object_list.filter(
-                experiment__samples__name__exact=qDict.get('samples__name', None))
-        if qDict.get('chipType', None) is not None:
-            base_object_list = base_object_list.filter(
-                experiment__chipType__exact=qDict.get('chipType', None))
-        if qDict.get('pgmName', None) is not None:
-            base_object_list = base_object_list.filter(experiment__pgmName__exact=qDict.get('pgmName', None))
-        if qDict.get('results__eas__reference', None) is not None:
-            base_object_list = base_object_list.filter(
-                eas__reference__exact=qDict.get('results__eas__reference', None))
-        if qDict.get('flows', None) is not None:
-            base_object_list = base_object_list.filter(experiment__flows__exact=qDict.get('flows', None))
-        if qDict.get('star', None) is not None:
-            base_object_list = base_object_list.filter(experiment__star__exact=bool(qDict.get('star', None)))
-
-        name = qDict.get('all_text', None)
-        if name is not None:
-            qset = (
-                Q(experiment__expName__icontains=name) |
-                Q(resultsName__icontains=name) |
-                Q(experiment__notes__icontains=name)
-            )
-            base_object_list = base_object_list.filter(qset)
-
-        date = qDict.get('all_date', None)
-        logger.debug("Got all_date='%s'" % str(date))
-        if date is not None:
-            date = unquote_plus(date)
-            date = date.split(',')
-            logger.debug("Got all_date='%s'" % str(date))
-            qset = (
-                Q(experiment__date__range=date) |
-                Q(timeStamp__range=date)
-            )
-            base_object_list = base_object_list.filter(qset)
-        status = qDict.get('result_status', None)
-        if status is not None:
-            if status == "Completed":
-                qset = Q(status="Completed")
-            elif status == "Progress":
-                qset = Q(status__in=("Pending", "Started",
-                                     "Signal Processing", "Base Calling", "Alignment"))
-            elif status == "Error":
-                # This list may be incomplete, but a coding standard needs to
-                # be established to make these more coherent and migration
-                # written to normalize the exisitng entries
-                qset = Q(status__in=(
-                    "Failed to contact job server.",
-                    "Error",
-                    "TERMINATED",
-                    "Checksum Error",
-                    "Moved",
-                    "CoreDump",
-                    "ERROR",
-                    "Error in alignmentQC.pl",
-                    "MissingFile",
-                    "Separator Abort",
-                    "PGM Operation Error",
-                    "Error in Reads sampling with samtools",
-                    "No Live Beads",
-                    "Error in Analysis",
-                    "Error in BaseCaller"
-                ))
-            base_object_list = base_object_list.filter(qset)
-        base_object_list.distinct()
-        CSVstr = _makeCSVstr(base_object_list)
-
-    except Exception as err:
-        logger.error("During result CSV generation: %s" % err)
-        raise
-    ret = http.HttpResponse(CSVstr, mimetype='text/csv')
-    now = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
-    ret['Content-Disposition'] = 'attachment; filename=metrics_%s.csv' % now
-    return ret
+    # Now we can directly return a csv file response
+    response = http.HttpResponse(_makeCSVstr(results_queryset), mimetype='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=metrics_%s.csv' % str(
+        datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    return response
 
 
 def get_project_CSV(request, project_pk, result_pks):

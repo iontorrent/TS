@@ -87,6 +87,7 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 	size_t r_pos = line.find("R", found+bstrand.size());
 	// look for the code F
 	size_t f_pos = line.find("F", found+bstrand.size());
+	size_t s_pos = line.find("S", found+bstrand.size());
 	bool blacklist = false;
 	if (f_pos < semicolon_pos) {
 	  hint = FWD_BAD_HINT;
@@ -98,8 +99,7 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 	  hint = BOTH_BAD_HINT;
 	}
 	if ( (f_pos < semicolon_pos) &&  (r_pos < semicolon_pos)){
-	  hint = BOTH_BAD_HINT;
-	}
+	  hint = BOTH_BAD_HINT;	}
 	
 	// blacklist this position
 	if (hint != NO_HINT) {
@@ -110,11 +110,44 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 	  char* end; // dummy variable for strtoll
 	  long int pos = strtoll(fields.at(1).c_str(), &end, 10);
 	  long int chrom_idx = ref_reader_->chr_idx(sequenceName.c_str());
-	  vector<long int> hint_entry (3, NO_HINT);
-	  hint_entry[0] = chrom_idx;
-	  hint_entry[1] = pos-1;
-	  hint_entry[2] = hint;
+	  hint_item hint_entry;
+	  hint_entry.chr_ind = chrom_idx;
+	  hint_entry.pos = pos-1;
+	  hint_entry.value = hint;
+	  hint_entry.rlen = 0;
 	  hint_vec.push_back(hint_entry);
+	} else if (s_pos < semicolon_pos) {
+          vector<string> fields = split(line, '\t');
+          string sequenceName = fields.at(0);
+          char* end; // dummy variable for strtoll
+          long int pos = strtoll(fields.at(1).c_str(), &end, 10);
+          long int chrom_idx = ref_reader_->chr_idx(sequenceName.c_str());
+	  vector<string> alts = split(fields.at(4), ',');
+	  vector<string> bstr = split(line.substr(found+bstrand.size()+1, semicolon_pos-(found+bstrand.size()+1)), ',');
+	  int len = fields.at(3).size();
+	  for (unsigned int i = 0; i < alts.size(); i++) {
+	    if (bstr.at(i)[0] == 'S') {
+	      hint = BOTH_BAD_HINT;
+	      switch(bstr.at(i)[1]) {
+		case 'b':  
+		  hint = BOTH_BAD_HINT;
+		  break;
+ 		case 'f':
+		  hint = FWD_BAD_HINT;
+		  break;
+		case 'r':
+		  hint = REV_BAD_HINT;
+		  break;
+	      }
+		hint_item hint_entry;
+          	hint_entry.chr_ind = chrom_idx;
+          	hint_entry.pos = pos-1;
+          	hint_entry.value = hint;
+		hint_entry.rlen = len;
+		hint_entry.alt = alts.at(i);
+		hint_vec.push_back(hint_entry);
+	    }
+	  }
 	}
       }
     }
@@ -156,6 +189,7 @@ void HotspotReader::FetchNextVariant()
     vector<string>& strand_bias = current_hotspot.info["strand_bias"];
     vector<string>& min_coverage = current_hotspot.info["min_coverage"];
     vector<string>& min_coverage_each_strand = current_hotspot.info["min_coverage_each_strand"];
+    vector<string>& min_var_coverage = current_hotspot.info["min_var_coverage"];
     vector<string>& min_variant_score = current_hotspot.info["min_variant_score"];
     vector<string>& data_quality_stringency = current_hotspot.info["data_quality_stringency"];
     vector<string>& hp_max_length = current_hotspot.info["hp_max_length"];
@@ -163,6 +197,7 @@ void HotspotReader::FetchNextVariant()
     vector<string>& filter_unusual_predictions = current_hotspot.info["filter_unusual_predictions"];
     vector<string>& filter_insertion_predictions = current_hotspot.info["filter_insertion_predictions"];
     vector<string>& filter_deletion_predictions = current_hotspot.info["filter_deletion_predictions"];
+    vector<string>& min_tag_fam_size = current_hotspot.info["min_tag_fam_size"];
     vector<string>& sse_prob_threshold = current_hotspot.info["sse_prob_threshold"];
 
     // collect bad-strand info
@@ -222,6 +257,11 @@ void HotspotReader::FetchNextVariant()
         hotspot.params.min_coverage_each_strand = atoi(min_coverage_each_strand[alt_idx].c_str());
       }
 
+      if (alt_idx < min_var_coverage.size() and min_var_coverage[alt_idx] != ".") {
+        hotspot.params.min_var_coverage_override = true;
+        hotspot.params.min_var_coverage = atoi(min_var_coverage[alt_idx].c_str());
+      }
+
       if (alt_idx < min_variant_score.size() and min_variant_score[alt_idx] != ".") {
         hotspot.params.min_variant_score_override = true;
         hotspot.params.min_variant_score = atof(min_variant_score[alt_idx].c_str());
@@ -250,6 +290,11 @@ void HotspotReader::FetchNextVariant()
       if (alt_idx < filter_deletion_predictions.size() and filter_deletion_predictions[alt_idx] != ".") {
         hotspot.params.filter_deletion_predictions_override = true;
         hotspot.params.filter_deletion_predictions = atof(filter_deletion_predictions[alt_idx].c_str());
+      }
+
+      if (alt_idx < min_tag_fam_size.size() and min_tag_fam_size[alt_idx] != ".") {
+        hotspot.params.min_tag_fam_size_override = true;
+        hotspot.params.min_tag_fam_size = atof(min_tag_fam_size[alt_idx].c_str());
       }
 
       if (alt_idx < sse_prob_threshold.size() and sse_prob_threshold[alt_idx] != ".") {

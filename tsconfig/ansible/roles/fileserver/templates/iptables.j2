@@ -21,6 +21,10 @@ COMMIT
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 8080 -j ACCEPT
 
+#Allow pyftp access (port 8021 is defined in settings.py)
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 8021 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW --match multiport --dports 20000:20100 -j ACCEPT
+
 #Uncomment the line below to allow connections on port 443/HTTPS
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
 {# When there are compute nodes, we need to allow access for gridengine traffic #}

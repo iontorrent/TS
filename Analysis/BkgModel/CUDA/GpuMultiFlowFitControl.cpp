@@ -41,10 +41,9 @@ GpuMultiFlowFitMatrixConfig* GpuMultiFlowFitControl::createConfig(
 {
   // Build the configuration.
   GpuMultiFlowFitMatrixConfig* config = 
-    new GpuMultiFlowFitMatrixConfig(levMarSparseMatrices->GetFitDescriptorByName(fitName.c_str()), 
+    new GpuMultiFlowFitMatrixConfig(const_cast<master_fit_type_table*>(levMarSparseMatrices)->GetFitDescriptorByName(fitName.c_str()), 
                                      BkgFitStructures::Steps, BkgFitStructures::NumSteps, 
                                      _activeFlowKey, _activeFlowMax);
-
   // Accumulate maximum values.
   DetermineMaxSteps(config->GetNumSteps());
   DetermineMaxParams(config->GetNumParamsToFit());
@@ -53,7 +52,6 @@ GpuMultiFlowFitMatrixConfig* GpuMultiFlowFitControl::createConfig(
   _allMatrixConfig[ MatrixIndex(_activeFlowKey, _activeFlowMax, fitName ) ] = config;
   return config;
 }
-
 
 void GpuMultiFlowFitControl::DetermineMaxSteps(int steps)
 {

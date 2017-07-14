@@ -128,7 +128,10 @@ bool RealignImp::compute_alignment (
     unsigned cigar_sz, 
     uint32_t*& cigar_dest, 
     unsigned& cigar_dest_sz, 
-    int& new_pos,
+    unsigned& new_ref_pos,
+    unsigned& new_qry_pos,
+    unsigned& new_ref_len,
+    unsigned& new_qry_len,
     bool& already_perfect,
     bool& clip_failed,
     bool& alignment_failed,
@@ -193,13 +196,13 @@ bool RealignImp::compute_alignment (
     vector<CigarOp> new_cigar_vec;
     unsigned int start_pos_shift;
 
-    if (!computeSWalignment(new_cigar_vec, new_md_vec, start_pos_shift))
+    if (!computeSWalignment (new_cigar_vec, new_md_vec, start_pos_shift))
     {
         alignment_failed = true;
         return false;
     }
 
-    if (!addClippedBasesToTags(new_cigar_vec, new_md_vec, q_len))
+    if (!addClippedBasesToTags (new_cigar_vec, new_md_vec, q_len))
     {
         unclip_failed = true;
         return false; // error adding back clipped out zones
@@ -209,12 +212,23 @@ bool RealignImp::compute_alignment (
     {
         // build cigar data only if it is needed
         // TODO avoid automatic vectors to prevent unneeded heap usage
-        std::vector <CigarOp> cigar_vec;
+        CigarVec cigar_vec;
         cigar_vector_from_bin (cigar, cigar_sz, cigar_vec);
-        new_pos = updateReadPosition (cigar_vec, start_pos_shift, r_pos);
+        new_ref_pos = updateReadPosition (cigar_vec, start_pos_shift, r_pos);
     }
     else
-        new_pos = r_pos;
+        new_ref_pos = r_pos;
+
+    // here we need to adjust for the possible weirdness of Realigner:
+    // it may produce alignments starting / ending with indels.
+    // They are to be converted to softclips or to ref shifts.
+    // Namely:
+    //    insertions at the start and at the end should be added to softclips
+    //    deletions at the starts should be added to new_ref_pos
+    //    deletions at the end should be subtracted from new_ref_len
+    // we do processing here in order to avoid touching code inherited from Bamrealignment (can be re-considered later)
+    // the 
+    adjust_cigar (new_cigar_vec, new_ref_pos, new_ref_pos, new_qry_pos, new_ref_len, new_qry_len);
 
     // free (cigar_dest);
     // TODO: switch to better alignment memory management, avoid heap operations
@@ -226,5 +240,101 @@ bool RealignImp::compute_alignment (
 }
 
 
+void adjust_cigar (CigarVec& src, unsigned start_pos_shift, unsigned& new_ref_pos, unsigned& new_qry_pos, unsigned& new_ref_len, unsigned& new_qry_len)
+{
+    // walk from front to first aligned pair of bases. Count softclips and Is as softclip, Ds as reference shifts
+    // it is safe to reset new_ref_pos since even if same var is passed as start_pos_shif and new_ref_pos, the former is copied on stack.
+    new_ref_pos = new_qry_pos = new_ref_len = new_qry_len = 0;
+    if (!src.size ())
+    {
+        new_ref_pos = start_pos_shift;
+        return;
+    }
+    // walks toward the end to compute ref and lengths
+    bool in_prefix = true;
+    unsigned last_prefix_idx = 0;
+    for (CigarVec::iterator ci = src.begin (); ci != src.end (); ++ci)
+    {
+        switch (ci->Type)
+        {
+            case 'M':  // aligned
+            case 'X':  // mismatch
+            case '=':  // match
+                // both ref and qry consumed
+                new_ref_len += ci->Length, new_qry_len += ci->Length;
+                in_prefix = false; // stops accumulating left flank
+                break;
+            case 'I':  // insert
+            case 'S':  // softclip
+                // qry consumed, ref not
+                if (in_prefix)
+                    new_qry_pos += ci->Length, ++last_prefix_idx;
+                else
+                    new_qry_len += ci->Length;
+                break;
+            case 'D':  // delete
+            case 'N':  // refskip
+                // ref consumed, qry not
+                if (in_prefix)
+                    new_ref_pos += ci->Length, ++last_prefix_idx;
+                else
+                    new_ref_len += ci->Length;
+                break;
+            default:   // hardclip and pad
+                // none consumed
+                if (in_prefix)
+                    ++last_prefix_idx;
+                break;
+        }
+    }
+    // now figure out the suffix - walk backward
+    bool in_suffix = true;
+    unsigned first_suffix_idx = src.size ();
+    for (CigarVec::reverse_iterator ri = src.rbegin (); in_suffix && ri != src.rend (); ++ri)
+    {
+        switch (ri->Type)
+        {
+            case 'M':  // aligned
+            case 'X':  // mismatch
+            case '=':  // match
+                // both ref and qry consumed
+                in_suffix = false; // stops accumulating left flank
+                break;
+            case 'I':  // insert
+            case 'S':  // softclip
+                // qry consumed, ref not
+                assert (new_qry_len >= ri->Length);
+                assert (first_suffix_idx);
+                new_qry_len -= ri->Length;
+                --first_suffix_idx;
+                break;
+            case 'D':  // delete
+            case 'N':  // refskip
+                // ref consumed, qry not
+                assert (new_ref_len >= ri->Length);
+                assert (first_suffix_idx);
+                new_ref_len -= ri->Length;
+                --first_suffix_idx;
+                break;
+            default:   // hardclip and pad
+                // none consumed
+                assert (first_suffix_idx);
+                --first_suffix_idx;
+                break;
+        }
+    }
+    assert (last_prefix_idx <= first_suffix_idx);
+    // take the suffix out
+    src.resize (first_suffix_idx);
+    // replace prefix with just one softclip (assuming no hard clip encountered - TMAP does not produce one
+    if (last_prefix_idx)
+    {
+        src.erase (src.begin (), src.begin () + (last_prefix_idx - 1)); // leave one position
+        src.front ().Type = 'S';
+        src.front ().Length = new_qry_pos;
+    }
+    // add prior start offset
+    new_ref_pos += start_pos_shift;
+}
 
 

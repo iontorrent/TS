@@ -55,9 +55,10 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   hamming_dmin_      = -1;
   barcode_min_start_flow_ = -1;
   no_barcode_read_group_  = -1;
+  have_ambiguity_codes_   = false;
 
-  dataset_in_use_     = datasets.DatasetInUse();
-  is_control_dataset_ = datasets.IsControlDataset();
+  dataset_in_use_       = datasets.DatasetInUse();
+  is_control_dataset_   = datasets.IsControlDataset();
 
 
   // --- Prepare directory structure and output files
@@ -122,7 +123,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   LoadBarcodesFromDataset(datasets, keys);
 
   // For now only option to get the properties of the barcode set
-  if (compute_dmin or score_auto_config_)
+  if ((compute_dmin or score_auto_config_) and not have_ambiguity_codes_)
     ComputeHammingDistance();
 
   // Set options with limits that potentially depend on barcode set Hamming distance
@@ -193,6 +194,12 @@ void BarcodeClassifier::LoadBarcodesFromDataset(BarcodeDatasets& datasets, const
     barcode_.back().full_barcode += read_group.get("barcode_adapter","").asString();
     int key_barcode_adapter_length = barcode_.back().full_barcode.length();
 
+    // Check for non-ACGT characters
+    if (std::string::npos != barcode_.back().full_barcode.find_first_not_of("ACGTN")){
+      have_ambiguity_codes_ = true;
+      continue;
+    }
+
     int flow = 0;
     int curBase = 0;
     int end_length = -1;
@@ -239,17 +246,23 @@ void BarcodeClassifier::LoadBarcodesFromDataset(BarcodeDatasets& datasets, const
   if (dataset_in_use_ and no_barcode_read_group_ < 0)
     cout << "   INFO: Dataset " << barcode_id << " does not have a non-barcoded read group." << endl;
 
-  // And loop through barcodes again to determine maximum amount of flows after start flow has been determined
-  int barcode_flows, barcode_min_flows = -1;
-  for (unsigned int bc=0; bc<barcode_.size(); bc++) {
-    barcode_flows = barcode_.at(bc).adapter_start_flow - barcode_min_start_flow_;
-    barcode_max_flows_ = max( barcode_max_flows_, barcode_flows);
-    if (barcode_min_flows < 0 or barcode_flows < barcode_min_flows)
-      barcode_min_flows = barcode_flows;
+  if (not have_ambiguity_codes_) {
+    // And loop through barcodes again to determine maximum amount of flows after start flow has been determined
+    int barcode_flows, barcode_min_flows = -1;
+    for (unsigned int bc=0; bc<barcode_.size(); bc++) {
+      barcode_flows = barcode_.at(bc).adapter_start_flow - barcode_min_start_flow_;
+      barcode_max_flows_ = max( barcode_max_flows_, barcode_flows);
+      if (barcode_min_flows < 0 or barcode_flows < barcode_min_flows)
+        barcode_min_flows = barcode_flows;
+    }
+    if (dataset_in_use_ and barcode_min_flows >= 0 and barcode_min_flows != barcode_max_flows_)
+      cout << "   WARNING: Barcode set is not flow space synchronized. Barcodes range from "
+           << barcode_min_flows << " to " << barcode_max_flows_ << " flows." << endl;
   }
-  if (dataset_in_use_ and barcode_min_flows >= 0 and barcode_min_flows != barcode_max_flows_)
-    cout << "   WARNING: Barcode set is not flow space synchronized. Barcodes range from "
-         << barcode_min_flows << " to " << barcode_max_flows_ << " flows." << endl;
+  /*cout << "  Barcode dataset info: min_start_flow=" << barcode_min_start_flow_ << endl <<
+          "                     barcode_max_flows=" << barcode_max_flows_ << endl <<
+          "                             num_flows=" << barcode_.back().num_flows << endl;
+   */
 
   // Export barcode_max_flows_ to datasets structure
   datasets.SetBCmaxFlows(barcode_max_flows_);
@@ -264,7 +277,12 @@ void BarcodeClassifier::SetClassificationParams(int mode, double cutoff, double 
   score_cutoff_                   = cutoff;
   score_separation_               = separation;
 
-  CheckParameterLowerUpperBound("barcode-mode",          score_mode_,      1,1, 5,1, 2);
+  CheckParameterLowerUpperBound("barcode-mode",          score_mode_,      0,1, 5,1, 2);
+  if (have_ambiguity_codes_ and score_mode_ != 0){
+    cout << "   WARNING: Non-ACGT characters detected. Setting score-mode=0." << endl;
+    score_mode_ =0;
+    return;
+  }
 
   // Do we have minimum distance information available?
   if (hamming_dmin_ > 0) {
@@ -366,8 +384,28 @@ void BarcodeClassifier::BuildPredictedSignals(float cf, float ie, float dr)
 
 
 // ------------------------------------------------------------------------
+// trivially simple base space matching
 
-int  BarcodeClassifier::BaseSpaceClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors)
+int  BarcodeClassifier::SimpleBaseSpaceClassification(const BasecallerRead& basecaller_read)
+{
+  int bc_len;
+  for (int bc = 0; bc < num_barcodes_; ++bc) {
+    bc_len = barcode_[bc].full_barcode.length();
+    if (basecaller_read.sequence.size() < barcode_[bc].full_barcode.length())
+      continue;
+
+    int i=0;
+    while (i<bc_len and isBaseMatch(basecaller_read.sequence[i],barcode_[bc].full_barcode[i]))
+      ++i;
+    if (i==bc_len)
+      return bc; // perfect match found
+  }
+  return -1;
+}
+
+// ------------------------------------------------------------------------
+
+int  BarcodeClassifier::FlowAlignClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors)
 {
     int best_barcode = -1;
 	best_errors = 1 + (int)score_cutoff_; // allows match with this many errors minimum when in bc_score_mode 1
@@ -599,25 +637,27 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     return;
 
   int   best_barcode  = -1;
-  // looks at flow-space absolute error counts, not ratios
-  if (score_mode_ == 1) {
-    best_barcode = BaseSpaceClassification(processed_read, base_to_flow, processed_read.barcode_n_errors);
-  }
-  // Minimize distance to barcode predicted signal
-  else if (score_mode_ == 2 or score_mode_ == 3) {
-    // Minimize L2 distance for score_mode_ == 2
-    // Minimize L1 distance for score_mode_ == 3
-	best_barcode = SignalSpaceClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
-                                             processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
-  } else if (score_mode_ ==4 or score_mode_ ==5){
-      //L2 for score mode 4
-      //L1 for score mode 5
+  switch (score_mode_){
+    case 1: // looks at flow-space absolute error counts, not ratios
+      best_barcode = FlowAlignClassification(processed_read, base_to_flow, processed_read.barcode_n_errors);
+      break;
+    case 2: // Minimize L2 distance for score_mode_ == 2
+    case 3: // Minimize L1 distance for score_mode_ == 3
+      best_barcode = SignalSpaceClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
+                                                 processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
+      break;
+    case 4: //L2 for score mode 4
+    case 5: //L1 for score mode 5
       best_barcode = ProportionalSignalClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
-                                               processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
+                                                   processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
+      break;
+    default: // Trivial base space comparison
+      best_barcode = SimpleBaseSpaceClassification(basecaller_read);
   }
 
   // Optionally verify barcode adapter
-  AdapterValidation(basecaller_read, best_barcode, processed_read.barcode_adapter_filtered);
+  if (score_mode_ > 0)
+    AdapterValidation(basecaller_read, best_barcode, processed_read.barcode_adapter_filtered);
 
 
   // -------- Classification done, now accounting ----------
@@ -645,14 +685,19 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     return;
 
   // Account for barcode + barcode adapter bases
-  processed_read.filter.n_bases_barcode = 0;
-  while (processed_read.filter.n_bases_barcode < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_barcode] < bce.num_flows-1)
-    processed_read.filter.n_bases_barcode++;
+  if (score_mode_ == 0){
+    processed_read.filter.n_bases_barcode = min(processed_read.filter.n_bases, (int)barcode_[best_barcode].full_barcode.length());
+  }
+  else {
+    processed_read.filter.n_bases_barcode = 0;
+    while (processed_read.filter.n_bases_barcode < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_barcode] < bce.num_flows-1)
+      processed_read.filter.n_bases_barcode++;
 
-  int last_homopolymer = bce.last_homopolymer;
-  while (processed_read.filter.n_bases_barcode < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_barcode] < bce.num_flows and last_homopolymer > 0) {
-    processed_read.filter.n_bases_barcode++;
-    last_homopolymer--;
+    int last_homopolymer = bce.last_homopolymer;
+    while (processed_read.filter.n_bases_barcode < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_barcode] < bce.num_flows and last_homopolymer > 0) {
+      processed_read.filter.n_bases_barcode++;
+      last_homopolymer--;
+    }
   }
 
   // Propagate current 5' trimming point

@@ -327,7 +327,8 @@ bool BbcCoarse::SetReference( const BamTools::RefVector &references )
 			m_contigBinIndex[i] = references[i].RefLength / m_minorBinSize;
 			if( references[i].RefLength % m_majorBinSize ) ++m_contigBinIndex[i];
 		}
-		m_numMajorBins = m_numContigs;
+		// m_minorPerMajor == 1 is a special case where major substitutes for minor bins
+		m_numMajorBins = m_contigBinIndex[m_numContigs-1];
 	}
 	// allocate memory and sizes to be filled out or loaded (unused for V0 or V1 w/ minor contigs)
 	delete [] m_majorBins;
@@ -336,7 +337,8 @@ bool BbcCoarse::SetReference( const BamTools::RefVector &references )
 	free(m_minorBinPack);
 	m_minorBinPack = NULL;
 	if( m_write ) {
-		// estimate of typical work space: realloc() may be necessary for high coverage references
+		// sizeof(uint32_t) assumes sparse coverage: average 1 byte per targeted base coverage (or 2 for WGNM)
+		// realloc() may be necessary for high coverage references, doubling storage as necessary
 		m_minorBinPackSize = m_numMajorBins * m_minorPerMajor * sizeof(uint32_t);	// ~47Mb for human
 		m_minorBinPack = (uint8_t *)malloc( m_minorBinPackSize );
 	}

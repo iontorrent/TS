@@ -9,7 +9,7 @@
 #-----------------------------------------------------------------------------
 - name: DEBUG
   debug: msg="No NFS mounts to be configured"
-  with_items: nas_mounts
+  with_items: "{{ nas_mounts }}"
   when: nas_mounts|default(None) == None
 
 # Unmount any ansible-added mounts
@@ -18,25 +18,25 @@
   
 # Remove any ansible-added mount points from /etc/fstab
 - name: "Remove mountpoints from /etc/fstab"
-  shell: sed -i '/^{{startline}}/,/{{endline}}$/d' /etc/fstab
+  shell: sed -i '/^{{ startline }}/,/{{ endline }}$/d' /etc/fstab
 
 - name: Create mountpoint for external storage
   shell: bash -lc 'if [ ! -d {{ item.mountpoint }} ]; then mkdir -p {{ item.mountpoint }}; chmod 0777 {{ item.mountpoint }}; fi'
-  with_items: nas_mounts
+  with_items: "{{ nas_mounts }}"
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
   
 - name: Create fstab header line
   lineinfile: dest=/etc/fstab
                 state=present
-                line='{{startline}}'
+                line='{{ startline }}'
                 insertafter=EOF
   when: nas_mounts|default(None) != None
                 
 - name: Create fstab footer line
   lineinfile: dest=/etc/fstab
                 state=present
-                line='{{endline}}'
-                insertafter='{{startline}}'
+                line='{{ endline }}'
+                insertafter='{{ startline }}'
   when: nas_mounts|default(None) != None
 
 # Format of the nas_mounts variable changed in TS5.2 with addition of the 'options' keyword
@@ -44,10 +44,10 @@
 - name: Create fstab entry
   lineinfile: dest=/etc/fstab
                 state=present
-                regexp='{{item.name}}:{{item.directory}}.*'
-                line='{{item.name}}:{{item.directory}} {{item.mountpoint}} nfs {{item.options|default('defaults')}} 0 0'
-                insertbefore='{{endline}}'
-  with_items: nas_mounts
+                regexp='{{ item.name }}:{{ item.directory }}.*'
+                line='{{ item.name }}:{{ item.directory }} {{ item.mountpoint }} nfs {{ item.options|default('defaults') }} 0 0'
+                insertbefore='{{ endline }}'
+  with_items: "{{ nas_mounts }}"
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
 
 #-----------------------------------------------------------------------------
@@ -55,7 +55,7 @@
 # the action to write to /dev/null.  We want to maintain fstab ourselves.
 #-----------------------------------------------------------------------------
 - name: External mounts
-  mount: name={{item.mountpoint}} src={{item.name}}:{{item.directory}} fstype=nfs state=mounted fstab=/dev/null
-  with_items: nas_mounts
+  mount: name={{ item.mountpoint }} src={{ item.name }}:{{ item.directory }} fstype=nfs state=mounted fstab=/dev/null
+  with_items: "{{ nas_mounts }}"
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
   ignore_errors: yes    # TODO: Having trouble with some already-mounted volumes detected to be unmounted.

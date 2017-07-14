@@ -47,9 +47,9 @@ public:
     void    RezeroOneBead(float t_start, float t_end, int fnum, int ibd, int flow_block_size);
     void    RezeroBeadsAllFlows (float t_start, float t_end);
     void    RezeroUncompressedTraceV(void *Ptr,  float t_start, float t_end);
-    void  GenerateAllBeadTrace(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, int flow_block_size);
+    void  GenerateAllBeadTrace(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, int flow_block_size,float t_start, float t_end);
     void  GenerateAllBeadTrace_nonvec(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size);
-    void  GenerateAllBeadTrace_vec(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size);
+    void  GenerateAllBeadTrace_vec(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size, float t_start, float t_end);
     void  GenerateAllBeadTraceAnRezero(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, int flow_block_size, float t_start, float t_end);
 
 #define BKTRC_VEC_SIZE 8

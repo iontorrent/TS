@@ -9,6 +9,7 @@ namespace vcf {
     infoFlags.clear();
     format.clear();
     alt.clear();
+    alt_orig_padding.clear();
     alleles.clear();
 
     // #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT [SAMPLE1 .. SAMPLEN]
@@ -34,10 +35,12 @@ namespace vcf {
 
     // set up reverse lookup of allele index
     altAlleleIndexes.clear();
+    alt_orig_padding.resize(alt.size());
     int n = 0;
     for (vector<string>::iterator a = alt.begin();
          a != alt.end(); ++a, ++n) {
       altAlleleIndexes[*a] = n;
+      alt_orig_padding[n] = make_pair(0,0);
     }
 
     convert(fields.at(5), quality);

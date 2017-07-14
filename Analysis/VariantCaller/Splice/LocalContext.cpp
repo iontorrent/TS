@@ -6,18 +6,30 @@
 
 #include "LocalContext.h"
 
-
+void LocalReferenceContext::DetectContextAtPosition(const ReferenceReader &ref_reader, int my_chr_idx, int position0, int ref_len){
+	assert(ref_len > 0);
+	chr_idx = my_chr_idx;
+	vcf::Variant dummy_variant;
+	dummy_variant.sequenceName = ref_reader.chr_str(chr_idx);
+	dummy_variant.position = (long) (position0 + 1);
+	dummy_variant.ref = ref_reader.substr(chr_idx, (long) position0, (long) ref_len);
+	DetectContext(dummy_variant, 0, ref_reader);
+}
 
 void LocalReferenceContext::DetectContext(const vcf::Variant &candidate_variant, int DEBUG,
-    const ReferenceReader &ref_reader, int chr_idx) {
+    const ReferenceReader &ref_reader) {
 
   // VCF stores positions in 1-based index; local_contig_sequence has a zero based index
   // all positions in this object are zero based so that they correspond to reference in memory.
   position0 = candidate_variant.position-1;
   contigName = candidate_variant.sequenceName;
+  if (chr_idx < 0)
+	  chr_idx = ref_reader.chr_idx(contigName.c_str());
+  else if (contigName != ref_reader.chr_str(chr_idx))
+	  chr_idx = ref_reader.chr_idx(contigName.c_str());
 
   // Sanity checks if position is valid and reference allele matches reference
-  if (!ContextSanityChecks(candidate_variant, ref_reader, chr_idx))
+  if (!ContextSanityChecks(candidate_variant, ref_reader))
     return;
 
   my_hp_length.resize(reference_allele.length(), 0);
@@ -105,13 +117,11 @@ void LocalReferenceContext::DetectContext(const vcf::Variant &candidate_variant,
 }
 
 bool LocalReferenceContext::ContextSanityChecks(const vcf::Variant &candidate_variant,
-    const ReferenceReader &ref_reader, int chr_idx) {
+    const ReferenceReader &ref_reader) {
 
   // Sanity checks that abort context detection
   reference_allele = candidate_variant.ref;
   context_detected = true;
-
-
 
   if (candidate_variant.position < 1 or candidate_variant.position > (long)ref_reader.chr_size(chr_idx)) {
     cerr << "Non-fatal ERROR: Candidate Variant Position is not within the Contig Bounds at VCF Position "
@@ -162,4 +172,55 @@ bool LocalReferenceContext::ContextSanityChecks(const vcf::Variant &candidate_va
   }
 
   return (context_detected);
+}
+
+// return the minimum possible splicing window start in this context
+int LocalReferenceContext::SplicingLeftBound(const ReferenceReader &ref_reader) const{
+	if (not context_detected){
+		return StartSplicingNoExpansion();
+	}
+	int splicing_left_bound = StartSplicingNoExpansion(); // splicing window start for SNP/MNP
+	splicing_left_bound = min(splicing_left_bound, StartSplicingExpandFromMyHpStart0()); // splicing window start for INDEL
+    for (int rep_period = min_mnr_rep_period; rep_period <= max_mnr_rep_period; ++rep_period){
+    	CircluarBuffer<char> mnr_window(0);
+    	int mnr_start = FindSplicingStartForMNR(ref_reader, position0, rep_period, mnr_window);
+        splicing_left_bound = min(splicing_left_bound, mnr_start); // splicing window start for MNR
+    }
+    splicing_left_bound = max(0, splicing_left_bound); // safety
+    return splicing_left_bound;
+}
+
+// Splicing start for MNR only depends on context, so I do it here.
+int LocalReferenceContext::FindSplicingStartForMNR(const ReferenceReader &ref_reader, int variant_pos, int rep_period, CircluarBuffer<char>& window) const{
+	int mnr_start = variant_pos;
+	if (variant_pos + rep_period >= (int) ref_reader.chr_size(chr_idx)){
+	    return mnr_start;
+	}
+
+	--mnr_start; // 1 anchor base
+	window = CircluarBuffer<char>(rep_period);
+	for (int idx = 0; idx < rep_period; idx++){
+	   window.assign(idx, ref_reader.base(chr_idx, variant_pos + idx));
+	}
+
+    // Investigate (inclusive) start position of MNR region
+	window.shiftLeft(1);
+	while (mnr_start > 0 and window.first() == ref_reader.base(chr_idx, mnr_start)) {
+		mnr_start--;
+	    window.shiftLeft(1);
+	}
+	return mnr_start;
+}
+
+// Originally, the start splicing window was calculated in AlleleIdentity::CalculateWindowForVariant.
+// Now LocalReferenceContext::SplicingLeftBound wants to calculate the left bound of the splicing window,
+// so I calculate the splicing window start here to make sure that LocalReferenceContext can handle all possible start splicing windows.
+int LocalReferenceContext::StartSplicingNoExpansion() const{
+	return (int) position0;
+}
+int LocalReferenceContext::StartSplicingExpandFromMyHpStart0() const{
+	return my_hp_start_pos[0] - 1;
+}
+int LocalReferenceContext::StartSplicingExpandFromMyHpStartLeftAnchor(int left_anchor) const{
+	return my_hp_start_pos[left_anchor - 1] - 1;
 }

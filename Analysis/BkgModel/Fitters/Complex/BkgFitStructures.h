@@ -12,6 +12,7 @@ public:
   static CpuStep Steps[];
   static int NumSteps;
 
+  /*
   static fit_descriptor fit_well_ampl_descriptor[];
   static fit_descriptor fit_well_ampl_buffering_descriptor[];
   static fit_descriptor fit_well_post_key_descriptor[];
@@ -39,8 +40,35 @@ public:
   static fit_descriptor fit_region_full_taue_NoD_descriptor[];
   static fit_descriptor fit_region_full_taue_NoRDR_NoD_descriptor[];
 
-  static int GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_block_size);
-  static int GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd);
+ std::vector<fit_descriptor> fit_well_ampl_descriptor;
+ std::vector<fit_descriptor> fit_well_ampl_buffering_descriptor;
+ std::vector<fit_descriptor> fit_well_post_key_descriptor;
+ std::vector<fit_descriptor> fit_well_post_key_descriptor_nodmult;
+
+  // region
+ std::vector<fit_descriptor> fit_region_tmidnuc_plus_descriptor;
+
+ std::vector<fit_descriptor> fit_region_init2_descriptor;
+ std::vector<fit_descriptor> fit_region_init2_taue_descriptor;
+ std::vector<fit_descriptor> fit_region_init2_noRatioDrift_descriptor;
+ std::vector<fit_descriptor> fit_region_init2_taue_NoRDR_descriptor;
+
+ std::vector<fit_descriptor> fit_region_full_descriptor;
+ std::vector<fit_descriptor> fit_region_full_taue_descriptor;
+ std::vector<fit_descriptor> fit_region_full_noRatioDrift_descriptor;
+ std::vector<fit_descriptor> fit_region_full_taue_NoRDR_descriptor;
+
+ std::vector<fit_descriptor> fit_region_time_varying_descriptor;
+ std::vector<fit_descriptor> fit_region_darkness_descriptor;
+
+ std::vector<fit_descriptor> fit_region_init2_taue_NoD_descriptor;
+ std::vector<fit_descriptor> fit_region_init2_taue_NoRDR_NoD_descriptor;
+ std::vector<fit_descriptor> fit_region_full_taue_NoD_descriptor;
+ std::vector<fit_descriptor> fit_region_full_taue_NoRDR_NoD_descriptor;
+  */
+
+  static int GetNumParamsToFitForDescriptor(const std::vector<fit_descriptor>& fds, int flow_key, int flow_block_size);
+  static int GetNumParDerivStepsForFitDescriptor(const std::vector<fit_descriptor>& fds);
 };
 
 

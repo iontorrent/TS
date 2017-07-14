@@ -9,7 +9,7 @@ from traceback import format_exc
 from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 from django.contrib.auth.models import User
 from iondb.rundb.models import PlannedExperiment, PlannedExperimentQC, QCType,\
-    Project, Plugin, RunType, ApplicationGroup
+    Project, Plugin, RunType, ApplicationGroup, common_CV
 
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from django.db import transaction
@@ -24,6 +24,8 @@ from iondb.rundb.plan.page_plan.reference_step_data import ReferenceFieldNames
 from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames
 from iondb.rundb.plan.page_plan.save_template_step_data import SaveTemplateStepDataFieldNames
 from iondb.rundb.plan.page_plan.analysis_params_step_data import AnalysisParamsFieldNames
+
+from iondb.rundb.plan.plan_validator import MAX_LENGTH_PLAN_NAME
 
 import logging
 logger = logging.getLogger(__name__)
@@ -84,6 +86,19 @@ class StepHelperDbSaver():
                 categories = categories.replace("Onconet", "");
                 categories = categories.replace("Oncomine", "");
 
+        # if user has changed the application or target technique during template copying/editing, reset categories value if outdated customer-facing category value is found         
+        if runType:
+            if categories:
+                tokens = categories.split(';')
+                for token in tokens:
+                    categories_cv = common_CV.objects.filter(cv_type = "applicationCategory", isVisible = True, value__iexact = token)
+                    if (categories_cv.count() > 0):
+                        category_cv = categories_cv[0]
+                        if category_cv.categories and runType not in category_cv.categories:
+                            categories = ""
+        else:
+            categories = ""
+
         if ionreporter_step_data.savedFields[IonReporterFieldNames.SAMPLE_GROUPING]:
             sampleGrouping = ionreporter_step_data.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING]
 
@@ -116,6 +131,7 @@ class StepHelperDbSaver():
         x_bedfile = reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE]
         x_library = reference_step_data.savedFields[ReferenceFieldNames.REFERENCE]
         x_regionfile = reference_step_data.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE]
+        x_sseBedFile = reference_step_data.get_sseBedFile(x_bedfile)
 
         x_mixedTypeRNA_bedfile = reference_step_data.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_TARGET_BED_FILE]
         x_mixedTypeRNA_library = reference_step_data.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_REFERENCE]
@@ -203,6 +219,7 @@ class StepHelperDbSaver():
             'x_regionfile': x_regionfile,
             'x_selectedPlugins': selectedPluginsValue,
             'x_sequencekitname': x_sequencekitname,
+            'x_sseBedFile': x_sseBedFile,
             'x_variantfrequency': '',
             'x_isDuplicateReads': False if x_isDuplicateReads is None else x_isDuplicateReads,
             'x_base_recalibration_mode': "no_recal" if x_base_recalibration_mode is None else x_base_recalibration_mode,
@@ -236,7 +253,7 @@ class StepHelperDbSaver():
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
 
         isReusable = False
-        barcodedSamples = None
+        barcodedSamples = {}
 
         planDisplayedName = save_step.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME]
 
@@ -250,7 +267,7 @@ class StepHelperDbSaver():
         sampleTubeLabel = tubeLabel
         chipBarcode = chip_barcode
         if step_helper.isBarcoded():
-            barcodedSamples = json.dumps(barcoding_step.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE])
+            barcodedSamples = barcoding_step.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE]
             sampleTubeLabel = barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL]
             chipBarcode = barcoding_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL]
 
@@ -276,18 +293,23 @@ class StepHelperDbSaver():
                 'x_sampleDisplayedName': sample_set_item_display_Name,
                 })
 
+        for qcType in save_step.prepopulatedFields['qcTypes']:
+            retval[qcType.qcName] = save_step.savedFields[qcType.qcName]
+
         return retval
 
     def __get_specific_params(self, step_helper, username, sample_name='', tube_label='', chip_barcode='',
                               sample_external_id='', sample_description='',
                               is_multi_sample=False):
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
-        if step_helper.isTemplateBySample():
-            save_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE_BY_SAMPLE]
+        if step_helper.isPlan():
+            save_step_data = step_helper.steps[StepNames.SAVE_PLAN]
         else:
-            save_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE]
+            if step_helper.isTemplateBySample():
+                save_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE_BY_SAMPLE]
+            else:
+                save_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE]
 
-        planDisplayedName = save_step_data.savedFields[SaveTemplateStepDataFieldNames.TEMPLATE_NAME]
         sampleTubeLabel = ''
         chipBarcode = ''
         isReusable = True
@@ -296,28 +318,30 @@ class StepHelperDbSaver():
         meta = ""
         sample = ''
         sample_display_name = ''
-        barcodedSamples = None
+        barcodedSamples = {}
         if step_helper.isPlan():
-            planDisplayedName = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.PLAN_NAME]
+            planDisplayedName = save_step_data.savedFields[SavePlanFieldNames.PLAN_NAME]
+
             if is_multi_sample:
                 planDisplayedName += '_' + sample_name.strip()
+                planDisplayedName = planDisplayedName[:MAX_LENGTH_PLAN_NAME]
+
             sampleTubeLabel = tube_label
             chipBarcode = chip_barcode
             isReusable = False
-            note = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.NOTE]
+            note = save_step_data.savedFields[SavePlanFieldNames.NOTE]
 
-            LIMS_meta = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.LIMS_META]
-            existing_meta = step_helper.steps[StepNames.SAVE_PLAN].savedObjects[SavePlanFieldNames.META]
+            LIMS_meta = save_step_data.savedFields[SavePlanFieldNames.LIMS_META]
+            existing_meta = save_step_data.savedObjects[SavePlanFieldNames.META]
 
             sample = sample_name.strip().replace(' ', '_')
             sample_display_name = sample_name.strip()
             if step_helper.isBarcoded():
-                barcodedSamples = json.dumps(step_helper.steps[StepNames.SAVE_PLAN].savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE])
-                sampleTubeLabel = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL]
-                chipBarcode = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL]
-
-                # logger.debug("step_helper_db_saver.__get_specific_params() barcodedSamples=%s" %(barcodedSamples))
+                barcodedSamples = save_step_data.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE]
+                sampleTubeLabel = save_step_data.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL]
+                chipBarcode = save_step_data.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL]
         else:
+            planDisplayedName = save_step_data.savedFields[SaveTemplateStepDataFieldNames.TEMPLATE_NAME]
             note = save_step_data.savedFields[SaveTemplateStepDataFieldNames.NOTE]
 
             LIMS_meta = save_step_data.savedFields[SaveTemplateStepDataFieldNames.LIMS_META]
@@ -339,30 +363,22 @@ class StepHelperDbSaver():
                   }
         if ionreporter_step_data.savedFields[IonReporterFieldNames.IR_WORKFLOW] != None:
             retval.update({'irworkflow': ionreporter_step_data.savedFields[IonReporterFieldNames.IR_WORKFLOW]})
+
+        for qcType in save_step_data.prepopulatedFields['qcTypes']:
+            retval[qcType.qcName] = save_step_data.savedFields[qcType.qcName]
+
         return retval
 
     def __update_metaData_for_LIMS(self, existingValue, input):
         logger.debug("ENTER step_helper_db_saver.__update_metaData_for_LIMS() existingValue=%s; input=%s" % (existingValue, input))
-
-        newValue = existingValue
-        if newValue is None:
-            newValue = {}
-
+        newValue = existingValue or {}
         if input:
             data = input.strip()
             logger.debug("step_helper_db_saver.__update_metaData_for_LIMS() data=%s;" % (data))
-
-            if not existingValue:
-                newValue = {}
-
             newValue["LIMS"] = []
             newValue["LIMS"].append(data)
 
-        json_newValue = json.dumps(newValue)
-        # logger.debug("step_helper_db_saver.__update_metaData_for_LIMS()AFTER newValue=%s" %(newValue))
-        # logger.debug("step_helper_db_saver.__update_metaData_for_LIMS()AFTER type(json_newValue)=%s; json_newValue=%s" %(type(json_newValue), json_newValue))
-
-        return json_newValue
+        return newValue
 
     def __update_non_barcode_ref_info(self, step_helper, parentDict, sampleValueDict):
         """
@@ -378,6 +394,9 @@ class StepHelperDbSaver():
             parentDict["x_bedfile"] = sampleValueDict[SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE]
         if SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE in sampleValueDict.keys():
             parentDict["x_regionfile"] = sampleValueDict[SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE]
+        if SavePlanFieldNames.BARCODE_SAMPLE_SSE_BED_FILE in sampleValueDict.keys():
+            parentDict["x_sseBedFile"] = sampleValueDict[SavePlanFieldNames.BARCODE_SAMPLE_SSE_BED_FILE]
+
 
     def __update_plugins_with_ir(self, step_helper, parentDict, userInputList):
         logger.debug("step_helper_db_sever.__update_plugins_with_ir() userInputList=%s" % (userInputList))
@@ -602,39 +621,10 @@ class StepHelperDbSaver():
             param_dict['origin'] = "gui"
             planTemplate, extra_kwargs = PlannedExperiment.objects.save_plan(-1, **param_dict)
 
-        if step_helper.isPlanBySample():
-            self.saveQc(planTemplate, step_helper.steps[StepNames.SAVE_PLAN_BY_SAMPLE])
-        elif step_helper.isTemplate():
-            if step_helper.isTemplateBySample():
-                self.saveQc(planTemplate, step_helper.steps[StepNames.SAVE_TEMPLATE_BY_SAMPLE])
-            else:
-                self.saveQc(planTemplate, step_helper.steps[StepNames.SAVE_TEMPLATE])
-        else:
-            self.saveQc(planTemplate, step_helper.steps[StepNames.SAVE_PLAN])
         self.saveProjects(planTemplate, projectObjList)
         self.addSavedPlansList(planTemplate.pk)
         return planTemplate
 
-    def saveQc(self, planTemplate, monitoring_step):
-        # Update QCtype thresholds
-        qcTypes = QCType.objects.all()
-        for qcType in qcTypes:
-            qc_threshold = monitoring_step.savedFields[qcType.qcName]
-            if qc_threshold:
-                # get existing PlannedExperimentQC if any
-                plannedExpQcs = PlannedExperimentQC.objects.filter(plannedExperiment=planTemplate.id, qcType=qcType.id)
-                if len(plannedExpQcs) > 0:
-                    for plannedExpQc in plannedExpQcs:
-                        plannedExpQc.threshold = qc_threshold
-                        plannedExpQc.save()
-                else:
-                    kwargs = {
-                        'plannedExperiment': planTemplate,
-                        'qcType': qcType,
-                        'threshold': qc_threshold
-                    }
-                    plannedExpQc = PlannedExperimentQC(**kwargs)
-                    plannedExpQc.save()
 
     def saveProjects(self, planTemplate, projectObjList):
         # add/remove projects

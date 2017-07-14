@@ -7,6 +7,7 @@
 #include "InputStructures.h"
 #include "ExtendedReadInfo.h"
 #include "json/json.h"
+#include "MolecularTag.h"
 
 InputStructures::InputStructures()
 {
@@ -34,7 +35,7 @@ void InputStructures::Initialize(ExtendParameters &parameters, const ReferenceRe
   // now get calibration information, padded to account if nFlows for some bam is large
   do_recal.ReadRecalibrationFromComments(bam_header,num_flows_by_run_id); // protect against over-flowing nFlows, 0-based
 
-  if (parameters.sseMotifsProvided) {
+  if ((parameters.sseMotifsProvided) && (parameters.my_controls.filter_variant.sseProbThreshold < 1.0)) {
     cout << "Loading systematic error contexts." << endl;
     read_error_motifs(parameters.sseMotifsFileName);
     cout << "Loaded." << endl;
@@ -174,7 +175,7 @@ void InputStructures::DetectFlowOrderzAndKeyFromBam(const SamHeader &samHeader){
     }
 
     // Verbose output
-    cout << "TVC found a total of " << flow_order_vector.size() << " different flow orders of max flow lengths: ";
+    cout << "Found a total of " << flow_order_vector.size() << " different flow orders of max flow lengths: ";
     int iFO=0;
     for (; iFO<(int)flow_order_vector.size()-1; iFO++)
       cout << flow_order_vector.at(iFO).num_flows() << ',';
@@ -313,7 +314,7 @@ PersistingThreadObjects::PersistingThreadObjects(const InputStructures &global_c
 #ifdef __SSE3__
     if (use_SSE_basecaller) {
 	  for (unsigned int iFO=0; iFO < global_context.flow_order_vector.size(); iFO++){
-        TreephaserSSE*    treephaser_sse = new TreephaserSSE(global_context.flow_order_vector.at(iFO), DPTreephaser::kWindowSizeDefault_);
+        TreephaserSSE treephaser_sse(global_context.flow_order_vector.at(iFO), DPTreephaser::kWindowSizeDefault_);
         treephaserSSE_vector.push_back(treephaser_sse);
       }
     }

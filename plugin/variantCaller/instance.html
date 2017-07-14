@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
-<st><head>
+<head>
     <link rel="stylesheet" media="all" href="/site_media/css/chosen.css" />
     <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
-    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap-theme.min.css" />
 
     <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
     <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
@@ -17,6 +16,10 @@
         width: 400px;
     }
     
+	.chzn-container.chzn-container-single {
+    	width: 400px !important;
+	}
+	    
     .help {
         cursor: default;
         border-bottom: 1px dotted #A9A9A9;
@@ -96,7 +99,7 @@
 <body>
     <div class="container">
         <div style="margin-bottom:0px">
-            <h3>Torrent Variant Caller 5.2</h3>
+            <h3>Torrent Variant Caller 5.4</h3>
         </div>
 		<div style="display:none">
 			<input type="checkbox" id="multisample" value="multisample"> Batch configurations into multi-sample runs<br>
@@ -316,8 +319,9 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
         <thead>
         <tr>
             <th>Parameter</th>
-            <th>SNP</th>
             <th>INDEL</th>
+            <th>SNP</th>
+            <th>MNP</th>
             <th class="hot hothead">Hotspot</th>
         </tr>
         </thead>
@@ -332,10 +336,12 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
               </div>
               <div class="row-fluid parameter-subname">min_allele_freq</div>
           </td>
+          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_allele_freq" id="indel_min_allele_freq"
+                     class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>          
           <td><input data-key="torrent_variant_caller" data-subkey="snp_min_allele_freq" id="snp_min_allele_freq"
                      class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
-          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_allele_freq" id="indel_min_allele_freq"
-                     class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="mnp_min_allele_freq" id="mnp_min_allele_freq"
+                     class="mnp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>                
           <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_allele_freq"
                                  id="hotspot_min_allele_freq" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
@@ -349,10 +355,12 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
               </div>
               <div class="row-fluid parameter-subname">min_variant_score</div>
           </td>
+          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_variant_score"
+                     id="indel_min_variant_score" class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>          
           <td><input data-key="torrent_variant_caller" data-subkey="snp_min_variant_score" id="snp_min_variant_score"
                      class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
-          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_variant_score"
-                     id="indel_min_variant_score" class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="mnp_min_variant_score" id="mnp_min_variant_score"
+                     class="mnp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
           <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_variant_score"
                                  id="hotspot_min_variant_score" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
@@ -366,10 +374,12 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">min_coverage</div>
             </td>
-            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_coverage" id="snp_min_coverage"
-                       class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
             <td><input data-key="torrent_variant_caller" data-subkey="indel_min_coverage" id="indel_min_coverage"
                        class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_coverage" id="snp_min_coverage"
+                       class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="mnp_min_coverage" id="mnp_min_coverage"
+                       class="mnp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>                                              
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_coverage"
                                    id="hotspot_min_coverage" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
@@ -383,14 +393,16 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">min_var_coverage</div>
             </td>
-            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_var_coverage" id="snp_min_var_coverage"
-                       class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
             <td><input data-key="torrent_variant_caller" data-subkey="indel_min_var_coverage" id="indel_min_var_coverage"
                        class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_var_coverage" id="snp_min_var_coverage"
+                       class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="mnp_min_var_coverage" id="mnp_min_var_coverage"
+                       class="mnp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>                                              
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_var_coverage"
                                    id="hotspot_min_var_coverage" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-        <tr class="zebra">
+        <tr class="zebra not_tagseq">
           <td>
               <div class="row-fluid parameter-name">
               <span class="help"
@@ -400,14 +412,16 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
               </div>
               <div class="row-fluid parameter-subname">min_cov_each_strand</div>
           </td>
-          <td><input data-key="torrent_variant_caller" data-subkey="snp_min_cov_each_strand"
-                     id="snp_min_cov_each_strand" class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
           <td><input data-key="torrent_variant_caller" data-subkey="indel_min_cov_each_strand"
                      id="indel_min_cov_each_strand" class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="snp_min_cov_each_strand"
+                     id="snp_min_cov_each_strand" class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="mnp_min_cov_each_strand"
+                     id="mnp_min_cov_each_strand" class="mnp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>                                          
           <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_cov_each_strand"
                                  id="hotspot_min_cov_each_strand" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-        <tr class="zebra">
+        <tr class="zebra not_tagseq">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -417,15 +431,30 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">strand_bias</div>
             </td>
-            <td><input data-key="torrent_variant_caller" data-subkey="snp_strand_bias" id="snp_strand_bias"
-                       class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
             <td><input data-key="torrent_variant_caller" data-subkey="indel_strand_bias" id="indel_strand_bias"
                        class="indel plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_strand_bias" id="snp_strand_bias"
+                       class="snp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="mnp_strand_bias" id="mnp_strand_bias"
+                       class="mnp plugin_input input-mini" title="Only custom parameter sets can be edited."/></td>                                              
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_strand_bias"
                                    id="hotspot_strand_bias" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-
-        <tr class="zebra">
+        <tr class="zebra tagseq">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Minimum number of reads with same molecular tag required to form a functional family.">
+                      Minumum tag family size
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">min_tag_fam_size</div>
+            </td>
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="min_tag_fam_size" id="min_tag_fam_size"
+                       class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>
+        <tr class="zebra not_tagseq">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -435,11 +464,11 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">data_quality_stringency</div>
             </td>
-            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="data_quality_stringency" id="data_quality_stringency"
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="data_quality_stringency" id="data_quality_stringency"
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra">
+        <tr class="zebra not_tagseq">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -449,11 +478,11 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">filter_unusual_predictions</div>
             </td>
-            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="filter_unusual_predictions" id="filter_unusual_predictions"
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="filter_unusual_predictions" id="filter_unusual_predictions"
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra">
+        <tr class="zebra not_tagseq">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -463,11 +492,11 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">filter_insertion_predictions</div>
             </td>
-            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="filter_insertion_predictions" id="filter_insertion_predictions"
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="filter_insertion_predictions" id="filter_insertion_predictions"
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra">
+        <tr class="zebra not_tagseq">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -477,7 +506,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row-fluid parameter-subname">filter_deletion_predictions</div>
             </td>
-            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="filter_deletion_predictions" id="filter_deletion_predictions"
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="filter_deletion_predictions" id="filter_deletion_predictions"
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
@@ -487,15 +516,14 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 <span class="help"
                       title="Reduce coverage in over-sampled locations to this value to save computational time.">
                       Down sample to coverage
+                </span>
                 </div>
                 <div class="row-fluid parameter-subname">downsample_to_coverage</div>
             </td>
-            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="downsample_to_coverage" id="downsample_to_coverage"
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="downsample_to_coverage" id="downsample_to_coverage"
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-
-        </tbody>
     </table>
 
 
@@ -505,7 +533,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
     <div id="advanced" style="display:none">
 
         <div id="torrent_variant_caller">
-            <h4>Torrent Variant Caller</h4>
+            <h4>Torrent Variant Caller Settings</h4>
 
             <form class="form-horizontal tvc"></form>
         </div>
@@ -517,7 +545,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
         </div>
 
         <div id="freebayes">
-            <h4>FreeBayes</h4>
+            <h4>Candidate Generator (FreeBayes) Settings</h4>
 
             <form class="form-horizontal"></form>
         </div>
@@ -559,15 +587,19 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                     <div class="span7">
                         <textarea class="plugin_input" id="tmapargs" rows="5" cols="150"></textarea>
                     </div>
-
-
                 </div>
+                <div class="row zebra">
+                    <div class="span3">
+                        <span>Unify vcf arguments</span>
+                    </div>
+					<br/>
+                    <div class="span7">
+                        <textarea class="plugin_input" id="unifyargs" rows="5" cols="150"></textarea>
+                    </div>
+                </div>                
             </form>
 
         </div>
-
-    </div>
-	
 
     </div>
     <div>
@@ -581,7 +613,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
         <div>
             <h4>About Torrent Variant Caller</h4>
             <p>TVC analyzes mapped reads covering each individual reference base to deduce whether there is sufficient statistical evidence to support calling a SNP or INDEL at a given position. The analysis can be restricted to a subset of the genome by defining targeted regions. If hotspot regions are defined, TVC includes their positions in the report, even if variants have not been specifically identified.</p>
-            <p>Get more information by visiting <a href="http://ioncommunity.thermofisher.com/docs/DOC-7426" target="_blank">Torrent Variant Caller page on Ion Community</a>.</p>
+            <p>Get more information by visiting <a href="http://tools.thermofisher.com/content/sfs/manuals/MAN0014668_Torrent_Suite_RUO_Help.pdf" target="_blank">Torrent Variant Caller Documentation</a>.</p>
         </div>
     </div>
 </body>
@@ -626,6 +658,114 @@ if (!Array.prototype.indexOf) {
          return -1;
     };
 }
+
+// I will display the parameters in the order of parameter_order
+var parameter_order = {
+	'torrent_variant_caller': [
+  		// tagseq parameters
+		'tag_trim_method',
+		'min_tag_fam_size',
+		'indel_func_size_offset',
+		'fd_nonsnp_min_var_cov',
+		'tag_sim_max_cov',
+		// allele classification parameters
+		"use_fd_param",
+		"min_ratio_for_fd",                                        
+		"indel_as_hpindel",	
+		// indel parameters
+		"indel_min_allele_freq",
+		"indel_min_variant_score",
+		"indel_min_coverage",
+		"indel_min_cov_each_strand",
+		"indel_min_var_coverage",
+		"indel_strand_bias", 
+		"indel_strand_bias_pval",                                    
+		// snp parameters
+		"snp_min_allele_freq",
+		"snp_min_variant_score",
+		"snp_min_coverage",
+		"snp_min_cov_each_strand",
+		"snp_min_var_coverage",
+		"snp_strand_bias", 
+		"snp_strand_bias_pval",
+		// mnp parameters
+		"mnp_min_allele_freq",
+		"mnp_min_variant_score",
+		"mnp_min_coverage",
+		"mnp_min_cov_each_strand",   
+		"mnp_min_var_coverage",
+		"mnp_strand_bias", 
+		"mnp_strand_bias_pval",
+		// hotspot parameters
+		"hotspot_min_allele_freq",
+		"hotspot_min_variant_score",
+		"hotspot_min_coverage",
+		"hotspot_min_cov_each_strand",
+		"hotspot_min_var_coverage",
+		"hotspot_strand_bias", 
+		"hotspot_strand_bias_pval",		
+		// SNP/MNP realignment parameters 
+		"do_snp_realignment",
+		"do_mnp_realignment",
+		"realignment_threshold",                                       
+		// Flow evaluation parameters
+		"downsample_to_coverage",
+		"max_flows_to_test",
+		"heavy_tailed",
+		"outlier_probability",
+		"prediction_precision",
+		"min_detail_level_for_fast_scan",
+		"try_few_restart_freq",
+		"suppress_recalibration",
+		// HP length filters
+		"hp_max_length",
+		"hp_indel_hrun",
+		"hp_ins_len",
+		"hp_del_len",
+		// Flow evaluation filters
+		"data_quality_stringency",
+		"filter_unusual_predictions",
+		"filter_deletion_predictions",
+		"filter_insertion_predictions",
+		// Position bias filters
+		"use_position_bias",
+		"position_bias",
+		"position_bias_pval",
+		"position_bias_ref_fraction",                                    
+		// SSE filters
+		"error_motifs",                                    
+		"sse_prob_threshold",
+		// LOD filter for tagseq
+		'use_lod_filter',
+		'lod_multiplier',
+		// Others
+		"report_ppa"
+     ],
+	'long_indel_assembler':[
+		"kmer_len",
+		"min_var_freq",                                  
+		"min_var_count",
+		"short_suffix_match",
+		"min_indel_size",
+		"max_hp_length",
+		"relative_strand_bias",
+		"output_mnv"
+	 ],
+	'freebayes': [
+		"allow_indels",
+		"allow_snps",
+		"allow_mnps",
+		"allow_complex",
+		"gen_min_alt_allele_freq",                       
+		"gen_min_indel_alt_allele_freq",
+		"gen_min_coverage",
+		"min_cov_fraction",
+		"min_mapping_qv",
+		"read_snp_limit",
+		"read_max_mismatch_fraction",
+		"read_mismatch_limit"
+	]
+};
 
 var newGuid = function () {
     var result = '';
@@ -694,6 +834,7 @@ function initialize() {
 		try {plan_run_type = TB_plan_json.runType;} catch(e) {plan_run_type = "AMPS";}
 	}
 	if (plan_run_type == "TAG_SEQUENCING") {
+		// Disable the configuration for tagseq here.
         document.getElementById("configuration_management").style.display = 'none';
         document.getElementById("configurable").style.display = 'none';
 		document.getElementById("configuration_save_bottom").style.display = 'none';
@@ -771,7 +912,8 @@ function initialize() {
 
         document.getElementById("configuration_save").style.display = 'block';
         document.getElementById("configuration_submit").style.display = 'none';
-        document.getElementById("barcode_handling").style.display = 'none';
+        // barcode_handling is not using anymore
+        //document.getElementById("barcode_handling").style.display = 'none';
     }
 	
 	function addClass(el, newClassName){
@@ -860,7 +1002,7 @@ function initialize() {
           //if (!("configuration" in new_config["meta"]))
             new_config["meta"]["configuration"] = "custom";
           //if (!("ts_version" in new_config["meta"]))
-            new_config["meta"]["ts_version"] = "5.2";
+            new_config["meta"]["ts_version"] = "5.4";
           //if (!("repository_id" in new_config["meta"]))
           //  new_config["meta"]["repository_id"] = "";
           //if (!("compatibility" in new_config["meta"]))
@@ -886,7 +1028,7 @@ function initialize() {
     });
     //$("#config_combo").chosen().change(change_config);
     $("#chip_type").chosen().change(HandleAmpliseqChange);
-    $("#library_type").chosen().change(ApplyParameterFilters);
+    $("#library_type").chosen().change(HandleAmpliseqChange);
     $("#variant_frequency").chosen().change(ApplyParameterFilters);
     $("#ampliseq_panel").chosen().change(HandleAmpliseqChange);
     $("#tagseq_panel").chosen().change(HandleAmpliseqChange);
@@ -937,6 +1079,7 @@ function initialize() {
       document.getElementById("configuration_save").style.display = 'none';
       document.getElementById("configuration_submit").style.display = 'block';
 	  if (plan_run_type == "TAG_SEQUENCING") {
+		// Disable the configuration for tagseq here.
 	      document.getElementById("configuration_save_bottom").style.display = 'none';
 	  }
 	  else {
@@ -1075,15 +1218,10 @@ function initialize() {
     	}
 		for (j=0;j<configurations.length;j++) {
 		    var opt = document.createElement("option");
-		    combo.options.add(opt);
 		    opt.text = configurations[j];
 		    opt.value = configurations[j];
+		    combo.options.add(opt);
 		}
-        opt = document.createElement("option");
-        combo.options.add(opt);
-        opt.text = "";
-        opt.value = "";
-		
 	    count = 0;
 	    $.getJSON("/rundb/api/v1/results/" + TB_result + "/barcodesampleinfo/?format=json", function(data) {
 	        var tr = document.createElement('TR');
@@ -1140,14 +1278,14 @@ function initialize() {
 		            e0.id=0;
 		            for (j=0;j<configurations.length;j++){
 		                var opt = document.createElement("option");
-		                e0.options.add(opt);
 		                opt.text = configurations[j];
 		                opt.value = configurations[j];
+		                e0.options.add(opt);
 		            }
-		            opt = document.createElement("option");
-		            e0.options.add(opt);
-		            opt.text = "";
-		            opt.value = "";
+		            //opt = document.createElement("option");
+		            //e0.options.add(opt);
+		            //opt.text = "";
+		            //opt.value = "";
 		            td.appendChild(e0);
 		            //e0.onchange= function(){populateMeasure(e0.id);};
 		            //eachRow.appendChild(cell0);
@@ -1223,6 +1361,7 @@ function initialize() {
 		}
 	});
 	if (plan_run_type == "TAG_SEQUENCING") {
+		// Disable the configuration for tagseq here.
         document.getElementById("configuration_management").style.display = 'none';
         document.getElementById("configurable").style.display = 'none';
 		document.getElementById("configuration_save_bottom").style.display = 'none';
@@ -1245,9 +1384,9 @@ function show_advanced() {
 
   var library_selection = $("#library_type option:selected").val();
   if (library_selection == "tag_sequencing") {
-    document.getElementById("parameters").style.display = 'none';
-    document.getElementById("freebayes").style.display = 'none';
-    document.getElementById("long_indel_assembler").style.display = 'none';
+    document.getElementById("parameters").style.display = 'block';
+    document.getElementById("freebayes").style.display = 'block';
+    document.getElementById("long_indel_assembler").style.display = 'block';
   }
   else {
     document.getElementById("parameters").style.display = 'block';
@@ -1300,6 +1439,7 @@ function chip_type_load() {
     var select = document.getElementById("chip_type");
     for (var i = select.options.length - 1; i >= 0; i--) {select.remove(i);}
 	add_option(select, "PGM", "pgm");
+	add_option(select, "510", "510");
 	add_option(select, "520", "520");
 	add_option(select, "530", "530");
 	add_option(select, "540", "540");
@@ -1335,15 +1475,12 @@ function library_type_load() {
 function variant_frequency_load() {
     var select = document.getElementById("variant_frequency");
     for (var i = select.options.length - 1; i >= 0; i--) {select.remove(i);}
-	if (plan_run_type == "TAG_SEQUENCING") {
+	if ($("#library_type").val() == 'tag_sequencing'){
 		add_option(select, "Rare Somatic", "rare_somatic");
 	}
-	else {
+	else{
 		add_option(select, "Germ Line", "germline");
 		add_option(select, "Somatic", "somatic");
-		if (plan_page) {
-			add_option(select, "Rare Somatic", "rare_somatic");
-		}
 	}
 }
 
@@ -1421,6 +1558,7 @@ function ampliseq_panel_load() {
                 if ("choice" in result["meta"]) {
                     if (result["meta"]["choice"] == 'pgm') ampliseq_panel_option += " - PGM";
                     if (result["meta"]["choice"] == 'proton') ampliseq_panel_option += " - Proton";
+                    if (result["meta"]["choice"] == '510') ampliseq_panel_option += " - 510";                    
                     if (result["meta"]["choice"] == '520') ampliseq_panel_option += " - 520";
                     if (result["meta"]["choice"] == '530') ampliseq_panel_option += " - 530";
                     if (result["meta"]["choice"] == '540') ampliseq_panel_option += " - 540";
@@ -1440,11 +1578,11 @@ function ampliseq_panel_load() {
                 if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
                     new_config["meta"]["configuration"] = "";
                 if (!("ts_version" in new_config["meta"]))
-                    new_config["meta"]["ts_version"] = "5.2";
+                    new_config["meta"]["ts_version"] = "5.4";
                 //if (!("repository_id" in new_config["meta"]))
                 //    new_config["meta"]["repository_id"] = "";
                 new_config["meta"]["compatibility"] = {
-                    "chip"        : ["pgm","proton_p1","520","530","540"],
+                    "chip"        : ["pgm","proton_p1","510","520","530","540"],
                     "library"     : ["ampliseq"],
                     "panel"       : result["resource_uri"]
                 };
@@ -1489,6 +1627,7 @@ function tagseq_panel_load() {
                 if ("choice" in result["meta"]) {
                     if (result["meta"]["choice"] == 'pgm') tagseq_panel_option += " - PGM";
                     if (result["meta"]["choice"] == 'proton') tagseq_panel_option += " - Proton";
+                    if (result["meta"]["choice"] == '510') tagseq_panel_option += " - 510";                    
                     if (result["meta"]["choice"] == '520') tagseq_panel_option += " - 520";
                     if (result["meta"]["choice"] == '530') tagseq_panel_option += " - 530";
                     if (result["meta"]["choice"] == '540') tagseq_panel_option += " - 540";
@@ -1508,11 +1647,11 @@ function tagseq_panel_load() {
                 if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
                     new_config["meta"]["configuration"] = "";
                 if (!("ts_version" in new_config["meta"]))
-                    new_config["meta"]["ts_version"] = "5.2";
+                    new_config["meta"]["ts_version"] = "5.4";
                 //if (!("repository_id" in new_config["meta"]))
                 //    new_config["meta"]["repository_id"] = "";
                 new_config["meta"]["compatibility"] = {
-                    "chip"        : ["pgm","proton_p1","520","530","540"],
+                    "chip"        : ["pgm","proton_p1","510","520","530","540"],
                     "library"     : ["tag_sequencing"],
                     "panel"       : result["resource_uri"]
                 };
@@ -1594,7 +1733,7 @@ function set_values() {
         "name"          : "Custom",
         "tooltip"       : "Manually created custom set",
         "configuration" : "custom",
-        "ts_version"    : "5.2",
+        "ts_version"    : "5.4",
         //"repository_id" : "",
         "compatibility" : {},
         "custom"        : true,
@@ -1852,10 +1991,9 @@ function ApplyParameterFilters () {
 }
 
 function UpdateParameterValues() {
-  var library_selection = $("#library_type option:selected").val();
   var config = $("#parameter_sets_table input[type='radio']:checked").attr("id");
   var idx = parseInt(config.substr(14), 10);
-
+  var library_selection = $("#library_type option:selected").val();
   var topparams = get_top_params(library_selection);
 
   var parameters_are_readonly = true;
@@ -1869,38 +2007,36 @@ function UpdateParameterValues() {
     		 $("#tmapargs").val(value["tmapargs"]);
 		 }
 		 else {
-		 	//$("#tmapargs").val("");
+			 //$("#tmapargs").val("");
 		 }
         if ("tvcargs" in value)
           $("#tvcargs").val(value["tvcargs"]);
         else {
           //$("#tvcargs").val("tvc");
         }
+        if ("unifyargs" in value)
+            $("#unifyargs").val(value["unifyargs"]);
+          else {
+              //$("#unifyargs").val("");
+          }
         return;
     }
     $("#" + key + "> form").html("");
-    $.each(value, function (subkey, subvalue) {
-      if ($.inArray(subkey, topparams) === -1) {
-        tmpl = '<div class="row zebra"> <div class="span3"> <span>' + subkey + '</span> </div> <div class="span2">';
-        tmpl += '<input class="plugin_input input-mini" data-key="' + key + '" data-subkey="' + subkey + '" ';
-        tmpl +=        'type="text" id="' + subkey + '" value="' + subvalue + '" title="Only custom parameter sets can be edited.">';
-        tmpl += '</div><div class="span5"><ul>';
-
-        //add the help as well
-        try {
-          $.each(window.help[key][subkey], function (i, help) {
-            tmpl += '<li><small>' + help + '</small></li>';
-          });
-        } catch (e) {
-          console.log("out of sync description.json");
-        }
-
-        tmpl += '</ul></div></div>';
-        $("#" + key + "> form").append(tmpl);
-      } else {
-        $("#" + subkey).val(subvalue);
-      }
-    });
+    // I want to display the parameters in the order of parameter_order
+    var my_section_order = []
+    if (key in parameter_order){
+    	my_section_order = parameter_order[key]
+    }
+    for (idx = 0; idx < my_section_order.length; idx++){
+    	if (my_section_order[idx] in value){
+    		add_parameter_element(key, my_section_order[idx], value[my_section_order[idx]], topparams);
+    	}
+    }
+    for (var subkey in value){
+    	if (my_section_order.indexOf(subkey) < 0 ){
+    		add_parameter_element(key, subkey, value[subkey], topparams);
+    	}    	
+    }
   });
 
   $(".plugin_input").attr("readonly", parameters_are_readonly);
@@ -1927,8 +2063,9 @@ function UpdateHotspotColumn() {
 
 
 function HandleAmpliseqChange() {
-
-  ApplyParameterFilters ();
+  variant_frequency_load();
+  HandleTopParamChange();
+  ApplyParameterFilters();
 
   var library_selection = $("#library_type option:selected").val();
   var entry = $("#ampliseq_panel option:selected");
@@ -1986,11 +2123,14 @@ function serializeForm() {
   if ("dom" in base_set["meta"]) {delete base_set["meta"]["dom"];}
 
   base_set["meta"]["configuration_name"] = document.getElementsByName('configuration_name')[0].value;
-base_set["meta"]["parameters"] = {};
+  base_set["meta"]["parameters"] = {};
   base_set["meta"]["parameters"]["config"] = config;
   base_set["meta"]["parameters"]["value"] = $("#parameter_sets_table input[type='radio']:checked").val();
   base_set["meta"]["trimreads"] = $("#trimreads").prop('checked');
   base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+  base_set["meta"]["tmapargs"] = $("#tmapargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+  base_set["meta"]["unifyargs"] = $("#unifyargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+
   base_set["meta"]["barcode_mode"] = "match";
   //base_set["meta"]["barcode_mode"] = $("#barcodeModeSelector input[type='radio']:checked").val();
   //if ($("#barcodeModeSelector").is(":checked") || !barcoded) {
@@ -2021,21 +2161,363 @@ base_set["meta"]["parameters"] = {};
 	base_set["meta"]["targetloci_merge"] = base_set["meta"]["targetloci"].replace('/unmerged/detail/','/merged/plain/');
 	base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
 	base_set["meta"]["tmapargs"] = $("#tmapargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+	base_set["meta"]["unifyargs"] = $("#unifyargs").val().replace(/(\r\n|\n|\r)/gm, " ");	
 	if (base_set["meta"]["parameters"]["value"] == 'custom') {
-		var element;
-		for (element in base_set["torrent_variant_caller"]) {
-			base_set["torrent_variant_caller"][element] = $("#" + element).val();
-		}
-		for (element in base_set["long_indel_assembler"]) {
-			base_set["long_indel_assembler"][element] = $("#" + element).val();
-		}
-		for (element in base_set["freebayes"]) {
-			base_set["freebayes"][element] = $("#" + element).val();
+		var section_keys = ["torrent_variant_caller", "long_indel_assembler", "freebayes"];
+		for (var section_idx = 0; section_idx < section_keys.length; section_idx++){
+			var section_key = section_keys[section_idx];
+			for (var element in base_set[section_key]) {
+				var my_value =  $("#" + element).val();
+				// What I see should be what I save.
+				// TODO: Is it possible that a parameter is on the page but not in base_set?
+				if (my_value == null){
+					console.log('Missing id "' + element + '": delete the entry base_set["' + section_key + '"]["' + element + '"].');
+					console.warn('Missing id "' + element + '": delete the entry base_set["' + section_key + '"]["' + element + '"].');
+					delete base_set[section_key][element];
+				}else{
+				    base_set[section_key][element] = my_value;
+				}
+			}
 		}
 	}
 
   return base_set;
 }
+
+function areParametersValid(base_set) {
+	var element;
+	var value;
+	for (element in base_set["torrent_variant_caller"]) {
+		value = base_set["torrent_variant_caller"][element];
+		if (!isParameterValid(element, value)) {return false;}
+	}
+	for (element in base_set["long_indel_assembler"]) {
+		value = base_set["long_indel_assembler"][element];
+		if (!isParameterValid(element, value)) {return false;}
+	}
+	for (element in base_set["freebayes"]) {
+		value = base_set["freebayes"][element];
+		if (!isParameterValid(element, value)) {return false;}
+	}
+	return true;
+}
+
+function isParameterValid(element, value) {
+	if (value == "off") {value = 0;}
+	if (value == "on") {value = 1;}
+	if (value == "false") {value = 0;}
+	if (value == "true") {value = 1;}
+	
+	if (element == "min_detail_level_for_fast_scan") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}	
+	else if (element == "data_quality_stringency") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "downsample_to_coverage") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 1) {alert(element + " value must be >= 1"); return false;}
+	}
+	else if (element == "snp_min_cov_each_strand") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "snp_min_variant_score") {
+		if (!isFloat(value)) {alert(element + " must be a floating point number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "snp_min_allele_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "snp_min_coverage") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "snp_strand_bias") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0.5) {alert(element + " value must be >= 0.5"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "snp_strand_bias_pval") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "mnp_min_cov_each_strand") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "mnp_min_variant_score") {
+		if (!isFloat(value)) {alert(element + " must be a floating point number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "mnp_min_allele_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "mnp_min_coverage") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "mnp_strand_bias") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0.5) {alert(element + " value must be >= 0.5"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "mnp_strand_bias_pval") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "indel_min_cov_each_strand") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "indel_min_variant_score") {
+                if (!isFloat(value)) {alert(element + " must be a floating point number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "indel_min_allele_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "indel_min_coverage") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "indel_strand_bias") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0.5) {alert(element + " value must be >= 0.5"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "indel_strand_bias_pval") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "hotspot_min_cov_each_strand") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "hotspot_min_variant_score") {
+                if (!isFloat(value)) {alert(element + " must be a floating point number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "hotspot_min_allele_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "hotspot_min_coverage") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "hotspot_strand_bias") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0.5) {alert(element + " value must be >= 0.5"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "hotspot_strand_bias_pval") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "prediction_precision") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0.1) {alert(element + " value must be >= 0.1"); return false;}
+	}
+	else if (element == "outlier_probability") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "heavy_tailed") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 1) {alert(element + " value must be >= 1"); return false;}
+	}
+	else if (element == "filter_unusual_predictions") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "filter_insertion_predictions") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "filter_deletion_predictions") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "indel_as_hpindel") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "hp_max_length") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 1) {alert(element + " value must be >= 1"); return false;}
+	}
+	else if (element == "sse_prob_threshold") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "min_ratio_reads_non_sse_strand") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "do_snp_realignment") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "do_mnp_realignment") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "realignment_threshold") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "suppress_recalibration") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "use_position_bias") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "position_bias") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "position_bias_pval") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "position_bias_ref_fraction") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "min_fam_size") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 0) {alert(element + " value must be > 0"); return false;}
+	}
+	else if (element == "min_var_fam") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 0) {alert(element + " value must be > 0"); return false;}
+	}
+	else if (element == "min_func_cov") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 0) {alert(element + " value must be > 0"); return false;}
+	}
+	else if (element == "min_func_maf") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "hotspots_only") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "read_snp_limit") {
+		if (!isInt(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "allow_indels") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "allow_snps") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "allow_mnps") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "allow_complex") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	else if (element == "min_mapping_qv") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "read_max_mismatch_fraction") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "gen_min_alt_allele_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "gen_min_indel_alt_allele_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "gen_min_coverage") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+	}
+	else if (element == "kmer_len") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value < 5) {alert(element + " value must be >= 5"); return false;}
+	}
+	else if (element == "min_var_count") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 1) {alert(element + " value must be > 1"); return false;}
+	}
+	else if (element == "short_suffix_match") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 2) {alert(element + " value must be > 2"); return false;}
+	}
+	else if (element == "min_indel_size") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 0) {alert(element + " value must be > 0"); return false;}
+	}
+	else if (element == "max_hp_length") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if (value <= 1) {alert(element + " value must be > 1"); return false;}
+	}
+	else if (element == "min_var_freq") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "relative_strand_bias") {
+		if (!isFloat(value)) {alert(element + " must be a decimal number"); return false;}
+		if (value < 0) {alert(element + " value must be >= 0"); return false;}
+		if (value > 1) {alert(element + " value must be <= 1"); return false;}
+	}
+	else if (element == "output_mnv") {
+		if (!isInt(value)) {alert(element + " must be an integer"); return false;}
+		if ((value != 0) && (value != 1)) {alert(element + " value must be 0 or 1"); return false;}
+	}
+	return true;
+}
+
+function isInt(value) {
+    var er = /^-?[0-9]+$/;
+    return er.test(value);
+}
+    
+function isFloat(value) {   
+	if (isInt(value)) {return true;}
+    var er= /^[-+]?[0-9]+\.[0-9]+$/;
+    return er.test(value);   
+}   
 
 function unserializeForm(json) {
 	if (json == "Use default") {
@@ -2063,6 +2545,8 @@ function unserializeForm(json) {
 	    ApplyParameterFilters();
         var config = obj["pluginconfig"]["meta"]["parameters"]["config"];
         var idx = parseInt(config.substr(14), 10);
+        var library_selection = $("#library_type option:selected").val();
+        var topparams = get_top_params(library_selection);
 		if (obj["pluginconfig"]["meta"]["parameters"]['value'] == "custom") {idx = parameter_sets.length - 1;}
 		else {
 	        for (var temp_idx = 0; temp_idx < parameter_sets.length - 1; temp_idx++) {
@@ -2079,105 +2563,161 @@ function unserializeForm(json) {
 		UpdateParameterValues();
 		$("#tvcargs").val(obj["pluginconfig"]["meta"]["tvcargs"]);
 		$("#tmapargs").val(obj["pluginconfig"]["meta"]["tmapargs"]);
+		$("#unifyargs").val(obj["pluginconfig"]["meta"]["unifyargs"]);		
 		if (obj["pluginconfig"]["meta"]["parameters"]["value"] == 'custom') {
-			var element;
-		    $("#" + "torrent_variant_caller" + "> form").html("");
-			for (element in obj["pluginconfig"]["torrent_variant_caller"]) {
-				add_parameter_element("torrent_variant_caller", element, obj["pluginconfig"]["torrent_variant_caller"][element]);
-				$("#" + element).val(obj["pluginconfig"]["torrent_variant_caller"][element]);
-			}
-		    $("#" + "long_indel_assembler" + "> form").html("");
-			for (element in obj["pluginconfig"]["long_indel_assembler"]) {
-				add_parameter_element("long_indel_assembler", element, obj["pluginconfig"]["long_indel_assembler"][element]);
-        		$("#" + element).val(obj["pluginconfig"]["long_indel_assembler"][element]);
-			}
-		    $("#" + "freebayes" + "> form").html("");
-			for (element in obj["pluginconfig"]["freebayes"]) {
-				add_parameter_element("freebayes", element, obj["pluginconfig"]["freebayes"][element]);
-        		$("#" + element).val(obj["pluginconfig"]["freebayes"][element]);
+			var param_sections = ['torrent_variant_caller', 'long_indel_assembler', 'freebayes'];
+			for (var section_idx = 0; section_idx < param_sections.length; section_idx++){
+				var key = param_sections[section_idx];
+				if (!(key in obj["pluginconfig"])){
+					continue;
+				}
+				var value = obj["pluginconfig"][key]
+				$("#" + key + "> form").html("");
+			    var my_section_order = []
+			    if (key in parameter_order){
+			    	my_section_order = parameter_order[key]
+			    }
+			    for (idx = 0; idx < my_section_order.length; idx++){
+			    	if (my_section_order[idx] in value){
+			    		add_parameter_element(key, my_section_order[idx], value[my_section_order[idx]], topparams);
+			    	}
+			    }
+			    for (var subkey in value){
+			    	if (my_section_order.indexOf(subkey) < 0 ){
+			    		add_parameter_element(key, subkey, value[subkey], topparams);
+			    	}    	
+			    }
 			}
 		}
 	}
 }
-
-function get_top_params(library_selection) {
-  var topparams = ["snp_min_cov_each_strand",
-                   "snp_min_variant_score",
-                   "snp_min_allele_freq",
-                   "snp_min_coverage",
-                   "snp_strand_bias",
-                   "indel_min_cov_each_strand",
-                   "indel_min_variant_score",
-                   "indel_min_allele_freq",
-                   "indel_min_coverage",
-                   "indel_strand_bias",
-                   "hotspot_min_cov_each_strand",
-                   "hotspot_min_variant_score",
-                   "hotspot_min_allele_freq",
-                   "hotspot_min_coverage",
-                   "hotspot_strand_bias",
-                   "snp_beta_bias",
-                   "indel_beta_bias",
-                   "hotspot_beta_bias",
-                   "data_quality_stringency",
-                   "filter_unusual_predictions",
-                   "filter_insertion_predictions",
-                   "filter_deletion_predictions",
-                   "downsample_to_coverage"
-  ];
-  if (library_selection == "tag_sequencing") {
-  	topparams = ["snp_min_cov_each_strand",
-                 "snp_min_allele_freq",
-                 "snp_min_variant_score",
-                 "snp_min_coverage",
-                 "snp_min_var_coverage",
-                 "snp_strand_bias",
-                 "indel_min_cov_each_strand",
-                 "indel_min_allele_freq",
+var tagseq_top_params = [ 
+  	             "indel_min_allele_freq",
                  "indel_min_variant_score",
                  "indel_min_coverage",
                  "indel_min_var_coverage",
-                 "indel_strand_bias",
-                 "hotspot_min_cov_each_strand",
+  	             "snp_min_allele_freq",
+                 "snp_min_variant_score",
+                 "snp_min_coverage",
+                 "snp_min_var_coverage",
+  	             "mnp_min_allele_freq",
+                 "mnp_min_variant_score",
+                 "mnp_min_coverage",
+                 "mnp_min_var_coverage",                 
                  "hotspot_min_allele_freq",
                  "hotspot_min_variant_score",
                  "hotspot_min_coverage",
                  "hotspot_min_var_coverage",
+                 "downsample_to_coverage",
+                 "min_tag_fam_size"];
+var ampliseq_top_parameters = [
+                 "indel_min_cov_each_strand",
+                 "indel_min_variant_score",
+                 "indel_min_allele_freq",
+                 "indel_min_coverage",
+                 "indel_strand_bias",
+                 "snp_min_cov_each_strand",
+                 "snp_min_variant_score",
+                 "snp_min_allele_freq",
+                 "snp_min_coverage",
+                 "snp_strand_bias",
+                 "mnp_min_cov_each_strand",
+                 "mnp_min_variant_score",
+                 "mnp_min_allele_freq",
+                 "mnp_min_coverage",
+                 "mnp_strand_bias",
+                 "hotspot_min_cov_each_strand",
+                 "hotspot_min_variant_score",
+                 "hotspot_min_allele_freq",
+                 "hotspot_min_coverage",
                  "hotspot_strand_bias",
                  "data_quality_stringency",
                  "filter_unusual_predictions",
                  "filter_insertion_predictions",
                  "filter_deletion_predictions",
                  "downsample_to_coverage"];
+                 
+function get_top_params(library_selection) {
+  if (library_selection == "tag_sequencing") {
+	  return tagseq_top_params;
   }
-  return topparams;
+  return ampliseq_top_parameters;
 }
 
-function add_parameter_element(key, subkey, subvalue) {
-  var library_selection = $("#library_type option:selected").val();
-
-  var topparams = get_top_params(library_selection);
-
-	if ($.inArray(subkey, topparams) === -1) {
-	  tmpl = '<div class="row zebra"> <div class="span3"> <span>' + subkey + '</span> </div> <div class="span2">';
-	  tmpl += '<input class="plugin_input input-mini" data-key="' + key + '" data-subkey="' + subkey + '" ';
-	  tmpl +=        'type="text" id="' + subkey + '" value="' + subvalue + '" title="Only custom parameter sets can be edited.">';
-	  tmpl += '</div><div class="span5"><ul>';
-
-	  //add the help as well
-	  try {
-	    $.each(window.help[key][subkey], function (i, help) {
-	      tmpl += '<li><small>' + help + '</small></li>';
-	    });
-	  } catch (e) {
-	    console.log("out of sync description.json");
-	  }
-
-	  tmpl += '</ul></div></div>';
-	  $("#" + key + "> form").append(tmpl);
-	} else {
-	  $("#" + subkey).val(subvalue);
+function in_tagseq_not_in_ampliseq_top(){
+	var return_array = [];
+	for (var idx = 0; idx < tagseq_top_params.length; ++idx){
+		if (ampliseq_top_parameters.indexOf(tagseq_top_params[idx]) < 0){
+			return_array.push(tagseq_top_params[idx]);
+		}
 	}
+	return return_array;
+}
+
+function in_ampliseq_not_in_tagseq_top(){
+	var return_array = [];
+	for (var idx = 0; idx < ampliseq_top_parameters.length; ++idx){
+		if (tagseq_top_params.indexOf(ampliseq_top_parameters[idx]) < 0){
+			return_array.push(ampliseq_top_parameters[idx]);
+		}
+	}
+	return return_array;
+}
+
+function HandleTopParamChange(){
+	// Id may be defined twice in the top parameter section and in add_parameter_element. 
+	// Need to change the id in case of conflict.
+	var library_selection = $("#library_type option:selected").val();
+	var id_from_normal_to_temp; 
+	var id_from_temp_to_normal;
+	if (library_selection == 'tag_sequencing'){
+		id_from_normal_to_temp = in_ampliseq_not_in_tagseq_top();
+		id_from_temp_to_normal = in_tagseq_not_in_ampliseq_top();
+	}else{
+		id_from_temp_to_normal = in_ampliseq_not_in_tagseq_top();
+		id_from_normal_to_temp = in_tagseq_not_in_ampliseq_top();
+	}
+	for (var idx = 0; idx < id_from_temp_to_normal.length; idx++){
+		var element = document.getElementById(id_from_temp_to_normal[idx] + "_temp");
+		if (element != null){
+			element.id = id_from_temp_to_normal[idx];
+		}
+	}
+	for (var idx = 0; idx < id_from_normal_to_temp.length; idx++){
+		var element = document.getElementById(id_from_normal_to_temp[idx]);
+		if (element != null){
+			element.id = id_from_normal_to_temp[idx] + "_temp";
+		}
+	}
+}
+
+
+function add_parameter_element(key, subkey, subvalue, topparams) {
+	var my_subvalue = subvalue;
+	if (Array.isArray(subvalue)){
+	  	// For hp_indel_hrun, hp-ins-len, hp-del-len
+	  	my_subvalue = JSON.stringify(subvalue);
+	}
+  
+	if ($.inArray(subkey, topparams) === -1) {
+		tmpl = '<div class="row zebra"> <div class="span3"> <span>' + subkey + '</span> </div> <div class="span2">';
+		tmpl += '<input class="plugin_input input-mini" data-key="' + key + '" data-subkey="' + subkey + '" ';
+		tmpl +=        'type="text" id="' + subkey + '" value="' + my_subvalue + '" title="Only custom parameter sets can be edited.">';
+		tmpl += '</div><div class="span5"><ul>';
+	
+		//add the help as well
+		try {
+			$.each(window.help[key][subkey], function (i, help) {
+		        tmpl += '<li><small>' + help + '</small></li>';
+		    });
+			} catch (e) {
+		    	console.log("out of sync description.json");
+		  	}
+		
+			tmpl += '</ul></div></div>';
+			$("#" + key + "> form").append(tmpl);
+	}
+	$("#" + subkey).val(my_subvalue);
 }
 
 function submitPlugin()  {
@@ -2203,6 +2743,7 @@ function submitPlugin()  {
 	};
 	// Serialize form info
 	obj = serializeForm();
+	if (!areParametersValid(obj)) {return;}
 	if ($('#myDynamicTable tr').length > 0) {
 		barcode_count = 0;
 		var str = '{"barcodes":[';
@@ -2267,7 +2808,7 @@ function addConfiguration()  {
     document.getElementById("configuration").style.display = 'block';
     document.getElementById("configuration_submit").style.display = 'none';
     document.getElementById("configuration_save").style.display = 'block';
-    document.getElementById("barcode_handling").style.display = 'none';
+    //document.getElementById("barcode_handling").style.display = 'none';
 }
 
 function hide_config() {
@@ -2342,6 +2883,8 @@ function restoreForm(data) {
     $("#tvcargs").val(restore_form_data["meta"]["tvcargs"]);
   if ("tmapargs" in restore_form_data["meta"])
     $("#tmapargs").val(restore_form_data["meta"]["tmapargs"]);
+  if ("unifyargs" in restore_form_data["meta"])
+	$("#unifyargs").val(restore_form_data["meta"]["unifyargs"]);  
 
   //$("#barcodeModeSelector input[value='match']").prop("checked", true);
   //$('#barcodeModeSelector').attr('checked', false);
@@ -2388,6 +2931,7 @@ function restoreForm(data) {
     delete restore_form_data["meta"]["trimreads"];
     delete restore_form_data["meta"]["tvcargs"];
     delete restore_form_data["meta"]["tmapargs"];
+    delete restore_form_data["meta"]["unifyargs"];
     delete restore_form_data["meta"]["compatibility"];
     delete restore_form_data["meta"]["barcode_mode"];
 
@@ -2398,7 +2942,7 @@ function restoreForm(data) {
     if (!("tooltip" in restore_form_data["meta"]))
       restore_form_data["meta"]["tooltip"] = "Legacy";
     if (!("ts_version" in restore_form_data["meta"]))
-      restore_form_data["meta"]["ts_version"] = "5.2";
+      restore_form_data["meta"]["ts_version"] = "5.4";
     //if (!("repository_id" in restore_form_data["meta"]))
     //  restore_form_data["meta"]["repository_id"] = "";
     if (!("compatibility" in restore_form_data["meta"]))

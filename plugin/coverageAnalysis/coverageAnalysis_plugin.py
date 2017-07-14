@@ -72,6 +72,8 @@ def addAutorunParams(plan=None):
   if not 'padtargets' in config: config['padtargets'] = '0'
   if not 'uniquemaps' in config: config['uniquemaps'] = 'No'
   if not 'nonduplicates' in config: config['nonduplicates'] = 'Yes'
+  config['minalignlen'] = '0'
+  config['minmapqual'] = '0'
   config['barcodebeds'] = 'No'
   config['barcodetargetregions'] = ''
   # extract things from the plan if provided - for coverageAnalysis auto-run w/o a plan leads to early exit
@@ -121,10 +123,12 @@ def furbishPluginParams():
   if 'sampleid' not in config: config['sampleid'] = 'No'
   if 'uniquemaps' not in config: config['uniquemaps'] = 'No'
   if 'nonduplicates' not in config: config['nonduplicates'] = 'No'
+  if 'minalignlen' not in config: config['minalignlen'] = '0'
+  if 'minmapqual' not in config: config['minmapqual'] = '0'
 
 
 def configReport():
-  '''Returns a dictionary based on the plugin config parameters that as reported in results.json.'''
+  '''Returns a dictionary based on the plugin config parameters that are reported in results.json.'''
   config = pluginParams['config']
   return {
     "Launch Mode" : config['launch_mode'],
@@ -135,6 +139,8 @@ def configReport():
     "Target Padding" : config['padtargets'],
     "Use Only Uniquely Mapped Reads" : config['uniquemaps'],
     "Use Only Non-duplicate Reads" : config['nonduplicates'],
+    "Min Aligned Length" : config['minalignlen'],
+    "Min Mapping Quality" : config['minmapqual'],
     "barcoded" : "true" if pluginParams['barcoded'] else "false"
   }
 
@@ -166,6 +172,8 @@ def printStartupMessage():
   printlog('  Sample Tracking:  %s' % config['sampleid'])
   printlog('  Uniquely Mapped:  %s' % config['uniquemaps'])
   printlog('  Non-duplicate:    %s' % config['nonduplicates'])
+  printlog('  Min Align Length: %s' % config['minalignlen'])
+  printlog('  Min Map Quality:  %s' % config['minmapqual'])
   printlog('')
 
 
@@ -207,8 +215,17 @@ def run_plugin(skiprun=False,barcode=""):
   if chr_stats: trg_type = 3
   if wgn_stats: trg_type = 4
 
-  # Hard-coded path to sample ID target BED file
-  sampleidBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_regions.bed') if samp_track else ''
+  # Check sample tracking is appropriate to reference and set path to sample ID target BED file
+  sampleidBed = ''
+  if samp_track:
+    if not librarytype.startswith('AMPS'):
+      printlog("WARNING: Sample Tracking option ignored. This is only available for AmpliSeq Libraries.")
+      samp_track = False
+    elif pluginParams['genome_id'] != "hg19":
+      printlog("WARNING: Sample Tracking option ignored. This is only available for reads aligned to the hg19 reference.")
+      samp_track = False
+    else:
+      sampleidBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_regions.bed')
 
   # skip the actual and assume all the data already exists in this file for processing
   if skiprun:
@@ -230,9 +247,10 @@ def run_plugin(skiprun=False,barcode=""):
     if config['nonduplicates'] == 'Yes': filtopts += ' -d'
     rptopt = '-R coverageAnalysis.html' if pluginParams['cmdOptions'].cmdline else ''
     printtime("Running coverage analysis pipeline...")
-    runcmd = '%s %s %s %s -D "%s" -A "%s" -B "%s" -C "%s" -L "%s" -N "%s" -P %s -S "%s" %s "%s" "%s"' % (
+    runcmd = '%s %s %s %s -D "%s" -A "%s" -B "%s" -C "%s" -L "%s" -M %s -N "%s" -P %s -Q %s -S "%s" %s "%s" "%s"' % (
         os.path.join(plugin_dir,'run_coverage_analysis.sh'), pluginParams['logopt'], ampopt,
-        filtopts, output_dir, annoBed, mergeBed, bedfile, genomeUrl, sample, config['padtargets'], sampleidBed, rptopt, reference, bamfile )
+        filtopts, output_dir, annoBed, mergeBed, bedfile, genomeUrl, config['minalignlen'],
+        sample, config['padtargets'], config['minmapqual'], sampleidBed, rptopt, reference, bamfile )
     if logopt: printlog('\n$ %s\n'%runcmd)
     if( os.system(runcmd) ):
       raise Exception("Failed running run_coverage_analysis.sh. Refer to Plugin Log.")
@@ -503,6 +521,10 @@ def renderOptions():
   if ampliseq and config['sampleid'] == 'Yes': filter_options.append('Sample tracking')
   if not librarytype == 'AMPS_RNA' and config['uniquemaps'] == 'Yes': filter_options.append('Uniquely mapped')
   if not ampliseq and config['nonduplicates'] == 'Yes': filter_options.append('Non-duplicate')
+  if config['minalignlen'] and int(config['minalignlen']):
+    filter_options.append('Minimum aligned length = %d'%int(config['minalignlen']))
+  if config['minmapqual'] and int(config['minmapqual']):
+    filter_options.append('Minimum mapping quality = %d'%int(config['minmapqual']))
   trg_stats = config['targetregions_id'] != 'None'
   return {
     "runType" : librarytype,
@@ -873,12 +895,12 @@ def loadPluginParams():
     barcodeData = barcodeSpecifics(NONBARCODED)
     genome_id = barcodeData['reference']
     target_id = barcodeData['bedfile']
+
   pluginParams['genome_id'] = genome_id if genome_id else 'None'
-  if not pluginParams['manual_run']:
-    target_id = os.path.basename(target_id)
-    if target_id[-4:] == ".bed": target_id = target_id[:-4]
-    config['targetregions_id'] = target_id if target_id else 'None'
-    config['barcodebeds'] = "Yes" if target_id == "Barcode specific" else "No"
+  target_id = os.path.basename(target_id)
+  if target_id[-4:] == ".bed": target_id = target_id[:-4]
+  config['targetregions_id'] = target_id if target_id else 'None'
+  config['barcodebeds'] = "Yes" if target_id == "Barcode specific" else "No"
  
   # preset some (library) dependent flags
   runtype = config['librarytype']
@@ -978,22 +1000,27 @@ def runForBarcodes():
   barcodes = getOrderedBarcodes()
   numGoodBams = 0
   numInvalidBarcodes = 0
+  numInvalidBAMs = 0
   maxBarcodeLen = 0
   barcodeIssues = []
   for barcode in barcodes:
     errmsg = checkBarcode(barcode)
-    if not errmsg:
+    if errmsg:
+      # distinguish errors due to targets vs. BAM
+      numInvalidBarcodes += 1
+      if errmsg[:6] == "ERROR:":
+        errmsg = "\n"+errmsg
+        numInvalidBAMs += 1
+    else:
       if( len(barcode) > maxBarcodeLen ):
         maxBarcodeLen = len(barcode)
       numGoodBams += 1
-    elif errmsg[:6] == "ERROR:":
-      errmsg = "\n"+errmsg
-      numInvalidBarcodes += 1
     barcodeIssues.append(errmsg)
 
   ensureFilePrefix(maxBarcodeLen+1)
   pluginReport['num_barcodes_processed'] = numGoodBams
   pluginReport['num_barcodes_invalid'] = numInvalidBarcodes
+  pluginReport['num_barcodes_badbams'] = numInvalidBAMs
   pluginReport['num_barcodes_failed'] = 0
 
   skip_analysis = pluginParams['cmdOptions'].skip_analysis
@@ -1064,13 +1091,13 @@ def checkBarcode(barcode):
   '''Checks if a specific barcode is set up correctly for analysis.'''
   barcodeData = barcodeSpecifics(barcode) 
   if barcodeData['filtered']:
-    return "Filtered (not enough reads)"
+    return "ERROR: Filtered (not enough reads)"
   if not barcodeData['reference']:
-    return "Analysis requires alignment to a reference"
+    return "ERROR: Analysis requires alignment to a reference"
   if not os.path.exists(barcodeData['bamfile']):
-    return "BAM file not found at " + barcodeData['bamfile']
+    return "ERROR: BAM file not found at " + barcodeData['bamfile']
   if os.stat(barcodeData['bamfile']).st_size < pluginParams['cmdOptions'].minbamsize:
-    return "BAM file too small"
+    return "ERROR: BAM file too small"
   return checkTarget( barcodeData['bedfile'], barcodeData['bamfile'] )
 
 def checkTarget(bedfile,bamfile):
@@ -1101,8 +1128,8 @@ def checkBamBed(bamfile,bedfile):
   errMsg = runcmd.communicate()[0]
   errMsg.strip()
   # Hard error will kill run. Soft error (errMsg != "") will just kill for current barcode.
-  if runcmd.poll():
-    raise Exception("Detected issue with BAM/BED files: %s" % errMsg)
+  #if runcmd.poll():
+  #  raise Exception("Detected issue with BAM/BED files: %s" % errMsg)
   return errMsg
 
 def createScraperLinksFolder(outdir,rootname):
@@ -1153,10 +1180,12 @@ def plugin_main():
     if pluginParams['barcoded']:
       runForBarcodes()
       if pluginReport['num_barcodes_processed'] == 0:
-        if pluginReport['num_barcodes_invalid'] > 0:
+        if pluginReport['num_barcodes_badbams'] == 0:
           fatalErrorReport("All barcodes had invalid target regions specified.")
+        elif pluginReport['num_barcodes_invalid'] == pluginReport['num_barcodes_badbams']:
+          fatalErrorReport("No valid barcode alignment files were found for this barcoded run.")
         else:
-          fatalErrorReport("No barcode alignment files were found for this barcoded run.")
+          fatalErrorReport("All barcodes had invalid alignment files vs. target regions specified.")
         return 1
       elif pluginReport['num_barcodes_processed'] == pluginReport['num_barcodes_failed']:
         fatalErrorReport("Analysis failed for all barcode alignments.")

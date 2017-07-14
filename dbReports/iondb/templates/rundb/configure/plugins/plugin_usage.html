@@ -7,7 +7,7 @@
 {% endblock extra_head_styles %}
 {% block extra_head_js %}
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
 <script type="text/javascript">
 // Copied from data_model.js - needs new home
 function precisionUnits(num, div) {
@@ -133,7 +133,6 @@ $(document).ready(function(){
                         id: { type: "number" }
                         , starttime: { type: "date" }
                         , endtime: { type: "date" }
-                        , duration: { type: "string" }
                         , inodes: { type: "number" }
                         , size: { type: "string" }
                         , path: { type: "string" }
@@ -143,13 +142,11 @@ $(document).ready(function(){
                 }
             }
             , serverSorting: true
-            , sort: { field: "endtime", dir: "desc" }
+            , sort: { field: "id", dir: "desc" }
             , serverPaging: true
             , pageSize: 20
             , serverFiltering: true
-            , filter: [ {field: "plugin__name", operator:"__exact", value:"{{ plugin.name|escapejs }}"}
-                        ,{ field: "starttime", operator: "__isnull", value: "false"}
-                        ,{ field: "endtime", operator: "__isnull", value: "false"} ]
+            , filter: [ {field: "plugin__name", operator:"__exact", value:"{{ plugin.name|escapejs }}"}]
             , autoSync: true
         }
         , height: '446'
@@ -178,9 +175,6 @@ $(document).ready(function(){
                 ,title: "End"
                 ,sortable: true
                 ,template: kendo.template($("#EndTimeTemplate").html())
-            } , {
-                field: "duration"
-                ,title: "Duration"
             } , {
                 field: "state"
                 ,title: "State"

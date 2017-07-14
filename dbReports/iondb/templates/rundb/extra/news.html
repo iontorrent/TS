@@ -56,8 +56,8 @@
             {% endif %}
             <div class="news-body">
                 <a href="{{ article.link }}" class="news-title">{{ article.title }}</a>
-                <p class="news-summary">{{ article.summary }}</p>
-                <small class="news-date">{{ article.updated|timesince }} ago</small>
+                <p class="news-summary">{{ article.summary|safe }}</p>
+                <small class="news-date">{{ article.updated|date:"M j Y" }}</small>
             </div>
         </div>
     {% empty %}

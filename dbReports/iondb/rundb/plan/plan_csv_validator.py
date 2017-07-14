@@ -2,22 +2,21 @@
 from django.contrib.auth.models import User
 
 from iondb.rundb.models import PlannedExperiment, Experiment, RunType, ApplProduct, \
-    ReferenceGenome, Content, KitInfo, VariantFrequencies, dnaBarcode, \
+    ReferenceGenome, Content, KitInfo, dnaBarcode, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
     PlannedExperimentQC
 
-from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_default_or_first_IR_account_by_userName, get_internal_name_for_displayed_name, \
+from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_IR_accounts_by_userName, get_default_or_first_IR_account_by_userName, get_internal_name_for_displayed_name, \
     get_ir_set_id, is_operation_supported_by_obj
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_flows, \
     validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info, \
     validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType, validate_chipBarcode, \
     validate_reference, validate_sampleControlType
-
+from iondb.rundb.plan.plan_csv_iru_validator import validate_iruConfig_process_userInputInfo, call_iru_validation_api
 from traceback import format_exc
 
 from plan_csv_writer import PlanCSVcolumns
 import iondb.rundb.plan.views
-
 import copy
 import json
 import os
@@ -84,6 +83,7 @@ class MyPlan:
         self.sampleList = []
         self.sampleIdList = []
         self.nucleotideTypeList = []
+        self.USERINPUT = {}
 
     def get_planObj(self):
         return self.planObj
@@ -103,8 +103,10 @@ class MyPlan:
     def get_nucleotideTypeList(self):
         return self.nucleotideTypeList
 
+    def get_USERINPUT(self):
+        return self.USERINPUT
 
-def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=None):
+def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=None, httpHost=None):
     """ validate csv contents and convert user input to raw data to prepare for plan persistence
     returns: a collection of error messages if errors found, a dictionary of raw data values
     If single_file=False barcoded samples info is in separate csv files, must include samples_contents for each plan
@@ -181,41 +183,53 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
     else:
         return failed, planDict, rawPlanDict, isToSkipRow
 
-    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate sample_prep_kit..." % (selectedTemplate.id, selectedTemplate.planDisplayedName))
     if PlanCSVcolumns.COLUMN_CHIP_BARCODE in csvPlanDict:
         errorMsg = _validate_chip_barcode(csvPlanDict.get(PlanCSVcolumns.COLUMN_CHIP_BARCODE), selectedTemplate, planObj)
         if errorMsg:
             failed.append((PlanCSVcolumns.COLUMN_CHIP_BARCODE, errorMsg))
+    elif PlanCSVcolumns.COLUMN_CHIP_BARCODE_V1 in csvPlanDict:
+        errorMsg = _validate_chip_barcode(csvPlanDict.get(PlanCSVcolumns.COLUMN_CHIP_BARCODE_V1), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_CHIP_BARCODE_V1, errorMsg))
 
-    errorMsg = _validate_sample_prep_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT), selectedTemplate, planObj)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT, errorMsg))
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate Kit/chip combinations..." % (selectedTemplate.id, selectedTemplate.planDisplayedName))
 
-    errorMsg = _validate_lib_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_LIBRARY_KIT), selectedTemplate, planObj)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_LIBRARY_KIT, errorMsg))
+    # check if deprecated header exists for chiptype
+    chipType_header = PlanCSVcolumns.COLUMN_CHIP_TYPE if PlanCSVcolumns.COLUMN_CHIP_TYPE in csvPlanDict else PlanCSVcolumns.COLUMN_CHIP_TYPE_V1
 
-    errorMsg = _validate_template_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_TEMPLATING_KIT), selectedTemplate, planObj)
+    errorMsg = _validate_chip_type(csvPlanDict.get(chipType_header, None), selectedTemplate, planObj, selectedExperiment)
+
     if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_TEMPLATING_KIT, errorMsg))
+        failed.append((PlanCSVcolumns.COLUMN_CHIP_TYPE, errorMsg))
+    else:
+        errorMsg = _validate_sample_prep_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT, errorMsg))
+
+        errorMsg = _validate_lib_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_LIBRARY_KIT), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_LIBRARY_KIT, errorMsg))
+
+        # check if deprecated header exists for templatingKitName
+        templatingKit_header = PlanCSVcolumns.COLUMN_TEMPLATING_KIT if PlanCSVcolumns.COLUMN_TEMPLATING_KIT in csvPlanDict else PlanCSVcolumns.COLUMN_TEMPLATING_KIT_V1
+
+        errorMsg = _validate_template_kit(csvPlanDict.get(templatingKit_header, None), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_TEMPLATING_KIT, errorMsg))
+
+        errorMsg = _validate_control_seq_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT, errorMsg))
+
+        logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate seq_kit..." % (selectedTemplate.id, selectedTemplate.planDisplayedName))
+
+        errorMsg = _validate_seq_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_SEQ_KIT), selectedTemplate, planObj, selectedExperiment)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_SEQ_KIT, errorMsg))
 
     errorMsg = _validate_templatingSize(csvPlanDict.get(PlanCSVcolumns.COLUMN_TEMPLATING_SIZE), selectedTemplate, planObj)
     if errorMsg:
         failed.append((PlanCSVcolumns.COLUMN_TEMPLATING_SIZE, errorMsg))
-
-    errorMsg = _validate_control_seq_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT), selectedTemplate, planObj)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT, errorMsg))
-
-    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate seq_kit..." % (selectedTemplate.id, selectedTemplate.planDisplayedName))
-
-    errorMsg = _validate_seq_kit(csvPlanDict.get(PlanCSVcolumns.COLUMN_SEQ_KIT), selectedTemplate, planObj, selectedExperiment)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_SEQ_KIT, errorMsg))
-
-    errorMsg = _validate_chip_type(csvPlanDict.get(PlanCSVcolumns.COLUMN_CHIP_TYPE), selectedTemplate, planObj, selectedExperiment)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_CHIP_TYPE, errorMsg))
 
     errorMsg = _validate_libraryReadLength(csvPlanDict.get(PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH), selectedTemplate, planObj)
     if errorMsg:
@@ -259,6 +273,10 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
     errorMsg = _validate_target_bed(csvPlanDict.get(PlanCSVcolumns.COLUMN_TARGET_BED), selectedTemplate, planObj, csvPlanDict.get(PlanCSVcolumns.COLUMN_REF))
     if errorMsg:
         failed.append((PlanCSVcolumns.COLUMN_TARGET_BED, errorMsg))
+    else:
+        # sse file is tied to target region bed, we will blank it if targetRegionBedFile changed
+        if planObj.get_easObj().sseBedFile and planObj.get_easObj().targetRegionBedFile != selectedEAS.targetRegionBedFile:
+            planObj.get_easObj().sseBedFile = ""
 
     errorMsg = _validate_hotspot_bed(csvPlanDict.get(PlanCSVcolumns.COLUMN_HOTSPOT_BED), selectedTemplate, planObj, csvPlanDict.get(PlanCSVcolumns.COLUMN_REF))
     if errorMsg:
@@ -276,9 +294,10 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
 
     rawPlanDict["newProjects"] = projects
 
-    errorMsg = _validate_plan_name(csvPlanDict.get(PlanCSVcolumns.COLUMN_PLAN_NAME), selectedTemplate, planObj)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_PLAN_NAME, errorMsg))
+    if 'Plan name (required)' not in dict(failed):
+        errorMsg = _validate_plan_name(csvPlanDict.get(PlanCSVcolumns.COLUMN_PLAN_NAME), selectedTemplate, planObj)
+        if errorMsg:
+            failed.append((PlanCSVcolumns.COLUMN_PLAN_NAME, errorMsg))
 
     errorMsg = _validate_notes(csvPlanDict.get(PlanCSVcolumns.COLUMN_NOTES), selectedTemplate, planObj)
     if errorMsg:
@@ -296,16 +315,19 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
 
     barcodeKitName = selectedEAS.barcodeKitName
     if barcodeKitName:
+        csvfile = csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER)
         if single_file:
             errorMsg, barcodedSampleList = _parse_barcodedSamples_from_plan_csv(csvPlanDict, selectedTemplate, barcodeKitName, planObj)
         else:
             errorMsg, barcodedSampleList = _parse_barcodedSamples_from_sample_csv(samples_contents, barcodeKitName, csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER))
         if errorMsg:
-            failed.append(("Barcoded samples", errorMsg))
+            failed.append(("Sample CSV File Name: ", csvfile))
+            failed.append(("Barcoded samples validation errors:", errorMsg))
 
-        errorMsg, barcodedSampleJson = _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj)
+        errorMsg, barcodedSampleJson = _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj, selectedEAS)
         if errorMsg:
-            failed.append(("Barcoded samples", errorMsg))
+            failed.append(("Sample CSV File Name: ", csvfile))
+            failed.append(("Barcoded samples validation errors:", errorMsg))
         else:
             planObj.get_sampleList().extend(barcodedSampleJson.keys())
     else:
@@ -344,16 +366,33 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
         selectedPlugins = dict(plugins)
         selectedPlugins.update(uploaders)
 
-        rawPlanDict["selectedPlugins"] = selectedPlugins
-
-        planObj.get_easObj().selectedPlugins = selectedPlugins
-
     except:
         logger.exception(format_exc())
         errorMsg = "Internal error while processing selected plugins info. " + format_exc()
         failed.append(("selectedPlugins", errorMsg))
 
+    #validate the iru configuration settings in the CSV plan upload
+    if csvPlanDict.get(PlanCSVcolumns.COLUMN_IR_ACCOUNT):
+        iru_validationErrors, selectedPlugins = validate_iruConfig_process_userInputInfo(csvPlanDict,
+                                                                  username,
+                                                                  samples_contents,
+                                                                  planObj,
+                                                                  httpHost,
+                                                                  selectedPlugins = selectedPlugins)
+        if iru_validationErrors:
+            failed.append(("IRU validation errors:", iru_validationErrors))
+
+        # this is validated inside the plan_csv_iru_validator
+        irChevron_workflow = csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW, "")
+        if irChevron_workflow and not iru_validationErrors:
+            planObj.get_planObj().irworkflow = irChevron_workflow
+
+    rawPlanDict["selectedPlugins"] = selectedPlugins
+
     logger.debug("EXIT plan_csv_validator.validate_csv_plan() rawPlanDict=%s; " % (rawPlanDict))
+
+    planObj.get_easObj().selectedPlugins = selectedPlugins
+
 
     planDict = {
         "plan": planObj.get_planObj(),
@@ -387,6 +426,45 @@ def _get_template(templateName):
         logger.debug("plan_csv_validator._get_template() NO template found. ")
         return None, "Template name: " + templateName + " cannot be found to create plans from"
 
+# Validate for supported kit/chip combination:
+def _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit):
+    errorMsg = None
+    selectedChip = None
+
+    user_chipType = planObj.get_expObj().chipType
+    try:
+        selectedChip = Chip.objects.get(name__iexact=user_chipType, isActive=True)
+    except Exception, Err:
+        logger.debug("Error in plan.plan_csv_validation %s" % Err)
+        errorMsg = Err
+
+    # validate selected chip and kit instrument type combination is supported
+    selectedChip_instType = selectedChip.instrumentType
+    selectedKit_instType = selectedKit.instrumentType
+    if selectedKit_instType:
+        if selectedKit_instType not in selectedChip_instType:
+            errorMsg = "specified Kit (%s) / Chip (%s) instrument type is not supported" % (selectedKit.name, user_chipType)
+            return errorMsg
+
+    # if instrument type is valid: validate if chip type of selected kit is in the supported list
+    if selectedKit.chipTypes:
+        selectedKit_chipTypes = selectedKit.chipTypes.split(";")
+        if selectedKit_chipTypes:
+            if user_chipType not in selectedKit_chipTypes:
+                errorMsg = "specified Kit (%s) / Chip (%s) combination is not supported" % (selectedKit.name, user_chipType)
+                return errorMsg
+
+    # if instrument type and chip type are valid: validate if application type of selected kit is in the supported list
+    template_runType = selectedTemplate.runType
+    selectedKit_applicationType = selectedKit.applicationType
+    if selectedKit_applicationType:
+        if "AMPS_ANY" in selectedKit_applicationType:
+            selectedKit_applicationType = ['AMPS', 'AMPS_DNA_RNA', 'AMPS_EXOME', 'AMPS_RNA']
+        if template_runType not in selectedKit_applicationType:
+            errorMsg = "specified Kit (%s) is not supported for the template (%s)" % (selectedKit.name, selectedTemplate.planDisplayedName)
+            return errorMsg
+
+    return errorMsg
 
 def _validate_sample_prep_kit(input, selectedTemplate, planObj):
     """
@@ -404,7 +482,10 @@ def _validate_sample_prep_kit(input, selectedTemplate, planObj):
             else:
                 selectedKit = selectedKits[0]
 
-            planObj.get_planObj().samplePrepKitName = selectedKit.name
+            errorMsg = _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit)
+
+            if not errorMsg:
+                planObj.get_planObj().samplePrepKitName = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
@@ -429,7 +510,10 @@ def _validate_lib_kit(input, selectedTemplate, planObj):
             else:
                 selectedKit = selectedKits[0]
 
-            planObj.get_easObj().libraryKitName = selectedKit.name
+            errorMsg = _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit)
+
+            if not errorMsg:
+                planObj.get_easObj().libraryKitName = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
@@ -454,12 +538,15 @@ def _validate_template_kit(input, selectedTemplate, planObj):
             else:
                 selectedKit = selectedKits[0]
 
-            planObj.get_planObj().templatingKitName = selectedKit.name
+            errorMsg = _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit)
 
-            if selectedKit.kitType == "IonChefPrepKit":
-                planObj.get_planObj().planStatus = "pending"
-            else:
-                planObj.get_planObj().planStatus = "planned"
+            if not errorMsg:
+                planObj.get_planObj().templatingKitName = selectedKit.name
+
+                if selectedKit.kitType == "IonChefPrepKit":
+                    planObj.get_planObj().planStatus = "pending"
+                else:
+                    planObj.get_planObj().planStatus = "planned"
         except:
             errorMsg = input + " not found."
     else:
@@ -485,7 +572,9 @@ def _validate_control_seq_kit(input, selectedTemplate, planObj):
             else:
                 selectedKit = selectedKits[0]
 
-            planObj.get_planObj().controlSequencekitname = selectedKit.name
+            errorMsg = _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit)
+            if not errorMsg:
+                planObj.get_planObj().controlSequencekitname = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
@@ -510,11 +599,14 @@ def _validate_seq_kit(input, selectedTemplate, planObj, selectedExperiment):
             else:
                 selectedKit = selectedKits[0]
 
-            planObj.get_expObj().sequencekitname = selectedKit.name
+            errorMsg = _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit)
 
-            if (selectedKit.name != selectedExperiment.sequencekitname):
-                flowOrder = selectedKit.defaultFlowOrder.flowOrder if selectedKit.defaultFlowOrder else ""
-                planObj.get_expObj().flowsInOrder = flowOrder
+            if not errorMsg:
+                planObj.get_expObj().sequencekitname = selectedKit.name
+
+                if (selectedKit.name != selectedExperiment.sequencekitname):
+                    flowOrder = selectedKit.defaultFlowOrder.flowOrder if selectedKit.defaultFlowOrder else ""
+                    planObj.get_expObj().flowsInOrder = flowOrder
         except:
             logger.exception(format_exc())
             errorMsg = input + " not found."
@@ -618,7 +710,7 @@ def _validate_flows(input, selectedTemplate, planObj):
 
 def _validate_chip_barcode(input, selectedTemplate, planObj):
     """
-    validate flow value with leading/trailing blanks in the input ignored
+    validate Chip Barcode value with leading/trailing blanks in the input ignored
     """
     errorMsg = None
     if input:
@@ -674,7 +766,7 @@ def _validate_ref(value, selectedTemplate, planObj):
     validate genome reference case-insensitively with leading/trailing blanks in the input ignored
     """
     errorMsg = None
-    if value:
+    if value and value.strip().lower() != 'none':
         plan = planObj.get_planObj()
         applicationGroupName = plan.applicationGroup.name if plan.applicationGroup else ""
         errorMsg, ref_short_name = validate_reference(value, plan.runType, applicationGroupName)
@@ -710,7 +802,7 @@ def _validate_target_bed(input, selectedTemplate, planObj, selectedReference, is
         planObj.get_easObj().targetRegionBedFile = validated_targetBed
 
     else:
-        if input:
+        if input and input.strip().lower() != 'none':
             # for barcoded plan with user input
             bedFile = get_bedFile_for_reference(input, selectedReference, hotspot=False)
             if bedFile:
@@ -730,7 +822,7 @@ def _validate_hotspot_bed(input, selectedTemplate, planObj, selectedReference):
     validate hotSpot BED file case-insensitively with leading/trailing blanks in the input ignored
     """
     errorMsg = None
-    if input:
+    if input and input.strip().lower() != 'none':
         bedFile = get_bedFile_for_reference(input, selectedReference, hotspot=True)
         if bedFile:
             planObj.get_easObj().hotSpotRegionBedFile = bedFile
@@ -770,7 +862,11 @@ def _validate_sample_target_bed(input, runType, sampleReference, applicationGrou
     """
     bedFile = ""
     errorMsg = None
-    if input:
+    if input and input.strip().lower() != 'none':
+        if not sampleReference or sampleReference.strip().lower() == 'none':
+            errorMsg = "Invalid/Missing reference"
+            return errorMsg, bedFile
+
         bedFile = get_bedFile_for_reference(input, sampleReference, hotspot=False)
         if not bedFile:
             errorMsg = input + " not found."
@@ -792,7 +888,10 @@ def _validate_sample_hotspot_bed(input, sampleReference):
     """
     errorMsg = None
     bedFile = ""
-    if input:
+    if input and input.strip().lower() != 'none':
+        if not sampleReference or sampleReference.lower() == 'none':
+            errorMsg = "Invalid/Missing reference"
+            return errorMsg, bedFile
         bedFile = get_bedFile_for_reference(input, sampleReference, hotspot=True)
         if not bedFile:
             errorMsg = input + " not found."
@@ -1265,12 +1364,13 @@ def _parse_barcodedSamples_from_sample_csv(samples_contents, barcodeKitName, csv
         barcodedSampleList = []
         errorMsgDict = {}
         errorMsg = None
+        starting_index = 3
         for index, row in enumerate(samples_contents):
             sampleName = row.get(PlanCSVcolumns.COLUMN_SAMPLE_NAME, '').strip()
             if not sampleName:
                 continue
 
-            error_key = "row %d, %s" % (index+3, csvFile)
+            error_key = "%d" % (index + starting_index)
             barcodeName = row.get(PlanCSVcolumns.COLUMN_BARCODE, '').strip()
             if not barcodeName:
                 errorMsgDict[error_key] = "Barcode is required"
@@ -1299,14 +1399,14 @@ def _parse_barcodedSamples_from_sample_csv(samples_contents, barcodeKitName, csv
         return errorMsg, []
 
     if not barcodedSampleList:
-        errorMsg = "Required column is empty. At least one barcoded sample is required. "
+        errorMsg = json.dumps({starting_index: "Required column is empty. At least one barcoded sample is required. "})
     elif errorMsgDict:
         errorMsg = json.dumps(errorMsgDict)
 
     return errorMsg, barcodedSampleList
 
 
-def _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj):
+def _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj, selectedEAS):
     barcodedSampleJson = {}
     errorMsgDict = {}
     errorMsg = None
@@ -1436,6 +1536,7 @@ def _validate_barcodedSamples(barcodedSampleList, selectedTemplate, planObj):
                     'reference': sampleReference,
                     'targetRegionBedFile': targetRegionBedFile,
                     'hotSpotRegionBedFile': hotSpotRegionBedFile,
+                    'sseBedFile': selectedEAS.sseBedFile if targetRegionBedFile == selectedEAS.targetRegionBedFile else '',
                     'controlType': controlType
                 }
 

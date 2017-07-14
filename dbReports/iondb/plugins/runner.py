@@ -11,9 +11,6 @@ from django.utils.encoding import smart_str
 import logging
 import json
 
-# From pipeline package
-from ion.plugin.remote import callPluginXMLRPC
-
 from iondb.rundb import models
 from django.forms.models import model_to_dict
 from iondb.rundb.json_field import JSONEncoder

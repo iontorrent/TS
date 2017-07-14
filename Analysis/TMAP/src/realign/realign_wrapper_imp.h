@@ -5,8 +5,15 @@
 #include "realign_proxy.h"
 #include "Realign.h"
 
+typedef std::vector <CigarOp> CigarVec;
+// compensate for cigar discrepancies (in/dels at the alignment edges) 
+// that is possible result of realignment
+// (kind of a hack, implemented in outer layer to avoid meessing with original Realign code from bamrealignment
+void adjust_cigar (CigarVec& src, unsigned start_pos_shift, unsigned& new_ref_pos, unsigned& new_qry_pos, unsigned& new_ref_len, unsigned& new_qry_len);
+
 class RealignImp : public RealignProxy, protected Realigner
 {
+private:
     CLIPTYPE cliptype_;
 
     // buffers for reference and inverse query sequences
@@ -20,6 +27,9 @@ class RealignImp : public RealignProxy, protected Realigner
     unsigned clip_end_;
 
     unsigned len_roundup (unsigned len);
+
+
+
 
 protected:
     RealignImp ();
@@ -50,7 +60,10 @@ public:
                             unsigned cigar_sz,
                             uint32_t*& cigar_dest,
                             unsigned& cigar_dest_sz,
-                            int& new_pos,
+                            unsigned& new_ref_pos,
+                            unsigned& new_qry_pos,
+                            unsigned& new_ref_len,
+                            unsigned& new_qry_len,
                             bool& already_perfect,
                             bool& clip_failed,
                             bool& alignment_failed,

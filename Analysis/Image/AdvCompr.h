@@ -92,14 +92,15 @@ public:
 
 	AdvCompr(FILE_HANDLE _fd, short int *raw, int _w, int _h, int _nImgPts,
 			int _nUncompImgPts, int *_timestamps_in, int *_timestamps_out,
-			int _testUncompr, char *fname, char *options, int frameRate=15);
+			int _testUncompr, char *fname, char *options, int frameRate=15,
+			int RemoveRowNoise=1);
 	~AdvCompr();
 
 	/*  un-compress the image into memory */
 	int  UnCompress(int threadNum=-1);
 
 	/* compress the image to a file */
-	int  Compress(int threadNum=-1, uint32_t region=0, int targetAvg=8192);
+	int  Compress(int threadNum=-1, uint32_t region=0, int targetAvg=8192, int timeTransform=1);
 
     void SetDoCNC(bool value) { do_cnc = value; }
     static void SetGain(int region, int w, int h, float conv, uint16_t *gainPtr);
@@ -158,6 +159,15 @@ private:
     void SmoothMean();
     void ClearBeginningOfTrace();
     void PostClearFrontPorch();
+    static float *AllocateGainCorrection(uint32_t region, uint32_t len);
+    void findPinned();
+    void ApplyGain_FullChip_xtalkcorr(float xtalk_fraction, int w, int h, int npts,
+    		short unsigned int *raw);
+    void ApplyGain_FullChip_xtalkcorr_sumRows(float xtalk_fraction,
+    		int w, int h, int npts, short unsigned int *raw);
+
+    void NNSubtractComparatorSigs(int span);
+    void NNSubtractComparatorSigs_tn(int span);
 
 
 
@@ -168,7 +178,7 @@ private:
 	int nDfcCoeff;              // number of dfc coefficients
 
 	int nBasisVectors;          // sum of all the above coefficients
-	char *options;              // passed in options arguments
+	char *inp_options;              // passed in options arguments
 
 	short int *raw;             // raw image
 	float *trcs;                // raw image block loaded into floats, mean subtracted and zeroed
@@ -215,13 +225,17 @@ private:
 	AdvComprHeader_t hdr;
 	float tikhonov_k;
 	int spline_order;
+	int timeTransform; // set to 1 if timetransform is requested
+	int CorrectRowNoise;      // set to 1 for row noise correction
 
 	float *gainCorr; // set to the correct region
 	char *GblMemPtr;
 	uint32_t GblMemLen;
 	int ThreadNum;
-	short int *mMask;
+	float *mMask;
 	uint32_t mMask_len;
+    float *mCorr_sigs; // [cols*frames*4];
+    float *mCorr_noise; // [cols*frames*4];
 
 	uint32_t trcs_len;
 	uint32_t trcs_coeffs_len;
@@ -232,6 +246,8 @@ private:
 	uint32_t maxVals_len;
 	uint32_t bitsNeeded_len;
 	uint32_t sampleMatrix_len;
+    uint32_t mCorr_sigs_len;
+    uint32_t mCorr_noise_len;
 
 #define TARGET_SAMPLE_RATE 10
 #define TARGET_MIN_SAMPLES 800
@@ -249,8 +265,11 @@ private:
 		SETLEN(minVals,minVals_len,nv,float);
 		SETLEN(maxVals,maxVals_len,nv,float);
 		SETLEN(bitsNeeded,bitsNeeded_len,nv,int);
-		SETLEN(mMask,mMask_len,w*h,short int);
+		SETLEN(mMask,mMask_len,w*h,float);
 		SETLEN(timestamps_newfr,timestamps_newfr_len,npts*2,int);
+		SETLEN(mCorr_sigs,mCorr_sigs_len,2*h*npts,float);
+		SETLEN(mCorr_noise,mCorr_noise_len,2*h*npts,float);
+
 //		int sample_rate = TARGET_SAMPLE_RATE;//ntrcsL/TARGET_SAMPLES;
 //		if(sample_rate < 1)
 //			sample_rate=1;
@@ -307,8 +326,10 @@ private:
 		ALLOC_PTR(maxVals,maxVals_len,float);
 		ALLOC_PTR(bitsNeeded,bitsNeeded_len,int);
 		ALLOC_PTR(sampleMatrix,sampleMatrix_len,float);
-		ALLOC_PTR(mMask,mMask_len,short int);
+		ALLOC_PTR(mMask,mMask_len,float);
 		ALLOC_PTR(timestamps_newfr,timestamps_newfr_len, int);
+		ALLOC_PTR(mCorr_sigs,mCorr_sigs_len, float);
+		ALLOC_PTR(mCorr_noise,mCorr_noise_len, float);
 	}
 
     void FREE_STRUCTURES(bool doFree)
@@ -323,6 +344,8 @@ private:
 		bitsNeeded=NULL; bitsNeeded_len=0;
 		sampleMatrix=NULL; sampleMatrix_len=0;
 		mMask=NULL; mMask_len=0;
+		mCorr_sigs=NULL; mCorr_sigs_len=0;
+		mCorr_noise=NULL; mCorr_noise_len=0;
 //		printf("freeing thread %d doFree=%d\n",ThreadNum,doFree);
 
 		if(doFree || !(ThreadNum >= 0 && ThreadNum < ADVC_MAX_REGIONS))

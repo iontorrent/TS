@@ -31,6 +31,10 @@
 								<td>{{ plan.applicationGroup.description }}</td>
 							</tr>
 							<tr>
+								<td><b>Application Category:</b></td>
+								<td>{{ applicationCategoryDisplayedName }}</td>
+							</tr>
+							<tr>
 								<td><b>Sample Grouping:</b></td>
 								<td>{{ plan.sampleGrouping.displayedName }}</td>
 							</tr>
@@ -264,9 +268,9 @@
 				</div>
 			</div>
 		</div>
-		{% if not plan.isReusable %}
 		<div class="row-fluid">
 			<div class="span12">
+			{% if not plan.isReusable %}
 				<div class="summary-section">
 					<h3>
 						<a class='pull-right' data-toggle="collapse" href="#samples"><i class="openclose icon-minus"></i></a>
@@ -281,7 +285,7 @@
 								<td>{{ plan.sampleTubeLabel }}</td>
 							</tr>
 							<tr>
-								<td><b>Chip ID:</b></td>
+								<td><b>Chip Barcode:</b></td>
 								<td>{{ plan.experiment.chipBarcode }}</td>
 							</tr>
 							<tr>
@@ -318,13 +322,12 @@
 								<td colspan=3>{{ plan.sampleTubeLabel }}</td>
 							</tr>
 							<tr>
-								<td colspan=2><b>Chip ID:</b></td>
+								<td colspan=2><b>Chip Barcode:</b></td>
 								<td colspan=3>{{ plan.experiment.chipBarcode }}</td>
 							</tr>
 							<tr><td colspan=5></td></tr>
 							<tr>
-								<th>Barcode ID</th>
-								<th>Sequence</th>
+								<th>Barcode</th>
 								<th>Sample Name</th>
 								{% for key in bcsamples_columns %}
 									<th>{{key}}</th>
@@ -337,8 +340,7 @@
 							</tr>
 							{% for barcode in barcodes %}
 								<tr>
-									<td>{{ barcode.id_str }}</td>
-									<td>{{ barcode.sequence }}</td>
+									<td>{{ barcode.id_str }} ({{barcode.sequence}})</td>
 									<td>{{ barcodedSamples|bracket:barcode.id_str|bracket:'sample'|default:'' }}</td>
 									{% for key in bcsamples_columns %}
 										<td>{{ barcodedSamples|bracket:barcode.id_str|bracket:key|default:'' }}</td>
@@ -357,6 +359,7 @@
 						{% endif %}
 					</div>
 				</div>
+			{% endif %}
 				<div class="summary-section">
 					<h3>
 						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>
@@ -471,7 +474,6 @@
 				{% endif %}
 			</div>
 		</div>
-		{% endif %}
 	</div>
 	<div class="modal-footer">
 		<a href="#" class="btn" data-dismiss="modal">Close</a>

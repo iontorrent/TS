@@ -117,7 +117,7 @@ int main (int argc, const char *argv[])
         l_thread_time = ExecuteThreadedCalibrationTraining(calib_context);
 
         // Activate master linear model after every round of training
-        master_linear_model.CreateCalibrationModel(false);  // make linear model
+        master_linear_model.CreateCalibrationModel(false); // make linear model
         master_linear_model.SetModelGainsAndOffsets(); // expand for use in basecalling
 
         calibration_thread_time += l_thread_time;

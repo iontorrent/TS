@@ -338,7 +338,7 @@ public:
   }
 
   /** Look at trace data provided by Y and find when nuc hits the wells */
-  bool FindT0Time(float *Y, float *X, size_t size) {
+  bool FindT0Time(float *Y, float *X, size_t size, FILE* fdbg) {
     mX.resize(size);
     for (size_t i = 0; i < mX.size(); i++) {
       mX[i] = X[i];
@@ -356,6 +356,13 @@ public:
       t0.SetFirstRange(i - mWindowSize, i);
       t0.SetSecondRange(i+1, i + mWindowSize + 1);
       t0.FitModel(Y, &mX[0]);
+      if( fdbg ){
+          bool firstOk =  (t0.mHingeModel.GetFirst().GetSlope() >= mFirstSlopeRange[0] &&
+                            t0.mHingeModel.GetFirst().GetSlope() <= mFirstSlopeRange[1]);
+          bool secondOk =  (t0.mHingeModel.GetSecond().GetSlope() >= mSecondSlopeRange[0] &&
+                             t0.mHingeModel.GetSecond().GetSlope() <= mSecondSlopeRange[1]);
+        fprintf(fdbg, "%g %g %g %g %g %d %d\n", t0.GetT0Est()/66., 66.*t0.mHingeModel.GetFirst().GetSlope(), 66.*t0.mHingeModel.GetSecond().GetSlope(), t0.GetSsqDiff(), t0.GetSsqRatio(), firstOk, secondOk );
+      }
       if (first) {
         mBestT0 = t0;
         maxSsqDiff = 0.0;
@@ -371,6 +378,8 @@ public:
         }
       }
     }
+    if( fdbg )
+        fprintf(fdbg, "%g %g %g %g %g\n", mBestT0.GetT0Est()/66., 66.*mBestT0.mHingeModel.GetFirst().GetSlope(), 66.*mBestT0.mHingeModel.GetSecond().GetSlope(), mBestT0.GetSsqDiff(), mBestT0.GetSsqRatio() );
     return found;
   }
 

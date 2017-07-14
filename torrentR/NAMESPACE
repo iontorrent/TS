@@ -89,5 +89,6 @@ export(
   readIonBamStack,
   normalizeRead,
   flowAlignment,
-  fitPhasingBurst
+  fitPhasingBurst,
+  findAdapter
 )

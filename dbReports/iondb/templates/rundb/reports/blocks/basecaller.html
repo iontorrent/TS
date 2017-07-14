@@ -16,7 +16,11 @@
         <a data-toggle="modal" class="report-metric-visual showImg" href="#baseCallerModal">
             <div id="usable_sequence" data-usablesequence="{{usable_sequence}}"></div>  
             <h2><abbr title="Ion Sphere Particles">ISP</abbr> Summary</h2>
+           {% if basecaller.isToShowClonality %}
             <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram.png" /> <i class="icon-zoom-in"></i>
+		   {% else %}
+            <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram_basic.png" /> <i class="icon-zoom-in"></i>
+		   {% endif %}		   
         </a>
     {% endif %}
     {% if beadsummary %}
@@ -26,7 +30,13 @@
                 <h3><abbr title="Ion Sphere Particles">ISP</abbr> Summary</h3>
             </div>
             <div class="modal-body" style="max-height: 500px;" id="basecaller_body">
+            
+                {% if basecaller.isToShowClonality %}
                 <img class="pull-left" style="height: 335px;" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram.png"><br class="hide" />
+		   		{% else %}
+                <img class="pull-left" style="height: 335px;" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram_basic.png"><br class="hide" />
+		   		{% endif %}		   
+
                 <strong>Chip well details</strong>
                 <table class="table table-condensed table-striped" style="height: auto; width: 330px; align: center;">
                     <thead>
@@ -71,11 +81,13 @@
                     </thead>
                     <tbody>
                         {% if basecaller %}
+                        {% if basecaller.isToShowClonality %}
                         <tr>
                             <td rel="tooltip" data-placement="left" title="More than one template sequence per ISP. (this / Library ISPs)">Filtered: Polyclonal</td>
                             <td style="text-align: right;">{{ basecaller.polyclonal|intcomma }}</td>
                             <td style="text-align: right;">{{ basecaller.p_polyclonal }}</td>
                         </tr>
+                        {% endif %}
                         <tr>
                             <td rel="tooltip" data-placement="left" title="Low quality. (this / Library ISPs)">Filtered: Low Quality</td>
                             <td style="text-align: right;">{{ basecaller.low_quality|intcomma }}</td>

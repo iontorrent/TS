@@ -312,29 +312,8 @@ void padded_alignment(const vector<BamTools::CigarOp>& cig, string& qDNA, string
     pad_match.reserve(tDNA.length());
     string::iterator tdna_itr = tDNA.begin();
     unsigned int tot = 0;
-    //find out if the first cigar op could be soft clipped or not
-    bool is_three_prime_soft_clipped = false;
-
 
     for (vector<BamTools::CigarOp>::const_iterator i = cig.begin(); i!=cig.end(); ++i) {
-        //i.op();		i.len();
-        if (isReversed) {
-            if (tot > ( cig.size() - 3) ){
-                if (i->Type == 'S')
-                    is_three_prime_soft_clipped = true;
-                else
-                    is_three_prime_soft_clipped = false;
-
-            }
-        } else {
-            if (tot < 2) {
-                if (i->Type == 'S')
-                    is_three_prime_soft_clipped = true;
-                else
-                    is_three_prime_soft_clipped = false;
-
-            }
-        }
 
         if (i->Type == 'I' ) {
             pad_target.append(i->Length, '-');

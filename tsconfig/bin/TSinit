@@ -24,6 +24,8 @@ function print_help()
     echo -e "\t--test                        No changes are made to the system, commands are printed"
     echo -e "\t--help, -h                    Prints command line args"
     echo -e "\t--version                     Prints version"
+#    Hidden feature
+#    echo -e "\t--force                       Skips interactive prompts"
     echo
     echo -e "\tLegacy Options:"
     echo -e "\t--proton-config               Create /results and /rawdata partition on /dev/sdb"
@@ -74,7 +76,7 @@ function copy_and_mount()
 {
     deviceid=$1
     mtpt=$2
-    
+
     if [ ! -d $mtpt ]; then
         #Directory does not exist so just create it as the mountpoint
         #This is a degenerate case however...
@@ -119,7 +121,7 @@ function exec_cmd()
 }
 
 #--------------------------------------------------------------
-# Add UUID of LV to fstab. 
+# Add UUID of LV to fstab.
 #--------------------------------------------------------------
 function add_to_fstab()
 {
@@ -127,13 +129,13 @@ function add_to_fstab()
     mnt_pt=$2
     filename=/etc/fstab
     fs=$(blkid -o value -s TYPE ${dev_part})
-    
+
     if ! grep -q "$dev_part" $filename; then
         echo -e "${dev_part}\t${mnt_pt}\t$fs\tdefaults\t0\t0" >> $filename
     else
         echo "Device $dev_part already exists in $filename!"
     fi
-    
+
 
 #    dev_UUID=$(blkid -o value -s UUID ${dev_part})
 #    if ! grep -q "$dev_UUID" $filename; then
@@ -150,7 +152,7 @@ function edit_swap_fstab()
     #Remove any lines containing the string 'swap'
     #sed -i '/swap/d' $filename
     echo -e "$dev_part\tnone\tswap\tsw\t0\t0" >> $filename
-    
+
 #    fs=$(blkid -o value -s TYPE ${dev_part})
 #    dev_UUID=$(blkid -o value -s UUID ${dev_part})
 #    echo -e "UUID=$dev_UUID\tnone\tswap\tsw\t0\t0" >> $filename
@@ -202,6 +204,7 @@ partid=1
 DELETE_DATA=true
 NOMOUNT=False
 DEBUG=false
+NOPROMPT=False
 
 #---                                    ---#
 #--- Command Line Options Parsing       ---#
@@ -282,6 +285,10 @@ while [ $# != 0 ]; do
             fi
 	    exit 0
         ;;
+        '--force')
+            echo "Skipping interactive prompts"
+            NOPROMPT=True
+        ;;
         *)
         echo "Unknown option: $1.  Exiting"
         echo "Use TSinit --help for options."
@@ -345,9 +352,9 @@ echo -e "\nHardware Type is $hardware_name\n"
 
 if $LEGACY; then
     if [ $SETUP_RESULTS_PARTITION = true -a $SETUP_RAWDATA_PARTITION = true ]; then
-    
-        
-    
+
+
+
         #
         # Sets up a new partition on dedicated hardware for Torrent Server
         #
@@ -358,31 +365,33 @@ if $LEGACY; then
         #   - Delete all files in /results on /dev/sda1
         #   - mount /dev/sdb1 at /results
         #   (See jira issue TS-3559 for more details)
-   
-        # Get user confirmation
+
         echo
         echo "This will create two partitions on ${deviceid} and format and mount"
         echo "them at $results_mtpt and $rawdata_mtpt mountpoints."
         echo "The contents of the current $results_mtpt will migrate to the new partition."
         echo
-        echo "WARNING!  Any data on partition ${deviceid} will be deleted"
-        echo "Continue only if you are sure you want to reformat ${deviceid}"
-        read -p"Type yes to continue: " usrin
-        if [ "${usrin,,}" != "yes" ]; then
-            exit
+        # Get user confirmation
+        if [[ "$NOPROMPT" = False ]]; then
+            echo "WARNING!  Any data on partition ${deviceid} will be deleted"
+            echo "Continue only if you are sure you want to reformat ${deviceid}"
+            read -p"Type yes to continue: " usrin
+            if [ "${usrin,,}" != "yes" ]; then
+                exit
+            fi
         fi
-    
+
         if $DEBUG; then
             echo "Bailing out now since --test is not enabled for legacy mode. Apologies."
             exit 0
         fi
-        
+
         # Create GPT partition table and two primary partitions
-        parted ${deviceid} mklabel gpt
-        parted ${deviceid} mkpart primary 0% 40%
-        parted ${deviceid} mkpart primary 40% 100%
-    
-    
+        parted -s ${deviceid} mklabel gpt
+        parted -s ${deviceid} mkpart primary 0% 40%
+        parted -s ${deviceid} mkpart primary 40% 100%
+
+
         # Format the partition with ext4 filesystem
         # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
         if ! mkfs.ext4 ${deviceid}1; then
@@ -393,13 +402,13 @@ if $LEGACY; then
             echo "there was an error in mkfs.ext4 formatting ${deviceid}2"
             exit 1
         fi
-    
+
         # Prepare raw data directory
         mkdir -p $rawdata_mtpt
         chmod 777 $rawdata_mtpt
         mount ${deviceid}2 $rawdata_mtpt
         echo "${deviceid}2 has been mounted at $rawdata_mtpt"
-    
+
         # Move contents of current /results directory to new partition
         if [ -d $results_mtpt ]; then
             migrate_contents ${deviceid}1 $results_mtpt
@@ -407,10 +416,10 @@ if $LEGACY; then
             mkdir -p $results_mtpt
             chmod 777 $results_mtpt
         fi
-    
+
         mount ${deviceid}1 $results_mtpt
         echo "${deviceid}1 has been mounted at $results_mtpt"
-    
+
         #Edit /etc/fstab to automount at boot
         uuid1=$(get_uuid ${deviceid}1)
         if ! grep $uuid1 /etc/fstab; then
@@ -420,12 +429,12 @@ if $LEGACY; then
         if ! grep $uuid2 /etc/fstab; then
             echo -e "$uuid2\t${rawdata_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
         fi
-    
+
     elif [ $SETUP_RESULTS_PARTITION = true -a $SETUP_RAWDATA_PARTITION = false ]; then
-    
+
         # Must have root permissions to continue
         needs_root
-    
+
         #
         # Sets up a new partition on dedicated hardware for Torrent Server
         #
@@ -443,29 +452,31 @@ if $LEGACY; then
         echo "it at $results_mtpt mountpoint.  The contents of the current $results_mtpt will"
         echo "migrate to the new partition."
         echo
-        echo "WARNING!  Any data on partition ${deviceid} will be deleted"
-        echo "Continue only if you are sure you want to reformat ${deviceid}"
-        read -p"Type yes to continue: " usrin
-        if [ "${usrin,,}" != "yes" ]; then
-            exit
+        if [[ "$NOPROMPT" = False ]]; then
+            echo "WARNING!  Any data on partition ${deviceid} will be deleted"
+            echo "Continue only if you are sure you want to reformat ${deviceid}"
+            read -p"Type yes to continue: " usrin
+            if [ "${usrin,,}" != "yes" ]; then
+                exit
+            fi
         fi
-    
+
         if $DEBUG; then
             echo "Bailing out now since --test is not enabled for legacy mode. Apologies."
             exit 0
         fi
-    
+
         # Create GPT partition table and one primary partition
-        parted ${deviceid} mklabel gpt
-        parted ${deviceid} mkpart primary 0% 100%
-    
+        parted -s ${deviceid} mklabel gpt
+        parted -s ${deviceid} mkpart primary 0% 100%
+
         # Format the partition with ext4 filesystem
         # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
         if ! mkfs.ext4 ${deviceid}1; then
             echo "there was an error in mkfs.ext4 formatting ${deviceid}1 "
             exit 1
         fi
-    
+
         # Move contents of current /results directory to new partition
         if [ -d $results_mtpt ]; then
             migrate_contents ${deviceid}1 $results_mtpt
@@ -475,7 +486,7 @@ if $LEGACY; then
         fi
         mount ${deviceid}1 $results_mtpt
         echo "${deviceid}1 has been mounted at $results_mtpt"
-    
+
         #Edit /etc/fstab to automount at boot
         uuid1=$(get_uuid ${deviceid}1)
         if ! grep $uuid1 /etc/fstab; then
@@ -483,9 +494,6 @@ if $LEGACY; then
         fi
     fi
 else
-    #------------------------
-    # Get user confirmation
-    #------------------------
     echo
     echo "This will create a single partition on ${deviceid}."
     echo "ALL EXISTING DATA WILL BE LOST!"
@@ -495,22 +503,27 @@ else
         echo "The current contents of /results and /home will be copied to the new volumes"
     fi
     echo
-    echo "WARNING!  Any data on partition ${deviceid} will be deleted"
-    echo "Continue only if you are sure you want to reformat ${deviceid}"
-    if [ $NOMOUNT == False ]; then
-        echo "and migrate current /results and /home to the new partitions."
+    #------------------------
+    # Get user confirmation
+    #------------------------
+    if [[ "$NOPROMPT" = False ]]; then
+        echo "WARNING!  Any data on partition ${deviceid} will be deleted"
+        echo "Continue only if you are sure you want to reformat ${deviceid}"
+        if [ $NOMOUNT == False ]; then
+            echo "and migrate current /results and /home to the new partitions."
+        fi
+        read -p"Type yes to continue: " usrin
+        if [ "${usrin,,}" != "yes" ]; then
+            exit
+        fi
     fi
-    read -p"Type yes to continue: " usrin
-    if [ "${usrin,,}" != "yes" ]; then
-        exit
-    fi
-    
+
     #--------------------------------------------------------------------------
     #If partition has been formatted, need to clean it up first
     #--------------------------------------------------------------------------
     cmd="cleanup_partition ${deviceid}${partid}"
     exec_cmd "$cmd"
-    
+
     #------------------------
     # Create partition table
     #------------------------
@@ -526,7 +539,7 @@ else
     #------------------------
     cmd="parted -s -a optimal ${deviceid} set 1 LVM on"
     exec_cmd "$cmd"
-    
+
     #------------------------
     #LVM configuration
     #------------------------
@@ -542,7 +555,7 @@ else
     exec_cmd "$cmd"
     cmd="lvcreate --extents 100%FREE --name results data"
     exec_cmd "$cmd"
-    
+
     #-------------------
     #Create filesystems
     #-------------------
@@ -554,7 +567,7 @@ else
     exec_cmd "$cmd"
     cmd="mkswap /dev/data/swap"
     exec_cmd "$cmd"
-    
+
     #---------------------------------------------------
     # Following commands only should run when executed from
     # within the TS environment.
@@ -569,7 +582,7 @@ else
         exec_cmd "$cmd"
         cmd="hack_tmp_permissions"
         exec_cmd "$cmd"
-        
+
         #---------------------------------------------------
         #Copy existing /results, /home to new partitions
         #---------------------------------------------------
@@ -577,7 +590,7 @@ else
         exec_cmd "$cmd"
         cmd="copy_and_mount /dev/data/home $home_mtpt"
         exec_cmd "$cmd"
-        
+
         #---------------------------------------------------
         # Edit /etc/fstab
         #---------------------------------------------------
@@ -590,7 +603,7 @@ else
         cmd="edit_swap_fstab /dev/data/swap"
         exec_cmd "$cmd"
     fi
-    
+
     #---------------------------------------------------
     # We are finished.  Exit banner
     #---------------------------------------------------

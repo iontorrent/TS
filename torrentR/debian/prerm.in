@@ -7,50 +7,16 @@ case "$1" in
     remove)
     LIBLIST=(\
         annotate
-        AnnotationDbi
-        Biobase
-        BiocGenerics
-        Biostrings
-        bitops
         caTools
-        colorspace
-        DBI
-        dichromat
-        digest
-        ellipse
-        fields
-        gdata
-        geneplotter
-        GenomicRanges
-        getopt
-        ggplot2
         gplots
-        gtools
-        hdf5
-        Hmisc
-        hwriter
-        IRanges
-        labeling
-        latticeExtra
-        memoise
-        munsell
-        optparse
-        plyr
-        proto
-        rbamtools
-        RColorBrewer
-        Rcpp
-        RCurl
-        reshape2
-        rjson
-        ROCR
-        Rsamtools
-        RSQLite
-        scales
-        ShortRead
         spam
-        stringr
-        xtable
+        maps
+        fields
+        ellipse
+        geneplotter
+        Hmisc
+        rbamtools
+        optparse
         zlibbioc
     )
     for LIB in ${LIBLIST[@]}; do

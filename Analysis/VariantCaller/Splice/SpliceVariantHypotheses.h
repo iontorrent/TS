@@ -25,7 +25,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
                         vector<bool> & same_as_null_hypothesis, bool & changed_alignment, const InputStructures &global_context,
-                        const ReferenceReader &ref_reader, int chr_idx);
+                        const ReferenceReader &ref_reader);
 
 
 bool SpliceAddVariantAlleles(const Alignment &current_read, const string& pretty_alignment,

@@ -63,7 +63,7 @@ public:
   void SetMinFirstHingeSlope(float minSlope) { mMinFirstHingeSlope = minSlope; }
   void SetMaxSecondHingeSlope(float maxSlope) { mMaxSecondHingeSlope = maxSlope; }
   void SetMinSecondHingeSlope(float minSlope) { mMinSecondHingeSlope = minSlope; }
-
+  void SetDebugLevel( int debugLevel ) { outputDebug = debugLevel; }
   void SetMask(Mask *mask) { mMask = mask; }
 
   /** Setup our t0 calculator. */
@@ -102,7 +102,7 @@ public:
   /** Algorithm to fit t0 for this trace using a two piece linear model. */
   static void CalcT0(T0Finder &finder, std::vector<float> &trace, 
                      std::vector<float> &timestamps,
-                     T0Prior &prior, float &t0) {
+                     T0Prior &prior, float &t0, FILE* fdbg=0) {
     /* Convert the t0 prior in time into frames. */
     std::vector<float>::iterator tstart;
     int frameEnd = trace.size();
@@ -118,7 +118,7 @@ public:
       frameStart = frame - 1;
     }
     finder.SetSearchRange(frameStart, frameEnd);
-    bool ok = finder.FindT0Time(&trace[0], &timestamps[0], trace.size());
+    bool ok = finder.FindT0Time(&trace[0], &timestamps[0], trace.size(), fdbg);
     if (ok) {
       t0 = finder.GetT0Est();
       t0 = (prior.mT0Weight * prior.mT0Prior) + t0;
@@ -174,18 +174,27 @@ public:
     int tooFew = 0;
     int enough = 0;
     for (size_t bIx = 0; bIx < numBin; bIx++) {
-      std::pair<size_t, std::vector<float> > &bin = mRegionSum.GetItem(bIx);
-      if (bin.first < 20) {
-        tooFew++;
-        continue;
-      }
-      enough++;
-      for (size_t fIx = 0; fIx < bin.second.size(); fIx++) {
-        bin.second[fIx] = bin.second[fIx] / bin.first;
-      }
-      T0Prior &prior = mT0Prior.GetItem(bIx);
-      float &t0 = mT0.GetItem(bIx);
-      T0Calc::CalcT0(mFinder, bin.second, mTimeStamps, prior, t0);
+        FILE* fdbg = 0;
+        if( outputDebug>4){
+            char fname[1024];
+            sprintf(fname,"bin_%d.dbg",(int)bIx);
+            FILE* fdbg = fopen(fname,"w");
+        }
+        std::pair<size_t, std::vector<float> > &bin = mRegionSum.GetItem(bIx);
+        if (bin.first < 20) {
+            tooFew++;
+            continue;
+        }
+        enough++;
+        for (size_t fIx = 0; fIx < bin.second.size(); fIx++) {
+            bin.second[fIx] = bin.second[fIx] / bin.first;
+        }
+        T0Prior &prior = mT0Prior.GetItem(bIx);
+        float &t0 = mT0.GetItem(bIx);
+        T0Calc::CalcT0(mFinder, bin.second, mTimeStamps, prior, t0, fdbg);
+
+        if(fdbg)
+            fclose(fdbg);
     }
     //    std::cout << "T0 Fitting: " << enough << " enough " << tooFew << " too few good wells." << std::endl;
   }
@@ -677,6 +686,7 @@ private:
   float mMinSdThresh;
   int mPixHigh;
   int mPixLow;
+  int outputDebug;
 };
 
 

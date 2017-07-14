@@ -36,19 +36,19 @@ TauBFromLinearModelUsingTauE<-function(
   return(val)
 }
 
-CheckIfFittingTauE <- function(logFile) {
+CheckIfFittingTauE <- function(logFile, nrLinesToParse=500) {
   fitTauE = FALSE
   if (file.exists(logFile)){
-    tmp = readLines(logFile,n=100)
+    tmp = readLines(logFile,nrLinesToParse)
     for (i in 1:length(tmp)){
-      if ((length(grep("Command line",tmp[i])) >0 ) & (length(grep("--fitting-taue on",tmp[i])) >0)){
+      if ((length(grep("Command line",tmp[i])) >0 ) & (length(grep("--fitting-taue true",tmp[i])) >0)){
         fitTauE = TRUE
         break
       }
     }
     return (fitTauE)
   }
-  else 
+  else
     print(sprintf("%s could not be found",logFile))
 }
-    
+

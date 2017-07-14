@@ -17,21 +17,15 @@
                         <p class="planCountError" id="planCountError">
                         </p>
                         <input value="{{selectedPlanTemplate.pk}}"  id="selectedTemplateId" name="selectedTemplateId" type="hidden"/>
+                        {% if not is_barcoded %}
+                            <label><i>Note: Single CSV file with sample and plan will be downloaded.</i></label>
+                            <input type="hidden" id="uploadtype_single" name="uploadtype_select" value="single">
+                        {% else %}
+                            <i>Note: ZIP archive of multiple samples and plan CSV files will be downloaded </i>
+                            <input type="hidden" id="uploadtype_multi" name="uploadtype_select" value="multi">
+                        {% endif %}
+                     </div>
                     </div>
-                </div>
-                <div class="control-group" {% if not is_barcoded %}style="display: none;"{% endif %}>
-                    <label for="uploadtype" class="control-label">Barcoded CSV file format</label>
-                    <div class="controls">
-                        <label for="uploadtype_single" class="checkbox inline" rel="tooltip" title='Single CSV file with sample columns'>
-                            <input type="radio" id="uploadtype_single" name="uploadtype_select" value="single" checked >
-                            Single CSV File
-                        </label>
-                        <label for="uploadtype_multi" class="checkbox inline" rel="tooltip" title='ZIP archive of multiple samples and plan CSV files'>
-                            <input type="radio" id="uploadtype_multi" name="uploadtype_select" value="multi" >
-                            Multiple CSV Files
-                        </label>
-                    </div>
-                </div>
             </fieldset>
         </form>
         <div class="bump">

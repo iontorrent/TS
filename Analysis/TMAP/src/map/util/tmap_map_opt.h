@@ -113,6 +113,23 @@ enum {
 };
 
 /*!
+  The alignment sanity check modes
+  */
+enum {
+    TMAP_MAP_SANITY_NONE                          = 0, /*!< do not perform sanity check */
+    TMAP_MAP_SANITY_WARN_CONTENT                  = 1, /*!< perform content checks, print warning to stdout; do not check alignment consistency or scores */
+    TMAP_MAP_SANITY_WARN_CONTENT_ALIGN            = 2, /*!< perform content and alignment compatibility checks, print warning to stdout; do not check alignment scores */
+    TMAP_MAP_SANITY_WARN_ALL                      = 3, /*!< perform all checks, print warnings to stdout */
+    TMAP_MAP_SANITY_ERR_CONTENT                   = 4, /*!< perform content checks, exit on error */
+    TMAP_MAP_SANITY_ERR_CONTENT_WARN_ALIGN        = 5, /*!< perform content checks, exit on error; warn if processed alignment is incompatible with raw one */
+    TMAP_MAP_SANITY_ERR_CONTENT_WARN_ALIGN_SCORE  = 6, /*!< perform content checks, exit on error; warn if processed alignment is incompatible with raw one or if score is suspicious */
+    TMAP_MAP_SANITY_ERR_CONTENT_ALIGN             = 7, /*!< perform content and alignment compatibility checks, exit on error */
+    TMAP_MAP_SANITY_ERR_CONTENT_ALIGN_WARN_SCORE  = 8, /*!< perform content and alignment compatibility checks, exit on error; warn if score is suspicious */
+    TMAP_MAP_SANITY_ERR_ALL                       = 9, /*!< perform all checks, exit if any of them fails */
+    TMAP_MAP_SANITY_LASTVAL                       = 9
+};
+
+/*!
   The various option types
   */
 enum {
@@ -218,6 +235,8 @@ typedef struct __tmap_map_opt_t {
     int32_t min_anchor_large_indel_rescue; /*!< minimum size of anchor needed to open one large gap*/
     int32_t amplicon_overrun; /*!< maximum allowed alignment to overrun amplicon edge in one large indel alignment*/
     int32_t max_adapter_bases_for_soft_clipping; /*!< specifies to perform 3' soft-clipping (via -g) if at most this # of adapter bases were found (ZB tag) (--max-adapter-bases-for-soft-clipping) */ 
+    int32_t end_repair_5_prime_softclip; /*!< end-repair is allowed to introduce 5' softclip */
+
     key_t shm_key;  /*!< the shared memory key (-k,--shared-memory-key) */
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
     double sample_reads;  /*!< sample the reads at this fraction (-x,--sample-reads) */
@@ -241,12 +260,14 @@ typedef struct __tmap_map_opt_t {
     double context_gip_score; /*!< context realignment gap opening score */
     double context_gep_score; /*!< context realignment gap extension score */
     int32_t context_extra_bandwidth; /*!< context realignment DP matrix extra band width */
-    int32_t context_debug_log; /*!< output detailed log of alignment operation into log */
+    int32_t context_debug_log; /*!< output detailed log of context alignment (scoring matrix) into a log file (designated by realign_log)*/
 
     // DVK: tandem repeat end-clipping
     int32_t do_repeat_clip; /*!< clip tandem repeats at the alignment ends */
     // int32_t repclip_overlap; /*! repeat clipping is not performed if read overlaps amplicon end by this number of bases (or more) */
     int32_t repclip_continuation; /*! repeat clipping performed only if repeat continues past the end of the read into the reference by at least 1 period */
+
+    int32_t cigar_sanity_check;
 
     // DVK: alignment length filtering
     int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */

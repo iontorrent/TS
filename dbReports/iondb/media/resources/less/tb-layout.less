@@ -21,12 +21,12 @@ html, body {
   [class*="no-margin-left"] {
     margin-left: 0px;
   }
-  .logo {
-    padding-top: 15px;
-  }
   .nav-tabs {
-    margin-top: 8px;
+    margin-top: 0px;
     margin-bottom: -1px;
+    ul {
+      margin-top: -1px;
+    }
     li {
       min-width: (@gridColumnWidth *2) + 5;
       margin-right: 4px;
@@ -105,13 +105,20 @@ html, body {
   height: 100%;
   margin: 0 auto -@footerHeight; //must be negative value of sticky footer
 }
-        
+
 .main {
-  .sticky-footer-wrapper; 
+  .sticky-footer-wrapper;
   padding-top: 15px;
   padding-bottom: 40px;
   z-index: 1;
+  &.no-padding {
+    padding-top: 0;
+    .alert {
+      margin-top: 15px;
+    }
+  }
 }
+
 .report {
   padding-top: 15px;
 } 
@@ -150,12 +157,8 @@ section {
   // width: 1200px;
 //}
 .content {
-  padding: 12px;
   margin-bottom: 20px;
   background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.1);
   .row {
     
   }

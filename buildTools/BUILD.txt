@@ -51,7 +51,6 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
         libarmadillo-dev \
         libboost-serialization-dev \
         libncurses-dev \
-        libbz2-dev
         libbz2-dev \
         libcurl4-openssl-dev \
         libncurses-dev \

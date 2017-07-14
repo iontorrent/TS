@@ -11,7 +11,7 @@
   script: "files/gridengine.preseed {{ groups.gridengine_master[0] }}"
 
 - name: Install GridEngine APT packages
-  apt: pkg={{item}} state=present force=yes
+  apt: pkg={{ item }} state=present force=yes
   with_items:
     - gridengine-client
     - gridengine-exec
@@ -36,13 +36,13 @@
 # Copy gridengine scripts
 # --------------------------------
 - name: Create /usr/share/ion-tsconfig/gridengine-scripts directory
-  file: dest={{SCRIPT_PATH}} state=directory mode=755 owner=root
+  file: dest={{ SCRIPT_PATH }} state=directory mode=755 owner=root
 
 - name: Copy gridengine scripts
-  copy: src={{item['name']}} dest={{item['path']}} force=yes mode=0755
+  copy: src={{ item['name'] }} dest={{ item['path'] }} force=yes mode=0755
   with_items:
-    - { 'name':'{{LOCAL_EPILOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{EPILOG_SCRIPT}}' }
-    - { 'name':'{{LOCAL_PROLOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{PROLOG_SCRIPT}}' }
+    - { 'name':'{{ LOCAL_EPILOG_SCRIPT }}', 'path':'{{ SCRIPT_PATH }}/{{ EPILOG_SCRIPT }}' }
+    - { 'name':'{{ LOCAL_PROLOG_SCRIPT }}', 'path':'{{ SCRIPT_PATH }}/{{ PROLOG_SCRIPT }}' }
 
 # --------------------------------
 # Add node as an execution host
@@ -51,23 +51,27 @@
   template: src=../templates/host.j2 dest=/tmp/host.conf
 
 - name: Add this node as an execution host
-  shell: bash -lc "if ! qconf -sel | egrep -q '(localhost|{{ansible_hostname}})'; then qconf -Ae /tmp/host.conf;fi"
+  shell: bash -lc "if ! qconf -sel | egrep -q '(localhost|{{ ansible_hostname }})'; then qconf -Ae /tmp/host.conf;fi"
+  register: result
+  until: result.rc == 0
+  retries: 5
+  delay: 10
 
 # --------------------------------
 # Add node to all queues
 # --------------------------------
 - name: add compute hosts to queues
-  shell: bash -lc 'qconf -aattr queue hostlist {{ansible_hostname}} {{item.name}}'
+  shell: bash -lc 'qconf -aattr queue hostlist {{ ansible_hostname }} {{ item.name }}'
   with_items:
-    - '{{queues}}'
+    - '{{ queues }}'
 
 # --------------------------------
 # set number of slots for queues
 # --------------------------------
 - name: Modify number of slots per queue
-  shell: bash -lc 'qconf -rattr queue slots [{{ansible_hostname}}={{item['slots']}}] {{item['name']}}'
+  shell: bash -lc 'qconf -rattr queue slots [{{ ansible_hostname }}={{ item['slots'] }}] {{ item['name'] }}'
   with_items:
-    - "{{queues}}"
+    - "{{ queues }}"
 
 # --------------------------------
 #    set_sge_open_files

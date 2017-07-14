@@ -35,7 +35,9 @@ public:
     float germline_log_prior_normalization; // for comparing LL across different priors
     vector<float> prior_frequency_weight;
 
-    float data_reliability;
+    // Historically FreqMaster stored and used typical_prob = (1.0f - outlier_prob).
+    // It can cause singular outlier_prob (i.e. outlier_prob = 0.0f) which is calculated by outlier_prob from outlier_prob = (1.0f - typical_prob) in the downstream process if typical_prob is too close to 1.
+    float outlier_prob;
     FreqMaster();
     void SetHypFreq(const vector<float> & local_freq);
     void SetPriorStrength(const vector<float> & local_freq);
@@ -58,45 +60,53 @@ public:
   // if I am doing one allele vs another for genotyping
   vector<int> freq_pair;
   float freq_pair_weight;
-  bool scan_done;
+  bool scan_pair_done;
+  bool scan_ref_done;
   unsigned int min_detail_level_for_fast_scan;
+  unsigned int max_detail_level;
+  int DEBUG;
 
   ScanSpace();
   float LogDefiniteIntegral(float alpha, float beta);
   float FindMaxFrequency();
   void UpdatePairedFrequency(vector <float > &tmp_freq, FreqMaster &base_clustering, float local_freq);
   unsigned int ResizeToMatch(ShortStack &total_theory, unsigned max_detail_level = 0);
-  void  DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref, int max_detail_level = 0);
-  void SetDebug(bool debug){ debug_ = debug;};
+  void  DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref);
+  void SetTargetMinAlleleFreq(const ExtendParameters& my_param, const vector<VariantSpecificParams>& variant_specific_params);
 
 private:
   //  Calculate the posterior for just one hyp frequency
   void DoPosteriorFrequencyScanOneHypFreq_(unsigned int i_eval);
+  // Scan all frequencies
+  void DoFullScan_();
+  // Update max_log_posterior_scanned_ and argmax_log_posterior_scanned_
+  void UpdateMaxPosteior_(unsigned int i_eval);
   // functions for fast scan
   void DoFastScan_();
   void DoFineScan_(unsigned int i_left, unsigned int i_right, unsigned int i_middle);
   void DoInterpolation_();
-  void LinearInterpolation_(unsigned int i_1, unsigned int i_2, unsigned int i_intp);
   unsigned int FibonacciSearchMax_(unsigned int i_left, unsigned int i_right);
   unsigned int FibonacciSearchMax_(unsigned int i_left, unsigned int i_right, unsigned int i_middle);
 
   // variables for fast scan
-  vector<bool> is_scanned_;
+  vector<bool> is_scanned_; // is_scanned_[i_eval] = Have I scanned for log_posterior_by_frequency[i_eval]?
+  vector<float> scan_more_frequencies_;
   unsigned int argmax_log_posterior_scanned_;
   float max_log_posterior_scanned_;
-  float coarse_freq_resolution_;
-  unsigned int num_of_fibonacci_blocks;
-  float fine_log_posterior_cutoff_gap_;
-  float fine_freq_search_increment_;
-  float min_fine_log_posterior_gap_;
-  float fine_scan_penalty_order_;
+
+  // hard coded parameters for fast scan
+  const static unsigned int kNumOfFibonacciBlocks = 3; // The maximums for Hom, Het, Hom
+  const static constexpr float kCoarseFreqResolution_ = 0.01f;
+  const static constexpr float kFineLogPosteriorCutoffGap_ = -log(0.00001f);
+  const static constexpr float kFineFreqSearchIncrement_ = 0.02f;
+  const static constexpr float kMinFineLogPosteriorGap_ = 0.01f;
+  const static constexpr float kFineScanPenaltyOrder_ = 1.5f;
 
   // pointers for DoPosteriorFrequencyScanOneHypFreq_
   ShortStack *ptr_total_theory_ = NULL;
   FreqMaster *ptr_base_clustering_ = NULL;
   int *ptr_strand_key_ = NULL;
   bool *ptr_scan_ref_ = NULL;
-  bool debug_ = false;
 };
 
 class PosteriorInference{
@@ -109,6 +119,8 @@ class PosteriorInference{
   FreqMaster clustering;
 
   float params_ll; // likelihood offset for fitted parameters
+
+  int DEBUG;
 
   PosteriorInference();
 
@@ -125,10 +137,6 @@ class PosteriorInference{
   float ReturnMaxLL(){ return(ref_vs_all.max_ll+params_ll);};
   float ReturnJustLL(){return(ref_vs_all.max_ll);};
 
-  void SetDebug(bool debug){
-	  ref_vs_all.SetDebug(debug);
-	  gq_pair.SetDebug(debug);
-  };
 };
 
 

@@ -20,6 +20,7 @@ RegionCoverage::RegionCoverage( const BamTools::RefVector& references )
 	: m_contigList(NULL)
 	, m_bcovRegion(NULL)
 	, m_rcovRegion(NULL)
+    , m_lastRegionAssigned(NULL)
 	, m_numAuxFields(0)
 	, m_ncovDepths(0)
 {
@@ -57,6 +58,7 @@ void RegionCoverage::Clear()
 		m_contigList = NULL;
 	}
 	m_bcovContigIdx = m_rcovContigIdx = m_numRefContigs;
+	m_lastRegionAssigned = NULL;
 }
 
 uint32_t *RegionCoverage::CreateTargetBinSizes( uint32_t &numBins, uint32_t binSize,
@@ -229,6 +231,11 @@ string RegionCoverage::FieldsOnRegion( uint32_t contigIdx, uint32_t readSrt, uin
 	return fieldVals;
 }
 
+// Return the target index for the region the last call to ReadOnRegion() mapped to, or 0 if none
+uint32_t RegionCoverage::GetLastReadOnRegionIdx() const {
+  return m_lastRegionAssigned ? m_lastRegionAssigned->trgIdx : 0;
+}
+
 bool RegionCoverage::GetNextRegion( int &contigIdx, int &srtPosition, int &endPosition, bool start )
 {
     static uint32_t s_contig = 0;
@@ -289,19 +296,23 @@ string RegionCoverage::Load(
     }
     m_numAuxFields = auxFieldsIdx.size();
     vector<string> auxFieldValues(m_numAuxFields,"");
+    size_t numAuxFields = auxFieldValues.size();
+    bool auxWarn = true;
 
     ifstream trgfile(fileName.c_str());
     if( !trgfile.is_open() ) {
     	return "Failed to open region file "+fileName;
     }
     string line, lastContig("");
-    int lineNum = 0, numTracks = 0;
+    int lineNum = 0, numTracks = 0, numFields = 0;
+    uint32_t srt, end;
     size_t contigIdx = 0;
     TargetContig *currentContig = NULL;
     while( getline(trgfile,line) ) {
     	++lineNum;
     	vector<string> fields = stringTrimSplit(line,'\t');
-    	if( fields[0].empty() ) continue;
+    	int fsize = fields.size();
+    	if( !fsize ) continue;
     	// handle header line - may later depend on fileType
     	if( filetype == 1 && fields[0].substr(0,5) == "track" ) {
     		if( ++numTracks > 1 ) {
@@ -318,13 +329,22 @@ string RegionCoverage::Load(
     		continue;
     	}
     	// check primary data fields
-    	int fsize = fields.size();
     	for( size_t i = 0; i < 3; ++i ) {
     		if( trgFieldsIdx[i] >= fsize || fields[trgFieldsIdx[i]].empty() ) {
     			ostringstream ss;
     			ss << "Missing or blank data field (" << (trgFieldsIdx[i]+1) << ") while reading '";
     			ss << fileName << "' at line " << lineNum;
     			return ss.str();
+    		}
+    	}
+    	// check number of fields consistency
+    	if( numFields != fsize ) {
+    		if( !numFields ) {
+    			numFields = fsize;
+    		} else {
+				ostringstream ss;
+				ss << "Inconsistent number of fields in regions file " << fileName << " at line " << lineNum;
+				return ss.str();
     		}
     	}
     	// check for new contig start
@@ -343,8 +363,12 @@ string RegionCoverage::Load(
     		currentContig = m_contigList[contigIdx];
     	}
     	// get both coordinates to 1-base
-    	uint32_t srt = stringToInteger(fields[trgFieldsIdx[1]]) + srtPosAdj;
-    	uint32_t end = stringToInteger(fields[trgFieldsIdx[2]]);
+    	try {
+			srt = stringToInteger(fields[trgFieldsIdx[1]]) + srtPosAdj;
+			end = stringToInteger(fields[trgFieldsIdx[2]]);
+    	} catch( runtime_error &e ) {
+    		return "Format error in regions file "+fileName+": "+e.what();
+    	}
 		if( srt == end+1 ) {
 			fprintf(stderr,"WARNING: Bed file region has zero length at line %d. Discarded.\n",lineNum);
 			continue;
@@ -356,10 +380,16 @@ string RegionCoverage::Load(
 			return ss.str();
     	}
     	// grab auxiliary fields for new region data
-    	if( auxFieldValues.size() ) {
+    	// - missing auxiliary fields are given value "" with a warning for first occurrence
+    	if( numAuxFields ) {
 			for( size_t i = 0; i < m_numAuxFields; ++i ) {
 				int idx = auxFieldsIdx[i];
 				if( idx < 0 ) idx += fsize;
+				if( idx >= fsize && auxWarn ) {
+					cerr << "Warning: No value found for auxiliary field " << idx << " at line " << lineNum;
+					cerr << " of regions file " << fileName << ". Missing values will default to empty.\n";
+					auxWarn = false;
+				}
 				auxFieldValues[i] = (idx >= 0 && idx < fsize) ? fields[idx] : "";
 			}
     	}
@@ -367,8 +397,10 @@ string RegionCoverage::Load(
     }
     trgfile.close();
     // create array of sorted regions for mapping
+    uint32_t rgnIdx = 0;
     for( size_t i = 0; i < m_numRefContigs; ++i ) {
-    	m_contigList[i]->MakeSortedArray();
+    	m_contigList[i]->ReverseSort(rgnIdx);
+    	rgnIdx += m_contigList[i]->numRegions;
     }
 	return "";
 }
@@ -451,7 +483,7 @@ void RegionCoverage::SetWholeContigTargets()
 	vector<string> auxFieldValues;
     for( size_t i = 0; i < m_numRefContigs; ++i ) {
     	m_contigList[i]->AddRegion( new TargetRegion( 1, m_contigList[i]->length, auxFieldValues ) );
-    	m_contigList[i]->MakeSortedArray();
+    	m_contigList[i]->ReverseSort(i);
     }
 }
 
@@ -495,11 +527,8 @@ void RegionCoverage::Write( const string &filename, const string &columnTitles )
 		if( haveHeader ) fprintf( fout, "\n" );
 	}
 	for( size_t i = 0; i < m_numRefContigs; ++i ) {
-		TargetRegion **targetRegionArray = m_contigList[i]->targetRegionArray;
-		if( !targetRegionArray ) continue;
 		const char *contig = m_contigList[i]->id.c_str();
-		for( size_t j = 0; j < m_contigList[i]->numRegions; ++j ) {
-			TargetRegion *tr = targetRegionArray[j];
+		for( TargetRegion *tr = m_contigList[i]->targetRegionHead; tr; tr = tr->next ) {
 			fprintf( fout, "%s\t%d\t%d", contig, tr->trgSrt, tr->trgEnd );
 			vector<string> &auxData = tr->auxData;
 			for( size_t k = 0; k < auxData.size(); ++k ) {
@@ -643,6 +672,7 @@ uint32_t RegionCoverage::BaseOnRegion( uint32_t contigIdx, uint32_t position )
 // Tracks first on-target in instance object so can be iterated over all hit targets.
 // Assumes reads are given in order (for a single contig) so the search starts where it left off
 // or at the start of new contig. A reset for the current contig can be forced by using readEnd = 0
+// Side-effect: Record the (reference sorted) index of the overlapped region or 0 if none.
 uint32_t RegionCoverage::ReadOnRegion( uint32_t contigIdx, uint32_t readSrt, uint32_t readEnd )
 {
 	if( contigIdx != m_rcovContigIdx && contigIdx < m_numRefContigs ) {
@@ -654,7 +684,11 @@ uint32_t RegionCoverage::ReadOnRegion( uint32_t contigIdx, uint32_t readSrt, uin
 	// here we want the first region overlapped by the read
 	for( ; m_rcovRegion; m_rcovRegion = m_rcovRegion->next ) {
 		if( readEnd < m_rcovRegion->trgSrt ) break;
-		if( readSrt <= m_rcovRegion->trgEnd ) return 1;
+		if( readSrt <= m_rcovRegion->trgEnd ) {
+			m_lastRegionAssigned = m_rcovRegion;
+			return 1;
+		}
 	}
+	m_lastRegionAssigned = NULL;
 	return 0;
 }

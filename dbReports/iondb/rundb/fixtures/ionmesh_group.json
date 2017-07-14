@@ -1,0 +1,16 @@
+[
+  {
+    "pk": 2,
+    "model": "auth.group",
+    "fields": {
+      "name": "ionmesh",
+      "permissions": [
+        [
+          "delete_ionmeshnode",
+          "rundb",
+          "ionmeshnode"
+        ]
+      ]
+    }
+  }
+]

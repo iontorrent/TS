@@ -34,11 +34,10 @@
     <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-
 <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
 
-<script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
 
 <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
 {% endblock extra_head_js %}
@@ -52,10 +51,8 @@
         <div class="clearfix">
             <h1 class="pull-left">Plugins</h1>
             <div class="pull-right btn-group">
-                <a href="{% url "configure_plugins_plugin_install" %}" class="btn install_plugin_or_publisher" style="margin-right: 5px;">Install or Upgrade Plugin</a>                
-                <br /><p></p>
-                <button id="rescan_button" style="font-size: 12px;font-weight: 700;outline: none" type="button" class="btn" onclick="rescan()">Rescan Plugins for Changes</button>
-                <br /><p></p>
+                <a href="{% url "configure_plugins_plugin_install" %}" class="btn install_plugin_or_publisher" style="margin-right: 5px;">Install or Upgrade Plugin</a>
+                <a id="rescan_button" class="btn" onclick="rescan()">Rescan Plugins for Changes</a>
             </div>
         </div>
         <form class="well well-small clearfix">
@@ -143,7 +140,7 @@
 <div class="modal container hide" id="modal-window" data-modal-Overflow="true">
     <div class="modal-header">
         <button data-dismiss="modal" class="close" type="button">&times;</button>
-        <h3>Configure </h3>
+        <h3>Configure Plugin</h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
@@ -217,7 +214,7 @@
 
             # if (data.hasAbout) { #
             <li>
-                <a class='about-plugin' href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#"> About </a>
+                <a class='about-plugin' data-name="#= data.name #" href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#"> About </a>
             </li>
             # } #
 
@@ -373,7 +370,7 @@ $(document).ready(function(){
             });
             $(source + ' .configure-plugin').click(function(e){
                 e.preventDefault();
-                openModal(this, "Configure");
+                openModal(this, "Configure Plugin");
             });
 
             $(source + " .install-to-version-plugin").click(function (e) {
@@ -461,7 +458,7 @@ $(document).ready(function(){
 
             $(source + ' .about-plugin').click(function(e) {
                 e.preventDefault();
-                openModal(this, "About " + $(this).text() + " Plugin");
+                openModal(this, "About " + $(this).attr("data-name") + " Plugin");
             });
         }
     });
@@ -479,7 +476,7 @@ $(document).ready(function(){
             }
         };
         content.ready(function() {
-            $('iframe.auto-height').iframeAutoHeight({minHeight: 400, heightOffset: 20});
+            $('iframe.auto-height').css("height", 0).iframeAutoHeight({minHeight: 400, heightOffset: 20});
             modal.modal("show");
         });
     }

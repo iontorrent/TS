@@ -223,14 +223,7 @@ h6 small {
 body {
   font: 0.875em/1.4 Arial, "Helvetica Neue", Helvetica, sans-serif;
   color: #333333;
-  background: #EFEFEF;
-  background-image: linear-gradient(bottom, #efefef 8%, #a0a0a0 61%, #efefef 89%);
-  background-image: -o-linear-gradient(bottom, #efefef 8%, #a0a0a0 61%, #efefef 89%);
-  background-image: -moz-linear-gradient(bottom, #efefef 8%, #a0a0a0 61%, #efefef 89%);
-  background-image: -webkit-linear-gradient(bottom, #efefef 8%, #a0a0a0 61%, #efefef 89%);
-  background-image: -ms-linear-gradient(bottom, #efefef 8%, #a0a0a0 61%, #efefef 89%);
-  background-image: -webkit-gradient(linear, left bottom, left top, color-stop(0.08, #efefef), color-stop(0.61, #a0a0a0), color-stop(0.89, #efefef));
-  background-position: center 100px;
+  background: #FFFFFF;
 }
 
 .form-label {
@@ -394,7 +387,7 @@ a.btn-danger:hover {
   height: 20px;
   padding-left: 30px;
   margin: auto auto;
-  background: url("../img/gear-inactive.png") no-repeat center top transparent;
+  background: url("../img/gear-inactive.png") no-repeat center center transparent;
 }
 
 .gear-inactive .caret {
@@ -407,7 +400,7 @@ a.btn-danger:hover {
   height: 20px;
   padding-left: 30px;
   margin: auto auto;
-  background: url("../img/gear-active.png") no-repeat center top transparent;
+  background: url("../img/gear-active.png") no-repeat center center transparent;
 }
 
 .gear-active .caret {
@@ -416,7 +409,13 @@ a.btn-danger:hover {
 }
 
 .header {
-  background-color: transparent;
+  background-color: #EFEFEF;
+}
+
+.header .badge-dark {
+  color: #2d4782;
+  text-shadow: none;
+  background-color: white;
 }
 
 .header .nav-tabs > li > .nav-tab {
@@ -441,7 +440,7 @@ a.btn-danger:hover {
   height: 20px;
   padding-left: 30px;
   margin: auto auto;
-  background: url("../img/gear-inactive.png") no-repeat center top transparent;
+  background: url("../img/gear-inactive.png") no-repeat center center transparent;
 }
 
 .header .nav-tabs > li > .nav-tab #gear .caret {
@@ -465,7 +464,7 @@ a.btn-danger:hover {
   height: 20px;
   padding-left: 30px;
   margin: auto auto;
-  background: url("../img/gear-active.png") no-repeat center top transparent;
+  background: url("../img/gear-active.png") no-repeat center center transparent;
 }
 
 .header .nav-tabs > li.active > a #gear .caret,
@@ -474,25 +473,16 @@ a.btn-danger:hover {
   border-bottom-color: #233873;
 }
 
-.header .nav-tabs > li.active > a .icon-bullhorn.icon-white,
-.header .nav-tabs > li > a:hover .icon-bullhorn.icon-white {
-  background-image: url("../bootstrap/img/glyphicons-halflings.png");
+.header .nav-tabs > li.active > a .badge-dark,
+.header .nav-tabs > li > a:hover .badge-dark {
+  color: white;
+  background-color: #2d4782;
 }
 
 .header .nav-pills > li > span {
-  padding-top: 6px;
-  padding-top: 8px;
-  padding-right: 12px;
-  padding-bottom: 6px;
-  padding-bottom: 8px;
-  padding-left: 12px;
-  margin-top: 4px;
-  margin-top: 2px;
-  margin-right: 2px;
-  margin-bottom: 4px;
-  margin-bottom: 2px;
+  padding: 6px 12px 6px 12px;
+  margin: 2px 2px 2px 0;
   font-size: 12px;
-  font-style: bold;
   font-weight: bold;
   line-height: 14px;
   color: #333333;
@@ -587,6 +577,11 @@ a.btn-danger:hover {
 
 .report-header .form-inline {
   margin-top: 6px;
+}
+
+.utility-menu {
+  margin-top: 15px;
+  margin-bottom: 0;
 }
 
 .utility-menu a {
@@ -780,10 +775,17 @@ body .modal-1000 {
   border-left-width: 0;
 }
 
+.k-grid .k-grid-header th:first-child {
+  border-top-left-radius: 4px;
+}
+
+.k-grid .k-grid-header th:last-child {
+  border-top-right-radius: 4px;
+}
+
 .k-grid .k-grid-header .k-header {
   padding: 0.7em 0.6em;
   white-space: normal;
-  border-bottom: 3px solid #D6D6D6;
 }
 
 .k-grid .k-grid-header .k-header .k-link {
@@ -859,6 +861,10 @@ body .modal-1000 {
   -webkit-border-radius: 0 0 4px 4px;
      -moz-border-radius: 0 0 4px 4px;
           border-radius: 0 0 4px 4px;
+}
+
+.k-grid-pager .k-state-selected {
+  background-color: #08c;
 }
 
 /* =============================================================================
@@ -1352,10 +1358,6 @@ tr.new_plan td {
   width: 40%;
 }
 
-#AnalysisDetails td span {
-  color: red;
-}
-
 #PluginOutputAccordian {
   margin: 15px 0 0;
 }
@@ -1501,6 +1503,7 @@ tr.new_plan td {
 }
 
 .view-toggle {
+  display: inline-block;
   margin: 10px 0 0;
   font-size: 12px;
   font-weight: bold;
@@ -1664,6 +1667,18 @@ tr.new_plan td {
   text-indent: 28px;
   vertical-align: text-top;
   background: url('../img/appl_hid.png') no-repeat center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.IMMUNE_REPERTOIRE {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  *margin-right: .3em;
+  text-indent: 28px;
+  vertical-align: text-top;
+  background: url('../img/appl_immuneRepertoire.png') no-repeat center center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
 }
@@ -1847,16 +1862,15 @@ div.valid {
   border-top: 2px solid #dddddd;
 }
 
-#configModal {
-  width: 850px;
-  margin-left: -425px;
+#configModal iframe {
+  width: 100%;
 }
 
 .bordered-section {
   background: #f3f3f3;
-  border-bottom-width: 1px;
   border-bottom-color: #f7ffb4;
   border-bottom-style: solid;
+  border-bottom-width: 1px;
   box-shadow: 5px 7px 5px #cdcdcd;
 }
 
@@ -2502,7 +2516,75 @@ div.valid {
   border-color: #cdcdcd;
 }
 
-#configModal {
-  width: 850px;
-  margin-left: -425px;
+/* Overrides for bootstrap-select */
+
+.bootstrap-select li,
+.bootstrap-select .actions-btn,
+.bootstrap-select input,
+.bootstrap-select .filter-option {
+  font-size: 11px;
+}
+
+.bootstrap-select .actions-btn {
+  margin: 0;
+}
+
+/* Make the search bar on the data page look like the bootstrap selects */
+
+#search_bar .search-field > .btn,
+#search_bar .search-field-run > .btn,
+#search_bar .search-field > input,
+#search_bar .search-field-run > input {
+  font-size: 11px;
+}
+
+#search_bar .search-field {
+  /* Needed to override style on data.html page */
+
+  /* Order by is on the right and needs to right margin */
+
+}
+
+#search_bar .search-field.hide {
+  display: none;
+}
+
+#search_bar .search-field.order-by {
+  float: right;
+  margin-right: 0;
+}
+
+#search_bar .clearfix {
+  margin-left: 28px;
+  clear: both;
+}
+
+/* Style the popup on the data page for samples */
+
+#sample-popover-container .popover-title {
+  display: none;
+}
+
+#sample-popover-container .popover {
+  width: 340px;
+}
+
+#sample-popover-container table.sample-popover-table {
+  margin: 0;
+  font-size: 10px;
+}
+
+#sample-popover-container table.sample-popover-table tbody > tr > td {
+  word-wrap: break-word;
+}
+
+#sample-popover-container table.sample-popover-table tfoot > tr > td {
+  text-align: center;
+}
+
+/* Override all table headers to change the link color to black */
+
+table > thead > tr > th a:link,
+table > thead > tr > th a:visited {
+  color: #333;
 }

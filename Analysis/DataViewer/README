@@ -1,0 +1,4 @@
+sudo apt-get install qtcreator
+sudo apt-get install qtbase5-examples qtbase5-doc-html qt5-doc qt5-doc-html
+sudo apt-get install qt5-default
+

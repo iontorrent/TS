@@ -372,6 +372,7 @@ class SignalProcessingMasterFitter
     GlobalWriter global_state;
     
     debug_collection my_debug;
+    DebugSaver debugSaver;
     
     // cache math that all bkgmodel objects need to execute
     PoissonCDFApproxMemo *math_poiss;

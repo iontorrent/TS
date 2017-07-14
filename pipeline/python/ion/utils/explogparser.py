@@ -4,7 +4,6 @@
 __version__ = filter(str.isdigit, "$Revision$")
 
 import os
-import sys
 import datetime
 import traceback
 import json
@@ -18,10 +17,10 @@ PROTON_START_TIME_FORMAT = "%m/%d/%Y %H:%M:%S"
 DB_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
-def extract_rig(folder):
+def extract_rig(rig_folder):
     """Given the name of a folder storing experiment data, return the name
     of the PGM from which the date came."""
-    return os.path.basename(os.path.dirname(folder))
+    return os.path.basename(os.path.dirname(rig_folder))
 
 
 def getparameter(parameterfile=None):
@@ -185,6 +184,7 @@ def getparameter(parameterfile=None):
             env['report_type'] = 'thumbnail'
         else:
             env['report_type'] = 'composite'
+            env['chipBlocksOverride'] = EXTERNAL_PARAMS.get('chipBlocksOverride','')
 
     env['username'] = EXTERNAL_PARAMS.get('username')
     env['sampleInfo'] = EXTERNAL_PARAMS.get('sampleInfo', {})
@@ -244,32 +244,32 @@ def load_log(folder, logName):
     return text
 
 ENTRY_MAP = {
-    "gain": lre.float_parse,
-    "datacollect_version": lre.int_parse,
-    "liveview_version": lre.int_parse,
-    "firmware_version": lre.int_parse,
-    "fpga_version": lre.int_parse,
-    "driver_version": lre.int_parse,
+    "gain": float,
+    "datacollect_version": int,
+    "liveview_version": int,
+    "firmware_version": int,
+    "fpga_version": int,
+    "driver_version": int,
     "script_version": lre.dot_separated_parse,
-    "board_version": lre.int_parse,
+    "board_version": int,
     "kernel_build": lre.kernel_parse,
     "prerun": lre.yn_parse,
     # TODO: Enumerate things that will break if this is changed
     # It is used to parse job files produced by the PGM, yes?
-    "cycles": lre.int_parse,
+    "cycles": int,
     "livechip": lre.yn_parse,
     "continuous_clocking": lre.yn_parse,
     "auto_cal": lre.yn_parse,
-    "frequency": lre.int_parse,
+    "frequency": int,
     "oversample": lre.oversample_parse,
-    "frame_time": lre.float_parse,
-    "num_frames": lre.int_parse,
+    "frame_time": float,
+    "num_frames": int,
     "autoanalyze": lre.yn_parse,
-    "dac": lre.float_parse,
+    "dac": float,
     "cal_chip_hist": lre.space_separated_parse,
     "cal_chip_high_low_inrange": lre.cal_range_parse,
     "prebeadfind": lre.yn_parse,
-    "flows": lre.int_parse,
+    "flows": int,
     "analyzeearly": lre.yn_parse,
     #    "chiptype": lre.chip_parse,
 }
@@ -290,42 +290,49 @@ def parse_log(text):
         else:
             return str_in
 
-    def clean_name(name):
-        no_ws = CLEAN_RE.sub("_", name)
+    def clean_name(key_name):
+        no_ws = CLEAN_RE.sub("_", key_name)
         return no_ws.lower()
 
-    def extract_entries(text):
-        ret = []
-        for line in text.split('\n'):
-            match = ENTRY_RE.match(line)
+    def extract_entries(log_text):
+        key_value_pairs = []
+        for log_line in log_text.split('\n'):
+            match = ENTRY_RE.match(log_line)
             if match is not None:
                 d = match.groupdict()
-                ret.append((clean_name(d['name']), d['value'].strip()))
-        return ret
+                key_value_pairs.append((clean_name(d['name']), d['value'].strip()))
+        return key_value_pairs
 
-    ret = {}
+    log_lookup = {}
     entries = extract_entries(text)
+
     for name, value in entries:
+
         # utf-8 replace code to ensure we don't crash on invalid characters
         # ret[name] = ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii","ignore"))
-        ret[name] = filter_non_printable(ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii", "ignore")))
+        try:
+            log_lookup[name] = filter_non_printable(ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii", "ignore")))
+        except:
+            log_lookup[name] = None
+
         # back compatability for PGMs where dac value is string of 8 integers and not a float
-        if name == 'dac' and not ret['dac']:
-            ret['dac'] = filter_non_printable(lre.dac_parse(value.decode("ascii", "ignore")))
-    ret['blocks'] = []
-    ret['thumbnails'] = []
+        if name == 'dac' and not log_lookup['dac']:
+            log_lookup['dac'] = filter_non_printable(lre.dac_parse(value.decode("ascii", "ignore")))
+
+    log_lookup['blocks'] = []
+    log_lookup['thumbnails'] = []
     # For the oddball repeating keyword: BlockStatus create an array of them.compatibility:
     for line in text.split('\n'):
         if line.startswith('BlockStatus'):
-            ret['blocks'].append(line.strip().replace('BlockStatus:', ''))
+            log_lookup['blocks'].append(line.strip().replace('BlockStatus:', ''))
     # new format
-    for k, v in ret.iteritems():
+    for k, v in log_lookup.iteritems():
         if k.startswith('block_'):
-            ret['blocks'].append(v)
+            log_lookup['blocks'].append(v)
         if k.startswith('thumbnail_'):
-            ret['thumbnails'].append(v)
+            log_lookup['thumbnails'].append(v)
 
-    return ret
+    return log_lookup
 
 
 def getBlocksFromExpLogJson(exp_json, excludeThumbnail=False):
@@ -372,7 +379,7 @@ def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):
         block['autoanalyze'] = int(args[4].split(':')[1].strip()) == 1
         block['analyzeearly'] = int(args[5].split(':')[1].strip()) == 1
         block['id_str'] = block['datasubdir']
-        print "explog: " + str(block)
+        print("explog: " + str(block))
         blocks.append(block)
 
     return blocks

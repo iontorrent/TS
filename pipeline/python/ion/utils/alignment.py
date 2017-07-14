@@ -63,11 +63,12 @@ def align(
     do_mark_duplicates,
     do_indexing,
     output_dir,
-        output_basename):
+    output_basename,
+    threads=0):
 
     try:
 
-        threads = multiprocessing.cpu_count()
+        threads = threads or multiprocessing.cpu_count()
         bamBase = os.path.normpath(output_dir + "/" + output_basename)
         bamFile = bamBase + ".bam"
 
@@ -257,6 +258,136 @@ def align(
         raise
 
 
+def align_dataset_parallel(
+        dataset,
+        blocks,
+        reference,
+        alignmentArgs,
+        ionstatsArgs,
+        BASECALLER_RESULTS,
+        basecaller_meta_information,
+        library_key,
+        graph_max_x,
+        ALIGNMENT_RESULTS,
+        do_realign,
+        do_ionstats,
+        do_mark_duplicates,
+        do_indexing,
+        align_threads
+    ):
+
+    do_sorting = True
+
+    try:
+        # process block by block
+        if reference and len(blocks) > 1 and int(dataset["read_count"]) > 20000000:
+            printtime("DEBUG: TRADITIONAL BLOCK PROCESSING ------ prefix: %20s ----------- reference: %20s ---------- reads: %10s ----------" % (dataset['file_prefix'], reference, dataset["read_count"]))
+          # start alignment for each block and current barcode with reads
+          # TODO: in how many blocks are reads with this barcode
+            for block in blocks:
+                printtime("DEBUG: ALIGN ONLY ONE BLOCK: %s" % block)
+                align(
+                    [block],
+                    os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
+                    alignmentArgs,
+                    ionstatsArgs,
+                    reference,
+                    basecaller_meta_information,
+                    library_key,
+                    graph_max_x,
+                    do_realign,
+                    do_ionstats=False,
+                    do_sorting=do_sorting,
+                    do_mark_duplicates=False,
+                    do_indexing=False,
+                    output_dir=os.path.join(block, ALIGNMENT_RESULTS),
+                    output_basename=dataset['file_prefix'],
+                    threads=align_threads)
+    
+            bamdir = '.'  # TODO , do we need this ?
+            bamBase = dataset['file_prefix']
+            bamfile = dataset['file_prefix'] + ".bam"
+    
+            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in blocks]
+            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+            printtime("blocks with reads:    %s" % len(block_bam_list))
+    
+            bamFile = dataset['file_prefix'] + ".bam"
+            composite_bam_filepath = dataset['file_prefix'] + ".bam"
+    
+            blockprocessing.extract_and_merge_bam_header(block_bam_list, composite_bam_filepath)
+            # Usage: samtools merge [-nr] [-h inh.sam] <out.bam> <in1.bam> <in2.bam> [...]
+            cmd = 'samtools merge -l1 -@8'
+            if do_ionstats:
+                cmd += ' - '
+            else:
+                cmd += ' %s' % (composite_bam_filepath)
+            for bamfile in block_bam_list:
+                cmd += ' %s' % bamfile
+            cmd += ' -h %s.header.sam' % composite_bam_filepath
+    
+            if do_ionstats:
+                bam_filenames = ["/dev/stdin"]
+                ionstats_alignment_filename = "%s.ionstats_alignment.json" % bamBase      # os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json')
+                ionstats_alignment_h5_filename = "%s.ionstats_error_summary.h5" % bamBase  # os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5')
+    
+                ionstats_cmd = ionstats.generate_ionstats_alignment_cmd(
+                    ionstatsArgs,
+                    bam_filenames,
+                    ionstats_alignment_filename,
+                    ionstats_alignment_h5_filename,
+                    basecaller_meta_information,
+                    library_key,
+                    graph_max_x)
+    
+                cmd += " | tee >(%s)" % ionstats_cmd
+    
+            if do_mark_duplicates:
+                json_name = 'BamDuplicates.%s.json' % bamBase if bamBase != 'rawlib' else 'BamDuplicates.json'
+                cmd = "BamDuplicates -i <(%s) -o %s -j %s" % (cmd, bamFile, json_name)
+            else:
+                cmd += " > %s.bam" % bamBase
+    
+            printtime("DEBUG: Calling '%s':" % cmd)
+            ret = subprocess.Popen(['/bin/bash', '-c', cmd]).wait()
+            if ret != 0:
+                printtime("ERROR: merging failed, return code: %d" % ret)
+                raise RuntimeError('exit code: %d' % ret)
+    
+            # TODO: piping into samtools index or create index in sort process ?
+            if do_indexing and do_sorting:
+                cmd = "samtools index " + bamFile
+                printtime("DEBUG: Calling '%s':" % cmd)
+                subprocess.call(cmd, shell=True)
+    
+        else:
+            printtime("DEBUG: MERGED BLOCK PROCESSING ----------- prefix: %20s ----------- reference: %20s ---------- reads: %10s ----------" % (dataset['file_prefix'], reference, dataset["read_count"]))
+            # TODO: try a python multiprocessing pool
+            align(
+                blocks,
+                os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
+                alignmentArgs,
+                ionstatsArgs,
+                reference,
+                basecaller_meta_information,
+                library_key,
+                graph_max_x,
+                do_realign,
+                do_ionstats,
+                do_sorting,
+                do_mark_duplicates,
+                do_indexing,
+                output_dir=ALIGNMENT_RESULTS if reference else BASECALLER_RESULTS,
+                output_basename=dataset['file_prefix'],
+                threads=align_threads)
+    except:
+        traceback.print_exc()
+
+
+def align_dataset_parallel_wrap(args):
+    return align_dataset_parallel(*args)
+
+
 def process_datasets(
         blocks,
         alignmentArgs,
@@ -273,16 +404,25 @@ def process_datasets(
         do_indexing,
         barcodeInfo):
 
-    printtime("Attempt to align")
-    printtime("DEBUG: PROCESS DATASETS blocks: '%s'" % blocks)
+    parallel_datasets = 1
+    try:
+        memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
+        if memTotalGb > 70:
+            parallel_datasets = 2
+    except:
+        pass
 
-    do_sorting = True
+    align_threads = multiprocessing.cpu_count() / parallel_datasets
+    printtime("Attempt to align")
+    printtime("DEBUG: PROCESS DATASETS blocks: '%s', parallel datasets: %d" % (blocks, parallel_datasets))
 
     # TODO: compare with pipeline/python/ion/utils/ionstats.py
     ionstats_basecaller_file_list = []
     ionstats_alignment_file_list = []
     ionstats_basecaller_filtered_file_list = []
     ionstats_alignment_filtered_file_list = []
+    
+    align_dataset_args = []
 
     for dataset in basecaller_datasets["datasets"]:
 
@@ -299,112 +439,23 @@ def process_datasets(
         if int(dataset["read_count"]) == 0:
             continue
 
-        try:
-
-            # process block by block
-            if reference and len(blocks) > 1 and int(dataset["read_count"]) > 20000000:
-                printtime("DEBUG: TRADITIONAL BLOCK PROCESSING ------ prefix: %20s ----------- reference: %20s ---------- reads: %10s ----------" % (dataset['file_prefix'], reference, dataset["read_count"]))
-              # start alignment for each block and current barcode with reads
-              # TODO: in how many blocks are reads with this barcode
-                for block in blocks:
-                    printtime("DEBUG: ALIGN ONLY ONE BLOCK: %s" % block)
-                    align(
-                        [block],
-                        os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
-                        alignmentArgs,
-                        ionstatsArgs,
-                        reference,
-                        basecaller_meta_information,
-                        library_key,
-                        graph_max_x,
-                        do_realign,
-                        do_ionstats=False,
-                        do_sorting=do_sorting,
-                        do_mark_duplicates=False,
-                        do_indexing=False,
-                        output_dir=os.path.join(block, ALIGNMENT_RESULTS),
-                        output_basename=dataset['file_prefix'])
-
-                bamdir = '.'  # TODO , do we need this ?
-                bamBase = dataset['file_prefix']
-                bamfile = dataset['file_prefix'] + ".bam"
-
-#                printtime("DEBUG: BLOCKS for BAMFILE %s: %s" % (bamfile, blocks))
-                block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in blocks]
-#                printtime("DEBUG: block_bam_list: %s" % block_bam_list)
-                block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
-#                printtime("DEBUG: block_bam_list: %s" % block_bam_list)
-                printtime("blocks with reads:    %s" % len(block_bam_list))
-
-                bamFile = dataset['file_prefix'] + ".bam"
-                composite_bam_filepath = dataset['file_prefix'] + ".bam"
-
-                blockprocessing.extract_and_merge_bam_header(block_bam_list, composite_bam_filepath)
-                # Usage: samtools merge [-nr] [-h inh.sam] <out.bam> <in1.bam> <in2.bam> [...]
-                cmd = 'samtools merge -l1 -@8'
-                if do_ionstats:
-                    cmd += ' - '
-                else:
-                    cmd += ' %s' % (composite_bam_filepath)
-                for bamfile in block_bam_list:
-                    cmd += ' %s' % bamfile
-                cmd += ' -h %s.header.sam' % composite_bam_filepath
-
-                if do_ionstats:
-                    bam_filenames = ["/dev/stdin"]
-                    ionstats_alignment_filename = "%s.ionstats_alignment.json" % bamBase      # os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json')
-                    ionstats_alignment_h5_filename = "%s.ionstats_error_summary.h5" % bamBase  # os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5')
-
-                    ionstats_cmd = ionstats.generate_ionstats_alignment_cmd(
-                        ionstatsArgs,
-                        bam_filenames,
-                        ionstats_alignment_filename,
-                        ionstats_alignment_h5_filename,
-                        basecaller_meta_information,
-                        library_key,
-                        graph_max_x)
-
-                    cmd += " | tee >(%s)" % ionstats_cmd
-
-                if do_mark_duplicates:
-                    json_name = 'BamDuplicates.%s.json' % bamBase if bamBase != 'rawlib' else 'BamDuplicates.json'
-                    cmd = "BamDuplicates -i <(%s) -o %s -j %s" % (cmd, bamFile, json_name)
-                else:
-                    cmd += " > %s.bam" % bamBase
-
-                printtime("DEBUG: Calling '%s':" % cmd)
-                ret = subprocess.Popen(['/bin/bash', '-c', cmd]).wait()
-                if ret != 0:
-                    printtime("ERROR: merging failed, return code: %d" % ret)
-                    raise RuntimeError('exit code: %d' % ret)
-
-                # TODO: piping into samtools index or create index in sort process ?
-                if do_indexing and do_sorting:
-                    cmd = "samtools index " + bamFile
-                    printtime("DEBUG: Calling '%s':" % cmd)
-                    subprocess.call(cmd, shell=True)
-
-            else:
-                printtime("DEBUG: MERGED BLOCK PROCESSING ----------- prefix: %20s ----------- reference: %20s ---------- reads: %10s ----------" % (dataset['file_prefix'], reference, dataset["read_count"]))
-                # TODO: try a python multiprocessing pool
-                align(
-                    blocks,
-                    os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
-                    alignmentArgs,
-                    ionstatsArgs,
-                    reference,
-                    basecaller_meta_information,
-                    library_key,
-                    graph_max_x,
-                    do_realign,
-                    do_ionstats,
-                    do_sorting,
-                    do_mark_duplicates,
-                    do_indexing,
-                    output_dir=ALIGNMENT_RESULTS if reference else BASECALLER_RESULTS,
-                    output_basename=dataset['file_prefix'])
-        except:
-                traceback.print_exc()
+        align_dataset_args.append((
+            dataset,
+            blocks,
+            reference,
+            alignmentArgs,
+            ionstatsArgs,
+            BASECALLER_RESULTS,
+            basecaller_meta_information,
+            library_key,
+            graph_max_x,
+            ALIGNMENT_RESULTS,
+            do_realign,
+            do_ionstats,
+            do_mark_duplicates,
+            do_indexing,
+            align_threads
+        ))
 
         if reference:
             if filtered:
@@ -416,6 +467,11 @@ def process_datasets(
                 ionstats_basecaller_filtered_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
             else:
                 ionstats_basecaller_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
+
+    # do alignment in multiprocessing pool
+    pool = multiprocessing.Pool(processes=parallel_datasets)
+    pool.map(align_dataset_parallel_wrap, align_dataset_args)
+
 
     if do_ionstats:
 

@@ -184,33 +184,7 @@
             </div>
         </div>
     </div>
-    <div class="content">
-        <div class="clearfix">
-            <h1>TS Mesh</h1>
-            <br>
-            <div class="row">
-                <div class="span4">
-                    <p>Available Torrent Servers</p>
-                    <select id="mesh_servers" size="7" class="input input-xlarge">
-                    {% for item in ionMesh %}
-                        <option>{{ item }}</option>
-                    {% endfor %}
-                    </select>
-            </div>
-                <div class="span4">
-                    <p>Shared Servers</p>
-                    <select id="shared_servers" size="7" class="input input-xlarge">
-                    {% for item in sharedServers %}
-                        <option>{{item.address}} ({{item.name}})</option>
-                    {% endfor %}
-                    </select>
-            </div>
-        </div>
-        </div> 
-    </div>
-    
-    </div>
-    </div>
+
 
 <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script>
 <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>

@@ -529,8 +529,8 @@ void ImageToWells::MoveWellsFileAndFinalize()
 								   inception_state.loc_context.chip_offset_y, 
 								   inception_state.loc_context.chip_offset_y + inception_state.loc_context.rows - 1, 
 								   inception_state.loc_context.chip_len_y) ){
-      printf("Masking DataCollect exclude regions as Bad Key\n");
-      FromBeadfindMask.my_mask->SetAll((MaskType)(MaskFilteredBadKey)); // MaskIgnore
+      printf("Masking DataCollect exclude regions as Ignore\n");
+      FromBeadfindMask.my_mask->SetAll((MaskType)(MaskIgnore));
     }
   }
 

@@ -1,0 +1,148 @@
+{% load static from staticfiles %}
+
+<html>
+    <div class="span11">
+        <div id="bctable-div">
+            <a id="show_bctable">-</a>
+            <div id="bctable-grid"></div>
+        </div>
+    </div>
+</html>
+
+<script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.web.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.editable.js"%}"></script>
+<link rel="stylesheet" href="{% static "resources/kendo/styles/kendo.common.min.css"%}" />
+
+
+<script type="text/javascript">
+    // global helper functions provided to plugin iframe to access the table
+    var TB_plugin_functions = {};
+    TB_plugin_functions.get_plugin_barcodetable = function(){
+        var table = $("#bctable-grid").data('kendoGrid').dataSource.data().toJSON();
+        return table;
+    }
+    TB_plugin_functions.update_plugin_barcodetable = function(data){
+        var dataSource = $("#bctable-grid").data('kendoGrid').dataSource;
+        dataSource.data(data);
+    }
+    TB_plugin_functions.plugin_barcodetable_div = $("#bctable-div");
+    
+
+    function get_display_value(value, options){
+        value = typeof value !== 'undefined' ? value : "";
+
+        var option = options.filter(function(obj){ return (obj.value==value); })[0];
+        if (option && 'display' in option) {
+            return option.display;
+        } else {
+            return value;
+        }
+    }
+
+    $(document).ready(function () {
+        var _columns = JSON.parse("{{ columns|escapejs }}");
+        var _data = JSON.parse("{{ data|escapejs }}");
+        var isBarcoded = "{{isBarcoded}}" == "True";
+        console.log('plugin table columns', _columns);
+        console.log('plugin table data', _data);
+        
+        var disabled_columns = [];
+        var checkbox_columns = [];
+        
+        $.each(_columns, function(i, col){
+            _columns[i].attributes = { "name": col.field };
+            if (!col.editable) disabled_columns.push(col.field);
+
+            if (col.type == "checkbox"){
+                _columns[i].template = '<input type="checkbox" #= ' + col.field + ' ? "checked" : "" # />'
+                if (col.editable) {
+                    checkbox_columns.push(col.field);
+                }
+            }
+
+            if (col.type == "dropdown" && col.options && col.options.length > 0){
+                if (col.editable){
+                    _columns[i].editor = dropDownEditor;
+                    _columns[i].template = function(dataItem){
+                        var display = get_display_value(dataItem[col.field], col.options);
+                        return kendo.template('#=data# <span class="k-icon k-i-arrow-s pull-right"></span>')(display);
+                    }
+                } else {
+                    _columns[i].template = function(dataItem){
+                        var display = get_display_value(dataItem[col.field], col.options);
+                        return kendo.template('#=data#')(display);
+                    }
+                }
+            }
+        });
+
+        $("#bctable-grid").kendoGrid({
+            columns: _columns,
+            dataSource: _data,
+            height: 200,
+            scrollable: true,
+            sortable: false,
+            filterable: false,
+            pageable: false,
+            editable: true,
+            dataBound: function(e){
+                $.each(disabled_columns, function(i,name){
+                    toggleDisableColumn(name, true);
+                });
+            }
+        });
+
+        // add onchange event to checkboxes
+        $.each(checkbox_columns, function(i, name){
+            $("#bctable-grid .k-grid-content").on("change", "[name="+ name +"] :input", function(e) {
+                var dataItem = $("#bctable-grid").data("kendoGrid").dataItem($(e.target).closest("tr"));
+                dataItem.set(name, this.checked);
+            });
+        });
+
+        function dropDownEditor(container, options) {
+            var column = $.grep(_columns, function(obj){ return obj.field == options.field })[0];
+            $('<input name="dropDownEditor" data-bind="value:' + options.field + '"/>')
+                .appendTo(container)
+                .kendoDropDownList({
+                    dataSource: column.options,
+                    optionLabel: "---",
+                    dataTextField: "display",
+                    dataValueField: "value",
+                    open: function(e) {
+                        if (options.field == 'target_region_filepath' || options.field == 'hotspot_filepath'){
+                            e.sender.dataSource.filter({
+                                field: "reference", operator: "eq", value: options.model.reference
+                            });
+                        }
+                    },
+                    change: function(e){
+                        if (options.field == 'reference'){
+                            if ('target_region_filepath' in options.model) options.model.set('target_region_filepath','');
+                            if ('hotspot_filepath' in options.model) options.model.set('hotspot_filepath','');
+                        }
+                    }
+            });
+        }
+
+        var show_bctable_text = isBarcoded ? "Barcode Sample Settings" : "Sample Settings";
+        $('#show_bctable').click(function(){
+            if ($(this).text().indexOf('+')>-1){
+                $(this).text(show_bctable_text + ' -');
+                $('#bctable-grid').show();
+            } else {
+                $(this).text(show_bctable_text + ' +');
+                $('#bctable-grid').hide();
+            }
+        });
+        $('#show_bctable').click();
+    });
+
+    function toggleDisableColumn(column, disable){
+        var $elements = $("#bctable-grid .k-grid-content [name=" + column +"]");
+        $elements.prop('disabled', disable);
+        $elements.children().prop('disabled', disable);
+        $elements.css('opacity', disable ? 0.8 : 1);
+        $elements.css('cursor', disable ? 'not-allowed' : 'auto');
+    }
+</script>

@@ -7,7 +7,7 @@
  */
 
 #include "ClonalFilterWrapper.h"
-#include "mixed.h"
+#include "ClonalFilter/mixed.h"
 #include "hdf5.h"
 
 #define MIXED_PPF_CUTOFF 0.84f

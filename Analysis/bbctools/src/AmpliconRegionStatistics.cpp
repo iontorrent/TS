@@ -154,6 +154,7 @@ void AmpliconRegionStatistics::TrackReadsOnRegion( const BamTools::BamAlignment 
 		}
 		// pseudo-randomly choose best region of equivalent best regions
 		TargetRegion *bestRegion = m_regionStack[ clockSeed % numBestRegions ];
+		m_lastRegionAssigned = bestRegion;
 		bool e2e_or_cov;
 		if( m_sigFacCoverage ) {
 			int32_t trgLen = bestRegion->trgEnd - bestRegion->trgSrt + 1;

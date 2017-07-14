@@ -105,6 +105,7 @@ struct BCcontextVars {
     string    run_id;                 //!< Run ID string, prepended to each read name
     bool      process_tfs;            //!< If set to false, TF-related BAM will not be generated
     bool      only_process_unfiltered_set;
+    bool      flow_predictors_;       //!< If set to true, use flow-based predictor for Quality Score prediction
     string    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased,
                                       //                         "wells" - Raw values (unnormalized and not dephased),
                                       //                         "key-normalized" - Key normalized and not dephased,
@@ -122,6 +123,7 @@ struct BCcontextVars {
     bool      debug_normalization_bam;//!< Switch to output debug data to the bam file
     bool      just_phase_estimation;  //!< BaseCaller will only do phase estimation and nothing else
     bool      calibrate_TFs;          //!< Switch to apply calibration to TFs
+    bool      trim_zm;                //!< Trim the ZM tag when writing it to the bam file
 
     bool      options_set;            //!< Flag whether options have been read to ensure order
 };
@@ -143,6 +145,7 @@ struct BaseCallerContext {
     string                    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased, "wells" - Raw values (unnormalized and not dephased), "key-normalized" - Key normalized and not dephased, "adaptive-normalized" - Adaptive normalized and not dephased, and "unclipped" - Normalized and phased but unclipped.
     string                    output_directory;       //!< Root directory for all output files
     string                    wells_norm_method;      //!< Normalization method for wells file before any processing
+    bool                      flow_predictors_;       //!< If set to false, TF-related BAM will not be generated
     bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
     int                       windowSize;             //!< Normalization window size
     bool                      have_calibration_panel; //!< Signales the presence of a recalibration panel
@@ -153,6 +156,7 @@ struct BaseCallerContext {
     bool                      skip_recal_during_norm; //!< Switch to exclude recalibration from the normalization stage
     bool                      debug_normalization_bam;//!< Switch to output debug info to the bam file
     bool                      calibrate_TFs;          //!< Switch to apply calibration to TFs
+    bool                      trim_zm;                //!< Trim the ZM tag when writing it to the bam file
 
     // Important outside entities accessed by BaseCaller
     ion::ChipSubset           chip_subset;            //!< Chip coordinate & region handling for Basecaller
@@ -166,7 +170,6 @@ struct BaseCallerContext {
     BarcodeClassifier         *calibration_barcodes;  //!< Barcode detection for calibration set
     HistogramCalibration      *histogram_calibration; //!< Posterior base call and signal adjustment algorithm
     LinearCalibrationModel    *linear_cal_model;      //!< Model estimation of simulated predictions and observed measurements
-    PolyclonalFilterOpts      polyclonal_filter;      //!< User options for polyclonal filtering
     MolecularTagTrimmer       *tag_trimmer;           //!< Class for tag accounting within read groups
 
     // Threaded processing
@@ -193,6 +196,7 @@ public:
     BaseCallerParameters() {
       num_threads_              = 1;
       num_bamwriter_threads_    = 1;
+      compress_output_bam_      = true;
       bc_files.options_set      = false;
       sampling_opts.options_set = false;
       context_vars.options_set  = false;
@@ -211,6 +215,8 @@ public:
     bool SaveParamsToJson(Json::Value& basecaller_json, const BaseCallerContext& bc, const string& chip_type);
 
     bool JustPhaseEstimation() { return context_vars.just_phase_estimation; };
+
+    bool CompressOutputBam() { return compress_output_bam_; };
 
 
     const BaseCallerFiles & GetFiles() const {
@@ -234,8 +240,11 @@ public:
     int NumBamWriterThreads() const { return num_bamwriter_threads_; };
 
 private:
+
     int                 num_threads_;              //!< Number of worker threads to do base calling
     int                 num_bamwriter_threads_;    //!< Number of threads one bam writer object uses
+    bool                compress_output_bam_;      //!< Switch to output compressed / uncompressed BAM
+
     BaseCallerFiles     bc_files;
     BCcontextVars       context_vars;
     BCwellSampling      sampling_opts;

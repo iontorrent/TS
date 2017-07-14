@@ -34,7 +34,8 @@ public:
      * data is pinned low and zero everything out.
      */
     double CorrectCorrNoise(short *image, int rows, int cols, int frames, int correctRows,
-    		int thumbnail, bool overrride=false, bool verbose=false, int threadNum=-1, int avg=0);
+    		int thumbnail, bool overrride=false, bool verbose=false, int threadNum=-1,
+    		int avg=0, int frame_mult=0);
 
     CorrNoiseCorrector() {
       mCorr_sigs = NULL;
@@ -63,6 +64,7 @@ public:
       CorrLen=0;
       thumbnail=0;
       CorrAvg=0;
+      fmult=1;
       initVars();
     }
 
@@ -111,6 +113,7 @@ private:
     int frames;
     int ncomp;
     int CorrLen;
+    int fmult; // number of frames to skip
 
     double sumTime;
     double applyTime;

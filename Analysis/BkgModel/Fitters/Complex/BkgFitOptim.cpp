@@ -3,12 +3,35 @@
 #include "BkgFitOptim.h"
 #include "BkgFitStructures.h"
 
+using namespace std;
 
 
+#define DVAL(X) {X,#X}
+
+std::map<PartialDerivComponent, std::string> PartialDerivNames = {
+             DVAL(TBL_END),DVAL(TBL_END),DVAL(DFDP),DVAL(DFDR),
+             DVAL(DFDPDM),DVAL(DFDGAIN),DVAL(DFDA),DVAL(DFDDKR),
+             DVAL(DFDSIGMA),DVAL(DFDTSH),DVAL(DFDERR),DVAL(DFDT0),
+             DVAL(DFDTAUMR),DVAL(DFDTAUOR),DVAL(DFDRDR),DVAL(DFDKRATE),
+             DVAL(DFDSENS),DVAL(DFDD),DVAL(DFDPDR),DVAL(DFDMR),DVAL(DFDKMAX),
+             DVAL(DFDT0DLY),DVAL(DFDSMULT),DVAL(DFDTAUE),DVAL(YERR),DVAL(FVAL)
+            };
+
+std::string ComponentName( PartialDerivComponent comp )
+{
+    std::string readable_name;
+    try {
+        readable_name = PartialDerivNames[comp];
+        if(readable_name.substr(0,3)=="DFD")
+            readable_name=readable_name.substr(3); //cleanup the readable name by removing redundant part
+    } catch (const std::out_of_range&) {
+        readable_name = "UNKNOWN";
+    }
+    return readable_name;
+}
 
 
-//@TODO BAD CODE STYLE: function in header
-void InitializeLevMarFitter(mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size)
+void InitializeLevMarFitter(const mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size)
 {
   int np;
 
@@ -47,9 +70,6 @@ void InitializeLevMarFitter(mat_table_build_instr *btbl,fit_instructions *instr,
 
   // the output matrix gets one row for each indepdendent parameter
   struct delta_mat_output_line *ols = new struct delta_mat_output_line[np];
-
-  // it's a good idea to clear these at the start
-  memset(ols,0,sizeof(struct delta_mat_output_line[np]));
 
   // now build the input and output lines
   input_cnt = 0;
@@ -96,6 +116,7 @@ void InitializeLevMarFitter(mat_table_build_instr *btbl,fit_instructions *instr,
     ols[i].bead_params_func = btbl[i].bead_params_func;
     ols[i].reg_params_func  = btbl[i].reg_params_func;
     ols[i].array_index      = btbl[i].array_index;
+    ols[i].name             = btbl[i].name;
   }
 
   // fill in the top-level structure
@@ -105,53 +126,16 @@ void InitializeLevMarFitter(mat_table_build_instr *btbl,fit_instructions *instr,
   instr->output_len = np;
 }
 
+
+
+
 void DumpBuildInstructionTable(mat_table_build_instr *tbl, int flow_block_size)
 {
   for (int i=0;true;i++)
   {
     std::string pcomp;
 
-    switch (tbl[i].comp)
-    {
-      case TBL_END:
-        pcomp="TBL_END    ";
-        break;
-      case DFDR:
-        pcomp="DFDR       ";
-        break;
-      case DFDA:
-        pcomp="DFDA       ";
-        break;
-      case DFDT0:
-        pcomp="DFDT0      ";
-        break;
-      case DFDP:
-        pcomp="DFDP       ";
-        break;
-      case DFDTSH:
-        pcomp="DFDTSH     ";
-        break;
-      case DFDSIGMA:
-        pcomp="DFDSIGMA   ";
-        break;
-      case DFDKRATE:
-        pcomp="DFDKRATE   ";
-        break;
-      case DFDD:
-        pcomp="DFDD       ";
-        break;
-      case DFDRDR:
-        pcomp="DFDRDR     ";
-        break;
-      case DFDGAIN:
-        pcomp="DFDGAIN    ";
-        break;
-      case YERR:
-        pcomp="YERR       ";
-        break;
-      default:
-        pcomp = "UNKNOWN";
-    }
+    pcomp = ComponentName( tbl[i].comp );
 
     printf("%s % 4d [",pcomp.c_str(), tbl[i].array_index );
     for (int j=0;j < flow_block_size-1;j++)
@@ -170,14 +154,14 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
 {
   // if there is a high-level fit descriptor, create a set of build instructions
   // from the high-level descriptor
-  if (fd != NULL)
+  if (fds.size()>0)
   {
     int row_cnt = 0;
 
     // first figure out how many entries the build instruction table will need
-    for (int i=0;fd[i].comp != TBL_END;i++)
+    for (int i=0;fds[i].comp != TBL_END;i++)
     {
-      switch (fd[i].ptype)
+      switch (fds[i].ptype)
       {
         case ParamTypeAFlows:
         case ParamTypeCFlows:
@@ -222,28 +206,30 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
     row_cnt = 0;
 
     // now create the rows
-    for (int i=0;fd[i].comp != TBL_END;i++)
+    for (int i=0;fds[i].comp != TBL_END;i++)
     {
-      switch (fd[i].ptype)
+      switch (fds[i].ptype)
       {
         case ParamTypeAllFlow:
-          mb[row_cnt].comp = fd[i].comp;
-          mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-          mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+          mb[row_cnt].comp = fds[i].comp;
+          mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+          mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
           for (int j=0;j < flow_block_size;j++) mb[row_cnt].SetAffectedFlow(j, 1);
+          mb[row_cnt].name = ComponentName(fds[i].comp);
           row_cnt++;
           break;
         case ParamTypeNotKey:
           // create an independent paramter per flow except for key flows
           for (int row=flow_key;row < flow_block_size;row++)
           {
-            mb[row_cnt].comp = fd[i].comp;
+            mb[row_cnt].comp = fds[i].comp;
 
             // individual parameters for each flow are assumed to be consecutive in the
             // BeadParams structure
-            mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-            mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+            mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+            mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
             mb[row_cnt].array_index = row - flow_key;
+            mb[row_cnt].name = ComponentName(fds[i].comp)+"_f"+std::to_string(row);
 
             // indicate which flow this specific parameter affects
             mb[row_cnt].SetAffectedFlow(row, 1);
@@ -254,13 +240,14 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
           // create an independent paramter per flow except for the first flow
           for (int row=1;row < flow_block_size;row++)
           {
-            mb[row_cnt].comp = fd[i].comp;
+            mb[row_cnt].comp = fds[i].comp;
 
             // individual parameters for each flow are assumed to be consecutive in the
             // BeadParams structure
-            mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-            mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+            mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+            mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
             mb[row_cnt].array_index = row - 1;
+            mb[row_cnt].name = ComponentName(fds[i].comp)+"_f"+std::to_string(row);
 
             // indicate which flow this specific parameter affects
             mb[row_cnt].SetAffectedFlow(row, 1);
@@ -271,13 +258,14 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
           // create an independent paramter per flow
           for (int row=0;row < flow_block_size;row++)
           {
-            mb[row_cnt].comp = fd[i].comp;
+            mb[row_cnt].comp = fds[i].comp;
 
             // individual parameters for each flow are assumed to be consecutive in the
             // bead_params structure
-            mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-            mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+            mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+            mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
             mb[row_cnt].array_index = row;
+            mb[row_cnt].name = ComponentName(fds[i].comp)+"_f"+std::to_string(row);
 
             // indicate which flow this specific parameter affects
             mb[row_cnt].SetAffectedFlow(row, 1);
@@ -288,13 +276,14 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
           // create an independent parameter per nucleotide
           for (int nuc=0;nuc < NUMNUC;nuc++)
           {
-            mb[row_cnt].comp = fd[i].comp;
+            mb[row_cnt].comp = fds[i].comp;
 
             // individual parameters for each nucleotide are assumed to be consecutive in the
             // BeadParams structure
-            mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-            mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+            mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+            mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
             mb[row_cnt].array_index = nuc;
+            mb[row_cnt].name = ComponentName(fds[i].comp)+"_n"+std::to_string(nuc);
 
             // indicate which flows this specific parameter affects
             for (int j=0;j < flow_block_size;j++)
@@ -310,11 +299,12 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
           break;
         case ParamTypeAFlows:
           // create one parameter for all flows of a single nucleotide (A)
-          mb[row_cnt].comp = fd[i].comp;
+          mb[row_cnt].comp = fds[i].comp;
 
           // the table entry should point to the specific parameter for this nucleotide
-          mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-          mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+          mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+          mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
+          mb[row_cnt].name = ComponentName(fds[i].comp);
 
           // indicate which flows this specific parameter affects
           for (int j=0;j < flow_block_size;j++)
@@ -329,11 +319,12 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
           break;
         case ParamTypeCFlows:
           // create one parameter for all flows of a single nucleotide (C)
-          mb[row_cnt].comp = fd[i].comp;
+          mb[row_cnt].comp = fds[i].comp;
 
           // the table entry should point to the specific parameter for this nucleotide
-          mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-          mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+          mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+          mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
+          mb[row_cnt].name = ComponentName(fds[i].comp);
 
           // indicate which flows this specific parameter affects
           for (int j=0;j < flow_block_size;j++)
@@ -348,11 +339,12 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
           break;
         case ParamTypeGFlows:
           // create one parameter for all flows of a single nucleotide (G)
-          mb[row_cnt].comp = fd[i].comp;
+          mb[row_cnt].comp = fds[i].comp;
 
           // the table entry should point to the specific parameter for this nucleotide
-          mb[row_cnt].bead_params_func = fd[i].bead_params_func;
-          mb[row_cnt].reg_params_func  = fd[i].reg_params_func;
+          mb[row_cnt].bead_params_func = fds[i].bead_params_func;
+          mb[row_cnt].reg_params_func  = fds[i].reg_params_func;
+          mb[row_cnt].name = ComponentName(fds[i].comp)+"_G";
 
           // indicate which flows this specific parameter affects
           for (int j=0;j < flow_block_size;j++)
@@ -379,60 +371,114 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
     InitializeLevMarFitter(mb,& (fi), flow_block_size);
 }
 
-
-master_fit_type_entry master_fit_type_table::base_bkg_model_fit_type[] =
+void master_fit_type_table::set_base_bkg_model_fit_type()
 {
-//{"name",                     &fit_descriptor,                              NULL, {NULL,0,NULL,0}},
-  // individual well fits
-  {"FitWellAmpl",               BkgFitStructures::fit_well_ampl_descriptor,                    NULL, {NULL,0,NULL,0}},
-  {"FitWellAmplBuffering",      BkgFitStructures::fit_well_ampl_buffering_descriptor,          NULL, {NULL,0,NULL,0}},
-  {"FitWellPostKey",            BkgFitStructures::fit_well_post_key_descriptor,                NULL, {NULL,0,NULL,0}},
-  {"FitWellAll",                BkgFitStructures::fit_well_all_descriptor,                     NULL, {NULL,0,NULL,0}},
-  {"FitWellPostKeyNoDmult",     BkgFitStructures::fit_well_post_key_descriptor_nodmult,        NULL, {NULL,0,NULL,0}},
+    // set fit_type_hash_table
+    fit_type_hash_table = { // nested list-initialization
+       {"FitWellAmpl", {"wellAmpl","TableEnd"}},
+       {"FitWellAmplBuffering", {"wellR","wellAmpl","TableEnd"}},
+       {"FitWellPostKey", {"wellR","wellCopies","wellDmult","wellAmplPostKey","TableEnd"}},
+       {"FitWellAll", {"wellR","wellCopies","wellDmult","wellAmpl","wellKmult","TableEnd"}},
+       {"FitWellPostKeyNoDmult", {"wellR","wellCopies","wellAmplPostKey","TableEnd"}},
+       // region-wide fits
+       {"FitRegionTmidnucPlus", {"R","Copies","Ampl","TMidNuc","TableEnd"}},
+       {"FitRegionInit2",      {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","D","NucModifyRatio","TauRM","TauRO","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionInit2TauE",  {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","D","NucModifyRatio","TauE","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionInit2TauENoRDR",{"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","D","NucModifyRatio","TauE","CopyDrift","TableEnd"}},
+       {"FitRegionFull",       {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","D","NucModifyRatio","TauRM","TauRO","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionFullTauE",   {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","D","NucModifyRatio","TauE","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionFullTauENoRDR", {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","D","NucModifyRatio","TauE","CopyDrift","TableEnd"}},
+       {"FitRegionInit2NoRDR", {"R","Copies","Ampl","TShift","TMidNuc","Sigma","TMidNucDelay","SigmaMult","Krate","D","NucModifyRatio","TauRM","TauRO","CopyDrift","TableEnd"}},
+       {"FitRegionFullNoRDR",  {"R","Copies","Ampl","TShift","TMidNuc","Sigma","TMidNucDelay","SigmaMult","Krate","D","NucModifyRatio","TauRM","TauRO","CopyDrift","TableEnd"}},
+       {"FitRegionTimeVarying",{"TMidNuc","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionDarkness",   {"Darkness","Ampl","TableEnd"}},
+       //region-wide fits without diffusion
+       {"FitRegionInit2TauENoD",  {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","NucModifyRatio","TauE","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionInit2TauENoRDRNoD", {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","NucModifyRatio","TauE","CopyDrift","TableEnd"}},
+       {"FitRegionFullTauENoD",   {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","NucModifyRatio","TauE","RatioDrift","CopyDrift","TableEnd"}},
+       {"FitRegionFullTauENoRDRNoD",  {"R","Copies","Ampl","TShift","TMidNuc","Sigma","Krate","NucModifyRatio","TauE","CopyDrift","TableEnd"}},
+       };
 
-  // region-wide fits
-  {"FitRegionTmidnucPlus",      BkgFitStructures::fit_region_tmidnuc_plus_descriptor,          NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2",            BkgFitStructures::fit_region_init2_descriptor,                 NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2TauE",        BkgFitStructures::fit_region_init2_taue_descriptor,            NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2TauENoRDR",   BkgFitStructures::fit_region_init2_taue_NoRDR_descriptor,      NULL, {NULL,0,NULL,0}},
-  {"FitRegionFull",             BkgFitStructures::fit_region_full_descriptor,                  NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauE",         BkgFitStructures::fit_region_full_taue_descriptor,             NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauENoRDR",    BkgFitStructures::fit_region_full_taue_NoRDR_descriptor,       NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2NoRDR",       BkgFitStructures::fit_region_init2_noRatioDrift_descriptor,    NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullNoRDR",        BkgFitStructures::fit_region_full_noRatioDrift_descriptor,     NULL, {NULL,0,NULL,0}},
-  {"FitRegionTimeVarying",      BkgFitStructures::fit_region_time_varying_descriptor,          NULL, {NULL,0,NULL,0}},
-  {"FitRegionDarkness",         BkgFitStructures::fit_region_darkness_descriptor,              NULL, {NULL,0,NULL,0}},
-
-  //region-wide fits without diffusion
-  {"FitRegionInit2TauENoD",     BkgFitStructures::fit_region_init2_taue_NoD_descriptor,        NULL, {NULL,0,NULL,0}},
-  {"FitRegionInit2TauENoRDRNoD",BkgFitStructures::fit_region_init2_taue_NoRDR_NoD_descriptor,  NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauENoD",      BkgFitStructures::fit_region_full_taue_NoD_descriptor,         NULL, {NULL,0,NULL,0}},
-  {"FitRegionFullTauENoRDRNoD", BkgFitStructures::fit_region_full_taue_NoRDR_NoD_descriptor,   NULL, {NULL,0,NULL,0}},
-
-  { NULL, NULL, NULL, {NULL,0,NULL,0} },  // end of table
-};
-
-
-fit_instructions *master_fit_type_table::GetFitInstructionsByName(const char *name) const
-{
-  for (int i=0;data[i].name != NULL;i++)
-  {
-    if (strcmp(data[i].name,name) == 0)
-      return &data[i].fi;
-  }
-
-  return NULL;
+    // set each entry for base_bkg_model_fit_type
+    for (auto p: fit_type_hash_table)
+    {
+      CreateBkgModelFitType(p.first, p.second);
+      base_bkg_model_fit_type[p.first].CreateBuildInstructions(_nucIdentity, max(_flowKey - _flowStart, 0 ), _flowBlockSize);
+    }
 }
 
-fit_descriptor *master_fit_type_table::GetFitDescriptorByName(const char *name) const
+
+fit_descriptor master_fit_type_table::make_fit_param_entry(std::string param)
 {
-  for (int i=0;data[i].name != NULL;i++)
-  {
-    if (strcmp(data[i].name,name) == 0)
-      return data[i].fd;
+  fit_descriptor fd;
+  if (param == "wellAmpl")            fd = fit_descriptor({DFDA,      & BeadParams::AccessAmpl,   0,      ParamTypePerFlow });
+  else if (param == "wellR")          fd = fit_descriptor({DFDR,      & BeadParams::AccessR,      0,      ParamTypeAllFlow });
+  else if (param == "wellCopies")     fd = fit_descriptor({DFDP,      & BeadParams::AccessCopies, 0,      ParamTypeAllFlow });
+  else if (param == "wellDmult")      fd = fit_descriptor({DFDPDM,    & BeadParams::AccessDmult,  0,      ParamTypeAllFlow });
+  else if (param == "wellKmult")      fd = fit_descriptor({DFDDKR,    & BeadParams::AccessKmult,  0,      ParamTypePerFlow });
+  else if (param == "wellAmplPostKey")fd = fit_descriptor({DFDA,      & BeadParams::AccessAmplPostKey, 0, ParamTypeNotKey  });
+
+  else if (param == "Ampl")           fd = fit_descriptor({DFDA,      0, & reg_params::AccessAmpl,        ParamTypePerFlow });
+  else if (param == "R")              fd = fit_descriptor({DFDR,      0, & reg_params::AccessR,           ParamTypeAllFlow });
+  else if (param == "Copies")         fd = fit_descriptor({DFDP,      0, & reg_params::AccessCopies,      ParamTypeAllFlow });
+  else if (param == "D")              fd = fit_descriptor({DFDD,      0, & reg_params::AccessD,           ParamTypePerNuc });
+  else if (param == "Darkness")       fd = fit_descriptor({DFDERR,    0, & reg_params::AccessDarkness,    ParamTypeAllFlow });
+  else if (param == "TShift")         fd = fit_descriptor({DFDTSH,    0, & reg_params::AccessTShift,      ParamTypeAllFlow });
+  else if (param == "TMidNuc")        fd = fit_descriptor({DFDT0,     0, & reg_params::AccessTMidNuc,     ParamTypeAllFlow });
+  else if (param == "TMidNucDelay")   fd = fit_descriptor({DFDT0DLY,  0, & reg_params::AccessTMidNucDelay,ParamTypePerNuc });
+  else if (param == "Sigma")          fd = fit_descriptor({DFDSIGMA,  0, & reg_params::AccessSigma,       ParamTypeAllFlow });
+  else if (param == "SigmaMult")      fd = fit_descriptor({DFDSMULT,  0, & reg_params::AccessSigmaMult,   ParamTypePerNuc });
+  else if (param == "Krate")          fd = fit_descriptor({DFDKRATE,  0, & reg_params::AccessKrate,       ParamTypePerNuc });
+  else if (param == "NucModifyRatio") fd = fit_descriptor({DFDMR,     0, & reg_params::AccessNucModifyRatio, ParamTypePerNuc });
+  else if (param == "TauRM")          fd = fit_descriptor({DFDTAUMR,  0, & reg_params::AccessTauRM,       ParamTypeAllFlow });
+  else if (param == "TauRO")          fd = fit_descriptor({DFDTAUOR,  0, & reg_params::AccessTauRO,       ParamTypeAllFlow });
+  else if (param == "TauE")           fd = fit_descriptor({DFDTAUE,   0, & reg_params::AccessTauE,        ParamTypeAllFlow });
+  else if (param == "RatioDrift")     fd = fit_descriptor({DFDRDR,    0, & reg_params::AccessRatioDrift,  ParamTypeAllFlow });
+  else if (param == "CopyDrift")      fd = fit_descriptor({DFDPDR,    0, & reg_params::AccessCopyDrift,   ParamTypeAllFlow });
+  else if (param == "TableEnd")      fd = fit_descriptor({TBL_END,    0, 0,   ParamTableEnd });
+  else { 
+    throw FitTypeException(param + ": Not a valid bead/reg param \n");
   }
 
-  return NULL;
+  return fd;
+}
+
+void master_fit_type_table::CreateBkgModelFitType(const string &fitName, const std::vector<std::string> &fit_params) {
+  master_fit_type_entry mfte;
+  mfte.name = fitName.c_str();
+  mfte.fds.resize(fit_params.size());
+  for (size_t i=0; i<fit_params.size(); i++) {
+        mfte.fds[i] = make_fit_param_entry(fit_params[i]);
+  }
+  base_bkg_model_fit_type[fitName] = mfte;
+}
+
+fit_instructions *master_fit_type_table::GetFitInstructionsByName(const string& name)
+{
+  pthread_mutex_lock(&addFit);
+  auto it = base_bkg_model_fit_type.find(name);
+  if (it != base_bkg_model_fit_type.end()) {
+    pthread_mutex_unlock(&addFit);
+    return &(it->second.fi);
+  }
+  else {
+    pthread_mutex_unlock(&addFit);
+    throw FitTypeException(name + " :Not a valid fit type name\n");
+  }
+}
+
+const vector<fit_descriptor>& master_fit_type_table::GetFitDescriptorByName(const string& name)
+{
+  pthread_mutex_lock(&addFit);
+  auto it = base_bkg_model_fit_type.find(name);
+  if (it != base_bkg_model_fit_type.end()) {
+    pthread_mutex_unlock(&addFit);
+    return it->second.fds;
+  }
+  else {
+    pthread_mutex_unlock(&addFit);
+    throw FitTypeException(name + " :Not a valid fit type name\n");
+  }
 }
 
 
@@ -446,38 +492,35 @@ master_fit_type_table::master_fit_type_table(
     int flow_start, 
     int flow_key, 
     int flow_block_size
-  )
+  ) :_flowStart(flow_start), _flowKey(flow_key), _flowBlockSize(flow_block_size)
 {
-  int my_nuc_block[flow_block_size];
-  tears.GetFlowOrderBlock( my_nuc_block, flow_start, flow_start + flow_block_size );
+  _nucIdentity = new int[_flowBlockSize];
+  tears.GetFlowOrderBlock(_nucIdentity, _flowStart, _flowStart + _flowBlockSize );
 
-  // We want to copy the prototype table.
-  data = new master_fit_type_entry[ sizeof( base_bkg_model_fit_type ) / 
-                                    sizeof( master_fit_type_entry ) ];
+  // for thread safe adding of dynamic fit types during  signal processing
+
+  pthread_mutex_init(&addFit, NULL);
+
+  set_base_bkg_model_fit_type();
 
   // go through the master table of fit types and generate all the build
   // instructions for each type of fitting we are going to do
-  for (int i=0 ; ; i++)
-  {
-    data[i] = base_bkg_model_fit_type[i];
-
-    if ( base_bkg_model_fit_type[i].name == NULL )  break;
-
-    data[i].CreateBuildInstructions(my_nuc_block, std::max( flow_key - flow_start, 0 ), flow_block_size);
-  }
+ 
+  //for (auto it=base_bkg_model_fit_type.begin(); it != base_bkg_model_fit_type.end(); ++it) {
+  //  it->second.CreateBuildInstructions(_nucIdentity, max(_flowKey - _flowStart, 0 ), _flowBlockSize);
+  //}
 }
 
 master_fit_type_table::~master_fit_type_table()
 {
-  for (int i=0;data[i].name != NULL;i++)
-  {
-    struct master_fit_type_entry *ft = &data[i];
+  for (auto it=base_bkg_model_fit_type.begin(); it != base_bkg_model_fit_type.end(); ++it) {
+    master_fit_type_entry *ft = &(it->second);
 
     // make sure there is a high-level descriptor for this row
     // if there wasn't one, then the row might contain a hard link to
     // a statically allocated matrix build instruction which we don't
     // want to free
-    if (ft->fd != NULL)
+    if (ft->fds.size() > 0)
     {
       if (ft->mb != NULL)
       {
@@ -496,8 +539,26 @@ master_fit_type_table::~master_fit_type_table()
     ft->fi.output = NULL;
   }
 
-  // Final cleanup.
-  delete [] data;
+  delete [] _nucIdentity;
+  pthread_mutex_destroy(&addFit);
 }
 
+void master_fit_type_table::addBkgModelFitType(
+  const string& fitName,
+  const vector<string>& paramNames)
+{
+  pthread_mutex_lock(&addFit);
 
+  try {
+    auto it = base_bkg_model_fit_type.find(fitName);
+    if (it == base_bkg_model_fit_type.end()) {
+      CreateBkgModelFitType(fitName, paramNames);
+      base_bkg_model_fit_type[fitName].CreateBuildInstructions(_nucIdentity, max(_flowKey - _flowStart, 0 ), _flowBlockSize);
+    }
+  }
+  catch(exception &ft) {
+    pthread_mutex_unlock(&addFit);
+    throw FitTypeException(ft.what());
+  }
+  pthread_mutex_unlock(&addFit);
+}

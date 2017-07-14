@@ -75,10 +75,10 @@ public:
 	      bool isSample, int flow_key, int flow_block_size,
         int flow_block_start );
 
-    void DoSampledRegionIteration ( BkgFitMatrixPacker *reg_fit,
+    int DoSampledRegionIteration ( BkgFitMatrixPacker *reg_fit,
                                     int iter, int flow_key, int flow_block_size,
                                     int flow_block_start );
-    void DoRegionIteration ( BkgFitMatrixPacker *reg_fit,
+    int DoRegionIteration( BkgFitMatrixPacker *reg_fit,
                              int iter, int flow_key, int flow_block_size,
                              int flow_block_start );
     bool DoSampledBeadIteration ( bool well_only_fit,

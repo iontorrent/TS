@@ -18,9 +18,32 @@ from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
+from math import isnan
 
 from json import encoder
 encoder.FLOAT_REPR = lambda x: format(x, '.15g')
+
+def groom_for_json(value):
+    """Helper method to remove all invalid values from a dictionary before encoding to json"""
+
+    def groom_list_for_json(my_list):
+        for index in range(len(my_list)):
+            my_list[index] = groom_for_json(my_list[index])
+        return my_list
+
+    def groom_dict_for_json(my_dictionary):
+        for key in my_dictionary.keys():
+            my_dictionary[key] = groom_for_json(my_dictionary[key])
+        return my_dictionary
+
+    if isinstance(value, dict):
+        return groom_dict_for_json(value)
+    elif isinstance(value, list):
+        return groom_list_for_json(value)
+    elif isinstance(value, float) and isnan(value):
+        return "NaN"
+    else:
+        return value
 
 
 class JSONEncoder(DjangoJSONEncoder):
@@ -92,6 +115,7 @@ class JSONField(models.TextField):
         if not value:
             return super(JSONField, self).get_db_prep_save("", connection=connection)
         else:
+            value = groom_for_json(value)
             return super(JSONField, self).get_db_prep_save(dumps(value), connection=connection)
 
     def south_field_triple(self):

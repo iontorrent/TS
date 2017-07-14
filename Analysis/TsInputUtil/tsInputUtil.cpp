@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 
 #include "json/json.h"
-#include "Utils.h""
+#include "Utils.h"
 #include "OptArgs.h"
 
 #define TS_INPUT_UTIL_VERSION "1.0.0"
@@ -165,11 +165,11 @@ int main(int argc, const char *argv[])
     jsonBase["BkgModelControlOpts"]["mixed-stringency"]["value"] = 0.5;
     jsonBase["BkgModelControlOpts"]["mixed-stringency"]["min"] = "";
     jsonBase["BkgModelControlOpts"]["mixed-stringency"]["max"] = "";
-    jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-alpha"]["type"] = OT_FLOAT;
+    jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-alpha"]["type"] = OT_DOUBLE;
     jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-alpha"]["value"] = 1.0;
     jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-alpha"]["min"] = "";
     jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-alpha"]["max"] = "";
-    jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-gamma"]["type"] = OT_FLOAT;
+    jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-gamma"]["type"] = OT_DOUBLE;
     jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-gamma"]["value"] = 1.0;
     jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-gamma"]["min"] = "";
     jsonBase["BkgModelControlOpts"]["sigproc-regional-smoothing-gamma"]["max"] = "";
@@ -177,7 +177,7 @@ int main(int argc, const char *argv[])
     jsonBase["BkgModelControlOpts"]["restart-region-params-file"]["value"] = "";
     jsonBase["BkgModelControlOpts"]["restart-region-params-file"]["min"] = "";
     jsonBase["BkgModelControlOpts"]["restart-region-params-file"]["max"] = "";
-    jsonBase["BkgModelControlOpts"]["bkg-washout-threshold"]["type"] = OT_FLOAT;
+    jsonBase["BkgModelControlOpts"]["bkg-washout-threshold"]["type"] = OT_DOUBLE;
     jsonBase["BkgModelControlOpts"]["bkg-washout-threshold"]["value"] = 2.0;
     jsonBase["BkgModelControlOpts"]["bkg-washout-threshold"]["min"] = "";
     jsonBase["BkgModelControlOpts"]["bkg-washout-threshold"]["max"] = "";
@@ -185,7 +185,7 @@ int main(int argc, const char *argv[])
     jsonBase["BkgModelControlOpts"]["bkg-washout-flow-detection"]["value"] = 6;
     jsonBase["BkgModelControlOpts"]["bkg-washout-flow-detection"]["min"] = "";
     jsonBase["BkgModelControlOpts"]["bkg-washout-flow-detection"]["max"] = "";
-    jsonBase["GpuControlOpts"]["gpuworkload"]["type"] = OT_FLOAT;
+    jsonBase["GpuControlOpts"]["gpuworkload"]["type"] = OT_DOUBLE;
     jsonBase["GpuControlOpts"]["gpuworkload"]["value"] = 1.0;
     jsonBase["GpuControlOpts"]["gpuworkload"]["min"] = 0.0;
     jsonBase["GpuControlOpts"]["gpuworkload"]["max"] = 1.0;
@@ -269,6 +269,14 @@ int main(int argc, const char *argv[])
     jsonBase["GpuControlOpts"]["gpu-num-history-flows"]["value"] = 10;
     jsonBase["GpuControlOpts"]["gpu-num-history-flows"]["min"] = "";
     jsonBase["GpuControlOpts"]["gpu-num-history-flows"]["max"] = "";
+    jsonBase["GpuControlOpts"]["gpu-force-multi-flow-fit"]["type"] = OT_BOOL;
+    jsonBase["GpuControlOpts"]["gpu-force-multi-flow-fit"]["value"] = false;
+    jsonBase["GpuControlOpts"]["gpu-force-multi-flow-fit"]["min"] = "";
+    jsonBase["GpuControlOpts"]["gpu-force-multi-flow-fit"]["max"] = "";
+    jsonBase["GpuControlOpts"]["gpu-memory-per-proc"]["type"] = OT_INT;
+    jsonBase["GpuControlOpts"]["gpu-memory-per-proc"]["value"] = 0;
+    jsonBase["GpuControlOpts"]["gpu-memory-per-proc"]["min"] = "";
+    jsonBase["GpuControlOpts"]["gpu-memory-per-proc"]["max"] = "";
     jsonBase["SignalProcessingBlockControl"]["wells-compression"]["type"] = OT_INT;
     jsonBase["SignalProcessingBlockControl"]["wells-compression"]["value"] = 0;
     jsonBase["SignalProcessingBlockControl"]["wells-compression"]["min"] = 0;
@@ -367,6 +375,10 @@ int main(int argc, const char *argv[])
     jsonBase["BeadfindControlOpts"]["use-beadmask"]["value"] = "";
     jsonBase["BeadfindControlOpts"]["use-beadmask"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["use-beadmask"]["max"] = "";
+    jsonBase["BeadfindControlOpts"]["exclusion-mask"]["type"] = OT_STRING;
+    jsonBase["BeadfindControlOpts"]["exclusion-mask"]["value"] = "";
+    jsonBase["BeadfindControlOpts"]["exclusion-mask"]["min"] = "";
+    jsonBase["BeadfindControlOpts"]["exclusion-mask"]["max"] = "";
     jsonBase["BeadfindControlOpts"]["beadmask-categorized"]["type"] = OT_BOOL;
     jsonBase["BeadfindControlOpts"]["beadmask-categorized"]["value"] = false;
     jsonBase["BeadfindControlOpts"]["beadmask-categorized"]["min"] = "";
@@ -387,7 +399,7 @@ int main(int argc, const char *argv[])
     jsonBase["BeadfindControlOpts"]["beadfind-sdasbf"]["value"] = true;
     jsonBase["BeadfindControlOpts"]["beadfind-sdasbf"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-sdasbf"]["max"] = "";
-    jsonBase["BeadfindControlOpts"]["beadfind-bfmult"]["type"] = OT_FLOAT;
+    jsonBase["BeadfindControlOpts"]["beadfind-bfmult"]["type"] = OT_DOUBLE;
     jsonBase["BeadfindControlOpts"]["beadfind-bfmult"]["value"] = 1.0;
     jsonBase["BeadfindControlOpts"]["beadfind-bfmult"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-bfmult"]["max"] = "";
@@ -407,11 +419,11 @@ int main(int argc, const char *argv[])
     jsonBase["BeadfindControlOpts"]["beadfind-min-tf-snr"]["value"] = 7.0;
     jsonBase["BeadfindControlOpts"]["beadfind-min-tf-snr"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-min-tf-snr"]["max"] = "";
-    jsonBase["BeadfindControlOpts"]["beadfind-tf-min-peak"]["type"] = OT_FLOAT;
+    jsonBase["BeadfindControlOpts"]["beadfind-tf-min-peak"]["type"] = OT_DOUBLE;
     jsonBase["BeadfindControlOpts"]["beadfind-tf-min-peak"]["value"] = 40.0;
     jsonBase["BeadfindControlOpts"]["beadfind-tf-min-peak"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-tf-min-peak"]["max"] = "";
-    jsonBase["BeadfindControlOpts"]["beadfind-lib-min-peak"]["type"] = OT_FLOAT;
+    jsonBase["BeadfindControlOpts"]["beadfind-lib-min-peak"]["type"] = OT_DOUBLE;
     jsonBase["BeadfindControlOpts"]["beadfind-lib-min-peak"]["value"] = 10.0;
     jsonBase["BeadfindControlOpts"]["beadfind-lib-min-peak"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-lib-min-peak"]["max"] = "";
@@ -427,10 +439,6 @@ int main(int argc, const char *argv[])
     jsonBase["BeadfindControlOpts"]["beadfind-skip-sd-recover"]["value"] = 1;
     jsonBase["BeadfindControlOpts"]["beadfind-skip-sd-recover"]["min"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-skip-sd-recover"]["max"] = "";
-    jsonBase["BeadfindControlOpts"]["beadfind-thumbnail"]["type"] = OT_INT;
-    jsonBase["BeadfindControlOpts"]["beadfind-thumbnail"]["value"] = 0;
-    jsonBase["BeadfindControlOpts"]["beadfind-thumbnail"]["min"] = "";
-    jsonBase["BeadfindControlOpts"]["beadfind-thumbnail"]["max"] = "";
     jsonBase["BeadfindControlOpts"]["beadfind-sep-ref"]["type"] = OT_BOOL;
     jsonBase["BeadfindControlOpts"]["beadfind-sep-ref"]["value"] = false;
     jsonBase["BeadfindControlOpts"]["beadfind-sep-ref"]["min"] = "";
@@ -583,7 +591,7 @@ int main(int argc, const char *argv[])
     jsonBase["ImageControlOpts"]["col-doubles-xtalk-correct"]["value"] = false;
     jsonBase["ImageControlOpts"]["col-doubles-xtalk-correct"]["min"] = "";
     jsonBase["ImageControlOpts"]["col-doubles-xtalk-correct"]["max"] = "";
-    jsonBase["ImageControlOpts"]["pair-xtalk-coeff"]["type"] = OT_FLOAT;
+    jsonBase["ImageControlOpts"]["pair-xtalk-coeff"]["type"] = OT_DOUBLE;
     jsonBase["ImageControlOpts"]["pair-xtalk-coeff"]["value"] = 0.0;
     jsonBase["ImageControlOpts"]["pair-xtalk-coeff"]["min"] = "";
     jsonBase["ImageControlOpts"]["pair-xtalk-coeff"]["max"] = "";
@@ -591,7 +599,7 @@ int main(int argc, const char *argv[])
     jsonBase["ImageControlOpts"]["fluid-potential-correct"]["value"] = false;
     jsonBase["ImageControlOpts"]["fluid-potential-correct"]["min"] = "";
     jsonBase["ImageControlOpts"]["fluid-potential-correct"]["max"] = "";
-    jsonBase["ImageControlOpts"]["fluid-potential-threshold"]["type"] = OT_FLOAT;
+    jsonBase["ImageControlOpts"]["fluid-potential-threshold"]["type"] = OT_DOUBLE;
     jsonBase["ImageControlOpts"]["fluid-potential-threshold"]["value"] = 1.0;
     jsonBase["ImageControlOpts"]["fluid-potential-threshold"]["min"] = "";
     jsonBase["ImageControlOpts"]["fluid-potential-threshold"]["max"] = "";
@@ -599,6 +607,10 @@ int main(int argc, const char *argv[])
     jsonBase["ImageControlOpts"]["corr-noise-correct"]["value"] = true;
     jsonBase["ImageControlOpts"]["corr-noise-correct"]["min"] = "";
     jsonBase["ImageControlOpts"]["corr-noise-correct"]["max"] = "";
+    jsonBase["ImageControlOpts"]["mask-datacollect-exclude-regions"]["type"] = OT_BOOL;
+    jsonBase["ImageControlOpts"]["mask-datacollect-exclude-regions"]["value"] = false;
+    jsonBase["ImageControlOpts"]["mask-datacollect-exclude-regions"]["min"] = "";
+    jsonBase["ImageControlOpts"]["mask-datacollect-exclude-regions"]["max"] = "";
     jsonBase["ModuleControlOpts"]["bfonly"]["type"] = OT_BOOL;
     jsonBase["ModuleControlOpts"]["bfonly"]["value"] = false;
     jsonBase["ModuleControlOpts"]["bfonly"]["min"] = "";
@@ -705,11 +717,11 @@ int main(int argc, const char *argv[])
     jsonBase["SystemContext"]["wells-save-as-ushort"]["value"] = true;
     jsonBase["SystemContext"]["wells-save-as-ushort"]["min"] = "";
     jsonBase["SystemContext"]["wells-save-as-ushort"]["max"] = "";
-    jsonBase["SystemContext"]["wells-convert-low"]["type"] = OT_FLOAT;
+    jsonBase["SystemContext"]["wells-convert-low"]["type"] = OT_DOUBLE;
     jsonBase["SystemContext"]["wells-convert-low"]["value"] = -5.0;
     jsonBase["SystemContext"]["wells-convert-low"]["min"] = "";
     jsonBase["SystemContext"]["wells-convert-low"]["max"] = "";
-    jsonBase["SystemContext"]["wells-convert-high"]["type"] = OT_FLOAT;
+    jsonBase["SystemContext"]["wells-convert-high"]["type"] = OT_DOUBLE;
     jsonBase["SystemContext"]["wells-convert-high"]["value"] = 28.0;
     jsonBase["SystemContext"]["wells-convert-high"]["min"] = "";
     jsonBase["SystemContext"]["wells-convert-high"]["max"] = "";
@@ -741,19 +753,19 @@ int main(int argc, const char *argv[])
     jsonBase["GlobalDefaultsForBkgModel"]["barcode-spec-file"]["value"] = "";
     jsonBase["GlobalDefaultsForBkgModel"]["barcode-spec-file"]["min"] = "";
     jsonBase["GlobalDefaultsForBkgModel"]["barcode-spec-file"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["bkg-kmult-adj-low-hi"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["bkg-kmult-adj-low-hi"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["bkg-kmult-adj-low-hi"]["value"] = 2.0;
     jsonBase["LocalSigProcControl"]["bkg-kmult-adj-low-hi"]["min"] = "";
     jsonBase["LocalSigProcControl"]["bkg-kmult-adj-low-hi"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["kmult-low-limit"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["kmult-low-limit"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["kmult-low-limit"]["value"] = 0.65;
     jsonBase["LocalSigProcControl"]["kmult-low-limit"]["min"] = "";
     jsonBase["LocalSigProcControl"]["kmult-low-limit"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["kmult-hi-limit"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["kmult-hi-limit"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["kmult-hi-limit"]["value"] = 1.75;
     jsonBase["LocalSigProcControl"]["kmult-hi-limit"]["min"] = "";
     jsonBase["LocalSigProcControl"]["kmult-hi-limit"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["bkg-copy-stringency"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["bkg-copy-stringency"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["bkg-copy-stringency"]["value"] = 1.0;
     jsonBase["LocalSigProcControl"]["bkg-copy-stringency"]["min"] = "";
     jsonBase["LocalSigProcControl"]["bkg-copy-stringency"]["max"] = "";
@@ -789,19 +801,19 @@ int main(int argc, const char *argv[])
     jsonBase["LocalSigProcControl"]["barcode-debug"]["value"] = false;
     jsonBase["LocalSigProcControl"]["barcode-debug"]["min"] = "";
     jsonBase["LocalSigProcControl"]["barcode-debug"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["barcode-radius"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["barcode-radius"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["barcode-radius"]["value"] = 0.75;
     jsonBase["LocalSigProcControl"]["barcode-radius"]["min"] = "";
     jsonBase["LocalSigProcControl"]["barcode-radius"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["barcode-tie"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["barcode-tie"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["barcode-tie"]["value"] = 0.5;
     jsonBase["LocalSigProcControl"]["barcode-tie"]["min"] = "";
     jsonBase["LocalSigProcControl"]["barcode-tie"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["barcode-penalty"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["barcode-penalty"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["barcode-penalty"]["value"] = 2000.0;
     jsonBase["LocalSigProcControl"]["barcode-penalty"]["min"] = "";
     jsonBase["LocalSigProcControl"]["barcode-penalty"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["kmult-penalty"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["kmult-penalty"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["kmult-penalty"]["value"] = 100.0;
     jsonBase["LocalSigProcControl"]["kmult-penalty"]["min"] = "";
     jsonBase["LocalSigProcControl"]["kmult-penalty"]["max"] = "";
@@ -825,11 +837,11 @@ int main(int argc, const char *argv[])
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-tau-adj"]["value"] = true;
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-tau-adj"]["min"] = "";
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-tau-adj"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-limit"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-limit"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-limit"]["value"] = 0.2;
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-limit"]["min"] = "";
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-limit"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-lower"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-lower"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-lower"]["value"] = 10.0;
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-lower"]["min"] = "";
     jsonBase["LocalSigProcControl"]["bkg-exp-tail-bkg-lower"]["max"] = "";
@@ -861,7 +873,7 @@ int main(int argc, const char *argv[])
     jsonBase["LocalSigProcControl"]["vectorize"]["value"] = true;
     jsonBase["LocalSigProcControl"]["vectorize"]["min"] = "";
     jsonBase["LocalSigProcControl"]["vectorize"]["max"] = "";
-    jsonBase["LocalSigProcControl"]["bkg-ampl-lower-limit"]["type"] = OT_FLOAT;
+    jsonBase["LocalSigProcControl"]["bkg-ampl-lower-limit"]["type"] = OT_DOUBLE;
     jsonBase["LocalSigProcControl"]["bkg-ampl-lower-limit"]["value"] = 0.001;
     jsonBase["LocalSigProcControl"]["bkg-ampl-lower-limit"]["min"] = "";
     jsonBase["LocalSigProcControl"]["bkg-ampl-lower-limit"]["max"] = "";

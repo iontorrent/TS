@@ -7,7 +7,9 @@
 #include <errno.h>
 #include "LinuxCompat.h"
 #include <cinttypes>
-
+#include <istream>
+#include <fstream>
+#include <string>
 
 Mask::Mask ( int _w, int _h )
 {
@@ -55,11 +57,6 @@ Mask::Mask ( const char *fileName, bool fillMask )
     mask.clear();
   }
   fclose ( in );
-}
-
-Mask::~Mask()
-{
-  mask.clear();
 }
 
 void Mask::Init ( int _w, int _h )
@@ -156,12 +153,12 @@ void Mask::Set ( int x, int y, MaskType type )
   }
 }
 
-// adds specified type flag to all wells in the mask
+// sets specified type flag to all wells in the mask; resets all other flags
 void Mask::SetAll(MaskType type )
 {
   int i;
   for ( i=0;i<w*h;i++ ) {
-     mask[i] |= type; 
+    mask[i] = type; 
     }
 }
 
@@ -491,6 +488,62 @@ int Mask::SetMask ( const char *fileName )
   fclose ( fp );
   // validateMask();
   return ( 0 );
+}
+
+int Mask::SetMaskFullChipText(const char* fileName, int offset_x, int offset_y, int size_x, int size_y)
+{
+    std::ifstream fp;
+    fp.open(fileName, std::ifstream::in);
+    if (!fp.is_open()) {
+        fprintf(stderr, "%s: %s\n", fileName, strerror(errno));
+        return (1);
+    }
+
+    std::string line;
+
+    // Format of a .txt mask file:
+    // - Header line indicates the whole chip size, x /t y.
+    // - One line per y coordinate in the chip, indicating the stretch of x-values that are NOT masked, [a,b[
+
+    // first line is chip size
+    int maskSize[2];
+    std::getline(fp, line);
+    sscanf(line.c_str(), "%d\t%d", &maskSize[0], &maskSize[1]);
+    if ((maskSize[0] <= offset_x) || (maskSize[1] <= offset_y)) {
+        fprintf(stdout, "Error: Incorrect exclusion mask size.\n");
+        return (1);
+    }
+
+    int masked = 0;
+    for (int y = 0; y < maskSize[1]; y++) {
+        std::getline(fp, line);
+        int bytes_read = line.size();
+
+        int maskStart, maskEnd;
+        if (bytes_read > 0) {
+            sscanf(line.c_str(), "%d\t%d", &maskStart, &maskEnd);
+
+            if( y>=offset_y && y<offset_y+size_y ){
+
+                if( maskStart>=offset_x ){ //fill in the beginning of the row
+                    for( int x = 0; x < std::min(maskStart-offset_x, size_x); ++x){
+                        mask[x+((y-offset_y)*this->w)] = MaskExclude;
+                        masked++;
+                    }
+                }
+
+                if( maskEnd < (offset_x+size_x) ){ //fill in the end of the row
+                    //note that maskEnd==0 of the whole row is excluded
+                    for( int x = std::max(0, maskEnd - offset_x); x<size_x; ++x){
+                        mask[x+((y-offset_y)*this->w)] = MaskExclude;
+                        masked++;
+                    }
+                }
+            }
+        }
+    }
+    std::cerr << "Total Masked Wells: " << masked << "\n";
+    return 0;
 }
 
 int Mask::DumpStats ( Region region, char *fileName, bool showWashouts ) const

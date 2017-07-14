@@ -8,6 +8,9 @@
 #include "BeadTracker.h"
 #include "RegionParams.h"
 #include "RegionTracker.h"
+#include "BkgModel/Fitters/Complex/BkgFitMatrixPacker.h"
+#include "hdf5.h"
+#include <armadillo>
 
 class SignalProcessingMasterFitter; // forward definition
 
@@ -23,7 +26,6 @@ class debug_collection
   FILE        *region_only_trace_file;
   FILE        *region_1mer_trace_file;
   FILE        *region_0mer_trace_file;
-
   debug_collection();
   ~debug_collection();
   void DebugFileClose();
@@ -36,5 +38,20 @@ class debug_collection
   void MultiFlowComputeTotalSignalTrace (SignalProcessingMasterFitter &bkg, float *fval,struct BeadParams *p,struct reg_params *reg_p,float *sbg /*=NULL*/,
                                          int flow_block_size, int flow_block_start);
 };
+
+#define IF_OPTIMIZER_DEBUG( D, X ) { if( D->bkg_control.pest_control.bkgModelHdf5Debug > 3 ) {X;} }
+class DebugSaver{
+
+private:
+    static hid_t hdf_file_id;
+
+
+public:
+    DebugSaver()  {} //: hdf_file_id(-1)
+    ~DebugSaver();
+    void DebugFileOpen(std::string& dirName);
+    void WriteData(const BkgFitMatrixPacker* reg_fit, reg_params &rp, int flow, const Region* region, const std::vector<string> derivativeNames, int nbeads);
+};
+
 
 #endif // DEBUGWRITER_H

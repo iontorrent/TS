@@ -18,6 +18,7 @@ def project_msg_banner(user, project_msg, action):
     try:
         msg = ''
         thistag = ''
+        grpstatus = ''
         logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=d)
         for pk, status_list in project_msg.iteritems():
             report = Results.objects.get(id=pk)
@@ -43,9 +44,9 @@ def project_msg_banner(user, project_msg, action):
         if len(project_msg) > 1:
             thistag = "%s_%s_%s" % ('project', action, slugify(category))
 
-        if grpstatus == 'scheduled':
+        if grpstatus.lower() == 'scheduled':
             func = Message.info
-        elif grpstatus == 'success':
+        elif grpstatus.lower() == 'success':
             func = Message.success
         else:
             func = Message.error

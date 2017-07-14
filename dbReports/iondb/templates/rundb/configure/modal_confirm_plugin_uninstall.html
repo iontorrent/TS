@@ -36,6 +36,9 @@
                             $('#modal_confirm_plugin_uninstall').trigger(elem, {})
                         });
                     }
+                    var g = $('#grid').data('kendoGrid');
+                    g.dataSource.page(1);
+                    g.dataSource.read();
                     $('#modal_confirm_plugin_uninstall').trigger('modal_confirm_plugin_uninstall_done', { values: e.values } );
                     $('#modal_confirm_plugin_uninstall').modal("hide");
                 })
@@ -44,7 +47,6 @@
                     console.log("error:", data);
 
                 })
-                .always(function(data) { /*console.log("complete:", data);*/ });
         });
         $('#modal_confirm_plugin_uninstall').on('hidden', function () {
             $('body #modal_confirm_plugin_uninstall').remove();

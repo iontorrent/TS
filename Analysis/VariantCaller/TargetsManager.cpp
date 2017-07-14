@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <algorithm>
+#include <fstream>
 #include "BAMWalkerEngine.h"
 //#include "ExtendParameters.h"
 
@@ -15,10 +16,13 @@
 TargetsManager::TargetsManager()
 {
   trim_ampliseq_primers = false;
+  min_coverage_fraction = 0.0f;
+  pthread_mutex_init(&coverage_counter_mutex_, NULL);
 }
 
 TargetsManager::~TargetsManager()
 {
+	pthread_mutex_destroy(&coverage_counter_mutex_);
 }
 
 bool CompareTargets(TargetsManager::UnmergedTarget *i, TargetsManager::UnmergedTarget *j)
@@ -47,13 +51,12 @@ bool CompareTargets(TargetsManager::UnmergedTarget *i, TargetsManager::UnmergedT
 
 
 
-void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string& _targets, bool _trim_ampliseq_primers /*const ExtendParameters& parameters*/)
+void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string& _targets, float min_cov_frac, bool _trim_ampliseq_primers /*const ExtendParameters& parameters*/)
 {
-
+  min_coverage_fraction = min_cov_frac;
   //
   // Step 1. Retrieve raw target definitions
   //
-
   list<UnmergedTarget>  raw_targets;
 
   if (not _targets.empty()) {
@@ -137,35 +140,35 @@ void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string&
 }
 
 
-
+// -------------------------------------------------------------------------------------
 
 void TargetsManager::LoadRawTargets(const ReferenceReader& ref_reader, const string& bed_filename, list<UnmergedTarget>& raw_targets)
 {
-  FILE *bed_file = fopen(bed_filename.c_str(), "r");
-  if (not bed_file) {
+  ifstream bedfile(bed_filename.c_str());
+  if (not bedfile.is_open()){
     cerr << "ERROR: Unable to open target file " << bed_filename << " : " << strerror(errno) << endl;
     exit(1);
   }
 
-  char line[4096];
-  char chr_name[4096];
-  int begin;
-  int end;
-  char region_name[4096];
+  string line, bed_field;
+  vector<string> bed_line;
   int line_number = 0;
 
-  while (fgets(line, 4096, bed_file)) {
+  while(getline(bedfile, line)){
+
     ++line_number;
-
-    if (strncmp(line,"track",5) == 0) {
-      // Parse track line if needed
+    // Skip header line(s)
+    if (line.compare(0,5,"track")==0 or line.compare(0,7,"browser")==0 or line.length()==0)
       continue;
-    }
 
+    // Split line into tab separated fields
+    bed_line.clear();
+    stringstream ss(line);
+    while (getline(ss, bed_field, '\t'))
+      bed_line.push_back(bed_field);
 
-    int num_fields = sscanf(line, "%s\t%d\t%d\t%s", chr_name, &begin, &end, region_name);
-    if (num_fields == 0)
-      continue;
+    // the first three columns are required in the bad format
+    unsigned int num_fields = bed_line.size();
     if (num_fields < 3) {
       cerr << "ERROR: Failed to parse target file line " << line_number << endl;
       exit(1);
@@ -173,90 +176,117 @@ void TargetsManager::LoadRawTargets(const ReferenceReader& ref_reader, const str
 
     raw_targets.push_back(UnmergedTarget());
     UnmergedTarget& target = raw_targets.back();
-    target.begin = begin;
-    target.end = end;
-    target.chr = ref_reader.chr_idx(chr_name);
-    if (num_fields > 3 and strcmp(region_name,".") != 0)
-      target.name = region_name;
+    target.chr = ref_reader.chr_idx(bed_line[0].c_str());
+    target.begin = strtol (bed_line[1].c_str(), NULL, 0);
+    target.end = strtol (bed_line[2].c_str(), NULL, 0);
 
-    if (target.chr < 0) {
-      cerr << "ERROR: Target region " << target.name << " (" << chr_name << ":" << begin << "-" << end << ")"
+    if (num_fields > 3 and bed_line[3]!=".")
+      target.name = bed_line[3];
+
+    // Validate target
+    if (target.chr < 0){
+      cerr << "ERROR: Target region " << target.name << " (" << bed_line[0] << ":" << bed_line[1] << "-" << bed_line[2] << ")"
            << " has unrecognized chromosome name" << endl;
       exit(1);
     }
-
-    if (begin < 0 || end > ref_reader.chr_size(target.chr)) {
-      cerr << "ERROR: Target region " << target.name << " (" << chr_name << ":" << begin << "-" << end << ")"
+    if (target.begin < 0 || target.end > ref_reader.chr_size(target.chr)) {
+      cerr << "ERROR: Target region " << target.name << " (" << bed_line[0] << ":" << bed_line[1] << "-" << bed_line[2] << ")"
            << " is outside of reference sequence bounds ("
-           << chr_name << ":0-" << ref_reader.chr_size(target.chr) << ")" << endl;
+           << bed_line[0] << ":0-" << ref_reader.chr_size(target.chr) << ")" << endl;
       exit(1);
     }
-    if (end < begin) {
-      cerr << "ERROR: Target region " << target.name << " (" << chr_name << ":" << begin << "-" << end << ")"
+    if (target.end < target.begin) {
+      cerr << "ERROR: Target region " << target.name << " (" << bed_line[0] << ":" << bed_line[1] << "-" << bed_line[2] << ")"
            << " has inverted coordinates" << endl;
       exit(1);
     }
-    AddExtraTrim(target, line, num_fields);
+
+    // And now we simply assume that we have a beddetail file with at least 5 columns
+    if (num_fields > 4)
+      ParseBedInfoField(target, bed_line[num_fields-1]);
   }
 
-  fclose(bed_file);
-
+  bedfile.close();
   if (raw_targets.empty()) {
-    cerr << "ERROR: No targets loaded from " << bed_filename
-         << " after parsing " << line_number << " lines" << endl;
+    cerr << "ERROR: No targets loaded from " << bed_filename << " after parsing " << line_number << " lines" << endl;
     exit(1);
   }
 }
 
-void TargetsManager::AddExtraTrim(UnmergedTarget& target, char *line, int num_fields)
-{
-  // parse extra trimming out of the bed file
-  // would be nice to unify with validate_bed using BedFile.h
-  char keybuffer[4096];
-  target.trim_left = 0;
-  target.trim_right = 0;
+// -------------------------------------------------------------------------------------
 
-  int numfields = sscanf(line, "%*s\t%*d\t%*d\t%*s\t%*s\t%*s\t%*s\t%s", keybuffer);
-  if (numfields == 1) {
-    string keypairs = keybuffer; 
-    string left = "TRIM_LEFT=";
-    string right = "TRIM_RIGHT=";
-    long int trim_l = 0;
-    long int trim_r = 0;
+bool ParseInfoKey(const string key, string info, long &value) {
 
-    // look for a trim_left field
-    size_t found = keypairs.find(left);
-    if (found != string::npos){
-      string r1 = keypairs;
-      r1.erase(0, found+left.size());
-      trim_l = strtol (r1.c_str(), NULL, 0);
-    }
-
-    // look for a trim_right field
-    found = keypairs.find(right);
-    if (found != string::npos){
-      string r1 = keypairs;
-      r1.erase(0, found+right.size());
-      trim_r = strtol (r1.c_str(), NULL, 0);
-    }
-    assert(trim_l>=0);
-    assert(trim_r>=0);
-    target.trim_left = trim_l;
-    target.trim_right = trim_r;
+  size_t found = info.find(key);
+  if (found == string::npos){
+    return false;
   }
-  // cout << "trim assigned to amplicon starting " << target.begin << " with trimming " << target.trim_left << " and " << target.trim_right << endl;
+
+  info.erase(0, found+key.size());
+  value = strtol (info.c_str(), NULL, 0);
+  if (value>=0)
+    return true;
+  else
+    return false;
 }
 
+// -------------------------------------------------------------------------------------
 
-void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hint) const
+void TargetsManager::ParseBedInfoField(UnmergedTarget& target, const string info)
 {
+  // parse extra parameters out of the bed file info fields
+  long int temp = 0;
+
+  target.trim_left = 0;
+  if (ParseInfoKey("TRIM_LEFT=", info, temp))
+    target.trim_left = temp;
+
+  target.trim_right = 0;
+  if (ParseInfoKey("TRIM_RIGHT=", info, temp))
+    target.trim_right = temp;
+
+  target.hotspots_only = 0;
+  if (ParseInfoKey("HS_ONLY=", info, temp))
+    target.hotspots_only = temp;
+
+  target.read_mismatch_limit = -1;
+  if (ParseInfoKey("READ_MISMATCH_LIMIT=", info, temp)){
+      target.read_mismatch_limit = temp;
+  }
+}
+
+// -------------------------------------------------------------------------------------
+// expects a zero-based position to match target indexing.
+
+int TargetsManager::ReportHotspotsOnly(const MergedTarget &merged, int chr, long pos0)
+{
+  // Verify that (chr,pos) is inside the merged target
+  if (merged.chr != chr or pos0 < merged.begin or pos0 >= merged.end){
+    cerr << "ReportHotspotsOnly ERROR: (chr=" << chr << ",pos=" << pos0 << ") not in target chr "
+         << merged.chr << ":" << merged.begin << "-" << merged.end << endl;
+    exit(1);
+  }
+
+  // We take the first target index that contains the variant position, excluding primers.
+  unsigned int target_idx = merged.first_unmerged;
+  while (target_idx < unmerged.size() and unmerged[target_idx].end-unmerged[target_idx].trim_right < pos0)
+    ++target_idx;
+
+  if (target_idx < unmerged.size() and pos0 >= unmerged[target_idx].begin)
+    return  unmerged[target_idx].hotspots_only;
+
+  return 0;
+}
+
+// -------------------------------------------------------------------------------------
+
+void TargetsManager::GetBestTargetIndex(Alignment *rai, int unmerged_target_hint, int& best_target_idx, int& best_fit_penalty, int& best_overlap) const
+{
+
   // set these before any trimming
   rai->align_start = rai->alignment.Position;
   rai->align_end = rai->alignment.GetEndPosition(false, true);
   rai->old_cigar = rai->alignment.CigarData;
-
-  if (not trim_ampliseq_primers)
-    return;
 
   // Step 1: Find the first potential target region
 
@@ -271,10 +301,9 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
 
 
   // Step 2: Iterate over potential target regions, evaluate fit, pick the best fit
-
-  int best_target_idx = -1;
-  int best_fit_penalty = 100;
-  int best_overlap = 0;
+  best_target_idx = -1;
+  best_fit_penalty = 100;
+  best_overlap = 0;
 
   while (target_idx < (int)unmerged.size() and rai->alignment.RefID == unmerged[target_idx].chr and rai->end >= unmerged[target_idx].begin) {
 
@@ -285,16 +314,22 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
     int overlap = min(unmerged[target_idx].end, read_end) - max(unmerged[target_idx].begin, read_start);
     int fit_penalty = 100;
 
+    float overlap_ratio = (float) overlap / (float) (unmerged[target_idx].end - unmerged[target_idx].begin);
+    if (overlap_ratio > min_coverage_fraction)
+      rai->target_coverage_indices.push_back(target_idx);
+
     if (not rai->alignment.IsReverseStrand()) {
       if (read_prefix_size > 0)
         fit_penalty = min(read_prefix_size,50) + max(0,50-overlap);
       else
         fit_penalty = min(-3*read_prefix_size,50) + max(0,50-overlap);
+      if (read_postfix_size > 30) fit_penalty += read_postfix_size-10;
     } else {
       if (read_postfix_size > 0)
         fit_penalty = min(read_postfix_size,50) + max(0,50-overlap);
       else
         fit_penalty = min(-3*read_postfix_size,50) + max(0,50-overlap);
+      if (read_prefix_size > 30) fit_penalty += read_prefix_size-10;
     }
     if (read_prefix_size > 0 and read_postfix_size > 0)
       fit_penalty -= 10;
@@ -307,14 +342,34 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
 
     ++target_idx;
   }
+  if (rai->target_coverage_indices.size() > 1){
+    sort(rai->target_coverage_indices.begin(), rai->target_coverage_indices.end());
+  }
+}
 
-  if (best_target_idx == -1) {
-    rai->filtered = true;
-    return;
+
+void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hint) const
+{
+  int best_target_idx = -1;
+  int best_fit_penalty = 100;
+  int best_overlap = 0;
+  GetBestTargetIndex(rai, unmerged_target_hint, best_target_idx, best_fit_penalty, best_overlap);
+
+  if (best_target_idx < 0 or rai->target_coverage_indices.empty()){
+	  rai->filtered = true;
+	  return;
   }
 
+  if (not trim_ampliseq_primers){
+	  return;
+  }
 
-  // Step 3: Do the actual primer trimming.
+  // Step 1: Find the best target index
+  if (best_target_idx < 0){
+	  rai->filtered = true;
+	  return;
+  }
+  // Step 2: Do the actual primer trimming.
   //
   // For now, only adjust Position and Cigar.
   // Later, also adjust MD tag.
@@ -326,7 +381,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   vector<CigarOp>::iterator old_op = old_cigar.begin();
   int ref_pos = rai->alignment.Position;
 
-  // 3A: Cigar ops left of the target
+  // 2A: Cigar ops left of the target
 
   int begin = unmerged[best_target_idx].begin + unmerged[best_target_idx].trim_left;
   if (begin > unmerged[best_target_idx].end)
@@ -373,8 +428,11 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
 
     if (old_op->Type == 'D') {
       if (old_op->Length > gap) {
-        old_op->Length -= gap;
-        ref_pos += gap;
+        //old_op->Length -= gap;
+        //ref_pos += gap; 
+	// avoid #S#D case, extend align position, remove the leading D.
+	ref_pos += old_op->Length;
+	++old_op;
         break;
       } else {
         ref_pos += old_op->Length;
@@ -385,7 +443,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   }
 
 
-  // 3B: Cigar ops in the middle of the target
+  // 2B: Cigar ops in the middle of the target
 
   rai->alignment.Position = ref_pos;
 
@@ -419,13 +477,13 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
     }
 
     if (old_op->Type == 'D') {
-      new_cigar.push_back(CigarOp('D'));
       if (old_op->Length > gap) {
-        new_cigar.back().Length = gap;
-        old_op->Length -= gap;
-        ref_pos += gap;
+	// last D op, remove this one
+        ref_pos += old_op->Length;
+	++old_op; 
         break;
       } else {
+        new_cigar.push_back(CigarOp('D'));
         new_cigar.back().Length = old_op->Length;
         ref_pos += old_op->Length;
         ++old_op;
@@ -434,8 +492,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
     }
   }
 
-
-  // 3C: Cigar ops to the right of the target
+  // 2C: Cigar ops to the right of the target
 
   for (; old_op != old_cigar.end(); ++old_op) {
     if (old_op->Type == 'H' or old_op->Type == 'D')
@@ -455,14 +512,72 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   ZL << unmerged[best_target_idx].name << ":" <<  best_fit_penalty << ":" << best_overlap;
 
   rai->alignment.AddTag("ZL", "Z", ZL.str());
-
-
 }
 
 
+// Filter out a read if any of the following conditions is satisfied
+// a) The read does not cover any region.
+// b) The coverage ratio at the best region < min_coverage_ratio.
+bool TargetsManager::FilterReadByRegion(Alignment* rai, int unmerged_target_hint) const
+{
+	bool is_filtered_out = false;
+	int best_target_idx = -1;
+	int best_fit_penalty = 100;
+	int best_overlap = 0;
+	GetBestTargetIndex(rai, unmerged_target_hint, best_target_idx, best_fit_penalty, best_overlap);
+
+	// Filter out the read if it does not cover any region.
+	if (best_target_idx < 0 or rai->target_coverage_indices.empty()){
+		is_filtered_out = true;
+		rai->filtered = true;
+	    return is_filtered_out;
+	}
+
+	return is_filtered_out;
+}
 
 
+void TargetsManager::WriteTargetsCoverage(const string& target_cov_file, const ReferenceReader& ref_reader) const {
+	ofstream target_cov_out;
+	target_cov_out.open(target_cov_file.c_str(), ofstream::out);
+	target_cov_out << "chr"           << "\t"
+				   << "pos_start"     << "\t"
+				   << "pos_end"       << "\t"
+				   << "name"          << "\t"
+				   << "read_depth"    << "\t"
+				   << "family_depth"  << "\t"
+				   << "fam_size_hist" << endl;
 
+	for (vector<UnmergedTarget>::const_iterator target_it = unmerged.begin(); target_it != unmerged.end(); ++target_it){
+		unsigned int check_read_cov = 0;
+		unsigned int check_fam_cov = 0;
+		target_cov_out << ref_reader.chr_str(target_it->chr) << "\t"
+				       << target_it->begin << "\t"
+					   << target_it->end << "\t"
+					   << (target_it->name.empty()? "." : target_it->name) << "\t"
+					   << target_it->my_stat.read_coverage << "\t"
+					   << target_it->my_stat.family_coverage << "\t";
+		for (map<int, unsigned int>::const_iterator hist_it = target_it->my_stat.fam_size_hist.begin(); hist_it != target_it->my_stat.fam_size_hist.end(); ++hist_it){
+			target_cov_out << "(" << hist_it->first << "," << hist_it->second <<"),";
+			check_fam_cov += hist_it->second;
+			check_read_cov += (hist_it->second * (unsigned int) hist_it->first);
+		}
+		target_cov_out << endl;
+		// Check fam_size_hist matches read/family coverages.
+		assert((check_read_cov == target_it->my_stat.read_coverage) and (check_fam_cov == target_it->my_stat.family_coverage));
+	}
+	target_cov_out.close();
+}
 
-
-
+void TargetsManager::AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets){
+	pthread_mutex_lock(&coverage_counter_mutex_);
+	for (map<int, TargetStat>::const_iterator stat_it = stat_of_targets.begin(); stat_it != stat_of_targets.end(); ++stat_it){
+		int target_idx = stat_it->first;
+		unmerged[target_idx].my_stat.read_coverage += stat_it->second.read_coverage;
+		unmerged[target_idx].my_stat.family_coverage += stat_it->second.family_coverage;
+		for (map<int, unsigned int>::const_iterator hist_it = stat_it->second.fam_size_hist.begin(); hist_it != stat_it->second.fam_size_hist.end(); ++hist_it){
+			unmerged[target_idx].my_stat.fam_size_hist[hist_it->first] += hist_it->second;
+		}
+	}
+	pthread_mutex_unlock(&coverage_counter_mutex_);
+}

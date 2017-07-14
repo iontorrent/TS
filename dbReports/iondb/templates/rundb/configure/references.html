@@ -7,7 +7,7 @@
 {% endblock tab-configure-references %}
 {% block extra_head %}
   <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-  <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+  <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
   <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
   <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 
@@ -495,6 +495,9 @@ $(document).ready(function() {
     <li>
       <a href="#= '{% url "references_barcodeset" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Edit</a>
     </li>
+      <li>
+          <a href="#= '{% url "references_barcodeset_csv" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Download</a>
+      </li>
     <li>
       <a href="#= '{% url "references_barcodeset_delete" '999999' %}'.replace('999999',id)#" class="delete_barcodeset">Delete</a>
     </li>

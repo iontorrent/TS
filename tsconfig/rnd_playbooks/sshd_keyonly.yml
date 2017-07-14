@@ -1,0 +1,32 @@
+---
+# file: sshd_keyonly.yml + sshd_keyonly.j2
+# create sshd_keyonly.j2 with necessary public keys, one per line
+# copy both files to: /usr/share/ion-tsconfig/ansible/
+# run: sudo ansible-playbook sshd_keyonly.yml -i torrentsuite_hosts --sudo
+- hosts: headnode
+  tasks:
+    - name: Creating .ssh folder
+      file:
+        path: /home/ionadmin/.ssh
+        state: directory
+        owner: ionadmin
+        mode: 0700
+
+    - name: Adding SSH keys
+      template:
+        src: sshd_keyonly.j2
+        dest: /home/ionadmin/.ssh/authorized_keys
+        force: yes
+        backup: yes
+        owner: ionadmin
+        mode: 0600
+    
+    - name: Disabling PasswordAuthentication
+      replace:
+        dest: /etc/ssh/sshd_config
+        backup: yes
+        regexp: '.*PasswordAuthentication yes'
+        replace: 'PasswordAuthentication no'
+    
+    - name: Restarting SSH Daemon
+      service: name=ssh state=restarted

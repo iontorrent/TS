@@ -23,7 +23,7 @@ void BasicSkewGenerator::AddOneUpdateForHypothesis(int strand_key, float respons
 
 void BasicSkewGenerator::AddCrossUpdate(CrossHypotheses &my_cross){
    for (unsigned int i_hyp=1; i_hyp<my_cross.residuals.size(); i_hyp++){  // no outlier values count here
-      AddOneUpdateForHypothesis(my_cross.strand_key, my_cross.responsibility[i_hyp], my_cross.test_flow, my_cross.residuals[i_hyp]);
+      AddOneUpdateForHypothesis(my_cross.strand_key, my_cross.weighted_responsibility[i_hyp], my_cross.test_flow, my_cross.residuals[i_hyp]);
    }
 }
 

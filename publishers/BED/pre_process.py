@@ -3,91 +3,19 @@
 import argparse
 from decimal import Decimal
 import json
-import os
 import os.path
 import subprocess
-import sys
 
 from iondb.bin.djangoinit import *
-from iondb.rundb import models
-from iondb.rundb.configure.genomes import new_reference_genome
-from iondb.rundb.publishers import run_pub_scripts
 from iondb.utils import files as file_utils
-from iondb.rundb.plan import ampliseq
 import zipfile
 import call_api as api
-
 
 def check_stage_pre(upload_id, meta):
     reentry = meta.get('reentry_stage', None)
     if reentry and reentry != 'pre_process':
         # Success, we're past pre_processing already and do not need to run further
         sys.exit(0)
-
-
-def set_checkpoint(meta, args):
-    # Set a sentinel in the meta data to determine whether or not
-    # we've already run before and done this work.
-    meta['reentry_stage'] = 'validate'
-    api.update_meta(meta, args)
-
-
-def check_reference(meta, args):
-    """Check and install the needed reference genome"""
-    print("Checking reference")
-    plan_data = json.load(open(os.path.join(args.path, "plan.json")))
-    version, design, meta = ampliseq.handle_versioned_plans(plan_data, meta, arg_path=args.path)
-    print("Got versioned stuff")
-    # If we have a genome reference, check to see if it's installed
-    reference = design.get('genome_reference', None)
-    print(reference)
-    if not reference:
-        return False
-    try:
-        url = reference.get('uri')
-        ref_hash = reference.get('files_md5sum', {}).get('fasta')
-        short_name = reference.get('short_name')
-        name = reference.get('name')
-        notes = reference.get('notes', "AmpliSeq Import")
-        print("Got various fields")
-    except KeyError as err:
-        # If the key does not exist, that's fine, but it can't exist and be corrupt
-        print("Corrupt genome_reference entry: {0}".format(err))
-        sys.exit(1)
-
-    # The identity_hash matching the files_md5sum.fasta hash determines whether
-    # or not the genome is installed
-    print("Checking reference " + ref_hash)
-    if not models.ReferenceGenome.objects.filter(identity_hash=ref_hash).exists():
-        reference_args = {
-            'identity_hash': ref_hash,
-            'name': name,
-            'notes': notes,
-            'short_name': short_name,
-            'source': url,
-            'index_version': "tmap-f3"
-        }
-
-        pub = models.Publisher.objects.get(name='BED')
-        upload = models.ContentUpload.objects.get(pk=args.upload_id)
-        # This is a celery subtask that will run the publisher scripts on this upload again
-        finish_me = run_pub_scripts.si(pub, upload)
-        print("About t set check point")
-        set_checkpoint(meta, args)
-        print("check point set")
-        # With a status starting with "Waiting" the framework will stop
-        # after pre_processing, before validate.
-        upload.status = "Waiting on reference"
-        upload.save()
-
-        # the subtask finish_me will be called at the end of the reference install
-        # process to restart validation of the upload
-        new_reference_genome(reference_args, url=url, callback_task=finish_me)
-        print("Started reference download")
-        return True
-    print("exiting in shame")
-    return False
-
 
 def deal_with_upload(meta, args):
     print("Dealing with the upload file")
@@ -120,9 +48,6 @@ def main(args):
 
     check_stage_pre(args.upload_id, meta)
     files = deal_with_upload(meta, args)
-    if "plan.json" in files:
-        check_reference(meta, args)
-
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()

@@ -141,11 +141,11 @@ def destination_validation(dmfilestat, backup_directory=None, manual_action=Fals
         '''
         if os.path.exists(os.path.join(directory, ".no_size_check")):
             logger.info("%s: Exists: %s" %
-                        (sys._getframe().f_code.co_name, os.path.join(directory, ".no_size_check")))
+                        (sys._getframe().f_code.co_name, os.path.join(directory, ".no_size_check")), extra=logid)
             return True
         else:
             logger.info("%s: Not Found: %s" %
-                        (sys._getframe().f_code.co_name, os.path.join(directory, ".no_size_check")))
+                        (sys._getframe().f_code.co_name, os.path.join(directory, ".no_size_check")), extra=logid)
             return False
 
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=logid)
@@ -329,25 +329,6 @@ def _create_archival_files(dmfilestat):
         logger.error("Could not create CSA", extra=logid)
         raise
 
-    try:
-        # TS-7385.  When executed by celery task, the files created are owned by root.root.
-        # This hack sets the ownership to the same as the report directory.
-        pdf_files = [
-            'report.pdf',
-            'plugins.pdf',
-            'backupPDF.pdf',
-            os.path.basename(dmfilestat.result.get_report_dir()) + '-full.pdf',
-            os.path.basename(dmfilestat.result.get_report_dir()) + '.support.zip'
-            ]
-        report_path = dmfilestat.result.get_report_dir()
-        report_path_stat = os.stat(report_path)
-        for src in [os.path.join(report_path, pdf_file) for pdf_file in pdf_files]:
-            if os.path.exists(src):
-                os.chown(src, report_path_stat.st_uid, report_path_stat.st_gid)
-    except:
-        logger.warn("Something failed while changing ownership of pdf or support zip file", extra=logid)
-        logger.debug(traceback.format_exc(), extra=logid)
-
 
 def _create_destination(dmfilestat, action, filesettype, backup_directory=None):
     '''
@@ -428,12 +409,6 @@ def _copy_to_dir(filepath, _start_dir, _destination):
             local_dir = local_dir[1:] if local_dir.startswith('/') else local_dir
             local_dir = os.path.join("./", local_dir)
             os.makedirs(os.path.dirname(local_dir))
-            # change ownership of all new subdirectories
-            src_dir_stat = os.stat(os.path.dirname(filepath))
-            subdir = os.path.dirname(local_dir)
-            while subdir != '.':
-                os.chown(subdir, src_dir_stat.st_uid, src_dir_stat.st_gid)
-                subdir = os.path.dirname(subdir)
 
         except OSError as exception:
             if exception.errno in [errno.EEXIST, errno.EPERM, errno.EACCES]:
@@ -447,8 +422,6 @@ def _copy_to_dir(filepath, _start_dir, _destination):
             try:
                 link = os.readlink(filepath)
                 os.symlink(link, dst)
-                src_dir_stat = os.stat(os.path.dirname(filepath))
-                os.chown(os.path.dirname(dst), src_dir_stat.st_uid, src_dir_stat.st_gid)
                 return True
             except Exception as e:
                 if e.errno == errno.EEXIST:
@@ -1142,9 +1115,6 @@ def prepare_for_data_import(dmfilestat):
             filepath = os.path.join(report_path, pdf_file)
             if os.path.exists(filepath):
                 shutil.copy2(filepath, dmfilestat.archivepath)
-                os.chown(os.path.join(dmfilestat.archivepath, pdf_file),
-                         os.stat(filepath).st_uid,
-                         os.stat(filepath).st_gid)
 
 
 def write_serialized_json(result, destination):
@@ -1171,13 +1141,6 @@ def write_serialized_json(result, destination):
                 'json', dmfilesets, indent=2, fields=('type', 'version')).lstrip('[')
 
             fileh.write(obj_json)
-
-        # set file permissions
-        try:
-            stat = os.stat(destination)
-            os.chown(sfile, stat.st_uid, stat.st_gid)
-        except:
-            pass
 
     except:
         logger.error("Unable to save serialized.json for %s(%d)" %

@@ -6,6 +6,8 @@
 #include "BkgMagicDefines.h"
 //#include "MathOptim.h"
 #include "Serialization.h"
+#include "TimeControl.h"
+#include "TimeCompression.h"
 
 class EmphasisClass
 {
@@ -15,14 +17,17 @@ class EmphasisClass
     std::vector<float> emphasis_vector_storage;      // storage for emphasis vectors
     float**            EmphasisVectorByHomopolymer;  // array of pointers to different vectors
     std::vector<float> EmphasisScale;                // scaling factor for each vector
-    float              emp[NUMEMPHASISPARAMETERS];   // parameters for emphasis vector generation
     std::vector<int>   nonZeroEmphasisFrames; // number of non zero frame values for each emphasis vector
 
+    float              emp[NUMEMPHASISPARAMETERS];   // parameters for emphasis vector generation
     bool point_emphasis_by_compression; // avoid emphasis artifacts due to highly compressed points
 
     // keep timing parameters as well
     float emphasis_width;   // parameters scaling the emphasis vector
     float emphasis_ampl;    // parameters scaling the emphasis vector
+
+    DataWeightDefaults data_weights; // real control
+
     // timing parameters - warning, if time-compression changes these need to be updated
     std::vector<int>   my_frames_per_point;
     std::vector<float> my_frameNumber;
@@ -40,6 +45,8 @@ class EmphasisClass
     void SaveEmphasisVector();
     EmphasisClass();
     ~EmphasisClass();
+
+    void SetUpEmphasis(TimeAndEmphasisDefaults &data_control, TimeCompression &time_c);
 
   private:
     void DetermineNonZeroEmphasisFrames(int hp);
@@ -65,6 +72,7 @@ class EmphasisClass
       & my_frames_per_point
       & my_frameNumber
       & npts
+          & data_weights
       & point_emphasis_by_compression;
 
       if ( npts > 0 )
@@ -88,6 +96,7 @@ class EmphasisClass
       & my_frames_per_point
       & my_frameNumber
       & npts
+          & data_weights
       & point_emphasis_by_compression;
 
       // fprintf(stdout, "done EmphasisVector\n");

@@ -1,12 +1,17 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "DebugWriter.h"
+#include "BkgModel/Fitters/Complex/BkgFitMatDat.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include "LinuxCompat.h"
 #include "RawWells.h"
 #include "SignalProcessingMasterFitter.h"
+#include <mutex>
+#include "hdf5_hl.h"
+#include <boost/algorithm/string.hpp>
 
 #define BKG_MODEL_DEBUG_DIR "/bkg_debug/"
 
@@ -339,4 +344,122 @@ void debug_collection::DumpRegionTrace (SignalProcessingMasterFitter &bkg, int f
     fflush (only_trace);
     fflush (my_fp);
   } // end file exists
+}
+
+
+hid_t DebugSaver::hdf_file_id = -1;
+std::mutex dbg_mutex;
+
+void DebugSaver::DebugFileOpen( std::string& dirName )
+{
+    std::lock_guard<std::mutex> guard(dbg_mutex);
+
+    if( hdf_file_id<0 ){
+        hdf_file_id = 0;
+        std::string fname = dirName+"/optimizer.h5";
+        hdf_file_id = H5Fcreate(fname.c_str(),H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
+        assert(hdf_file_id >= 0);
+        //CreateDataSet(); //move this somewhere else
+    }
+}
+
+void DebugSaver::WriteData( const BkgFitMatrixPacker* reg_fit, reg_params& rp, int flow, const Region *region, const std::vector<std::string> derivativeNames, int nbeads )
+{
+    const arma::Mat<double> *jtj = reg_fit->data->jtj;
+    const arma::Col<double> *rhs = reg_fit->data->rhs;
+    const arma::Col<double> *delta = reg_fit->data->delta;
+
+    std::lock_guard<std::mutex> guard(dbg_mutex);
+    if( hdf_file_id<0 )
+        return;
+
+    /* Save old error handler */
+    herr_t ( *old_func ) ( hid_t, void * );
+    void *old_client_data;
+
+    H5Eget_auto ( H5E_DEFAULT, &old_func, &old_client_data );
+
+    /* Silence warnings by turning off error handling */
+    H5Eset_auto ( H5E_DEFAULT, NULL, NULL );
+
+    hsize_t mat_dim[]={jtj->n_rows,jtj->n_cols};
+    hsize_t vec_dim[]={delta->n_rows};
+    char path[1024];
+    snprintf(path, 1024, "regfit/flow_%d/r_%d_c_%d",flow,region->row,region->col);
+
+    std::vector<std::string> path_parts;
+    boost::split(path_parts,path,boost::is_any_of("/"));
+
+
+    hid_t dataset_id = hdf_file_id;
+    for( auto group_name=path_parts.begin(); group_name!=path_parts.end(); ++group_name ){
+
+        hid_t dataset_id_new = H5Gopen(dataset_id, group_name->c_str(),H5P_DEFAULT);
+        if( dataset_id_new<0)
+            dataset_id_new = H5Gcreate(dataset_id, group_name->c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+        if( dataset_id!=hdf_file_id)
+            H5Gclose(dataset_id);
+        dataset_id=dataset_id_new;
+    }
+
+    //we store count in the branch corresponding to the current region
+    int iteration;
+    herr_t err = H5LTget_attribute_int(hdf_file_id,path,"count",&iteration);
+    if( err<0 )
+        iteration = 0;
+    else
+        ++iteration;
+
+    /* Restore previous error handler */
+    H5Eset_auto ( H5E_DEFAULT, old_func, old_client_data );
+
+    err = H5LTset_attribute_int(hdf_file_id,path,"count",&iteration,1);
+
+    std::string subgroup_name="iter_";
+    dataset_id = H5Gcreate(dataset_id, (subgroup_name+std::to_string(iteration)).c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+
+    //turn parameter names into comma separated string
+    std::stringstream ss;
+    for_each(derivativeNames.begin(), derivativeNames.end(), [&ss] (const std::string& s) { ss << s << ","; }); //uses lambda expression
+    std::string names = ss.str();
+    names.pop_back(); //remove extra comma in the end
+
+    H5LTmake_dataset(dataset_id, "jtj", 2, mat_dim, H5T_NATIVE_DOUBLE, jtj->memptr());
+    H5LTset_attribute_string(dataset_id,"jtj","paramNames",names.c_str());
+    H5LTmake_dataset(dataset_id, "rhs", 1, vec_dim, H5T_NATIVE_DOUBLE, rhs->memptr());
+    H5LTset_attribute_string(dataset_id,"rhs","paramNames",names.c_str());
+    H5LTmake_dataset(dataset_id, "delta", 1, vec_dim, H5T_NATIVE_DOUBLE, delta->memptr());
+    H5LTset_attribute_string(dataset_id,"delta","paramNames",names.c_str());
+
+    //Save output
+    float* output= new float[reg_fit->getNumOutputs()];
+    ss.str("");
+
+    for (int i=0;i < reg_fit->getNumOutputs();i++){
+        // What is that right place?
+        float *dptr = (rp.*( reg_fit->getOuputList()[i].reg_params_func))();
+        output[i] = dptr[reg_fit->getOuputList()[i].array_index];
+        ss<<reg_fit->getOuputList()[i].name<<",";
+    }
+    names = ss.str();  names.pop_back(); //remove extra comma in the end
+    vec_dim[0]=static_cast<hsize_t>(reg_fit->getNumOutputs());
+    H5LTmake_dataset(dataset_id, "output", 1, vec_dim, H5T_NATIVE_FLOAT, output);
+    H5LTset_attribute_string(dataset_id,"output","paramNames",names.c_str());
+    delete[] output;
+
+    vec_dim[0]=1;
+    H5LTmake_dataset(dataset_id, "nbeads", 1, vec_dim, H5T_NATIVE_INT, &nbeads);
+    H5Gclose(dataset_id);
+    H5Fflush(hdf_file_id, H5F_SCOPE_GLOBAL);
+}
+
+DebugSaver::~DebugSaver()
+{
+    std::lock_guard<std::mutex> guard(dbg_mutex);
+    if(hdf_file_id>=0){
+        H5Fclose(hdf_file_id);
+        hdf_file_id=-1;
+    }
 }

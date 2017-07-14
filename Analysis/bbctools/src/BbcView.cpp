@@ -559,6 +559,7 @@ bool BbcView::ReadRegion( uint32_t srtContig, uint32_t srtPosition, uint32_t end
 				StreamCoverage( srtPosition++, 0, 0, 0 );
 				if( srtPosition == endPos ) return true;
 			}
+			if( srtContig > endContig || m_position >= endPos ) break;
 		} else {
 			if( srtContig > endContig || m_position >= endPos ) break;
 			srtPosition = m_position;

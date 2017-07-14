@@ -1,262 +1,282 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- java script required for interacting with the RESTful API -->
-  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-  <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
-  
-  <!--page style-->
-  <style type='text/css'>
-    #formwrap {
-      line-height: 2em;
-      background: #eef;
-      margin: 10px;
-      padding: 10px;
-      height: 130px;
-      text-align: center;
-    }
+    <!-- java script required for interacting with the RESTful API -->
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
 
-    input {
-      height:30px;
-    }
-
-    body {
-     font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
-     font-size: 14px;
-    }
-  </style>
-
-  <script type='text/javascript'>
-    default_key = "";
-    pluginGET = "";
-
-    function getRunData(experimentId) {
-            runData = {};
-            $.ajax({
-                    url : "/rundb/api/v1/results/" + experimentId + "/?format=json",
-                    dataType : "json",
-                    type : "GET",
-                    async : false,
-                    success : function(data) {
-                            runData['results'] = data;
-                    }
-            });
-            
-            $.ajax({
-            url : runData['results'].experiment,
-            dataType : "json",
-            type : "GET",
-            async: false,
-            success : function(data) {
-                    runData['experiment'] = data
-            }
-        });
-            
-            $.ajax({
-            url : runData['results'].qualitymetrics,
-            dataType : "json",
-            type : "GET",
-            async: false,
-            success : function(data) {
-                    runData['qualitymetrics'] = data
-            }
-        });
-            
-            $.ajax({
-            url : runData['results'].libmetrics,
-            dataType : "json",
-            type : "GET",
-            async: false,
-            success : function(data) {
-                    runData['libmetrics'] = data
-            }
-        });
-            return runData;
-    }
-    $(document).ready(function(){     
-     $.ajax({
-      
-      url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
-      dataType:"json",
-      type: "GET",
-      async: false,
-      success:function(data){
-       //get the plugin data
-       pluginGET = data;
-
-       //delete the resource_uri
-       delete pluginGET.resource_uri;
-
-        runData = getRunData(TB_result);
-        chipType = runData['experiment'].chipType;
-      
-       $.each(pluginGET.config, function(key,val){
-        if(key == "ip"){
-            document.getElementById("ip").value = val;
-          }
-
-          //set the vlaue of user_name
-          else if(key == "user_name"){
-            document.getElementById("user_name").value = val;
-          }
-
-          //set the vlaue of user_password
-          else if(key == "user_password"){
-            document.getElementById("user_password").value = val;
-          }
-
-          //set the value of upload_path
-          else if(key == "upload_path"){
-            document.getElementById("upload_path").value = val;
-          }
-
-          //set the value of upload_path
-          else if(key == "chiptype"){
-            document.getElementById("chiptype").value = chipType;
-          }
-
-          //set the value of thumbnail_only checkbox
-          else if(key == "thumbnailonly"){
-            if (val == "off") {
-              $("#thumbnailonly").prop('checked', false);
-            } else {
-              $("#thumbnailonly").prop('checked', true);
-            }
-            
-            if (chipType.substring(0,1) === "P" & runData['results'].metaData.thumb) {
-              //This is Proton thumbnail; show the option
-              $("#thumbnailonly").prop('disabled', false);
-            } else {
-              //This is PGM or Proton fullchip; option makes no sense so disable it
-              $("#thumbnailonly").prop('disabled', true).prop('checked', false);
-            }
-          }
-       });
-      }
-     });
-      if(document.getElementById("upload_path").value == ""){
-       document.getElementById("upload_path").value = "/results/uploads/";
-      }
-      
-      
-    });
-
-    //process form to grab html objects and turn them into json objects
-    $(function() {
-     $.fn.serializeObject = function(){
-      var o = {};
-      var a = this.serializeArray();
-
-      $.each(a, function() {
-        console.log(this.name);
-       if (o[this.name] != null) {
-        if (!o[this.name].push) {
-         o[this.name] = [o[this.name]];
+    <!--page style-->
+    <style type='text/css'>
+        #formwrap {
+            line-height: 2em;
+            background: #eef;
+            margin: 10px;
+            padding: 10px;
+            height: 130px;
+            text-align: center;
         }
 
-        o[this.name].push(this.value || '');
-       } else if(this.name == "file") {
+        input {
+            height:30px;
+        }
 
-       o[this.name] = [this.value || ''];
-      }
-      else {
-       o[this.name] = this.value || '';
-      }
-     });
+        body {
+            font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+            font-size: 14px;
+        }
+    </style>
 
-     return o;
-    };
+    <script type='text/javascript'>
+        default_key = "";
+        pluginGET = "";
 
-    //use the RESTful API to post the json variable
-    $(function() {
-     $('#postbutton').click(function() {
+        function getRunData(experimentId) {
+            runData = {};
+            $.ajax({
+                url : "/rundb/api/v1/results/" + experimentId + "/?format=json",
+                dataType : "json",
+                type : "GET",
+                async : false,
+                success : function(data) {
+                    runData['results'] = data;
+                }
+            });
 
-      //check that values were given
-      if(document.getElementById("ip").value == ""){
-        alert("Please provide IP address");
-        return(false);
-      }
+            $.ajax({
+                url : runData['results'].experiment,
+                dataType : "json",
+                type : "GET",
+                async: false,
+                success : function(data) {
+                    runData['experiment'] = data
+                }
+            });
 
-      if(document.getElementById("user_name").value == ""){
-        alert("Please provide user name");
-        return(false);
-      }
+            $.ajax({
+                url : runData['results'].qualitymetrics,
+                dataType : "json",
+                type : "GET",
+                async: false,
+                success : function(data) {
+                    runData['qualitymetrics'] = data
+                }
+            });
 
-      if(document.getElementById("user_password").value == ""){
-        alert("Please provide user password");
-        return(false);
-      }
+            $.ajax({
+                url : runData['results'].libmetrics,
+                dataType : "json",
+                type : "GET",
+                async: false,
+                success : function(data) {
+                    runData['libmetrics'] = data
+                }
+            });
+            return runData;
+        }
+        $(document).ready(function(){
+            $.ajax({
 
-      if(document.getElementById("upload_path").value == ""){
-        alert("Please provide upload_path");
-        return(false);
-      }
+                url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
+                dataType:"json",
+                type: "GET",
+                async: false,
+                success:function(data){
+                    //get the plugin data
+                    pluginGET = data;
 
-      //the name of the form used here, in this case "inputform" should match the one in the html code
-      obj =  $('#inputform').serializeObject();
+                    //delete the resource_uri
+                    delete pluginGET.resource_uri;
 
-      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
-      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
-      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+                    runData = getRunData(TB_result);
+                    chipType = runData['experiment'].chipType;
 
-      $.ajax({
-       type: 'POST',
-       url: pluginURL,
-       contentType: "application/json; charset=utf-8",
-       success: function(data) {
-        $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Starting the Plugin...</p></div>');
-        setTimeout("parent.$.fn.colorbox.close()" ,2000); },
-        data: pluginAPIJSON,
-        dataType: "json"
-       });
-      });
-     })
-    });
-  </script>
+                    $.each(pluginGET.config, function(key,val){
+                        if(key == "ip"){
+                            document.getElementById("ip").value = val;
+                        }
+
+                        //set the vlaue of user_name
+                        else if(key == "user_name"){
+                            document.getElementById("user_name").value = val;
+                        }
+
+                        //set the vlaue of user_password
+                        else if(key == "user_password"){
+                            document.getElementById("user_password").value = val;
+                        }
+
+                        //set the value of upload_path
+                        else if(key == "upload_path"){
+                            document.getElementById("upload_path").value = val;
+                        }
+
+                        //set the value of upload_path
+                        else if(key == "chiptype"){
+                            document.getElementById("chiptype").value = chipType;
+                        }
+
+                        //set the value of thumbnail_only checkbox
+                        else if(key == "thumbnailonly"){
+                            if (val == "off") {
+                                $("#thumbnailonly").prop('checked', false);
+                            } else {
+                                $("#thumbnailonly").prop('checked', true);
+                            }
+
+                            if (chipType.substring(0,1) === "P" & runData['results'].metaData.thumb) {
+                                //This is Proton thumbnail; show the option
+                                $("#thumbnailonly").prop('disabled', false);
+                            } else {
+                                //This is PGM or Proton fullchip; option makes no sense so disable it
+                                $("#thumbnailonly").prop('disabled', true).prop('checked', false);
+                            }
+                        }
+                    });
+                }
+            });
+            if(document.getElementById("upload_path").value == ""){
+                document.getElementById("upload_path").value = "/results/uploads/";
+            }
+
+
+        });
+
+        //process form to grab html objects and turn them into json objects
+        $(function() {
+            $.fn.serializeObject = function(){
+                var o = {};
+                var a = this.serializeArray();
+
+                $.each(a, function() {
+                    console.log(this.name);
+                    if (o[this.name] != null) {
+                        if (!o[this.name].push) {
+                            o[this.name] = [o[this.name]];
+                        }
+
+                        o[this.name].push(this.value || '');
+                    } else if(this.name == "file") {
+
+                        o[this.name] = [this.value || ''];
+                    }
+                    else {
+                        o[this.name] = this.value || '';
+                    }
+                });
+
+                return o;
+            };
+
+            //use the RESTful API to post the json variable
+            $(function() {
+                $('#postbutton').click(function() {
+
+                    //check that values were given
+                    if(document.getElementById("ip").value == ""){
+                        alert("Please provide IP address");
+                        return(false);
+                    }
+
+                    if(document.getElementById("user_name").value == ""){
+                        alert("Please provide user name");
+                        return(false);
+                    }
+
+                    if(document.getElementById("user_password").value == ""){
+                        alert("Please provide user password");
+                        return(false);
+                    }
+
+                    if(document.getElementById("upload_path").value == ""){
+                        alert("Please provide upload_path");
+                        return(false);
+                    }
+
+                    //the name of the form used here, in this case "inputform" should match the one in the html code
+                    obj =  $('#inputform').serializeObject();
+
+                    pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+                    pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+                    pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+
+                    $.ajax({
+                        type: 'POST',
+                        url: pluginURL,
+                        contentType: "application/json; charset=utf-8",
+                        success: function(data) {
+                            $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Starting the Plugin...</p></div>');
+                            setTimeout("parent.$.fn.colorbox.close()" ,2000);
+                            var secretPostData = {
+                                "unencrypted": document.getElementById("user_password").value,
+                                "name": "RunTransferConfig-" + document.getElementById("ip").value + "-" + document.getElementById("user_name").value
+                            };
+                            // upon success we are going to have to setup a securely stored password in the database
+                            // TODO: needs to updated to https
+                            $.ajax({
+                                type: 'POST',
+                                url: "/security/api/v1/securestring/",
+                                data: JSON.stringify(secretPostData),
+                                contentType: "application/json; charset=utf-8",
+                                dataType: "json",
+                                async: false,
+                                success: function(data, status, xhr){
+                                    if(status == "success"){
+                                        parent.$.fn.colorbox.close();
+                                    }
+                                }
+                            });
+                        },
+                        data: pluginAPIJSON,
+                        dataType: "json"
+                    });
+                });
+            })
+        });
+    </script>
 </head>
 
-  <!-- set up the html page that the user interacts with -->
+<!-- set up the html page that the user interacts with -->
 <body>
-  <div>
+<div>
     <!-- the form name here, in this case "inputform" should match the one used in the put java script -->
     <div class="page-header">
-      <h1> RunTransfer Settings</h1></center>
+        <h1> RunTransfer Settings</h1></center>
     </div>
 
-    <center>This will push data for this analysis to the receiving Torrent Server using the settings provided in the global configuration.
+    <center>This will push data for this analysis to the receiving Torrent Server using the settings provided in the global configuration.</center>
 
     <form id="inputform">
-      <div id="adv_parent">
-        <div>
-          <center><table align="center">
-            <tr>
-              <td>IP address or fully qualified hostname: </td>
-              <td><input id="ip" name="ip" value="" size="50"/></td>
-            </tr>
-            <tr>
-              <td>Remote TS Username: </td>
-              <td><input id="user_name" name="user_name" value="" size="50"/></td>
-            </tr>
-            <tr>
-              <td>Password: </td>
-              <td><input id="user_password" name="user_password" value="" type="password" size="50"/></td>
-            </tr>
-            <tr>
-              <td>Upload Path: </td>
-              <td><input id="upload_path" name="upload_path" value="" size="50"/></td>
-            <tr>
-              <td>Thumbnail-only: </td>
-              <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" uncheckedtitle="Only affects Proton datasets" size="50"/></td>
-            </tr>
-          </table></center>
+        <div id="adv_parent">
+            <div>
+                <table align="center">
+                    <tr>
+                        <td>IP address or fully qualified hostname: </td>
+                        <td><input id="ip" name="ip" value="" size="50"/></td>
+                    </tr>
+                    <tr>
+                        <td>Remote TS Username: </td>
+                        <td><input id="user_name" name="user_name" value="" size="50" autocomplete="new-password"/></td>
+                    </tr>
+                    <tr>
+                        <td>Password: </td>
+                        <td><input id="user_password" name="user_password" value="" type="password" size="50" autocomplete="new-password"/></td>
+                    </tr>
+                    <tr>
+                        <td>Upload Path: </td>
+                        <td><input id="upload_path" name="upload_path" value="" size="50"/></td>
+                    <tr>
+                        <td>Thumbnail-only: </td>
+                        <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" uncheckedtitle="Only affects Proton datasets" size="50"/></td>
+                    </tr>
+                </table>
+            </div>
         </div>
-      </div>
     </form>
-  </div>
+</div>
 
-  <br><center><input id="postbutton" type="submit" value="Submit"></center> <p><br>
+<br><center><input id="postbutton" type="submit" value="Submit"></center> <p><br>
 
-  <div id="json_result"> </div>
+<div id="json_result"> </div>
 
 </body>
 </html>

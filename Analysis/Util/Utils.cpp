@@ -970,4 +970,129 @@ int GetAbsoluteFreeSystemMemoryInKB()
   return freeMem;
 }
 
+// -----------------
+
+
+void expandBaseSymbol(char nuc, std::vector<bool>& nuc_ensemble)
+{
+  nuc_ensemble.assign(4, false);
+  nuc = toupper(nuc);
+
+  switch(nuc) {
+      case 'A': nuc_ensemble[0] = true; break;
+      case 'C': nuc_ensemble[1] = true; break;
+      case 'G': nuc_ensemble[2] = true; break;
+      case 'T': nuc_ensemble[3] = true; break;
+      case 'U': nuc_ensemble[3] = true; break;
+
+      case 'W': nuc_ensemble[0] = true; nuc_ensemble[3] = true; break;
+      case 'S': nuc_ensemble[1] = true; nuc_ensemble[2] = true; break;
+      case 'M': nuc_ensemble[0] = true; nuc_ensemble[1] = true; break;
+      case 'K': nuc_ensemble[2] = true; nuc_ensemble[3] = true; break;
+      case 'R': nuc_ensemble[0] = true; nuc_ensemble[2] = true; break;
+      case 'Y': nuc_ensemble[1] = true; nuc_ensemble[3] = true; break;
+
+      case 'B': nuc_ensemble[1] = true; nuc_ensemble[2] = true; nuc_ensemble[3] = true; break;
+      case 'D': nuc_ensemble[0] = true; nuc_ensemble[2] = true; nuc_ensemble[3] = true; break;
+      case 'H': nuc_ensemble[0] = true; nuc_ensemble[1] = true; nuc_ensemble[3] = true; break;
+      case 'I': nuc_ensemble[0] = true; nuc_ensemble[1] = true; nuc_ensemble[3] = true; break;
+      case 'V': nuc_ensemble[0] = true; nuc_ensemble[1] = true; nuc_ensemble[2] = true; break;
+
+      case 'N': nuc_ensemble.assign(4, true); break;
+  }
+}
+
+char contractNucSymbol(const std::vector<bool>& nuc_ensemble)
+{
+  if (nuc_ensemble.size() != 4)
+    return 'Z';
+
+  unsigned int weight = 0;
+  for (unsigned int i=0; i<4; ++i)
+    if (nuc_ensemble[i])
+      ++weight;
+
+  if (weight == 0)
+    return 'Z';
+
+  else if (weight==4)
+    return 'N';
+
+  else if (weight == 3){
+    if (not nuc_ensemble[0])
+      return 'B';
+    else if (not nuc_ensemble[1])
+      return 'D';
+    else if (not nuc_ensemble[2])
+      return 'H';
+    else // if (not nuc_ensemble[3])
+      return 'V';
+  }
+
+  else if (weight == 2){
+    if (nuc_ensemble[0] and nuc_ensemble[3])
+      return 'W';
+    else if (nuc_ensemble[1] and nuc_ensemble[2])
+      return 'S';
+    else if (nuc_ensemble[0] and nuc_ensemble[1])
+      return 'M';
+    else if (nuc_ensemble[2] and nuc_ensemble[3])
+      return 'K';
+    else if (nuc_ensemble[0] and nuc_ensemble[2])
+      return 'R';
+    else //if (nuc_ensemble[1] and nuc_ensemble[3])
+      return 'Y';
+  }
+
+  else if (nuc_ensemble[0])
+    return 'A';
+  else if (nuc_ensemble[1])
+    return 'C';
+  else if (nuc_ensemble[2])
+    return 'G';
+  else // if (nuc_ensemble[3])
+    return 'T';
+}
+
+
+bool isBaseMatch(char nuc1, char nuc2)
+{
+  std::vector<bool> ensemble1, ensemble2;
+  expandBaseSymbol(nuc1, ensemble1);
+  expandBaseSymbol(nuc2, ensemble2);
+
+  /* / ---- XXX
+  cerr << "[";
+  for (unsigned int i=0; i<ensemble1.size(); ++i){
+    cerr << ensemble1[i];
+  }
+  cerr << "] [";
+  for (unsigned int i=0; i<ensemble2.size(); ++i){
+    cerr << ensemble2[i];
+  }
+  cerr << "] ";
+  // ------- XXX //*/
+
+
+  for (unsigned int i=0; i<ensemble2.size(); ++i){
+    if (ensemble1[i] and ensemble2[i])
+      return true;
+  }
+  return false;
+}
+
+
+char getMatchSymbol(char nuc1, char nuc2)
+{
+  std::vector<bool> ensemble1, ensemble2;
+  expandBaseSymbol(nuc1, ensemble1);
+  expandBaseSymbol(nuc2, ensemble2);
+
+  for (unsigned int i=0; i<ensemble1.size(); ++i){
+    ensemble1[i] = ensemble1[i] and ensemble2[i];
+  }
+
+  return contractNucSymbol(ensemble1);
+}
+
 #endif

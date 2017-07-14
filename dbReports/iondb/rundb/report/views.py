@@ -37,6 +37,10 @@ from collections import OrderedDict
 
 from iondb.rundb.report.analyze import createReport_and_launch, get_project_names
 from iondb.rundb.data import dmactions_types
+from iondb.plugins.plugin_barcodes_table import barcodes_table_for_plugin
+
+from ion.reports import wells_beadogram
+from iondb.utils.utils import is_internal_server
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +225,11 @@ def load_json(report, *subpaths):
     return None
 
 
+def _is_to_show_all_stats(report):
+    isInternalServer = is_internal_server()
+    isToShowAllStats = False if report.experiment and report.experiment.isPQ and not isInternalServer else True
+    return isToShowAllStats
+
 def testfragments_read(report):
     testfragments = load_json(report, "basecaller_results", "TFStats.json")
     if not testfragments:
@@ -231,28 +240,42 @@ def testfragments_read(report):
         if report.experiment.getPlatform == "s5":
             testfragments.pop("TF_C", None)
 
+        isToShowExtraStats = _is_to_show_all_stats(report)
+
+        # TS-14078 hide TF_G for PQ chips
+        if not isToShowExtraStats:
+            testfragments.pop("TF_G", None)
+
         for tf_name, tf_data in testfragments.iteritems():
             num_reads = int(tf_data.get("Num", 0))
             num_50AQ17 = int(tf_data.get("50Q17", 0))
             conversion_50AQ17 = "N/A"
 
+            NO_VALUE = "---"
             # since 100Q17 is a new attribute in TFStats.json, old file will not have this attribute
             is_100Q17_key_found = False
             if "100Q17" in tf_data.keys():
                 num_100AQ17 = int(tf_data.get("100Q17", 0))
                 is_100Q17_key_found = True
-            conversion_100AQ17 = "---"
+            conversion_100AQ17 = NO_VALUE
 
             if num_reads > 0:
                 conversion_50AQ17 = (100*num_50AQ17/num_reads)
                 if is_100Q17_key_found:
                     conversion_100AQ17 = (100*num_100AQ17/num_reads)
                     if conversion_100AQ17 < 1:
-                        conversion_100AQ17 = "---"
-            testfragments[tf_name]["conversion_50AQ17"] = conversion_50AQ17
-            testfragments[tf_name]["conversion_100AQ17"] = conversion_100AQ17
-            testfragments[tf_name]["histogram_filename"] = "new_Q17_%s.png" % tf_name
-            testfragments[tf_name]["num_reads"] = num_reads
+                        conversion_100AQ17 = NO_VALUE
+
+            if isToShowExtraStats:
+                testfragments[tf_name]["conversion_50AQ17"] = conversion_50AQ17
+                testfragments[tf_name]["conversion_100AQ17"] = conversion_100AQ17
+                testfragments[tf_name]["histogram_filename"] = "new_Q17_%s.png" % tf_name
+                testfragments[tf_name]["num_reads"] = num_reads
+            else:
+                testfragments[tf_name]["conversion_50AQ17"] = "further investigation needed" if conversion_50AQ17 < 22 else "pass"
+                testfragments[tf_name]["conversion_100AQ17"] = NO_VALUE
+                testfragments[tf_name]["histogram_filename"] = NO_VALUE
+                testfragments[tf_name]["num_reads"] = "no call" if num_reads < 1000 else num_reads
 
     except KeyError:
         pass
@@ -277,7 +300,7 @@ def get_barcodes(datasets):
             if value.get('filtered', False):
                 continue
             try:
-                value["mean_read_length"] = "%d bp" % round(float(value["total_bases"])/float(value["read_count"]))
+                value["mean_read_length"] = "%d bp" % int(float(value["total_bases"])/float(value["read_count"]))
             except:
                 value["mean_read_length"] = "N/A"
             barcode_list.append(value)
@@ -392,10 +415,36 @@ def basecaller_read(report):
         bcd["primer_dimer"] = basecaller["Filtering"]["LibraryReport"]["filtered_primer_dimer"]
         bcd["bases_called"] = basecaller["Filtering"]["BaseDetails"]["final"]
 
+        # TS-11255 omit polyclonal bar chart 
+        bcd["isToShowClonality"] = _is_to_show_all_stats(report)
+
+        if not bcd["isToShowClonality"]:           
+            bcd["low_quality"] += bcd["polyclonal"]
+            bcd["polyclonal"] = 0
+            #check if wells_beadogram_basic.png exists, create one if it does not
+            _basecaller_basic_png(report)
+
         return bcd
     except KeyError, IOError:
         #"Error parsing BaseCaller.json, the version of BaseCaller used for this report is too old."
         return None
+
+
+def _basecaller_basic_png(report):
+    """check if basic beadogram image file exists. Try to create it if missing"""
+    basic_beadogram_dir = os.path.join(report.get_report_dir(), 'basecaller_results/wells_beadogram_basic.png')
+    if os.path.exists(basic_beadogram_dir):
+        return
+  
+    logger.debug("going to create wells_beadogram_basic,png basic_beadogram_dir=%s" %(basic_beadogram_dir))
+    
+    basecaller_results = os.path.join(report.get_report_dir(), "basecaller_results")
+    sigproc_results = os.path.join(report.get_report_dir(), "sigproc_results")
+    try:
+        wells_beadogram.generate_wells_beadogram_basic(basecaller_results, sigproc_results)
+    except:
+        logger.error("ERROR: basic wells beadogram generation failed")
+        logger.exception(traceback.format_exc())
 
 
 def report_plan(report):
@@ -566,15 +615,6 @@ def parse_chip_efuse(report):
 
     return chip_efuseDict
 
-def get_chipLot(report):
-    # Send the Chip Lot information to Analysis Details
-    chip_efuseDict = parse_chip_efuse(report)
-
-    if not chip_efuseDict or "L" not in chip_efuseDict:
-        return ""
-
-    return chip_efuseDict["L"]
-
 
 def report_S5_consumable_display(report):
     # Get S5 consumable Summary Info:
@@ -582,6 +622,15 @@ def report_S5_consumable_display(report):
     chip_efuseInfo = None
     bcBarcode = None
     bcChipType = None
+
+    # First, parse the chip efuse to get the chip type and chip barcode
+    # For some reason chip_efuse may have corrupted data or invalid format, (TS-13708)
+    #    if so get the chipBarcode and chipType from experiment
+    warning = "Chip efuse had invalid format or corrupted data."
+    expChipType = report.experiment.chipType
+    expChipBarcode = report.experiment.chipBarcode
+
+
     try:
         chip_efuseDict = parse_chip_efuse(report)
         if 'BC' in chip_efuseDict:
@@ -589,11 +638,20 @@ def report_S5_consumable_display(report):
                 bcBarcode, bcChipType = chip_efuseDict["BC"].split("*")
                 chip_efuseOrderedDict["Chip Type"] = re.sub(r'^241','', bcChipType)
                 chip_efuseOrderedDict["Chip Barcode"] = re.sub(r'^21','', bcBarcode)
+
         if 'Chip Type' not in chip_efuseOrderedDict:
+            logger.debug("Warning for Chip Type in report_S5_consumable_display: %s" % warning)
             if 'CT' in chip_efuseDict:
                 chip_efuseOrderedDict["Chip Type"] = chip_efuseDict["CT"]
             elif 'C' in chip_efuseDict:
                 chip_efuseOrderedDict["Chip Type"] = chip_efuseDict["C"]
+            elif expChipType:
+                chip_efuseOrderedDict["Chip Type"] = expChipType
+
+        if 'Chip Barcode' not in chip_efuseOrderedDict:
+            logger.debug("Warning for Chip Barcode in report_S5_consumable_display: %s" % warning)
+            if expChipBarcode:
+                chip_efuseOrderedDict["Chip Barcode"] = expChipBarcode
     except Exception, Err:
         logger.debug("ERROR in rundb.report.view.report_S5_consumable_display: %s" % Err)
         return {"err" : get_msgDesc()['002']}
@@ -793,21 +851,18 @@ def _report_context(request, report_pk):
     latex = request.GET.get("latex", False)
     noplugins = request.GET.get("noplugins", False)
 
-    error = None
     if not latex:
         dmfilestat = report.get_filestat(dmactions_types.OUT)
         if dmfilestat.isarchived():
-            error = "report_archived"
+            raise Exception("report_archived")
         elif dmfilestat.isdeleted():
-            error = "report_deleted"
+            raise Exception("report_deleted")
         elif "User Aborted" == report.experiment.ftpStatus:
-            error = "user_aborted"
+            raise Exception("user_aborted")
         elif 'Error' in report.status:
-            error = report.status
+            raise Exception(report.status)
         elif report.status == 'Completed' and report_version(report) < "3.0":
-            error = "old_report"
-    if error is not None:
-        return error, None
+            raise Exception("old_report")
 
     experiment = report.experiment
     otherReports = report.experiment.results_set.exclude(pk=report_pk).order_by("-timeStamp")
@@ -824,8 +879,7 @@ def _report_context(request, report_pk):
             # list all of the _blocks for the major plugins, just use the first one
             try:
                 majorPluginFiles = glob.glob(os.path.join(major_plugin.path(), "*_block.html"))[0]
-                majorPluginImages = glob.glob(os.path.join(report.get_report_dir(), "pdf",
-                                                           "slice_" + major_plugin.plugin.name + "*"))
+                majorPluginImages = glob.glob(os.path.join(report.get_report_dir(), "pdf", "slice_" + major_plugin.plugin.name + "*"))
                 has_major_plugins = True
             except IndexError:
                 majorPluginFiles = False
@@ -853,7 +907,8 @@ def _report_context(request, report_pk):
         chip_efuseDict = report_S5_consumable_display(report)
         S5_InitLog_read = InitLog_read(report)
 
-    chipLot = get_chipLot(report)
+    chipLot = parse_chip_efuse(report).get("L", "Missing")
+    chipWafer = parse_chip_efuse(report).get("W", "Missing")
 
     # special case: combinedAlignments output doesn't have any basecaller results
     if report.resultsType and report.resultsType == 'CombinedAlignments':
@@ -885,8 +940,7 @@ def _report_context(request, report_pk):
             logger.exception("Cannot read info from ion_params_00.json.")
 
     try:
-        qcTypes = dict(qc for qc in
-                       report.experiment.plan.plannedexperimentqc_set.all().values_list('qcType__qcName', 'threshold'))
+        qcTypes = dict(qc for qc in report.experiment.plan.plannedexperimentqc_set.all().values_list('qcType__qcName', 'threshold'))
     except:
         qcTypes = {}
 
@@ -903,7 +957,7 @@ def _report_context(request, report_pk):
         bead_loading = int(round(bead_loading))
         bead_loading_threshold = qcTypes.get("Bead Loading (%)", 0)
 
-        beadsummary = {}
+        beadsummary = dict()
         beadsummary["total_addressable_wells"] = addressable_wells
         beadsummary["bead_wells"] = beadfind["Bead Wells"]
         beadsummary["p_bead_wells"] = percent(beadfind["Bead Wells"], beadsummary["total_addressable_wells"])
@@ -918,15 +972,24 @@ def _report_context(request, report_pk):
 
     # Basecaller
     try:
-        usable_sequence = basecaller and int(round(100.0 *
-                                                   float(basecaller["total_reads"]) / float(beadfind["Library Beads"])))
+        usable_sequence = basecaller and int(round(100.0 * float(basecaller["total_reads"]) / float(beadfind["Library Beads"])))
         usable_sequence_threshold = qcTypes.get("Usable Sequence (%)", 0)
         # quality = load_ini(report,"basecaller_results","quality.summary")
 
-        basecaller["p_polyclonal"] = percent(basecaller["polyclonal"], beadfind["Library Beads"])
-        basecaller["p_low_quality"] = percent(basecaller["low_quality"], beadfind["Library Beads"])
         basecaller["p_primer_dimer"] = percent(basecaller["primer_dimer"], beadfind["Library Beads"])
         basecaller["p_total_reads"] = percent(basecaller["total_reads"], beadfind["Library Beads"])
+
+        # TS-11255 omit polyclonal bar chart 
+        basecaller["isToShowClonality"] = _is_to_show_all_stats(report)
+
+        if basecaller["isToShowClonality"]:
+            basecaller["p_polyclonal"] = percent(basecaller["polyclonal"], beadfind["Library Beads"])
+            basecaller["p_low_quality"] = percent(basecaller["low_quality"], beadfind["Library Beads"])
+        else:           
+            basecaller["p_low_quality"] = percent(basecaller["polyclonal"] + basecaller["low_quality"], beadfind["Library Beads"])
+            basecaller["p_polyclonal"] = 0
+            bcd["isToShowClonality"] = False
+
     except:
         logger.warn("Failed to build Basecaller report content for %s." % report.resultsName)
 
@@ -1011,7 +1074,7 @@ def _report_context(request, report_pk):
     isToShowAlignmentStats = False if experiment.plan and experiment.plan.runType == "RNA" else True
     alternateAlignmentStatsMessage = "For RNA Sequencing, please refer to the RNASeq Analysis plugin output for alignment statistics "
 
-    isToShowRawReadAccuracy = False if experiment and experiment.chipType.startswith("P2.2.") else True
+    isToShowExtraStats = _is_to_show_all_stats(report)
 
     class ProtonResultBlock:
 
@@ -1019,10 +1082,7 @@ def _report_context(request, report_pk):
             self.directory = directory
             self.status_msg = status_msg
 
-    try:
-        isInternalServer = os.path.exists("/opt/ion/.ion-internal-server")
-    except:
-        logger.exception("Failed to create isInternalServer variable")
+    isInternalServer = is_internal_server()
 
     try:
         # TODO
@@ -1098,22 +1158,17 @@ def _report_context(request, report_pk):
     elif not report.status.startswith('Completed'):
         context['disable_actions'].extend(['upload_to_ir'])
 
-    return None, context
+    return context
 
 
 @login_required
 def report_display(request, report_pk):
-    latex = request.GET.get("latex", False)
-
-    error, ctxd = _report_context(request, report_pk)
-    if error is not None:
-        return HttpResponseRedirect(url_with_querystring(reverse('report_log',
-                                                                 kwargs={'pk': report_pk}), error=error))
-    ctx = RequestContext(request, ctxd)
-    if not latex:
-        return render_to_response("rundb/reports/report.html", context_instance=ctx)
-    else:
-        return render_to_response("rundb/reports/printreport.tex", context_instance=ctx)
+    try:
+        ctx = RequestContext(request, _report_context(request, report_pk))
+        html_path = "rundb/reports/printreport.tex" if request.GET.get("latex", False) else "rundb/reports/report.html"
+        return render_to_response(html_path, context_instance=ctx)
+    except Exception as exc:
+        return HttpResponseRedirect(url_with_querystring(reverse('report_log', kwargs={'pk': report_pk}), error=str(exc)))
 
 
 @login_required
@@ -1523,6 +1578,9 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                     for sample in barcodedSamples.values():
                         for barcode, info in sample.get('barcodeSampleInfo', {}).items():
                             info['reference'] = barcodedReferences[barcode]['reference'] if barcodedReferences[barcode]['reference'] != 'none' else ''
+                            # blank the SSE file if target region BED file changed
+                            if info['targetRegionBedFile'] != barcodedReferences[barcode]['targetRegionBedFile']:
+                                info['sseBedFile'] = ""
                             info['targetRegionBedFile'] = barcodedReferences[barcode]['targetRegionBedFile']
                             info['hotSpotRegionBedFile'] = barcodedReferences[barcode]['hotSpotRegionBedFile']
                             # info['nucleotideType'] = barcodedReferences[barcode]['nucType']
@@ -1541,6 +1599,7 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                 'reference':  eas_form.cleaned_data['reference'] if eas_form.cleaned_data['reference'] != 'none' else '',
                 'targetRegionBedFile':  eas_form.cleaned_data['targetRegionBedFile'],
                 'hotSpotRegionBedFile': eas_form.cleaned_data['hotSpotRegionBedFile'],
+                'sseBedFile': eas.sseBedFile if eas_form.cleaned_data['targetRegionBedFile'] == eas.targetRegionBedFile else '',
                 'barcodeKitName': eas_form.cleaned_data['barcodeKitName'],
                 'barcodedSamples': barcodedSamples,
                 'threePrimeAdapter': eas_form.cleaned_data['threePrimeAdapter'],
@@ -1898,3 +1957,28 @@ def getVCF(request, pk):
                     lnOut, lnErr = lnCmd.communicate()
                     plStr += 'VCF Link: <a href=%s>%s</a><br/>\n' % (newFP[newFP.find('/results/analysis')+len('/results/analysis'):], newFP[len(fullPath):])
     return HttpResponse(plStr)
+
+
+def plugin_barcodes_table(request, pk, plugin_pk):
+    result = get_object_or_404(models.Results, pk=pk)
+    plugin = get_object_or_404(models.Plugin, pk=plugin_pk)
+
+    if plugin.path and plugin.script and plugin.script.endswith('.py'):
+        try:
+            columns, data = barcodes_table_for_plugin(result, plugin)
+            if columns:
+                if not data:
+                    return HttpResponse('<div class="alert alert-error">Error: unable to retrieve samples table data</div>')
+                else:
+                    ctxd = {
+                        "columns": json.dumps(columns, cls=DjangoJSONEncoder),
+                        "data": json.dumps(data),
+                        "isBarcoded": True if result.eas.barcodeKitName else False
+                    }
+                    return render_to_response("rundb/reports/blocks/plugin_barcodes_table.html", context_instance=RequestContext(request, ctxd))
+        except Exception:
+            err = traceback.format_exc()
+            logger.error(err)
+            return HttpResponse('<div class="alert alert-error">Error: unable to retrieve samples table<br>%s</div>' % err)
+    
+    return HttpResponse()

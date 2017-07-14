@@ -30,6 +30,8 @@ document.write('\
 <div id="RC-controlpanel" class="filter-panel" style="display:none">\
   <table><tr>\
     <td class="nwrap">View Options:</td>\
+    <td class="nwrap" id="RC-autoZoomControl"><span class="flyhelp" id="RC-autoZoomLabel">Automatic Zoom</span>:\
+      <input type="checkbox" id="RC-autoZoom" checked="unchecked"></td>\
     <td class="nwrap" id="RC-offScaleOutlierControl" style="display:none">\
       <span class="flyhelp" id="RC-offScaleOutlierLabel">Plot Outlier Off-scale</span>:\
       <input type="checkbox" id="RC-offScaleOutlier" checked="unchecked"></td>\
@@ -158,7 +160,7 @@ $(function () {
   // some default values for plot display
   var def_minPoints = 11;  // odd so one is in the middle
   var def_numPoints = 200;
-  var def_tinyValue = 0.0004;
+  var def_tinyValue = 0.00001;
   var def_outlierFactor = 4;
   var disableTitleBar = false;
   var placeholder = $("#RC-placeholder");
@@ -271,6 +273,9 @@ $(function () {
       "may depend on the current zoom level to those regions (i.e. the region size represented by the binned data). "+
       "Adding an overlay plot is also useful for identifying very low coverage regions, since these points are not "+
       "plotted for any region with 0 base coverage." );
+    $("#RC-autoZoomLabel").attr( "title",
+      "Select to allow the current view to automatically scale the Base Read Depth (y-axis) to the largest peak within view. "+
+      "The default (unchecked) behavior is to automatically scale to the largest peak within the current slider range." ); 
     $("#RC-offScaleOutlierLabel").attr( "title",
       "Select to indicate that a single outlier data point is plotted off-scale. "+
       "The y-axis is re-scaled so that the over-represented contig (or range) does not hide the relative representation "+
@@ -351,6 +356,7 @@ $(function () {
     resetYScale: false,
     showLegend : true,
     showTargets : true,
+    autoZoom : false,
     offScaleOutlier : false,
     numPoints : def_numPoints,
     aveBase : 1,
@@ -891,11 +897,17 @@ $(function () {
     $('.RC-selectParam#barAxis').val(plotParams.barAxis);
     $('.RC-selectParam#overPlot').val(plotParams.overPlot);
     $('#RC-numPoints').val(plotParams.numPoints);
+    $('#RC-autoZoom').attr('checked',plotParams.offScaleOutlier);
     $('#RC-offScaleOutlier').attr('checked',plotParams.offScaleOutlier);
     $('#RC-showLegend').attr('checked',plotParams.showLegend);
     $('#RC-showTargets').attr('checked',plotParams.showTargets);
     $('#RC-selectChrom').val(baseRangeParam.chrom);
   }
+
+  $('#RC-autoZoom').change(function() {
+    plotParams.autoZoom = ($(this).attr("checked") == "checked");
+    updatePlot();
+  });
 
   $('#RC-offScaleOutlier').change(function() {
     plotParams.offScaleOutlier = ($(this).attr("checked") == "checked");
@@ -1586,42 +1598,45 @@ $(function () {
     // But needs extra coding to fix variable Y axis heights and max left scroll issue.
     var xSrt = 0; //plotStats.minX + plotStats.sliderShift;
     var xEnd = plotStats.numPoints; //plotStats.maxX + plotStats.sliderShift;
+    var vSrt = plotParams.autoZoom ? plotStats.minX + plotStats.sliderShift : xSrt;
+    var vEnd = plotParams.autoZoom ? plotStats.maxX + plotStats.sliderShift : xEnd;
     for( var i = xSrt; i < xEnd; ++i ) {
       var scale = plotParams.aveBase ? 1.0/(dataTable[i][end]-dataTable[i][srt]+1) : 1;
       if( plotParams.barAxis == 0 ) {
         var reads = scale * (dataTable[i][f_reads]+dataTable[i][r_reads]);
         var ontarg = scale * (dataTable[i][f_ontarg]+dataTable[i][r_ontarg]);
-        if( reads == 0 ) ncov = def_tinyValue;
         if( onTargets ) d1.push( [i,ontarg] );
         d2.push( [i,reads] );
-        if( reads > ymax ) {
-          pmax = ymax;
-          ymax = reads;
-        } else if( reads > pmax ) {
-          pmax = reads;
-        } 
+        if( i >= vSrt && i <= vEnd ) {
+          if( reads > ymax ) {
+            pmax = ymax;
+            ymax = reads;
+          } else if( reads > pmax ) {
+            pmax = reads;
+          } 
+        }
       } else {
         var freads = dataTable[i][f_reads] * scale;
         var fontarg = dataTable[i][f_ontarg] * scale;
         var rreads = -dataTable[i][r_reads] * scale;
         var rontarg = -dataTable[i][r_ontarg] * scale;
-        if( freads == 0 ) freads = def_tinyValue;
-        if( rreads == 0 ) rreads = -def_tinyValue;
         if( onTargets ) d1.push( [i,fontarg] );
         if( onTargets ) d2.push( [i,rontarg] );
         d3.push( [i,freads] );
         d4.push( [i,rreads] );
-        if( freads > ymax ) {
-          pmax = ymax;
-          ymax = freads;
-        } else if( freads > pmax ) {
-          pmax = freads;
-        }
-        if( rreads < ymin ) {
-          pmin = ymin;
-          ymin = rreads;
-        } else if( rreads < pmin ) {
-          pmin = rreads;
+        if( i >= vSrt && i <= vEnd ) {
+          if( freads > ymax ) {
+            pmax = ymax;
+            ymax = freads;
+          } else if( freads > pmax ) {
+            pmax = freads;
+          }
+          if( rreads < ymin ) {
+            pmin = ymin;
+            ymin = rreads;
+          } else if( rreads < pmin ) {
+            pmin = rreads;
+          }
         }
       }
     }
@@ -1683,6 +1698,11 @@ $(function () {
       plotParams.resetYScale = false;
       plotStats.minY = ymin;
       plotStats.maxY = ymax;
+    }
+    // prevent flot axis defaults where whole region has 0 reads
+    if( ymin == 0 && ymax == 0 ) {
+      ymax = def_tinyValue;
+      if( plotParams.barAxis ) ymin = -def_tinyValue;
     }
 
     if( plotParams.barAxis == 0 ) {

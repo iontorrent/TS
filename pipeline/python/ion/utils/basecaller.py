@@ -28,8 +28,7 @@ def basecaller_cmd(basecallerArgs,
                    tfKey,
                    runID,
                    BASECALLER_RESULTS,
-                   block_col_offset,
-                   block_row_offset,
+                   block_offset_xy,
                    datasets_pipeline_path,
                    adapter):
     if basecallerArgs:
@@ -43,7 +42,7 @@ def basecaller_cmd(basecallerArgs,
     cmd += " --tfkey=%s" % (tfKey)
     cmd += " --run-id=%s" % (runID)
     cmd += " --output-dir=%s" % (BASECALLER_RESULTS)
-    cmd += " --block-offset %d,%d" % (block_col_offset, block_row_offset)
+    cmd += " --block-offset %d,%d" % block_offset_xy
     cmd += " --datasets=%s" % (datasets_pipeline_path)
     cmd += " --trim-adapter %s" % (adapter)
 
@@ -55,6 +54,7 @@ def basecaller_cmd(basecallerArgs,
 
 
 def basecalling(
+    block_offset_xy,
     SIGPROC_RESULTS,
     basecallerArgs,
     libKey,
@@ -102,21 +102,6 @@ def basecalling(
     ''' Step 2: Invoke BaseCaller '''
 
     try:
-        [(x, y)] = re.findall('block_X(.*)_Y(.*)', os.getcwd())
-        if x.isdigit():
-            block_col_offset = int(x)
-        else:
-            block_col_offset = 0
-
-        if y.isdigit():
-            block_row_offset = int(y)
-        else:
-            block_row_offset = 0
-    except:
-        block_col_offset = 0
-        block_row_offset = 0
-
-    try:
 
         cmd = basecaller_cmd(basecallerArgs,
                              SIGPROC_RESULTS,
@@ -124,8 +109,7 @@ def basecalling(
                              tfKey,
                              runID,
                              BASECALLER_RESULTS,
-                             block_col_offset,
-                             block_row_offset,
+                             block_offset_xy,
                              datasets_pipeline_path,
                              adaptersequence)
 

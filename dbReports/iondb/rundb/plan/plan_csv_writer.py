@@ -4,20 +4,20 @@ from django.contrib.auth.models import User
 from django.conf import settings
 
 from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
-    ReferenceGenome, Content, KitInfo, VariantFrequencies, dnaBarcode, \
+    ReferenceGenome, Content, KitInfo, dnaBarcode, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
     PlannedExperimentQC, AnalysisArgs
 
 from iondb.rundb.plan.views_helper import getPlanDisplayedName
 from iondb.rundb.plan.plan_validator import MAX_LENGTH_PLAN_NAME
-
 from traceback import format_exc
-
 import logging
 logger = logging.getLogger(__name__)
 
 
 class PlanCSVcolumns():
+    COLUMN_PLAN_HEADING_KEY = "Plan Parameters"
+    COLUMN_PLAN_HEADING_VALUE = "Plan "
     COLUMN_PLAN_CSV_VERSION = "CSV Version (required)"
     COLUMN_TEMPLATE_NAME = "Template name to plan from (required)"
     COLUMN_PLAN_NAME = "Plan name (required)"
@@ -25,11 +25,13 @@ class PlanCSVcolumns():
 
     COLUMN_SAMPLE_PREP_KIT = "Sample preparation kit name"
     COLUMN_LIBRARY_KIT = "Library kit name"
-    COLUMN_TEMPLATING_KIT = "Templating kit name"
+    COLUMN_TEMPLATING_KIT_V1 = "Templating kit name"
+    COLUMN_TEMPLATING_KIT = "Templating kit name (required)"
     COLUMN_TEMPLATING_SIZE = "Templating Size"
     COLUMN_CONTROL_SEQ_KIT = "Control sequence name"
     COLUMN_SEQ_KIT = "Sequence kit name"
-    COLUMN_CHIP_TYPE = "Chip type"
+    COLUMN_CHIP_TYPE_V1 = "Chip type"
+    COLUMN_CHIP_TYPE = "Chip type (required)"
     COLUMN_LIBRARY_READ_LENGTH = "Library Read Length"
     COLUMN_FLOW_COUNT = "Flows"
     COLUMN_SAMPLE_TUBE_LABEL = "Sample tube label"
@@ -46,7 +48,9 @@ class PlanCSVcolumns():
     COLUMN_EXPORT = "Export"
     COLUMN_NOTES = "Notes"
     COLUMN_LIMS_DATA = "LIMS Meta Data"
-    COLUMN_CHIP_BARCODE = "Chip ID"
+    COLUMN_CHIP_BARCODE_V1 = "Chip ID"
+    COLUMN_CHIP_BARCODE = "Chip Barcode"
+    COLUMN_IR_ACCOUNT = "IR Account"
     COLUMN_BC_SAMPLE_KEY = ":Sample"
 
     # Samples
@@ -57,6 +61,15 @@ class PlanCSVcolumns():
     COLUMN_SAMPLE_DESCRIPTION = "Sample Description"
     COLUMN_SAMPLE_FILE_HEADER = "Samples CSV file name (required)"
     COLUMN_SAMPLE_CONTROLTYPE = "Control Type"
+    COLUMN_SAMPLE_CANCER_TYPE = "Cancer Type"
+    COLUMN_SAMPLE_CELLULARITY = "Cellularity %"
+    COLUMN_SAMPLE_BIOSPY_DAYS = "Biospy Days"
+    COLUMN_SAMPLE_COUPLE_ID = "Coupld ID"
+    COLUMN_SAMPLE_EMBRYO_ID = "Embryo ID"
+    COLUMN_SAMPLE_IR_RELATION = "IR Relation"
+    COLUMN_SAMPLE_IR_GENDER = "IR Gender"
+    COLUMN_SAMPLE_IR_WORKFLOW = "IR Workflow"
+    COLUMN_SAMPLE_IR_SET_ID = "IR Set ID"
 
     # obsolete?
     COLUMN_IR_V1_0_WORKFLOW = "IR_v1_0_workflow"
@@ -256,6 +269,7 @@ def _get_plugins(template, delimiter):
                         plugins += delimiter
 
     # logger.info("EXIT plan_csv_writer._get_plugins() plugins=%s" %(plugins))
+
     return plugins
 
 
@@ -350,6 +364,8 @@ def _has_ir_beyond_v1_0(template):
 def _get_sample_name(template):
     return ""
 
+def _get_sample_description(template):
+    return ""
 
 def _get_sample_id(template):
     return ""
@@ -419,17 +435,69 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
 
         logger.info("plan_csv_writer.get_template_data_for_batch_planning() template retrieved. id=%d;" % (int(templateId)))
 
-        hdr = [PlanCSVcolumns.COLUMN_TEMPLATE_NAME, PlanCSVcolumns.COLUMN_PLAN_NAME
-               ]
+        hdr = [
+            PlanCSVcolumns.COLUMN_TEMPLATE_NAME,
+            PlanCSVcolumns.COLUMN_PLAN_NAME
+        ]
 
-        hdr2 = [PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT, PlanCSVcolumns.COLUMN_LIBRARY_KIT, PlanCSVcolumns.COLUMN_TEMPLATING_KIT, PlanCSVcolumns.COLUMN_TEMPLATING_SIZE, PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT, PlanCSVcolumns.COLUMN_SEQ_KIT, PlanCSVcolumns.COLUMN_CHIP_TYPE, PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH, PlanCSVcolumns.COLUMN_FLOW_COUNT, PlanCSVcolumns.COLUMN_SAMPLE_TUBE_LABEL, PlanCSVcolumns.COLUMN_BEAD_LOAD_PCT, PlanCSVcolumns.COLUMN_KEY_SIGNAL_PCT, PlanCSVcolumns.COLUMN_USABLE_SEQ_PCT, PlanCSVcolumns.COLUMN_REF, PlanCSVcolumns.COLUMN_TARGET_BED, PlanCSVcolumns.COLUMN_HOTSPOT_BED, PlanCSVcolumns.COLUMN_PLUGINS, PlanCSVcolumns.COLUMN_PROJECTS, PlanCSVcolumns.COLUMN_EXPORT, PlanCSVcolumns.COLUMN_NOTES, PlanCSVcolumns.COLUMN_LIMS_DATA, PlanCSVcolumns.COLUMN_CHIP_BARCODE
-                ]
+        hdr2 = [
+            PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT,
+            PlanCSVcolumns.COLUMN_LIBRARY_KIT,
+            PlanCSVcolumns.COLUMN_TEMPLATING_KIT,
+            PlanCSVcolumns.COLUMN_TEMPLATING_SIZE,
+            PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT,
+            PlanCSVcolumns.COLUMN_SEQ_KIT,
+            PlanCSVcolumns.COLUMN_CHIP_TYPE,
+            PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH,
+            PlanCSVcolumns.COLUMN_FLOW_COUNT,
+            PlanCSVcolumns.COLUMN_SAMPLE_TUBE_LABEL,
+            PlanCSVcolumns.COLUMN_BEAD_LOAD_PCT,
+            PlanCSVcolumns.COLUMN_KEY_SIGNAL_PCT,
+            PlanCSVcolumns.COLUMN_USABLE_SEQ_PCT,
+            PlanCSVcolumns.COLUMN_REF,
+            PlanCSVcolumns.COLUMN_TARGET_BED,
+            PlanCSVcolumns.COLUMN_HOTSPOT_BED,
+            PlanCSVcolumns.COLUMN_PLUGINS,
+            PlanCSVcolumns.COLUMN_PROJECTS,
+            PlanCSVcolumns.COLUMN_EXPORT,
+            PlanCSVcolumns.COLUMN_NOTES,
+            PlanCSVcolumns.COLUMN_LIMS_DATA,
+            PlanCSVcolumns.COLUMN_CHIP_BARCODE,
+            PlanCSVcolumns.COLUMN_IR_ACCOUNT
+        ]
 
-        body = [getPlanDisplayedName(template), ""
-                ]
+        body = [
+            getPlanDisplayedName(template),
+            ""
+        ]
 
-        body2 = [_get_sample_prep_kit_description(template), _get_lib_kit_description(template), _get_template_kit_description(template), _get_templating_size(template), _get_control_seq_kit_description(template), _get_seq_kit_description(template), _get_chip_type_description(template), _get_library_read_length(template), _get_flow_count(template), _get_sample_tube_label(template), _get_bead_loading_qc(template), _get_key_signal_qc(template), _get_usable_seq_qc(template), _get_reference(template), _get_target_regions_bed_file(template), _get_hotspot_regions_bed_file(template), _get_plugins(template, ";"), _get_projects(template, ";"), _get_export(template, ";"), _get_notes(template), _get_LIMS_data(template)
-                 ]
+        body2 = [
+            _get_sample_prep_kit_description(template),
+            _get_lib_kit_description(template),
+            _get_template_kit_description(template),
+            _get_templating_size(template),
+            _get_control_seq_kit_description(template),
+            _get_seq_kit_description(template),
+            _get_chip_type_description(template),
+            _get_library_read_length(template),
+            _get_flow_count(template),
+            _get_sample_tube_label(template),
+            _get_bead_loading_qc(template),
+            _get_key_signal_qc(template),
+            _get_usable_seq_qc(template),
+            _get_reference(template),
+            _get_target_regions_bed_file(template),
+            _get_hotspot_regions_bed_file(template),
+            _get_plugins(template, ";"),
+            _get_projects(template, ";"),
+            _get_export(template, ";"),
+            _get_notes(template),
+            _get_LIMS_data(template),
+            "",
+            _get_template_IR_account(template),
+            _get_template_IR_workflow(template)
+
+        ]
 
         # position of the fields below are based on the template selected and whether IR has been installed on the TS
         if _has_ir_v1_0(template):
@@ -449,16 +517,24 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
                 hdr.append(PlanCSVcolumns.COLUMN_SAMPLE_FILE_HEADER)
                 body.append("")
         else:
-            hdr.append(PlanCSVcolumns.COLUMN_SAMPLE)
-            body.append(_get_sample_name(template))
+            hdr.extend([PlanCSVcolumns.COLUMN_SAMPLE,
+                        PlanCSVcolumns.COLUMN_SAMPLE_DESCRIPTION,
+                        PlanCSVcolumns.COLUMN_SAMPLE_ID])
 
-            hdr.append(PlanCSVcolumns.COLUMN_SAMPLE_ID)
-            body.append(_get_sample_id(template))
+            body.extend([_get_sample_name(template),
+                         _get_sample_description(template),
+                         _get_sample_id(template)])
+
             # if has_ir_beyond_v1_0:
              #   hdr.append(PlanCSVcolumns.COLUMN_IR_V1_X_WORKFLOW)
              #   body.append(_get_sample_IR_beyond_v1_0_workflows(template))
 
         hdr.extend(hdr2)
+        if single_samples_file:
+            hdr.extend(get_irSettings())
+        else:
+            hdr.append(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW)
+
         body.extend(body2)
 
         return hdr, body
@@ -467,12 +543,35 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
         return [], [], []
 
 
+def get_irSettings():
+    irSettings = [PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW,
+                  PlanCSVcolumns.COLUMN_SAMPLE_IR_RELATION,
+                  PlanCSVcolumns.COLUMN_SAMPLE_IR_GENDER,
+                  PlanCSVcolumns.COLUMN_SAMPLE_IR_SET_ID]
+
+    return irSettings
+
+def _get_template_IR_account(template):
+    planPlugins = template.get_selectedPlugins()
+    existingIR = None
+    if planPlugins:
+        for planPlugin in planPlugins.values():
+            if "IonReporterUploader" in planPlugin.get("name"):
+                existingIR = planPlugin["userInput"]["accountName"]
+                existingIR = existingIR.strip()
+                return existingIR
+    return existingIR
+
+def _get_template_IR_workflow(template):
+    return template.irworkflow
+
 def get_samples_data_for_batch_planning(templateId):
     template = PlannedExperiment.objects.get(pk=int(templateId))
     reference = _get_reference(template)
     target_bed = _get_target_regions_bed_file(template)
     hotspot_bed = _get_hotspot_regions_bed_file(template)
     nucleotideType = template.get_default_nucleotideType()
+    template_ir_workflow = _get_template_IR_workflow(template)
 
     hdr = [
         PlanCSVcolumns.COLUMN_BARCODE,
@@ -483,8 +582,21 @@ def get_samples_data_for_batch_planning(templateId):
         PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE,
         PlanCSVcolumns.COLUMN_REF,
         PlanCSVcolumns.COLUMN_TARGET_BED,
-        PlanCSVcolumns.COLUMN_HOTSPOT_BED,
+        PlanCSVcolumns.COLUMN_HOTSPOT_BED
     ]
+    # include ir configuration settings
+    hdr.extend(get_irSettings())
+
+    # if selected template is for Oncology, include below properties
+    isOnco = [cat for cat in ["Oncomine", "Onconet"] if cat in template.categories]
+    if isOnco:
+        hdr.extend([PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE,
+                    PlanCSVcolumns.COLUMN_SAMPLE_CELLULARITY])
+    else:
+        hdr.extend([PlanCSVcolumns.COLUMN_SAMPLE_BIOSPY_DAYS,
+                    PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID,
+                   PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID])
+
     body = []
     barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("index")
 
@@ -501,6 +613,8 @@ def get_samples_data_for_batch_planning(templateId):
                 row.append(hotspot_bed)
             elif column == PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE:
                 row.append(nucleotideType)
+            elif column == PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW:
+                row.append(template_ir_workflow)
             else:
                 row.append("")
         body.append(row)

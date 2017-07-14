@@ -53,9 +53,12 @@ public:
   float damper_bias;
   float pseudo_sigma_base;
 
+  int DEBUG;
+
   BasicBiasGenerator(){
     int num_alt = 1;
    InitForStrand(num_alt);
+   DEBUG = 0;
   }
 
   void GenerateBiasByStrand(int i_hyp, HiddenBasis &delta_state, vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions);
@@ -77,6 +80,8 @@ public:
   float BiasHypothesisLL();
   float RadiusOfBias(int o_alt);
   float RadiusOfHypothesisBias();
+
+  void PrintDebug(bool print_updated = true);
 };
 
 

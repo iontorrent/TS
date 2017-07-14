@@ -57,6 +57,7 @@
 
 <script type="text/javascript">
   function numberWithCommas(x) {
+    if( !x ) return "NA";
     var parts = x.toString().split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
@@ -196,7 +197,7 @@ $(document).ready(function() {
   <div class="pull-right">
     <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
     <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
-    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+
     <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
   </div>
 </div> </div> </div> </div>

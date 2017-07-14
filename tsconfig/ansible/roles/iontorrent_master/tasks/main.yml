@@ -17,8 +17,8 @@
   script: samba.preseed
 
 - name: Install system packages for master node
-  apt: name={{item}} state=present force=yes
-  with_items: ionmaster_syspkg_list
+  apt: name={{ item }} state=present force=yes
+  with_items: "{{ ionmaster_syspkg_list }}"
 
 #-----------------------------------------------------------------------------
 # Copy configuration and init scripts celeryd and celerybeat daemons
@@ -56,11 +56,11 @@
 #-----------------------------------------------------------------------------
 - name: Install packages for head node
   apt: name={{ item }} state=present force=yes
-  with_items: ionmaster_ionpkg_list
+  with_items: "{{ ionmaster_ionpkg_list }}"
   when: item != ''
 - name: Install 3rd party plugin packages
   apt: name={{ item }} state=present force=yes
-  with_items: ionmaster_pluginpkg_list
+  with_items: "{{ ionmaster_pluginpkg_list }}"
   when: item != ''
   ignore_errors: yes
 
@@ -74,13 +74,6 @@
     - ionCrawler
     - ionJobServer
     - ionPlugin
-
-#-----------------------------------------------------------------------------
-# Add www-data user to the adm group to allow read permission on log files
-#-----------------------------------------------------------------------------
-- name: Add www-data user to adm group
-  user: name=www-data append=yes groups=adm
-  notify: restart apache2
 
 #-----------------------------------------------------------------------------
 # Site Specific Database Changes
@@ -109,7 +102,7 @@
   file: path=/etc/torrentserver state=directory mode=0755 owner=root group=root
 
 - name: Create/Update tsconf.log
-  template: src={{ansible_env.PWD}}/templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+  template: src={{ ansible_env.PWD }}/templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
 
 #-----------------------------------------------------------------------------
 # Increase minimum free space on S5
@@ -122,7 +115,7 @@
 # Enable console access to the TSVM running on S5 host
 #-----------------------------------------------------------------------------
 - name: Adding ttyS0 config to enable console on the S5TSVM
-  template: src={{ansible_env.PWD}}/templates/ttyS0.conf.j2 dest=/etc/init/ttyS0.conf mode=0644 owner=root group=root
+  template: src={{ ansible_env.PWD }}/templates/ttyS0.conf.j2 dest=/etc/init/ttyS0.conf mode=0644 owner=root group=root
   when: S5_virtual_guest|bool == True
 
 #-----------------------------------------------------------------------------
@@ -154,3 +147,26 @@
 - name: Set NO_PROXY in /etc/environment
   lineinfile: dest=/etc/environment line=NO_PROXY="localhost,127.0.0.1,127.0.1.1,::1"
                 insertafter=EOF
+
+#-----------------------------------------------------------------------------
+# Enable a custom shell prompt for S5 only
+#-----------------------------------------------------------------------------
+- name: Enable customized shell prompt
+  lineinfile: dest=/home/ionadmin/.bashrc
+                insertafter=EOF
+                line="ihid=$(nmblookup -A 192.168.122.1|awk '/<00>/{print $1;exit;}')"
+  when: S5_virtual_guest|bool == True
+- name:
+  lineinfile: dest=/home/ionadmin/.bashrc
+                insertafter="^ihid=.*"
+                line="PS1='${debian_chroot:+($debian_chroot)}\u@\h-${ihid}:\w\$ '"
+  when: S5_virtual_guest|bool == True
+
+#-----------------------------------------------------------------------------
+# Set up cron job to check system services
+#-----------------------------------------------------------------------------
+- cron:
+    name: monitor services
+    minute: "*/30"
+    job: "/usr/bin/python /opt/ion/iondb/bin/check_system_services.py -n > /dev/null"
+

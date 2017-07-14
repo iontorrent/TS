@@ -67,10 +67,12 @@ class AssemblerRunner(object):
 
     def runDownsampling(self):
         print("\nSubsampling using Picard")
-        downsampler = os.path.join(self.assembler_path, 'DownsampleSam.jar')
+        # downsampler = os.path.join(self.assembler_path, 'DownsampleSam.jar')
+        downsampler = "/opt/picard/picard-tools-current/picard.jar"
         out = os.path.join(self.sample_output_dir, self.bam_file + "_scaled")
 
         cmd = ("java -Xmx2g -jar {downsampler} "
+               "DownsampleSam "
                "INPUT={self.bam_to_assemble} OUTPUT={out} "
                "PROBABILITY={self.fraction_of_reads}").format(**locals())
         self.runCommand(cmd)
@@ -97,8 +99,8 @@ class AssemblerRunner(object):
                    "Skipping this file") % (self.min_reads,))
             return
 
-#       if self.fraction_of_reads < 1:
-#            self.runDownsampling()
+        if self.fraction_of_reads < 1:
+            self.runDownsampling()
 
 #        if self.params.has_key('runSpades'):
         self.runSPAdes()

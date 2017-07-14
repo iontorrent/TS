@@ -1000,56 +1000,6 @@ class LegacyMigration(SchemaMigration):
 
         try:
             db.start_transaction()
-            # Adding model 'SequencingKit'
-            db.create_table('rundb_sequencingkit', (
-                ('id', models.fields.AutoField(primary_key=True)),
-                ('name', models.fields.CharField(max_length=512, blank=True)),
-                ('description', models.fields.CharField(max_length=3024, blank=True)),
-                ('sap', models.fields.CharField(max_length=7, blank=True)),
-            ))
-            db.send_create_signal('rundb', ['SequencingKit'])
-            db.execute_deferred_sql()
-            db.commit_transaction()
-        except DatabaseError:
-            db.rollback_transaction()
-            log.info("SequencingKit table already exists")
-            db.clear_deferred_sql()
-
-        try:
-            db.start_transaction()
-            # Adding model 'LibraryKit'
-            db.create_table('rundb_librarykit', (
-                ('id', models.fields.AutoField(primary_key=True)),
-                ('name', models.fields.CharField(max_length=512, blank=True)),
-                ('description', models.fields.CharField(max_length=3024, blank=True)),
-                ('sap', models.fields.CharField(max_length=7, blank=True)),
-            ))
-            db.send_create_signal('rundb', ['LibraryKit'])
-            db.execute_deferred_sql()
-            db.commit_transaction()
-        except DatabaseError:
-            db.rollback_transaction()
-            log.info("LibraryKit table already exists")
-            db.clear_deferred_sql()
-
-        try:
-            db.start_transaction()
-            # Adding model 'VariantFrequencies'
-            db.create_table('rundb_variantfrequencies', (
-                ('id', models.fields.AutoField(primary_key=True)),
-                ('name', models.fields.CharField(max_length=512, blank=True)),
-                ('description', models.fields.CharField(max_length=3024, blank=True)),
-            ))
-            db.send_create_signal('rundb', ['VariantFrequencies'])
-            db.execute_deferred_sql()
-            db.commit_transaction()
-        except DatabaseError:
-            db.rollback_transaction()
-            log.info("VariantFrequencies table already exists")
-            db.clear_deferred_sql()
-
-        try:
-            db.start_transaction()
             # Adding model 'KitInfo'
             db.create_table('rundb_kitinfo', (
                 ('id', models.fields.AutoField(primary_key=True)),
@@ -1619,13 +1569,6 @@ class LegacyMigration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '256'}),
             'sequence': ('django.db.models.fields.CharField', [], {'max_length': '64'})
         },
-        'rundb.librarykit': {
-            'Meta': {'object_name': 'LibraryKit'},
-            'description': ('django.db.models.fields.CharField', [], {'max_length': '3024', 'blank': 'True'}),
-            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '512', 'blank': 'True'}),
-            'sap': ('django.db.models.fields.CharField', [], {'max_length': '7', 'blank': 'True'})
-        },
         'rundb.location': {
             'Meta': {'object_name': 'Location'},
             'comments': ('django.db.models.fields.TextField', [], {'blank': 'True'}),
@@ -1832,13 +1775,6 @@ class LegacyMigration(SchemaMigration):
             'meta': ('django.db.models.fields.TextField', [], {'default': "''", 'null': 'True', 'blank': 'True'}),
             'runType': ('django.db.models.fields.CharField', [], {'max_length': '512'})
         },
-        'rundb.sequencingkit': {
-            'Meta': {'object_name': 'SequencingKit'},
-            'description': ('django.db.models.fields.CharField', [], {'max_length': '3024', 'blank': 'True'}),
-            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '512', 'blank': 'True'}),
-            'sap': ('django.db.models.fields.CharField', [], {'max_length': '7', 'blank': 'True'})
-        },
         'rundb.template': {
             'Meta': {'object_name': 'Template'},
             'comments': ('django.db.models.fields.TextField', [], {'blank': 'True'}),
@@ -1914,12 +1850,6 @@ class LegacyMigration(SchemaMigration):
             'phone_number': ('django.db.models.fields.CharField', [], {'default': "''", 'max_length': '256', 'blank': 'True'}),
             'title': ('django.db.models.fields.CharField', [], {'default': "'user'", 'max_length': '256'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']", 'unique': 'True'})
-        },
-        'rundb.variantfrequencies': {
-            'Meta': {'object_name': 'VariantFrequencies'},
-            'description': ('django.db.models.fields.CharField', [], {'max_length': '3024', 'blank': 'True'}),
-            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '512', 'blank': 'True'})
         }
     }
 

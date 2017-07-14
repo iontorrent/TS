@@ -4,6 +4,25 @@
 #include <string.h>
 #include <errno.h>
 #include "tmap_error.h"
+#include <stdarg.h>
+
+#ifdef HAVE_LIBPTHREAD
+#include <pthread.h>
+static pthread_mutex_t err_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+static void elock ()
+{
+#ifdef HAVE_LIBPTHREAD
+  pthread_mutex_lock (&err_mutex);
+#endif
+}
+static void eunlock ()
+{
+#ifdef HAVE_LIBPTHREAD
+  pthread_mutex_unlock (&err_mutex);
+#endif
+}
 
 static char error_string[][64] =
 { 
@@ -110,3 +129,33 @@ tmap_error_full(const char *file, const unsigned int line, const char *function_
       break;
   }
 }
+
+
+void 
+tmap_warn (const char* src_fname, const char* src_func, int src_lno, const char *fmt, ...)
+{
+  elock ();
+  va_list ap;
+  va_start (ap, fmt);
+  fprintf (stderr, "Warning: ");
+  vfprintf (stderr, fmt, ap);
+  fprintf (stderr, "\n  (In file: %s, function: %s, line %d)\n", src_fname, src_func, src_lno);
+  va_end (ap);
+  eunlock ();
+}
+
+void 
+tmap_fail (int quit, const char* src_fname, const char* src_func, int src_lno, const char *fmt, ...)
+{
+  elock ();
+  va_list ap;
+  va_start(ap, fmt);
+  fprintf (stderr, "Error: ");
+  vfprintf (stderr, fmt, ap);
+  fprintf (stderr, "\n  (In file: %s, function: %s, line %d)\n", src_fname, src_func, src_lno);
+  va_end(ap);
+  eunlock ();
+  if (quit)
+    exit(EXIT_FAILURE);
+}
+

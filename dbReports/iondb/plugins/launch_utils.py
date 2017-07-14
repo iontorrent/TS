@@ -120,24 +120,19 @@ def depsolve(plugins, pk):
     satisfied_dependencies = {}
     for name in sorted_names:
         if name not in plugins.keys():
-            pr = plugin_results.filter(plugin__name=name).filter(state__in=['Completed','Started','Queued']).order_by('-pk')
-            if pr:
-                satisfied_dependencies[name] = {
-                    'pluginresult': pr[0].pk,
-                    'version': pr[0].plugin.version,
-                    'jid': pr[0].jobid,
-                    'pluginresult_path': pr[0].path()
-                }
-            # else:
-            #     # add dependency plugin to be launched
-            #     try:
-            #         p = active_plugins.get(name=name)
-            #         plugins.update(get_plugins_dict([p]))
-            #     except Plugin.DoesNotExist:
-            #         logger.exception("Plugin requested dependency on %s, which isn't installed", name)
+            for pr in plugin_results.filter(plugin__name=name).order_by('-pk'):
+                if pr.state() in ['Completed', 'Started', 'Queued']:
+                    prj = pr.plugin_result_jobs.latest('starttime')
+                    satisfied_dependencies[name] = {
+                        'pluginresult': pr.pk,
+                        'version': pr.plugin.version,
+                        'jid': prj.grid_engine_jobid if prj else '',
+                        'pluginresult_path': pr.path()
+                    }
+                    break
 
-            
     return plugins, sorted_names, satisfied_dependencies
+
 
 def get_plugins_to_run(plugins, result_pk, runlevel):
     # updates plugins with dependencies
@@ -147,7 +142,7 @@ def get_plugins_to_run(plugins, result_pk, runlevel):
     export_plugins_to_run = []
     for name in sorted_names:
         if name in plugins:
-            plugin_runlevels = plugins[name].get('runlevel') or [RunLevel.DEFAULT]
+            plugin_runlevels = plugins[name].get('runlevels') or [RunLevel.DEFAULT]
             if runlevel in plugin_runlevels:
                 if Feature.EXPORT in plugins[name].get('features',[]):
                     export_plugins_to_run.append(name)

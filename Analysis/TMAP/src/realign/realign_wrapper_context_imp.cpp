@@ -50,7 +50,7 @@ char* ContAlignImp::qry_buf (unsigned len)
         return qry_buf_;
     qry_buf_len_ = len_roundup (len);
     if (qry_buf_)
-        delete qry_buf_;
+        delete [] qry_buf_;
     // TODO: memory allocation error handling
     qry_buf_ = new char [qry_buf_len_];
     return qry_buf_;
@@ -64,7 +64,7 @@ char* ContAlignImp::ref_buf (unsigned len)
         return ref_buf_;
     ref_buf_len_ = len_roundup (len);
     if (ref_buf_)
-        delete ref_buf_;
+        delete [] ref_buf_;
     // TODO: memory allocation error handling
     ref_buf_ = new char [ref_buf_len_];
     return ref_buf_;
@@ -126,7 +126,10 @@ bool ContAlignImp::compute_alignment (
     unsigned cigar_sz, 
     uint32_t*& cigar_dest, 
     unsigned& cigar_dest_sz, 
-    int& new_pos,
+    unsigned& new_ref_pos,
+    unsigned& new_qry_pos,
+    unsigned& new_ref_len,
+    unsigned& new_qry_len,
     bool& already_perfect,
     bool& clip_failed,
     bool& alignment_failed,
@@ -192,10 +195,10 @@ bool ContAlignImp::compute_alignment (
             ref_ins + extra_bandwidth_        // width
         );
     // convert alignment to cigar
-    unsigned qry_off, ref_off;
+    unsigned ref_off;
     // int ref_shift = 
-    roll_cigar (new_cigar_, MAX_CIGAR_SZ, cigar_dest_sz, batches_, bno, clean_len, clips, qry_off, ref_off);
-    new_pos = r_pos + ref_off;
+    roll_cigar (new_cigar_, MAX_CIGAR_SZ, cigar_dest_sz, batches_, bno, clean_len, clips, new_qry_pos, ref_off, new_qry_len, new_ref_len);
+    new_ref_pos = r_pos + ref_off;
     cigar_dest = new_cigar_;
 
     return true;

@@ -1,5 +1,20 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% block extra_head %}
+<style type="text/css">
+table {
+    table-layout: auto;
+}
+.bc_ir  {
+    width: 7%;
+}
+.single_csv {
+    width: 20%;
+}
+</style>
+{% endblock extra_head %}
+{% block content %}
+
 <div id="modal_batch_planning_upload" title="" class="modal modal-900 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -11,32 +26,38 @@
             <div class="control-group">
                 <label for="postedfile" class="control-label">Plan CSV or ZIP File</label>
                 <div class="controls">
-                    <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required">
+                    <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required" accept=".zip, .csv">
                     <p class="help-block error"></p>
                 </div>
             </div>
         </form>
-        <div>
-            Download example files:
-            <ul>
-                <li><a href="{% static "examples/batchPlanning_nonbarcoded_example.csv" %}">Non-barcoded planning CSV example</a></li>
-                <li><a href="{% static "examples/batchPlanning_barcoded_example_single.csv" %}">Barcoded planning single file CSV example</a><sup>&dagger;</sup></li>
-                <li><a href="{% static "examples/batchPlanning_barcoded_example.zip" %}">Barcoded planning multiple files ZIP example with separate CSV sample files</a></li>
-            </ul>
+        <div class="help-block">
+            <font size="5">&#9758;</font>Tips:
+                <ul>
+                    <li>To Download the non-barcoded(single CSV) or barcoded(zip bundle) plans:
+                        <ul>
+                            <li>Go to respective Application</li>
+                            <li>Click the Gear button which is located on the right most side of the respective template</li>
+                            <li>Click Plan Multiple</li>
+                            <li>Enter no of plans to create</li>
+                            <li>Click Download CSV for batch planning</li>
+                        </ul>
+                    </li>
+                </ul>
         </div>
         <div class="help-block">
-            Tips:
             <ul>
                 <li>Plan values not included in the CSV file will default to values of the template you are planning from</li>
                 <li>To associate a Plan with multiple Plugins or Projects,
                 <ul>
                     <li>use "<b>;</b>" as the separator</li>
                     <li>Example: My Project1; My Project2</li>
-                </ul>
+                </ul></li>
+                <li>When configuring the IR Account, specify only the Name (Display Name) of the IR account which is configured in Torrent Suite</li>
             </ul>
         </div>
         <div class="help-block">
-            <sup>&dagger;</sup>Tips for barcoded planning with single CSV file:
+            <font size="5">&#9758;</font>Tips for barcoded planning with single CSV file:
             <ul>
                 <li>To specify both sample name and sample ID during barcoded planning,
                     <ul>
@@ -77,4 +98,5 @@
 <script type="text/javascript">
 TB.plan.batchupload.ready("{% url "planned" %}");</script>
 </div>
+{% endblock %}
 

@@ -1,201 +1,209 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <!-- java script required for interacting with the RESTful API -->
     <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
     <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
 
     <!-- page style -->
     <style type='text/css'>
-      #formwrap {
-        line-height: 2em;
-        background: #eef;
-        margin: 10px;
-        padding:10px;
-        height: 130px;
-        text-align: center;
-      }
+        #formwrap {
+            line-height: 2em;
+            background: #eef;
+            margin: 10px;
+            padding:10px;
+            height: 130px;
+            text-align: center;
+        }
 
-      input {
-        height:30px;
-      }
+        input {
+            height:30px;
+        }
 
-      body {
-       font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
-       font-size: 14px;
-      }
+        body {
+            font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+            font-size: 14px;
+        }
     </style>
 
     <script type='text/javascript'>
-      default_key = "";
-      pluginGET = "";
+        default_key = "";
+        pluginGET = "";
 
-      $(document).ready(function(){
-       $.ajax({
-        url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
-        dataType:"json",
-        type: "GET",
-        async: false,
-        success:function(data){
-          //get the plugin data
-          pluginGET = data;
+        $(document).ready(function(){
+            $.ajax({
+                url:"/rundb/api/v1/plugin/" + TB_plugin.pk,
+                dataType:"json",
+                type: "GET",
+                async: false,
+                success:function(data){
+                    //get the plugin data
+                    pluginGET = data;
 
-          //delete the resource_uri
-          delete pluginGET.resource_uri;
+                    //delete the resource_uri
+                    delete pluginGET.resource_uri;
 
-          $.each(pluginGET.config, function(key,val){
-            console.log(key+"->"+val);
-            if(key == "ip"){
-             document.getElementById("ip").value = val;
+                    $.each(pluginGET.config, function(key,val){
+                        if(key == "ip"){
+                            document.getElementById("ip").value = val;
+                        }
+
+                        //set the vlaue of user_name
+                        else if(key == "user_name"){
+                            document.getElementById("user_name").value = val;
+                        }
+
+                        //set the value of upload_path
+                        else if(key == "upload_path"){
+                            document.getElementById("upload_path").value = val;
+                        }
+
+                        //set the value of thumbnailonly
+                        else if(key == "thumbnailonly"){
+                            if (val == "off") {
+                                $("#thumbnailonly").prop('checked', false);
+                            } else {
+                                $("#thumbnailonly").prop('checked', true);
+                            }
+                        }
+                    });
+                }
+            });
+
+            if(document.getElementById("upload_path").value == ""){
+                document.getElementById("upload_path").value = "/results/uploads/";
             }
-
-            //set the vlaue of user_name
-            else if(key == "user_name"){
-             document.getElementById("user_name").value = val;
-            }
-
-            //set the vlaue of user_password
-            else if(key == "user_password"){
-             document.getElementById("user_password").value = val;
-            }
-
-            //set the value of upload_path
-            else if(key == "upload_path"){
-             document.getElementById("upload_path").value = val;
-            }
-
-            //set the value of thumbnailonly
-            else if(key == "thumbnailonly"){
-              if (val == "off") {
-                $("#thumbnailonly").prop('checked', false);
-              } else {
-                $("#thumbnailonly").prop('checked', true);
-              }
-            }
-          });
-        }
-      });
-
-        //if nothing has been provided for path and user name, let's fill that out
-        if(document.getElementById("user_name").value == ""){
-         document.getElementById("user_name").value = "ionadmin";
-        }
-
-        if(document.getElementById("upload_path").value == ""){
-         document.getElementById("upload_path").value = "/results/uploads/";
-        }
-      });
-
-      //turn the html objects into json objects
-      $(function() {
-          $.fn.serializeObject = function(){
-          var o = {};
-          var a = this.serializeArray();
-          a = a.concat(
-            jQuery('#pluginconfig input[type=checkbox]:not(:checked)').map(
-                    function() {
-                        return {"name": this.name, "value": "off"}
-                    }).get());
-
-          console.log(a)
-          $.each(a, function() {
-            console.log(this.name+" : "+this.value);
-
-            if (o[this.name] != null) {
-              if (!o[this.name].push) {
-                o[this.name] = [o[this.name]];
-              }
-              o[this.name].push(this.value || '');
-            } else {
-              o[this.name] = this.value || '';
-            }
-          });
-
-          return o;
-        };
-
-      //use the RESTful API to post the json objects to the plugin
-      $(function() {
-       $('#postbutton').click(function() {
-
-        if(document.getElementById("ip").value == ""){
-          alert("Please enter the IP address of the receiving Torrent Server.");
-          return(false);
-        }
-
-        if(document.getElementById("user_name").value == ""){
-            alert("Please enter the user name");
-            return(false);
-        }
-
-        if(document.getElementById("user_password").value == ""){
-            alert("Please enter the user password");
-            return(false);
-        }
-
-        if(document.getElementById("upload_path").value == ""){
-            alert("Please enter the upload path");
-            return(false);
-        }
-
-        <!-- this form name "pluginconfig" should match the one used in the html page-->
-        obj =  $('#pluginconfig').serializeObject();
-        //use the data retreived from the GET and modify it only the config key is changed
-        pluginGET.config = obj;
-        pluginAPIJSON = JSON.stringify(pluginGET);
-        pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
-        $.ajax({
-         type: 'PUT',
-         url: pluginURL,
-         contentType: "application/json; charset=utf-8",
-         success: function () {parent.$.fn.colorbox.close();},
-         data: pluginAPIJSON,
-         dataType: "json"
         });
-       });
-      })
-      });
-    </script>
-  </head>
 
-  <!-- set up the html page that the user interacts with -->
-  <body>
-    <div>
-      <div class="page-header">
-	<h1>RunTransfer Global Settings</h1>
-      </div>
-      
-      <!-- this form id, in this case "pluginconfig", should match the one called in PUT java script -->
-      <form id="pluginconfig" align="center">
-        <div id="adv_parent">
-          <div>
-            <center><table align="center">
-              <!-- input_text will become the json variable  -->
-              <tr>
-                <td>IP address or fully qualified hostname: </td>
-                <td><input id="ip" name="ip" value="" type="text" size="50"/></td>
-              </tr>
-              <tr>
-                <td>Remote TS Username (default ionadmin): </td>
-                <td><input id="user_name" name="user_name" value="" type="text" size="50"/></td>
-              </tr>
-              <tr>
-                <td>Password: </td>
-                <td><input id="user_password" name="user_password" value="" type="password" size="50"/></td>
-              </tr>
-              <tr>
-                <td>Upload Path (default /results/uploads/): </td>
-                <td><input id="upload_path" name="upload_path" value="" size="50"/></td>
-              </tr>
-              <tr>
-                <td align=right>Thumbnail-only: </td>
-                <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" title="Only affects Proton datasets" size="50"/></td>
-              </tr>
-            </table></center>
-          </div>
-        </div>
-      </form>
+        //turn the html objects into json objects
+        $(function() {
+            $.fn.serializeObject = function(){
+                var o = {};
+                var a = this.serializeArray();
+                a = a.concat(
+                        jQuery('#pluginconfig input[type=checkbox]:not(:checked)').map(
+                                function() {
+                                    return {"name": this.name, "value": "off"}
+                                }).get());
+
+
+                $.each(a, function() {
+
+                    if (o[this.name] != null) {
+                        if (!o[this.name].push) {
+                            o[this.name] = [o[this.name]];
+                        }
+                        o[this.name].push(this.value || '');
+                    } else {
+                        o[this.name] = this.value || '';
+                    }
+                });
+
+                return o;
+            };
+
+            //use the RESTful API to post the json objects to the plugin
+            $(function() {
+                $('#postbutton').click(function() {
+
+                    if(document.getElementById("ip").value == ""){
+                        alert("Please enter the IP address of the receiving Torrent Server.");
+                        return(false);
+                    }
+
+                    if(document.getElementById("user_name").value == ""){
+                        alert("Please enter the user name");
+                        return(false);
+                    }
+
+                    if(document.getElementById("user_password").value == ""){
+                        alert("Please enter the user password");
+                        return(false);
+                    }
+
+                    if(document.getElementById("upload_path").value == ""){
+                        alert("Please enter the upload path");
+                        return(false);
+                    }
+
+                    <!-- this form name "pluginconfig" should match the one used in the html page-->
+                    //use the data retreived from the GET and modify it only the config key is changed
+                    pluginGET.config = $('#pluginconfig').serializeObject();
+                    pluginAPIJSON = JSON.stringify(pluginGET);
+                    pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
+                    $.ajax({
+                        type: 'PUT',
+                        url: pluginURL,
+                        contentType: "application/json; charset=utf-8",
+                        success: function () {
+                            
+                            var secretPostData = {
+                                "unencrypted": document.getElementById("user_password").value,
+                                "name": "RunTransferConfig-" + document.getElementById("ip").value + "-" + document.getElementById("user_name").value
+                            };
+                            // upon success we are going to have to setup a securely stored password in the database
+                            // TODO: needs to updated to https
+                            $.ajax({
+                                type: 'POST',
+                                url: "/security/api/v1/securestring/",
+                                data: JSON.stringify(secretPostData),
+                                contentType: "application/json; charset=utf-8",
+                                dataType: "json",
+                                async: false,                       
+                                success: function(data, status, xhr){
+                                    if(status == "success"){
+                                        parent.$.fn.colorbox.close();
+                                    }
+                                }
+                            });
+                        },
+                        data: pluginAPIJSON,
+                        dataType: "json"
+                    });
+                });
+            })
+        });
+    </script>
+</head>
+
+<!-- set up the html page that the user interacts with -->
+<body>
+<div>
+    <div class="page-header">
+        <h1>RunTransfer Global Settings</h1>
     </div>
-    <br><center><input id="postbutton" type="submit" value="Submit"></center> <p>
-  </body>
+
+    <!-- this form id, in this case "pluginconfig", should match the one called in PUT java script -->
+    <form id="pluginconfig" align="center">
+        <div id="adv_parent">
+            <div>
+                <table align="center">
+                    <!-- input_text will become the json variable  -->
+                    <tr>
+                        <td>IP address or fully qualified hostname: </td>
+                        <td><input id="ip" name="ip" value="" type="text" size="50" title="The domain or internet address."/></td>
+                    </tr>
+                    <tr>
+                        <td>Remote TS Username (default ionadmin): </td>
+                        <td><input id="user_name" name="user_name" value="" type="text" size="50" title="The user name." autocomplete="new-password" /></td>
+                    </tr>
+                    <tr>
+                        <td>Password: </td>
+                        <td><input id="user_password" name="user_password" value="" type="password" size="50" title="The user password." autocomplete="new-password" /></td>
+                    </tr>
+                    <tr>
+                        <td>Upload Path (default /results/uploads/): </td>
+                        <td><input id="upload_path" name="upload_path" value="" size="50" title="The upload path."/></td>
+                    </tr>
+                    <tr>
+                        <td align=right>Thumbnail-only: </td>
+                        <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" title="Only affects Proton datasets" size="50"/></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </form>
+</div>
+<br><input id="postbutton" type="submit" value="Submit"> <p>
+</body>
 </html>

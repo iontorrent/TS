@@ -1,0 +1,64 @@
+{
+    "metadata": {
+        "compatible_chip_type": "318D",
+        "created": "2016-05-24 15:50:57.069486",
+        "optimizable params": "km_const(1-4), krate(6-9), d_coeff(11-14), sigma_mult(16-19), t_mid_nuc_delay(21-24), sens(25), tau_R_m(26), tau_R_o(27), emphasis(28-35), emp_amplitude(36), emp_width(37), clonal_call_scale(38-42), tau_E(43), min_tauB/max_tauB/mid_tauB(44/45/46)",
+        "source": "gopt",
+        "version": 1
+    },
+    "parameters": {
+        "clonal_call_scale": [
+            0.001,
+            0.709681,
+            0.246037,
+            0.02,
+            0.11484
+        ],
+        "d_coeff": [
+            26.8412,
+            156.299,
+            150.531,
+            52.4835
+        ],
+        "emp_amplitude": 7.572,
+        "emp_width": 4.961651,
+        "emphasis": [
+            7.238,
+            1.58,
+            1.695,
+            1.4475,
+            7.3275,
+            1.11375,
+            0.495,
+            11.56725
+        ],
+        "km_const": [
+            18.7799,
+            22.2851,
+            17.3087,
+            15.5264
+        ],
+        "krate": [
+            17.1972,
+            25.0697,
+            25.2226,
+            31.6017
+        ],
+        "molecules_to_micromolar_conv": 6.2e-05,
+        "sens": 1.374064,
+        "sigma_mult": [
+            0.981658,
+            1.30326,
+            0.8448,
+            0.810976
+        ],
+        "t_mid_nuc_delay": [
+            0.707009,
+            2.03301,
+            0.006868,
+            0.209029
+        ],
+        "tau_R_m": -16.08,
+        "tau_R_o": 28.719999
+    }
+}

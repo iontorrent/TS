@@ -32,7 +32,7 @@ var isEven = function(aNumber){
 // ******************* Handle Dual Nucleotide type for DNA/RNA Applications ************************* //
 
 // These fields will be disabled on the RNA sample row for dual nuc type if SameSample is checked
-var fieldsToUpdateForRNASameSample = [ 'sampleName', 'sampleDescription', 'sampleExternalId',
+var fieldsToUpdateForRNASameSample = [ 'sampleName', 'sampleDescription', 'sampleExternalId', 'controlType',
         'irWorkflow', 'irRelationRole', 'irGender', 'irSetID', 'ircancerType', 'ircellularityPct'
     ];
 
@@ -67,6 +67,9 @@ function handleSameSampleForDualNucleotideType(){
                         row.hotSpotRegionBedFile = refInfo.default_hotSpotBedFile;
                     }
                 }
+                if (irWorkflowNotValid(row)){
+                    row.irWorkflow = "";
+                }
             } else {
                 // RNA row
                 row.nucleotideType = "RNA";
@@ -78,9 +81,6 @@ function handleSameSampleForDualNucleotideType(){
                 $.each(fieldsToUpdateForRNASameSample, function(i, field){
                     row[field] = prevRow[field];
                 });
-            }
-            if (irWorkflowNotValid(row)){
-                row.irWorkflow = "";
             }
         });
         $("#grid").data("kendoGrid").dataSource.data(samplesTableJSON);
@@ -154,12 +154,14 @@ function updateSamplesForReference(selectedReference) {
 }
 
 function updateMixedTypeRNASamplesForReference(selectedReference) {
+    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+    
     if (planOpt.isReferenceSupported && planOpt.isDualNucleotideType) {
         var samplesTableJSON = $("#grid").data("kendoGrid").dataSource.data().toJSON();
         $.each(samplesTableJSON, function(){
             if (this.nucleotideType == "RNA"){
                 this.reference = selectedReference;
-                if (irWorkflowNotValid(this)){
+                if (!isSameSampleForDual && irWorkflowNotValid(this)){
                     this.irWorkflow = "";
                 }
             }
@@ -430,7 +432,7 @@ $(document).ready(function () {
                 hidden: $('#chk_barcoded').is(':checked')
             },
             {
-                field: "chipBarcode", title: "Chip ID",
+                field: "chipBarcode", title: "Chip Barcode",
                 width: '150px',
                 attributes: { "name": "chipBarcode" },
                 hidden: $('#chk_barcoded').is(':checked')
@@ -470,6 +472,8 @@ $(document).ready(function () {
                 var tableCell = e.sender.tbody.find("tr:eq("+ obj.row +")>[name='"+ obj.field +"']");
                 displayErrorInCell(tableCell, obj.error, obj.type);
             });
+
+            $('.fillDown').hide(); //filldown btns refuse to disappear on Firefox
         },
 
         save:function(e){
@@ -614,12 +618,15 @@ $(document).ready(function () {
                     if (irWorkflowNotValid(options.model)){
                         options.model.set('irWorkflow', '');
                     }
+                    if (irSetIdNotValid(options.model)){
+                        options.model.set('irSetID', '');
+                    }
                 }
             });
     }
 
     function sampleForSamplesetEditor(container, options) {
-        $('<input id="nucleotideTypeEditor" name="sampleForSamplesetEditor" data-bind="value:' + options.field + '"/>')
+        $('<input id="sampleNameEditor" name="sampleNameEditor" data-bind="value:' + options.field + '"/>')
             .appendTo(container)
             .kendoDropDownList({
                 dataSource: SAMPLESETITEMS || [],
@@ -633,6 +640,7 @@ $(document).ready(function () {
                     var samplesetItem = this.dataItem();
                     options.model.set('sampleExternalId', samplesetItem.externalId);
                     options.model.set('sampleDescription', samplesetItem.description);
+                    options.model.set('controlType', samplesetItem.controlType);
 
                     options.model.set('ircancerType', samplesetItem.ircancerType);
                     options.model.set('ircellularityPct', samplesetItem.ircellularityPct);
@@ -646,6 +654,7 @@ $(document).ready(function () {
                     if (planOpt.isDualNucleotideType && isSameSampleForDual && nextGridItem){
                         nextGridItem.set('sampleExternalId', samplesetItem.externalId);
                         nextGridItem.set('sampleDescription', samplesetItem.description);
+                        nextGridItem.set('controlType', samplesetItem.controlType);
 
                         nextGridItem.set('ircancerType', samplesetItem.ircancerType);
                         nextGridItem.set('ircellularityPct', samplesetItem.ircellularityPct);
@@ -847,7 +856,6 @@ $(document).ready(function () {
             var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
             var sampleNameIndex = (planOpt.isDualNucleotideType && isSameSampleForDual) ? Math.ceil(nrows/2) : nrows;
             var refInfo = getDefaultReferenceInfo();
-            var irSetID = samplesTableJSON[nrows-1].irSetID || '';
             
             for(var i=nrows; i<nrows_new; i++){
                 if (!planOpt.isDualNucleotideType || isEven(i)){
@@ -877,13 +885,16 @@ $(document).ready(function () {
 
                 // Ion Reporter fields
                 if (USERINPUT.is_ir_connected) {
-                    var workflowObj = getWorkflowObj(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow);
-                    row['irWorkflow'] = workflowObj.Workflow;
-                    row['irRelationRole'] = workflowObj.relations_list.length == 1 ? workflowObj.relations_list[0] : "";
                     if (planOpt.isDualNucleotideType && isSameSampleForDual && row['nucleotideType'] == "RNA"){
-                        row['irSetID'] = irSetID;
+                        var prevRow = samplesTableJSON[i-1];
+                        row['irWorkflow'] = prevRow['irWorkflow']
+                        row['irRelationRole'] = prevRow['irRelationRole']
+                        row['irSetID'] = prevRow['irSetID'];
                     } else {
-                        row['irSetID'] = irSetID = set_id_from_workflow(workflowObj, '', samplesTableJSON);
+                        var workflowObj = getWorkflowObj(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow);
+                        row['irWorkflow'] = workflowObj.Workflow;
+                        row['irRelationRole'] = workflowObj.relations_list.length == 1 ? workflowObj.relations_list[0] : "";
+                        row['irSetID'] = generate_set_id(workflowObj, row, samplesTableJSON);
                     }
                 }
 
@@ -997,13 +1008,12 @@ $(document).ready(function () {
         var action = options.action;
         var name = options.name;
 
-        var fillDownButton = $("<div class='btn btn-primary btn-mini'><i class='icon-circle-arrow-down icon-white'></i></div>")
+        var fillDownButton = $("<div class='fillDown btn btn-primary btn-mini'><i class='icon-circle-arrow-down icon-white'></i></div>")
             .css("border-radius", 20)
             .css("border-top-right-radius", 0)
             .css("border-bottom-right-radius", 0)
             .css("position", "absolute")
             .css("line-height", "1px")
-            .css("left", -1000) //FireFox bug stops me from hiding the element.
             .appendTo("#grid");
         fillDownButton.tooltip({title: "Copy value to all rows."});
         fillDownButton.mousedown(function (e) {
@@ -1041,12 +1051,13 @@ $(document).ready(function () {
             function () {
                 fillDownButton.css("top", $(elementSelector).position().top + 53);
                 fillDownButton.css("left", $(elementSelector).position().left - 27);
+                fillDownButton.show();
             }
         );
 
         tableContainer.on('blur', elementSelector,
             function () {
-                fillDownButton.css("left", -1000); //FireFox bug stops me from hiding the element.
+                fillDownButton.hide();
             }
         );
     });

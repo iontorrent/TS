@@ -1,4 +1,6 @@
 {%include "rundb/plan/page_plan/summary/monitoring_summary.html"%}
+{% load pagetools %}
+
 {% if helper.getApplProduct.isReferenceSelectionSupported %}
 <tr>
     <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Reference Library:</b></td>
@@ -7,13 +9,17 @@
 
 <tr>
     <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Target Regions:</b></td>
-    <td id="selectedTargetRegions" class="word-break-all">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile|default_if_none:""}}</td>
+    <td id="selectedTargetRegions" class="word-break-all">
+    {{ helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile|default_if_none:""|basename }}
+    </td>
 </tr>
 
 {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.showHotSpotBed %}
     <tr>
         <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Hotspot Regions:</b></td>
-        <td id="selectedHotspotRegions" class="word-break-all">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile|default_if_none:""}}</td>
+        <td id="selectedHotspotRegions" class="word-break-all">
+        {{ helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile|default_if_none:""|basename }}
+        </td>
     </tr>
 {% endif %}
 

@@ -96,30 +96,7 @@ $(function(){
         , error_class : 'alert alert-error'
         , prevent_submit      : true
     });
-          
-    var firstFinish = false;
-    function finish() {
-        //plupload calls this twice, we don't want that.
-        if (firstFinish) return false;
-        
-        firstFinish = true;
-        
-        var file_name = uploader.files[0].target_name
-        $("#target_file").val(file_name.split(' ').join(''));
-        
-        $.post("{% url "add_custom_genome" %}", $("#modal_references_new_genome_form").serialize(), function (data) {
-            if (data.error == true) {
-                $("#update").addClass('alert alert-error').html(data.status);
-            } else {
-                $("#update").removeClass('alert-error').addClass('alert alert-success');
-                $("#update").html("Started genome reference creation");
-                setTimeout(function () {
-                    $('#modal_references_new_genome').trigger('modal_references_new_genome_done', {});
-                    $('#modal_references_new_genome').modal('hide'); 
-                }, 2000);
-            }
-        });
-    }  
+
     var flashFail = false;
       
     $('#modal_references_new_genome').on('hidden', function () {
@@ -136,7 +113,7 @@ $(function(){
     //init plupload
     var uploader = new plupload.Uploader({
         container : 'upload-fasta',
-        runtimes : 'silverlight,flash,html5,gears,browserplus',
+        runtimes : 'html5,flash,silverlight',
         filters : [
             {title : "FASTA files", extensions : "fasta,fas,fa,fna,seq"},
             {title : "FASTA Compressed Zip files", extensions : "zip"}
@@ -147,8 +124,8 @@ $(function(){
         unique_names: true,
         multi_selection: false,
         multiple_queues: false,
-        silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}',
-        flash_swf_url: '{% static "resources/plupload/js/plupload.flash.swf"%}'
+        silverlight_xap_url: '{% static "resources/plupload/js/Moxie.xap"%}',
+        flash_swf_url: '{% static "resources/plupload/js/Moxie.swf"%}'
     });
     $( "#modal_references_new_genome" ).data('uploader', uploader);
 
@@ -188,7 +165,9 @@ $(function(){
     });  
           
     uploader.bind('FilesAdded', function (up, files) {
-        this.removeFile(this.files[0]);
+        if (up.files.length > 1) {
+            up.removeFile(up.files[0]);
+        }
         $('#upload-fasta').removeClass('invalid alert alert-error').addClass('valid');
         $("#file_info").html("");
         $(".file_item").remove();
@@ -214,17 +193,29 @@ $(function(){
 
     uploader.bind('UploadProgress', function (up, file) {
         $('#' + file.id + " b").html(file.percent + "%");
-        
         $('#upload-progress .bar').css('width', ''+file.percent + '%');
-        //status 5 means transfer was a success
-        if (file.status == 5) {
-            uploaddone = true;
-            $('#' + file.id + " b").html("100%");
-            $('#upload-progress .bar').css('width', '100%');
-            $("#file_info").html("");
-            finish();
-        }
-    });    
+    });
+
+    uploader.bind('UploadComplete', function(up, file){
+        $('#' + file.id + " b").html("100%");
+        $('#upload-progress .bar').css('width', '100%');
+
+        var file_name = uploader.files[0].target_name;
+        $("#target_file").val(file_name.split(' ').join(''));
+
+        $.post("{% url "add_custom_genome" %}", $("#modal_references_new_genome_form").serialize(), function (data) {
+            if (data.error == true) {
+                $("#update").addClass('alert alert-error').html(data.status);
+            } else {
+                $("#update").removeClass('alert-error').addClass('alert alert-success');
+                $("#update").html("Started genome reference creation");
+                setTimeout(function () {
+                    $('#modal_references_new_genome').trigger('modal_references_new_genome_done', {});
+                    $('#modal_references_new_genome').modal('hide'); 
+                }, 2000);
+            }
+        });
+    });
        
     uploader.init();
 

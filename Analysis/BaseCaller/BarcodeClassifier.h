@@ -55,7 +55,9 @@ public:
 
   void SetClassificationParams(int mode, double cutoff, double separation);
 
-  int  BaseSpaceClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors);
+  int  SimpleBaseSpaceClassification(const BasecallerRead& basecaller_read);
+
+  int  FlowAlignClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors);
 
   int  SignalSpaceClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
                                  vector<float>& best_bias, int& filtered_zero_errors);
@@ -147,6 +149,7 @@ protected:
   bool                      barcode_filter_named_;       // Exclude barcodes with an associated sample name from filtering
   bool                      barcode_ignore_flows_;       // Switch telling the classifier to exclude certain flows from classification
   bool                      trim_barcodes_;              // Switch to trim or leave barcodes alone
+  bool                      have_ambiguity_codes_;       // Do we have non-ACGT characters in key, barcode?
   vector<int>               classifier_ignore_flows_;    // Specifying an interval of flows to exclude from classification
 
   int                       hamming_dmin_;

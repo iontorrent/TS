@@ -79,8 +79,47 @@ def get_runplugin(ion_params, runlevel, blockId, block_dirs):
         "block_dirs": block_dirs,
         "numBlocks": len(block_dirs)
     }             
-    return d  
-      
+    return d
+
+def get_chefSummary(ion_params, report_dir):
+    chefSummary = {}
+    exp_json = ion_params.get('exp_json', {})
+    isChefRun = exp_json.get('chefInstrumentName', None)
+
+    if isChefRun:
+        chefSummary = {
+            "chefReagentID": exp_json.get('chefReagentID'),
+            "chefSolutionsPart": exp_json.get('chefSolutionsPart'),
+            "chefLotNumber": exp_json.get('chefLotNumber'),
+            "chefChipExpiration1": exp_json.get('chefChipExpiration1'),
+            "chefChipExpiration2": exp_json.get('chefChipExpiration2'),
+            "chefChipType1": exp_json.get('chefChipType1'),
+            "chefChipType2": exp_json.get('chefChipType2'),
+            "chefKitType": exp_json.get('chefKitType'),
+            "chefManufactureDate": exp_json.get('chefManufactureDate'),
+            "chefMessage": exp_json.get('chefMessage'),
+            "chefPackageVer": exp_json.get('chefPackageVer'),
+            "chefProgress": exp_json.get('chefProgress'),
+            "chefReagentID": exp_json.get('chefReagentID'),
+            "chefReagentsExpiration": exp_json.get('chefReagentsExpiration'),
+            "chefReagentsLot": exp_json.get('chefReagentsLot'),
+            "chefReagentsPart": exp_json.get('chefReagentsPart'),
+            "chefSamplePos": exp_json.get('chefSamplePos'),
+            "chefScriptVersion": exp_json.get('chefScriptVersion'),
+            "chefSolutionsExpiration": exp_json.get('chefSolutionsExpiration'),
+            "chefSolutionsLot": exp_json.get('chefSolutionsLot'),
+            "chefSolutionsPart": exp_json.get('chefSolutionsPart'),
+            "chefStatus": exp_json.get('chefStatus'),
+            "chefTipRackBarcode": exp_json.get('chefTipRackBarcode'),
+            "chefExtraInfo_1": exp_json.get('chefExtraInfo_1'),
+            "chefExtraInfo_2": exp_json.get('chefExtraInfo_2'),
+            "chefLogPath": exp_json.get('chefLogPath'),
+            "chefLastUpdate": exp_json.get('chefLastUpdate'),
+            "chefInstrumentName": exp_json.get('chefInstrumentName'),
+        }
+
+    return chefSummary
+
 def get_expmeta(ion_params, report_dir):
     from datetime import datetime
     exp_json = ion_params.get('exp_json',{})
@@ -190,7 +229,8 @@ def get_plan(ion_params):
         "sampleGrouping": plan.get("sampleGrouping"),
         "sampleTubeLabel": plan.get("sampleTubeLabel"),
         
-        "sequencekitname": ion_params.get('exp_json',{}).get('sequencekitname',''), 
+        "sequencekitname": ion_params.get('exp_json',{}).get('sequencekitname',''),
+        "sseBedFile": eas.get('sseBedFile',''),
     }
     
     # compatibility: pre-EAS these attributes were part of Plan
@@ -225,6 +265,7 @@ def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_locati
         "runinfo":get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId),
         "runplugin":get_runplugin(ion_params, runlevel, blockId, block_dirs),
         "expmeta": get_expmeta(ion_params, report_dir),
+        "chefSummary": get_chefSummary(ion_params, report_dir),
         "pluginconfig":get_pluginconfig(plugin, instance_config),
         "globalconfig":get_globalconfig(),
         "plan":get_plan(ion_params),

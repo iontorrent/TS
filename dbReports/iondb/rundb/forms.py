@@ -425,56 +425,97 @@ class NetworkConfigForm(forms.Form):
         self.set_to_current_values()
 
     def save(self, *args, **kw):
-        host_task, proxy_task, no_proxy_task = None, None, None
-        settings = self.get_network_settings()
-        host_config = ["mode", "address", "subnet", "gateway", "nameservers", "dnssearch"]
-        if self.new_config(self.cleaned_data, settings, host_config):
+
+        def ax_proxy():
+            """
+            Helper method for TSsetproxy script which will automatically set the "--remove" argument
+            """
+            cmd = ["sudo", "/usr/sbin/TSsetproxy", "--remove"]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            if stderr:
+                logger.warning("Network error: %s" % stderr)
+
+        def proxyconf(address, port, username, password):
+            """
+            Helper method for TSsetproxy script
+            :param address:  --address     Proxy address (http://proxy.net)
+            :param port:     --port        Proxy port number
+            :param username: --username    Username for authentication
+            :param password: --password    Password for authentication
+            """
+            cmd = ["sudo", "/usr/sbin/TSsetproxy", "--address", address, "--port", port, "--username", username, "--password", password]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            if stderr:
+                logger.warning("Network error: %s" % stderr)
+
+        def dhcp():
+            """
+            Helper method to call into the TSstaticip script with the "remove" option to revert back to dhcp
+            """
+            cmd = ["sudo", "/usr/sbin/TSstaticip", "--remove"]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            if stderr:
+                logger.warning("Network error: %s" % stderr)
+
+        def static_ip(address, subnet, gateway, nameserver=None, search=None):
+            """
+            Helper method to call into the TSstaticip script
+            :param address:    --ip         Define host IP address
+            :param subnet:     --nm         Define subnet mask (netmask)
+            :param gateway:    --gw         Define gateway/router IP address
+            :param nameserver: --nameserver Specify one or more nameserver IP addresses
+            :param search:     --search     Specify one or more search domains
+            """
+            cmd = ["sudo", "/usr/sbin/TSstaticip", "--ip", address, "--nm", subnet,"--gw", gateway]
+            if nameserver:
+                cmd += ["--nameserver", nameserver]
+            if search:
+                cmd += ["--search", search]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            if stderr:
+                logger.warning("Network error: %s" % stderr)
+
+        network_settings = self.get_network_settings()
+        host_config = ["mode", "address", "subnet", "gateway"]
+        if self.new_config(self.cleaned_data, network_settings, host_config):
             if self.cleaned_data['mode'] == "dhcp":
-                host_task = tasks.dhcp.delay()
+                dhcp()
             elif self.cleaned_data['mode'] == "static":
                 address = self.cleaned_data['address']
                 subnet = self.cleaned_data['subnet']
                 gateway = self.cleaned_data['gateway']
-                nameservers = self.cleaned_data['nameservers']
-                dnssearch = self.cleaned_data['dnssearch']
-                host_task = tasks.static_ip.delay(address,
-                                                  subnet,
-                                                  gateway,
-                                                  nameserver=nameservers,
-                                                  search=dnssearch)
+                nameservers = None
+                dnssearch = None
+
+                if self.new_config(self.cleaned_data, network_settings, ["nameservers", "dnssearch"]):
+                    logger.info("User changed the DNS and host network settings.")
+                    if self.cleaned_data['nameservers']:
+                        nameservers = self.cleaned_data['nameservers']
+
+                    if self.cleaned_data['dnssearch']:
+                        dnssearch = self.cleaned_data['dnssearch']
+
+                logger.info("User changed the host network settings.")
+                static_ip(address, subnet, gateway, nameserver=nameservers, search=dnssearch)
         else:
-            logger.info("new_config has no changed settings")
-            
+            logger.info("new_config failed to pass")
+
         proxy_config = ["proxy_address", "proxy_port", "proxy_username", "proxy_password"]
-        if self.new_config(self.cleaned_data, settings, proxy_config):
+        if self.new_config(self.cleaned_data, network_settings, proxy_config):
             logger.info("User changed the proxy settings.")
             if self.cleaned_data['proxy_address'] and self.cleaned_data['proxy_port']:
                 address = self.cleaned_data['proxy_address']
                 port = self.cleaned_data['proxy_port']
                 user = self.cleaned_data['proxy_username']
                 password = self.cleaned_data['proxy_password']
-                proxy_task = tasks.proxyconf.delay(address, port, user, password)
+                proxyconf(address, port, user, password)
             else:
-                proxy_task = tasks.ax_proxy.delay()
-        else:
-            logger.info("proxy_config has no changed settings")
-        
-        if self.new_config(self.cleaned_data, settings, ["no_proxy"]):
-            logger.info("User changed the no_proxy setting.")
-            if self.cleaned_data['no_proxy']:
-                no_proxy = self.cleaned_data['no_proxy']
-                no_proxy_task = tasks.noproxyconf.delay(no_proxy)
-            else:
-                no_proxy_task = tasks.noproxyconf.delay(None)
-        else:
-            logger.info("no_proxy has not changed")
-            
-        if host_task:
-            host_task.get()
-        if proxy_task:
-            proxy_task.get()
-        if no_proxy_task:
-            no_proxy_task.get()
+                ax_proxy()
+
         self.set_to_current_values()
 
 

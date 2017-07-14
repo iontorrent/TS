@@ -187,6 +187,7 @@ __tmap_map_opt_option_print_func_int_init(max_one_large_indel_rescue)
 __tmap_map_opt_option_print_func_int_init(min_anchor_large_indel_rescue)
 __tmap_map_opt_option_print_func_int_init(amplicon_overrun)
 __tmap_map_opt_option_print_func_int_init(max_adapter_bases_for_soft_clipping)
+__tmap_map_opt_option_print_func_tf_init(end_repair_5_prime_softclip)
 
 __tmap_map_opt_option_print_func_int_init(shm_key)
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
@@ -211,6 +212,9 @@ __tmap_map_opt_option_print_func_tf_init(log_text_als)
 __tmap_map_opt_option_print_func_tf_init(do_repeat_clip)
 // __tmap_map_opt_option_print_func_int_init(repclip_overlap)
 __tmap_map_opt_option_print_func_tf_init(repclip_continuation)
+
+__tmap_map_opt_option_print_func_int_init(cigar_sanity_check)
+
 
 // context-dependent gaps
 __tmap_map_opt_option_print_func_tf_init(do_hp_weight)
@@ -454,7 +458,8 @@ tmap_map_opt_options_destroy(tmap_map_opt_options_t *options)
 static void
 tmap_map_opt_init_helper(tmap_map_opt_t *opt)
 {
-  static char *softclipping_type[] = {"0 - allow on the left and right portion of the read",
+  static char *softclipping_type[] = {
+      "0 - allow on the left and right portion of the read",
       "1 - allow on the left portion of the read",
       "2 - allow on the right portion of the read",
       "3 - do not allow soft-clipping",
@@ -477,7 +482,8 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
       "9 - Bladze (Top Coder #6)",
       "10 - ngthuydiem (Top Coder #7) [Farrar cut-and-paste]",
       NULL};
-  static char *realignment_clip_type[] = {"0 - global realignment",
+  static char *realignment_clip_type[] = {
+      "0 - global realignment",
       "1 - semiglobal (can start/end anywhere in reference)",
       "2 - semiglobal with soft clip on bead side of a read",
       "3 - semiglobal with soft clip on key side of a read",
@@ -492,6 +498,18 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
   static char *strandedness[] = {"0 - same strand", "1 - opposite strand", NULL};
   static char *positioning[] = {"0 - read one before read two", "1 - read two before read one", NULL};
   static char *end_repair[] = {"0 - disable", "1 - prefer mismatches", "2 - prefer indels", ">2 - specify %% Mismatch above which to trim end alignment", NULL};
+  static char *sanity_check_outcome [] = {
+      "0 - do not perform sanity check",
+      "1 - perform content checks, print warning to stderr; do not check alignment compatibility or scores",
+      "2 - perform content and alignment compatibility checks, print warnings to stderr; do not check alignment scores",
+      "3 - perform all checks, print warnings to stderr",
+      "4 - perform content checks, exit on error",
+      "5 - perform content checks, exit on error; warn if processed alignment is incompatible with raw one",
+      "6 - perform content and alignment compatibility checks, exit on error",
+      "7 - perform content checks, exit on error; warn if processed alignment is incompatible with raw one or if score is suspicious",
+      "8 - perform content and alignment compatibility checks, exit on error; warn if score is suspicious",
+      "9 - perform all checks, exit if any of them fails",
+      NULL};
 
   opt->options = tmap_map_opt_options_init();
 
@@ -704,7 +722,7 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "end-repair", required_argument, 0, 0 /* no short flag */, 
                            TMAP_MAP_OPT_TYPE_INT,
-                           "specifies to perform 5' end repair",
+                           "specifies to perform end repair",
                            end_repair,
                            tmap_map_opt_option_print_func_end_repair,
                            TMAP_MAP_ALGO_GLOBAL);
@@ -722,7 +740,7 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            TMAP_MAP_ALGO_GLOBAL);
    tmap_map_opt_options_add(opt->options, "max-amplicon-overrun-large-indel-rescue", required_argument, 0, 0 /* no short flag */,
                            TMAP_MAP_OPT_TYPE_INT,
-                           "the minimum anchor  size to rescue with one large indel algorithm",
+                           "the maximum number of bases allowed for a read to overrun the end of amplicon",
                            NULL,
                            tmap_map_opt_option_print_func_amplicon_overrun,
                            TMAP_MAP_ALGO_GLOBAL);
@@ -732,6 +750,13 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_max_adapter_bases_for_soft_clipping,
                            TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "er-5clip", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "allow end repair to introduce 5' soft clips",
+                           NULL,
+                           tmap_map_opt_option_print_func_end_repair_5_prime_softclip,
+                           TMAP_MAP_ALGO_GLOBAL);
+
   tmap_map_opt_options_add(opt->options, "shared-memory-key", required_argument, 0, 'k', 
                            TMAP_MAP_OPT_TYPE_INT,
                            "use shared memory with the following key",
@@ -844,6 +869,16 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_repclip_continuation,
                            TMAP_MAP_ALGO_GLOBAL);
+
+
+
+  tmap_map_opt_options_add(opt->options, "cigar-sanity-check", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "perform diagnostics sanity check on all generated alignments",
+                           sanity_check_outcome,
+                           tmap_map_opt_option_print_func_cigar_sanity_check,
+                           TMAP_MAP_ALGO_GLOBAL);
+
 
   // context-dependent indel weights
   tmap_map_opt_options_add(opt->options, "context", no_argument, 0, 0, 
@@ -1376,6 +1411,7 @@ tmap_map_opt_init(int32_t algo_id)
   opt->min_anchor_large_indel_rescue = 6;
   opt->amplicon_overrun = 6;
   opt->max_adapter_bases_for_soft_clipping = INT32_MAX;
+  opt->end_repair_5_prime_softclip = 0;
   opt->shm_key = 0;
   opt->min_seq_len = -1;
   opt->max_seq_len = -1;
@@ -1396,6 +1432,9 @@ tmap_map_opt_init(int32_t algo_id)
   // tail repeat clipping
   opt->do_repeat_clip = 0;
   opt->repclip_continuation = 0;
+
+  opt->cigar_sanity_check = TMAP_MAP_SANITY_NONE;
+  
   // context dependent gap scores
   opt->do_hp_weight = 0;
   opt->gap_scale_mode = TMAP_CONTEXT_GAP_SCALE_GEP;
@@ -1904,8 +1943,9 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       } else if(0 == c && 0 == strcmp("max-amplicon-overrun-large-indel-rescue", options[option_index].name)) {
           opt->amplicon_overrun = atoi(optarg);
       }
-
-
+      else if (0 == c && 0 == strcmp ("er-5clip", options [option_index].name)) {
+          opt->end_repair_5_prime_softclip = 1;
+      }
       // End of global options
 
       // realignment options
@@ -1946,6 +1986,9 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       }
       else if (0 == c && 0 == strcmp ("repclip-cont", options [option_index].name)) {
           opt->repclip_continuation = 1;
+      }
+      else if (0 == c && 0 == strcmp ("cigar-sanity-check", options [option_index].name)) {
+          opt->cigar_sanity_check = atoi (optarg);
       }
       // context-dependent gap scoring
       else if (0 == c && 0 == strcmp ("context", options [option_index].name)) {
@@ -2508,6 +2551,7 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->output_type, 0, 2, "-o");
   tmap_error_cmd_check_int(opt->end_repair, 0, 100, "--end-repair");
   tmap_error_cmd_check_int(opt->max_adapter_bases_for_soft_clipping, 0, INT32_MAX, "max-adapter-bases-for-soft-clipping");
+  tmap_error_cmd_check_int(opt->end_repair_5_prime_softclip, 0, 1, "--er-5clip");
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_error_cmd_check_int(opt->sample_reads, 0, 1, "-x");
 #endif
@@ -2558,6 +2602,8 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   // tail repeat clip
   tmap_error_cmd_check_int (opt->do_repeat_clip, 0, 1, "--do-repeat-clip");
   tmap_error_cmd_check_int (opt->repclip_continuation, 0, 1, "--repclip_cont");
+
+  tmap_error_cmd_check_int (opt->cigar_sanity_check, 0, TMAP_MAP_SANITY_LASTVAL, "--cigar-sanity-check");
 
   // context dependent gap scores
   tmap_error_cmd_check_int (opt->do_hp_weight, 0, 1, "--context");
@@ -2727,12 +2773,15 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->min_anchor_large_indel_rescue = opt_src->min_anchor_large_indel_rescue;
     opt_dest->amplicon_overrun = opt_src->amplicon_overrun;
     opt_dest->max_adapter_bases_for_soft_clipping = opt_src->max_adapter_bases_for_soft_clipping;
+    opt_dest->end_repair_5_prime_softclip = opt_src->end_repair_5_prime_softclip;
     opt_dest->shm_key = opt_src->shm_key;
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
     opt_dest->sample_reads = opt_src->sample_reads;
 #endif
     opt_dest->vsw_type = opt_src->vsw_type;
-    
+
+    opt_dest->cigar_sanity_check = opt_src->cigar_sanity_check;
+
     // flowspace options
     opt_dest->fscore = opt_src->fscore;
     opt_dest->softclip_key = opt_src->softclip_key;
@@ -2818,6 +2867,7 @@ tmap_map_opt_print(tmap_map_opt_t *opt)
   fprintf(stderr, "min-anchor-large-indel-rescue=%d\n",opt->min_anchor_large_indel_rescue);
   fprintf(stderr, "max-amplicon-overrun-indel-rescue=%d", opt->amplicon_overrun);
   fprintf(stderr, "max_adapter_bases_for_soft_clipping=%d\n", opt->max_adapter_bases_for_soft_clipping);
+  fprintf(stderr, "end_repair_5_prime_softclip=%d\n", opt->end_repair_5_prime_softclip);
   fprintf(stderr, "shm_key=%d\n", (int)opt->shm_key);
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   fprintf(stderr, "sample_reads=%lf\n", opt->sample_reads);

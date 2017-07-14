@@ -184,14 +184,26 @@ $(function () {
                 if ('url' in data) {
                     $("#inspectOutput").html('<a class="btn btn-primary" href="' + data['url'] + '"> <i class="icon-download"></i> Download the zip</a> ');
                 } else {
-                    console.log(data);
                     if ('split_status' in data) {
+                    	if (data["split_status"]=='failed'){
+                    		var error_text = '<div class="alert alert-danger" role="alert"> <i class="icon-info-sign"></i> <span class="sr-only"> Error: </span>Job Failed. Please check the ';
+                    		if ('temp_path' in data){
+                    			error_text += '<a href="'+ data['temp_path'] + '/TVC_drmaa_stdout.txt">log file</a> for details.</div>';
+                    		}
+                    		else{
+                    			error_text += 'log file for details.</div>';
+                    		}
+                    		$("#inspectOutput").html(error_text);
+                    	}else{
+                            $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + data["split_status"]);
+                            poll_status();
+                    	}
+                    }else{
                         $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + data["split_status"]);
+                        poll_status();
                     }
-                    poll_status();
                 }
             });
-
         }, 1000);
     }
 
@@ -215,7 +227,7 @@ $(function () {
         slice.always(function (data) {
 
             if ('failed' in data) {
-                $("#inspectOutput").html('SGE Job Failed!');
+                $("#inspectOutput").html('<div class="alert alert-danger" role="alert"> <i class="icon-info-sign"></i> <span class="sr-only"> Error: </span> SGE Job Failed.</div>');
             } else {
                 poll_status();
             }
@@ -267,6 +279,10 @@ $(function () {
 
     function PercentFormat(row, cell, value, columnDef, dataContext) {
         return '<div style="text-align:right">' + value.toFixed(1) + " %</div>";
+    }
+    
+    function PercentFormatAF(row, cell, value, columnDef, dataContext) {
+        return '<div style="text-align:right">' + (value).toFixed(2) + " %</div>";
     }
 
     function StrandBiasFormat(row, cell, value, columnDef, dataContext) {
@@ -448,59 +464,112 @@ $(function () {
         return startplugin;
 
     }
+    
+    // get the column names of the db
+    function get_db_columns(TVC) {
+	    var plugin_extend = "/rundb/api/v1/plugin/" + TVC.plugin_name;
+	    plugin_extend += "/extend/db_columns/?format=json&path=" + TVC.plugin_dir;
+	    if (TVC.barcode) {
+	        plugin_extend += "/" + TVC.barcode + "/";
+	    }
+	    //request the data from the extend.py db_columns endpoint.
+	    var db_columns = $.ajax({
+	        url: plugin_extend,
+	        async: false,
+	        dataType: "json"
+	    });
+	    db_columns.done(function (data) {
+	    	db_columns = data;
+        });
+	    return db_columns;
+    }
+    
+    function is_tagseq_db(db_columns) {
+    	var has_mol_cov = (db_columns.indexOf('Mol Coverage') >= 0);
+    	var has_allele_mol_cov = (db_columns.indexOf('Allele Mol Cov') >= 0);
+    	var has_allele_mol_freq = (db_columns.indexOf('Allele Mol Freq') >= 0);
+    	return (has_mol_cov && has_allele_mol_cov && has_allele_mol_freq);
+    }
 
     //add this to the window object so we can grab it everywhere
     window.TVC = {};
 
     //map the slickgrid col names to the names in the db
-    TVC.col_lookup = {  "allele_id": "Allele Name",
-        "downsampled_cov_total_filter": "Coverage Filter",
-        "allele_cov_plus": "Allele Cov+",
-        "sse_minus": "Context Error-",
-        "pos": "Position",
-        "mlld_filter": "Relative Read Quality Filter",
-        "varb": "Variant Signal Shift",
-        "quality": "Quality",
-        "total_cov_minus": "Coverage-",
-        "vcf_ref": "VCF Ref",
-        "total_cov_minus_filter": "Coverage- Filter",
-        "refb_filter": "Reference Signal Shift Filter",
-        "type": "Type",
-        "hp_length": "HP Length",
-        "sssb": "Context Strand Bias",
-        "strand_bias_filter": "Strand Bias Filter",
-        "sssb_filter": "Context Strand Bias Filter",
-        "allele_call": "Allele Call",
-        "hp_length_filter": "HP Length Filter",
-        "chrom": "Chrom",
-        "submitted_region": "Region Name",
-        "downsampled_cov_total": "Coverage",
-        "strand_bias": "Strand Bias",
-        "ref": "Ref",
-        "quality_filter": "Quality Filter",
-        "rbi": "Common Signal Shift",
-        "total_cov": "Original Coverage",
-        "allele_call_filter": "Allele Call Filter",
-        "sse_minus_filter": "Context Error- Filter",
-        "vcf_alt": "VCF Variant",
-        "sse_plus_filter": "Context Error+ Filter",
-        "allele_source": "Allele Source",
-        "vcf_pos": "VCF Position",
-        "refb": "Reference Signal Shift",
-        "allele_cov": "Allele Cov",
-        "total_cov_plus_filter": "Coverage+ Filter",
-        "total_cov_plus": "Coverage+",
-        "rbi_filter": "Common Signal Shift Filter",
-        "varb_filter": "Variant Signal Shift Filter",
-        "sse_plus": "Context Error+",
-        "variant": "Variant",
-        "gene_id": "Gene ID",
-        "freq": "Frequency",
-        "mlld": "Relative Read Quality",
-        "allele_cov_minus": "Allele Cov-",
-        "position": "position"
-    };
+    TVC.col_lookup = {
+        "chrom": ["Chrom", "String"],
+        "pos": ["Position", "String"],
+        "ref": ["Ref", "String"],
+        "variant": ["Variant", "String"],
+        "allele_call": ["Allele Call", "String"],
+        "allele_call_filter": ["Allele Call Filter", "String"],
+        "freq": ["Frequency", "Number"],
+        
+        // optional
+        "ppa": ["Possible Polyploidy Allele", "Number"], 
+        "subset":["Subset Of", "String"],
 
+        "quality": ["Quality", "Number"],
+        "quality_filter": ["Quality Filter", "String"],
+
+        "type": ["Type", "String"],
+        "allele_source": ["Allele Source", "String"],
+    	"allele_id": ["Allele Name", "String"],
+        "gene_id": ["Gene ID", "String"],
+        "submitted_region": ["Region Name", "String"],
+        "vcf_pos": ["VCF Position", "String"],
+        "vcf_ref": ["VCF Ref", "String"],
+        "vcf_alt": ["VCF Variant", "String"],
+
+        // Tagseq only
+        "read_cov": ["Read Cov", "Number"],
+        "allele_read_cov": ["Allele Read Cov", "Number"],
+        "allele_read_freq": ["Allele Read Freq", "Number"],
+        "mol_cov": ["Mol Coverage", "Number"],
+        "mol_cov_filter": ["Mol Coverage Filter", "String"],
+        "allele_mol_cov": ["Allele Mol Cov", "Number"],
+        "allele_mol_cov_filter": ["Allele Mol Cov Filter", "String"],
+        "allele_mol_freq": ["Allele Mol Freq", "Number"],
+        "allele_mol_freq_filter": ["Allele Mol Freq Filter", "String"],
+        "lod": ["LOD", "Number"],
+        
+        // Non-Tagseq only
+        "total_cov": ["Original Coverage", "Number"],
+        "downsampled_cov_total": ["Coverage", "Number"],
+        "downsampled_cov_total_filter": ["Coverage Filter", "String"],        
+        "total_cov_plus": ["Coverage+", "Number"],
+        "total_cov_plus_filter": ["Coverage+ Filter", "String"],
+        "total_cov_minus": ["Coverage-", "Number"],
+        "total_cov_minus_filter": ["Coverage- Filter", "String"],
+        "allele_cov": ["Allele Cov", "Number"],
+        "allele_cov_plus": ["Allele Cov+", "Number"],
+        "allele_cov_minus": ["Allele Cov-", "Number"],
+
+        "strand_bias": ["Strand Bias", "Number"],
+        "strand_bias_filter": ["Strand Bias Filter", "String"],
+        "rbi": ["Common Signal Shift", "Number"],
+        "rbi_filter": ["Common Signal Shift Filter", "String"],
+        "refb": ["Reference Signal Shift", "Number"],
+        "refb_filter": ["Reference Signal Shift Filter", "String"],
+        "varb": ["Variant Signal Shift", "Number"],
+        "varb_filter": ["Variant Signal Shift Filter", "String"],
+        "mlld": ["Relative Read Quality", "Number"],
+        "mlld_filter": ["Relative Read Quality Filter", "String"],
+        "hp_length": ["HP Length", "Number"],
+        "hp_length_filter": ["HP Length Filter", "String"],
+        "sse_plus": ["Context Error+", "Number"],
+        "sse_plus_filter": ["Context Error+ Filter", "String"],
+        "sse_minus": ["Context Error-", "Number"],
+        "sse_minus_filter": ["Context Error- Filter", "String"],
+        "sssb": ["Context Strand Bias", "Number"],
+        "sssb_filter": ["Context Strand Bias Filter", "String"],
+
+        "sample": ["Sample Name", "String"],
+        "barcode": ["Barcode", "String"], 
+        "run_name": ["Run Name", "String"], 
+        "allele": ["Allele", "String"],
+        "position": ["Location", "String"],
+    };
+    
     //Store the state of the grid position
     TVC.pos = 0;
     TVC.page_size = 20;
@@ -516,6 +585,74 @@ $(function () {
 
     var columns = [];
 
+    //define the grid and attach head/foot of the table
+    var options = {
+        editable: true,
+        autoEdit: false,
+        enableCellNavigation: true,
+        multiColumnSort: true,
+        forceFitColumns: true,
+        syncColumnCellResize: true,
+        enableAsyncPostRender: true,
+        asyncPostRenderDelay: 0
+    };
+
+    TVC.empty_grid = function () {
+        TVC.data = [];
+        TVC.dataView.beginUpdate();
+        TVC.dataView.setItems({});
+        TVC.dataView.endUpdate();
+        TVC.grid.invalidateAllRows();
+        TVC.grid.updateRowCount();
+        TVC.grid.render();
+    };
+
+    TVC.subload = function (offset) {
+        TVC.empty_grid();
+        TVC.loadtable(offset);
+        setCheckAll();
+        TVC.grid.render();
+        TVC.pager_update();
+    };
+
+    TVC.startplugin = get_json("startplugin.json");
+    TVC.variant_summary = get_json("variant_summary.json");
+    TVC.plugin_dir = TVC.startplugin["runinfo"]["results_dir"];
+    TVC.plugin_name = TVC.startplugin["runinfo"]["plugin_name"];
+    TVC.barcode = get_barcode();
+    TVC.reference = get_reference();
+    TVC.total_variants = TVC.variant_summary["variants_total"]["variants"];
+    TVC.db_columns = get_db_columns(TVC);
+    TVC.is_tagseq = is_tagseq_db(TVC.db_columns);
+
+    TVC.column_2_name = [];
+    for (var idx = 0; idx < TVC.db_columns.length; idx++){
+    	TVC.column_2_name.push("");
+    }
+    for (var my_key in TVC.col_lookup){
+    	var column_idx = TVC.db_columns.indexOf(TVC.col_lookup[my_key][0]);
+    	// Bad design of the columns named "Filter" in alleles.xls.
+    	// Now I have to figure out which Filter it is.
+    	if (column_idx < 0 && my_key.endsWith("_filter")){
+    		var try_key = my_key.slice(0, my_key.length - "_filter".length);
+            if (try_key in TVC.col_lookup){
+        	    column_idx = TVC.db_columns.indexOf(TVC.col_lookup[try_key][0]);
+            }else{
+            	column_idx = -1;
+            }
+    	    if (column_idx > -1 && column_idx < TVC.db_columns.length - 1){
+    	    	if (TVC.db_columns[++column_idx] != "Filter"){
+    	    		column_idx = -1;
+    	    	}
+    	    }else{
+    	    	column_idx = -1;
+    	    }
+    	}
+    	if (column_idx > -1 && column_idx < TVC.db_columns.length){
+    		TVC.column_2_name[column_idx] = my_key;
+    	}
+    }
+    
     //the columns shown in every view
     TVC.all = [
         {
@@ -529,95 +666,172 @@ $(function () {
             formatter: ChromIGV
         },
         {
-            id: "ref", field: "ref", width: 10, minWidth: 10,
+            id: "ref", field: "ref", width: 18, minWidth: 12,
             name: "Ref", toolTip: "Ref: Reference sequence."
         },
         {
-            id: "variant", field: "variant", width: 10, minWidth: 10,
+            id: "variant", field: "variant", width: 18, minWidth: 12,
             name: "Variant", toolTip: "Variant: Allele sequence that replaces reference sequence in the variant."
         },
-        {
-            id: "allele_call", field: "allele_call", width: 20, minWidth: 20, sortable: true,
+    ];
+    if (TVC.is_tagseq){
+    	TVC.all.push({
+            id: "allele", field: "allele", width: 32, minWidth: 24, sortable: true,
+            name: "Allele", toolTip: "Allele: Gene + Allele Name."
+        },
+    	{
+            id: "freq", field: "freq", width: 15, minWidth: 15, sortable: true,
+            name: "Frequency", toolTip: "Frequency: Allele frequency, the ratio between (downsampled) allele molecular coverage and total molecular coverage",
+            formatter: PercentFormatAF
+    	},
+    	{
+            id: "lod", field: "lod", width: 12, minWidth: 12, sortable: true,
+            name: "LOD", toolTip: "LOD: Limit of Detection at genomic location, estimated based on the number of detected molecules",
+            formatter: PercentFormatAF
+    	});
+    }else{
+    	TVC.all.push({
+            id: "allele_call", field: "allele_call", width: 22, minWidth: 20, sortable: true,
             name: "Allele Call", toolTip: "Allele Call: Decision whether the allele is detected (Het and Hom), not detected (Absent), or filtered (No Call). No Call and Absent are for hotspot calls only.",
             asyncPostRender: MarkFilter
         },
-        {
+    	{
             id: "freq", field: "freq", width: 15, minWidth: 15, sortable: true,
             name: "Frequency", toolTip: "Frequency: Allele frequency, the ratio between (downsampled) allele coverage and total coverage",
             formatter: PercentFormat
-        },
-        {
-            id: "quality", field: "quality", width: 15, minWidth: 15, sortable: true,
+        });
+    }
+
+    if (TVC.db_columns.indexOf("Possible Polyploidy Allele") >= 0){
+    	TVC.all.push({
+            id: "ppa", field: "ppa", width: 8, minWidth: 8, sortable: true,
+            name: "PPA", toolTip: "PPA: Indicate whether the allele is a Possible Polypoidy Allele (PPA) or not",
+        });
+    }
+    
+    TVC.all.push({
+            id: "quality", field: "quality", width: 10, minWidth: 10, sortable: true,
             name: "Quality", toolTip: "Quality: PHRED-scaled probability of incorrect call",
             formatter: Fixed1Format, asyncPostRender: MarkFilter
         },
         {
-            id: "spacer", name: "", width: 1, minWidth: 1, maxWidth: 10, cssClass: "separator-bar"
-        }
-    ];
+            id: "spacer", name: "", width: 1, minWidth: 1, maxWidth: 2, cssClass: "separator-bar"
+        });
 
     //the columns shown in allele search view
-    TVC.allele = [
-        {
-            id: "type", field: "type", width: 32, minWidth: 32, sortable: true,
+    TVC.allele = []
+    var tagseq_width_adjustment = 0;
+    if (TVC.is_tagseq){
+        TVC.allele.push({
+            id: "allele_call", field: "allele_call", width: 18, minWidth: 18, sortable: true,
+            name: "Allele Call", toolTip: "Allele Call: Decision whether the allele is detected (Het and Hom), not detected (Absent), or filtered (No Call). No Call and Absent are for hotspot calls only.",
+            asyncPostRender: MarkFilter
+        });
+    	tagseq_width_adjustment = -3;
+    }
+    
+    if (TVC.db_columns.indexOf("Subset Of") >= 0){
+    	TVC.allele.push({
+            id: "subset", field: "subset", width: 20, minWidth: 16, sortable: true,
+            name: "Subset Of", toolTip: "Subset Of: The name of the called allele that is a strict superset of this allele.",
+        });
+    }
+    
+    TVC.allele.push({
+            id: "type", field: "type", width: 18 + tagseq_width_adjustment, minWidth: 18 + tagseq_width_adjustment, sortable: true,
             name: "Variant Type", toolTip: "Variant Type: SNP, INS, DEL, MNP, or COMPLEX"
         },
         {
-            id: "allele_source", field: "allele_source", width: 32, minWidth: 32, sortable: true,
+            id: "allele_source", field: "allele_source", width: 18 + tagseq_width_adjustment, minWidth: 18 + tagseq_width_adjustment, sortable: true,
             name: "Allele Source", toolTip: 'Allele Source: Hotspot for alleles in hotspots file, otherwise Novel'
         },
         {
-            id: "allele_id", field: "allele_id", width: 32, minWidth: 32, sortable: true,
+            id: "allele_id", field: "allele_id", width: 20 + tagseq_width_adjustment, minWidth: 20 + tagseq_width_adjustment, sortable: true,
             name: "Allele Name", toolTip: "Allele Name: Read from the hotspot file"
         },
         {
-            id: "gene_id", field: "gene_id", width: 32, minWidth: 32, sortable: true,
+            id: "gene_id", field: "gene_id", width: 20 + tagseq_width_adjustment, minWidth: 20 + tagseq_width_adjustment, sortable: true,
             name: "Gene ID", toolTip: "Gene ID: Read from the target regions file"
         },
         {
-            id: "submitted_region", field: "submitted_region", width: 32, minWidth: 32, sortable: true,
+            id: "submitted_region", field: "submitted_region", width: 32 + tagseq_width_adjustment, minWidth: 32 + tagseq_width_adjustment, sortable: true,
             name: "Region Name", toolTip: "Region Name: Read from target regions file"
-        }
-    ];
-
+        });
+ 
     //the columns shown in coverage view
-    TVC.coverage = [
-        {
-            id: "downsampled_cov_total", field: "downsampled_cov_total", width: 20, minWidth: 20, sortable: true,
-            name: "Coverage", toolTip: "Coverage: Total coverage at this position, after downsampling",
-            formatter: ThousandsIntFormat, asyncPostRender: MarkFilter
-        },
-        {
-            id: "total_cov_plus", field: "total_cov_plus", width: 20, minWidth: 20, sortable: true,
-            name: "Coverage +", toolTip: "Coverage+: Total coverage on forward strand, after downsampling ",
-            formatter: ThousandsIntFormat, asyncPostRender: MarkFilter
-        },
-        {
-            id: "total_cov_minus", field: "total_cov_minus", width: 20, minWidth: 20, sortable: true,
-            name: "Coverage -", toolTip: "Coverage-: Total coverage on reverse strand, after downsampling",
-            formatter: ThousandsIntFormat, asyncPostRender: MarkFilter
-        },
-        {
-            id: "allele_cov", field: "allele_cov", width: 20, minWidth: 20, sortable: true,
-            name: "Allele Cov", toolTip: "Allele Cov: Reads containing this allele, after downsampling",
-            formatter: ThousandsIntFormat
-        },
-        {
-            id: "allele_cov_plus", field: "allele_cov_plus", width: 20, minWidth: 20, sortable: true,
-            name: "Allele Cov +", toolTip: "Allele Cov+: Allele coverage on forward strand, after downsampling",
-            formatter: ThousandsIntFormat
-        },
-        {
-            id: "allele_cov_minus", field: "allele_cov_minus", width: 20, minWidth: 20, sortable: true,
-            name: "Allele Cov -", toolTip: "Allele Cov-: Allele coverage on reverse strand, after downsampling",
-            formatter: ThousandsIntFormat
-        },
-        {
-            id: "strand_bias", field: "strand_bias", width: 20, minWidth: 20, sortable: true,
-            name: "Strand Bias", toolTip: "Strand Bias: Imbalance between allele frequencies on forward and reverse strands",
-            formatter: StrandBiasFormat, asyncPostRender: MarkFilter
-        }
-    ];
+    if (TVC.is_tagseq){
+        TVC.coverage = [
+	        {
+	            id: "read_cov", field: "read_cov", width: 20, minWidth: 20, sortable: true,
+	            name: "Total Read Cov", toolTip: "Coverage: Total read coverage at this position.",
+	            formatter: ThousandsIntFormat
+	        },
+	        {
+	            id: "allele_read_cov", field: "allele_read_cov", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Read Cov", toolTip: "Number of reads containing alternative allele",
+	            formatter: ThousandsIntFormat
+	        },
+	        {
+	            id: "allele_read_freq", field: "allele_read_freq", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Read Freq", toolTip: "Frequency of alternative allele across all reads",
+	            formatter: PercentFormatAF,
+	        },
+	        {
+	            id: "mol_cov", field: "mol_cov", width: 20, minWidth: 20, sortable: true,
+	            name: "Total Mol Cov", toolTip: "Number of Molecules covering this location",
+	            formatter: ThousandsIntFormat,  asyncPostRender: MarkFilter
+	        },
+	        {
+	            id: "allele_mol_cov", field: "allele_mol_cov", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Mol Cov", toolTip: "Allele Molecular Coverage: Number of detected molecules containing alternative allele",
+	            formatter: ThousandsIntFormat,  asyncPostRender: MarkFilter
+	        },
+	        {
+	            id: "allele_mol_freq", field: "allele_mol_freq", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Mol Freq", toolTip: "Allele Molecular Frequency: Frequency of molecules containing alternative allele",
+	            formatter: PercentFormatAF, asyncPostRender: MarkFilter
+	        }
+	    ];
+    }
+    else{
+        TVC.coverage = [
+	        {
+	            id: "downsampled_cov_total", field: "downsampled_cov_total", width: 20, minWidth: 20, sortable: true,
+	            name: "Coverage", toolTip: "Coverage: Total coverage at this position, after downsampling",
+	            formatter: ThousandsIntFormat, asyncPostRender: MarkFilter
+	        },
+	        {
+	            id: "total_cov_plus", field: "total_cov_plus", width: 20, minWidth: 20, sortable: true,
+	            name: "Coverage +", toolTip: "Coverage+: Total coverage on forward strand, after downsampling ",
+	            formatter: ThousandsIntFormat, asyncPostRender: MarkFilter
+	        },
+	        {
+	            id: "total_cov_minus", field: "total_cov_minus", width: 20, minWidth: 20, sortable: true,
+	            name: "Coverage -", toolTip: "Coverage-: Total coverage on reverse strand, after downsampling",
+	            formatter: ThousandsIntFormat, asyncPostRender: MarkFilter
+	        },
+	        {
+	            id: "allele_cov", field: "allele_cov", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Cov", toolTip: "Allele Cov: Reads containing this allele, after downsampling",
+	            formatter: ThousandsIntFormat
+	        },
+	        {
+	            id: "allele_cov_plus", field: "allele_cov_plus", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Cov +", toolTip: "Allele Cov+: Allele coverage on forward strand, after downsampling",
+	            formatter: ThousandsIntFormat
+	        },
+	        {
+	            id: "allele_cov_minus", field: "allele_cov_minus", width: 20, minWidth: 20, sortable: true,
+	            name: "Allele Cov -", toolTip: "Allele Cov-: Allele coverage on reverse strand, after downsampling",
+	            formatter: ThousandsIntFormat
+	        },
+	        {
+	            id: "strand_bias", field: "strand_bias", width: 20, minWidth: 20, sortable: true,
+	            name: "Strand Bias", toolTip: "Strand Bias: Imbalance between allele frequencies on forward and reverse strands",
+	            formatter: StrandBiasFormat, asyncPostRender: MarkFilter
+	        }
+	    ];
+    }
 
     //the columns shown in quality view
     TVC.quality = [
@@ -663,50 +877,12 @@ $(function () {
         }
     ];
 
-    columns = columns.concat(TVC.all, TVC.allele);
-
-    //define the grid and attach head/foot of the table
-    var options = {
-        editable: true,
-        autoEdit: false,
-        enableCellNavigation: true,
-        multiColumnSort: true,
-        forceFitColumns: true,
-        syncColumnCellResize: true,
-        enableAsyncPostRender: true,
-        asyncPostRenderDelay: 0
-    };
-
+    columns = columns.concat(TVC.all, TVC.allele);    
+    
     TVC.dataView = new Slick.Data.DataView({inlineFilters: true});
     TVC.grid = new Slick.Grid("#AL-grid", TVC.dataView, columns, options);
     TVC.grid.setSelectionModel(new Slick.RowSelectionModel({selectActiveRow: false}));
-
-    TVC.empty_grid = function () {
-        TVC.data = [];
-        TVC.dataView.beginUpdate();
-        TVC.dataView.setItems({});
-        TVC.dataView.endUpdate();
-        TVC.grid.invalidateAllRows();
-        TVC.grid.updateRowCount();
-        TVC.grid.render();
-    };
-
-    TVC.subload = function (offset) {
-        TVC.empty_grid();
-        TVC.loadtable(offset);
-        setCheckAll();
-        TVC.grid.render();
-        TVC.pager_update();
-    };
-
-    TVC.startplugin = get_json("startplugin.json");
-    TVC.variant_summary = get_json("variant_summary.json");
-    TVC.plugin_dir = TVC.startplugin["runinfo"]["results_dir"];
-    TVC.plugin_name = TVC.startplugin["runinfo"]["plugin_name"];
-    TVC.barcode = get_barcode();
-    TVC.reference = get_reference();
-    TVC.total_variants = TVC.variant_summary["variants_total"]["variants"];
-
+    
     //TODO: do this in the Django template as well
     $.each(TVC.variant_summary["variants_by_chromosome"], function (i, variant) {
         $("#AL-selectChrom").append('<option value="' + variant["chromosome"] + '">' + variant["chromosome"] + '</select>');
@@ -730,21 +906,41 @@ $(function () {
     $(".slick-pager").append(nav_buttons);
     $(".slick-pager").append(page_html);
 
+    $('<span class="btn" id="suspect" style="margin-left:10px;">Export for Troubleshooting</span> ').appendTo(".slick-pager");
+    var table = '<div style="margin-top:35px; padding:5px; width: 99.5%" align="right">';
+    table += '<button type="button" class="btn clearfix" id="adjust_debug_settings">';
+    table += 'Show Troubleshooting <i class="icon-chevron-down"></i></button></div>';
+    table += '<div class=clearfix collapse" id="toInspect" style="data-toggle=collapse; height:0px; padding: 5px; width: 99%;"><h3 style="margin-bottom:5px"><i class="icon-zoom-in"></i> Variants to inspect (mini bam/bed/vcf files will be generated)</h3>';
+    table += '<div id="manualInspectAdd" class="btn">Add Manually</div>';
+    table += '<div id="exportInspect" class="btn btn-primary" style="margin-left: 10px;">Export</div>';
+    table += '<div id="inspectOutput" style="padding-top: 10px;"></div>';
+    table += '<table class="table" id="inspectTable">';
+    table += '<thead id="inspectHead" style="display: none;">';
+    table += '<tr> <th>Position</th> <th>Reference</th> <th>Variant</th> <th>Expected Variant</th> <th>Remove</th></tr>';
+    table += '</thead>';
+    table += '<tbody id="inspectBody"></tbody></table></div></div>';
+    $("#allelesTable").parent().append(table);
+
+    $("#adjust_debug_settings").click(function () {
+        $("#toInspect").collapse('toggle');
+      });
+    
+    $('#toInspect').on('show', function () {
+        document.getElementById('suspect').style.visibility = 'visible';
+        $("#adjust_debug_settings").html('Hide Troubleshooting <i class="icon-chevron-up"></i>');    
+    });
+
+    $('#toInspect').on('hide', function () {
+        document.getElementById('suspect').style.visibility = 'hidden';
+        $("#adjust_debug_settings").html('Show Troubleshooting <i class="icon-chevron-down"></i>');     	
+    });
+
     if ($.QueryString["debug"]) {
-        $('<span class="btn" id="suspect" style="margin-left: 10px;">Export for Troubleshooting</span>').appendTo(".slick-pager");
-
-        var table = '<div class="grid-header" id="toInspect" style="margin-top:35px; padding: 5px; width: 99%;"><h3><i class="icon-zoom-in"></i> Variants to inspect</h3>';
-        table += '<table class="table" id="inspectTable">';
-        table += '<thead id="inspectHead" style="display: none;">';
-        table += '<tr> <th>Position</th> <th>Reference</th> <th>Variant</th> <th>Expected Variant</th> <th>Remove</th></tr>';
-        table += '</thead>';
-        table += '<tbody id="inspectBody"></tbody></table> <div id="manualInspectAdd" class="btn">Add Manually</div>';
-        table += '<div id="exportInspect" class="btn btn-primary" style="margin-left: 10px;">Export</div>';
-        table += '<div id="inspectOutput" style="padding-top: 10px;"></div> </div>';
-        $("#allelesTable").parent().append(table);
-    }
-
-
+    	$("#toInspect").collapse('show');
+    }else{
+    	$("#toInspect").collapse('hide');
+    }     
+    
     $("#AL-tablecontent").appendTo('#allelesTable');
     $("#AL-tablecontent").show();
 
@@ -792,7 +988,7 @@ $(function () {
         TVC.checked = [];
         TVC.checked_data = [];
         TVC.grid.invalidateAllRows();
-        TVC.order_col = TVC.col_lookup[args["sortCols"][0]["sortCol"]["field"]];
+        TVC.order_col = TVC.col_lookup[args["sortCols"][0]["sortCol"]["field"]][0];
         if (TVC.order_col == "position") {TVC.order_col = "Location";}
         TVC.order_dir = args["sortCols"][0]["sortAsc"];
         TVC.subload(0);
@@ -800,7 +996,13 @@ $(function () {
         TVC.pager_toggle();
     });
 
-    TVC.filterSettings = {"Allele Call":["Heterozygous","Homozygous"]};
+    if(TVC.is_tagseq){
+    	TVC.filterSettings = {"Allele Call":["Heterozygous","Homozygous"], "Allele Source": ["Hotspot"]};
+        $("#AL-selectAlleleSource").val(["Hotspot"]);
+        $("#AL-selectAlleleSource").change()
+    }else{
+        TVC.filterSettings = {"Allele Call":["Heterozygous","Homozygous"]};
+    }
     $("#AL-selectAlleleCall").val(["Heterozygous","Homozygous"]);
     $("#AL-selectAlleleCall").change()
 
@@ -825,7 +1027,7 @@ $(function () {
             selected = "";
         }
 
-        TVC.filterSettings[TVC.col_lookup["chrom"]] = selected;
+        TVC.filterSettings[TVC.col_lookup["chrom"][0]] = selected;
         updateFilter();
     });
 
@@ -836,9 +1038,9 @@ $(function () {
         } else {
             selected = "";
         }
-        TVC.filterSettings[TVC.col_lookup["allele_source"]] = selected;
+        TVC.filterSettings[TVC.col_lookup["allele_source"][0]] = selected;
         updateFilter();
-        console.log(TVC.filterSettings);
+        //console.log(TVC.filterSettings);
     });
 
     $("#AL-selectVarType").change(function (e) {
@@ -848,7 +1050,7 @@ $(function () {
         } else {
             selected = "";
         }
-        TVC.filterSettings[TVC.col_lookup["type"]] = selected;
+        TVC.filterSettings[TVC.col_lookup["type"][0]] = selected;
         updateFilter();
     });
 
@@ -859,7 +1061,7 @@ $(function () {
         } else {
             selected = "";
         }
-        TVC.filterSettings[TVC.col_lookup["allele_call"]] = selected;
+        TVC.filterSettings[TVC.col_lookup["allele_call"][0]] = selected;
         updateFilter();
     });
 
@@ -1025,68 +1227,28 @@ $(function () {
             async: false,
             dataType: "json"
         });
-
         get_page.done(function (mem) {
             TVC.total_variants = mem["total"];
             $.each(mem["items"], function (n, fields) {
                 var pk = fields.shift();
                 var sortValue = fields.shift();
-                var chr = fields[0];
+                TVC.data[n] = {"id": Number(pk),}
                 //map the API data into the SlickGrid array
                 //Just keep 1 page in memory at any time
-                TVC.data[n] = {
-                    id: Number(pk),
-            key: TVC.pos + n,
-                    chrom: chr,
-                    position: (chr + ":" + fields[1]),
-                    pos: fields[1],
-                    ref: fields[2],
-                    variant: fields[3],
-                    allele_call: fields[4],
-                    allele_call_filter: fields[5],
-                    freq: Number(fields[6]),
-                    quality: Number(fields[7]),
-                    quality_filter: fields[8],
-
-                    type: fields[9],
-                    allele_source: fields[10],
-                    allele_id: fields[11],
-                    gene_id: fields[12],
-                    submitted_region: fields[13],
-                    vcf_pos: fields[14],
-                    vcf_ref: fields[15],
-                    vcf_alt: fields[16],
-
-                    total_cov: Number(fields[17]),
-                    downsampled_cov_total: Number(fields[18]),
-                    downsampled_cov_total_filter: fields[19],
-                    total_cov_plus: Number(fields[20]),
-                    total_cov_plus_filter: fields[21],
-                    total_cov_minus: Number(fields[22]),
-                    total_cov_minus_filter: fields[23],
-                    allele_cov: Number(fields[24]),
-                    allele_cov_plus: Number(fields[25]),
-                    allele_cov_minus: Number(fields[26]),
-                    strand_bias: Number(fields[27]),
-                    strand_bias_filter: fields[28],
-
-                    rbi: Number(fields[29]),
-                    rbi_filter: fields[30],
-                    refb: Number(fields[31]),
-                    refb_filter: fields[32],
-                    varb: Number(fields[33]),
-                    varb_filter: fields[34],
-                    mlld: Number(fields[35]),
-                    mlld_filter: fields[36],
-                    hp_length: Number(fields[37]),
-                    hp_length_filter: fields[38],
-                    sse_plus: Number(fields[39]),
-                    sse_plus_filter: fields[40],
-                    sse_minus: Number(fields[41]),
-                    sse_minus_filter: fields[42],
-                    sssb: Number(fields[43]),
-                    sssb_filter: fields[44]
-                };
+                //Now I don't hard code the index of the allele table.
+                for (var col_idx = 0; col_idx < TVC.column_2_name.length; col_idx++){
+                	var my_key = TVC.column_2_name[col_idx];
+                	if (my_key != ""){
+                		if (TVC.col_lookup[my_key][1] == 'Number'){
+                			TVC.data[n][my_key] = Number(fields[col_idx]);
+                		}else{
+                			TVC.data[n][my_key] = fields[col_idx];
+                		}
+                	}
+                }
+                
+            	// TVC.data[n]['position'] should be TVC.data[n]['location'], but there are some massage applied in 'location'. 
+                TVC.data[n]['position'] = (TVC.data[n]['chrom'] + ":" + TVC.data[n]['pos']);
             });
             onLoadPartial();
         });

@@ -13,7 +13,7 @@ from ion.utils.blockprocessing import printtime, isbadblock
 from ion.utils import blockprocessing
 
 
-def beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
+def beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS, block_offset_xy):
     if beadfindArgs:
         cmd = beadfindArgs  # e.g /home/user/Beadfind -xyz
     else:
@@ -24,14 +24,16 @@ def beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
     cmd += " --tfkey=%s" % (tfKey)
     cmd += " --no-subdir"
     cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
+    # justBeadFind is currently internally deriving the block offset 
+    #cmd += " --block-offset %d,%d" % block_offset_xy
     cmd += " %s" % pathtorawblock
 
     return cmd
 
 
-def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
+def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS, block_offset_xy):
 
-    cmd = beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS)
+    cmd = beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS, block_offset_xy)
     cmd += " >> %s 2>&1" % os.path.join(SIGPROC_RESULTS, 'sigproc.log')
 
     if not os.path.exists(SIGPROC_RESULTS):

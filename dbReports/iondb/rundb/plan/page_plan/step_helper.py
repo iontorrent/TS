@@ -27,7 +27,7 @@ from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNam
 
 from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 
-from iondb.rundb.models import ApplicationGroup
+from iondb.rundb.models import ApplicationGroup, PlannedExperiment
 
 from iondb.rundb.plan.views_helper import isOCP_enabled
 
@@ -274,6 +274,17 @@ class StepHelper(object):
 
     def getApplicationGroupName(self):
         return self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
+
+    def getApplicationCategoryDisplayedName(self):
+        runType_obj = self.getRunTypeObject()
+        categories = self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.CATEGORIES]
+        if categories:
+            if runType_obj:
+                return PlannedExperiment.get_validatedApplicationCategoryDisplayedName(categories, runType_obj.runType)
+            else:
+                return PlannedExperiment.get_applicationCategoryDisplayedName(categories)
+        else:
+            return ""
 
     def isControlSeqTypeBySample(self):
         return self.getApplProduct().isControlSeqTypeBySampleSupported

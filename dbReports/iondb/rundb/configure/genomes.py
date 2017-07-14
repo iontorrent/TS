@@ -475,6 +475,7 @@ def get_references():
             ref["installed"] = installed.get(ref['meta']['identity_hash'], None)
             ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation", "")))
             ref["reference_mask_encoded"] = ref.get("reference_mask", None)
+            ref["bedfiles"] = ref.get("bedfiles", [])
         return references
     else:
         return None

@@ -1,0 +1,63 @@
+---
+# file: torrentpy_database.yml
+# copy this script to: /usr/share/ion-tsconfig/ansible/
+# run: sudo ansible-playbook torrentpy_database.yml -i torrentsuite_hosts --sudo
+
+- hosts: headnode
+  tasks:
+    - name: Stopping Ion Daemon Services
+      service: name={{ item }} state=stopped
+      with_items:
+        - ionCrawler
+        - ionJobServer
+        - ionPlugin
+        - celerybeat
+        - celeryd
+        - apache2
+    
+    - name: Stopping PostgreSQL
+      service: name=postgresql state=stopped
+      
+    - name: Setting listen_addresses
+      replace:
+        dest: /etc/postgresql/9.3/main/postgresql.conf
+        backup: yes
+        regexp: '^.*listen_addresses.*'
+        replace: "listen_addresses = '*'"
+    
+    # - name: Modifying pg_hba.conf
+    - lineinfile:
+        dest=/etc/postgresql/9.3/main/pg_hba.conf
+        state=present
+        create=yes
+        backup=yes
+        insertafter=EOF
+        line="# START ANSIBLE ADDED TORRENTPY BLOCK"
+    
+    - lineinfile:
+        dest=/etc/postgresql/9.3/main/pg_hba.conf
+        insertafter="# START ANSIBLE ADDED TORRENTPY BLOCK"
+        line="host    iondb       ion         10.0.0.0/8            trust"
+    
+    - lineinfile:
+        dest=/etc/postgresql/9.3/main/pg_hba.conf
+        insertafter="host    iondb       ion         10.0.0.0/8            trust"
+        line="host    all         all         10.0.0.0/8            trust"
+    
+    - lineinfile:
+        dest=/etc/postgresql/9.3/main/pg_hba.conf
+        insertafter="host    all         all         10.0.0.0/8            trust"
+        line="# END ANSIBLE ADDED TORRENTPY BLOCK"
+    
+    - name: Starting PostgreSQL
+      service: name=postgresql state=started
+    
+    - name: Starting Ion Daemon Services
+      service: name={{ item }} state=started
+      with_items:
+        - celerybeat
+        - celeryd
+        - ionCrawler
+        - ionJobServer
+        - ionPlugin
+        - apache2

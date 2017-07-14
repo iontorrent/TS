@@ -247,131 +247,6 @@ function reconfig_compute_node ()
     return 0
 }
 
-#--------------------------------------
-# Remove and unconfigure a Torrent Server
-#--------------------------------------
-function unconfigure_torrentserver ()
-{
-    log "Unconfigure Torrent Server"
-    user_msg "=================================================================="
-    user_msg "All Torrent Server Software will be removed"
-    user_msg "=================================================================="
-
-    # Remove Torrent Suite Packages
-    server_files=
-    master_files=
-    read_packagelist_file torrentsuite allservers server_files
-    if is_master; then
-        read_packagelist_file torrentsuite master master_files
-        pkg_list=( ${server_files[@]} ${master_files[@]} )
-
-        #Load proton specific packages if this is Proton Torrent Server
-        inst_files=
-        if is_proton_ts; then
-            read_packagelist_file torrentsuite proton inst_files
-            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
-        else
-            #Default to PGM specific packages
-            read_packagelist_file torrentsuite pgm inst_files
-            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
-        fi
-    else
-        pkg_list=( ${server_files[@]} )
-    fi
-
-    # Remove ion-tsconfig package from the list
-    pkg_list=( $(echo ${pkg_list[@]} | sed 's/ion-tsconfig//g') )
-
-    #user_msg "\nNot Implemented - simulated apt-get"
-    for pkg in ${pkg_list[@]}; do
-        if dpkg -l $pkg|grep ^ii >/dev/null; then
-             user_msg "\tRemoving $pkg"
-             apt-get --assume-yes --force-yes remove $pkg 1>&2
-        else
-            echo "$pkg not installed"
-        fi
-    done
-
-    # Do not execute these by default
-    # Remove gridengine
-    #apt-get --assume-yes --force-yes purge gridengine-master gridengine-qmon gridengine-exec gridengine-common gridengine-client
-    # Remove postgresql
-    #apt-get --assume-yes --force-yes remove postgresql postgresql-8.4
-    # Remove apache2
-    #apt-get --assume-yes --force-yes purge apache2 apache2.2-common apache2.2-bin apache2-utils apache2-mpm-prefork
-
-    # Clean up directories
-    rm -rf /opt/ion/iondb/
-    rm -rf /opt/ion/config/
-    rm -rf /opt/ion/RSM
-    rm -rf $TSCONFIG_DIR/$TSCONFIG_CONF
-    rm -rf $TSCONFIG_DIR/local_cluster_settings.py
-
-    # Do not remove contents of these directories: may contain user-added data
-    #rm -rf /results/referenceLibrary
-    #rm -rf /results/plugins
-    #rm -rf /results/publishers
-    #rm -rf /results/uploads
-
-    # Remove NFS exports configuration
-    #sed -i 's:^/results\s.*::' /etc/exports
-    #sed -i 's:^/opt/sge.*::' /etc/exports  # legacy code created these; pre-2.0
-
-    # Remove network supporting external PGMs
-    # Do not execeute this by default.
-    #remove_pgm_support
-
-    #TODO: remove ftp server
-    #   stop vsftpd daemon
-    #if -e /etc/init.d/vsftpd; then service vsftpd stop; fi
-    #   remove vsftpd package
-    #apt-get --assume-yes --force-yes remove vsftpd
-
-    # Remove this server from gridengine queues, only if it is compute node (thus, not qmaster)
-    if ! is_master; then sge_delete_host $(hostname); fi
-
-    #   remove ionguest user
-    if getent passwd|grep -q ^ionguest; then deluser --remove-home --force ionguest; fi
-    if getent group|grep -q ^ionguest; then delgroup ionguest; fi
-    #   remove vsftpd configure files
-    rm -f /etc/vsftpd.allowed_users
-
-    rm -rf $TSCONFIG_DIR
-    rm -f /opt/ion/.computenode
-    rm -f /opt/ion/.masternode
-    user_msg "=================================================================="
-    user_msg "Unconfigure Torrent Server Complete"
-    user_msg "=================================================================="
-    user_msg "The following services may still be running with TS specific settings"
-    user_msg "vsftpd"
-    user_msg "dhcp3-server"
-    user_msg "dnsmasq"
-    user_msg "iptables.rules"
-    user_msg "postgresql"
-    user_msg "apache2"
-    user_msg "exportfs"
-    user_msg "sudo enabled commands for user www-data"
-    user_msg "gridengine (SGE)"
-    user_msg
-    user_msg "ion-tsconfig package is still installed:  sudo apt-get remove ion-tsconfig to remove"
-    user_msg "You can delete /var/log/ion directory"
-    user_msg "You can delete contents of /results"
-    if ! is_master; then user_msg "You may have remote mounts to cleanup manually"; fi
-    if is_master; then user_msg "You may have exported directories to cleanup manually"; fi
-    user_msg
-    # This is the end
-    echo -n "Do you want to remove all the packages Torrent Suite installed? (n|Y) "
-    read usrmsg
-    case $usrmsg in
-        y|Y)
-        scrub_torrentserver
-        ;;
-        *)
-        exit 1
-        ;;
-    esac
-}
-
 #---------------------------------------------
 # REALLY removes everything from torrentserver
 #---------------------------------------------
@@ -3503,11 +3378,7 @@ function read_packagelist_file()
 
     local version=$(distrib_rel)
 
-    if [[ "$version" == "10.04" ]]; then
-        PACKAGES='packages'
-    else
-        PACKAGES=packages_${version}
-    fi
+    PACKAGES=packages_${version}
 
     if [ ! -r $FILEPATH ]; then
         echo "Cannot read $FILEPATH" 1>&2
@@ -3767,18 +3638,6 @@ function install_prerequisites()
     fi
 }
 
-function config_repositories()
-{
-    # lucid is out of support and needs to ensure the ubuntu URL points to old-releases
-    if [[ $(lsb_release -sc) = "lucid" ]]; then
-        # We should never get here on lucid.
-        :
-    else
-        # No-op currently: placeholder until we need it
-        echo "Nothing to be done for $(lsb_release -sc) URLs at this time"
-    fi
-}
-
 function outbound_net_port()
 {
     port=$(/sbin/route | awk '/default/{print $8}')
@@ -3787,27 +3646,6 @@ function outbound_net_port()
     fi
 }
 
-# =============================================================================
-# Returns device name of / partition
-# =============================================================================
-function findroot()
-{
-    # find / entry in /etc/fstab
-    # regex is: any line not starting with # containing a / surrounded by a space
-    line=$(sed -n '/^[^#].*\s\/\s.*/p' /etc/fstab)
-
-    # First element is id, by UUID, or LABEL, or plain /dev/*
-    set -- $line
-    device=$1
-
-    if echo $device|grep -q "="; then
-        searchterm=${device%=*}
-        id=${device#*=}
-        readlink -f /dev/disk/by-${searchterm,,}/$id
-    else
-        echo $device
-    fi
-}
 # =============================================================================
 # Returns release version number, ie 10.04, 12.04
 # =============================================================================
@@ -3848,4 +3686,18 @@ clrclr()
 bold()
 {
     echo -ne '\033[1m'
+}
+
+function accept_eula(){
+    if(whiptail --title "Torrent Suite EULA" --textbox "/opt/ion/doc/ion-tsconfig/LICENSE.txt" --scrolltext 25 75 --ok-button "Proceed to confirm" --fb); then
+        if(whiptail --title "Torrent Suite EULA" --yesno "Please confirm to install the update" --scrolltext 25 75 --yes-button Accept --no-button Reject --fb); then
+            echo "EULA accepted"
+        else
+            echo "EULA rejected"
+            exit 0
+        fi
+    else
+        echo "EULA rejected"
+        exit 0
+    fi
 }

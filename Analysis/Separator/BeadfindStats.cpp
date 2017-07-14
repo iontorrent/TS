@@ -37,10 +37,11 @@ void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, Mask &mask, int gridMo
   img.FilterForPinned(&mask, MaskEmpty, false);
   T0Calc t0;
   t0.SetWindowSize(3);
-  t0.SetMinFirstHingeSlope(-5.0/raw->baseFrameRate);
-  t0.SetMaxFirstHingeSlope(300.0/raw->baseFrameRate);
-  t0.SetMinSecondHingeSlope(-20000.0/raw->baseFrameRate);
-  t0.SetMaxSecondHingeSlope(-10.0/raw->baseFrameRate);
+  t0.SetMinFirstHingeSlope(opts.beadfindBfThreshold[0]/raw->baseFrameRate);
+  t0.SetMaxFirstHingeSlope(opts.beadfindBfThreshold[1]/raw->baseFrameRate);
+  t0.SetMinSecondHingeSlope(opts.beadfindBfThreshold[2]/raw->baseFrameRate);
+  t0.SetMaxSecondHingeSlope(opts.beadfindBfThreshold[3]/raw->baseFrameRate);
+  t0.SetDebugLevel(opts.outputDebug);
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mask);
@@ -112,6 +113,10 @@ int main(int argc, const char *argv[]) {
     opts.t0MeshStepX = size;
     opts.t0MeshStepY = size;
   }
+  
+  opts.beadfindBfThreshold = std::vector<float>({-5, 300, -20000, -10});
+  
+  
   Mask mask;
   int row = 0, col = 0;
   std::vector<float> t0;
@@ -130,7 +135,7 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  SetExcludeMask(loc_context, &mask, ChipIdDecoder::GetChipType(), mask.H(), mask.W());
+  SetExcludeMask(loc_context, &mask, ChipIdDecoder::GetChipType(), mask.H(), mask.W(), std::string(""), false);
   size_t numWells = mask.H() * mask.W();
   int excludeWells = 0;
   for (size_t i = 0; i < numWells; i++) {

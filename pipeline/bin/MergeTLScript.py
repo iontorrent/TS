@@ -102,10 +102,17 @@ if __name__ == "__main__":
         except:
             traceback.print_exc()
 
-    blocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
-    blocks_to_process = [block for block in blocks if block['autoanalyze'] and block['analyzeearly']]
-    number_of_total_blocks = len(blocks)
-    number_of_blocks_to_process = len(blocks_to_process)
+    explogblocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
+    blocks_to_process = []
+    for block in explogblocks:
+        toProcess = block['autoanalyze'] and block['analyzeearly']
+        if env.get('chipBlocksOverride') and toProcess:
+            if env['chipBlocksOverride'] == '510':
+                toProcess = block['id_str'].endswith('Y0')
+        if toProcess:
+            blocks_to_process.append(block)
+
+    number_of_total_blocks = len(blocks_to_process)
     dirs = ['block_%s' % block['id_str'] for block in blocks_to_process]
     if not is_composite:
         dirs = []
@@ -114,6 +121,8 @@ if __name__ == "__main__":
 
         set_result_status('Merge Heatmaps')
 
+        # In 5.4 we apply a  mask in the bead find stage but also here to be backward compatible
+        # with from-basecall reanalyses of 5.2 and older OIA results
         exclusionMaskFile = 'exclusionMask_%s.txt' % env.get('chipType', '').lower()
 
         sigproc.mergeSigProcResults(

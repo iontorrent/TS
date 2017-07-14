@@ -45,6 +45,7 @@ install(
 	"${PROJECT_SOURCE_DIR}/tsvm-include"
 	"${PROJECT_SOURCE_DIR}/tsvm-isvtenabled"
 	"${PROJECT_SOURCE_DIR}/tsvm-prepare"
+	"${PROJECT_SOURCE_DIR}/tsvm-enable-nfs-rule"
 	DESTINATION ${ION_INSTALL_PREFIX}
 	PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
@@ -62,12 +63,12 @@ install(
 set(CPACK_GENERATOR "DEB")
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
-set(
-	CPACK_DEBIAN_PACKAGE_DEPENDS
-	"vagrant,
-	virtualbox-4.3 (>=4.3),
-	msr-tools"
-)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+       "vagrant,
+        virtualbox-4.3 (>=4.3),
+        msr-tools,
+        dmidecode"
+    )
 set(CPACK_PACKAGE_DESCRIPTION "This package configures the Ion Torrent Suite to download the Early Access Software version.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

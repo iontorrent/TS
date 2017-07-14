@@ -116,6 +116,7 @@ void BaseCallerParameters::PrintHelp()
     printf ("     --flow-order            STRING     flow order [retrieved from wells file]\n");
     printf ("     --run-id                STRING     read name prefix [hashed input dir name]\n");
     printf ("  -n,--num-threads           INT        number of worker threads [2*numcores]\n");
+    printf ("     --compress-bam          BOOL       Output compressed / uncompressed BAM [true]\n");
     printf ("  -f,--flowlimit             INT        basecall only first n flows [all flows]\n");
     printf ("     --keynormalizer         STRING     key normalization algorithm [gain]\n");
     printf ("     --wells-normalization   STRING     normalize wells signal and correct for signal bias [off]/on/keyOnly/signalBiasOnly/pinZero\n");
@@ -227,9 +228,11 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     context_vars.run_id                      = opts.GetFirstString ('-', "run-id", default_run_id);
 	num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
 	num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 0);
+	compress_output_bam_                     = opts.GetFirstBoolean('-', "compress-bam", true);
 
     context_vars.flow_signals_type           = opts.GetFirstString ('-', "flow-signals-type", "none");
     context_vars.only_process_unfiltered_set = opts.GetFirstBoolean('-', "only-process-unfiltered-set", false);
+    context_vars.flow_predictors_            = opts.GetFirstBoolean('-', "flow-predictors", false);
 
     // Treephaser options
 #if defined( __SSE3__ )
@@ -245,6 +248,7 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     context_vars.wells_norm_method           = opts.GetFirstString ('-', "wells-normalization", "off");
     context_vars.just_phase_estimation       = opts.GetFirstBoolean('-', "just-phase-estimation", false);
     context_vars.calibrate_TFs               = opts.GetFirstBoolean('-', "calibrate-tfs", false);
+    context_vars.trim_zm                     = opts.GetFirstBoolean('-', "trim-zm", true);
 
     // debug options
     context_vars.debug_normalization_bam     = opts.GetFirstBoolean ('-', "debug-normalization-bam", false);
@@ -343,7 +347,9 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
     bc.skip_droop             = context_vars.skip_droop;
     bc.skip_recal_during_norm = context_vars.skip_recal_during_norm;
     bc.calibrate_TFs          = context_vars.calibrate_TFs;
+    bc.trim_zm                = context_vars.trim_zm;
 
+    bc.flow_predictors_       = context_vars.flow_predictors_;
     // debug options
     bc.debug_normalization_bam              = context_vars.debug_normalization_bam;
     return true;

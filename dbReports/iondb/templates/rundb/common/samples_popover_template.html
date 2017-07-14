@@ -1,29 +1,44 @@
-<style>
-	.popover-title { display: none; }
-</style>
+<script>
+    // We need a container for the popover in order to style it
+    $("<span/>", {id: "sample-popover-container"}).appendTo("body");
+</script>
 <script id="SampleColumnTemplate" type="text/x-kendo-template">
 	#
 		try { var barcodedSamples = data.barcodedSamples.toJSON(); }
 		catch(err) { var barcodedSamples = data.barcodedSamples; }
 	#
 	# if (barcodedSamples && !$.isEmptyObject(barcodedSamples)) { #
-		<span rel="popover" data-toggle="popover" data-select="\#sample#=data.id#" data-html="true" data-trigger="hover">
-			#= TB.properties(barcodedSamples).length + " Samples " # ...
+		<span rel="popover" data-toggle="popover" data-select="\#sample#=data.id#" data-html="true" data-trigger="hover" data-container="\#sample-popover-container">
+			#= TB.properties(barcodedSamples).length + " Samples " # <i class="icon-info-sign" style="opacity: 0.9"></i>
 		</span>
 		<div id="sample#=data.id#" class="hide">
-			<table class="table table-condensed" style="margin:0;">
+			<table class="table table-condensed table-striped sample-popover-table" style="margin:0;">
 			<thead>
-				<th>Barcode</th>
-				<th>Sample</th>
+                <tr>
+                    <th>Sample</th>
+                    <th>Barcode</th>
+                </tr>
 			</thead>
 			<tbody>
-			# for (key in barcodedSamples) { #
-			<tr>
-				 <td>#=barcodedSamples[key].barcodes.join(' ')# </td>
-				 <td>#=key# </td>
-			</tr>
-			# } #
+            # var sampleInfo = Object.keys(barcodedSamples).map(function(key) {
+                return {
+                    sampleName: key,
+                    barcode: barcodedSamples[key].barcodes.join(' ')
+                }
+            }); #
+            # sampleInfo.sort(function(a,b){
+                return a.barcode.localeCompare(b.barcode);
+            }); #
+            # sampleInfo.slice(0, 16).map(function(sample){ #
+                <tr>
+                     <td>#=sample.sampleName# </td>
+                     <td>#=sample.barcode# </td>
+                </tr>
+			# }); #
 			</tbody>
+            # if(sampleInfo.length > 16){ #
+                <tfoot><tr><td colspan="2">+#=sampleInfo.length-16# more barcodes</td></tr></tfoot>
+            # }; #
 			</table>
 		</div>
 	# } else { #

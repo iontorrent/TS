@@ -20,6 +20,7 @@ void SpatialContext::DefaultSpatialContext()
   regionYSize = 0;
   cropRegions = NULL;
   numCropRegions = 0;
+  isCropped = false;
   // some raw image processing (like cross talk correction in the Image class) needs the absolute coordinates of the
   // pixels in the image.  This is easy for a standard data set, but for a cropped data set the origin of the data is
   // unknown.  These allow the user to specify the location of the cropped region so that these parts of analysis
@@ -137,6 +138,7 @@ void SpatialContext::SetOpts(OptArgs &opts, Json::Value& json_params)
 			cropRegions[numCropRegions-1].row = vec2[1];
 			cropRegions[numCropRegions-1].w = vec2[2];
 			cropRegions[numCropRegions-1].h = vec2[3];
+            isCropped = true;
 		}
 		else
 		{

@@ -191,6 +191,7 @@ ap (NULL),
 xhomo (NULL),
 yhomo (NULL),
 logbuf_ (NULL),
+own_log_ (NULL),
 logp_ (NULL)
 {
 }
@@ -202,6 +203,8 @@ btrmx (NULL),
 ap (NULL),
 xhomo (NULL),
 yhomo (NULL),
+logbuf_ (NULL),
+own_log_ (NULL),
 logp_ (NULL)
 {
     init (max_ylen, max_xlen, max_size, gip, gep, mat, mis);
@@ -413,7 +416,7 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
 
     int y_start, y_end, y_len; //, y;
     char *bp_start;
-    double cur_w;
+    // double cur_w;
     bool bottom_in = false;
     double add_score;
 
@@ -445,11 +448,12 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
         if (len  <= 0  || xpos + 1 == xlen || std::max (yref, ypos+1) >= std::min (ylen, ypos + 1 + bstep))
             last_col = true;
 
-        cur_w = align_y_loop (ap + y_start, xseq [xpos], bp_start, xpos, xhomo [xpos - xref + 1], y_start, y_len, bottom_in, add_score, last_col);
+        align_y_loop (ap + y_start, xseq [xpos], bp_start, xpos, xhomo [xpos - xref + 1], y_start, y_len, bottom_in, add_score, last_col);
 
         // record max score at the top of those columns that end at the band edge
-        if (y_end == ylen && last_w <= cur_w)
-            last_w = cur_w, last_bp = bp_start + y_len - 1, last_x = xpos, last_y = y_end-1, last_reached = true;
+        // 02/28/2017: with the change of semantic of firstx / lastx, the lastx means alignment should terminate at the edge of X sequence. The code below terminates at Y edge => commented
+        // if (y_end == ylen && last_w <= cur_w)
+        //     last_w = cur_w, last_bp = bp_start + y_len - 1, last_x = xpos, last_y = y_end-1, last_reached = true;
 
         xpos++, ypos++, bp += bstep;
     }
@@ -578,6 +582,8 @@ unsigned ContAlign::backtrace (BATCH *b_ptr, int max_cnt, unsigned width)
         ++b_ptr;
     }
     // in to_first mode, if y is not fully covered, add pseudo segment and a gap
+    // 02/28/2017: seem to be not needed as only X coverage is now required for to_first
+    /*
     if (to_first && y >= yref)
     {
         assert (b_cnt < max_cnt);
@@ -586,6 +592,7 @@ unsigned ContAlign::backtrace (BATCH *b_ptr, int max_cnt, unsigned width)
         b_ptr->len  = 0;
         ++b_cnt;
     }
+    */
     reverse_inplace<BATCH> (b_start, b_cnt);
     return b_cnt;
 }

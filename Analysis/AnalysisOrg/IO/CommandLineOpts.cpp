@@ -13,7 +13,7 @@
 #include "CommandLineOpts.h"
 #include "ChipIdDecoder.h"
 #include "IonErr.h"
-#include "mixed.h"
+#include "ClonalFilter/mixed.h"
 
 using namespace std;
 
@@ -93,22 +93,23 @@ void CommandLineOpts::PrintHelp()
 
 void CommandLineOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-	bkg_control.DefaultBkgModelControl();
-	bkg_control.SetOpts(opts, json_params);
-	bfd_control.DefaultBeadfindControl();
-	bfd_control.SetOpts(opts, json_params);
-	img_control.DefaultImageOpts();
-	img_control.SetOpts(opts, json_params);
-	mod_control.SetOpts(opts, json_params);
-	loc_context.DefaultSpatialContext();
-	loc_context.SetOpts(opts, json_params);
-	flow_context.DefaultFlowFormula();
-	flow_context.SetOpts(opts, json_params);
-	key_context.DefaultKeys();
-	key_context.SetOpts(opts, json_params);
-	no_control.SetOpts(opts, json_params);
-	sys_context.DefaultSystemContext();
-	sys_context.SetOpts(opts, json_params);
+  flow_context.DefaultFlowFormula();
+  flow_context.SetOpts(opts, json_params);
+  bkg_control.DefaultBkgModelControl();
+  // Apparently flow_context does not have a member that gives me the total number of flows in a run, so I'm hard coding this baby!
+  bkg_control.SetOpts(opts, json_params, 100000);
+  bfd_control.DefaultBeadfindControl();
+  bfd_control.SetOpts(opts, json_params);
+  img_control.DefaultImageOpts();
+  img_control.SetOpts(opts, json_params);
+  mod_control.SetOpts(opts, json_params);
+  loc_context.DefaultSpatialContext();
+  loc_context.SetOpts(opts, json_params);
+  key_context.DefaultKeys();
+  key_context.SetOpts(opts, json_params);
+  no_control.SetOpts(opts, json_params);
+  sys_context.DefaultSystemContext();
+  sys_context.SetOpts(opts, json_params);
 
   // We can only do save and restore on an even flow block boundary.
   // Now that all the parameters have been set, we can check their sanity.
@@ -226,6 +227,7 @@ ValidateOpts::ValidateOpts()
 	// BeadfindControlOpts
 	m_opts["beadfind-type"] = VT_STRING;
 	m_opts["use-beadmask"] = VT_STRING;
+    m_opts["exclusion-mask"] = VT_STRING;
 	m_opts["beadmask-categorized"] = VT_BOOL;
 	m_opts["beadfind-basis"] = VT_STRING;
 	m_opts["beadfind-dat"] = VT_STRING;
@@ -437,6 +439,11 @@ void ValidateOpts::Validate(const int argc, char *argv[])
 		{
 			if((!isdigit(argv[i][1])) && (argv[i][1] != '.'))
 			{
+                                if(s.length() > 2 && argv[i][1] != '-' && argv[i][2] != ' ' && argv[i][2] != '=') // handle mis-typing long option to short option
+                                {
+                                        fprintf ( stdout, "WARNING: %s may miss a leading - . Please check if it is a long option.\n", s.c_str());
+                                }
+
 				s = s.substr(1, s.length() - 1);
 				if(argv[i][1] == '-') // long option
 				{

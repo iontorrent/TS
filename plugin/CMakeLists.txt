@@ -14,7 +14,7 @@ SET(CPACK_PACKAGE_VENDOR "Ion Torrent")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Brian Bourke-Martin")
 
 # go through each of the plugins and do a manual build for each of them
-SET(PLUGIN_DIRS ampliSeqRNA AssemblerSPAdes coverageAnalysis DataExport ERCC_Analysis FileExporter FilterDuplicates immuneResponseRNA PGxAnalysis RNASeqAnalysis RunTransfer sampleID variantCaller)
+SET(PLUGIN_DIRS ampliSeqRNA AssemblerSPAdes coverageAnalysis DataExport ERCC_Analysis FieldSupport FileExporter FilterDuplicates immuneResponseRNA PGxAnalysis RNASeqAnalysis RunTransfer sampleID variantCaller)
 
 FOREACH(PLUGIN_DIR ${PLUGIN_DIRS})
     #create a clean version of the plugin directory

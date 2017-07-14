@@ -11,10 +11,12 @@
 #include <algorithm>
 #include <sstream>
 #include <sys/time.h>
+
 #ifndef ALIGNSTATS_IGNORE
 #include "SpecialDataTypes.h"
 #include "LinuxCompat.h"
 #endif
+
 // Transition states used in Analysis main function for progress tracking
 #define WELL_TO_IMAGE 1
 #define IMAGE_TO_SIGNAL 2
@@ -72,6 +74,12 @@ int GetFreeSystemMem();
 int GetCachedSystemMem();
 int GetSystemMemInBuffers();
 
+// --- Mapping of base ambiguity symbols
+
+void expandBaseSymbol(char nuc, std::vector<bool>& nuc_ensemble);
+char contractNucSymbol(const std::vector<bool>& nuc_ensemble);
+bool isBaseMatch(char nuc1, char nuc2);
+char getMatchSymbol(char nuc1, char nuc2);
 
 //string utils
 int     count_char (std::string s, char c);
@@ -282,6 +290,5 @@ T fast_median(T* start, size_t num_elements) {
   // else even, average middle two values
   return (*middle + *(middle -1)) /2.0f;
 }
-
 
 #endif // UTILS_H

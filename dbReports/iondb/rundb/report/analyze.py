@@ -4,6 +4,7 @@ import os
 import traceback
 import socket
 import xmlrpclib
+import re
 from datetime import date
 from django.conf import settings
 from django.db import transaction
@@ -401,6 +402,14 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
     if eas.targetRegionBedFile and tmap_bedfile_option in alignmentArgs:
         alignmentArgs = alignmentArgs.replace(tmap_bedfile_option, "%s %s" % (tmap_bedfile_option, eas.targetRegionBedFile))
 
+    # special case: override blocks
+    chipBlocksOverride = ''
+    m = re.search(' --chip.\w+', basecallerArgs)
+    if m:
+        option = m.group()
+        chipBlocksOverride = option.split()[1]
+        basecallerArgs = basecallerArgs.replace(option, "")
+
     ret = {
         'exp_json': exp_json,
         'plan': plan_json,
@@ -452,6 +461,9 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
         'sam_parsed': True if os.path.isfile('/opt/ion/.ion-internal-server') else False,
         'username': username,
     }
+
+    if chipBlocksOverride:
+        ret['chipBlocksOverride'] = chipBlocksOverride
 
     return ret
 

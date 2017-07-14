@@ -68,6 +68,7 @@ void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_
   json["strand"] = my_cross.strand_key;
   json["success"] = my_cross.success ? 1 : 0;
   json["usecorr"] = my_cross.use_correlated_likelihood ? 1: 0;
+  json["read_counter"] = my_cross.read_counter;
 
   json["heavy"] = my_cross.heavy_tailed;
   json["lastrelevantflow"] = my_cross.max_last_flow;
@@ -100,7 +101,7 @@ void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_
       my_cross_temp.mod_predictions[i_hyp][j_flow] = my_cross.mod_predictions[i_hyp][t_flow];
       my_cross_temp.residuals[i_hyp][j_flow] = my_cross.residuals[i_hyp][t_flow];
       my_cross_temp.sigma_estimate[i_hyp][j_flow] = my_cross.sigma_estimate[i_hyp][t_flow];
-      my_cross_temp.basic_likelihoods[i_hyp][j_flow] = my_cross.basic_likelihoods[i_hyp][t_flow];
+      my_cross_temp.basic_log_likelihoods[i_hyp][j_flow] = my_cross.basic_log_likelihoods[i_hyp][t_flow];
     }
   }
 
@@ -120,17 +121,23 @@ void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_
     json["testflows"][i_test] = my_cross.test_flow[i_test];
 
 // hold some intermediates size data matrix hyp * nFlows (should be active flows)
-
-  for (unsigned int i_hyp = 0; i_hyp < my_cross_temp.predictions.size(); i_hyp++) {
-    for (unsigned int i_flow = 0; i_flow < my_cross_temp.predictions[0].size(); i_flow++) {
+  for (unsigned int i_flow = 0; i_flow < my_cross_temp.predictions[0].size(); i_flow++) {
+    for (unsigned int i_hyp = 0; i_hyp < my_cross_temp.predictions.size(); i_hyp++) {
       json["predictions"][i_hyp][i_flow] = my_cross_temp.predictions[i_hyp][i_flow];
       json["modpred"][i_hyp][i_flow] = my_cross_temp.mod_predictions[i_hyp][i_flow];
       json["normalized"][i_hyp][i_flow] = my_cross_temp.normalized[i_flow];
       json["residuals"][i_hyp][i_flow] = my_cross_temp.residuals[i_hyp][i_flow];
       json["sigma"][i_hyp][i_flow] = my_cross_temp.sigma_estimate[i_hyp][i_flow];
-      json["basiclikelihoods"][i_hyp][i_flow] = my_cross_temp.basic_likelihoods[i_hyp][i_flow];
+      json["basiclikelihoods"][i_hyp][i_flow] = exp(my_cross_temp.basic_log_likelihoods[i_hyp][i_flow]);  // For historical reasons, dump the likelihood w/o taking logarithm
     }
   }
+
+  if (not my_cross_temp.measurement_var.empty()){
+    for (unsigned int i_flow = 0; i_flow < my_cross_temp.measurement_var.size(); i_flow++)
+      json["measurement_var"][i_flow] = my_cross_temp.measurement_var[i_flow];
+  }
+
+
   // sequence, responsibility (after clustering), etc
   for (unsigned int i_hyp = 0; i_hyp < my_cross.responsibility.size(); i_hyp++) {
     json["instancebystate"][i_hyp] = my_cross.instance_of_read_by_state[i_hyp];
@@ -143,6 +150,7 @@ void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_
 void TinyDiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_cross) {
 
 json["strand"] = my_cross.strand_key;
+ json["read_counter"] = my_cross.read_counter;
  json["success"] = my_cross.success ? 1 : 0;
 
  // active flows over which we are testing
@@ -161,14 +169,14 @@ json["strand"] = my_cross.strand_key;
 void DiagnosticJsonEvalFamily(Json::Value &json, const EvalFamily &my_family) {
   json["family_barcaode"] = my_family.family_barcode;
   json["strand_key"] = my_family.strand_key;
-  json["is_func_family"] = my_family.GetFunctionality() ? 1 : 0;
+  json["is_func_family"] = my_family.GetFuncFromValid() ? 1 : 0;
 
   // members in the family
-  for (unsigned int i_ndx = 0; i_ndx < my_family.family_members.size(); i_ndx++) {
-	json["family_members"][i_ndx] = my_family.family_members[i_ndx];
+  for (unsigned int i_ndx = 0; i_ndx < my_family.valid_family_members.size(); i_ndx++) {
+	json["valid_family_members"][i_ndx] = my_family.valid_family_members[i_ndx];
   }
 
-  if(my_family.GetFunctionality()){
+  if(my_family.GetFuncFromValid()){
 	  vector<float> family_log_likelihood(my_family.GetFamilyLogLikelihood());
 	  vector<float> family_scaled_likelihood(my_family.GetFamilyScaledLikelihood());
 	  // responsibility (after clustering), etc
@@ -185,11 +193,11 @@ void DiagnosticJsonEvalFamily(Json::Value &json, const EvalFamily &my_family) {
 void TinyDiagnosticJsonEvalFamily(Json::Value &json, const EvalFamily &my_family) {
 	json["family_barcaode"] = my_family.family_barcode;
 	json["strand_key"] = my_family.strand_key;
-	json["is_func_family"] = my_family.GetFunctionality() ? 1 : 0;
+	json["is_func_family"] = my_family.GetFuncFromValid() ? 1 : 0;
 
 	// members in the family
-	for (unsigned int i_ndx = 0; i_ndx < my_family.family_members.size(); i_ndx++) {
-		json["family_members"][i_ndx] = my_family.family_members[i_ndx];
+	for (unsigned int i_ndx = 0; i_ndx < my_family.valid_family_members.size(); i_ndx++) {
+		json["family_members"][i_ndx] = my_family.valid_family_members[i_ndx];
 	}
 }
 

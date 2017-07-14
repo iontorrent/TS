@@ -1347,11 +1347,13 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
   copy(raw->timestamps, raw->timestamps+raw->frames, &mBFTimePoints[0]);
   T0Calc t0;
   t0.SetWindowSize(3);
-  t0.SetMinFirstHingeSlope(-5.0/raw->baseFrameRate);
-  t0.SetMaxFirstHingeSlope(300.0/raw->baseFrameRate);
-  t0.SetMinSecondHingeSlope(-20000.0/raw->baseFrameRate);
-  t0.SetMaxSecondHingeSlope(-10.0/raw->baseFrameRate);
+  t0.SetMinFirstHingeSlope(opts.beadfindBfThreshold[0]/raw->baseFrameRate);
+  t0.SetMaxFirstHingeSlope(opts.beadfindBfThreshold[1]/raw->baseFrameRate);
+  t0.SetMinSecondHingeSlope(opts.beadfindBfThreshold[2]/raw->baseFrameRate);
+  t0.SetMaxSecondHingeSlope(opts.beadfindBfThreshold[3]/raw->baseFrameRate);
   t0.SetBadWells(&mFilteredWells[0]);
+  t0.SetDebugLevel(opts.outputDebug);
+
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mMask);
@@ -1420,11 +1422,13 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
   copy(raw->timestamps, raw->timestamps+raw->frames, &mBFTimePoints[0]);
   T0Calc t0;
   t0.SetWindowSize(4);
-  t0.SetMinFirstHingeSlope(-10.0/raw->baseFrameRate);
-  t0.SetMaxFirstHingeSlope(3.0/raw->baseFrameRate);
-  t0.SetMinSecondHingeSlope(5.0/raw->baseFrameRate);
-  t0.SetMaxSecondHingeSlope(500.0/raw->baseFrameRate);
+  t0.SetMinFirstHingeSlope(opts.beadfindAcqThreshold[0]/raw->baseFrameRate);
+  t0.SetMaxFirstHingeSlope(opts.beadfindAcqThreshold[1]/raw->baseFrameRate);
+  t0.SetMinSecondHingeSlope(opts.beadfindAcqThreshold[2]/raw->baseFrameRate);
+  t0.SetMaxSecondHingeSlope(opts.beadfindAcqThreshold[3]/raw->baseFrameRate);
   t0.SetBadWells(&mFilteredWells[0]);
+  t0.SetDebugLevel(opts.outputDebug);
+
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mMask);
@@ -1487,11 +1491,13 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
   copy(raw->timestamps, raw->timestamps+raw->frames, &mBFTimePoints[0]);
   T0Calc t0;
   t0.SetWindowSize(4);
-  t0.SetMinFirstHingeSlope(-10.0/raw->baseFrameRate);
-  t0.SetMaxFirstHingeSlope(3.0/raw->baseFrameRate);
-  t0.SetMinSecondHingeSlope(5.0/raw->baseFrameRate);
-  t0.SetMaxSecondHingeSlope(500.0/raw->baseFrameRate);
+  t0.SetMinFirstHingeSlope(opts.beadfindAcqThreshold[0]/raw->baseFrameRate);
+  t0.SetMaxFirstHingeSlope(opts.beadfindAcqThreshold[1]/raw->baseFrameRate);
+  t0.SetMinSecondHingeSlope(opts.beadfindAcqThreshold[2]/raw->baseFrameRate);
+  t0.SetMaxSecondHingeSlope(opts.beadfindAcqThreshold[3]/raw->baseFrameRate);
   t0.SetBadWells(&mFilteredWells[0]);
+  t0.SetDebugLevel(opts.outputDebug);
+
   short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mMask);

@@ -10,6 +10,11 @@
 {% block responsive %}
 {% endblock responsive %}
 
+{% block extra_head_styles %}
+    <link type="text/css" rel="stylesheet" media="all"
+          href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css" %}"/>
+{% endblock extra_head_styles %}
+
 {% block extra_head %}
     <script id="iru-list-tmpl" type="text/x-kendo-template">
         # var asPlanned_ir_accountID = "{{ report.eas.selectedPlugins.IonReporterUploader.userInput.accountId }}"; #
@@ -36,7 +41,7 @@
     <link href="{% static "css/chosen.css" %}" rel="stylesheet"/>
     <link rel="stylesheet" type="text/css" href="{% static "jquery/colorbox/colorbox.css" %}" media="screen" />
     <script type="text/javascript" src="{% static "jquery/colorbox/jquery.colorbox.js" %}"></script>
-    <script type="text/javascript" src="{% static "resources/scripts/report.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/reports/report.js" %}"></script>
     <script type="text/javascript" src="{% static "jquery/js/jquery.tools.min.js" %}"></script>
     <script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js" %}"></script>
@@ -45,6 +50,8 @@
     <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js" %}"></script>
     <script src="{% static "js/chosen.jquery.min.js" %}"></script>
     <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "js/iframe.js"%}"></script>
     <link rel="stylesheet" type="text/css" href="{% static "resources/styles/print.css" %}" media="print" />
     <link rel="stylesheet" type="text/css" href="{% static "resources/styles/report.css" %}" media="screen" />
     <link type="text/css" rel="stylesheet" media="screen" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" %}" />
@@ -54,7 +61,6 @@
     {% endif %}
     <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js" %}"></script>
-    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css" %}" />
 
     <style>
         /* When an entire menu is disabled */
@@ -152,7 +158,7 @@ report
 
     <!-- a dynamic-navbar-section="" dynamic-navbar-section-title="Run Summary" href="#RunSummary">
         <h2 id="report" data-pk="{{ report.pk }}" data-web="{{ report.reportWebLink }}" data-php="{{ report.reportLink }}">
-            <span rel="tooltip"  data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">Run Summary:</span> {{ report.experiment.expName }}
+            <span rel="tooltip"  data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">Run Summary:</span> {{ report.experiment.displayName }}
         </h2>
     </a -->
 
@@ -168,13 +174,16 @@ report
 
     <h2 id="report" data-pk="{{ report.pk }}">
         <span rel="tooltip" data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">
-            Run Summary: {{ report.experiment.expName }}
+            Run Summary: {{ report.experiment.displayName }}
         </span>
     </h2>
 
     <section id="RunSummary" {% spaceless  %} {%if not datasets.barcode_config %} class="no_barcodes" {% endif %} {% endspaceless %}>
         <div class="row-fluid">
-            <div id="nameRow" class="span12">
+            <div class="span6">
+                <h3 class="pull-left muted">{{ report.timeStamp | date:"M j Y" }}</h3>
+            </div>
+            <div id="nameRow" class="span6">
                 <div id="resultSet" class="pull-right">
                     <form class="form-horizontal">
                         <div class="control-group">
@@ -254,13 +263,13 @@ report
                 {# map #}
                 {% include "rundb/reports/blocks/map.html" %}
 
-                {% if isToShowRawReadAccuracy %}
+                {% if isToShowExtraStats %}
                     {# raw accuracy #}
                     {% include "rundb/reports/blocks/raw.html" %}
+                    {# alignment #}
+                	{% include "rundb/reports/blocks/alignment.html" %}
                 {% endif %}
 
-                {# alignment #}
-                {% include "rundb/reports/blocks/alignment.html" %}
         </div><!-- row-fluid -->
             {% else %}
         <h2>

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 #clear
-default_port=$(route|awk '/default/{print $8}')
+default_port=$(/sbin/route|awk '/default/{print $8}')
 
 #================Look up the MAC address for default network =========================
 echo "=================================================================="
@@ -111,7 +111,7 @@ echo
 echo "=================================================================="
 echo "-----Testing connection to the Ion Torrent update server-----"
 
-if eval "/usr/bin/wget -o /tmp/log -O - http://ionupdates.com/updates/software/lucid/Packages.gz >/dev/null"
+if eval "/usr/bin/wget -o /tmp/log -O - http://ionupdates.com/updates/software/trusty/Packages.gz >/dev/null"
 then
     echo "GOOD - Successful connection to ionupdates.com"
 	rm -f Packages.gz 2>/dev/null
@@ -131,7 +131,7 @@ echo "-----Checking to see if Sequencers are connected to this server-----"
 interfaces=$(ls -1 /sys/class/net|grep -v 'lo')
 cnt=1
 for i in ${interfaces[@]}; do
-    addr=$(ifconfig $i|awk '/inet addr/{print $2}'|cut -f2 -d:|cut -f1-3 -d.)".10"
+    addr=$(/sbin/ifconfig $i|awk '/inet addr/{print $2}'|cut -f2 -d:|cut -f1-3 -d.)".10"
     if ping -c 2 $addr &> /dev/null
     then
 	echo "Slot${cnt} - connected"

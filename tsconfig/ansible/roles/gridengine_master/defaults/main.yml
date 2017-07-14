@@ -19,5 +19,5 @@ S_STACK_LIMIT: 8M
 SCRIPT_PATH: /usr/share/ion-tsconfig/gridengine-scripts/
 PROLOG_SCRIPT: plugin-prolog.sh
 EPILOG_SCRIPT: plugin-epilog.sh
-LOCAL_PROLOG_SCRIPT: files/{{PROLOG_SCRIPT}}
-LOCAL_EPILOG_SCRIPT: files/{{EPILOG_SCRIPT}}
+LOCAL_PROLOG_SCRIPT: files/{{ PROLOG_SCRIPT }}
+LOCAL_EPILOG_SCRIPT: files/{{ EPILOG_SCRIPT }}

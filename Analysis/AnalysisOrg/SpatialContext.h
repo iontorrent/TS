@@ -25,6 +25,7 @@ class SpatialContext{
     int regionsY;
     Region *cropRegions;
     int numCropRegions;
+    bool isCropped;
      int cropped_region_x_offset;
     int cropped_region_y_offset;
     int chip_offset_x;

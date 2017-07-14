@@ -109,9 +109,13 @@ float BasicSigmaGenerator::RetrieveApproximateWeight(float x_val){
 }
 
 // Notice that now prediction and residuals contain only test flows!
-void BasicSigmaGenerator::AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals){
+void BasicSigmaGenerator::AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals, vector<float> &measurements_var){
+  bool is_non_empty_measurements_var = not measurements_var.empty();
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
      float y_val =residuals[t_flow]*residuals[t_flow];
+     if (is_non_empty_measurements_var){
+    	 y_val += measurements_var[t_flow];  // add the variance of the measurements if it is a consensus read.
+     }
      // handle skew
      // note that this is >opposite< t-dist formula
      if (residuals[t_flow]>0)
@@ -146,14 +150,14 @@ void BasicSigmaGenerator::AddShiftUpdateForHypothesis(vector<float> &prediction,
 
 void BasicSigmaGenerator::AddShiftCrossUpdate(CrossHypotheses &my_cross, float discount){
    for (unsigned int i_hyp=1; i_hyp<my_cross.residuals.size(); i_hyp++){  // no outlier values count here
-      AddShiftUpdateForHypothesis(my_cross.predictions[i_hyp], my_cross.mod_predictions[i_hyp], discount, my_cross.responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow);
+      AddShiftUpdateForHypothesis(my_cross.predictions[i_hyp], my_cross.mod_predictions[i_hyp], discount, my_cross.weighted_responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow);
    }
 }
 
 
 void BasicSigmaGenerator::AddCrossUpdate(CrossHypotheses &my_cross){
    for (unsigned int i_hyp=0; i_hyp<my_cross.residuals.size(); i_hyp++){  // no outlier values count here
-      AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], my_cross.responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow, my_cross.residuals[i_hyp]);
+      AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], my_cross.weighted_responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow, my_cross.residuals[i_hyp], my_cross.measurement_var);
    }
 }
 
@@ -165,7 +169,7 @@ void BasicSigmaGenerator::AddNullUpdate(CrossHypotheses &my_cross){
   for (unsigned int i_flow=0; i_flow<all_flows.size(); i_flow++)
     all_flows[i_flow] = i_flow;
   */
-  AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], 1.0f, 1.0f, my_cross.test_flow, my_cross.residuals[i_hyp]);
+  AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], 1.0f, 1.0f, my_cross.test_flow, my_cross.residuals[i_hyp], my_cross.measurement_var);
 
 }
 
@@ -245,6 +249,22 @@ void StrandedSigmaGenerator::DoStepForSigma(ShortStack &total_theory){
   UpdateSigmaGenerator(total_theory);
   UpdateSigmaEstimates(total_theory);
   total_theory.UpdateRelevantLikelihoods();
+  PrintDebug();
+}
+
+void StrandedSigmaGenerator::PrintDebug(bool print_updated){
+  if(DEBUG > 1){
+	cout << "    + Latent sigma" << (print_updated? " updated ": ":") << endl
+		 << "      - FWD: (amplitude, sigma) = ";
+	int max_level_debug = min(10 , fwd.max_level);
+	for (int i = 0; i < max_level_debug + 1; ++i)
+		cout << "("<< i << ", " << fwd.latent_sigma[i] <<"), ";
+	cout<< endl << "      - REV: (amplitude, sigma) = ";
+	max_level_debug = min(10 , rev.max_level);
+	for (int i = 0; i < max_level_debug + 1; ++i)
+		cout << "("<< i << ", " << rev.latent_sigma[i] <<"), ";
+  cout << endl;
+  }
 }
 
 void StrandedSigmaGenerator::UpdateSigmaGenerator(ShortStack &total_theory){

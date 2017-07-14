@@ -60,6 +60,7 @@ $(document).ready(function(){
                 , model: {
                     fields: {
                         id: { type: "number" }
+                        , index: { type: "number" }
                         , id_str: { type: "string" }
                         , name: { type: "string" }
                         , adapter: { type: "string" }
@@ -70,7 +71,7 @@ $(document).ready(function(){
                 }
             }
             , serverSorting: true
-            , sort: { field: "id_str", dir: "asc" }
+            , sort: { field: "index", dir: "asc" }
             , serverPaging: true                        	
         	, pageSize: 16
         }
@@ -81,7 +82,11 @@ $(document).ready(function(){
         , sortable: true
         , pageable: true
 		, columns: [
-			{
+            {
+                field: "index",
+                title: "Index",
+                width: 70
+            },{
                 field: "id_str"
                 , title: "ID"
                 , template: kendo.template($("#barcodeNameCellTemplate").html())
