@@ -31,8 +31,9 @@ def get_userInfoDict(row,workflowObj, rowCount, setid_suffix):
         "setid": userInput_setid,
         "cancerType": row.get(PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE),
         "cellularityPct": row.get(PlanCSVcolumns.COLUMN_SAMPLE_CELLULARITY),
-        "biopsyDays": row.get(PlanCSVcolumns.COLUMN_SAMPLE_BIOSPY_DAYS),
+        "biopsyDays": row.get(PlanCSVcolumns.COLUMN_SAMPLE_BIOPSY_DAYS),
         "barcodeId": row.get(PlanCSVcolumns.COLUMN_BARCODE),
+        "cellNum": row.get(PlanCSVcolumns.COLUMN_SAMPLE_CELL_NUM),
         "coupleID": row.get(PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID),
         "embryoID": row.get(PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID),
         "Workflow": row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW),
@@ -76,6 +77,16 @@ def get_samples_content_single_csv(csvPlanDict):
     irSetings = get_irSettings()
     for param in irSetings:
         single_csv_samplesDict[param] = csvPlanDict.get(param)
+
+    annotations = [PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE,
+                    PlanCSVcolumns.COLUMN_SAMPLE_CELLULARITY,
+                    PlanCSVcolumns.COLUMN_SAMPLE_BIOPSY_DAYS,
+                    PlanCSVcolumns.COLUMN_SAMPLE_CELL_NUM,
+                    PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID,
+                   PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID]
+    for param in annotations:
+        if param in csvPlanDict:
+            single_csv_samplesDict[param] = csvPlanDict[param]
 
     samples_contents.append(single_csv_samplesDict)
 

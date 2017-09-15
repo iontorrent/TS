@@ -59,7 +59,7 @@
                 "germline_low_stringency_pgm", 
                 "germline_low_stringency"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - PGM (3xx) - Germ Line - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
@@ -165,7 +165,7 @@
                 "germline_low_stringency_520_530", 
                 "germline_low_stringency"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - S5/S5XL (510/520/530) - Germ Line - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
@@ -271,7 +271,7 @@
                 "germline_low_stringency_540", 
                 "germline_low_stringency_proton"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - S5/S5XL (540) - Germ Line - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
@@ -375,7 +375,7 @@
                 "germline_low_stringency_p1", 
                 "germline_low_stringency_proton"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - Proton P1 - Germ Line - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
@@ -479,7 +479,7 @@
                 "somatic_low_stringency_pgm", 
                 "somatic_low_stringency"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - PGM (3xx) - Somatic - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Optimized for allele frequencies >2.5% and high sensitivity", 
@@ -585,7 +585,7 @@
                 "somatic_low_stringency_520_530", 
                 "somatic_low_stringency"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - S5/S5XL (510/520/530) - Somatic - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Optimized for allele frequencies >2.5% and high sensitivity", 
@@ -693,7 +693,7 @@
                 "somatic_low_stringency_p1_540", 
                 "somatic_low_stringency_proton"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - P1 or S5/S5XL (540)- Somatic - Low Stringency", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for low frequency variants and minimum false negatives", 
@@ -800,7 +800,7 @@
                 "nonampliseq_germline_low_stringency_p1_540", 
                 "nonampliseq_germline_low_stringency_proton"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Generic - Proton - Germ Line - Low Stringency - non-Ampliseq", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on non-AmpliSeq libraries", 
             "based_on": "targetseq_germline_lowstringency_p1_parameters.json", 
@@ -916,7 +916,7 @@
             "replaces": [
                 "tagseq_cfdna"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Oncomine Liquid Biopsy DNA - PGM (318) or S5/S5XL (5xx)", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "unifyargs": "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on", 
@@ -930,7 +930,8 @@
                     "520", 
                     "530", 
                     "540", 
-                    "pgm"
+                    "pgm", 
+                    "proton_p1"
                 ], 
                 "frequency": [
                     "rare_somatic"
@@ -1030,7 +1031,7 @@
             "replaces": [
                 "tagseq_ffpe"
             ], 
-            "ts_version": "5.4", 
+            "ts_version": "5.6", 
             "name": "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)", 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "unifyargs": "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on", 
@@ -1044,7 +1045,8 @@
                     "520", 
                     "530", 
                     "540", 
-                    "pgm"
+                    "pgm", 
+                    "proton_p1"
                 ], 
                 "frequency": [
                     "rare_somatic"

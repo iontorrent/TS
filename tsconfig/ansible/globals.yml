@@ -24,7 +24,7 @@
   stat: path='group_vars/{{ ansible_product_name }}'
   register: p
 - include_vars: 'group_vars/{{ ansible_product_name }}'
-  when: p.stat.exists
+  when: p.stat.exists and p.stat.isdir == False
 # ...or if its an S5, load the S5 variables
 - include_vars: 'group_vars/S5'
   when: S5_virtual_guest
@@ -60,3 +60,7 @@
   when: cidr_response|success
 
 - debug: var=CIDR
+
+# setup the spool directory
+- name: Create the ion spool directory
+  file: path=/var/spool/ion owner=www-data group=www-data mode=0775 state=directory

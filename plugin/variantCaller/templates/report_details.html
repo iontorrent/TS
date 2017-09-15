@@ -484,7 +484,7 @@
     </div>
   </div>
   <div class="clearfix" style="margin-bottom:10px;">
-    <a href="http://tools.thermofisher.com/content/sfs/manuals/MAN0014668_Torrent_Suite_RUO_Help.pdf">How to optimize variant caller parameters</a>
+    <a href="http://tools.thermofisher.com/content/sfs/manuals/MAN0014668_Torrent_Suite_RUO_Help.pdf">How to optimize Torrent Variant Caller parameters?</a>
   </div>
 
   <div class="clearfix collapse" id="filter_settings" style="height:0px;">
@@ -495,14 +495,23 @@
           <th rowspan=2 style="vertical-align:middle; text-align:right;"># No Calls</th>
           <th rowspan=2 style="vertical-align:middle; text-align:right;">Column</th>
           <th colspan=3>Parameter threshold value</th></tr>
-      <tr><th>SNP</th><th>INDEL</th><th>Hotspot</th></tr>
+      <tr><th>SNP</th><th>INDEL</th><th>MNP</th><th>Hotspot</th></tr>
     </thead>
     <tbody>
+      <tr><td><div class="row-fluid parameter-name">Minimum allele frequency</div><div class="row-fluid parameter-subname">min_allele_freq</div></td>
+          <td style="text-align:right;"> - </td>
+          <td style="text-align:right;">Allele Frequency &lt;</td>
+          <td><input id="edit_snp_min_allele_freq" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.snp_min_allele_freq}}"></td>
+          <td><input id="edit_indel_min_allele_freq" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.indel_min_allele_freq}}"></td>
+          <td><input id="edit_mnp_min_allele_freq" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.mnp_min_allele_freq}}"></td>          
+          <td><input id="edit_hotspot_min_allele_freq" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.hotspot_min_allele_freq}}"></td>
+      </tr>    
       <tr><td><div class="row-fluid parameter-name">Minimum quality</div><div class="row-fluid parameter-subname">min_variant_score</div></td>
           <td style="text-align:right;">{{summary.filters.min_variant_score.filtered}}</td>
           <td style="text-align:right;">Quality &lt;</td>
           <td><input id="edit_snp_min_variant_score" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.snp_min_variant_score}}"></td>
           <td><input id="edit_indel_min_variant_score" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.indel_min_variant_score}}"></td>
+          <td><input id="edit_mnp_min_variant_score" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.mnp_min_variant_score}}"></td>          
           <td><input id="edit_hotspot_min_variant_score" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.hotspot_min_variant_score}}"></td>
       </tr>
 
@@ -511,6 +520,7 @@
           <td style="text-align:right;">Coverage &lt;</td>
           <td><input id="edit_snp_min_coverage" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.snp_min_coverage}}"></td>
           <td><input id="edit_indel_min_coverage" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.indel_min_coverage}}"></td>
+          <td><input id="edit_mnp_min_coverage" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.mnp_min_coverage}}"></td>          
           <td><input id="edit_hotspot_min_coverage" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.hotspot_min_coverage}}"></td>
       </tr>
 
@@ -519,6 +529,7 @@
           <td style="text-align:right;">Coverage + or - &lt;</td>
           <td><input id="edit_snp_min_cov_each_strand" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.snp_min_cov_each_strand}}"></td>
           <td><input id="edit_indel_min_cov_each_strand" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.indel_min_cov_each_strand}}"></td>
+          <td><input id="edit_mnp_min_cov_each_strand" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.mnp_min_cov_each_strand}}"></td>          
           <td><input id="edit_hotspot_min_cov_each_strand" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.hotspot_min_cov_each_strand}}"></td>
       </tr>
 
@@ -528,6 +539,7 @@
           <td style="text-align:right;">Strand Bias &gt;</td>
           <td><input id="edit_snp_strand_bias" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.snp_strand_bias}}"></td>
           <td><input id="edit_indel_strand_bias" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.indel_strand_bias}}"></td>
+          <td><input id="edit_mnp_strand_bias" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.mnp_strand_bias}}"></td>          
           <td><input id="edit_hotspot_strand_bias" class="miniedit" type="text" value="{{options.parameters.torrent_variant_caller.hotspot_strand_bias}}"></td>
       </tr>
 
@@ -535,39 +547,39 @@
           <td><div class="row-fluid parameter-name">Minimum relative read quality</div><div class="row-fluid parameter-subname">data_quality_stringency</div></td>
           <td style="text-align:right;">{{summary.filters.data_quality_stringency.filtered}}</td>
           <td style="text-align:right;">Relative Read Quality &lt;</td>
-          <td colspan=3><input id="edit_data_quality_stringency" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.data_quality_stringency}}"></td>
+          <td colspan=4><input id="edit_data_quality_stringency" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.data_quality_stringency}}"></td>
       </tr>
 
       <tr>
           <td><div class="row-fluid parameter-name">Maximum common signal shift</div><div class="row-fluid parameter-subname">filter_unusual_predictions</div></td>
           <td style="text-align:right;">{{summary.filters.filter_unusual_predictions.filtered}}</td>
           <td style="text-align:right;">Common Signal Shift &gt;</td>
-          <td colspan=3><input id="edit_filter_unusual_predictions" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.filter_unusual_predictions}}"></td>
+          <td colspan=4><input id="edit_filter_unusual_predictions" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.filter_unusual_predictions}}"></td>
       </tr>
 
       <tr>
           <td><div class="row-fluid parameter-name">Maximum reference/variant signal shift (insertions)</div><div class="row-fluid parameter-subname">filter_insertion_predictions</div></td>
           <td style="text-align:right;">{{summary.filters.filter_x_predictions.filtered}}</td>
           <td style="text-align:right;">Reference or Variant Signal Shift &gt;</td>
-          <td colspan=3><input id="edit_filter_insertion_predictions" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.filter_insertion_predictions}}"></td>
+          <td colspan=4><input id="edit_filter_insertion_predictions" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.filter_insertion_predictions}}"></td>
       </tr>
 
       <tr>
           <td><div class="row-fluid parameter-name">Maximum reference/variant signal shift (deletions)</div><div class="row-fluid parameter-subname">filter_deletion_predictions</div></td>
           <td style="text-align:right;">{{summary.filters.filter_x_predictions.filtered}}</td>
           <td style="text-align:right;">Reference or Variant Signal Shift &gt;</td>
-          <td colspan=3><input id="edit_filter_deletion_predictions" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.filter_deletion_predictions}}"></td>
+          <td colspan=4><input id="edit_filter_deletion_predictions" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.filter_deletion_predictions}}"></td>
       </tr>
 
       <tr>
           <td><div class="row-fluid parameter-name">Maximum homopolymer length</div><div class="row-fluid parameter-subname">hp_max_length</div></td>
           <td style="text-align:right;">{{summary.filters.hp_max_length.filtered}}</td>
           <td style="text-align:right;">HP Length &gt;</td>
-          <td colspan=3><input id="edit_hp_max_length" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.hp_max_length}}"></td>
+          <td colspan=4><input id="edit_hp_max_length" class="mediumedit" type="text" value="{{options.parameters.torrent_variant_caller.hp_max_length}}"></td>
       </tr>
 
-      <tr><td colspan=6></td></tr>
-
+      <tr><td colspan=7></td></tr>
+<!--
       <tr>
           <td><div class="row-fluid parameter-name">Context error on one strand</div></td>
           <td style="text-align:right;">{{summary.filters.sse_one_strand.filtered}}</td>
@@ -583,17 +595,20 @@
           <td style="text-align:right;">{{summary.filters.rejection.filtered}}</td>
           <td colspan=4 style="color:#c0c0c0;">Not user configurable</td>
       </tr>
-
+-->
     </tbody>
     </table>
 
     <div class="clearfix">
-      <div id="rerun_message" class="pull-left"></div>
-      <input id="postbutton" class="btn btn-primary pull-right" type="submit" disabled="disabled" value="Rerun Variant Caller">
+      <h2 style="float:left;margin-bottom:0px;">Save Adjusted Parameters:</h2>
     </div>
-
-  </div>
-
+   	<div id="rerun_message"> </div>     
+    <div>
+	  Configuration Name: <input id="new_config_name" class="largeedit" type="text" value="">
+	</div>
+	<div>
+       <input id="postbutton" class="btn btn-primary" type="submit" value="Save to Configuration">
+	</div>
 </div>
 {% endif %}
 
@@ -617,97 +632,88 @@ $(function () {
   });
 
 
-
-  var local_parameters = {};
-
-  $.ajax({
-    type: "GET",
-    url: "{{parameter_name}}",
-    dataType: "json"
-  }).done(function (data) {
-    local_parameters = data;
-    if (!("meta" in local_parameters))
-      local_parameters["meta"] = {};
-    local_parameters["meta"]["reference"]           = "{{startplugin_json.runinfo.library}}";
-    {% if options.library_type == "Whole Genome" %}
-        local_parameters["meta"]["librarytype"]     = "wholegenome";
-    {% elif options.library_type == "AmpliSeq" %}
-        local_parameters["meta"]["librarytype"]     = "ampliseq";
-    {% elif options.library_type == "TargetSeq" %}
-        local_parameters["meta"]["librarytype"]     = "targetseq";
-    {% endif %}
-    local_parameters["meta"]["targetregions"]       = "{{options.targets_bed_unmerged}}";
-    local_parameters["meta"]["targetregions_merge"] = "{{options.targets_bed_merged}}";
-    local_parameters["meta"]["targetregions_id"]    = "{{options.targets_name}}";
-    local_parameters["meta"]["targetloci"]          = "{{options.hotspots_bed_unmerged}}";
-    local_parameters["meta"]["targetloci_merge"]    = "{{options.hotspots_bed_merged}}";
-    local_parameters["meta"]["targetloci_id"]       = "{{options.hotspots_name}}";
-    local_parameters["meta"]["configuration"]       = "custom";
-    local_parameters["meta"]["trimreads"]           = {% if options.trim_reads %} true; {% else %} false; {% endif %}
-
-    $("#postbutton").removeAttr('disabled');
-  }).fail(function () {
-    console.log("failed to load json config file");
-  });
-
-
-  $('#postbutton').click(function () {
-
-
-    bootbox.confirm("Are you sure you want to rerun Variant Caller? The previous plugin data will be overwritten.", function(result) {
-        if (result){
-            $('#postbutton').attr('disabled','disabled')
-            $("#postbutton").val("Submitting...");
-            pluginAPIJSON = {
-                "plugin": ["{{options.plugin_name}}"],
-                "pluginconfig": local_parameters
-            };
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_coverage"] = $("#edit_snp_min_coverage").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_coverage"] = $("#edit_indel_min_coverage").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_coverage"] = $("#edit_hotspot_min_coverage").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_cov_each_strand"] = $("#edit_snp_min_cov_each_strand").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_cov_each_strand"] = $("#edit_indel_min_cov_each_strand").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_cov_each_strand"] = $("#edit_hotspot_min_cov_each_strand").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_strand_bias"] = $("#edit_snp_strand_bias").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_strand_bias"] = $("#edit_indel_strand_bias").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_strand_bias"] = $("#edit_hotspot_strand_bias").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_variant_score"] = $("#edit_snp_min_variant_score").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_variant_score"] = $("#edit_indel_min_variant_score").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_variant_score"] = $("#edit_hotspot_min_variant_score").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hp_max_length"] = $("#edit_hp_max_length").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_unusual_predictions"] = $("#edit_filter_unusual_predictions").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_insertion_predictions"] = $("#edit_filter_insertion_predictions").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_deletion_predictions"] = $("#edit_filter_deletion_predictions").val();
-            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["data_quality_stringency"] = $("#edit_data_quality_stringency").val();
-            pluginAPIJSON = JSON.stringify(pluginAPIJSON);
-
-            pluginURL = "/rundb/api/v1/results/{{startplugin_json.runinfo.pk}}/plugin/";
-            console.log(pluginAPIJSON);
-            console.log(pluginURL);
-
-            $.ajax({
-                type: 'POST',
-                url: pluginURL,
-                async: false,
-                contentType: "application/json; charset=utf-8",
-                data: pluginAPIJSON,
-                dataType: "json"
-            }).done(function(data) {
-                        $("#postbutton").val("Success");
-                        $("#rerun_message").html('Plugin relaunch has been submitted. Check run report page.');
-                        //'<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
-
-                    });
-        }
-
+  function get_existing_configuration_names() {
+    var plugin_extend = "/rundb/api/v1/plugin/" + "{{startplugin_json.runinfo.plugin_name}}";
+	    plugin_extend += "/extend/get_config_names/?format=json";
+    //request the data from the extend.py get_config_names endpoint.
+    var existing_config_names = $.ajax({
+        url: plugin_extend,
+        async: false,
+        dataType: "json"
     });
+    existing_config_names.done(function (data) {
+    	existing_config_names = data;
+       });
+    return existing_config_names;
+  };
+  
+  function save_to_config(){
+	    $('#postbutton').attr('disabled','disabled')
+	    $("#postbutton").val("Submitting...");
+	    var adjusted_params = {};
+	    var params = ['filter_unusual_predictions', 'filter_insertion_predictions', 'filter_deletion_predictions', 'data_quality_stringency'];
+	    var allele_types = ['snp', 'mnp', 'indel', 'hotspot'];
+	    var basic_params = ['min_allele_freq', 'min_coverage', 'min_cov_each_strand', 'strand_bias', 'min_variant_score'];
+	    for (var idx1 = 0; idx1 < basic_params.length; idx1++){
+		    for (var idx2 = 0; idx2 < allele_types.length; idx2++){
+		    	params.push(allele_types[idx2] + '_' + basic_params[idx1]);
+	    	}
+	    }
+	    for (var idx = 0; idx < params.length; idx++){
+	    	if ($("#edit_" + params[idx]).val() != ''){
+	    		adjusted_params[params[idx]] = $("#edit_" + params[idx]).val();
+	    	}
+	    }
+	    adjusted_params = JSON.stringify(adjusted_params);
+	    var plugin_extend = "/rundb/api/v1/plugin/" + "{{startplugin_json.runinfo.plugin_name}}";
+	    plugin_extend += "/extend/save_adjusted_param_to_configuration/?format=json";
+	    plugin_extend += "&plugin_result_path=" + "{{startplugin_json.runinfo.results_dir}}"
+        {% if barcode %}
+		    plugin_extend += "&barcode={{barcode}}";
+        {% endif %}
+        plugin_extend += "&config_name=" + $("#new_config_name").val();
+        plugin_extend += "&adjusted_params=" + adjusted_params;
+        
+        var results = $.ajax({
+            url: plugin_extend,
+            async: false,
+            dataType: "json"
+        });
+        results.done(function (data) {
+        	results = data;
+        });
 
-
-
-
+        if ('Error' in results){
+    		var error_text = '<div class="alert alert-danger" role="alert"> <i class="icon-info-sign"></i> <span class="sr-only"> <strong> Error: </strong> </span>' +  results['Error'] + '</div>';
+            $("#rerun_message").html(error_text);
+        }else{
+        	var success_text = '<div class="alert alert-success"> <strong>Success!</strong> Adjusted parameters have been save to Configuration "' + $("#new_config_name").val() + '".</div>';
+        	$("#rerun_message").html(success_text);
+        }
+        $("#postbutton").removeAttr('disabled');
+	    $("#postbutton").val("Save to Configuration");
+  };
+  
+  $('#postbutton').click(function () {
+	var existing_config_names = get_existing_configuration_names();
+	var new_config_name = $("#new_config_name").val();
+	// I don't allow empty configuration name because it will cause some problems.
+	if (new_config_name == ''){
+		bootbox.alert("Please enter a Configuration Name.");
+		return;
+	}
+	if (existing_config_names.indexOf(new_config_name) >= 0){
+    	bootbox.confirm('The configuration "' + new_config_name + '" existis. Do you want to overwrite it?', function(result){
+        	if (result){
+    			save_to_config();
+    		}
+    	});
+	}
+	else{
+		save_to_config();
+	}
   });
 });
-
 </script>
 
 

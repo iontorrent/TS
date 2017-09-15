@@ -79,7 +79,7 @@ from operator import itemgetter
 import httplib2
 from iondb.utils import toBoolean
 from iondb.utils.TaskLock import TaskLock
-from iondb.utils.utils import is_internal_server
+from iondb.utils.utils import is_internal_server, is_endTime_after_startTime
 
 import urllib
 import re
@@ -99,6 +99,7 @@ from iondb.rundb import tasks
 from iondb.rundb.data import dmactions_types
 
 from iondb.plugins.manager import pluginmanager
+from iondb.plugins.tasks import scan_plugin
 
 # shared functions for making startplugin json
 from iondb.plugins.launch_utils import get_plugins_dict
@@ -445,7 +446,7 @@ class ProjectResource(ModelResource):
         ordering = field_list + ['resultsCount']
         filtering = field_dict(field_list)
 
-        authentication = IonAuthentication(ion_mesh_data_type="data")
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
 
 
@@ -1100,6 +1101,44 @@ class ResultsResource(BaseMetadataResource):
         scan_for_orphaned_plugin_results_allowed_methods = ['get']
 
 
+class ExperimentValidation(Validation):
+
+    def is_valid(self, bundle, request=None):
+        if not bundle.data:
+            return {'__all__': 'Fatal Error, no bundle!'}
+
+        errors = {}
+        key_remainingSeconds = "chefRemainingSeconds"
+        value = bundle.data.get(key_remainingSeconds, "")
+        if value:
+            try:
+                bundle.data[key_remainingSeconds] = int(float(value))
+            except ValueError:
+                errors[key_remainingSeconds] = "Attribute " + key_remainingSeconds + " requires a numeric value."
+
+        key_timeStart = "chefStartTime"
+        key_timeEnd = "chefEndTime"
+        
+        if key_timeStart in bundle.data:
+            startTime = bundle.data.get(key_timeStart, "")
+        else:
+            startTime = bundle.obj.chefStartTime if bundle.obj else ""
+        
+        if key_timeEnd in bundle.data:
+            endTime = bundle.data.get(key_timeEnd, "")
+        else:
+            endTime = bundle.obj.chefEndTime if bundle.obj else ""
+
+        if not is_endTime_after_startTime(startTime, endTime):
+            errors[key_timeEnd] = "Attribute " + key_timeEnd + " cannot be earlier than the start time"
+            
+        if errors:
+            logger.error("Experiment has validation errors. Errors=%s" % (errors))
+            raise ValidationError(json.dumps(errors))
+
+        return errors
+
+
 class ExperimentResource(BaseMetadataResource):
 
     def prepend_urls(self):
@@ -1111,7 +1150,7 @@ class ExperimentResource(BaseMetadataResource):
 
         return urls
 
-    results = fields.ToManyField(ResultsResource, 'results_set')
+    results = fields.ToManyField(ResultsResource, 'results_set', null=True, blank=True)
 
     runtype = CharField('runtype')
 
@@ -1148,16 +1187,13 @@ class ExperimentResource(BaseMetadataResource):
         try:
             analysis_params = json.loads(request.body)
             directory = analysis_params['directory']
-            thumbnail_only  = analysis_params['thumbnail_only']
+            is_thumbnail  = analysis_params['is_thumbnail']
 
             logger.info("Changing permissions on " + directory)
             subprocess.check_call(['chmod', '-R', 'a+w', directory])
 
             # start the analysis here
-            cmd = ["/opt/ion/iondb/bin/from_wells_analysis.py"]
-            if thumbnail_only:
-                cmd.append("--thumbnail-only")
-            cmd.append(directory)
+            cmd = ["/opt/ion/iondb/bin/from_wells_analysis.py", str(is_thumbnail), directory]
 
             # do the work!
             with open(os.path.join(directory, 'stdout.log'), 'w') as log_file:
@@ -1193,9 +1229,10 @@ class ExperimentResource(BaseMetadataResource):
 
         projects_allowed_methods = ['get']
         from_wells_allowed_methods = ['post']
-
+        allowed_methods = ['get','patch', 'put','delete']
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+        validation = ExperimentValidation()
 
 
 class SampleResource(ModelResource):
@@ -1212,7 +1249,7 @@ class SampleResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
-        authentication = IonAuthentication(ion_mesh_data_type="data")
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
         allowed_methods = ['get', 'post', 'put']
 
@@ -1412,6 +1449,15 @@ class SampleSetResource(ModelResource):
 
         return bundle
 
+
+    def hydrate_libraryPrepInstrumentData(self, bundle):
+        libraryPrepInstrumentData = bundle.data.get('libraryPrepInstrumentData', None)
+        if libraryPrepInstrumentData and bundle.obj.libraryPrepInstrumentData:
+            bundle.data['libraryPrepInstrumentData']['pk'] = bundle.obj.libraryPrepInstrumentData.pk
+
+        return bundle
+
+
     def obj_update(self, bundle, **kwargs):
         bundle = super(SampleSetResource, self).obj_update(bundle, **kwargs)
 
@@ -1462,10 +1508,12 @@ class SampleSetResource(ModelResource):
 #                    'samples'
 #                ).all()
 
+
         queryset = models.SampleSet.objects.all().select_related(
             'SampleGroupType_CV__displayedName'
             ).prefetch_related(
-            'samples'
+            'samples',
+            'libraryPrepInstrumentData'
             ).all()
 
         resource_name = 'sampleset'
@@ -1480,10 +1528,44 @@ class SampleSetResource(ModelResource):
         validation = SampleSetValidation()
 
 
-class SamplePrepDataResource(ModelResource):
-    sampleSet = fields.ToOneField(
-        'iondb.rundb.api.SampleSetResource', 'sampleSet', full=False, null=True, blank=True)
+class SamplePrepDataValidation(Validation):
+    def is_valid(self, bundle, request=None):
+        if not bundle.data:
+            return {'__all__': 'Fatal Error, no bundle!'}
+        
+        errors = {}
+        key_remainingSeconds = "remainingSeconds"
+        value = bundle.data.get(key_remainingSeconds, "")
+        if value:
+            try:
+                bundle.data[key_remainingSeconds] = int(float(value))
+            except ValueError:
+                errors[key_remainingSeconds] = "Attribute " + key_remainingSeconds + " requires a numeric value."
 
+        key_timeStart = "startTime"
+        key_timeEnd = "endTime"
+        
+        if key_timeStart in bundle.data:
+            startTime = bundle.data.get(key_timeStart, "")
+        else:
+            startTime = bundle.obj.startTime if bundle.obj  else ""
+
+        if key_timeEnd in bundle.data:
+            endTime = bundle.data.get(key_timeEnd, "")
+        else:
+            endTime = bundle.obj.endTime if bundle.obj  else ""
+
+        if not is_endTime_after_startTime(startTime, endTime):
+            errors[key_timeEnd] = "Attribute " + key_timeEnd + " cannot be earlier than the start time"
+            
+        if errors:
+            logger.error("SamplePrepData has validation errors. Errors=%s" % (errors))
+            raise ValidationError(json.dumps(errors))
+
+        return errors
+
+
+class SamplePrepDataResource(ModelResource):
     class Meta:
         queryset = models.SamplePrepData.objects.all()
 
@@ -1496,6 +1578,7 @@ class SamplePrepDataResource(ModelResource):
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+        validation = SamplePrepDataValidation()
 
 
 class SampleSetItemResource(ModelResource):
@@ -1730,7 +1813,7 @@ class ReferenceGenomeResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
-        authentication = IonAuthentication(ion_mesh_data_type="data")
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
 
 
@@ -1868,7 +1951,7 @@ class RigResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
-        authentication = IonAuthentication(ion_mesh_data_type="data")
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
         status_allowed_methods = ['get', 'put']
         config_allowed_methods = ['get']
@@ -1892,46 +1975,27 @@ class PluginResource(ModelResource):
     BUSY_MSG = "The package manager is currently busy with another operation, please wait a moment and try again."
 
     def prepend_urls(self):
-        # this is meant for internal use only
-        urls = [
-            url(r"^(?P<resource_name>%s)/set/(?P<keys>\w[\w/-;]*)/type%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('get_type_set'), name="api_get_type_set"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w\./-]*)/extend/(?P<extend>\w[\w/-;]*)%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('dispatch_extend'), name="api_dispatch_extend"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/type%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('dispatch_type'), name="api_dispatch_type"),
-            url(r"^(?P<resource_name>%s)/install%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_install'), name="api_dispatch_install"),
-            url(r"^(?P<resource_name>%s)/uninstall/(?P<pk>\w[\w/-]*)%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('dispatch_uninstall'), name="api_dispatch_uninstall_compat"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/uninstall%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('dispatch_uninstall'), name="api_dispatch_uninstall"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/upgrade%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('dispatch_upgrade'), name="api_dispatch_upgrade"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/(?P<version>[^/]+)/install_to_version%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view(
-                'dispatch_install_to_version'), name="api_dispatch_install_to_version"),
-            url(r"^(?P<resource_name>%s)/rescan%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/info%s$" % (
-                self._meta.resource_name, trailing_slash(
-                    )), self.wrap_view('dispatch_info'), name="api_dispatch_info"),
-            url(r"^(?P<resource_name>%s)/show%s$" %
-                (self._meta.resource_name, trailing_slash()), self.wrap_view('dispatch_show'), name="api_plugins_show"),
-            url(r"^(?P<resource_name>%s)/lineage%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_lineage'), name="api_dispatch_lineage"),
-            url(r"^(?P<resource_name>%s)/rescan%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan")
-        ]
+        """Setup all of the urls"""
+        rn = self._meta.resource_name
+        ts = trailing_slash()
 
-        return urls
+        # this is meant for internal use only
+        return [
+            url(r"^(?P<resource_name>%s)/set/(?P<keys>\w[\w/-;]*)/type%s$" % (rn, ts), self.wrap_view('get_type_set'), name="api_get_type_set"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w\./-]*)/extend/(?P<extend>\w[\w/-;]*)%s$" % (rn, ts), self.wrap_view('dispatch_extend'), name="api_dispatch_extend"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/type%s$" % (rn, ts), self.wrap_view('dispatch_type'), name="api_dispatch_type"),
+            url(r"^(?P<resource_name>%s)/install%s$" % (rn, ts), self.wrap_view('dispatch_install'), name="api_dispatch_install"),
+            url(r"^(?P<resource_name>%s)/uninstall/(?P<pk>\w[\w/-]*)%s$" % (rn, ts), self.wrap_view('dispatch_uninstall'), name="api_dispatch_uninstall_compat"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/uninstall%s$" % (rn, ts), self.wrap_view('dispatch_uninstall'), name="api_dispatch_uninstall"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/upgrade%s$" % (rn, ts), self.wrap_view('dispatch_upgrade'), name="api_dispatch_upgrade"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/(?P<version>[^/]+)/install_to_version%s$" % (rn, ts), self.wrap_view('dispatch_install_to_version'), name="api_dispatch_install_to_version"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/rescan_plugin%s$" % (rn, ts), self.wrap_view('dispatch_rescan_plugin'), name="api_dispatch_rescan_plugin"),
+            url(r"^(?P<resource_name>%s)/rescan%s$" % (rn, ts), self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/info%s$" % (rn, ts), self.wrap_view('dispatch_info'), name="api_dispatch_info"),
+            url(r"^(?P<resource_name>%s)/show%s$" % (rn, ts), self.wrap_view('dispatch_show'), name="api_plugins_show"),
+            url(r"^(?P<resource_name>%s)/lineage%s$" % (rn, ts), self.wrap_view('dispatch_lineage'), name="api_dispatch_lineage"),
+            url(r"^(?P<resource_name>%s)/rescan%s$" % (rn, ts), self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan")
+        ]
 
     def dispatch_type(self, request, **kwargs):
         return self.dispatch('type', request, **kwargs)
@@ -1944,6 +2008,9 @@ class PluginResource(ModelResource):
 
     def dispatch_rescan(self, request, **kwargs):
         return self.dispatch('rescan', request, **kwargs)
+
+    def dispatch_rescan_plugin(self, request, **kwargs):
+        return self.dispatch('rescan_plugin', request, **kwargs)
 
     def dispatch_info(self, request, **kwargs):
         return self.dispatch('info', request, **kwargs)
@@ -2180,6 +2247,11 @@ class PluginResource(ModelResource):
         pluginmanager.rescan()
         return HttpAccepted()
 
+    def get_rescan_plugin(self, request, **kwargs):
+        plugin = models.Plugin.objects.get(pk=kwargs['pk'])
+        pluginmanager.rescan([plugin])
+        return HttpAccepted()
+
     def get_info(self, request, **kwargs):
         bundle = self.build_bundle(request=request)
         plugin = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
@@ -2280,6 +2352,7 @@ class PluginResource(ModelResource):
         install_allowed_methods = ['post', ]
         uninstall_allowed_methods = ['delete']
         rescan_allowed_methods = ['get', ]
+        rescan_plugin_allowed_methods = ['get', ]
         info_allowed_methods = ['get', ]
         show_allowed_methods = ['post']
         upgrade_allowed_methods = ['post']
@@ -2530,6 +2603,21 @@ class PlannedExperimentValidation(Validation):
             if templatingKit_warning:
                 planExp_warnings["templatingKitName"] = templatingKit_warning
 
+        # validate the sample input data
+        sampleValue = bundle.data.get("sample")
+        barcodedSampleValue = bundle.data.get("barcodedSamples")
+
+        msg = "sample(for non barcoded plan) or barcodedSamples(for barcoded plan) must be provided"
+        if not sampleValue and not barcodedSampleValue and not isTemplate:
+            errors["sample"] = "Missing sample input data. Either %s" % msg
+        if sampleValue and barcodedSampleValue:
+            errors["sample"] = "Barcoded sample data exists. Only %s but not both" % msg
+            errors["barcodedSamples"] = "Non barcoded sample data exists. Only %s but not both." % msg
+        if "sample" not in errors and sampleValue:
+            err = plan_validator.validate_sample_name(value, isTemplate = isTemplate, barcodeId = bundle.data.get("barcodeId"))
+            if err:
+                errors["sample"] = err
+
         value = bundle.data.get("libraryKey","")
         noGlobal_libraryKit = None
         if not value:
@@ -2547,11 +2635,12 @@ class PlannedExperimentValidation(Validation):
             key_specific_warning = []
             if key == "planStatus":
                 err = plan_validator.validate_planStatus(value)
-            if key == "sample":
-                err = plan_validator.validate_sample_name(value)
             if key == "sampleTubeLabel":
                 err = plan_validator.validate_sample_tube_label(value)
-            if key == "barcodedSamples" and value:
+            if key == "barcodedSamples" and value and "barcodedSamples" not in errors:
+                if isTemplate:
+                    errors["barcodedSamples"] = "Invalid input. Barcoded sample information cannot be saved in the plan template"
+                    continue
                 barcodedSamples = json.loads(value) if isinstance(value, basestring) else value
                 keyErrMsg = "KeyError: Missing %s key"
                 for sample in barcodedSamples:
@@ -2877,7 +2966,7 @@ class PlannedExperimentDbResource(ModelResource):
         if custom_query is not None:
             base_object_list = base_object_list.filter(custom_query)
 
-        name_or_id = request.GET.get('name_or_id')
+        name_or_id = request.GET.get('name_or_id') or request.GET.get('name_or_id__icontains')
         if name_or_id is not None:
             qset = (
                 Q(planName__icontains=name_or_id) |
@@ -2917,7 +3006,7 @@ class PlannedExperimentDbResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
-        authentication = IonAuthentication()
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
         validation = PlannedExperimentValidation()
 
@@ -3623,7 +3712,8 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 class AvailableIonChefPlannedExperimentResource(ModelResource):
 
     experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
-
+    chipType = fields.CharField(readonly=True, attribute='get_chipType', null=True, blank=True)
+    
     def dehydrate(self, bundle):
         required_chef_fields_list = ["id",
                                      "experiment",
@@ -3639,7 +3729,8 @@ class AvailableIonChefPlannedExperimentResource(ModelResource):
                                      "sampleTubeLabel",
                                      "templatingSize",
                                      "templatingKitName",
-                                     "samplePrepProtocol"
+                                     "samplePrepProtocol",
+                                     "chipType"
                                      ]
         chef_bundle = {}
         for key,value in bundle.data.iteritems():
@@ -3660,8 +3751,7 @@ class AvailableIonChefPlannedExperimentResource(ModelResource):
         return orm_filters
 
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(
-            planStatus__in=['pending'], isReusable=False, planExecuted=False)
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable=False, planExecuted=False)
 
         # allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -3908,7 +3998,9 @@ class PlanTemplateSummaryResource(ModelResource):
 
 
 class PlanTemplateBasicInfoResource(ModelResource):
+    experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
     eas = fields.ToOneField(ExperimentAnalysisSettingsResource, 'latestEAS', null=True, full=False)
+    projects = fields.ToManyField(ProjectResource, 'projects', full=False, null=True, blank=True)
 
     # ExperimentAnalysisSettings fields
     barcodeKitName = fields.CharField(readonly=True, attribute="latestEAS__barcodeKitName", null=True, blank=True)
@@ -3918,8 +4010,7 @@ class PlanTemplateBasicInfoResource(ModelResource):
 
     templatePrepInstrumentType = fields.CharField(
         readonly=True, attribute="templatePrepInstrumentType", null=True, blank=True)
-    sequencingInstrumentType = fields.CharField(
-        readonly=True, attribute="sequencingInstrumentType", null=True, blank=True)
+    sequencingInstrumentType = fields.CharField(readonly=True, attribute="experiment__getPlatform", null=True, blank=True)
     notes = fields.CharField(readonly=True, blank=True, null=True, default='')
 
     irAccountName = fields.CharField(readonly=True, attribute="irAccountName", null=True, blank=True)
@@ -3940,6 +4031,44 @@ class PlanTemplateBasicInfoResource(ModelResource):
         ]
         return urls
 
+    def apply_filters(self, request, filters):
+        #custom_query = filters.pop("custom_platform", None)
+        base_object_list = super(PlanTemplateBasicInfoResource, self).apply_filters(request, filters)
+
+        platform = request.GET.get('platform')
+        if platform is not None:
+            chiptypes = models.Chip.objects.filter(instrumentType__iexact=platform).values_list('name', flat=True)
+            qset = (
+                Q(experiment__platform__iexact=platform) |
+                Q(experiment__chipType__in=chiptypes)
+            )
+            base_object_list = base_object_list.filter(qset)
+
+        sampleprep = request.GET.get('sampleprep')
+        if sampleprep is not None:
+            kits = models.KitInfo.objects.filter(kitType__in = ['TemplatingKit', 'IonChefPrepKit'],
+                samplePrep_instrumentType__iexact=sampleprep).values_list('name', flat=True)
+            qset = (
+                Q(templatingKitName__in=kits)
+            )
+            base_object_list = base_object_list.filter(qset)
+
+        user = request.GET.get('user')
+        if user is not None:
+            qset = ( Q(isSystem=True) ) if user == '_system' else ( Q(username=user) )
+            base_object_list = base_object_list.filter(qset)
+
+        iraccount = request.GET.get('iraccount') or request.GET.get('iraccount__icontains')
+        if iraccount:
+            qset = (
+                Q(experiment__eas_set__selectedPlugins__contains="IonReporterUploader") &
+                Q(experiment__eas_set__selectedPlugins__icontains=iraccount)
+            )
+            base_object_list = base_object_list.filter(qset)
+
+        return base_object_list.distinct()
+
+
     def dehydrate(self, bundle):
         planTemplate = bundle.obj
         eas = planTemplate.latestEAS
@@ -3952,20 +4081,12 @@ class PlanTemplateBasicInfoResource(ModelResource):
             if kits:
                 kit = kits[0]
                 if kit.kitType == "TemplatingKit":
-                    bundle.data['templatePrepInstrumentType'] = "OneTouch"
+                    if kit.samplePrep_instrumentType == "IA":
+                        bundle.data['templatePrepInstrumentType'] = "Isothermal Amplification"
+                    else:
+                        bundle.data['templatePrepInstrumentType'] = "OneTouch"
                 elif kit.kitType == "IonChefPrepKit":
                     bundle.data['templatePrepInstrumentType'] = "IonChef"
-
-        bundle.data['sequencingInstrumentType'] = ""
-        chipType = planTemplate.experiment.chipType if planTemplate.experiment else ''
-
-        if chipType:
-            chips = models.Chip.objects.filter(name=chipType)
-            if chips:
-                chip = chips[0]
-                bundle.data['sequencingInstrumentType'] = chip.instrumentType.upper()
-        else:
-            bundle.data['sequencingInstrumentType'] = planTemplate.experiment.platform.upper()
 
         notes = planTemplate.experiment.notes if planTemplate.experiment else ''
         bundle.data['notes'] = notes
@@ -3989,6 +4110,8 @@ class PlanTemplateBasicInfoResource(ModelResource):
         bundle.data['sampleGroupName'] = sampleGroup.displayedName if sampleGroup else ''
 
         bundle.data['applicationCategoryDisplayedName'] = bundle.obj.get_applicationCategoryDisplayedName(bundle.obj.categories)
+
+        bundle.data['projects'] = ','.join(bundle.obj.projects.values_list('name',flat=True))
 
         return bundle
 
@@ -4157,7 +4280,7 @@ class TorrentSuite(ModelResource):
 
     class Meta:
 
-        authentication = IonAuthentication(ion_mesh_data_type="data")
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
         update_allowed_methods = ['get', 'put']
         version_allowed_methods = ['get']
@@ -4881,17 +5004,20 @@ class CompositeDataManagementResource(ModelResource):
             state_filter = request.GET.get('%s_filter' % t, None)
             if state_filter:
                 qset = Q(dmfilestat__dmfileset__type=dm_type)
-                if state_filter == "K":
+                filter_list = state_filter.split(',')
+
+                if "K" in filter_list:
                     if dm_type == dmactions_types.SIG:
                         qset = qset & Q(experiment__storage_options='KI')
                     else:
                         qset = qset & Q(dmfilestat__preserve_data=True)
-                    qset = qset & Q(dmfilestat__action_state__in=['L', 'S', 'N', 'A', 'SE', 'EG', 'E'])
-                elif state_filter == 'P':
-                    qset = qset & Q(dmfilestat__action_state__in=[
-                                    'AG', 'DG', 'EG', 'SA', 'SE', 'S', 'N', 'A'])
-                else:
-                    qset = qset & Q(dmfilestat__action_state__in=[state_filter])
+
+                if "P" in filter_list:
+                    filter_list.extend(['AG', 'DG', 'EG', 'SA', 'SE', 'S', 'N', 'A'])
+
+                filter_list = [f for f in filter_list if f not in ['K','P']]
+                if filter_list:
+                    qset = qset & Q(dmfilestat__action_state__in=filter_list)
 
                 base_object_list = base_object_list.filter(qset)
 
@@ -5255,17 +5381,23 @@ class CompositeExperimentResource(ModelResource):
         return self.dispatch('show', request, **kwargs)
 
     def get_composite_applCatDisplayedName(self, bundle):
-        applicationCategoryDisplayedName = bundle.obj.plan.get_applicationCategoryDisplayedName(bundle.obj.plan.categories)
-        if not applicationCategoryDisplayedName:
-            try:
-                runTypeObj = models.RunType.objects.filter(runType=bundle.obj.plan.runType)
-                if runTypeObj:
-                    applicationCategoryDisplayedName = runTypeObj[0].description
-            except Exception as err:
-                applicationCategoryDisplayedName = ""
-                logger.debug("Error occured while getting the application category displayed name %s" % err)
+        applicationCategoryDisplayedName = bundle.obj.plan.get_applicationCategoryDisplayedName(bundle.obj.plan.categories) if bundle.obj and bundle.obj.plan else ""
+        try:
+            runTypeObj = models.RunType.objects.filter(runType=bundle.obj.plan.runType)
+            if runTypeObj:
+                if applicationCategoryDisplayedName:
+                    categoryDisplayedName = applicationCategoryDisplayedName
+                    categoryDisplayedName += " | "
+                    categoryDisplayedName += runTypeObj[0].description
+                else:
+                    categoryDisplayedName = runTypeObj[0].description
+            else:
+                categoryDisplayedName = applicationCategoryDisplayedName
+        except Exception as err:
+            categoryDisplayedName = applicationCategoryDisplayedName if applicationCategoryDisplayedName else ""
+            logger.debug("Error occured while getting the application category displayed name %s" % err)
 
-        return applicationCategoryDisplayedName
+        return categoryDisplayedName
 
     def dehydrate(self, bundle):
         # We used result_status to filter out experiments before. But if we picked 'Completed' we would get all exps
@@ -5438,7 +5570,7 @@ class CompositeExperimentResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
-        authentication = IonAuthentication(ion_mesh_data_type="data")
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
         # This query is expensive, and used on main data tab.
         # Cache frequent access
@@ -5946,6 +6078,30 @@ class GetChefScriptInfoResource(ModelResource):
 
         return self.create_response(request, result)
 
+    def get_schema(self, request, **kwargs):
+        schema = {
+            "allowed_detail_http_methods": [],
+            "allowed_list_http_methods": [
+                "get",
+            ],
+            "default_format": "application/json",
+            "default_limit": 0,
+            "fields": {
+                "availableversion": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "A dictionary of data. Ex: {'Compatible_Chef_release': ['IC.5.4.0'], 'IS_scripts': '00515'}",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "dict",
+                    "unique": False
+                }
+            },
+            "filtering": {},
+            "ordering": []
+        }
+        return HttpResponse(json.dumps(schema), content_type="application/json")
+
     class Meta:
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
@@ -5957,56 +6113,17 @@ class IonMeshNodeResource(ModelResource):
 
     class Meta:
         queryset = models.IonMeshNode.objects.all()
-        authentication = IonAuthentication(ion_mesh_data_type="admin")
+
+        field_list = models.IonMeshNode._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication(ion_mesh_access=True)
         authorization = DjangoAuthorization()
         allowed_methods = ['patch', 'get', 'delete']
         system_id_allowed_methods = ['get', 'options']
-        retrieve_key_allowed_methods = ['get']
-        assign_key_allowed_methods = ['put']
-        revalidate_allowed_methods = ['get']
-        filtering = field_dict(["system_id"])
-
-    def patch_response(self, response):
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = "POST, GET, OPTIONS, DELETE, PUT, PATCH"
-        response['Access-Control-Allow-Headers'] = ','.join(['Content-Type', 'Authorization', 'origin', 'accept'])
-        return response
-
-
-    def wrap_view(self, view):
-        """ calls view and patches resonse headers or catches ImmediateHttpResponse, patches headers and re-raises"""
-
-        # first do what the original wrap_view wanted to do
-        wrapper = super(ModelResource, self).wrap_view(view)
-
-        # now wrap that to patch the headers
-        def wrapper2(*args, **kwargs):
-            try:
-                response = wrapper(*args, **kwargs)
-                return self.patch_response(response)
-            except ImmediateHttpResponse, exception:
-                response = self.patch_response(exception.response)
-                # re-raise - we could return a response but then anthing wrapping
-                # this and expecting an exception would be confused
-                raise ImmediateHttpResponse(response)
-
-        return wrapper2
-
-
-    def method_check(self, request, allowed=None):
-        """ Handle OPTIONS requests """
-        if request.method.upper() == 'OPTIONS':
-
-            if allowed is None:
-                allowed = []
-
-            allows = ','.join(allowed).upper()
-
-            response = HttpResponse(allows)
-            response['Allow'] = allows
-            raise ImmediateHttpResponse(response=response)
-
-        return super(ModelResource, self).method_check(request, allowed)
+        exchange_keys_allowed_methods = ['post']
+        validate_allowed_methods = ['get']
 
 
     def prepend_urls(self):
@@ -6014,54 +6131,66 @@ class IonMeshNodeResource(ModelResource):
         ts = trailing_slash()
         return [
             url(r"^(?P<resource_name>%s)/system_id%s$" % (self._meta.resource_name, ts), self.wrap_view('dispatch_system_id'), name="api_dispatch_system_id"),
-            url(r"^(?P<resource_name>%s)/retrieve_key%s$" % (self._meta.resource_name, ts), self.wrap_view('dispatch_retrieve_key'), name="api_dispatch_retrieve_key"),
-            url(r"^(?P<resource_name>%s)/assign_key%s$" % (self._meta.resource_name, ts), self.wrap_view('dispatch_assign_key'), name="api_dispatch_assign_key"),
-            url(r"^(?P<resource_name>%s)/revalidate%s$" % (self._meta.resource_name, ts), self.wrap_view('dispatch_revalidate'), name="api_dispatch_revalidate"),
+            url(r"^(?P<resource_name>%s)/exchange_keys%s$" % (self._meta.resource_name, ts), self.wrap_view('dispatch_exchange_keys'), name="api_dispatch_exchange_keys"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/validate%s$" % (self._meta.resource_name, ts), self.wrap_view('dispatch_validate'), name="api_dispatch_validate"),
         ]
 
-
-    def dispatch_revalidate(self, request, **kwargs):
-        return self.dispatch('revalidate', request, **kwargs)
-
+    def dispatch_validate(self, request, **kwargs):
+        return self.dispatch('validate', request, **kwargs)
 
     def dispatch_system_id(self, request, **kwargs):
         return self.dispatch('system_id', request, **kwargs)
 
+    def get_validate(self, request, **kwargs):
+        """Validate node can be reached and authenticated
+            1) connect to remote server and get software version
+            2) check TS version is the same as local version
+            3) authenticate via mesh API keys
+        """
+        remote_version = "unknown"
+        status = "Good"
+        error = ""
 
-    def get_revalidate(self, request, **kwargs):
-        """Revalidate all of the nodes and remove the bad ones"""
-        bad_nodes = dict()
+        bundle = self.build_bundle(request=request)
+        mesh_node = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
 
-        # revalidate all of the nodes for both the connection and version number
-        nodes = models.IonMeshNode.objects.all()
-        for node in nodes:
-            version_response = None
-            try:
-                version_response = requests.get('http://%s/rundb/api/v1/torrentsuite/version/' % node.hostname)
-                version_response.raise_for_status()
-            except requests.ConnectionError as exc:
-                bad_nodes[node.hostname] = "Could not make a connection to the remote server."
-                continue
-            except Exception as exc:
-                bad_nodes[node.hostname] = "Could not get the version number from remote server."
-                continue
+        try:
+            version_response = requests.get('http://%s/rundb/api/v1/torrentsuite/version/' % mesh_node.hostname, timeout=30)
+            version_response.raise_for_status()
+        except requests.ConnectionError as exc:
+            status = "Connection Error"
+            error = "Could not make a connection to the remote server"
+        except requests.exceptions.Timeout:
+            status = "Error: Timeout"
+            error = "Timeout while trying to get response from remote server"
+        except Exception as exc:
+            status = "Error"
+            error = str(exc)
+        else:
+            remote_version = version_response.json()['meta_version']
+            from ion import version as local_version
+            if remote_version != local_version:
+                status = "Error: Incompatible"
+                error = "Remote server has incompatible software version"
+            else:
+                params = {
+                    "api_key": mesh_node.apikey_remote,
+                    "system_id": settings.SYSTEM_UUID
+                }
+                try:
+                    auth_response = requests.get('http://%s/rundb/api/v1/ionmeshnode/' % mesh_node.hostname, params=params)
+                    if auth_response.status_code == 401:
+                        status = "Error: Unauthorized"
+                        error = "Invalid user credentials"
+                    else:
+                        auth_response.raise_for_status()
+                except Exception as exc:
+                    status = "Error"
+                    error = str(exc)
 
-            remote_version = None
-            try:
-                remote_version = version_response.json()['meta_version']
-            except Exception as exc:
-                bad_nodes[node.hostname] = "Could not get the version number from response."
-                continue
+        data = {"hostname": mesh_node.hostname, "version": remote_version, "status": status, "error": error}
+        return self.create_response(request, data)
 
-            try:
-                from ion import version as local_version
-                if remote_version != local_version:
-                    bad_nodes[node.hostname] = "The node does not have the same version."
-            except Exception as exc:
-                bad_nodes[node.hostname] = "Could not compare the versions."
-                continue
-
-        return self.create_response(request=request, data=bad_nodes)
 
     def get_system_id(self, request, **kwargs):
         system_id_data = {
@@ -6071,33 +6200,21 @@ class IonMeshNodeResource(ModelResource):
         return self.create_response(request=request, data=system_id_data)
 
 
-    def dispatch_retrieve_key(self, request, **kwargs):
-        return self.dispatch('retrieve_key', request, **kwargs)
+    def dispatch_exchange_keys(self, request, **kwargs):
+        return self.dispatch('exchange_keys', request, **kwargs)
 
-
-    def get_retrieve_key(self, request, **kwargs):
-        node = models.IonMeshNode.create(request.GET['system_id'])
-        data = {
-            'apikey_local' : node.apikey_local
-        }
-        return self.create_response(request=request, data=data)
-
-
-    def dispatch_assign_key(self, request, **kwargs):
-        return self.dispatch('assign_key', request, **kwargs)
-
-
-    def put_assign_key(self, request, **kwargs):
+    def post_exchange_keys(self, request, **kwargs):
         try:
-            deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
-            data = dict_strip_unicode_keys(deserialized)
-
-            node = models.IonMeshNode.create(data['system_id'])
+            data = request.POST.dict()
+            node, _created = models.IonMeshNode.create(data['system_id'])
             node.hostname = data['hostname']
-            node.apikey_remote = data['apikey_remote']
+            node.apikey_remote = data['apikey']
+            node.name = data.get('name') or node.hostname
             node.save()
         except Exception as exc:
-            logger.exception('')
-            return HttpApplicationError()
+            logger.error('Exchange Keys error.')
+            logger.error(traceback.format_exc())
+            return HttpApplicationError(str(exc))
+        else:
+            return self.create_response(request=request, data={'apikey' : node.apikey_local})
 
-        return HttpAccepted()

@@ -30,9 +30,9 @@ class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
 
     def render(self, name, value, attrs=None):
         csm = super(Plugins_SelectMultiple, self).render(name, value, attrs=None)
-        csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>', u'').replace(u'</label>', u'')
+        csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>', u'<label class="checkbox pull-left">')
         # add 'configure' button for plugins
-        btn_html = '&nbsp; <button type="button" class="configure_plugin" id="configure_plugin_XXX" data-plugin_pk=XXX style="display: none;"> Configure </button>'
+        btn_html = '<a href="#" class="configure_plugin" id="configure_plugin_XXX" data-plugin_pk=XXX style="display: none;"> Configure </a>'
         output = ''
         columns = 3
         for line in csm.split('<li>'):
@@ -41,15 +41,15 @@ class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
                 if columns == 2:
                     output += '<div class="row-fluid">'
                 output += '<div class="span4">' + line.split('</li>')[0]
-                #output += line.split('</li>')[0]
-                if columns == 0:
-                    output += '</div>'
-                    columns = 3
 
                 pk = line.split('value="')[1].split('"')[0]
                 plugin = models.Plugin.objects.get(pk=pk)
                 if plugin.isPlanConfig:
                     output += btn_html.replace('XXX', pk)
+
+                if columns == 0:
+                    output += '</div>'
+                    columns = 3
                 output += '</div>'
                 # disable IRU if not configured
                 if 'IonReporterUploader' == plugin.name:
@@ -320,17 +320,35 @@ class UserProfileForm(forms.ModelForm):
     # Captain Fantastic Faster Than Superman Spiderman Batman Wolverine Hulk And The Flash Combined
     name = forms.CharField(max_length=93)
     email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput(), required=False)
+    password_confirm = forms.CharField(widget=forms.PasswordInput(), label="Password Confirm", required=False)
 
     def __init__(self, *args, **kw):
         super(UserProfileForm, self).__init__(*args, **kw)
         self.fields['email'].initial = self.instance.user.email
 
-        self.fields.keyOrder = ['name', 'email', 'phone_number']
+        self.fields.keyOrder = ['name', 'email', 'phone_number', 'password', 'password_confirm']
 
     def save(self, *args, **kw):
         super(UserProfileForm, self).save(*args, **kw)
         self.instance.user.email = self.cleaned_data.get('email')
+        password = self.cleaned_data.get('password', '')
+        if password:
+            self.instance.user.set_password(password)
+
         self.instance.user.save()
+
+    def clean_password_confirm(self):
+        """Validation that the passwords match"""
+        password1 = str(self.cleaned_data.get('password'))
+        password2 = str(self.cleaned_data.get('password_confirm'))
+
+        if password1:
+            if not password2:
+                raise forms.ValidationError("You must confirm your password")
+            if password1 != password2:
+                raise forms.ValidationError("Your passwords do not match")
+        return password2
 
     class Meta:
         model = models.UserProfile

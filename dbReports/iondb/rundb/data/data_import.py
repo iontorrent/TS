@@ -26,6 +26,7 @@ from iondb.rundb.data import dm_utils
 from iondb.rundb.data.dmactions import _copy_to_dir
 from iondb.rundb.data.dm_utils import get_walk_filelist
 from iondb.utils.files import getSpaceMB
+from iondb.rundb.data.tasks import update_dmfilestat_diskusage
 
 logger = logging.getLogger()
 
@@ -547,6 +548,13 @@ def process_import(importing, copy_data, copy_report):
 
         result.status = 'Completed'
         result.save()
+
+        # update all diskusage related database entries
+        try:
+            update_dmfilestat_diskusage(result.pk)
+        except:
+            importing.log('Error updating diskusage')
+            logger.error(traceback.format_exc())
 
     elif dmactions_types.SIG in importing.dmtypes:
         if copy_data:

@@ -36,6 +36,7 @@ class KitsFieldNames():
     FLOW_ORDER = "flowOrder"
     TEMPLATE_KIT_NAME = 'templatekitname'
     ONE_TOUCH = 'OneTouch'
+    ISO_AMP = 'IA'
     KIT_VALUES = 'kit_values'
     APPLICATION_DEFAULT = 'applDefault'
     TEMPLATE_KIT_TYPES = 'templateKitTypes'
@@ -114,19 +115,24 @@ class KitsStepData(AbstractStepData):
         self.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = None
 
         oneTouchDict = {
-            KitsFieldNames.KIT_VALUES: KitInfo.objects.filter(kitType__in=['TemplatingKit', 'AvalancheTemplateKit'], isActive=True).order_by("description"),
+            KitsFieldNames.KIT_VALUES: KitInfo.objects.filter(kitType__in=['TemplatingKit', 'AvalancheTemplateKit'], isActive=True).exclude(samplePrep_instrumentType="IA").order_by("description"),
             KitsFieldNames.APPLICATION_DEFAULT: None
-            }
+        }
 
+        isoAmpDict = {
+            KitsFieldNames.KIT_VALUES: KitInfo.objects.filter(kitType__in=['TemplatingKit'], isActive=True, samplePrep_instrumentType="IA").order_by("description"),
+            KitsFieldNames.APPLICATION_DEFAULT: None
+        }
         ionChefDict = {
             KitsFieldNames.KIT_VALUES: KitInfo.objects.filter(kitType='IonChefPrepKit', isActive=True).order_by("description"),
             KitsFieldNames.APPLICATION_DEFAULT: None
-            }
+        }
 
-        self.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES] = {
-            KitsFieldNames.ONE_TOUCH: oneTouchDict,
-            KitsFieldNames.ION_CHEF: ionChefDict,
-            }
+        self.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES] = OrderedDict([
+            (KitsFieldNames.ONE_TOUCH, oneTouchDict),
+            (KitsFieldNames.ION_CHEF, ionChefDict),
+            (KitsFieldNames.ISO_AMP, isoAmpDict)
+        ])
 
         self.savedFields[KitsFieldNames.SEQUENCE_KIT_NAME] = None
         self.prepopulatedFields[KitsFieldNames.SEQ_KITS] = KitInfo.objects.filter(kitType='SequencingKit', isActive=True).order_by("description")

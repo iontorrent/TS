@@ -14,13 +14,12 @@ def instrument_host_ip():
     # recent init date which is likely to be the correct entry.  instruments
     # record their IP address in the host_address field.
     # the host_address field is always an IP address
-    try:
-        for rig in models.Rig.objects.all().order_by('-last_init_date'):
-            if rig.host_address:
-                ipaddr = rig.host_address
-                break
-    except:
-        ipaddr = '127.0.0.1'
+    ipaddr = '127.0.0.1'
+    for rig in models.Rig.objects.all().order_by('-last_init_date'):
+        if rig.host_address:
+            ipaddr = rig.host_address
+            break
+
     return ipaddr
 
 
@@ -55,6 +54,17 @@ def gethostname():
             hostname = 'tsvm'
     else:
         hostname = socket.gethostname()
+    return hostname
+
+
+def gethostfqdn():
+    '''Same as gethostname, but makes another attempt to get a fully qualified domain name'''
+    hostname = gethostname()
+    if '.' not in hostname:
+        try:
+            hostname = socket.getfqdn(gethostip())
+        except:
+            pass
     return hostname
 
 

@@ -23,6 +23,14 @@
  <script>
   $(function() {
 
+    var reportUrl = '/rundb/api/v1/results/'+TB_result+'/?format=json&noplugin=True';
+    var referenceID = "Unknown";
+    $.ajaxSetup({async: false});
+    $.get( reportUrl, function(data) {
+      referenceID = data.reference;
+    });
+    $('#referenceid').html(referenceID);
+
     $.fn.serializeObject = function() {
      var o = {};
      var a = this.serializeArray();
@@ -42,6 +50,12 @@
 
     $(function() {
      $('#postbutton').click(function() {
+      var refID = $('#referenceid').text();
+      if( !refID.startsWith("hg19") && !refID.startsWith("GRCh37") &&
+          !refID.startsWith("GRCh38") && !refID.startsWith("hg38") ) {
+        alert("The sampleID plugin may only be run on reads aligned to a hg19 or GRCh38 reference.");
+        return false;
+      }
       obj = $('#sampleID').serializeObject();
       pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
       pluginAPIJSON = JSON.stringify(pluginAPIJSON);
@@ -72,6 +86,11 @@
    <h1>Torrent Sample Identification Plugin</h1>
    <h3>Identify samples by gender and SNP markers.</h3>
   </div>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td><span class="help" title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for coverage analysis.">Reference Genome:</span></td>
+     <td><div id="referenceid"></div></td> </tr>
+   </table>
    <br/>
    <div align="center" id="json_result">
     <input id="postbutton" type="submit" value="Submit">

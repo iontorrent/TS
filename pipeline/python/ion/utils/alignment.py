@@ -280,7 +280,11 @@ def align_dataset_parallel(
 
     try:
         # process block by block
-        if reference and len(blocks) > 1 and int(dataset["read_count"]) > 20000000:
+        memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
+        maxReads=20000000
+        if memTotalGb > 140:
+            maxReads=60000000
+        if reference and len(blocks) > 1 and int(dataset["read_count"]) > maxReads:
             printtime("DEBUG: TRADITIONAL BLOCK PROCESSING ------ prefix: %20s ----------- reference: %20s ---------- reads: %10s ----------" % (dataset['file_prefix'], reference, dataset["read_count"]))
           # start alignment for each block and current barcode with reads
           # TODO: in how many blocks are reads with this barcode
@@ -303,18 +307,18 @@ def align_dataset_parallel(
                     output_dir=os.path.join(block, ALIGNMENT_RESULTS),
                     output_basename=dataset['file_prefix'],
                     threads=align_threads)
-    
+
             bamdir = '.'  # TODO , do we need this ?
             bamBase = dataset['file_prefix']
             bamfile = dataset['file_prefix'] + ".bam"
-    
+
             block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in blocks]
             block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
             printtime("blocks with reads:    %s" % len(block_bam_list))
-    
+
             bamFile = dataset['file_prefix'] + ".bam"
             composite_bam_filepath = dataset['file_prefix'] + ".bam"
-    
+
             blockprocessing.extract_and_merge_bam_header(block_bam_list, composite_bam_filepath)
             # Usage: samtools merge [-nr] [-h inh.sam] <out.bam> <in1.bam> <in2.bam> [...]
             cmd = 'samtools merge -l1 -@8'
@@ -325,12 +329,12 @@ def align_dataset_parallel(
             for bamfile in block_bam_list:
                 cmd += ' %s' % bamfile
             cmd += ' -h %s.header.sam' % composite_bam_filepath
-    
+
             if do_ionstats:
                 bam_filenames = ["/dev/stdin"]
                 ionstats_alignment_filename = "%s.ionstats_alignment.json" % bamBase      # os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json')
                 ionstats_alignment_h5_filename = "%s.ionstats_error_summary.h5" % bamBase  # os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5')
-    
+
                 ionstats_cmd = ionstats.generate_ionstats_alignment_cmd(
                     ionstatsArgs,
                     bam_filenames,
@@ -339,27 +343,27 @@ def align_dataset_parallel(
                     basecaller_meta_information,
                     library_key,
                     graph_max_x)
-    
+
                 cmd += " | tee >(%s)" % ionstats_cmd
-    
+
             if do_mark_duplicates:
                 json_name = 'BamDuplicates.%s.json' % bamBase if bamBase != 'rawlib' else 'BamDuplicates.json'
                 cmd = "BamDuplicates -i <(%s) -o %s -j %s" % (cmd, bamFile, json_name)
             else:
                 cmd += " > %s.bam" % bamBase
-    
+
             printtime("DEBUG: Calling '%s':" % cmd)
             ret = subprocess.Popen(['/bin/bash', '-c', cmd]).wait()
             if ret != 0:
                 printtime("ERROR: merging failed, return code: %d" % ret)
                 raise RuntimeError('exit code: %d' % ret)
-    
+
             # TODO: piping into samtools index or create index in sort process ?
             if do_indexing and do_sorting:
                 cmd = "samtools index " + bamFile
                 printtime("DEBUG: Calling '%s':" % cmd)
                 subprocess.call(cmd, shell=True)
-    
+
         else:
             printtime("DEBUG: MERGED BLOCK PROCESSING ----------- prefix: %20s ----------- reference: %20s ---------- reads: %10s ----------" % (dataset['file_prefix'], reference, dataset["read_count"]))
             # TODO: try a python multiprocessing pool
@@ -405,12 +409,15 @@ def process_datasets(
         barcodeInfo):
 
     parallel_datasets = 1
-    try:
-        memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
-        if memTotalGb > 70:
-            parallel_datasets = 2
-    except:
-        pass
+    if not do_mark_duplicates: # temporary fix for TS-15304
+        try:
+            memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
+            if memTotalGb > 140:
+                parallel_datasets = 4
+            elif memTotalGb > 70:
+                parallel_datasets = 2
+        except:
+            pass
 
     align_threads = multiprocessing.cpu_count() / parallel_datasets
     printtime("Attempt to align")
@@ -421,7 +428,7 @@ def process_datasets(
     ionstats_alignment_file_list = []
     ionstats_basecaller_filtered_file_list = []
     ionstats_alignment_filtered_file_list = []
-    
+
     align_dataset_args = []
 
     for dataset in basecaller_datasets["datasets"]:

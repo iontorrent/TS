@@ -3,10 +3,17 @@
 {% load static from staticfiles %}
 {% block extra_head %}
 <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js" %}"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery.scannerdetection.js"%}"></script>
+
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" %}"/>
 <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js" %}"></script>
 
 <style type="text/css">
+    input[type="radio"].template-kit-radio {
+    margin-top: 0;
+    margin-left: 10px;
+}
+
 .folders {
     border: 1px solid #E5E5E5;
     padding : 4px; 
@@ -23,19 +30,20 @@
 {% if helper.isPlanBySample %}
 .chevrons li{
     width: 12.5%;
+    word-break: break-all;
 }
 {% else %}
 .chevrons li{
     width: 14.25%;
+    word-break: break-all;
 }
 {% endif %}
 </style>
 {% endblock extra_head %}
 {% block sub-nav %}
-<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
-<li><a href="{% url "samplesets" %}">Samples</a></li>
 <li><a href="{% url "plan_templates" %}">Templates</a></li>
-<li><a href="{% url "planned" %}">Planned Run List</a></li>
+<li><a href="{% url "samplesets" %}">Samples</a></li>
+<li><a href="{% url "planned" %}">Planned Runs</a></li>
 <li class="active">
     <a href="#">
         {% if helper.isPlan %}
@@ -88,7 +96,7 @@
                         {% endif %}
                         
                         <li class="disabled" id="Ionreporter"><a class="submitStepForm" href='{% url "page_plan_ionreporter" %}'>Ion Reporter</a></li>
-                        <li id="Application" class="disabled"><a class="submitStepForm" href='{% url "page_plan_application" %}'>Application</a></li>
+                        <li id="Application" class="disabled"><a class="submitStepForm" href='{% url "page_plan_application" %}'>Research Application</a></li>
                         <li id="Kits" class="disabled"><a class="submitStepForm" href='{% url "page_plan_kits" %}'>Kits</a></li>
                         <!--- TODO: Remove Dead Monitoring Page Code
                             <li id="Monitoring" class="disabled"><a class="submitStepForm" href='{% url "page_plan_monitoring" %}'>Monitoring</a></li>
@@ -120,7 +128,7 @@
                     <div class="span8" id="mainContent">
                         <a class="btn pull-right hide" style="margin-top: 10px;" id="showSummary" href="#">Show Summary</a>
                         {% if step.warnings %}
-                        <div class="alert alert-warning">
+                        <div class="alert alert-error">
                             <ul>
                             {% for warning in step.warnings %}
                                 <li>{{warning}}</li>
@@ -270,13 +278,25 @@
             seqKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';
         {% endfor %}
         $("#selectedSequenceKit").html(seqKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.sequencekitname}}']);
-        
+
+        chipNameToInstrumentName = {};
+        {% for chipType in helper.getStepDict.Kits.getPrePopulatedFieldDict.chipTypes %}
+            chipNameToInstrumentName['{{chipType.name}}'] = 'Ion {{chipType.get_instrumentType_display}}\u2122 System';
+        {% endfor %}
+        $("#selectedInstrumentName").html(chipNameToInstrumentName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
+
         chipNameToDisplayName = {};
         {% for chipType in helper.getStepDict.Kits.getPrePopulatedFieldDict.chipTypes %}
             chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedNamePrimaryPrefix}}\u2122{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}';
         {% endfor %}
         $("#selectedChipType").html(chipNameToDisplayName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
-        
+
+        baseRecalibrationModesValueToName = {};
+        {% for mode, displayedMode in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
+            baseRecalibrationModesValueToName["{{mode}}"] = "{{displayedMode}}";
+        {% endfor %}
+        $("#selectedBaseCalibrationMode").html(baseRecalibrationModesValueToName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.base_recalibrate}}']);
+
         referenceShortToLongName = {};
         {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
             referenceShortToLongName['{{ref.short_name}}'] = '{{ref.short_name}}({{ref.name}})';
@@ -356,6 +376,17 @@
 
             $form.submit();
             return false;
+        });
+
+        // Toggle advanced settings
+        var advancedSettingsRows = $(".advanced-settings-row");
+        $('input[type=radio][name=advancedSettingsRadio]').change(function () {
+            if (this.value == 'default') {
+                advancedSettingsRows.removeClass("active");
+            }
+            else {
+                advancedSettingsRows.addClass("active");
+            }
         });
     });
 </script>

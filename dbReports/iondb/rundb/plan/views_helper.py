@@ -262,12 +262,13 @@ def get_template_categories():
     applicationGroup_immuneRepertoire = ApplicationGroup.objects.filter(name='immune_repertoire')
 
     category_solidTumor = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_solidTumor")
-    category_immune = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_immune")
+    category_onco_immune = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_immune")
     category_repro = common_CV.objects.filter(cv_type = "applicationCategory", value = "repro")
     category_16s = common_CV.objects.filter(cv_type = "applicationCategory", value = "16s")
     category_inheritedDisease = common_CV.objects.filter(cv_type = "applicationCategory", value = "inheritedDisease")
     category_oncoHeme = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_heme")
-                    
+    category_immune = common_CV.objects.filter(cv_type = "applicationCategory", value = "immunology")
+                        
     categories = [
         # Favorites
         {
@@ -345,7 +346,17 @@ def get_template_categories():
             'img': 'resources/img/appl_immuneRepertoire.png',
             'isActive': applicationGroup_immuneRepertoire[0].isActive if applicationGroup_immuneRepertoire else False,           
             'code': 12,
-        },                  
+        },
+        # immunology
+        {
+            'tag': 'category_immune',
+            'displayedName': category_immune[0].displayedValue if category_immune else "--",
+            'api_filter': '&categories__icontains=immunology',
+            'img': 'resources/img/appl_category_immunology.png',
+            'isActive': category_immune[0].isActive if category_immune else False,
+            'ampliSeq_upload': True,            
+            'code': 12,
+        },        
         # Inherited disease
         {
             'tag': 'category_inherited_disease',
@@ -369,10 +380,10 @@ def get_template_categories():
         # Oncology - immunology
         {
             'tag': 'category_onco_immune',
-            'displayedName': category_immune[0].displayedValue if category_immune else "--",
+            'displayedName': category_onco_immune[0].displayedValue if category_onco_immune else "--",
             'api_filter': '&categories__icontains=onco_immune',
             'img': 'resources/img/appl_category_onco_immune.png',
-            'isActive': category_immune[0].isActive if category_immune else False,
+            'isActive': category_onco_immune[0].isActive if category_onco_immune else False,
             'ampliSeq_upload': True,            
             'code': 1,
         },

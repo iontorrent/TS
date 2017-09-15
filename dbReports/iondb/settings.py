@@ -338,6 +338,13 @@ REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.
 
 PRODUCT_UPDATE_BASEURL = "http://ionupdates.com/"
 PRODUCT_UPDATE_PATH = "products/main.json"
+OFFCYCLE_UPDATE_PATH_LOCAL = "/results/uploads/offcycle/"
+
+SUPPORTED_INSTALL_PACKAGES = [
+    ('ion-chefupdates', 'Ion Chef scripts'),
+]
+
+
 EULA_TEXT_URL = "products/LICENSE.txt"
 
 PLAN_CSV_VERSION = "2.0"

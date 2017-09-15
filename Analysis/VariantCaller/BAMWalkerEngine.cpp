@@ -922,9 +922,26 @@ void BAMWalkerEngine::AddReadToPG(Alignment *rai){
 bool BAMWalkerEngine::GetMostPopularTmap(SamProgram& most_popular_tmap){
 	string most_popular_pg;
 	int current_popular_count = -1;
+	bool success = false;
+
+	// TS-15110: Empty bam file. Usually happened in IR when IR splits the bam file into chromosomes.
+	if (read_counts_of_pg_.empty()){
+		for (SamProgramIterator I = bam_header_.Programs.Begin(); I != bam_header_.Programs.End(); ++I) {
+			if (I->HasID() and I->HasCommandLine()){
+				// I use the last tmap args. It doesn't really matter.
+				if (I->ID.substr(0, 4) == "tmap"){
+					most_popular_tmap = *I;
+					success = true;
+				}
+			}
+		}
+		return success;
+	}
+
     for (map<string, unsigned int>::iterator it = read_counts_of_pg_.begin(); it != read_counts_of_pg_.end(); ++it){
     	if ((int) it->second > current_popular_count){
     		most_popular_pg = it->first;
+    		current_popular_count = (int) it->second;
     	}
     }
     if (most_popular_pg.substr(0, 4) != "tmap"){
@@ -932,17 +949,18 @@ bool BAMWalkerEngine::GetMostPopularTmap(SamProgram& most_popular_tmap){
         for (map<string, unsigned int>::iterator it = read_counts_of_pg_.begin(); it != read_counts_of_pg_.end(); ++it){
         	cerr << "  PG: "<<  it->first << " , read count: "<< it->second << endl;
         }
-    	return false;
+    	return success;
     }
 
 	for (SamProgramIterator I = bam_header_.Programs.Begin(); I != bam_header_.Programs.End(); ++I) {
 		if (I->HasID() and I->HasCommandLine()){
 			if (I->ID == most_popular_pg){
 				most_popular_tmap = *I;
-				return true;
+				success = true;
+				return success;
 			}
 		}
 	}
-	return false;
+	return success;
 }
 

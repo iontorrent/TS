@@ -35,23 +35,23 @@ function precisionUnits(num, div) {
     <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
 {% endblock tab-configure-plugins %}
 {% block content %}
-<div class="content clearfix">
-    <div class="clearfix">
-        <h1 class="pull-left clearfix">{{ plugin.name }} -- v{{ plugin.version }}</h1>
+<div class="content">
+    <h1>{{ plugin.name }}
+        <small>v{{ plugin.version }}</small>
+        <small class="pull-right" style="font-size: 12px; line-height: 40px;">Script: {{ plugin.script }}</small>
+    </h1>
 
-        <p><!-- Description: -->{{ plugin.description }}</p>
-        <p>Script: {{ plugin.script }}</p>
+        <p>{{ plugin.description }}</p>
         {% if plugin.hasAbout %}<iframe src="{{plugin.hasAbout}}"
             class="auto-height auto-width full-width"
             frameborder="1"></iframe>{% endif %}
         <!-- FIXME show toggles
         Selected: {{ plugin.selected }}
         -->
-    </div>
 </div>
 <div class="content clearfix">
     <div class="clearfix">
-        <h1 class="pull-left">Recent Plugin Results</h1>
+        <h2 class="pull-left">Recent Plugin Results</h2>
         <a title="Refresh Plugin Usage" href="#" id="refreshUsage" class="pull-right">
             <i class="icon-refresh"></i>
         </a>

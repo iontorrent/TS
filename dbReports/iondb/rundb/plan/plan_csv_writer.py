@@ -63,8 +63,9 @@ class PlanCSVcolumns():
     COLUMN_SAMPLE_CONTROLTYPE = "Control Type"
     COLUMN_SAMPLE_CANCER_TYPE = "Cancer Type"
     COLUMN_SAMPLE_CELLULARITY = "Cellularity %"
-    COLUMN_SAMPLE_BIOSPY_DAYS = "Biospy Days"
-    COLUMN_SAMPLE_COUPLE_ID = "Coupld ID"
+    COLUMN_SAMPLE_BIOPSY_DAYS = "Biopsy Days"
+    COLUMN_SAMPLE_CELL_NUM = "Cell Number"
+    COLUMN_SAMPLE_COUPLE_ID = "Couple ID"
     COLUMN_SAMPLE_EMBRYO_ID = "Embryo ID"
     COLUMN_SAMPLE_IR_RELATION = "IR Relation"
     COLUMN_SAMPLE_IR_GENDER = "IR Gender"
@@ -532,6 +533,7 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
         hdr.extend(hdr2)
         if single_samples_file:
             hdr.extend(get_irSettings())
+            hdr.extend(get_sampleAnnotations(template))
         else:
             hdr.append(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW)
 
@@ -542,6 +544,19 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
         logger.exception(format_exc())
         return [], [], []
 
+
+def get_sampleAnnotations(template):
+    annotations = []
+    isOncology = [cat for cat in ["Oncomine", "Onconet"] if cat in template.categories]
+    if isOncology:
+        annotations = [PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE,
+                    PlanCSVcolumns.COLUMN_SAMPLE_CELLULARITY]
+    else:
+        annotations = [PlanCSVcolumns.COLUMN_SAMPLE_BIOPSY_DAYS,
+                    PlanCSVcolumns.COLUMN_SAMPLE_CELL_NUM,
+                    PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID,
+                   PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID]
+    return annotations
 
 def get_irSettings():
     irSettings = [PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW,
@@ -586,16 +601,7 @@ def get_samples_data_for_batch_planning(templateId):
     ]
     # include ir configuration settings
     hdr.extend(get_irSettings())
-
-    # if selected template is for Oncology, include below properties
-    isOnco = [cat for cat in ["Oncomine", "Onconet"] if cat in template.categories]
-    if isOnco:
-        hdr.extend([PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE,
-                    PlanCSVcolumns.COLUMN_SAMPLE_CELLULARITY])
-    else:
-        hdr.extend([PlanCSVcolumns.COLUMN_SAMPLE_BIOSPY_DAYS,
-                    PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID,
-                   PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID])
+    hdr.extend(get_sampleAnnotations(template))
 
     body = []
     barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("index")

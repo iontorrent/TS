@@ -1,10 +1,10 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
-
+{% load static from staticfiles %}
 {% block main-title %}Select instrument, chip and kits and then hit next.{% endblock main-title %}
 
 {% block page-plan-content %}
-<div class="row-fluid bordered-section">
+<div class="row-fluid">
     <div class="span6">                                     
         <label class="form-label">Instrument</label>
         <select id="instrumentType">
@@ -26,7 +26,7 @@
     </div>
 
     <div class="span6">                                     
-        <label class="form-label">Chip Type{%if step.prepopulatedFields.is_chipType_required%} (required){%endif%}</label>
+        <label class="form-label">Chip Type{%if not step.prepopulatedFields.is_chipType_required%} (optional){%endif%}</label>
         <select id="chipType" name="chipType">
             {% if helper.isEditRun %}
                 <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">Ion 
@@ -55,7 +55,7 @@
     </div>
     <hr class="summary">  
 </div>
-<div class="row-fluid" style="margin-top: 20px">
+<div class="row-fluid" style="">
     <div class="span6">
         <input type="hidden" id="isBarcodeKitRequired" name="isBarcodeKitRequired" value="" />
 
@@ -87,7 +87,7 @@
 </div>
 <div class="row-fluid">
     <div class="span6">
-        <label class="form-label">Library Kit Type  <a class="btn btn-mini extra-kit-inline">Details +</a></label>
+        <label class="form-label">Library Kit Type</label>
         <select id="libraryKitType" name="librarykitname" style="width: 350px;">
             <option value=""></option>
             {% for libKit in step.getPrePopulatedFieldDict.libKits %}
@@ -113,50 +113,7 @@
             {% endfor %}
         </select>
     </div>
-</div>                  
-<div class="extra_kit_forward_info row-fluid hide" style="display: block;">
-    <div class="span6">
-        <label>Forward Library Key:</label>
-        <select id="libraryKey" name="libraryKey" value="" class="select-group"  style="width:350px;">
-            {% for libKey in step.getPrePopulatedFieldDict.forwardLibKeys %}
-                {% ifequal libKey.sequence step.getCurrentSavedFieldDict.libraryKey %}
-                    <option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
-                {% else %}
-                    <option value="{{libKey.sequence}}">{{libKey}}</option>
-                {% endifequal %}
-            {% endfor %}
-        </select>
-        <label>Test Fragment Key:</label>
-        <input type="text" name="tfKey" value={{step.getCurrentSavedFieldDict.tfKey}}
-               onkeyup="if('atcgATCG'.indexOf(this.value.slice(-1))<0) alert('Invalid TF key character');">
-    </div>
-    <div class="span6">                                     
-        <label>Forward 3' Adapter:</label>
-        <select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group">
-            <option value=""></option>
-            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
-                {% if adapter.sequence == step.getCurrentSavedFieldDict.forward3primeAdapter %}
-                    <option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
-                {% elif adapter.isActive %}
-                    <option value="{{adapter.sequence}}">{{adapter}}</option>
-                {% endif %}
-            {% endfor %}
-        </select>
-    </div>
-    <div class="span6 hideIfPgm" style="...">
-        <label>Flow Order:</label>
-        <select id="flowOrder" name="flowOrder" value="" class="select-group">
-        <option value=""></option>
-        	{% for flowOrder in step.getPrePopulatedFieldDict.flowOrders %}
-            	{% ifequal flowOrder.flowOrder step.getCurrentSavedFieldDict.flowOrder %}
-                	<option SELECTED value="{{flowOrder.flowOrder}}">{{flowOrder.description}}</option>
-                {% else %}
-                	<option value="{{flowOrder.flowOrder}}">{{flowOrder.description}}</option>
-                {% endifequal %}
-            {% endfor %}
-        </select>
-    </div>
-</div>                      
+</div>
 <div class="row-fluid">
     <div class="span6">
         <p class="form-label">Template Kit
@@ -165,17 +122,16 @@
             {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
                 {% ifequal kitTypeName "Avalanche" %}
                 {% else %}
-                <input type="radio" id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}"
+                <input type="radio" class="template-kit-radio" {% ifequal kitTypeName "IA" %} rel="tooltip" title="Isothermal Amplification" {% endifequal %} id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}"
                     {% if kitTypeName == step.getCurrentSavedFieldDict.templatekitType and step.getCurrentSavedFieldDict.templatekitname %}
                                     checked="checked" data-templatekitname="{{step.getCurrentSavedFieldDict.templatekitname}}"
                     {% endif %}
                 >{{kitTypeName}}
                 {% endifequal %}
             {% endfor %}
-            <a class="btn btn-mini chef-protocol-inline">Details +</a>
-        </p>      
         </small>
         </span>
+        </p>
         
         <div id="templateKitHolder">
             {% if not step.getCurrentSavedFieldDict.templatekitType %}
@@ -199,20 +155,19 @@
             
         </div>
     </div>
-
-	<div class="chef_protocol_info span6 hide" style="display: block;">
-        <label>Templating Protocol:</label>
-        <select id="samplePrepProtocol" name="samplePrepProtocol" value="" class="select-group">
-        	<option value=""></option>
-            {% for protocol in step.getPrePopulatedFieldDict.samplePrepProtocols %}
-                {% ifequal protocol.displayedValue step.getCurrentSavedFieldDict.samplePrepProtocol %}
-                    <option SELECTED value="{{protocol.value}}">{{protocol.displayedValue}}</option>
+    <div class="span6">
+        <label class="form-label">Sequencing Kit</label>
+        <select id="sequenceKit" name="sequencekitname" style="width: 350px;">
+            <option value=""></option>
+            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
+                {% ifequal kit.name step.getCurrentSavedFieldDict.sequencekitname %}
+                    <option SELECTED value="{{ kit.name }}">{{ kit.description }}</option>
                 {% else %}
-                    <option value="{{protocol.value}}">{{protocol.displayedValue}}</option>
+                    <option value="{{ kit.name }}">{{ kit.description }}</option>
                 {% endifequal %}
             {% endfor %}
         </select>
-	</div>   
+    </div>
 </div>
 
 
@@ -265,58 +220,165 @@
 
 <div class="row-fluid">
     <div class="span6">
-        <label class="form-label" >Sequencing Kit</label>
-        <select id="sequenceKit" name="sequencekitname" style="width: 350px;">
-            <option value=""></option>
-            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
-                {% ifequal kit.name step.getCurrentSavedFieldDict.sequencekitname %}
-                    <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
-                {% else %}
-                    <option value="{{kit.name}}">{{kit.description}}</option>
-                {% endifequal %}
-            {% endfor %}
-        </select>
-    </div>
-    <div class="span6">
-        <label class="form-label" >Flows</label>
-        <input value="{{step.getCurrentSavedFieldDict.flows}}" style="width:50px; font-weight: normal; font-size: 14px;" name="flows" id="flows" {% if helper.isEditRun %} readonly {% endif %}>
-    </div>
-
-</div>
-
-<div class="row-fluid">
-    <div class="span6">
-        <p class="form-label" rel="tooltip" title="Base Calibration allows for empirical alignments to influence flow signals to achieve better homopolymer calibration to improve overall accuracy">
-        <i class="icon-info-sign"></i> Base Calibration Mode</p>
-        <select id="base_recalibrate" name="base_recalibrate" style="width: 220px;">
-        <!--option value=""></option -->
-
-        {% for mode, displayedMode in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
-            {% ifequal mode step.getCurrentSavedFieldDict.base_recalibrate %}
-                <option SELECTED value="{{mode}}">{{displayedMode}}</option>
-            {% else %}
-                <option value="{{mode}}">{{displayedMode}}</option>
-            {% endifequal %}
-        {% endfor %}
-        </select>
-    </div>
-    
-    <div class="span6">
-        <p class="form-label" rel="tooltip" title="PCR duplicates will be flagged in the BAM file"><i class="icon-info-sign"></i> Mark as Duplicates Reads 
-            <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" 
-                {% if step.getCurrentSavedFieldDict.isDuplicateReads %}checked="checked"{% endif %} style="vertical-align:top;">
-            
-        </p>    
-        <p class="form-label" rel="tooltip" title="Optional analysis step to adjust the alignment, primarily in the CIGAR string"><i class="icon-info-sign"></i> Enable Realignment
-            <input type="checkbox" id="realign" name="realign" {% if step.getCurrentSavedFieldDict.realign %}checked="checked"{% endif %} style="vertical-align:top;">           
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Flows:
+            <input value="{{step.getCurrentSavedFieldDict.flows}}" class="pull-left" style="width:50px; font-weight: normal; font-size: 14px;" name="flows" id="flows" {% if helper.isEditRun %} readonly {% endif %}>
         </p>
     </div>
 </div>
 
 <div class="row-fluid">
+
+</div>
+
+    <!-- Advanced Settings -->
+    <div class="row-fluid advanced-settings-row" style="margin-top:20px">
+        <div class="span12 collapsible-section">
+            <h3>
+                <a class="pull-right" href="#"><i class="showhide icon-plus"></i></a>
+                Advanced Settings
+            </h3>
+            <div class="hideable_advanced_settings_section" style="display: none;">
+                <div class="row-fluid">
+                    <div class="span12">
+                        <div class="alert" style="margin-top: 10px">
+                            <strong>Warning!</strong> &nbsp;It's <u>not recommended</u> to change these settings,
+                            please consult your local field representative before modifying parameters below.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row-fluid">
+                    <!-- Templating Protocol -->
+                    <div class="span6">
+                        <div class="chef_protocol_info">
+                            <label class="form-label">Templating Protocol</label>
+                            <select id="samplePrepProtocol" name="samplePrepProtocol" value="" class="select-group" disabled="disabled">
+                                <option value=""></option>
+                                {% for protocol in step.getPrePopulatedFieldDict.samplePrepProtocols %}
+                                    {% ifequal protocol.displayedValue step.getCurrentSavedFieldDict.samplePrepProtocol %}
+                                        <option SELECTED
+                                                value="{{ protocol.value }}">{{ protocol.displayedValue }}</option>
+                                    {% else %}
+                                        <option value="{{ protocol.value }}">{{ protocol.displayedValue }}</option>
+                                    {% endifequal %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Base Calibration Mode -->
+                    <div class="span6">
+                        <p class="form-label">
+                            <i class="icon-info-sign" rel="tooltip"
+                               title="Base Calibration allows for empirical alignments to influence flow signals to achieve better homopolymer calibration to improve overall accuracy"></i>
+                            Base Calibration Mode</p>
+                        <select id="base_recalibrate" name="base_recalibrate" style="width: 220px;">
+                            <!--option value=""></option -->
+
+                            {% for mode, displayedMode in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
+                                {% ifequal mode step.getCurrentSavedFieldDict.base_recalibrate %}
+                                    <option SELECTED value="{{ mode }}">{{ displayedMode }}</option>
+                                {% else %}
+                                    <option value="{{ mode }}">{{ displayedMode }}</option>
+                                {% endifequal %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row-fluid">
+                    <!-- Forward Library Key -->
+                    <div class="span6">
+                        <div class="span6">
+                            <label class="form-label">Forward Library Key</label>
+                            <select id="libraryKey" name="libraryKey" value="" class="select-group"
+                                    style="width:350px;">
+                                {% for libKey in step.getPrePopulatedFieldDict.forwardLibKeys %}
+                                    {% ifequal libKey.sequence step.getCurrentSavedFieldDict.libraryKey %}
+                                        <option SELECTED value="{{ libKey.sequence }}">{{ libKey }}</option>
+                                    {% else %}
+                                        <option value="{{ libKey.sequence }}">{{ libKey }}</option>
+                                    {% endifequal %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Forward 3' Adapter -->
+                    <div class="span6">
+                        <label class="form-label">Forward 3' Adapter</label>
+                        <select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group">
+                            <option value=""></option>
+                            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
+                                {% if adapter.sequence == step.getCurrentSavedFieldDict.forward3primeAdapter %}
+                                    <option SELECTED value="{{ adapter.sequence }}">{{ adapter }}</option>
+                                {% elif adapter.isActive %}
+                                    <option value="{{ adapter.sequence }}">{{ adapter }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row-fluid">
+                    <!-- Test Fragment Key -->
+                    <div class="span6">
+                        <label class="form-label">Test Fragment Key</label>
+                        <input type="text" name="tfKey" value={{ step.getCurrentSavedFieldDict.tfKey }}
+                                onkeyup="if('atcgATCG'.indexOf(this.value.slice(-1))<0) alert('Invalid TF key
+                        character');">
+                    </div>
+                    <!-- Flow Order -->
+                    <div class="span6 hideIfPgm" style="...">
+                        <label class="form-label">Flow Order</label>
+                        <select id="flowOrder" name="flowOrder" value="" class="select-group">
+                            <option value="">Use Instrument Default</option>
+                            {% for flowOrder in step.getPrePopulatedFieldDict.flowOrders %}
+                                {% ifequal flowOrder.flowOrder step.getCurrentSavedFieldDict.flowOrder %}
+                                    <option SELECTED
+                                            value="{{ flowOrder.flowOrder }}">{{ flowOrder.description }}</option>
+                                {% else %}
+                                    <option value="{{ flowOrder.flowOrder }}">{{ flowOrder.description }}</option>
+                                {% endifequal %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row-fluid">
+                    <!-- Mark as Duplicates Reads -->
+                    <div class="span6">
+                        <label class="form-label"><i
+                                class="icon-info-sign" rel="tooltip" data-placement="right"
+                                title="PCR duplicates will be flagged in the BAM file"></i> Mark as Duplicates Reads
+                            <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads"
+                                   {% if step.getCurrentSavedFieldDict.isDuplicateReads %}checked="checked"{% endif %}
+                                   style="vertical-align:top;">
+
+                        </label>
+                    </div>
+                    <!-- Enable Realignment -->
+                    <div class="span6">
+                        <label class="form-label"><i
+                                class="icon-info-sign" rel="tooltip"
+                                title="Optional analysis step to adjust the alignment, primarily in the CIGAR string"></i>
+                            Enable Realignment
+                            <input type="checkbox" id="realign" name="realign"
+                                   {% if step.getCurrentSavedFieldDict.realign %}checked="checked"{% endif %}
+                                   style="vertical-align:top;">
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- End Advanced Settings -->
+
+<div class="row-fluid">
     {% for key, value in step.validationErrors.items %}
         <h4 style="color: red">{{value}}</h4>
     {% endfor %}
+</div>
+<div class="row-fluid">
+    <p><span id="scannerValidationError" class="alertScannerError"> </span></p>
 </div>
 {% endblock page-plan-content %}
 
@@ -326,6 +388,8 @@
 
 {% block post-raw %}
 {{ block.super }}
+<script type="text/javascript" src="{% static 'resources/scripts/plan/page_page_kits_barcode_scanning.js'%}"></script>
+
 <script type="text/javascript">
     // Populate info needed for smart filtering
     function applicationType_to_values(applicationType){
@@ -663,9 +727,10 @@
         }
 
         function handleTemplateKitSelectionForProtocol() {
+            $("#samplePrepProtocol").prop("disabled", true);
         	categorizedApplProductInUse = null;
         	
-            var templateKit = templateKits[$("#templateKit").val()];
+            var templateKit = templateKits[$("#templateKit").val()]
 
             if (templateKit && ($('input[name="templatekitType"]:checked').val() == "IonChef")) {
                 var kitCategories = templateKit.categories;
@@ -673,6 +738,7 @@
                 if (kitCategories.toLowerCase().indexOf("sampleprepprotocol") >= 0) {
 					var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
 					if (categorizedApplProduct) {
+					    $("#samplePrepProtocol").prop("disabled", false);
                         var planCategories = "{{step.getPrePopulatedFieldDict.planCategories}}";
 						update_samplePrepProtocol_select(kitCategories, planCategories);
 						
@@ -685,13 +751,10 @@
 	                		//re-select original value after selection list refresh
 	                		setSamplePrepProtocolSelection("{{step.savedFields.samplePrepProtocol}}");
 	                	}
-	                	$('.chef-protocol-inline').show();
 	                	return;
                 	}
                 }
             }
-            $('.chef-protocol-inline').hide();
-            $('.chef_protocol_info').hide();
             setSamplePrepProtocolSelection("");
         }
         
@@ -1063,7 +1126,6 @@
             }
         }
 
-
         $("#sequenceKit").on('change', function(){
             handleSequencingKitSelection($(this).val());
         });
@@ -1144,6 +1206,12 @@
                     templateKit = ($(this).val() == 'OneTouch') ? defaults.defaultTemplateKit : defaults.defaultIonChefPrepKit;
                 }
             }
+        	// default to auto-selecting if only one db entry is available
+        	var entryCount = $("#templateKit option").length;
+        	if (!templateKit || (entryCount > 0 && entryCount <= 2)) {
+                 templateKit = $("#templateKit option").eq(entryCount - 1).val();
+			}
+            
             $("#templateKit").val(templateKit).change();
         });
 
@@ -1189,7 +1257,7 @@
                 updateSummaryPanel("#selectedFlowOrder", displayedValue);
             }
             else {
-                updateSummaryPanel("#selectedFlowOrder", "(use instrument settings)");
+                updateSummaryPanel("#selectedFlowOrder", "Use Instrument Default");
             }
         });
 		
@@ -1204,6 +1272,12 @@
             else {
                 updateSummaryPanel("#selectedSamplePrepProtocol", "(use default)");
             }
+        });
+
+        $("#base_recalibrate").change(function() {
+            var value = $(this).val();
+            var displayedValue = baseRecalibrationModesValueToName[value];
+            updateSummaryPanel("#selectedBaseCalibrationMode", displayedValue);
         });
         
         var flowsSpinner = $("#flows").spinner({min: 1, max: 2000});
@@ -1275,18 +1349,6 @@
         $("#barcodeId").change(function()  {
             updateSummaryPanel("#selectedBarcode", $(this).val());
         });
-        
-        $(".extra_kit_forward_info").hide();
-        $(".extra-kit-inline").click(function() {
-            if (($(".extra_kit_forward_info").is(":visible"))) {
-                $(".extra-kit-inline").text("Details +");
-                $(".extra_kit_forward_info").hide();
-            } else {
-                $(".extra-kit-inline").text("Details -");
-                //toggleFlowOrder();
-                $(".extra_kit_forward_info").show();
-            }
-        });
 
 		init_protocol_templatingSize_n_readLength_visibility();
 
@@ -1297,18 +1359,6 @@
         else {
             $(".templating_size_info").show();
         }
-    
-        $(".chef_protocol_info").hide();
-        $(".chef-protocol-inline").click(function() {
-            if (($(".chef_protocol_info").is(":visible"))) {
-                $(".chef-protocol-inline").text("Details +");
-                $(".chef_protocol_info").hide();
-            } else {
-                $(".chef-protocol-inline").text("Details -");
-                //toggleFlowOrder();
-                $(".chef_protocol_info").show();
-            }
-        });
         		
         $('#isDuplicateReads').change(function(){
             if($(this).is(':checked')) {
@@ -1317,6 +1367,15 @@
                 $('#selectedMarkAsPcrDuplicates').text('False');
             }
             
+        });
+
+        $('#realign').change(function(){
+            if($(this).is(':checked')) {
+                $('#selectedEnableRealignment').text('True');
+            } else {
+                $('#selectedEnableRealignment').text('False');
+            }
+
         });
 
         // generate filtered dropdowns
@@ -1415,16 +1474,27 @@
         filter_select_dropdown(libraryKits, filters, "#libraryKitType");
     }
 
+    function getSamplePrep_filter_option(){
+        templatekitType_value = $('input[name="templatekitType"]:checked').val();
+        if (templatekitType_value == "IA"){
+            SamplePrep_filter_option = "IA";
+        }
+        else{
+            SamplePrep_filter_option = templatekitType_value == "IonChef"? "IC" : "OT";
+        }
+        return SamplePrep_filter_option;
+    }
+
     function update_TemplateKit_select(){
         var filters = get_filters("");
-        filters['samplePrep_instruments'] = $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT"
+        filters['samplePrep_instruments'] = getSamplePrep_filter_option();
 
         filter_select_dropdown(templateKits, filters, "#templateKit");
     }
 
     function update_SequencingKit_select(){
         var filters = get_filters("");
-        filters['samplePrep_instruments'] = $('input[name="templatekitType"]:checked').val() == "IonChef"? "IC" : "OT"
+        filters['samplePrep_instruments'] = getSamplePrep_filter_option();
 
         filter_select_dropdown(sequencingKits, filters, "#sequenceKit");
     }
@@ -1475,6 +1545,17 @@
         
         return filters;
      }
+
+    // Show and hide advanced settings
+    $(".showhide").click(function (event) {
+        event.preventDefault();
+        $(this).toggleClass('icon-minus icon-plus');
+        $(".hideable_advanced_settings_section").toggle();
+        window.localStorage.setItem("plan-advanced-settings", $(this).hasClass("icon-minus"));
+    });
+    if (window.localStorage.getItem("plan-advanced-settings") == "true") {
+        $(".showhide").click();
+    }
     
 </script>
 {% endblock post-raw %}

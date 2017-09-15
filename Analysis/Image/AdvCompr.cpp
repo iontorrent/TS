@@ -113,6 +113,9 @@ AdvCompr::AdvCompr(FILE_HANDLE _fd, short int *_raw, int _w, int _h,
 		cblocks++;
 	if (h % BLK_SZ_Y)
 		rblocks++;
+
+        // do by default for PQ...Not required for 550 chip
+        doPairPixelXtalkCorr = 1;
 }
 
 // deconstructor
@@ -327,23 +330,22 @@ int AdvCompr::Compress(int _threadNum, uint32_t region, int targetAvg, int _time
 	double start_xtc=AdvCTimer();
 	int total_iter = 0;
 
-#ifdef XTALK_FRAC_EARLY
 	findPinned();
-	if(CorrectRowNoise)
+        if (doPairPixelXtalkCorr) {
+	  if(CorrectRowNoise)
 		ApplyGain_FullChip_xtalkcorr_sumRows(XTALK_FRAC, w, h, npts, (short unsigned int *)raw);
-	else
+	  else
 		ApplyGain_FullChip_xtalkcorr(XTALK_FRAC, w, h, npts, (short unsigned int *)raw);
 
-#else
-	ApplyGain_FullChip(0);
-#endif
+        }
+	//ApplyGain_FullChip(0);
 	timing.xtalk += AdvCTimer() - start_xtc;
 
 	if(CorrectRowNoise){
-        if(region >= RDR_MAX_REGIONS)
-			NNSubtractComparatorSigs_tn(100);
-		else
-			NNSubtractComparatorSigs(500);
+          if(region >= RDR_MAX_REGIONS)
+	    NNSubtractComparatorSigs_tn(100);
+	  else
+	    NNSubtractComparatorSigs(500);
 	}
 
 #if 0
@@ -573,6 +575,8 @@ void AdvCompr::ParseOptions(char *options)
 	const char *CorrectRowNoiseOpt="CorrectRowNoise";
 //	const char *DfcCoeffOpt="DfcCoeff=";  // number of dfc coefficients
 
+        const char *pairPixelXtalkCorr="PairPixelXtalkCorr=";
+
 	// set up the defaults
 	strcpy(SplineStrategy,"no-knots");
 	nPcaBasisVectors=6;
@@ -646,14 +650,19 @@ void AdvCompr::ParseOptions(char *options)
 #endif
 	if(strstr(options,CorrectRowNoiseOpt))
 	{
-		CorrectRowNoise = 0;
+	  CorrectRowNoise = 0;
 	}
-
-
+        ptr = strstr(options,pairPixelXtalkCorr);
+        if(ptr)
+        {
+          ptr += strlen(pairPixelXtalkCorr);
+          sscanf(ptr,"%d",&doPairPixelXtalkCorr);
+        }
+        
 #ifndef BB_DC
 	AdvComprPrintf("%s: Options - %s\n",__FUNCTION__,options);
-	AdvComprPrintf("%s: nPcaBasisVectors-%d nPcaFakeBasisVectors-%d nPcaSplineBasisVectors-%d nSplineBasisVectors-%d nDfcCoeff-%d\n",
-			__FUNCTION__,nPcaBasisVectors,nPcaFakeBasisVectors,nPcaSplineBasisVectors,nSplineBasisVectors,nDfcCoeff);
+	AdvComprPrintf("%s: nPcaBasisVectors-%d nPcaFakeBasisVectors-%d nPcaSplineBasisVectors-%d nSplineBasisVectors-%d nDfcCoeff-%d CorrectRowNoise-%d PairPixelXtalkCorr-%d\n",
+			__FUNCTION__,nPcaBasisVectors,nPcaFakeBasisVectors,nPcaSplineBasisVectors,nSplineBasisVectors,nDfcCoeff, CorrectRowNoise, doPairPixelXtalkCorr);
 #endif
 }
 

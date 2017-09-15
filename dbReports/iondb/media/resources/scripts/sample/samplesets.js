@@ -576,6 +576,9 @@ function detailInit(e) {
                         biopsyDays : {
                         	type : "number",
                         },
+                        cellNum : {
+                        	type : "string",
+                        },
                         coupleId : {
                         	type : "string",
                         },
@@ -746,6 +749,10 @@ function getColumns(isFusions) {
      } , {
          field: "biopsyDays",
          title: "Biopsy Days",       
+         sortable: true,
+     } , {
+         field: "cellNum",
+         title: "Cell Num",
          sortable: true,
      } , {
          field: "coupleId",

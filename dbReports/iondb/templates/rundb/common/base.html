@@ -12,6 +12,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    {% comment %}
+        Only our dbReports package will include feedback.html. This with tag is needed to prevent django
+        from trying to include the file before evaling the if statement.
+    {% endcomment %}
+    {% if "rundb/common/feedback.html"|template_exists %}
+        {% with "rundb/common/feedback.html" as path %}
+            {% include path %}
+        {% endwith %}
+    {% endif %}
+
     {% if base_js_extra %}
         {% with "rundb/common/js_extra.html" as js_extra_html %}
             {% include js_extra_html %}
@@ -64,7 +74,7 @@
     {% block extra_head %}{% endblock extra_head %}
     <script type="text/javascript" src="{% static "resources/scripts/tb-bootstrap-modal.min.js"%}"></script> <!-- Must be last to override the bootstrap modal default behavior -->
 </head>
-<body>
+<body {% block extra_body_attributes %}{% endblock %} >
 <noscript>
     <style type="text/css">
         .header{display:none;}
@@ -138,7 +148,7 @@
                     <div class="">
                     <ul class=" nav nav-tabs pull-left">
                         <li id="plan-menu" class="{% block plan_menu %}{% endblock %}">
-                            <a href="{% url "planRuns" %}" class="nav-tab">Plan</a>
+                            <a href="{% url "plan" %}" class="nav-tab">Plan</a>
                         </li>
                         <li id="monitor-menu" class="{% block monitor_menu %}{% endblock %}">
                             <a href="{% url "monitor" %}" class="nav-tab">Monitor</a>
@@ -190,8 +200,10 @@
 {% endblock report-header %}
 <div class="main {%spaceless%} {%block extra-main-class%}{%endblock extra-main-class%} {%endspaceless%}">
     <div class="container-fluid">
-        <div id="global_messages"></div>
-        <div id="user_messages"></div>
+        <div id="messages-container">
+            <div id="global_messages"></div>
+            <div id="user_messages"></div>
+        </div>
         <script>
             $(function(){
                 //dynamically add the #error-messages container
@@ -230,5 +242,6 @@
   });
 </script>
 {% endif %}
+{% block extra_body %}{% endblock extra_body %}
 </body>
 </html>

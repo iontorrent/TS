@@ -172,6 +172,7 @@ class StepHelperDbLoader():
 
         if sampleset.libraryPrepKitName and sampleset.libraryPrepKitName != '0':
             kits_step_data.savedFields[KitsFieldNames.LIBRARY_KIT_NAME] = sampleset.libraryPrepKitName
+
         return step_helper
 
     def updateTemplateSpecificStepHelper(self, step_helper, planned_experiment):
@@ -484,6 +485,8 @@ class StepHelperDbLoader():
         kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = "OneTouch"
         if planned_experiment.is_ionChef():
             kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = "IonChef"
+        elif planned_experiment.is_isoAmp():
+            kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = "IA"
 
         kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_NAME] = planned_experiment.templatingKitName
         kits_step_data.savedFields[KitsFieldNames.CONTROL_SEQUENCE] = planned_experiment.controlSequencekitname
@@ -535,8 +538,10 @@ class StepHelperDbLoader():
             kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KITS] |= savedtemplatekit
             oneTouchKits = kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH][KitsFieldNames.KIT_VALUES]
             ionChefKits = kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ION_CHEF][KitsFieldNames.KIT_VALUES]
+            isoAmpKits = kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ISO_AMP][KitsFieldNames.KIT_VALUES]
             kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH][KitsFieldNames.KIT_VALUES] |= savedtemplatekit.filter(kitType__in=oneTouchKits.values_list('kitType', flat=True))
             kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ION_CHEF][KitsFieldNames.KIT_VALUES] |= savedtemplatekit.filter(kitType__in=ionChefKits.values_list('kitType', flat=True))
+            kits_step_data.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ISO_AMP][KitsFieldNames.KIT_VALUES] |= savedtemplatekit.filter(kitType__in=isoAmpKits.values_list('kitType', flat=True))
 
             available_dnaBarcodes = dnaBarcode.objects.filter(Q(active=True) | Q(name=planned_experiment.get_barcodeId()))
 
@@ -827,6 +832,7 @@ class StepHelperDbLoader():
                     cancerType=None,
                     cellularityPct=None,
                     biopsyDays=None,
+                    cellNum=None,
                     coupleID=None,
                     embryoID=None
                 )
@@ -854,6 +860,7 @@ class StepHelperDbLoader():
                 cancerType=None,
                 cellularityPct=None,
                 biopsyDays=None,
+                cellNum=None,
                 coupleID=None,
                 embryoID=None
             )
@@ -909,8 +916,14 @@ class StepHelperDbLoader():
         barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = sorted_sampleSetItems
         barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.SHOW_SAMPLESET_INFO] = len(samplesets) > 1
 
-        barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
-        save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
+        if step_helper.isCreate() and samplesets:
+            sampleTubeLabelInfo = self._get_combinedLibraryTubeLabelInfo(samplesets)
+            barcoding_step.savedFields[SavePlanFieldNames.TUBE_LABEL] = sampleTubeLabelInfo
+            barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = sampleTubeLabelInfo                   
+            save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = sampleTubeLabelInfo
+        else:
+            barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
+            save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
 
         barcoding_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = planned_experiment.get_chipBarcode()
         save_plan_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = planned_experiment.get_chipBarcode()
@@ -1006,9 +1019,11 @@ class StepHelperDbLoader():
                     "ircancerType": item.cancerType,
                     "ircellularityPct": item.cellularityPct,
                     "biopsyDays": "",
+                    "cellNum": "",
                     "coupleID": "",
                     "embryoID": "",
                     "irbiopsyDays": item.biopsyDays,
+                    "ircellNum": item.cellNum,
                     "ircoupleID": item.coupleId,
                     "irembryoID": item.embryoId,
                 }
@@ -1030,6 +1045,19 @@ class StepHelperDbLoader():
         barcoding_step.prepopulatedFields[SavePlanFieldNames.NUM_SAMPLES] = num_samples
 
 
+    def _get_combinedLibraryTubeLabelInfo(self, sampleSets):
+        '''
+        returns all the combined library tube label values found in the sample sets, separated by a space
+        '''
+        labelInfo = ""
+        for sampleSet in sampleSets:
+            if sampleSet.combinedLibraryTubeLabel:
+                if labelInfo:
+                    labelInfo += " "
+                labelInfo += sampleSet.combinedLibraryTubeLabel
+        return labelInfo       
+    
+    
     def _getIRinfo(self, planned_experiment):
         # logger.debug("ENTER step_helper_db_loader._getIRinfo()")
 

@@ -465,24 +465,24 @@
   }
   function add_filtered_uploads(data) {
     var in_progress = false;
-    data.objects.sort(function (a, b) {
+    
+    var uploads = data.objects.filter(function(upload){ return upload.meta.reference == "{{name}}" });
+    uploads.sort(function (a, b) {
       var nameA = a.file_path.split("/").pop().toLowerCase();
       var nameB = b.file_path.split("/").pop().toLowerCase();
       return (nameA > nameB)? 1 : -1;
     });
-    for (var i = 0; i < data.objects.length; i++) {
-      var upload = data.objects[i];
-      if (upload.meta.reference == "{{ name }}") {
-        add_upload(upload);
-        if (upload.status != "Successfully Completed" && upload.status.indexOf("Error") != 0) {
-          in_progress = true;
-        }
+
+    for (var i = 0; i < uploads.length; i++) {
+      add_upload(uploads[i]);
+      if (uploads[i].status != "Successfully Completed" && uploads[i].status.indexOf("Error") != 0) {
+        in_progress = true;
       }
     }
     return in_progress;
   }
   function update_uploads(data) {
-    $(".fileList li").remove();
+    $("#availableBedFileList, #processingBedFileList").empty();
     if (add_filtered_uploads(data)) {
       global_upload_refresh_timer = window.setTimeout(refresh_uploads, refresh_timer_wait);
       if (refresh_timer_wait < 2000) {
@@ -502,7 +502,7 @@
       clearTimeout(global_upload_refresh_timer);
       global_upload_refresh_timer = null;
     }
-    $.getJSON("/rundb/api/v1/contentupload/?limit=0", update_uploads);
+    $.getJSON("/rundb/api/v1/contentupload/?limit=0&pub=BED", update_uploads);
   }
   function jailbreak_callback(upload_id) {
     refresh_uploads();

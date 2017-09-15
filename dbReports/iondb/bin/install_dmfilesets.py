@@ -51,6 +51,7 @@ DM_FILE_SETS = [
             'Controller',
             'DataCollect\.config',
             'debug',
+            'liveview',
             'Gain.lsr',
             'thumbnail/Gain.lsr',
             # not required, but want to clean these up if exist
@@ -111,6 +112,7 @@ DM_FILE_SETS = [
                 'sigproc_results/analysis\.bfmask\.stats',
                 'onboard_results/sigproc_results/analysis\.bfmask\.stats',
                 'sigproc_results/Bead_density_.*?\.png',
+                'sigproc_results/sigproc\.log',
             ],
             dmactions_types.SIG:[
                 '.[^/]*?xplog\.txt',
@@ -161,6 +163,7 @@ DM_FILE_SETS = [
             'sigproc_results/analysis.bfmask.stats',
             'onboard_results/sigproc_results/analysis\.bfmask\.stats',
             'sigproc_results/Bead_density_.*?\.png',
+            'sigproc_results/sigproc\.log',
             'bc_files/.*?',
             'bc_filtered/.*?',
             'download_links/.*?',
@@ -171,10 +174,10 @@ DM_FILE_SETS = [
             'status.txt',
             ],
         'exclude':[
-            '.*?filtered.untrimmed.*?',
-            '.*?filtered.trimmed.*?',
-            '.*?unfiltered.untrimmed.*?',
-            '.*?unfiltered.trimmed.*?',
+            '.*?filtered.untrimmed/.*?',
+            '.*?filtered.trimmed/.*?',
+            '.*?unfiltered.untrimmed/.*?',
+            '.*?unfiltered.trimmed/.*?',
             ],
         'keepwith':{
             dmactions_types.BASE: [
@@ -240,12 +243,9 @@ DM_FILE_SETS = [
             'Controller',
             'DataCollect\.config',
             'debug',
+            'liveview',
             'Gain.lsr',
             'thumbnail/Gain.lsr',
-            # not required, but want to clean these up if exist
-            'jpg/.*?',
-            '.[^/]*?\.jpg',
-            '.[^/]*?hipCalImage\.bmp\.bz2',
             # Basecaller category
             'sigproc_results/1\.wells',
             'sigproc_results/.[^/]*?\.bin',

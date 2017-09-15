@@ -274,11 +274,11 @@ def status_update(path, status, extra_info_dict = {}):
     with open(os.path.join(path, "split_status.json"), "w+") as f:
         f.write(json.dumps(status_dict))
 
-def clean_position_name(chrom, pos, position_names, window, id):
+def clean_position_name(chrom, pos, position_names, window, my_id):
     """try to clean up chr names"""
 
-    left = int(pos) - (window / 2 )
-    right = int(pos) + (window / 2 )
+    #left = int(pos) - (window / 2 )
+    #right = int(pos) + (window / 2 )
 
     name = chrom.replace("|","PIPE")
     name += "_" + str(pos)
@@ -286,7 +286,7 @@ def clean_position_name(chrom, pos, position_names, window, id):
 
     #now check to make sure that the name isn't already taken
     if name in position_names:
-        name += "_" + str(id)
+        name += "_" + str(my_id)
 
     #maybe like this later
     #chr#(start-padding)(end+padding) where end=start+length(ref).
@@ -302,24 +302,17 @@ def add_to_zip_list(to_zip_list, source_path, dest_dir = None, dest_basename = N
         dest_path = os.path.join(dest_dir, dest_basename)
     to_zip_list.append((source_path, dest_path))
 
-def slicer_main(path, temp_path, barcode):
+def simulate_vc_plugin(path_to_result, barcode):
     '''
-    path: path to the barcode directory
-    temp_path: path to the sliced data directory
-    barcode: barcode of interest. Empty string refers to as no barcode.
+    Simulate the variantCaller plugin and get the files for the barcode.
     '''
-
-    full_path = os.path.join(path, temp_path)
-    
     # Use variant_caller_plugin to get information
-    if barcode in ['', False, None]:
-        plugin_dir = path
-        prefix = ''
+    if barcode in ['', False, None, 'nonbarcoded']:
+        plugin_dir = path_to_result
         my_barcode = None
     else:
-        plugin_dir = os.path.realpath(os.path.join(path, ".."))
+        plugin_dir = os.path.realpath(os.path.join(path_to_result, ".."))
         my_barcode = barcode
-        prefix = barcode + '_'
 
     # Get startplugin_json
     with open(os.path.join(plugin_dir, 'startplugin.json'), 'rb') as f_json:
@@ -374,7 +367,7 @@ def slicer_main(path, temp_path, barcode):
         if os.path.exists(try_bam_path):
             my_bam_dict['untrimmed_bam'] = try_bam_path
             break
-        try_bam_path = os.path.join(path, try_bam)
+        try_bam_path = os.path.join(path_to_result, try_bam)
         if os.path.exists(try_bam_path):
             my_bam_dict['untrimmed_bam'] = try_bam_path
             break        
@@ -389,14 +382,164 @@ def slicer_main(path, temp_path, barcode):
     # Determine the 'vc_pipeline_directory' and post processed bam
     if multisample:
         my_bam_dict['vc_pipeline_directory'] = os.path.join(vc_plugin.TSP_FILEPATH_PLUGIN_DIR, my_configutation['name'])
-        ptrim = os.path.join(my_bam_dict['vc_pipeline_directory'], 'multisample_processed.bam')
+        my_bam_dict['post_processed_bam'] = os.path.join(my_bam_dict['vc_pipeline_directory'], 'multisample_processed.bam')
     else:
         my_bam_dict['vc_pipeline_directory'] = my_bam_dict['results_directory']
         assert(my_bam_dict['untrimmed_bam'].endswith('.bam'))
-        ptrim = os.path.join(my_bam_dict['vc_pipeline_directory'], os.path.basename(my_bam_dict['untrimmed_bam'])[:-4] + '_processed.bam')
+        my_bam_dict['post_processed_bam'] = os.path.join(my_bam_dict['vc_pipeline_directory'], os.path.basename(my_bam_dict['untrimmed_bam'])[:-4] + '_processed.bam')
 
-    if not os.path.exists(ptrim):
-        ptrim = ''
+    if not os.path.exists(my_bam_dict['post_processed_bam']):
+        my_bam_dict['post_processed_bam'] = None
+
+    return vc_plugin, my_configutation, my_bam_dict 
+
+def get_config_names(bucket):
+    variantCallerConfigurations_path = '/results/plugins/scratch/variantCallerConfigurations.txt'
+    # load all configurations
+    try:
+        with open(variantCallerConfigurations_path, 'r') as f_configs:
+            all_contents = f_configs.read()
+    except IOError:
+        all_contents = ''
+    if all_contents == '':
+        all_configs = {}
+    else:
+        # load stringify content
+        all_configs = json.loads(all_contents)
+    return all_configs.keys()
+
+def save_adjusted_param_to_configuration(bucket):
+    '''
+    Save the adjusted parameters to the configuration.
+    '''
+    try:
+        try:
+            barcode = bucket["request_get"].get('barcode', None)
+            save_to_config_name = bucket["request_get"]['config_name']
+            adjusted_tvc_params = bucket["request_get"]['adjusted_params']
+            if barcode is None:
+                path_to_detail_report = bucket["request_get"]['plugin_result_path']
+            else:
+                path_to_detail_report = os.path.join(bucket["request_get"]['plugin_result_path'], barcode)
+        except:
+             return {'Error': 'invalid requests'}
+        
+        # I hard code the path to variantCallerConfigurations here.
+        variantCallerConfigurations_path = '/results/plugins/scratch/variantCallerConfigurations.txt'
+    
+        # Simulate what the plugin does
+        try:
+            vc_plugin, my_configutation, my_bam_dict = simulate_vc_plugin(path_to_detail_report, barcode)
+        except:
+            return {'Error': 'Fail to get the configuration of the plugin result %s.' %path_to_detail_report}
+       
+        # Get the configuration of the barcode
+        my_pluginconfig = my_configutation['json']['pluginconfig']
+        my_pluginconfig['meta']['name'] = 'Custom'
+        my_pluginconfig['meta']['configuration'] = 'custom'
+        my_pluginconfig['meta']['configuration_name'] = save_to_config_name
+        my_pluginconfig['meta']['tooltip'] = 'Manually created custom set'
+        my_pluginconfig['meta']['custom'] = True
+        my_pluginconfig['meta']['built_in'] = False
+        my_pluginconfig['meta']['parameters'] = {'config': '', 'value': 'custom'} # I can't tell the value of "config". It depends on the parameter file available to the stuffs selected by the user.
+
+        # If start the plugin with the plan, use the reference/target region/HS specified in barcodes.json.
+        # I must follow whatever instance.html does.
+        if my_configutation['start_mode'].lower() == 'auto start':
+            # Auto start mode has no panel.
+            my_pluginconfig['meta']['tagseq_panel'] = ''
+            my_pluginconfig['meta']['tagseq_panel_id'] = 'Unspecified'
+            my_pluginconfig['meta']['ampliseq_panel'] = ''
+            my_pluginconfig['meta']['ampliseq_panel_id'] = 'Unspecified'
+            my_pluginconfig['meta']['reference'] = my_configutation['options'].serve_option('reference_genome_name', my_bam_dict['name'])
+            # Deal with referenceid 
+            reference_full_name = vc_plugin.BARCODES_JSON[my_bam_dict['name']].get('reference_full_name', '') # Should be available if TS-15330 is included.
+            if reference_full_name == '':
+                my_pluginconfig['meta']['referenceid'] = my_pluginconfig['meta']['reference']
+            else:
+                my_pluginconfig['meta']['referenceid'] = my_pluginconfig['meta']['reference'] +  " - " + reference_full_name
+            # Hotspots
+            my_pluginconfig['meta']['targetloci'] = my_configutation['options'].serve_option('hotspots_bed_unmerged', my_bam_dict['name'])
+            my_pluginconfig['meta']['targetloci_id'] = my_configutation['options'].serve_option('hotspots_name', my_bam_dict['name'])
+            my_pluginconfig['meta']['targetloci_merge'] = my_configutation['options'].serve_option('hotspots_bed_merged', my_bam_dict['name'])
+            # Target Regions
+            my_pluginconfig['meta']['targetregions'] = my_configutation['options'].serve_option('targets_bed_unmerged', my_bam_dict['name'])
+            my_pluginconfig['meta']['targetregions_id'] = my_configutation['options'].serve_option('targets_name', my_bam_dict['name'])
+            my_pluginconfig['meta']['targetregions_merge'] = my_configutation['options'].serve_option('targets_bed_merged', my_bam_dict['name'])
+        
+        # Now deal with parameters
+        # Get local_parameters.json
+        local_param_json_path = my_configutation['options'].serve_option('parameters_file')
+        try:
+            with open(local_param_json_path, 'rb') as f_local_json:
+                local_parameters = json.load(f_local_json)
+        except:
+            return {'Error': 'Fail to load %s.' %local_param_json_path}    
+        # The parameters of the new configuration are based on "local_parameters.json".
+        for section in ['torrent_variant_caller', 'freebayes', 'long_indel_assembler']:
+            my_pluginconfig[section] = local_parameters[section]
+        # The tuned parameters
+        if type(adjusted_tvc_params) is not dict:
+            adjusted_tvc_params = json.loads(adjusted_tvc_params)
+        for key, value in adjusted_tvc_params.iteritems():
+            my_pluginconfig['torrent_variant_caller'][key] = value        
+        # The custom args
+        for arg_key in ['tvcargs', 'tmapargs', 'unifyargs']:
+            if arg_key in local_parameters['meta']:
+                my_pluginconfig['meta'][arg_key] = local_parameters['meta'][arg_key]
+            else: 
+                my_pluginconfig['meta'].pop(arg_key, None)
+    
+        # load all configurations
+        try:
+            with open(variantCallerConfigurations_path, 'r') as f_configs:
+                all_contents = f_configs.read()
+        except IOError:
+            all_contents = ''
+        
+        if all_contents == '':
+            all_configs = {}
+        else:
+            # load stringify content
+            all_configs = json.loads(all_contents)
+        # I must "serialize" one configuration
+        all_configs[save_to_config_name] = json.dumps({'pluginconfig': my_pluginconfig, 
+                                                       'plugin':  [vc_plugin.STARTPLUGIN_JSON['runinfo']['plugin_name'], ],
+                                                       })
+        try:
+            with open(variantCallerConfigurations_path, 'w') as f_configs:
+                f_configs.write(json.dumps(all_configs))
+                try:
+                    os.chmod(variantCallerConfigurations_path, 0777)
+                except:
+                    pass
+        except IOError:
+            return {'Error': 'Fail to write to %s.' %variantCallerConfigurations_path}        
+    except Exception as e:
+        if hasattr(e, 'message'):
+            err_msg = e.message
+        else:
+            err_msg = str(e)
+        return {'Error': err_msg}
+
+    return {'Success': 'Adjusted parameters are saved to the configuration "%s".' %save_to_config_name}
+
+def slicer_main(path, temp_path, barcode):
+    '''
+    path: path to the barcode directory
+    temp_path: path to the sliced data directory
+    barcode: barcode of interest. Empty string refers to as no barcode.
+    '''
+
+    full_path = os.path.join(path, temp_path)
+
+    # Simulate what variantCaller plugin does and gets the configuration/options for the barcode   
+    vc_plugin, my_configutation, my_bam_dict = simulate_vc_plugin(path, barcode)
+
+    # Get the prefix
+    prefix = ''
+    if my_bam_dict['name'] != vc_plugin.NONBARCODED:
+        prefix = my_bam_dict['name'] + '_'
 
     # Get all bed files
     source_bed_files = glob.glob(my_bam_dict['results_directory'] + '/*.bed')
@@ -420,8 +563,8 @@ def slicer_main(path, temp_path, barcode):
     with open(os.path.join(full_path, prefix + "rawlib_stats.txt"),"w+") as f:
         f.write(rawlib_stats)
 
-    if ptrim:
-        rawlib_prtim_stats = subprocess.Popen(['samtools', 'flagstat', ptrim],
+    if my_bam_dict['post_processed_bam'] is not None:
+        rawlib_prtim_stats = subprocess.Popen(['samtools', 'flagstat', my_bam_dict['post_processed_bam']],
                                               stdout=subprocess.PIPE).communicate()[0]
 
         with open(os.path.join(full_path, prefix + "rawlib_ptrim_stats.txt"),"w+") as f:
@@ -429,13 +572,13 @@ def slicer_main(path, temp_path, barcode):
 
     vcf_files = ["small_variants.vcf", "small_variants_filtered.vcf", "TSVC_variants.vcf", "indel_assembly.vcf"]
     # Hotspots vcf
-    hotspots_name = my_configutation['options'].serve_option('hotspots_name', my_barcode)
+    hotspots_name = my_configutation['options'].serve_option('hotspots_name', my_bam_dict['name'])
     if hotspots_name != '':
         try_hs_vcf_path = os.path.join(path, hotspots_name + '.hotspot.vcf')
         if os.path.exists(try_hs_vcf_path):
             vcf_files.append(os.path.basename(try_hs_vcf_path))
     # sse vcf
-    sse_bed = my_configutation['options'].serve_option('sse_bed', my_barcode)
+    sse_bed = my_configutation['options'].serve_option('sse_bed', my_bam_dict['name'])
     if sse_bed.endswith('bed') :
         try_sse_vcf_path = os.path.join(path, os.oath.basename(sse_bed)[:-4] + '.vcf')
         if os.path.exists(try_sse_vcf_path):
@@ -469,7 +612,7 @@ def slicer_main(path, temp_path, barcode):
         args =  "%s prepare_hotspots " %vc_plugin.TVCUTILS
         args += " --input-bed %s " %expected_bed_filename
         args += " --output-vcf %s " %expected_vcf_filename
-        args += " --reference %s " %my_configutation['options'].serve_option('reference_genome_fasta', my_barcode)
+        args += " --reference %s " %my_configutation['options'].serve_option('reference_genome_fasta', my_bam_dict['name'])
         args += " --left-alignment on"
         printtime(args)
         subprocess.check_call(args, cwd=full_path, shell=True)
@@ -497,10 +640,10 @@ def slicer_main(path, temp_path, barcode):
         subprocess.check_call(args, cwd=full_path)
         add_to_zip_list(to_zip, os.path.join(full_path, rawlib_variant + ".bai"), results_name)  
 
-        if ptrim:
+        if my_bam_dict['post_processed_bam'] is not None:
             # processed bam
-            rawlib_ptrim_variant = '%s_%s.bam' %(os.path.basename(ptrim)[:-4], base) 
-            args = bam_split(ptrim, rawlib_ptrim_variant, variant["chrom"], variant["pos"], WINDOW)
+            rawlib_ptrim_variant = '%s_%s.bam' %(os.path.basename(my_bam_dict['post_processed_bam'])[:-4], base) 
+            args = bam_split(my_bam_dict['post_processed_bam'], rawlib_ptrim_variant, variant["chrom"], variant["pos"], WINDOW)
             subprocess.check_call(args, cwd=full_path)
             add_to_zip_list(to_zip, os.path.join(full_path, rawlib_ptrim_variant), results_name)  
 
@@ -545,7 +688,7 @@ def slicer_main(path, temp_path, barcode):
 
     #add bam stats to the zip
     add_to_zip_list(to_zip, os.path.join(full_path, prefix + "rawlib_stats.txt"), results_name)  
-    if ptrim:
+    if my_bam_dict['post_processed_bam'] is not None:
         add_to_zip_list(to_zip, os.path.join(full_path, prefix + "rawlib_ptrim_stats.txt"), results_name)  
 
     #parameters
@@ -553,7 +696,7 @@ def slicer_main(path, temp_path, barcode):
     add_to_zip_list(to_zip, parameter_path, results_name)  
 
     #add the variants.json file
-    add_to_zip_list(to_zip, os.path.join(full_path, "variants.json"), results_name)  
+    add_to_zip_list(to_zip, os.path.join(full_path, "variants.json"), results_name)
     
     # make zip file
     status_update(path, "Creating ZIP")
@@ -614,4 +757,3 @@ if __name__ == '__main__':
         sys.stderr.flush()        
         # If an error occures, I must update the status to tell allelesTable.js don't have to wait until timeout (1000 sec).
         status_update(path, 'failed', {'path': path, 'temp_path': temp_path})
-

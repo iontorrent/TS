@@ -34,7 +34,9 @@ def ion_argstr_to_tuples(arg_str):
     
     tuple_list = []
     try:
-        arg_words = arg_str.split()
+        # IR-29686: IR allows a space '\ ' in file path.
+        # I first replace '\ ' by the null char '\0' and then split the tmap args, assuming that the null char '\0' is impossible to show up in tmap command line)
+        arg_words = arg_str.replace('\ ', '\0').split()
         index = 0
     
         while index < len(arg_words):
@@ -54,7 +56,7 @@ def ion_argstr_to_tuples(arg_str):
             index += 1
     except:
         pass
-    return tuple_list
+    return [(my_item[0].replace('\0', '\ '), my_item[1].replace('\0', '\ ')) for my_item in tuple_list] # IR-29686: Now I need to get '\ ' back, i.e., replace '\0' by '\ '.  
 
 
 # -------------------------------------------------------------------------
@@ -91,7 +93,7 @@ def get_consensus_tmap_command(options, parameters, input_bam):
         # Remove some input gloabl options from command string
         if tp[0] in ['-r','--fn-reads',    '-s','--fn-sam',
                      '-n','--num-threads', '-f','--fn-fasta', 
-                     '-k','--shared-memory-key']:
+                     '-k','--shared-memory-key', '--bam-start-vfo', '--bam-end-vfo']:
             continue
         # Change path to bed file in place, if applicable
         elif tp[0] in ['--bed-file']:
@@ -314,13 +316,14 @@ def main():
     # ^) A non standard executable is, e.g., '/path/to/my_tmap', as opposed to system 'tmap'
     
     # Get executable directory
-    bin_dir = ''
+    bin_dir = os.path.dirname(os.path.realpath(__file__)) # TS-14950
     if options.tvcrootdir:
         #printtime('WARNING: Option --tvc-root-dir is DEPRECATED and will be removed in a future release.')
-        bin_dir = os.path.normpath(os.path.join(options.tvcrootdir, 'bin'))
+        bin_dir = os.path.join(options.tvcrootdir, 'bin')
     elif options.bindir:
         #printtime('WARNING: Option --bin-dir is DEPRECATED and will be removed in a future release.')
-        bin_dir = os.path.normpath(options.bindir)
+        bin_dir = options.bindir
+    bin_dir = os.path.normpath(bin_dir)
         
     # Get path to executables
     if not options.path_to_tvc: # 1)

@@ -117,12 +117,16 @@
     </div>
 
     <script>
-        function rescan(){
+        function rescan(pk){
+            // set a default value for the primary key
+            pk = (typeof pk !== 'undefined') ? pk : -1;
+            rescan_url = pk === -1 ? '/rundb/api/v1/plugin/rescan' : '/rundb/api/v1/plugin/' + pk.toString() + '/rescan_plugin';
+
             // disable the kendo grid
             var g = $('#grid').data('kendoGrid');
             $.blockUI();
             $.ajax({
-                url: '/rundb/api/v1/plugin/rescan',
+                url: rescan_url,
                 dataType: 'json',
                 async: true,
                 success: function(data) {
@@ -131,6 +135,7 @@
                     $.unblockUI();
                 },
                 failure: function(data){
+                    console.log("Failed to refesh plugin.")
                     $.unblockUI();
                 }
             });
@@ -185,6 +190,9 @@
             <li>
                 <a href="#= '{% url "configure_plugins_plugin_usage" 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
             </li>
+            <li>
+                <a onclick="#='rescan(999999)'.replace('999999', _id)#" style="font-size: 12px" class="usage-plugin">Rescan</a>
+            </li>
             # if (data.isConfig) { #
             <li>
                 <a href="#= '{% url "configure_plugins_plugin_configure" 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
@@ -214,7 +222,7 @@
 
             # if (data.hasAbout) { #
             <li>
-                <a class='about-plugin' data-name="#= data.name #" href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#"> About </a>
+                <a class='about-plugin' data-name="#= data.name #" href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#">About</a>
             </li>
             # } #
 
@@ -225,6 +233,9 @@
 
 <script id="NameColumnTemplate" type="text/x-kendo-template">
     #= data.name #
+    # if(data.isUpgradable){ #
+        <span style="color:green">&nbsp;Updates Available!</span>
+    # } #
 </script>
 
 <script type="text/javascript">
@@ -305,15 +316,18 @@ $(document).ready(function(){
             {
                 field: "selected",
                 title: "Enabled",
+                width: "90px",
                 template: kendo.template($("#EnabledTemplate").html())
             } , {
                 field: "name",
                 title: "Name",
                 sortable: true,
+                width: '60%',
                 template: kendo.template($("#NameColumnTemplate").html())
             } , {
                 field: "defaultSelected",
                 sortable: false,
+                width: "120px",
                 template: kendo.template($("#DefaultSelectedTemplate").html()),
                 headerTemplate: // Use Bootstrap's tooltip: TS-12264
                     '<span data-toggle="tooltip" data-placement="top"'
@@ -325,21 +339,22 @@ $(document).ready(function(){
             } , {
                 field: "CurrentVersion",
                 title: "Version",
+                width: '20%',
                 sortable: true
             } , {
                 field: "date",
                 title: "Installed Date",
-                template: '#= date != "NA" ? kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") : "NA" #'
-
+                width: '20%',
+                template: '#= date != "NA" ? kendo.toString(new Date(Date.parse(date)),"MMM d yyyy") : "NA" #'
             } , {
                 field: "isSupported",
                 title: "Ion Supported",
-                width: '100px',
+                width: '120px',
                 sortable: true,
                 template: kendo.template($("#IsSupportedColumnTemplate").html())
             }, {
                 title: "Manage",
-                width: '100px',
+                width: '90px',
                 sortable: false,
                 template: kendo.template($("#ActionColumnTemplate").html())
             }

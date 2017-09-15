@@ -229,6 +229,9 @@ $(document).ready(function() {
                         biopsyDays : {
                         	type : "number",
                         },
+                        cellNum : {
+                        	type : "string",
+                        },
                         coupleId : {
                         	type : "string",
                         },
@@ -336,6 +339,10 @@ function getColumns() {
      } , {
          field: "biopsyDays",
          title: "Biopsy Days",       
+         sortable: true,
+     } , {
+         field: "cellNum",
+         title: "Cell Num",   
          sortable: true,
      } , {
          field: "coupleId",

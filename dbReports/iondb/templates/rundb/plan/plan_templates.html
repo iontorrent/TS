@@ -15,42 +15,49 @@
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
 <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script> <!-- Using updated uni-form JS -->
 
-<style>
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 
-.k-grid table tr td {
-    border-style: solid;
-    border-width: 0 0 1px 1px;
-    border-color: #fff8dc;
+<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
+<script src="{% static "js/date.min.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+
+<style type="text/css">
+.search-field {
+    display: inline-block;
+    zoom: 1;
+    *display: inline;
+    height: 30px;
+    float: left;
+    margin: 10px 10px 5px 0;
 }
 
-.k-grid-header .k-grid-header-wrap table thead tr th {
-    border-style: solid;
-    border-width: 0 0 1px 1px;
-    border-color: #fff8dc;
+.search-field select {
+    width: 200px;
 }
 
-
-.k-header{
-background-image: none, linear-gradient(to bottom, rgb(255, 255, 255) 0px, rgb(230, 230, 230) 100%)
-
+.search-field > .btn,
+.search-field > input {
+    font-size: 11px;
 }
-.k-grid .k-grid-header .k-header{
-border-bottom:none;
+
+#tab_contents {
+    margin: 0 10px;
 }
-.k-grid .k-grid-header .k-header .k-link {
-height:24px;
-padding-top:16px;
-font-size:13px;
-color: #333;
+.list_contents{
+    margin-top: 16px;
+}
+
+tbody .btn.dropdown-toggle {
+    padding: 2px 4px;
 }
 </style>
 
 {% endblock extra_head %}
 {% block sub-nav %}
-<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
-<li><a href="{% url "samplesets" %}">Samples</a></li>
-<li class="active"><a href="{% url "plan_templates" %}">Templates</a></li>
-<li><a href="{% url "planned" %}">Planned Run List</a></li>
+    <li class="active"><a href="{% url "plan_templates" %}">Templates</a></li>
+    <li><a href="{% url "samplesets" %}">Samples</a></li>
+    <li><a href="{% url "planned" %}">Planned Runs</a></li>
 {% endblock sub-nav %}
 
 
@@ -80,7 +87,7 @@ color: #333;
                 <h3 style="float:left;"><img src="{% static category.img %}" border="0" width='24px;'>&nbsp;{{category.displayedName}}</h3>
                 <div class="clearfix">
                     <div class="pull-right">
-                        <div class="btn-group"><a rel="tooltip" title="Upload Plan Runs or Template" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">Upload <span class="caret"></span></a>
+                        <div class="btn-group"><a rel="tooltip" title="Upload plans, templates, or panels" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">Upload <span class="caret"></span></a>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url "upload_plans_for_template" %}" class="upload-plan" >Upload Plans</a></li>
                                 <li><a href="#" data-toggle="modal" data-target="#modal_load_template">Upload Template</a></li>
@@ -102,7 +109,92 @@ color: #333;
                         <a href="{% url "page_plan_new_plan_from_code" category.code %}" rel="tooltip" title="Create new plan">Plan New Run</a>
                     </div>
                 </div>
-                <div class="alert alert-warning template_warnings" style="max-height: 100px; overflow-y: scroll;"></div>
+                <div class="alert alert-warning template_warnings" style="max-height: 100px; overflow-y: scroll; margin-bottom:0;"></div>
+
+                <div id="{{category.tag}}_search_bar" class="row-fluid">
+                    <div class="input-append search-field">
+                        <input name="search_text" type="text" placeholder="Search by Template Name"
+                               data-selected_filter="planName" style="width:160px;" />
+            
+                        <div class="btn-group">
+                            <a name="search_subject_nav" class="btn dropdown-toggle" title="Search by Template Name" data-toggle="dropdown" style="border-radius:0;">
+                                <i class="icon-search" border="0"></i><span class="caret"></span>
+                            </a>
+                            <ul name="plan_search_dropdown_menu" class="dropdown-menu pull-right">
+                                <li><a data-filter="planName"><span class="icon-check"></span>Template Name</a></li>
+                                <li><a data-filter="iraccount"><span class="icon-white"></span>IR Account</a></li>
+                                <li><a data-filter="irworkflow"><span class="icon-white"></span>IR Workflow</a></li>
+                            </ul>
+                            <button class="btn search_trigger" type="button" style="margin: 0 0 0 -1px; font-size:11px;">Go</button>
+                        </div>
+                    </div>
+                    <div class="search-field">
+                        <input type="text" name="dateRange" placeholder="Date" style="width:140px;"/>
+                    </div>
+                    <div class="search-field">
+                        <select name="instrument" class="selectpicker" data-width="140px" title="Instrument:" data-persist-title="true">
+                            <option value="">All</option>
+                            <option value="pgm">PGM</option>
+                            <option value="proton">Proton</option>
+                            <option value="s5">S5</option>
+                        </select>
+                    </div>
+                    <div class="search-field">
+                        <select name="sampleprep" class="selectpicker" data-width="140px" title="Sample Prep:" data-persist-title="true">
+                            <option value="">All</option>
+                            <option value="OT">OneTouch</option>
+                            <option value="IC">IonChef</option>
+                            <option value="IA">IA</option>
+                        </select>
+                    </div>
+                    <div class="search-field">
+                        <select name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
+                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
+                                data-live-search-placeholder="Find Projects..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                                title="Project:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                            {% for project in projects %}
+                                <option value="{{ project }}">{{ project }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="search-field">
+                        <button class="btn toggle_more_filters" type="button" data-more-text="More Filters" data-less-text="Less Filters">More Filters</button>
+                    </div>
+                    <div class="search-field">
+                        <button class="btn clear_filters" type="button">Clear All</button>
+                    </div>
+
+                    <div class="search-field optional hide" style="clear:left; margin-left:435px;">
+                        <select name="barcodes" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
+                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
+                                data-live-search-placeholder="Find Barcodes..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                                title="Barcodes:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                            {% for barcode in barcodes %}
+                                <option value="{{ barcode }}">{{ barcode }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="search-field optional hide">
+                        <select name="reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
+                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
+                                data-live-search-placeholder="Find References..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                                title="Reference:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                            {% for reference in references %}
+                                <option value="{{ reference }}">{{ reference }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="search-field optional hide">
+                        <select name="user" class="selectpicker" data-width="140px" title="Source:" data-persist-title="true">
+                            <option value="">All</option>
+                            <option value="_system">System Pre-loaded</option>
+                            {% for user in usernames %}
+                                <option value="{{ user }}">{{ user }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
                 <div id="{{category.tag}}" class="list_contents"></div>
             </div> 
             {% endif %}
@@ -171,15 +263,8 @@ var username = '{{user.username}}';
     
 </script>
 
-<script id="PlanDisplayedNameTemplate_old" type="text/x-kendo-template">
-    #= planDisplayedName #
-    <span>
-    <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">Date: #= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #</li>
-    </span> 
-</script>
-
 <script id="SeqInstrumentTemplate" type="text/x-kendo-template">
-    # var _instrumentType = sequencingInstrumentType;# 
+    # var _instrumentType = sequencingInstrumentType.toUpperCase();# 
 
     <span rel="tooltip" title="#= _instrumentType#">
     # if (_instrumentType == "PGM") { #
@@ -195,7 +280,7 @@ var username = '{{user.username}}';
 </script>
 
 <script id="BarcodeKitNameTemplate" type="text/x-kendo-template">
-    <span style="font-size:80%; word-wrap: break-word; word-break: break-all;">
+    <span style="word-wrap: break-word; word-break: break-all;">
     #= getDisplayedValue(barcodeKitName) #
     </span>
 </script>
@@ -253,9 +338,11 @@ var username = '{{user.username}}';
     # if (_instrumentType == "OneTouch") { #
         <img src="{% static "resources/img/oneTouch_24x24.png" %}" width="24px" height="24px" />
     # } else if (_instrumentType == "IonChef") { #
-        <img src="{% static "resources/img/ionChef_24x24.png" %}" width="24px" height="24px" /> 
+        <img src="{% static "resources/img/ionChef_24x24.png" %}" width="24px" height="24px" />
+    # } else if (_instrumentType == "Isothermal Amplification") { #
+        <img src="{% static "resources/img/isoAmp_24x24.png" %}" width="24px" height="24px" />
     # } else { #
-        #= _instrumentType #             
+        #= _instrumentType #
     # } #
     </span> 
 </script>
@@ -271,7 +358,7 @@ var username = '{{user.username}}';
         <i class="icon-user"></i>    
     # } #
     # if (username) { #
-        <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">User: #= getDisplayedValue(username) #</li>
+        <div style="font-size:80%; word-wrap: break-word; word-break: break-all;">#= getDisplayedValue(username) #</div>
     # } #
     </span> 
 </script>
@@ -282,7 +369,7 @@ var username = '{{user.username}}';
     # var _isSystem = isSystem; #
     # var _isFavorite = isFavorite; #
     
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
+    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></a>
     <ul class="dropdown-menu pull-right">
         <li>
             # if (_isFavorite) { #
@@ -320,8 +407,8 @@ var username = '{{user.username}}';
 </div>  
 </script>
 
-
 {%include "rundb/common/application_kendo_template.html"%}
+{%include "rundb/common/popover_template.html"%}
 
 <script type="text/javascript">
 var username = '{{user.username}}';

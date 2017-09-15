@@ -319,12 +319,12 @@ def run_meta_plugin():
     bctabfile = pluginParams['prefix']+".bc_summary.xls"
     bcline = "Barcode ID\tSample Name\tMapped Reads\tValid Reads\tTargets Detected"
     if renderOpts['ercc_track']: bcline += "\tERCC"
-    with open(os.path.join(pluginParams['results_dir'],bctabfile),'w') as outfile:
+    with open(os.path.join(output_dir,bctabfile),'w') as outfile:
       outfile.write(bcline+'\n')
       for bcline in bctable:
         outfile.write(bcline+'\n')
     readsfile = pluginParams['prefix']+".reads_summary.xls"
-    with open(os.path.join(pluginParams['results_dir'],readsfile),'w') as outfile:
+    with open(os.path.join(output_dir,readsfile),'w') as outfile:
       outfile.write('Barcode ID\tSample Name\tTotal Reads\tMapped Reads\tOn Target Reads\tAssigned Reads\tERCC Reads\n')
       for bcline in readstable:
         outfile.write(bcline+'\n')
@@ -337,7 +337,7 @@ def run_meta_plugin():
   numReports = len(reportFiles)
   if numReports > 0:
     bcmatrix = pluginParams['prefix']+".bcmatrix.xls"
-    p_bcmatrix = os.path.join(pluginParams['results_dir'],bcmatrix)
+    p_bcmatrix = os.path.join(output_dir,bcmatrix)
     with open(p_bcmatrix,'w') as outfile:
       runcmd = Popen( [os.path.join(plugin_dir,'scripts','barcodeMatrix.pl'),
         '-A', 'A_', pluginParams['reference']+'.fai', '9'] + reportFiles, stdout=outfile )
@@ -345,7 +345,7 @@ def run_meta_plugin():
       if runcmd.poll():
         raise Exception("Failed to create barcode x %s reads matrix."%typestr)
     rpmbcmatrix = pluginParams['prefix']+".rpm.bcmatrix.xls"
-    with open(os.path.join(pluginParams['results_dir'],rpmbcmatrix),'w') as outfile:
+    with open(os.path.join(output_dir,rpmbcmatrix),'w') as outfile:
       runcmd = Popen( [os.path.join(plugin_dir,'scripts','barcodeMatrix.pl'),
         '-A', 'A_', pluginParams['reference']+'.fai', '12'] + reportFiles, stdout=outfile )
       runcmd.communicate()
@@ -362,7 +362,7 @@ def run_meta_plugin():
           raise Exception("Failed to create differential expression matrix using tableDE.pl")
         if os.system( 'awk \'NR==1;NR>1{print|"sort -k 6,6nr -k 1,1d -k 2,2d"}\' "%s" > sort.xls.tmp; mv sort.xls.tmp "%s"' % (derTable,derTable) ):
           raise Exception("Failed to sort differential expression matrix using awk command.")
-        with open(os.path.join(pluginParams['results_dir'],derTable),'r') as infile:
+        with open(os.path.join(output_dir,derTable),'r') as infile:
           nline = 0
           nde = 0
           for line in infile:
@@ -411,6 +411,22 @@ def run_meta_plugin():
         os.path.join(plugin_dir,'scripts','plot_reads_hbar.R') ) ):
       raise Exception("Failed to create barcode read alignment plot using plot_reads_hbar.R")
 
+    # convert normalized RPM to CHP format for TAC software
+    rpm2log = os.path.join(plugin_dir,"scripts","log2rpm.pl");
+    log2rpm = pluginParams['prefix']+".log2rpm.xls";
+    chp_con = os.path.join(plugin_dir,"tac","convert2chp.py");
+    chp_zip = pluginParams['prefix']+".log2rpm.zip";
+    if os.system('%s %d "%s" > "%s"' % (rpm2log, numReports, os.path.join(output_dir,rpmbcmatrix), os.path.join(output_dir,log2rpm))):
+      raise Exception("Failed to create log2(rpm+1) files for %s." % rpmbcmatrix)
+    else:
+      chp_dir = "convert2chp"
+      if os.system('python %s -A "%s" -P %s -V "%s" -m %s -i %s -o %s' % ( chp_con, fileName(pluginParams['config']['targetregions_id']),
+	pluginParams['plugin_name'], pluginParams['cmdOptions'].version,
+        'RPM-normalized', os.path.join(output_dir,log2rpm), os.path.join(output_dir,chp_dir)) ):
+        raise Exception("Failed to create CHP files for %s."%log2rpm)
+      else:
+        os.system('zip -r %s %s'%(chp_zip,chp_dir))
+
     # record output files for use in barcode summary report
     # (p_bcmatrix used for passing to php script for interactive utilities)
     barcodeReport.update({
@@ -419,6 +435,7 @@ def run_meta_plugin():
       "bcmatrix" : bcmatrix,
       "p_bcmatrix" : p_bcmatrix,
       "rpmbcmatrix" : rpmbcmatrix,
+      "rpmchp" : chp_zip,
       "rvaluematrix" : rvalueMatrix,
       "readmaps" : readsfile,
       "featmatrix" : rvalueMatrix,
@@ -906,6 +923,7 @@ def loadPluginParams():
     reference = barcodeData['refpath']
   pluginParams['genome_id'] = genome_id if genome_id else 'None'
   pluginParams['reference'] = reference if reference else 'None'
+  if target_id: target_id = fileName(target_id)
   if not pluginParams['manual_run']:
     config['targetregions_id'] = target_id if target_id else 'None'
     config['barcodebeds'] = "Yes" if target_id == "Barcode specific" else "No"

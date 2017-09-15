@@ -645,6 +645,7 @@ $(document).ready(function () {
                     options.model.set('ircancerType', samplesetItem.ircancerType);
                     options.model.set('ircellularityPct', samplesetItem.ircellularityPct);
                     options.model.set('irbiopsyDays', samplesetItem.irbiopsyDays);
+                    options.model.set('ircellNum', samplesetItem.ircellNum);
                     options.model.set('ircoupleID', samplesetItem.ircoupleID);
                     options.model.set('irembryoID', samplesetItem.irembryoID);
 
@@ -659,6 +660,7 @@ $(document).ready(function () {
                         nextGridItem.set('ircancerType', samplesetItem.ircancerType);
                         nextGridItem.set('ircellularityPct', samplesetItem.ircellularityPct);
                         nextGridItem.set('irbiopsyDays', samplesetItem.irbiopsyDays);
+                        nextGridItem.set('ircellNum', samplesetItem.ircellNum);
                         nextGridItem.set('ircoupleID', samplesetItem.ircoupleID);
                         nextGridItem.set('irembryoID', samplesetItem.irembryoID);
                     }
@@ -942,12 +944,14 @@ $(document).ready(function () {
             grid.showColumn('ircancerType');
             grid.showColumn('ircellularityPct');
             grid.hideColumn('irbiopsyDays');
+            grid.hideColumn('ircellNum');
             grid.hideColumn('ircoupleID');
             grid.hideColumn('irembryoID');
         } else if (selectedAnnotation == 'Pgs') {
             grid.hideColumn('ircancerType');
             grid.hideColumn('ircellularityPct');
             grid.showColumn('irbiopsyDays');
+            grid.showColumn('ircellNum');
             grid.showColumn('ircoupleID');
             grid.showColumn('irembryoID');
         }
@@ -963,7 +967,7 @@ $(document).ready(function () {
         if (selectedAnnotation == 'Oncology') {
             annotation_columns = ['ircancerType','ircellularityPct'];
         } else if (selectedAnnotation == 'Pgs') {
-            annotation_columns = ['irbiopsyDays','ircoupleID','irembryoID'];
+            annotation_columns = ['irbiopsyDays','ircellNum','ircoupleID','irembryoID'];
         }
         var grid = $("#grid").data("kendoGrid");
         $.each(annotation_columns, function(i, column){
@@ -986,6 +990,7 @@ $(document).ready(function () {
         {name: "ircancerType",    action: "copy"},
         {name: "ircellularityPct",action: "copy"},
         {name: "irbiopsyDays",    action: "copy"},
+        {name: "ircellNum",      action: "copy"},
         {name: "ircoupleID",      action: "copy"},
         {name: "irembryoID",      action: "copy"},
     ];
@@ -1158,8 +1163,9 @@ function gridRefresh(grid){
 var samplesTableValidators = {
     "sampleName": validate_sampleName,
     "tubeLabel":  validate_sampleTubeLabel,
-    "ircoupleID": validate_ircoupleID,
-    "irembryoID": validate_irembryoID
+    "ircellNum":  function(value){ return validate_chars_and_length(value, 127, 'Cell Number')},
+    "ircoupleID": function(value){ return validate_chars_and_length(value, 127, 'Couple ID')},
+    "irembryoID": function(value){ return validate_chars_and_length(value, 127, 'Embryo ID')}
 }
 
 function updateSamplesTableValidationErrors(row, field, value, error){
@@ -1216,14 +1222,7 @@ function displayErrorInCell(cell, error, type){
 
 function validate_sampleName(value) {
     var error = "";
-    //call the Regex test function identified in validation.js file
-    if (!is_valid_chars(value)) {
-        error = 'Error, Sample name should contain only numbers, letters, spaces, and the following: . - _';
-    }
-    //call the check max length function that's in validation.js
-    if (!is_valid_length(value, 127)) {
-        error = 'Error, Sample name length should be 127 characters maximum';
-    }
+    error = validate_chars_and_length(value, 127, 'Sample name');
     if (!is_valid_leading_chars(value)) {
         error = 'Sample name cannot begin with (.) or (_) or (-)';
     }
@@ -1231,40 +1230,18 @@ function validate_sampleName(value) {
 }
 
 function validate_sampleTubeLabel(value){
-    var error = "";
-    //call the Regex test function identified in validation.js file
-    if (!is_valid_chars(value)) {
-        error = 'Error, Sample tube label should contain only numbers, letters, spaces, and the following: . - _';
-    }
-    //call the check max length function that's in validation.js
-    if (!is_valid_length(value, 512)) {
-        error = 'Error, Sample tube label length should be 512 characters maximum';
-    }
-    return error;
+    return validate_chars_and_length(value, 512, 'Sample Tube Label');
 }
 
-function validate_ircoupleID(value) {
+function validate_chars_and_length(value, max_length, displayedTerm){
     var error = "";
     //call the Regex test function identified in validation.js file
     if (!is_valid_chars(value)){
-        error = 'Error, Couple ID should contain only numbers, letters, spaces, and the following: . - _';
+        error = 'Error, ' +displayedTerm+' should contain only numbers, letters, spaces, and the following: . - _';
     }
     //call the check max length function that's in validation.js
-    if (!is_valid_length(value, 127)) {
-        error = 'Error, Couple ID length should be 127 characters maximum';
-    }
-    return error;
-}
-    
-function validate_irembryoID(value) {
-    var error = "";
-    //call the Regex test function identified in validation.js file
-    if (!is_valid_chars(value)){
-        error = 'Error, Embryo ID should contain only numbers, letters, spaces, and the following: . - _';
-    }
-    //call the check max length function that's in validation.js
-    if (!is_valid_length(value, 127)) {
-        error = 'Error, Embryo ID length should be 127 characters maximum';
+    if (!is_valid_length(value, max_length)) {
+        error = 'Error, Cell Number length should be '+max_length+' characters maximum';
     }
     return error;
 }

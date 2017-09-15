@@ -579,10 +579,17 @@ def main():
                 # tagseq doesn't have variant merging problem.
                 allele['freq']                      = '%1.3f'   % (100.0 * FAO[idx] / FDP if FDP > 0.0 else 0.0)
             else:
+
                 allele['cov_total']                 = '%d'      % (DP)
-                allele['cov_total_downsampled']     = '%d'      % (FDP)
-                allele['cov_total_plus']            = '%d'      % (FSRF + sum(FSAF))
-                allele['cov_total_minus']           = '%d'      % (FSRR + sum(FSAR))
+                # Quick fix for TS-15029
+                # If a tvc call and a indel_assembly call are merged in one vcf record, then the indel_assembly allele has FAO='.'
+                if 'FAO' in info:
+                    is_called_by_tvc= info['FAO'][idx] != '.'
+                else:
+                    is_called_by_tvc = False
+                allele['cov_total_downsampled']     = '%d'      % (FDP if is_called_by_tvc else DP)
+                allele['cov_total_plus']            = '%d'      % (FSRF + sum(FSAF) if is_called_by_tvc else SRF + sum(SAF))
+                allele['cov_total_minus']           = '%d'      % (FSRR + sum(FSAR) if is_called_by_tvc else SRR + sum(SAR))
                 allele['cov_allele']                = '%d'      % (FAO[idx])
                 allele['cov_allele_plus']           = '%d'      % (FSAF[idx])
                 allele['cov_allele_minus']          = '%d'      % (FSAR[idx])

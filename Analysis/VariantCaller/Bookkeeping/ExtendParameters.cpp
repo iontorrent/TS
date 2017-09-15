@@ -1,6 +1,7 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "ExtendParameters.h"
+#include <fenv.h>      // For floating point exceptions
 #include <fstream>
 #include <iomanip>
 #include <cstdlib>

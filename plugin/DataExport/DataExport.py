@@ -16,7 +16,7 @@ class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.4.0.1'
+    version = '5.6.0.1'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
     runlevels = [RunLevel.LAST]
 
@@ -106,13 +106,11 @@ class DataExport(IonPlugin):
             if item.values()[0]:
                 self.categories.append(item.keys()[0])
 
-        commentary = self.seek_commentary()
-
         raw_post_data = {
             'backup_dir': self.dest_dir,
             'confirmed': True,
             'categories': self.categories,
-            'comment': commentary,
+            'comment': 'initiated from DataExport plugin',
         }
 
         if len(self.categories):
@@ -156,7 +154,6 @@ class DataExport(IonPlugin):
 
         # Exit the launch function; exit the plugin
         print "==============================================================================="
-        print commentary
         return True
 
 
@@ -258,19 +255,6 @@ class DataExport(IonPlugin):
         display_fs.write("<small>Contact: %s Version: %s</small>" % (self.author, self.version))
         display_fs.write("</body></html>\n")
         display_fs.close()
-
-
-    def seek_commentary(self):
-        try:
-            p1 = subprocess.Popen(["/usr/games/fortune", "-s"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            stdout, _ = p1.communicate()
-            myfortune = stdout
-        except:
-            myfortune = "Fools like us"
-            print traceback.format_exc()
-        finally:
-            return myfortune
-
 
     def report(self):
         pass

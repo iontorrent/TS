@@ -4,6 +4,17 @@
 {% load static from staticfiles %}
 {% block extra_head %}
     <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "js/iframe.js"%}"></script>
+    <style>
+        #plugins .configure_plugin {
+            margin-left: 4px;
+            line-height: 22px;
+        }
+
+        #plugins > div.row-fluid > .span4 {
+            min-height: 25px;
+        }
+    </style>
 {% endblock extra_head %}
 {% block content %}
 <div class="content group" id="analyzeDiv">

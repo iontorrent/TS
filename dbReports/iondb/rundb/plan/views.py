@@ -12,7 +12,7 @@ from django.views.generic.detail import DetailView
 from django.core.exceptions import ValidationError
 
 from iondb.rundb.api import PlannedExperimentResource
-from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, SharedServer, \
+from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, IonMeshNode, \
     ReferenceGenome, Content, KitInfo, dnaBarcode, PlanSession, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
     PlannedExperimentQC, Sample, GlobalConfig, Message, Experiment, Results, EventLog, common_CV
@@ -97,10 +97,15 @@ def plan_templates(request):
     plan template home page
     """
     s5_chips_plan_json_upload = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540"], instrumentType= "S5").values_list('name', flat=True).order_by('name')
+    usernames =  PlannedExperiment.objects.filter(isReusable=True, username__isnull=False).values_list('username', flat=True)
 
     ctxd = {
         'categories': get_template_categories(),
-        's5_chips': s5_chips_plan_json_upload
+        's5_chips': s5_chips_plan_json_upload,
+        "projects": Project.objects.order_by('name').values_list('name', flat=True),
+        "barcodes": dnaBarcode.objects.filter(active=True).values_list('name', flat=True).distinct().order_by('name'),
+        "references": ReferenceGenome.objects.filter(enabled=True).values_list('short_name', flat=True).order_by('short_name'),
+        "usernames": [user for user in set(usernames) if user.strip()]
     }
     return render_to_response("rundb/plan/plan_templates.html", context_instance=RequestContext(request, ctxd))
 
@@ -476,7 +481,7 @@ def handle_step_request(request, next_step_name, step_helper=None):
         step_helper = StepHelper()
         ctxd = {
             'step': step_helper.steps.get(current_step_name) or step_helper.steps.values()[0],
-            'session_error': 'This Planning session expired'
+            'session_error': 'Error: Unable to retrieve Planning session'
         }
         return RequestContext(request, ctxd)
 
@@ -582,11 +587,12 @@ def _update_plan_session(request, step_helper):
     if not key and step_helper:
         key = '%s-%s' % (step_helper.sh_type, datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
 
-    request.session['plan_session_key'] = key
-
-    ps, created = PlanSession.objects.get_or_create(session_key = request.session.session_key, plan_key=key)
-    if not created:
-        step_helper = ps.get_data()
+    ps = None
+    if key:
+        request.session['plan_session_key'] = key
+        ps, created = PlanSession.objects.get_or_create(session_key = request.session.session_key, plan_key=key)
+        if not created:
+            step_helper = ps.get_data()
 
     return step_helper, ps
 
@@ -598,15 +604,13 @@ def planned(request):
         ctx["created_plan_pks"] = request.session["created_plan_pks"]
         del request.session["created_plan_pks"]
 
-    ctx["planshare"] = SharedServer.objects.filter(active=True)
+    ctx["planshare"] = IonMeshNode.objects.filter(active=True)
+    ctx["runTypes"] = RunType.objects.filter(isActive=True)
+    ctx["projects"] = Project.objects.order_by('name').values_list('name', flat=True)
+    ctx["barcodes"] = dnaBarcode.objects.filter(active=True).values_list('name', flat=True).distinct().order_by('name')
+    ctx["references"] = ReferenceGenome.objects.filter(enabled=True).values_list('short_name', flat=True).order_by('short_name')
 
     return render_to_response("rundb/plan/planned.html", context_instance=ctx)
-
-
-@login_required
-def plan_run_home(request):
-    ctx = RequestContext(request)
-    return render_to_response("rundb/plan/plan_run_home.html", context_instance=ctx)
 
 
 @login_required
@@ -1243,6 +1247,7 @@ def page_plan_samples_table_keys(is_barcoded, include_IR=False):
         ('ircancerType',        'Cancer Type'),
         ('ircellularityPct',    'Cellularity %'),
         ('irbiopsyDays',        'Biopsy Days'),
+        ('ircellNum',           'Cell Number'),
         ('ircoupleID',          'Couple ID'),
         ('irembryoID',          'Embryo ID'),
         ('irWorkflow',          'IR Workflow'),

@@ -146,7 +146,7 @@ def get_walk_filelist(input_dirs, list_dir=None, save_list=False):
     return thelist
 
 
-def _file_selector(start_dir, ipatterns, epatterns, kpatterns, is_thumbnail=False, add_linked_sigproc=False, cached=None):
+def _file_selector(start_dir, ipatterns, epatterns, kpatterns, exclude_onboard_results=False, add_linked_sigproc=False, cached=None):
     '''Returns list of files found in directory which match the list of
     patterns to include and which do not match any patterns in the list
     of patterns to exclude.  Also returns files matching keep patterns in
@@ -169,7 +169,7 @@ def _file_selector(start_dir, ipatterns, epatterns, kpatterns, is_thumbnail=Fals
     # find files matching include filters from start_dir
     # for root, dirs, files in os.walk(start_dir,topdown=True):
     for filepath in cached:
-        if is_thumbnail and 'onboard_results' in filepath:
+        if exclude_onboard_results and 'onboard_results' in filepath:
             continue
         if exclude_sigproc_folder and 'sigproc_results' in filepath:
             continue

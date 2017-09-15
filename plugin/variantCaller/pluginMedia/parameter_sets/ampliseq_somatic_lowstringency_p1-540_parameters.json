@@ -3,7 +3,7 @@
         "name"          : "AmpliSeq - Proton - Somatic - Low Stringency",
         "tooltip"       : "Parameters optimized using Oncomine Comprehensive Ampliseq Panel with AcroMetrix Oncology Hotspot Control AF at 5% for median depth 300",
         "configuration" : "ampliseq_somatic_low_stringency_p1",
-        "ts_version"    : "5.4",
+        "ts_version"    : "5.6",
         "compatibility" : {
           "chip"        : ["540", "proton_p1"],
           "library"     : ["ampliseq"],

@@ -189,23 +189,22 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%part row3 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 {% if datasets.barcode_config %}
 {% if isToShowExtraStats %}%
- \begin{longtable}{E{28mm}E{32mm}E{18mm}E{18mm}E{18mm}E{30mm}}
- Barcode Name		& Sample	& Bases					& \geq Q20	& Reads		& Mean Read Length\\
+ \begin{longtable}{E{28mm}E{20mm}E{18mm}E{18mm}E{18mm}E{20mm}E{100}}
+ Barcode Name		& Sample	& Bases					& \geq Q20	& Reads		& Mean Read Length & Read Length Histogram \\
  \midrule
  {% for barcode in barcodes %}
    {% if not barcode.filtered %} 
-{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}} & {{barcode.total_bases|intcomma}} & {{barcode.Q20_bases|intcomma}} & {{barcode.read_count|intcomma}} & {{barcode.mean_read_length}} \\[2.5mm]
+{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}} & {{barcode.total_bases|intcomma}} & {{barcode.Q20_bases|intcomma}} & {{barcode.read_count|intcomma}} & {{barcode.mean_read_length}} & \includegraphics[width=44mm]{% templatetag openbrace %}{% templatetag openbrace %}basecaller_results/{{barcode.barcode_name|default:"nomatch"}}_rawlib.sparkline{% templatetag closebrace %}.png{% templatetag closebrace %} \\[2.5mm]
    {% endif %}
  {% endfor %}
- 
 {% else %}%
 
  \begin{longtable}{E{28mm}E{32mm}E{18mm}E{18mm}E{30mm}}
- Barcode Name		& Sample	& Bases					& Reads		& Mean Read Length\\
+ Barcode Name		& Sample	& Bases					& Reads		& Mean Read Length \\
  \midrule
  {% for barcode in barcodes %}
    {% if not barcode.filtered %} 
-{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}} & {{barcode.total_bases|intcomma}} & {{barcode.read_count|intcomma}} & {{barcode.mean_read_length}} \\[2.5mm]   
+{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}} & {{barcode.total_bases|intcomma}} & {{barcode.read_count|intcomma}} & {{barcode.mean_read_length}} \\[2.5mm]
    {% endif %}
  {% endfor %}
  
@@ -374,6 +373,7 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf Sample & {{experiment.samples.all|join:", "|latexsafe}} \\
 	\bf Reference & {{report.corollary|latexsafe}} \\ 
 	\bf Instrument & {{experiment.pgmName|latexsafe}} \\
+	\bf Operation Mode & {{operationMode|latexsafe}} \\	
     \bf Flow Order & \seqbreak{5in}{ {{experiment.flowsInOrder}} } \\
 	\bf Library Key & {{report.eas.libraryKey|latexsafe}} \\
 	\bf TF Key & {{report.eas.tfKey|default:"ATCG"}} \\
@@ -420,7 +420,7 @@ Run Report for {{report.resultsName|latexsafe}}
         \subsection*{Chef Library Prep Information for Sample Set {{sampleSetName}}:}
         \begin{tabular}{l|l}
         {% for item, info in chefLibPrep %}
-            {%if item == "Last Updated" %}
+            {%if item in chefInfoListSampleSet %}
                \bf {{item|latexsafe}} & {{info}} \\
             {% else %}
                \bf {{item|latexsafe}} & {{info|latexsafe}} \\
@@ -432,7 +432,7 @@ Run Report for {{report.resultsName|latexsafe}}
         \subsection*{Chef Template Prep Information:}
         \begin{tabular}{l|l}
         {% for item, info in chef_info %}
-            {%if item == "Chef Last Updated" %}
+            {%if item in chefInfoList %}
                \bf {{item|latexsafe}} & {{info}} \\
             {% else %}
                \bf {{item|latexsafe}} & {{info|latexsafe}} \\

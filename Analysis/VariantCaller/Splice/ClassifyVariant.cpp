@@ -199,6 +199,23 @@ void AlleleIdentity::SubCategorizeMNP(const LocalReferenceContext &reference_con
       status.isPotentiallyCorrelated = true;
 }*/
 
+void AlleleIdentity::IdentifyClearlyNonFD(const LocalReferenceContext &reference_context){
+	if (status.isHPIndel){
+		status.isClearlyNonFD = true;
+		return;
+	}
+
+	string padding_ref = string(1, reference_context.ref_left_hp_base) + reference_context.reference_allele + string(1, reference_context.ref_right_hp_base);
+	string padding_alt = string(1, reference_context.ref_left_hp_base) + altAllele + string(1, reference_context.ref_right_hp_base);
+	string hp_removed_ref;
+	string hp_removed_alt;
+	RemoveHp(padding_ref, hp_removed_ref);
+	RemoveHp(padding_alt, hp_removed_alt);
+	status.isClearlyNonFD = hp_removed_ref == hp_removed_alt;
+}
+
+
+
 // Test whether this is an HP-InDel
 void AlleleIdentity::IdentifyHPdeletion(const LocalReferenceContext& reference_context) {
 
@@ -413,6 +430,8 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
     if (DEBUG > 0)
       cout << " is an MNP." << endl;
   }
+
+  IdentifyClearlyNonFD(reference_context); // Must be done after identifying HP-INDEL.
   return (is_ok);
 }
 
@@ -452,6 +471,9 @@ bool AlleleIdentity::getVariantType(
   ref_length = (int) reference_context.reference_allele.length();
   chr_idx = reference_context.chr_idx;
   num_padding_added = alt_orig_padding;
+
+  // Safety check
+  assert(num_padding_added.first >= 0 and num_padding_added.second >= 0);
 
   bool is_ok = reference_context.context_detected;
   // check position does not beyond the chromosome
@@ -734,8 +756,7 @@ bool AlleleIdentity::DetectSplicingHazard(const AlleleIdentity& alt_x) const{
 bool IsAllelePairConnected(const AlleleIdentity& alt1, const AlleleIdentity& alt2)
 {
 	bool debug = alt1.DEBUG or alt2.DEBUG;
-    // Alleles start at the same position should be evaluated together.
-	bool is_connect = alt1.start_variant_window == alt2.start_variant_window;
+	bool is_connect = false; // Starts with no connected.
 
 	// Print the allele information for debug
 	if (debug){
@@ -745,18 +766,10 @@ bool IsAllelePairConnected(const AlleleIdentity& alt1, const AlleleIdentity& alt
 		cout << "  - (altX, altY) is Fake HS Allele? (" << alt1.status.isFakeHsAllele << ", " << alt2.status.isFakeHsAllele <<")" << endl;
 	}
 
-	// Rule number one: start at the same position must be connected.
-	if (is_connect){
-		if (debug){
-			cout << "  - Connected: altX and altY start at the same position." << endl;
-		}
-		return is_connect;
-	}
-
 	// Exception for problematic alleles
 	if (alt1.status.isProblematicAllele or alt2.status.isProblematicAllele){
 		if (debug){
-			cout << (is_connect? "  - Connected: altX or altY is problematic at the same position." : "  - Not connected: altX or altY is problematic.") << endl;
+			cout << "  - Not connected: altX or altY is problematic." << endl;
 		}
 		return is_connect;
 	}
@@ -764,22 +777,26 @@ bool IsAllelePairConnected(const AlleleIdentity& alt1, const AlleleIdentity& alt
 	// Exceptions for Fake HS alleles
 	if (alt1.status.isFakeHsAllele and alt2.status.isFakeHsAllele){
 		if (debug){
-			cout << (is_connect? "  - Connected: both fake HS at the same position." : "  - Not connected: both fake HS." ) << endl;
-		}
-		return is_connect;
-	}else if (alt1.status.isFakeHsAllele and alt1.ref_length >= 10 and (not alt1.status.doRealignment)
-				and alt2.status.isHPIndel and alt2.inDelLength == 1){
-		if (debug){
-			cout << (is_connect? "  - Connected: altX and altY start at the same position." : "  - Not connected: long Fake HS altX meets 1-mer HP-INDEL altY." ) << endl;
-		}
-		return is_connect;
-	}else if (alt2.status.isFakeHsAllele and alt2.ref_length >= 10 and (not alt2.status.doRealignment)
-				and alt1.status.isHPIndel and alt1.inDelLength == 1){
-		if (debug){
-			cout << (is_connect? "  - Connected: altX and altY start at the same position." : "  - Not connected: 1-mer HP-INDEL altX meets long Fake HS altY." ) << endl;
+			cout << "  - Not connected: both fake HS." << endl;
 		}
 		return is_connect;
 	}
+
+	/* Special treatment for long FakeHS and short HP-INDEL can potentially cause problem for look ahead sliding window.
+	else if (alt1.status.isFakeHsAllele and (alt1.end_variant_window - alt1.start_variant_window >= 6) and (not alt1.status.doRealignment) and (not alt1.status.isHPIndel)
+				and alt2.status.isHPIndel and alt2.inDelLength == 1){
+		// The reason I checked doRealignment is to prevent the frame-shifted MNP due to tweaking HP-INDELs.
+		if (debug){
+			cout << "  - Not connected: long Fake HS altX meets 1-mer HP-INDEL altY." << endl;
+		}
+		return is_connect;
+	}else if (alt2.status.isFakeHsAllele and (alt2.end_variant_window - alt2.start_variant_window >= 6) and (not alt2.status.doRealignment) and  (not alt2.status.isHPIndel)
+				and alt1.status.isHPIndel and alt1.inDelLength == 1){
+		if (debug){
+			cout << "  - Not connected: 1-mer HP-INDEL altX meets long Fake HS altY." << endl;
+		}
+		return is_connect;
+	}*/
 
 	// Condition a)
 	bool is_variant_window_overlap = IsOverlappingWindows(alt1.start_variant_window, alt1.end_variant_window, alt2.start_variant_window, alt2.end_variant_window);

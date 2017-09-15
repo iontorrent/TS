@@ -221,6 +221,7 @@ def get_plan(ion_params):
         "reverse_primer": plan.get('reverse_primer'),
         "runMode": plan.get('runMode'),
         "runType": plan.get('runType'),
+        "applicationGroup_id": plan.get('applicationGroup', 1),
         "runTypeDescription": runTypeDescription,
         "samplePrepKitName": plan.get('samplePrepKitName'),
         "templatingKitName": plan.get('templatingKitName',''),

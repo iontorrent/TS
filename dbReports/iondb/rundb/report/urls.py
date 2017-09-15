@@ -11,7 +11,7 @@ urlpatterns = patterns(
     url(r'^(\d+)/$', 'views.report_display', name='report'),
     url(r'^(?P<pk>\d+)/metal/(?P<path>.*)', 'views.metal', name='report_metal'),
     url(r'^(?P<pk>\d+)/log$', 'views.report_log', name='report_log'),
-    url(r'^(?P<pk>\d+)/CSA.zip$', 'views.getCSA', name='report_csa'),
+    url(r'^(?P<pk>\d+)/CSA.zip$', 'views.get_csa', name='report_csa'),
     url(r'^getPDF/(\d+).pdf/$', 'views.get_summary_pdf'),
     url(r'^getPlugins/(\d+).pdf/$', 'views.get_plugin_pdf'),
     url(r'^latex/(\d+).pdf/$', 'views.get_report_pdf'),

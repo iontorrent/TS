@@ -44,7 +44,7 @@
                         <select name='chipType' class="required">
                             <option value=""></option>
                             {% for chip in chips %}
-                                <option value={{chip.name}} {% if chip.name == obj.chipType %}selected{% endif %}>{{chip.name}}</option>
+                                <option value={{chip.name}} {% if chip.name == obj.chipType %}selected{% endif %}>{{chip.description}}</option>
                             {% endfor %}
                         </select>
                         <p class="help-block"></p>
@@ -218,6 +218,8 @@ $(function() {
     var action = "{{args_action}}";
     if (action == 'view') {
         $('#modal_analysisargs_details .btn-primary').hide();
+        $('#modal_analysisargs_details textarea').attr('readonly', true);
+        $('#modal_analysisargs_details select').attr('disabled',true);
     }
 
     {% for arg in args_for_uniq_validation %}

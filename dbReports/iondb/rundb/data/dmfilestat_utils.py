@@ -125,7 +125,10 @@ def update_diskspace(dmfilestat, cached=None):
         total_size = 0
 
         # Create a list of files eligible to process
-        is_thumbnail = dmfilestat.result.isThumbnail
+        # exclude onboard_results folder if thumbnail or if fullchip was reanalyzed from signal processing
+        sigproc_results_dir = os.path.join(dmfilestat.result.get_report_dir(), 'sigproc_results')
+        exclude_onboard_results = dmfilestat.result.isThumbnail or ('onboard_results' not in os.path.realpath(sigproc_results_dir))
+
         for start_dir in search_dirs:
             to_process = []
             if os.path.isdir(start_dir):
@@ -133,7 +136,7 @@ def update_diskspace(dmfilestat, cached=None):
                                                         dmfilestat.dmfileset.include,
                                                         dmfilestat.dmfileset.exclude,
                                                         [],
-                                                        is_thumbnail,
+                                                        exclude_onboard_results,
                                                         add_linked_sigproc=True,
                                                         cached=cached)
 

@@ -18,20 +18,17 @@ function onDataBound(arg) {
             content : $($(elem).data('select')).html()
         });
     });
-    $(source + ' table thead th:first').html("<span rel='tooltip' title='(De)select All'><input  class='selectall' type='checkbox'>&nbsp; Select </span>");
 
     $(source + ' .selectall').click(function(e) {
         // e.preventDefault();
         var state = $(this).is(':checked');
         $(source + ' table tbody tr td input[type="checkbox"]').each(function(i, j) {
-            console.log(i, j);
             $(this).attr('checked', state);
             id = $(this).attr("id");
             if (state)
                 checked_ids.push(id);
             else
                 checked_ids.splice(checked_ids.indexOf(id), 1);
-            console.log($(this).attr('checked'));
         });
     });
 
@@ -81,43 +78,7 @@ function onDataBound(arg) {
             delete busyDiv;
         });
     });
-    $(source + " .edit-or-copy-plan").click(function(e) {
-        $('body').css("cursor", "wait");
-        e.preventDefault();
-        $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-        $('body').prepend(busyDiv);
 
-        url = $(this).attr('href');
-
-        $('body #modal_plan_wizard').remove();
-        $('body #modal_plan_run').remove();
-        $.get(url, function(data) {
-            $('body').append(data);
-
-            setTab('#ws-1');
-            $("#modal_plan_wizard").data('source', source);
-            $("#modal_plan_wizard").modal("show");
-            return false;
-        }).done(function(data) {
-            console.log("success:", url);
-            // $(that).trigger('remove_from_project_done', {values: e.values});
-        }).fail(function(data) {
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-
-        }).always(function(data) {/*console.log("complete:", data);*/
-            $('body').css("cursor", "default");
-            $('.myBusyDiv').empty();
-            $('body').remove('.myBusyDiv');
-            delete busyDiv;
-        });
-    });
     $(source + " .delete-plan").click(function(e) {
         e.preventDefault();
         $('#error-messages').hide().empty();
@@ -191,6 +152,9 @@ $(document).ready(function() {
                         barcodeId : {
                             type : "string"
                         },
+                        library : {
+                            type : "string"
+                        },
                         runType : {
                             type : "string"
                         },
@@ -234,31 +198,37 @@ $(document).ready(function() {
                 dir : "asc"
             }],
             serverPaging : true,
-            pageSize : 50
+            pageSize : 10
         },
-        height : '446',
         groupable : false,
-        scrollable : {
-            virtual : true
-        },
+        scrollable : false,
         selectable : false,
         sortable : true,
-        pageable : true,
-
+        pageable : {
+            messages: {
+                display: "{0} - {1} of {2} planned runs",
+                empty: "No planned runs to display"
+            }
+        },
 		dataBinding : onDataBinding,
 		dataBound : onDataBound,
 		
         columns : [{
             field : "id",
-            title : "Select",
+            title : "",
             sortable : false,
-            width: '70px',
+            width: '25px',
+            headerTemplate: "<span rel='tooltip' title='(De)select All'><input  class='selectall' type='checkbox'></span>",
             template : "<input id='${id}' name='runs' type='checkbox' class='selected'>"
         }, {
             field : "sampleSetDisplayedName",
             title : "Sample Set",
+            width: '10%',
             sortable : false,
-            template : kendo.template($('#SampleSetColumnTemplate').html())
+            template : function(item){
+                          var data = { id: item.id, label: "Sample Sets", values: item.sampleSetDisplayedName.split(',') };
+                          return kendo.template($("#PopoverColumnTemplate").html())(data);
+                       }
         }, {
             field : "planShortID",
             title : "Run Code",
@@ -267,23 +237,29 @@ $(document).ready(function() {
             template :kendo.template($('#PlanShortIdColumnTemplate').html())
         }, {
             field : "planDisplayedName",
-            title : "Run Plan Name",
+            title : "Planned Run Name",
             width: '25%',
             sortable : true
         }, {
             field : "barcodeId",
             title : "Barcodes",
+            width: '15%',
+            sortable : false
+        }, {
+            field : "library",
+            title : "Reference",
             width: '10%',
-            sortable : true
+            sortable : false
         }, {
             field : "runType",
-            title : "App",
+            title : "Res App",
             sortable : true,
-            width: '75px',
+            width: '32px',
             template : kendo.template($('#RunTypeColumnTemplate').html())
         }, {
             field : "sampleGroupingName",
         	title : "Group",
+            width: '10%',
         	sortable : true
         }, {
             field : "libraryPrepType",
@@ -299,74 +275,83 @@ $(document).ready(function() {
         },{    
             field : "projects",
             title : "Project",
-            sortable : false
+            width: '10%',
+            sortable : false,
+            template : function(item){
+                          var data = { id: item.id, label: "Projects", values: item.projects.split(',') };
+                          return kendo.template($("#PopoverColumnTemplate").html())(data);
+                       }
         }, {
             title : "Sample",
             sortable : false,
+            width: '10%',
             template : kendo.template($('#SampleColumnTemplate').html())
         }, {
             field : "sampleTubeLabel",
             title : "Sample Tube Label",
+            width: '10%',
             sortable : false,
         }, {
             field : "chipBarcode",
             title : "Chip Barcode",
+            width: '10%',
             sortable : false,
         }, {
             field : "date",
             title : "Last Modified",
-            template : '#= kendo.toString(new Date(Date._parse(date)),"yyyy/MM/dd hh:mm tt") #'
+            width : '9%',
+            template : '#= kendo.toString(new Date(Date._parse(date)),"MMM d yyyy") #'
         }, {
             field : "planStatus",
             title : "Status",
             width: '70px',
-            sortable : true            	
+            sortable : true,
+            template : '<span style="text-transform: capitalize;">#=planStatus#</span>'
         }, {        	
             title : " ",
-            width : '4%',
+            width : '36px',
             sortable : false,
             template : kendo.template($("#ActionColumnTemplate").html())
         }],
     });
 
     switch_to_view(window.location.hash.replace('#',''));
-    
-    $('#dateRange').daterangepicker({dateFormat: 'yy-mm-dd'});
+
+    var today = Date.parse('today');
+    $('#dateRange').daterangepicker({
+        dateFormat: 'M d yy',
+        presetRanges: [
+            {text: 'Today', dateStart: today, dateEnd: today},
+            {text: 'Last 7 Days', dateStart: 'today-7days', dateEnd: today},
+            {text: 'Last 30 Days', dateStart: 'today-30days', dateEnd: today},
+            {text: 'Last 60 Days', dateStart: 'today-60days', dateEnd: today},
+            {text: 'Last 90 Days', dateStart: 'today-90days', dateEnd: today}
+        ],
+    });
     $('.search_trigger').click(function (e) { filter(e); });
+    $('#search_text').keypress(function(e){ if (e.which == 13 || e.keyCode == 13) filter(e); });
+    $('#dateRange, .selectpicker').change(function (e) { filter(e); });
 
     $('#clear_filters').click(function () { console.log("going to reload!!"); window.location.reload(true); });
     
-    $(function () {  
-        $('#search_subject_nav').click(function(e) { 
-            $("#plan_search_dropdown_menu").show();
-        });
-    });
+    $('#plan_search_dropdown_menu a').click(function(e) {
+        var span = $(this).find('span');
+        $('#search_text').data('selected_filter', $(this).data('filter'));
 
-    $(function () {  
-        $('.search_chipBarcode').click(function(e) { 
-            set_search_subject_chipBarcode(e);
+        $('#plan_search_dropdown_menu span').each(function(){
+            $(this).removeClass("icon-white icon-check");
+            if (this == span.get(0)){
+                $(this).addClass("icon-check");
+            } else{
+                $(this).addClass("icon-white");
+            }
         });
-    });    
-    
-    $(function () {      
-        $('.search_planName').click(function(e) {
-            set_search_subject_planName(e);
-        });    
-    });    
-
-    $(function () {          
-        $('.search_sampleTubeLabel').click(function(e) { 
-            set_search_subject_sampleTubeLabel(e);
-        });
-    });
-
-    $(function () {
-        $('.search_combinedLibraryTubeLabel').click(function(e) {
-            set_search_subject_combinedLibraryTubeLabel(e);
-        });
-    });        
-      
         
+        $("#search_subject_nav").attr("title", "Search by " + this.text);
+        $("#search_text").attr("placeholder", "Search by " + this.text);
+    });
+
+
     $('.delete_selected').click(function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -467,141 +452,63 @@ function switch_to_view(view){
     data.dataSource.read();
 }
 
-function set_search_subject_chipBarcode(e) {
-    e.preventDefault();
-    $('.search_chipBarcode_selected').removeClass("icon-white icon-check");         
-    $('.search_chipBarcode_selected').addClass("icon-check");  
-    $('.search_planName_selected').removeClass("icon-white icon-check"); 
-    $('.search_planName_selected').addClass("icon-white"); 
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check"); 
-    $('.search_sampleTubeLabel_selected').addClass("icon-white"); 
-    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-white");
-    
-    $("label[for='searchSubject']").text("chipBarcode");  
-    $("#search_subject_nav").attr("title", "Search by chip barcode");  
-    $("#plan_search_dropdown_menu").toggle();        
-}
 
-function set_search_subject_planName(e) {
-    e.preventDefault();        
-    $('.search_chipBarcode_selected').removeClass("icon-white icon-check");  
-    $('.search_chipBarcode_selected').addClass("icon-white");  
-    $('.search_planName_selected').removeClass("icon-white icon-check"); 
-    $('.search_planName_selected').addClass("icon-check"); 
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_sampleTubeLabel_selected').addClass("icon-white");
-    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-white");
-                   
-    $("label[for='searchSubject']").text("planName");  
-    $("#search_subject_nav").attr("title", "Search by plan name or code"); 
-    $("#plan_search_dropdown_menu").toggle();                   
-} 
-
-function set_search_subject_sampleTubeLabel(e) {
-    console.log("ENTER set_search_subject_sampleTubLabel");
-    
-    e.preventDefault();   
-    $('.search_chipBarcode_selected').removeClass("icon-white icon-check"); 
-    $('.search_chipBarcode_selected').addClass("icon-white");       
-    $('.search_planName_selected').removeClass("icon-white icon-check"); 
-    $('.search_planName_selected').addClass("icon-white");     
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_sampleTubeLabel_selected').addClass("icon-check");
-    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-white");
-
-    $("label[for='searchSubject']").text("sampleTubeLabel");  
-    $("#search_subject_nav").attr("title", "Search by sample tube label");
-    $("#plan_search_dropdown_menu").toggle();   
-} 
-
-function set_search_subject_combinedLibraryTubeLabel(e) {
-    console.log("ENTER set_search_subject_combinedLibraryTubeLabel");
-
-	e.preventDefault();
-    $('.search_chipBarcode_selected').removeClass("icon-white icon-check");
-    $('.search_chipBarcode_selected').addClass("icon-white");
-    $('.search_planName_selected').removeClass("icon-white icon-check");
-    $('.search_planName_selected').addClass("icon-white");
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_sampleTubeLabel_selected').addClass("icon-white");
-    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
-    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-check");
-
-    $("label[for='searchSubject']").text("combinedLibraryTubeLabel");
-    $("#search_subject_nav").attr("title", "Search by combined library tube label");
-    $("#plan_search_dropdown_menu").toggle();
+function _get_query_string(val){
+    val = val || "";
+    if ($.isArray(val)){
+        return val.join(",")
+    }
+    return val;
 }
 
 function filter(e){
     e.preventDefault();
     e.stopPropagation();
 
-    var daterange = $("#dateRange").val();
+    var date = "";
+    var daterange = $("#dateRange").data("daterange");
     if (daterange) {
-        if (!/ - /.test(daterange)) { daterange = daterange + ' - ' + daterange; }
-        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
+        var start = daterange.start.toString('yyyy-MM-dd HH:mm');
+        var end = daterange.end.toString('yyyy-MM-dd HH:mm').replace('00:00', '23:59');
+        date = start + ',' + end;
     }
 
-    var subjectToSearch = $("label[for='searchSubject']").text();
-    console.log("filter - subjectToSearch=", subjectToSearch);
-    
-    if (subjectToSearch == "planName") {
-    $("#grid").data("kendoGrid").dataSource.filter([
+    var filters = [
         {
-            field: "date",
-            operator: "__range",
-            value: daterange
-        },
-        {
-            field: "name_or_id",
-            operator: "",
-            value: $("#search_text").val()
-        }
-    ]);
-    }
-    else if (subjectToSearch == "chipBarcode") {
-    $("#grid").data("kendoGrid").dataSource.filter([
-        {
-            field: "date",
-            operator: "__range",
-            value: daterange
-        },
-        {
-            field: "chipBarcode",
+            field: $('#search_text').data('selected_filter'),
             operator: "__icontains",
-            value: $("#search_text").val()
-        }
-    ]);
-    }
-    else if (subjectToSearch == "sampleTubeLabel") {
-    $("#grid").data("kendoGrid").dataSource.filter([
+            value: $("#search_text").val().trim().replace(/ /g, '_')
+        },
         {
             field: "date",
             operator: "__range",
-            value: daterange
+            value: date
         },
         {
-            field: "sampleTubeLabel",
-            operator: "__icontains",
-            value: $("#search_text").val()
-        }
-    ]);
-    }
-    else if (subjectToSearch == "combinedLibraryTubeLabel") {
-    $("#grid").data("kendoGrid").dataSource.filter([
-        {
-            field: "date",
-            operator: "__range",
-            value: daterange
-        },
-        {
-            field: "combinedLibraryTubeLabel",
+            field: "planStatus",
             operator: "",
-            value: $("#search_text").val()
+            value: $("#id_status").val()
+        },
+        {
+            field: "runType",
+            operator: "",
+            value: $("#id_runtype").val()
+        },
+        {
+            field: "projects__name",
+            operator: "__in",
+            value: _get_query_string($("#id_project").val())
+        },
+        {
+            field: "experiment__eas_set__barcodeKitName",
+            operator: "__in",
+            value: _get_query_string($("#id_barcodes").val())
+        },
+        {
+            field: "experiment__eas_set__reference",
+            operator: "__in",
+            value: _get_query_string($("#id_reference").val())
         }
-    ]);
-    }
+    ]
+    $("#grid").data("kendoGrid").dataSource.filter(filters);
 }

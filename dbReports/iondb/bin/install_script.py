@@ -2068,8 +2068,10 @@ if __name__ == "__main__":
         chip.delete()
 
     load_dbData("rundb/fixtures/ts_dbData_chips_kits.json")
+    load_dbData("rundb/fixtures/ts_dbData_chips_kits_rnd.json")    
     load_dbData("rundb/fixtures/ts_dbData.json")
-    load_dbData("rundb/fixtures/ts_dbData_analysisargs.json")    
+    load_dbData("rundb/fixtures/ts_dbData_analysisargs.json")
+    load_dbData("rundb/fixtures/ts_dbData_analysisargs_rnd.json")     
     load_dbData("rundb/fixtures/ionusers_group.json")
 
     # Setup an ion mesh user for mesh authed api calls to use

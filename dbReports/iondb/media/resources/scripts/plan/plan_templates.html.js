@@ -93,59 +93,69 @@ function commonKendoGrid(target, url, msg) {
                     }
                 }
             },            
-            
+            serverFiltering: true,
             serverPaging : true,
             pageSize : 10,
             serverSorting : true,
             sort: { field: "date", dir: "desc" }
         },
         sortable: true,
-        height : '460',
-        scrollable : {
-            virtual : false
+        scrollable : false,
+        pageable : {
+            messages: {
+                display: "{0} - {1} of {2} templates",
+                empty: "No templates to display"
+            }
         },
-        pageable : true,
-                
 		dataBinding : onDataBinding,
 		dataBound : onDataBound,
         columns : [{
             field : "planDisplayedName",
             title : "Template Name",
-            width : "18%",
+            width : "20%",
             template : kendo.template($("#PlanDisplayedNameTemplate").html())
         }, {
         	field : "sequencingInstrumentType",
         	title : "Instr",
-            width : "5%",
+            width : "40px",
             sortable : false,
         	template : kendo.template($("#SeqInstrumentTemplate").html())
         }, {
         	field : "templatePrepInstrumentType",
-        	title : "OT/IC",
-            width : "5%",
+        	title : "Sample Prep",
+            width : "55px",
             sortable : false,
         	template : kendo.template($("#TemplatePrepInstrumentTemplate").html())
          }, {        	
         	field : "runType",
-        	title: "App",
-            width : "5%",
+        	title: "Res App",
+            width : "37px",
             sortable : false,
         	template : kendo.template($("#RunTypeColumnTemplate").html())         	
         }, {        	
         	field : "barcodeKitName",
-        	title: "Barcode Kit",
-            width : "8%",        	           
-        	template : kendo.template($("#BarcodeKitNameTemplate").html())    
+        	title: "Barcodes",
+            width : "10%",
+        	template : kendo.template($("#BarcodeKitNameTemplate").html())
         }, {
         	field : "reference",
         	title : "Reference",
-            width : "13%",
-        	template : kendo.template($("#ReferenceTemplate").html())                 
+            width : "15%",
+        	template : kendo.template($("#ReferenceTemplate").html())
+        }, {    
+            field : "projects",
+            title : "Project",
+            width: '10%',
+            sortable : false,
+            template : function(item){
+                            var data = { id: item.id, label: "Projects", values: item.projects.split(',') };
+                            return kendo.template($("#PopoverColumnTemplate").html())(data);
+                        }
         }, {
             field : "irAccountName",
             title : "Ion Reporter Account",
             sortable : false,
-            width : "13%",
+            width : "10%",
         }, {
         	field : "irworkflow",
         	title : "Ion Reporter Workflow",
@@ -153,26 +163,21 @@ function commonKendoGrid(target, url, msg) {
         }, {
         	field : "date",
         	title : "Date",
-        	width : "8%",
-        	template : '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
+        	width : "9%",
+        	template : '#= kendo.toString(new Date(Date.parse(date)),"MMM d yyyy") #'
         }, {        	
         	field : "isSystem",
         	title : "Source",
-            width : "7%",          
+            width : "55px",
         	template : kendo.template($("#IsSystemTemplate").html())                 
         }, {        	
             title : " ",
-            width : "55px",
+            width : "36px",
             sortable : false,
             template : kendo.template($("#ActionColumnTemplate").html())
         }],
 //        columnResizeHandleWidth : 6,        
         columnResizeHandleWidth : 5,
-        /*
-        dataBound : function(e) {
-            commonDataBoundEvent(target, msg);
-        }
-        */
     };
 }
 
@@ -210,21 +215,14 @@ function onDataBound(arg) {
     
     var source = "#tab_contents";
     bindActions(source);
+    
+    $(source + ' span[rel="popover"]').each(function(i, elem) {
+        $(elem).popover({
+            content : $($(elem).data('select')).html()
+        });
+    });
 }
 
-
-function commonDataBoundEvent(target, msg) {
-    $(target).addClass('plan-table');
-    $(target).parent().children('div.k-pager-wrap').show();
-    if ($(target).data("kendoGrid").dataSource.data().length === 0) {
-        var encodingTemplate = kendo.template($("#emptyRowTemplate").html());
-        $(target + ' tbody').html(encodingTemplate({
-            msg : msg
-        }));
-        $(target).parent().children('div.k-pager-wrap').hide();
-    }
-    bindActions(target);
-}
 
 function bindActions(source) {
     $(source + ' .review-plan').click(function(e) {
@@ -451,6 +449,9 @@ $(function () {
     var grid = $("#"+selectedTab).kendoGrid( commonKendoGrid("#"+selectedTab,
                 basePlannedExperimentUrl + "?format=json" + $selectedNav.data('api_filter'),
                 "No" + $selectedNav.text() + "Templates") );
+    // start with all filters reset
+    clear_filters();
+    set_more_filters();
 
     // show warnings if missing files
     var checkFilesUrl = basePlannedExperimentUrl + "check_files" + "?format=json" + $selectedNav.data('api_filter') + "&application="+selectedTab;
@@ -664,4 +665,132 @@ $(document).ready(function() {
         $('#modal_load_template .btn').show();
         $('#modal_load_template #close_on_success').hide();
     });
+
+    var today = Date.parse('today');
+    $('[name=dateRange]').each(function(){ $(this).daterangepicker({
+            dateFormat: 'M d yy',
+            presetRanges: [
+                {text: 'Today', dateStart: today, dateEnd: today},
+                {text: 'Last 7 Days', dateStart: 'today-7days', dateEnd: today},
+                {text: 'Last 30 Days', dateStart: 'today-30days', dateEnd: today},
+                {text: 'Last 60 Days', dateStart: 'today-60days', dateEnd: today},
+                {text: 'Last 90 Days', dateStart: 'today-90days', dateEnd: today}
+            ],
+        }); 
+    });
+    $('.search_trigger').click(function (e) { filter(e); });
+    $('[name=search_text]').keypress(function(e){ if (e.which == 13 || e.keyCode == 13) filter(e); });
+    $('[name=dateRange], .selectpicker').change(function (e) { filter(e); });
+    $('.clear_filters').click(function () { clear_filters(); });
+    $('.toggle_more_filters').click(function () { set_more_filters(true); });
+    
+    $('[name=plan_search_dropdown_menu] a').click(function(e) {
+        var span = $(this).find('span');
+        var container = '#' + (window.location.hash.substring(1) || 'favorites') + '_tab';
+
+        $(container + ' [name=search_text]').data('selected_filter', $(this).data('filter'));
+        $(container + ' [name=plan_search_dropdown_menu] span').each(function(){
+            $(this).removeClass("icon-white icon-check");
+            if (this == span.get(0)){
+                $(this).addClass("icon-check");
+            } else{
+                $(this).addClass("icon-white");
+            }
+        });
+
+        $(container + ' [name=search_subject_nav]').attr("title", "Search by " + this.text);
+        $(container + ' [name=search_text]').attr("placeholder", "Search by " + this.text);
+    });
 });
+
+// Search bar functions
+function clear_filters(){
+    var container = '#' + (window.location.hash.substring(1) || 'favorites') + '_tab';
+    $(container + ' .search-field :input').val('');
+    $(container + ' .search-field .selectpicker').selectpicker('val','');
+    $(container + " .list_contents").data("kendoGrid").dataSource.filter([]);
+}
+
+function set_more_filters(toggle){
+    var more_filters = localStorage.getItem('templates-more-filters') == "true";
+    if (toggle){
+        more_filters = !more_filters;
+    }
+    var container = '#' + (window.location.hash.substring(1) || 'favorites') + '_tab';
+    var toggle_button = $(container + " .toggle_more_filters");
+    var optional_filters = $(container + " .search-field.optional");
+	if (!more_filters) {
+        toggle_button.text(toggle_button.data("more-text"));
+        optional_filters.hide();
+    } else {
+        toggle_button.text(toggle_button.data("less-text"));
+        optional_filters.show();
+    }
+    localStorage.setItem('templates-more-filters', more_filters);
+}
+
+function _get_query_string(val){
+    val = val || "";
+    if ($.isArray(val)){
+        return val.join(",")
+    }
+    return val;
+}
+
+function filter(e){
+    e.preventDefault();
+    e.stopPropagation();
+
+    var container = '#' + (window.location.hash.substring(1) || 'favorites') + '_tab';
+    var date = "";
+    var daterange = $(container + " [name=dateRange]").data("daterange");
+    if (daterange) {
+        var start = daterange.start.toString('yyyy-MM-dd HH:mm');
+        var end = daterange.end.toString('yyyy-MM-dd HH:mm').replace('00:00', '23:59');
+        date = start + ',' + end;
+    }
+
+    var filters = [
+        {
+            field: $(container + ' [name=search_text]').data('selected_filter'),
+            operator: "__icontains",
+            value: $(container + ' [name=search_text]').val().trim().replace(/ /g, '_')
+        },
+        {
+            field: "date",
+            operator: "__range",
+            value: date
+        },
+        {
+            field: "platform",
+            operator: "",
+            value: _get_query_string($(container + ' [name=instrument]').val())
+        },
+        {
+            field: "sampleprep",
+            operator: "",
+            value: _get_query_string($(container + ' [name=sampleprep]').val())
+        },
+        {
+            field: "projects__name",
+            operator: "__in",
+            value: _get_query_string($(container + " [name=project]").val())
+        },
+        {
+            field: "experiment__eas_set__barcodeKitName",
+            operator: "__in",
+            value: _get_query_string($(container +" [name=barcodes]").val())
+        },
+        {
+            field: "experiment__eas_set__reference",
+            operator: "__in",
+            value: _get_query_string($(container +" [name=reference]").val())
+        },
+        {
+            field: "user",
+            operator: "",
+            value: _get_query_string($(container + ' [name=user]').val())
+        },
+    ]
+    $(container + " .list_contents").data("kendoGrid").dataSource.filter(filters);
+}

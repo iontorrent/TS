@@ -28,6 +28,7 @@ function getIonReporterFields(){
         ircellularityPct: { type: "number" },
         // PGx
         irbiopsyDays:   { type: "number" },
+        ircellNum:     { type: "string", defaultValue: ""},
         ircoupleID:     { type: "string", defaultValue: ""},
         irembryoID:     { type: "string", defaultValue: ""},
             // IR Workflow
@@ -82,6 +83,12 @@ function getIonReporterColumns(){
             field: "irbiopsyDays", title: "Biopsy Days",
             width: '100px',
             attributes: { "name": "irbiopsyDays", "class": "integer" },
+            hidden: !$('#isPgs').is(':checked')
+        },
+        {
+            field: "ircellNum", title: "Cell Number",
+            width: '100px',
+            attributes: { "name": "ircellNum" },
             hidden: !$('#isPgs').is(':checked')
         },
         {
@@ -263,9 +270,9 @@ function irCancerTypeEditor(container, options) {
     $('<input id="irCancerTypeEditor" name="irCancerTypeEditor" data-bind="value:' + options.field + '"/>')
         .appendTo(container)
         .kendoDropDownList({
-            dataSource: USERINPUT.cancerTypes,
+            dataSource: cancerTypes,
             dataTextField: "display",
-            dataValueField: "CancerType",
+            dataValueField: "value",
             optionLabel: "---",
             change: function(e){
                 updateIRvalidationErrors(options.model.row, ['ircancerType']);
@@ -527,7 +534,7 @@ function check_selected_values(){
         }
         if (row.ircancerType && ($.grep(USERINPUT.cancerTypes, function(obj){ return obj.CancerType == row.ircancerType } ).length == 0) ){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Cancer Type not found: " + row.ircancerType);
-            row.ircancerType = "";
+            //row.ircancerType = ""; // allow TS-based annotation even if not present on IR
         }
         if (!row.irSetID){
             if( i > 0 && row.irWorkflow) {

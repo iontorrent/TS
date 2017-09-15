@@ -150,6 +150,7 @@ function get_user_input_info_from_ui() {
             dict["cancerType"] = row["ircancerType"];
             dict["cellularityPct"] = row["ircellularityPct"];
             dict["biopsyDays"] = row["irbiopsyDays"];
+            dict["cellNum"] = row["ircellNum"];
             dict["coupleID"] = row["ircoupleID"];
             dict["embryoID"] = row["irembryoID"];
             dict["setid"] = row["irSetID"];

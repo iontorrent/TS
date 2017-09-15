@@ -13,11 +13,11 @@ import re
 import httplib2
 import urlparse
 import datetime
+import requests
 from django.utils import timezone
 import celery.exceptions
 from django.conf import settings
 from django.contrib.auth.decorators import login_required, permission_required
-from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.http import require_POST
 from django.shortcuts import render_to_response, get_object_or_404, get_list_or_404
 from django.template import RequestContext, Context
@@ -35,7 +35,7 @@ from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
 from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, PluginResultJob, GlobalConfig, Chip, AnalysisArgs, \
                                EmailAddress, Publisher, Results, Template, UserProfile, model_to_csv, IonMeshNode, \
-                               FileMonitor, ContentType, Cruncher, SharedServer, RunType, RUNNING_STATES
+                               FileMonitor, ContentType, Cruncher, RunType, RUNNING_STATES, ReferenceGenome
 from iondb.rundb.data import rawDataStorageReport
 from iondb.rundb.configure.genomes import search_for_genomes
 from iondb.rundb.plan import ampliseq
@@ -242,7 +242,10 @@ def configure_services(request):
 def configure_references(request):
     '''Render reference tab'''
     search_for_genomes()
-    ctx = RequestContext(request)
+    ctxd = {
+        "active_references": ReferenceGenome.objects.filter(enabled=True, index_version=settings.TMAP_VERSION).order_by('short_name')
+    }
+    ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/references.html", context_instance=ctx)
 
 
@@ -457,6 +460,11 @@ def configure_plugins_plugin_zip_upload(request):
 
 
 @login_required
+def configure_offline_bundle_upload(request):
+    return plupload_file_upload(request, "/results/uploads/offcycle/")
+
+
+@login_required
 def configure_plugins_plugin_enable(request, pk, set):
     """Allow user to enable a plugin for use in the analysis"""
     try:
@@ -482,15 +490,6 @@ def configure_plugins_plugin_default_selected(request, pk, set):
     plugin.defaultSelected = bool(int(set))
     plugin.save()
     return HttpResponse()
-
-
-@login_required
-def configure_plugins_plugin_refresh(request, pk):
-    plugin = get_object_or_404(Plugin, pk=pk)
-    url = reverse('api_dispatch_info', kwargs={'resource_name': 'plugin', 'api_name': 'v1', 'pk': int(pk)})
-    url += '?use_cache=false'
-    ctx = RequestContext(request, {'plugin': plugin, 'action': url, 'method': 'get'})
-    return render_to_response("rundb/configure/plugins/modal_refresh.html", context_instance=ctx)
 
 
 @login_required
@@ -531,13 +530,130 @@ def configure_configure(request):
     return render_to_response("rundb/configure/configure.html", context_instance=ctx)
 
 
-@permission_required('user.is_staff')
+def finish_sharedservers_mesh_link():
+    # Finishes linking any SharedServers that were converted to IonMeshNode in migration 0324
+    # This function will only do anything if there are any unlinked servers left
+    from iondb.security.models import SecureString
+    from iondb.rundb.models import _generate_key
+    
+    nodes = IonMeshNode.objects.filter(system_id__startswith = 'sharedserver_')
+    for mesh_node in nodes:
+        try:
+            secure_string = SecureString.objects.get(pk=mesh_node.system_id.split('_')[1])
+            decrypted = json.loads(secure_string.decrypted)
+            api_url = 'http://%s/rundb/api/v1/' % mesh_node.hostname
+            
+            s = requests.Session()
+            s.auth = ((decrypted['username'], decrypted['password']))
+
+            # retrieve remote server info
+            r = s.get(api_url + 'ionmeshnode/system_id/', timeout=10)
+            r.raise_for_status()
+            remote_system_id = r.json()['system_id']
+
+            # make sure this node doesn't already exist
+            exist = IonMeshNode.objects.filter(system_id=remote_system_id)
+            if exist:
+                # update node name to the original SharedServer name and delete duplicate entry
+                mesh_node.delete()
+                exist[0].name = mesh_node.name
+                exist[0].save(update_fields=['name'])
+            else:
+                # set up mesh node on remote server
+                local_info = {
+                    "system_id": settings.SYSTEM_UUID,
+                    "hostname": ionMeshDiscoveryManager.getLocalComputer(),
+                    "apikey":  _generate_key()
+                }
+                r = s.post(api_url + 'ionmeshnode/exchange_keys/', data=local_info)
+                r.raise_for_status()
+
+                # finish updating local node
+                mesh_node.system_id = remote_system_id
+                mesh_node.apikey_remote = r.json()['apikey']
+                mesh_node.apikey_local = local_info['apikey']
+                mesh_node.save()
+
+            # clean up temporary username/password store
+            secure_string.delete()
+
+        except:
+            logger.debug('Error linking IonMeshNode %s: %s' % (mesh_node.name, traceback.format_exc()) )
+
+
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
+def link_mesh_node(request):
+    """
+    Add or update mesh node
+    """
+    name = request.POST.get('name')
+    hostname = socket.getfqdn(request.POST.get('hostname'))
+    username = request.POST.get('userid')
+    password = request.POST.get('pswrd')
+    api_url = 'http://%s/rundb/api/v1/' % hostname
+    error = ''
+    
+    # set up remote session
+    s = requests.Session()
+    s.auth = (username, password)
+    r = None
+
+    try:
+        r = s.get(api_url + 'ionmeshnode/system_id/', timeout=30)
+        r.raise_for_status()
+    except requests.ConnectionError as exc:
+        error = "Could not make a connection to the remote server"
+    except requests.exceptions.Timeout:
+        error = "Timeout while trying to get response from remote server"
+    except requests.HTTPError as exc:
+        if r.status_code == 401:
+            error = "Invalid user credentials"
+        else:
+            logger.error(str(exc))
+            error = "Unable to set up Mesh link. Ensure remote server has the same version of Torrent Suite as this server."
+    except Exception as exc:
+        error = str(exc)
+        logger.error(traceback.format_exc())
+    else:
+        remote_system_id = r.json()['system_id']
+        node, created = IonMeshNode.create(system_id=remote_system_id)
+        if not created and node.hostname != hostname:
+            error = "This system has already been setup in the mesh as '" + node.name + "'."
+        else:
+            try:
+                # set up mesh node on remote server
+                local_info = {
+                    "system_id": settings.SYSTEM_UUID,
+                    "hostname": ionMeshDiscoveryManager.getLocalComputer(),
+                    "apikey":  node.apikey_local
+                }
+                r = s.post(api_url + 'ionmeshnode/exchange_keys/', data=local_info)
+                r.raise_for_status()
+            except:
+                error = "Unable to set up Mesh link. Ensure remote server has the same version of Torrent Suite as this server."
+                logger.error(traceback.format_exc())
+                if not node.hostname:
+                    node.delete()
+            else:
+                # set up mesh node on this server
+                node.name = name
+                node.hostname = hostname
+                node.apikey_remote = r.json()['apikey']
+                node.save()
+
+    return HttpResponse(json.dumps({'error': error}), mimetype="application/json")
+
+
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
 def configure_mesh(request):
     """
     Handles view requests for the ion mesh configuration page.
     :param request: The http request
     :return: A http response
     """
+    finish_sharedservers_mesh_link()
 
     ctx=RequestContext(request, {
         "mesh_computers": sorted(ionMeshDiscoveryManager.getMeshComputers()),
@@ -1564,7 +1680,7 @@ def cluster_info_refresh(request):
 
 
 @login_required
-@staff_member_required
+@permission_required('user.is_staff', raise_exception=True)
 def cluster_ctrl(request, name, action):
     error = tasks.cluster_ctrl_task.delay(action, name, request.user.username).get(timeout=20)
     if error:
@@ -1823,17 +1939,21 @@ def check_nas_perms(request):
 
 
 @login_required
-def offcycle_updates(request):
+def offcycle_updates(request, offcycle_type = "online"):
     ctx = {
         'user_can_update': request.user.is_active and request.user.is_staff,
         'plugins': updateProducts.get_update_plugins(),
-        'products': updateProducts.get_update_products(),
+        'products': updateProducts.get_update_products(offcycle_type = offcycle_type),
         'instruments': updateProducts.get_update_packages()
     }
+    if offcycle_type == "manual":
+        return HttpResponse()
+
     return render_to_response("rundb/configure/offcycleUpdates.html", context_instance=RequestContext(request, ctx))
 
 
-@staff_member_required
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
 def offcycle_updates_install_product(request, name, version):
     try:
         updateProducts.update_product(name, version)
@@ -1841,10 +1961,80 @@ def offcycle_updates_install_product(request, name, version):
     except Exception as err:
         return HttpResponseServerError(err)
 
-@staff_member_required
+
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
 def offcycle_updates_install_package(request, name, version):
     try:
         updateProducts.update_package(name, version)
         return HttpResponse()
     except Exception as err:
         return HttpResponseServerError(err)
+
+
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
+def configure_offline_bundle(request):
+    '''Render offline offcycle install tab'''
+    offcycle_localPath = settings.OFFCYCLE_UPDATE_PATH_LOCAL
+    if not os.path.exists(offcycle_localPath):
+        os.makedirs(offcycle_localPath)
+        os.chmod(offcycle_localPath, 0777)
+
+    ctxd = {
+        "what": "Install Updates",
+        "file_filters": [("deb", "Debian Package"),
+                         ("zip", "Compressed Zip files"),
+                         ("json", "Single JSON file")],
+        "pick_label": "an Updates File",
+        "plupload_url": reverse("configure_offline_bundle_upload"),
+        "install_url": reverse('configure_offline_install'),
+        "install_product_url": reverse('offcycle_updates', kwargs={"offcycle_type" : "manual"})
+    }
+
+    return render_to_response("rundb/configure/modal_plugin_or_publisher_install.html", context_instance=RequestContext(request, ctxd))
+
+
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
+def configure_offline_install(request, **kwargs):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            offcycle_localPath = settings.OFFCYCLE_UPDATE_PATH_LOCAL
+            # get the misc deb file name location
+            filename = os.path.join(offcycle_localPath, data["file"])
+            actualFileName = data.get("actualFileName", None)
+            # check to see if there is an extension
+            if not "." in filename:
+                return HttpResponseServerError("Cannot identify file type.")
+
+            # get the file extensions
+            extension = filename.split(".")[-1]
+
+            if os.stat(filename).st_size == 0:
+                raise Exception("Invalid file (%s) uploaded. Please check the file content and try again " % actualFileName)
+
+            # parse the extension
+            if extension in ["zip", "json"]:
+                updateProducts.InstallProducts(filename, extension, actualFileName)
+            elif extension == "deb":
+                installPackages = settings.SUPPORTED_INSTALL_PACKAGES
+                # since deb file has some version attached to it, also some has (underscore, hypen) after the package name
+                # which is not consistent, so perform the reverse comparison
+                isSupported = [name for name, description in installPackages if name in actualFileName]
+                if not isSupported:
+                    errMsg = "The selected deb pacakge is not supported currently."
+                    return HttpResponseServerError(errMsg)
+                updateProducts.InstallDeb(filename, actualFileName = actualFileName)
+            else:
+                return HttpResponseServerError("The extension " + extension + " is not a valid file type.")
+        except Exception as err:
+            return HttpResponseServerError(str(err))
+
+        finally:
+            if 'filename' in vars() and filename and os.path.exists(filename):
+                os.remove(filename)
+
+    return HttpResponse()
+

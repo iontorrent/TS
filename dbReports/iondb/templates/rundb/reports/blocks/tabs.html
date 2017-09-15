@@ -1,10 +1,21 @@
 {% load url from future %}
-<section id="tabs">
+<style>
+.summaryTable tr td:first-child {
+ width: 30%;
+}
+
+.summaryTable tr td:nth-child(2) {
+ width: 70%;
+}
+</style>
+
+<div id="tabs">
+    <h1 id="details" class="section-header">
+        <span class="anchor" id="details-section"></span>
+        Details
+    </h1>
 	<ul class="nav nav-tabs inContentTabs" id="ReportDetailsTab">
 		<li class="active">
-			<a data-toggle="tab" dynamic-navbar-section="" href="#PluginOutput">Plugin Summary</a>
-		</li>
-		<li>
 			<a data-toggle="tab" href="#TestFragments">Test Fragments</a>
 		</li>
         <li>
@@ -30,149 +41,13 @@
 		<div class="pull-right"><a style="color:gray; font-weight:normal" href="metal/">H+</a></div>
 	</ul>				
 	<div id="ReportDetailsTabContent" class="tab-content">
-		<div id="PluginOutput" data-title="Plugin Output" class="tab-pane active in">
-			<a class="btn pluginDialogButton">Select Plugins to Run</a>
-			<div class="pull-right">
-				<div class="btn-group">
-					<button class="btn" id="pluginExpandAll">+ Expand All</button>
-					<button class="btn" id="pluginCollapseAll">- Collapse All</button>
-				</div>
-				<a id="pluginRefresh" class="btn btn-tertiary">Refresh plugin status</a>
-			</div>
 
-<script type="text/javascript">
-// Copied from data_model.js - needs new home
-function precisionUnits(num, div) {
-    // console.log(num + ' ' + typeof(num));
-    if (typeof div === "undefined") div = 1000;
-    num = parseFloat(num);
-    var postfix = "";
-    var exponent = Math.floor(Math.log(num) / Math.log(div));
-    if (exponent >= 0) {
-        num = Math.round(100 * num / Math.pow(div, exponent)) / 100;
-    }
-    if (Math.round(num) >= div) {
-        num /= div;
-        exponent += 1;
-    }
-    if (exponent >= 1) {
-        postfix = "kMGTPEZY"[exponent - 1];
-    }
-    return num.toPrecision(3) + ' ' + postfix;
-}
-
-</script>
-
-<script type="text/x-kendo-template" id="pluginStatusTemplate">
-    <div class='pluginGroup'>
-        <div class='pluginGroupHead'>
-            <div class='pluginGroupHeadInner clearfix'>
-                # if (!data.Major) { #
-                    <button class="btn plugin-collapse">#= (data.show)? "-" : "+" #</button>
-                # } else { #
-                    <div style="width: 34px; display: inline-block;"> </div>
-                # } #
-                <strong> #= data.Name # </strong>
-                <small>(#=data.Version#)</small>
-                <small> Id[ #=data.id# ] </small>
-                # if (data.Major) { #
-                    <a href="\##= data.Name #">See plugin results above</a>
-                # } #
-                <div class="pull-right">
-                    <span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">  #= data.State #</span>
-                    # if (!data.can_terminate) { #
-                        <span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">#= precisionUnits(data.Size, 1024) #B</span>
-                    # } #
-                    #= plugin_dropdown_template(data) #
-                </div>
-                # if (data.can_terminate) { #
-                    <div class="pull-right">
-                        <button class="pluginCancel btn btn-small btn-primary" data-id="#=data.id#" ><i class="icon-white icon-remove"></i>Stop</button>
-                    </div>
-                # } #
-            </div>
-        </div>
-
-        # if (!data.Major) { #
-            <div class="pluginGroupList" id="#= data.Name #" style="display: block">
-                # if (data.Files) { #
-                    # for (var j = 0; j < data.Files.length; j++) { #
-                        # if ( data.Files[j].endsWith("_block.html") || data.Files[j].endsWith("_block.php") ) { #
-                            <div class="pluginBlock">
-                                <iframe id="#= data.Name #" class="pluginBlock" src="#= data.URL ##= data.Files[j] #"width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #">
-                                </iframe>
-                            </div>
-                        # } else { #
-                            <div class="pluginFile">&bull;<a href="#= data.URL ##= data.Files[j] #">#=data.Files[j]#</a></div>
-                        # } #
-                    # } #
-                # } else { #
-                    <div>No Data</div>
-                # } #
-            </div>
-        # } #
-        </div>
-    </div>
-</script>
-<script type="text/x-kendo-template" id="pluginMajorBlockTemplate">
-    <div class="pluginGroup">
-        <div class="majorNameRow clearfix">
-            <h2 class="pull-left">#= Name # <small>(v#= Version #)</small></h2><a id="#= Name #"> </a>
-            <span class="plugin_links"></span>
-        	<div class="pull-right">
-        		<span style="line-height:48px;">#= State #</span>
-                #= plugin_dropdown_template(data) #
-            </div>
-        </div>
-    </div>
-</script>
-<script type="text/x-kendo-template" id="pluginDropdownTemplate">
-    <div class="btn-group plugin-controls">
-        <button data-toggle="dropdown" class="btn btn-mini dropdown-toggle"><span class="caret"></span></button>
-        <ul class="dropdown-menu pull-right">
-            <li>
-                <a class="pluginLog" title="Log File for #= Name #" href="#= URL #drmaa_stdout.txt"><i class="icon-file"></i> View Plugin Log</a>
-            </li>
-            # if (!data.can_terminate) { #
-                <li class="divider"></li>
-                <li>
-                    <a class="pluginRemove" title="Delete plugin #= Name #" href="/rundb/api/v1/pluginresult/#= id #/delete/"><i class="icon-trash"></i>Delete this plugin result</a>
-                </li>
-            # } #
-        </ul>
-    </div>
-</script>
-			<div id="pluginStatus" >
-				<div>
-					<div id="pluginStatusLoad"></div>
-					<div id="pluginStatusTable"> </div>
-				</div><!--plugin status wrapper -->
-			</div>
-
-			<div id="modal_plugin_log" class="modal container hide">
-			    <div class="modal-header">
-			        <button type="button" class="close" data-dismiss="modal">&times;</button>
-			        <h3></h3>
-			    </div>
-			    <div class="modal-body"></div>
-			    <div class="modal-footer">
-			        <a href="#" class="btn" data-dismiss="modal">Close</a>
-			    </div>
-			    <script>
-			        $('#modal_plugin_log').on('hidden', function() {
-			            $(this).removeData('modal').find('.modal-body').empty();
-			            $(this).removeData('modal').find('.modal-header h3').empty();
-			        });
-			    </script>
-			</div>
-		</div>
-		
 	  {% include "rundb/reports/blocks/testfragments.html" %}
 
 	  {% include "rundb/reports/blocks/calibration_report.html" %}
 
 		<div id="AnalysisDetails" data-title="Analysis Details" class="tab-pane">
-			<table class="table table-striped">
+			<table class="summaryTable table table-striped">
 				<tr><td>Run Name</td><td>{{experiment.expName}}</td></tr>
 				<tr><td>Run Date</td><td>{{experiment.date}}</td></tr>
 				<tr><td>Run Flows</td><td>{{experiment.flows}}</td></tr>
@@ -197,6 +72,7 @@ function precisionUnits(num, div) {
 				</tr>				
 				<tr><td>Reference</td><td>{{report.eas.reference}}</td></tr>
 				<tr><td>Instrument</td><td>{{experiment.pgmName}}</td></tr>
+				<tr><td>Sequencer Operation Mode</td><td>{{operationMode}}</td></tr>
 				<tr><td>Flow Order</td><td>{{experiment.flowsInOrder}}</td></tr>
 				<tr><td>Library Key</td><td>{{report.eas.libraryKey}}</td></tr>
 				<tr><td>TF Key</td><td>{{report.eas.tfKey|default:"ATCG"}}</td></tr>
@@ -264,7 +140,7 @@ function precisionUnits(num, div) {
 		</div>
 		
 		<div id="SoftwareVersion" data-title="Software Version" class="tab-pane">
-			<table class="table table-striped">
+			<table class="summaryTable table table-striped">
 				{% for item, version in software_versions %}
 					<tr><td>{{item}}</td><td>{{version}}</td></tr>
 				{% endfor %}
@@ -292,9 +168,9 @@ function precisionUnits(num, div) {
                 {% endif %}
 
                 {% for sampleSetName, chefLibPrep in chefLibPrep_info.items %}
-                <table id="{{sampleSetName|slugify}}" class="libprep_table table table-striped" {% if not forloop.first %}style="display: none;"{% endif %}>
+                <table id="{{sampleSetName|slugify}}" class="summaryTable libprep_table table table-striped" {% if not forloop.first %}style="display: none;"{% endif %}>
                     {% for item, info in chefLibPrep %}
-                    <tr><td align="center" valign="middle">{{item}}</td><td>{{info}}</td></tr>
+                    <tr><td>{{item}}</td><td>{{info}}</td></tr>
                     {% endfor %}
                 </table>
                 {% endfor %}
@@ -303,7 +179,7 @@ function precisionUnits(num, div) {
 
             {% if chef_info %}
             <h3>Chef Template Prep Information:</h3>
-            <table class="table table-striped">
+            <table class="summaryTable table table-striped">
                 {% for item, info in chef_info %}
                     <tr><td>{{item}}</td><td>{{info}}</td></tr>
                 {% endfor %}
@@ -338,7 +214,7 @@ function precisionUnits(num, div) {
 				{% elif S5_InitLog_read.msg %}
 					<p style="margin-left:2em">{{S5_InitLog_read.msg}}</p>
 				{% else %}
-					<table class="table table-striped">
+					<table class="summaryTable table table-striped">
 						<tr><th>Product Description</th><th>Part Number</th><th>Lot Number</th><th>Exp. Date</th><th>Remaining Uses</th></tr>
 						{% for initLog in S5_InitLog_read.existing_consumables %}
 							<tr>
@@ -358,34 +234,4 @@ function precisionUnits(num, div) {
 			{% endif %}
 		</div>
 	</div>
-</section>
-
-{# This modal is used to display links to re launch plugins. It is controlled by js #}
-
-<div class="modal hide" id="plugin-modal">
-  <div class="modal-header">
-	<a class="close" data-dismiss="modal">&times;</a>
-	<h3 id="modal-header"></h3>
-  </div>
-  <div class="modal-body" id="modal-body" style="height: 450px; overflow-y: scroll;">
-  </div>
-  <div class="modal-footer">
-	<a href="#" class="btn" data-dismiss="modal">Close</a>
-  </div>
-</div>
-
-{# This modal is used to display a specific plugins iframe. It is controlled by js #}
-
-<div class="modal container hide" id="plugin-iframe-modal" data-modal-Overflow="true">
-  <div class="modal-header">
-	<button class="close" data-dismiss="modal">&times;</button>
-	<h3 id="modal-header">Configure Plugin</h3>
-  </div>
-  <div class="modal-body">
-      <div id="plugin_barcodes_table"></div>
-      <iframe src="" class="auto-height" scrolling="no" frameborder="0" style="height: 400px;"></iframe>
-  </div>
-  <div class="modal-footer">
-	<a href="#" class="btn" data-dismiss="modal">Close</a>
-  </div>
 </div>

@@ -3,6 +3,7 @@
 
 import os, sys, string, glob, os.path, json, subprocess
 from optparse import OptionParser
+import re
 
 sys.path.append('/opt/ion/')
 header = None
@@ -48,6 +49,8 @@ def print_html(fh, header, data):
 def markDuplicates( options, data ):
   extra_files = glob.glob(os.path.join(options.analysis_dir,'*rawlib.bam'))
   extra_files.sort()
+  results={}
+  
   for extra_file in extra_files:
     if os.path.exists(extra_file):
       bam_name = os.path.basename(extra_file)
@@ -55,9 +58,23 @@ def markDuplicates( options, data ):
       cmd = "BamDuplicates -i %s -o temp.bam -j %s ; samtools view -F 0x0400 -b temp.bam > %s; rm temp.bam"%(extra_file,json_name,bam_name)
       print "DEBUG: Calling %s"%cmd
       subprocess.call(cmd,shell=True)
-      fjson = open(json_name,'r')
-      js=json.load(fjson)
-      data.append([ "<a href=%s> %s </a>"%(bam_name,bam_name), "%.2g%%"%(100*js[u'fraction_duplicates']),"%.2g%%"%(100*js[u'fraction_with_adaptor'])])
+      with open(json_name,'r') as fjson:
+          fjson = open(json_name,'r')
+          js=json.load(fjson)
+          data.append([ "<a href=%s> %s </a>"%(bam_name,bam_name), "%.2g%%"%(100*js[u'fraction_duplicates']),"%.2g%%"%(100*js[u'fraction_with_adaptor'])])
+          
+          print bam_name
+          bam_name = re.sub('\_rawlib.bam$','',bam_name)
+          print bam_name
+          
+          js['Percent_duplicate_reads_removed']=round(100.*float(js['fraction_duplicates']),4)
+          print js['Percent_duplicate_reads_removed']
+          results[bam_name]=js
+          
+  with open('results.json','w') as fout:
+      results1={}
+      results1['barcodes'] = results
+      json.dump(results1, fout)     
   return data
     
 def main(options):

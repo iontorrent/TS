@@ -176,7 +176,12 @@ def download_samplefile_format(request):
 
     sample_csv_version = import_sample_processor.get_sample_csv_version()
 
-    hdr = [import_sample_processor.COLUMN_SAMPLE_NAME, import_sample_processor.COLUMN_SAMPLE_EXT_ID, import_sample_processor.COLUMN_CONTROLTYPE, import_sample_processor.COLUMN_PCR_PLATE_POSITION, import_sample_processor.COLUMN_BARCODE_KIT, import_sample_processor.COLUMN_BARCODE, import_sample_processor.COLUMN_GENDER, import_sample_processor.COLUMN_GROUP_TYPE, import_sample_processor.COLUMN_GROUP, import_sample_processor.COLUMN_SAMPLE_DESCRIPTION, import_sample_processor.COLUMN_NUCLEOTIDE_TYPE, import_sample_processor.COLUMN_CANCER_TYPE, import_sample_processor.COLUMN_CELLULARITY_PCT, import_sample_processor.COLUMN_BIOPSY_DAYS, import_sample_processor.COLUMN_COUPLE_ID, import_sample_processor.COLUMN_EMBRYO_ID
+    hdr = [import_sample_processor.COLUMN_SAMPLE_NAME, import_sample_processor.COLUMN_SAMPLE_EXT_ID, import_sample_processor.COLUMN_CONTROLTYPE,
+           import_sample_processor.COLUMN_PCR_PLATE_POSITION, import_sample_processor.COLUMN_BARCODE_KIT, import_sample_processor.COLUMN_BARCODE,
+           import_sample_processor.COLUMN_GENDER, import_sample_processor.COLUMN_GROUP_TYPE, import_sample_processor.COLUMN_GROUP,
+           import_sample_processor.COLUMN_SAMPLE_DESCRIPTION, import_sample_processor.COLUMN_NUCLEOTIDE_TYPE, import_sample_processor.COLUMN_CANCER_TYPE,
+           import_sample_processor.COLUMN_CELLULARITY_PCT, import_sample_processor.COLUMN_BIOPSY_DAYS, import_sample_processor.COLUMN_CELL_NUM,
+           import_sample_processor.COLUMN_COUPLE_ID, import_sample_processor.COLUMN_EMBRYO_ID
            ]
 
     customAttributes = SampleAttribute.objects.all().exclude(isActive=False).order_by("displayedName")
@@ -667,6 +672,7 @@ def save_input_samples_for_sampleset(request):
                 sampleBiopsyDays = pending_sampleSetItem.get("biopsyDays", "0")
                 if not sampleBiopsyDays:
                     sampleBiopsyDays = "0"
+                sampleCellNum = pending_sampleSetItem.get("cellNum", "")
                 sampleCoupleId = pending_sampleSetItem.get("coupleId", "")
                 sampleEmbryoId = pending_sampleSetItem.get("embryoId", "")
 
@@ -679,7 +685,8 @@ def save_input_samples_for_sampleset(request):
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
 
                 views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, sampleControlType,\
-                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId, sampleDesc)
+                        selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType,
+                        pcrPlateRow, sampleBiopsyDays, sampleCellNum, sampleCoupleId, sampleEmbryoId, sampleDesc)
 
             clear_samplesetitem_session(request)
 
@@ -924,10 +931,10 @@ def show_input_samplesetitems(request):
 def show_samplesetitem_modal(request, intent, sampleSetItem=None, pending_sampleSetItem=None):
 
     sample_groupType_CV_list = _get_sample_groupType_CV_list(request)
-    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType="relationshipRole").order_by('value')
-    controlType_CV_list = SampleAnnotation_CV.objects.filter(annotationType="controlType").order_by('value')
-    gender_CV_list = SampleAnnotation_CV.objects.filter(annotationType="gender").order_by('value')
-    cancerType_CV_list = SampleAnnotation_CV.objects.filter(annotationType="cancerType").order_by('value')
+    sample_role_CV_list = SampleAnnotation_CV.objects.filter(isActive=True, annotationType="relationshipRole").order_by('value')
+    controlType_CV_list = SampleAnnotation_CV.objects.filter(isActive=True, annotationType="controlType").order_by('value')
+    gender_CV_list = SampleAnnotation_CV.objects.filter(isActive=True, annotationType="gender").order_by('value')
+    cancerType_CV_list = SampleAnnotation_CV.objects.filter(isActive=True, annotationType="cancerType").order_by('value')
     sampleAttribute_list = SampleAttribute.objects.filter(isActive=True).order_by('id')
     sampleAttributeValue_list = []
     selectedBarcodeKit = None

@@ -38,6 +38,7 @@ COLUMN_NUCLEOTIDE_TYPE = "DNA/RNA/Fusions"
 ALTERNATE_COLUMN_NUCLEOTIDE_TYPE = "DNA/RNA"
 COLUMN_PCR_PLATE_POSITION = "PCR Plate Position"
 COLUMN_BIOPSY_DAYS = "Biopsy Days"
+COLUMN_CELL_NUM = "Cell Number"
 COLUMN_COUPLE_ID = "Couple ID"
 COLUMN_EMBRYO_ID = "Embryo ID"
 COLUMN_CONTROLTYPE = "Control Type"
@@ -86,6 +87,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     pcrPlateRow = csvSampleDict.get(COLUMN_PCR_PLATE_POSITION, "").strip()
 
     biopsyDays = csvSampleDict.get(COLUMN_BIOPSY_DAYS, "0").strip()
+    cellNum = csvSampleDict.get(COLUMN_CELL_NUM, "").strip()
     coupleId = csvSampleDict.get(COLUMN_COUPLE_ID, None).strip()
     embryoId = csvSampleDict.get(COLUMN_EMBRYO_ID, "").strip()
 
@@ -140,6 +142,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
             'cancerType': cancerType_CV_value,
             'cellularityPct': cellularityPct if cellularityPct else None,
             'biopsyDays': int(biopsyDays) if biopsyDays else 0,
+            "cellNum": cellNum,
             "coupleId": coupleId,
             "embryoId": embryoId,
             'creator': user,
@@ -269,6 +272,7 @@ def validate_csv_sample(csvSampleDict, request):
         pcrPlateRow = csvSampleDict.get(COLUMN_PCR_PLATE_POSITION, "").strip()
 
         biopsyDays = csvSampleDict.get(COLUMN_BIOPSY_DAYS, "0").strip()
+        cellNum = csvSampleDict.get(COLUMN_CELL_NUM, "").strip()
         coupleId = csvSampleDict.get(COLUMN_COUPLE_ID, "").strip()
         embryoId = csvSampleDict.get(COLUMN_EMBRYO_ID, "").strip()
 
@@ -339,6 +343,11 @@ def validate_csv_sample(csvSampleDict, request):
             isValid, errorMessage = sample_validator.validate_sampleBiopsyDays(biopsyDays)
             if not isValid:
                 failed.append((COLUMN_BIOPSY_DAYS, errorMessage))
+
+        if cellNum:
+            isValid, errorMessage = sample_validator.validate_sampleCellNum(cellNum)
+            if not isValid:
+                failed.append((COLUMN_CELL_NUM, errorMessage))
 
         if coupleId:
             isValid, errorMessage = sample_validator.validate_sampleCoupleId(coupleId)

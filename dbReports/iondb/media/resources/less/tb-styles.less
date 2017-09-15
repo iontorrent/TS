@@ -830,10 +830,6 @@ tr.new_plan td {
 	padding-bottom: 15px;
 }
 
-#runSection div.well {
-  min-height: 540px;
-}
-
 #RunSummary .well small {
   display: block;
   margin-bottom: 20px;
@@ -843,9 +839,6 @@ tr.new_plan td {
 
 #runSection .well a {
   position: relative;
-  &:hover {
-    box-shadow: 1px 1px 0 4px #F5F5F5, 1px 1px 3px 4px rgba(0, 0, 0, 0.4);
-  }
   i.icon-zoom-in {
     position: absolute;
     right: 0;
@@ -885,10 +878,6 @@ tr.new_plan td {
 #OutputFiles .well,
 #VariantSummary .well,
 #PairingRate .well { margin-bottom: 0; }
-
-#OutputFiles .btn { margin-left: 5px; }
-#OutputFiles .btn-group + #OutputFiles .btn-group { margin: 0; }
-#OutputFiles .btn-group .btn { margin-left: 0px; }
 
 #OutputFiles h4 { width: 40%; }
 
@@ -1260,10 +1249,17 @@ div.valid { /* Additions for validation */
   box-shadow: 5px 7px 5px #cdcdcd;
 }
 
+.collapsible-section {
+  padding: 5px 15px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
 .summary-section {
   padding: 5px 15px;
   background: #f3f3f3;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .summary-section h2,
@@ -1888,7 +1884,7 @@ color: #fff;
 
 .summary-section {
     background: none repeat scroll 0 0 #F3F3F3;
-    border-radius: 8px 8px 8px 8px;
+    border-radius: 4px;
     padding: 5px 15px;
 }
 

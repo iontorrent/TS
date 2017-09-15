@@ -188,17 +188,6 @@
       "isActive": true,
       "instrumentType": "S5"
     }
-  },  
-  {
-    "pk": 8,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "521",
-      "slots": 1,
-      "description": "521",
-      "isActive": false,
-      "instrumentType": "S5"
-    }
   },
   {
     "pk": 9,
@@ -240,17 +229,6 @@
       "name": "P1.0.19",
       "slots": 1,
       "description": "P0(19)",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  {
-    "pk": 13,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P1.0.20",
-      "slots": 1,
-      "description": "P0",
       "isActive": false,
       "instrumentType": "proton"
     }
@@ -320,18 +298,6 @@
       "isActive": false,
       "instrumentType": "pgm"
     }
-  }, 
-  {
-    "pk": 20,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "541",
-      "slots": 1,
-      "description": "541",
-      "isActive": false,
-      "instrumentType": "S5",
-      "earlyDatFileDeletion" : "1"
-    }
   },
   {
     "pk": 21,
@@ -342,61 +308,6 @@
       "description": "318D",
       "isActive": true,
       "instrumentType": "pgm"
-    }
-  },
-  {
-    "pk": 22,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P2.0.1",
-      "slots": 1,
-      "description": "P2.0.1",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  {
-    "pk": 23,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P2.1.1",
-      "slots": 1,
-      "description": "P2.1.1",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  {
-    "pk": 24,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P2.3.1",
-      "slots": 1,
-      "description": "P2.3.1",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  {
-    "pk": 25,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P1.1.541",
-      "slots": 1,
-      "description": "PI Ti-Cup",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  {
-    "pk": 26,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "522",
-      "slots": 1,
-      "description": "521-P2.0",
-      "isActive": false,
-      "instrumentType": "S5"
     }
   },
   {
@@ -493,7 +404,19 @@
       "flowOrder": "TACGTACGTCTGAGGCATCGATCGATGTACAGCTGACTGACTATCGCAGAGCTAGCTACATGTCGACTGACTGATAGCGTCATGCATGCAGACTCGTCGTACGTACTCAGATGCTAGCTAGCACGTGATCAGTCAGTCGCTATGAGTCAGTCAGCGATACTGCATGCATGAGTCTACGATCGATCGTGCACTATACGTACGTCTGAGCATCGATCGATGTACAGCTGACTGACTATCGCAGAGCTAGCTACATGTCGACTGACTGATAGCGTCATGCATGCAGACTCGTCGTACGTACTCAGATGCTAGCTAGCACGTGATCAGTCAGTCGCTATGAGTCAGTCAGCGATACTGCATGCATGAGTCTACGATCGATCGTGCACTA"
     }
   },
-
+  {
+    "pk": 7,
+    "model": "rundb.flowOrder",
+    "fields": {
+      "name": "Ion samba.c.2step.pgs",
+      "description": "Ion samba.c.2step.pgs flow order",
+      "isActive" : true,
+      "isDefault": false,
+      "isSystem" : true,
+      "flowOrder": "TACGTACGTCTGAGCATCGGATCGCGATGTACAGCTACGTACGGAGTCTAGCTGACGTACGTCATGTGCATCGATCAGCTAGCTGACGTAGCTAGCATCGATCAGTCATGACTGACGTAGCTGACTGATCAGTCATGCATCGTACGTACGTAGCTGACGTACGTCATGCATCGATCAGCTAGCTGACGTAGCTAGCATCGATCAGTCATGACTGACGTAGCTGACTGATCAGTCATGCATCGTACGTACGTAGCTGACGTACGTCATGCATCGATCAGCTAGCTGACGTAGCTAGCATCGATCAGTCATGACTGACGTAGCTGACTGATCAGTCATGCATCG"
+    }
+  },
+ 
   {
     "pk": 20001,
     "model": "rundb.kitinfo",
@@ -1285,7 +1208,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0008",
       "instrumentType": "proton",
-      "samplePrep_instrumentType" : "OT",      
+      "samplePrep_instrumentType" : "OT",
       "isActive": true,
       "description": "Ion PI Template OT2 200 Kit v3",
       "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.3.1"
@@ -1364,7 +1287,7 @@
       "flowCount": 0,
       "uid": "IATEMP0001",
       "instrumentType": "pgm",
-      "samplePrep_instrumentType" : "OT",
+      "samplePrep_instrumentType" : "IA",
       "isActive": true,
       "description": "Ion PGM Template IA 500 Kit",
       "defaultThreePrimeAdapter": [
@@ -1919,7 +1842,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0016",
       "instrumentType": "S5",
-      "samplePrep_instrumentType" : "",
+      "samplePrep_instrumentType" : "OT_IC",
       "isActive": true,
       "description": "Ion 540 Control Ion Spheres",
       "categories" : "s5v1Install",
@@ -2042,26 +1965,6 @@
       "instrumentType": "pgm",
       "isActive": true,
       "description": "Ion PGM Controls 200 Kit v2"
-    }
-  },
-  {
-    "pk": 20095,
-    "model": "rundb.kitinfo",
-    "fields": {
-      "kitType": "IonChefPrepKit",
-      "name": "Ion Chef S541 V1",
-      "nucleotideType": "",
-      "runMode": "",
-      "flowCount": 500,
-      "libraryReadLength" : 200,
-      "templatingSize" : "200;400",
-      "uid": "ICPREP0008",
-      "instrumentType": "S5",
-      "samplePrep_instrumentType" : "IC",
-      "isActive": false,
-      "description": "Ion 541 Kit-Chef",
-      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;s5541",
-      "chipTypes" : "541"
     }
   },
   {
@@ -2189,7 +2092,7 @@
       "uid": "IATEMP0002",
       "instrumentType": "S5",
       "chipTypes" : "520;530",
-      "samplePrep_instrumentType" : "OT",
+      "samplePrep_instrumentType" : "IA",
       "isActive": true,
       "description": "Ion 520 & Ion 530 Kit - IA"
     }
@@ -2261,7 +2164,7 @@
       "isActive": true,
       "description": "Precision ID Chef Reagents",
       "categories" : "filter_s5HidKit",
-      "chipTypes" : "520;530",
+      "chipTypes" : "510;520;530",
       "applicationType" : "AMPS"
     }
   },
@@ -4562,36 +4465,6 @@
     }
   },
   {
-    "pk": 20221,
-    "model": "rundb.kitpart",
-    "fields": {
-      "barcode": "A30523",
-      "kit": [
-        "ICPREP0008"
-      ]
-    }
-  },
-  {
-    "pk": 20222,
-    "model": "rundb.kitpart",
-    "fields": {
-      "barcode": "A27755",
-      "kit": [
-        "ICPREP0008"
-      ]
-    }
-  },
-  {
-    "pk": 20223,
-    "model": "rundb.kitpart",
-    "fields": {
-      "barcode": "A27754",
-      "kit": [
-        "ICPREP0008"
-      ]
-    }
-  },
-  {
     "pk": 20224,
     "model": "rundb.kitpart",
     "fields": {
@@ -4990,5 +4863,5 @@
         "SEQ0028"
       ]
     }
-  }  
+  }
 ]

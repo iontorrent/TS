@@ -47,10 +47,10 @@ class PluginManager(object):
         self.default_plugin_script = LEGACY_PLUGIN_SCRIPT
         self.pluginroot = os.path.normpath(settings.PLUGIN_PATH or "/results/plugins/")
 
-    def rescan(self):
+    def rescan(self, plugins=[]):
         """ Convenience function to purge missing and find new plugins. Logs info message"""
-        removed = self.inactivate_missing()
-        installed = self.search_for_plugins()
+        removed = self.inactivate_missing(plugins)
+        installed = self.search_for_plugins([plugin.name for plugin in plugins])
         if removed or installed:
             logger.info("Rescan Plugins '%s': %d installed/updated and %d removed", self.pluginroot, installed, removed)
         return
@@ -64,12 +64,12 @@ class PluginManager(object):
         """
         if not plugins:
             # Review all currently installed/active plugins
-            activeplugins = iondb.rundb.models.Plugin.objects.filter(active=True)
+            plugins = iondb.rundb.models.Plugin.objects.filter(active=True)
 
         # for each record, test for corresponding folder
         count = 0
         scanned = 0
-        for plugin in activeplugins:
+        for plugin in plugins:
             # if specified folder does not exist
             if plugin.path == '' or not os.path.isdir(plugin.path):
                 if plugin.active:
@@ -107,7 +107,6 @@ class PluginManager(object):
         else:
             logger.error("Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef)
         return (pluginscript, islaunch)
-
 
     @staticmethod
     def get_plugininfo(pluginname, pluginscript, context=None, use_cache=False):
@@ -154,19 +153,18 @@ class PluginManager(object):
         # Invalid, or Unchanged
         return False
 
-    def search_for_plugins(self, basedir=None):
+    def search_for_plugins(self, plugin_name_list=[]):
         """ Scan folder for uninstalled or upgraded plugins
             Returns number of plugins installed or upgraded
         """
-        if not basedir:
-            basedir = self.pluginroot
-
+        basedir = self.pluginroot
         # Basedir - typically '/results/plugins', passed in args
         if not os.path.exists(basedir):
             return None
+        plugin_directories = plugin_name_list if plugin_name_list else os.listdir(basedir)
 
         # reset permissions assuming for all of the non supported plugins
-        for i in os.listdir(basedir):
+        for i in plugin_directories:
             if i in ["scratch", "implementations", "archive"]:
                 continue
             if not getPackageName(os.path.join(basedir, i)):
@@ -175,11 +173,11 @@ class PluginManager(object):
                 except:
                     logger.exception("Failed to change permissions")
 
-
         logger.debug("Scanning %s for plugin folders", basedir)
         # only list files in the 'plugin' directory if they are actually folders
-        folder_list = []
-        for i in os.listdir(basedir):
+        folder_list = list()
+
+        for i in plugin_directories:
             if i in ["scratch", "implementations", "archive"]:
                 continue
             full_path = os.path.join(basedir, i)
@@ -192,8 +190,8 @@ class PluginManager(object):
             # Candidate Plugin Found
             folder_list.append((i, full_path, plugin_script))
 
-        ## Pre-scan plugins - one big celery task rather than many small ones
-        pluginlist = [ (n,s,None) for n,p,s in folder_list ]
+        # Pre-scan plugins - one big celery task rather than many small ones
+        pluginlist = [(n, s, None) for n, p, s in folder_list]
         infocache = {}
         try:
             infocache = iondb.plugins.tasks.scan_all_plugins(pluginlist)
@@ -215,7 +213,7 @@ class PluginManager(object):
                 continue
 
             # Quick skip of already installed plugins
-            #if iondb.rundb.models.Plugin.objects.filter(pname=pname, version=info.get('version'), active=True).exists():
+            # if iondb.rundb.models.Plugin.objects.filter(pname=pname, version=info.get('version'), active=True).exists():
             #    continue
 
             # For now, install handles "reinstall" or "refresh" cases.

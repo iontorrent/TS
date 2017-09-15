@@ -1,0 +1,156 @@
+<div id="PluginOutput">
+    <h1 id="plugins" class="section-header">
+        <span class="anchor" id="plugins-section"></span>
+        Plugins
+    </h1>
+
+    <script type="text/javascript">
+        // Copied from data_model.js - needs new home
+        function precisionUnits(num, div) {
+            // console.log(num + ' ' + typeof(num));
+            if (typeof div === "undefined") div = 1000;
+            num = parseFloat(num);
+            var postfix = "";
+            var exponent = Math.floor(Math.log(num) / Math.log(div));
+            if (exponent >= 0) {
+                num = Math.round(100 * num / Math.pow(div, exponent)) / 100;
+            }
+            if (Math.round(num) >= div) {
+                num /= div;
+                exponent += 1;
+            }
+            if (exponent >= 1) {
+                postfix = "kMGTPEZY"[exponent - 1];
+            }
+            return num.toPrecision(3) + ' ' + postfix;
+        }
+
+    </script>
+
+<script type="text/x-kendo-template" id="pluginSubNavTemplate">
+    <li>
+        <a href="\\##= data.name #-section">#= data.name #</a>
+    </li>
+</script>
+
+<script type="text/x-kendo-template" id="pluginStatusTemplate">
+    <div id="#= name #-section" style="height: 30px; margin-top: -30px"></div>
+    # data.results.forEach(function(result, i){ #
+        <div class='pluginGroup' id="pluginGroupId#= result.id #" # if(i>0) { # style="display:none" # } #>
+            <div class='pluginGroupHead'>
+                <div class='pluginGroupHeadInner'>
+                    <div class="pluginGroupButtons">
+                        <a class="pluginLog btn" title="Log File for #= result.Name #" href="#= result.URL #drmaa_stdout.txt">View Log</a>
+                        # if (result.can_terminate) { #
+                            <a class="pluginCancel btn" data-id="#=result.id#" href="##">Stop</a>
+                        # } else { #
+                            <a class="pluginRemove btn" title="Delete plugin #= result.Name #" href="/rundb/api/v1/pluginresult/#= result.id #/delete/">Delete</a>
+                        # } #
+                    </div>
+                    <div>
+                    <h2>#= result.Name # </h2>
+                        # if(data.results.length < 2) { #
+                            <span class="pluginVersion">v#=result.Version# (#=result.id#)</span>
+                        # } else { #
+                            <select class="changePluginResult" data-parent-id="pluginGroupId#= result.id #">
+                                 # data.results.forEach(function(otherResult, i){ #
+                                    <option
+                                            value="pluginGroupId#= otherResult.id #"
+                                            # if(otherResult.id==result.id) { # selected="selected" # } #
+                                    >
+                                        v#=otherResult.Version# \\##=(data.results.length-i)# (#=otherResult.id#)
+                                    </option>
+                                 # }) #
+                            </select>
+                        # } #
+                        <br>
+                        <span rel='tooltip' title="Size (bytes): #=result.Size#, Inode Count: #=result.inodes#">  #= result.State #</span>
+                        # if (!result.can_terminate) { #
+                            <span rel='tooltip' title="Size (bytes): #=result.Size#, Inode Count: #=result.inodes#">#= precisionUnits(result.Size, 1024) #B</span>
+                        # } #
+                    </div>
+                </div>
+            </div>
+            <div class="pluginGroupList" id="#= result.Name #" style="display: block">
+                # if (result.Files) { #
+                    # for (var j = 0; j < result.Files.length; j++) { #
+                        # if ( result.Files[j].endsWith("_block.html") || result.Files[j].endsWith("_block.php") ) { #
+                            <div class="pluginBlock">
+                                <iframe id="#= result.Name #" class="pluginBlock" src="#= result.URL ##= result.Files[j] #"width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #">
+                                </iframe>
+                            </div>
+                        # } else { #
+                            <div class="pluginFile">&bull;<a href="#= result.URL ##= result.Files[j] #">#=result.Files[j]#</a></div>
+                        # } #
+                    # } #
+                # } else { #
+                    <div>No Data</div>
+                # } #
+            </div>
+        </div>
+    # }) #
+</script>
+			<div id="pluginStatus" >
+				<div>
+					<div id="pluginStatusLoad"></div>
+					<div id="pluginStatusTable"> </div>
+				</div><!--plugin status wrapper -->
+			</div>
+
+			<div id="modal_plugin_log" class="modal container hide">
+			    <div class="modal-header">
+			        <button type="button" class="close" data-dismiss="modal">&times;</button>
+			        <h3>Plugin Log</h3>
+			    </div>
+			    <div class="modal-body"></div>
+			    <div class="modal-footer">
+			        <a href="#" class="btn" data-dismiss="modal">Close</a>
+			    </div>
+			    <script>
+			        $('#modal_plugin_log').on('hidden', function() {
+			            $(this).removeData('modal').find('.modal-body').empty();
+			            $(this).removeData('modal').find('.modal-header h3').empty();
+			        });
+			    </script>
+			</div>
+		</div>
+
+
+
+{# This modal is used to display links to re launch plugins. It is controlled by js #}
+
+<script type="text/x-kendo-template" id="pluginLauncherTemplate">
+    <table id="plugin_table" class="table table-striped"></table>
+</script>
+
+<div class="modal hide" id="plugin-modal">
+  <div class="modal-header">
+	<a class="close" data-dismiss="modal">&times;</a>
+	<h3 id="modal-header"></h3>
+  </div>
+  <div class="modal-body" id="modal-body" style="height: 450px; overflow-y: scroll;">
+  </div>
+  <div class="modal-footer">
+      <div class="input-append pull-left" style="margin-bottom: 0">
+          <input class="span3" type="text" placeholder="Search" id="plugin_search_input">
+          <button class="btn" type="button" id="plugin_search_clear">Clear</button>
+      </div>
+	<button class="btn" data-dismiss="modal">Close</button>
+  </div>
+</div>
+
+{# This modal is used to display a specific plugins iframe. It is controlled by js #}
+
+<div class="modal container hide" id="plugin-iframe-modal" data-modal-Overflow="true">
+  <div class="modal-header">
+	<button class="close" data-dismiss="modal">&times;</button>
+	<h3 id="modal-header">Configure Plugin</h3>
+  </div>
+  <div class="modal-body">
+      <div id="plugin_barcodes_table"></div>
+      <iframe src="" class="auto-height" scrolling="no" frameborder="0" style="height: 400px;"></iframe>
+  </div>
+  <div class="modal-footer">
+	<button class="btn" data-dismiss="modal">Close</button>
+  </div>
+</div>

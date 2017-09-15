@@ -10,13 +10,13 @@
     <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
         type="text/css"/>
     <script type="text/javascript" src="{% static "resources/scripts/plan/iru_validation.js" %}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/plan/validation.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/ionreporter_util.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/iru_get_user_input.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/by_template.js" %}"></script>   
     <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_sample_table.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_reference_section.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_analysis_params_section.js" %}"></script> 
-    <script type="text/javascript" src="{% static "resources/scripts/plan/validation.js" %}"></script>
     <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
     <script type="text/javascript" src="{% static "jquery/js/jquery.form.js" %}"></script>
 <style>
@@ -58,7 +58,7 @@
         <input type="hidden" id="default_ref_section" name="default_ref_section" value={%if not helper.isPlanBySample%}"rundb/plan/page_plan/page_plan_reference_section.html"{%else%}""{%endif%}>
         
         <label for="planName" class="form-label">Run Plan Name (required)</label>
-        <input style="width: 420px;" id="planName" name="planName" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
+        <input style="width: 420px;" id="planName" name="planName" type="text" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
         <div id="error" style="color:red; margin-top: 10px;"></div>
         {% for key, validationErrors in step.validationErrors.items %}
             <div class="row-fluid">

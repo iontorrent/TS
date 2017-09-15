@@ -1,0 +1,26 @@
+<style>
+    .popover-title { display: none; }
+</style>
+<script id="PopoverColumnTemplate" type="text/x-kendo-template">
+    # if (data.values.length > 1) { #
+    <div class="popoverContainer">
+        <span rel="popover" data-toggle="popover" data-select="\#pid#=data.id#" data-html="true" data-trigger="hover">
+            #= data.values.length + " " + data.label # <i class="icon-info-sign" style="opacity: 0.9"></i>
+        </span>
+        <div id="pid#=data.id#" class="hide">
+            <table class="table table-condensed table-striped sample-popover-table" style="margin:0;">
+                <thead>
+                    <tr><th>#=data.label#</th></tr>
+                </thead>
+                <tbody>
+                #for (var i=0,len=data.values.length; i<len; i++){#
+                    <tr><td>${ data.values[i] }</td></tr>
+                # } #
+                </tbody>
+            </table>
+        </div>
+    </div>
+    # } else { #
+        #= data.values[0] #
+    # } #
+</script>

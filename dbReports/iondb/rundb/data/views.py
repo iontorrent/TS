@@ -3,8 +3,7 @@ from django import http, template
 from django.core import urlresolvers
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.contrib.auth.decorators import login_required
-from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.shortcuts import render_to_response, get_object_or_404, redirect, render
@@ -33,7 +32,7 @@ from iondb.rundb.models import (
     Location,
     ReportStorage,
     EventLog, GlobalConfig, ReferenceGenome, dnaBarcode, KitInfo, ContentType, Plugin, ExperimentAnalysisSettings, Sample,
-    DMFileSet, DMFileStat, FileServer, IonMeshNode)
+    DMFileSet, DMFileStat, FileServer, IonMeshNode, Chip)
 from iondb.rundb.api import CompositeExperimentResource, ProjectResource
 from iondb.rundb.report.analyze import build_result
 from iondb.rundb.report.views import _report_started
@@ -59,9 +58,31 @@ logger = logging.getLogger(__name__)
 
 
 def get_search_parameters():
+    def get_chip_choices():
+        chip_choices = []
+
+        # Get all string chip values from the db
+        used_chip_values = [str(value).strip() for value in list(
+            Experiment.objects.values_list("chipType", flat=True).distinct("chipType").order_by("chipType")
+        )]
+
+        # Try to find a better display name from the db if available
+        # otherwise, just show the raw string value
+        for chip_value in used_chip_values:
+            if len(chip_value) > 0:
+                try:
+                    display_name = Chip.objects.get(name=chip_value).getChipDisplayedName()
+                except Chip.DoesNotExist:
+                    if chip_value == "900":  # See TS-5276
+                        display_name = "PI"
+                    else:
+                        display_name = chip_value
+                chip_choices.append({"display_name": display_name, "value": chip_value})
+
+        return sorted(chip_choices, reverse=True)
+
     experiment_params = {
         'flows': [],
-        'chipType': [],
         'pgmName': [],
     }
     report_params = {
@@ -74,8 +95,12 @@ def get_search_parameters():
         experiment_params[key] = list(Experiment.objects.values_list(key, flat=True).distinct(key).order_by(key))
         experiment_params[key] = [value for value in experiment_params[key] if len(str(value).strip()) > 0]
 
-    experiment_params['sample'] = list(Sample.objects.filter(
-        status="run").values_list('name', flat=True).order_by('name'))
+    # Limit samples drop-down to only 5000 samples sorted by creation date date.
+    experiment_params['sample'] = list(
+        Sample.objects.filter(status="run").order_by('-date')[:5000].values_list('name', flat=True)
+    )
+
+    experiment_params['chipType'] = get_chip_choices()
 
     for expkey, key in eas_keys:
         experiment_params[expkey] = list(
@@ -959,6 +984,7 @@ def datamanagement(request):
 
     # Disk Usage section
     fs_stats = {}
+    fs_stats_mounted_paths = []
     for path in FileServer.objects.all().order_by('pk').values_list('filesPrefix', flat=True):
         try:
             if os.path.exists(path):
@@ -968,15 +994,20 @@ def datamanagement(request):
                 keeper_used = float(sum(keeper_used.values())) / 1024  # gbytes
                 total_gb = fs_stats[path]['disksize']
                 fs_stats[path]['percentkeep'] = 100 * (keeper_used / total_gb) if total_gb > 0 else 0
+                if os.path.islink(path):
+                    mounted = is_mounted(os.path.realpath(path))
+                    if mounted:
+                        fs_stats_mounted_paths.append(mounted)
         except:
             logger.error(traceback.format_exc())
 
     archive_stats = {}
     backup_dirs = get_dir_choices()[1:]
+
     for bdir, name in backup_dirs:
         try:
             mounted = is_mounted(bdir)  # This will return mountpoint path
-            if mounted and bdir not in archive_stats and bdir not in fs_stats:
+            if mounted and bdir not in archive_stats and bdir not in fs_stats and bdir not in fs_stats_mounted_paths:
                 archive_stats[bdir] = get_disk_attributes_gb(bdir)
         except:
             logger.error(traceback.format_exc())
@@ -1132,7 +1163,7 @@ def dm_action_selected(request, results_pks, action):
 
 
 @login_required
-@staff_member_required
+@permission_required('user.is_staff', raise_exception=True)
 def dm_configuration(request):
     def isdiff(value1, value2):
         return str(value1) != str(value2)

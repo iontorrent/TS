@@ -34,8 +34,6 @@ class BasicAuthMiddleware:
                         login(request, user)
                     else:
                         log.debug("Failed login attempt for user '%s'. INACTIVE USER", user)
-                else:
-                    log.debug("Failed login attempt for user '%s'. INVALID LOGIN", user)
             else:
                 log.debug("Attempt to auth with '%s' auth: NOT SUPPORTED", auth[0])
         else:

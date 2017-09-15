@@ -40,6 +40,7 @@ class SavePlanFieldNames():
     CANCER_TYPE = "cancerType"
     CELLULARITY_PCT = "cellularityPct"
     BIOPSY_DAYS = "biopsyDays"
+    CELL_NUM = "cellNum"
     COUPLE_ID = "coupleID"
     EMBRYO_ID = "embryoID"
     NUCLEOTIDE_TYPE = "NucleotideType"
@@ -68,6 +69,7 @@ class SavePlanFieldNames():
     IR_CANCER_TYPE = "ircancerType"
     IR_CELLULARITY_PCT = "ircellularityPct"
     IR_BIOPSY_DAYS = "irbiopsyDays"
+    IR_CELL_NUM = "ircellNum"
     IR_COUPLE_ID = "ircoupleID"
     IR_EMBRYO_ID = "irembryoID"
 
@@ -156,6 +158,7 @@ def update_ir_plugin_from_samples_table(samplesTable):
                 SavePlanFieldNames.CANCER_TYPE: row.get(SavePlanFieldNames.IR_CANCER_TYPE, ""),
                 SavePlanFieldNames.CELLULARITY_PCT: row.get(SavePlanFieldNames.IR_CELLULARITY_PCT, ""),
                 SavePlanFieldNames.BIOPSY_DAYS:  row.get(SavePlanFieldNames.IR_BIOPSY_DAYS, ""),
+                SavePlanFieldNames.CELL_NUM:  row.get(SavePlanFieldNames.IR_CELL_NUM, ""),
                 SavePlanFieldNames.COUPLE_ID: row.get(SavePlanFieldNames.IR_COUPLE_ID,  ""),
                 SavePlanFieldNames.EMBRYO_ID: row.get(SavePlanFieldNames.IR_EMBRYO_ID, ""),
                 SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(SavePlanFieldNames.IR_APPLICATION_TYPE, ''),
@@ -195,7 +198,7 @@ class SavePlanStepData(AbstractStepData):
         self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = None
         self.prepopulatedFields[SavePlanFieldNames.IR_ISFACTORY] = False
         self.prepopulatedFields[SavePlanFieldNames.IR_CONFIG_JSON] = None
-        self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
+        self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.filter(isActive=True).order_by("annotationType", "value"))
         self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = None
         self.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = None
         self.savedObjects[SavePlanFieldNames.BARCODE_TO_SAMPLE] = OrderedDict()
@@ -509,28 +512,12 @@ class SavePlanStepData(AbstractStepData):
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE: row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE, ""),
                         }
 
-                    # logger.debug("save_plan_step_data.updateSavedObjectsFromSaveFields() sampleName=%s; id_str=%s; savedObjects=%s" %(sample_name, id_str, self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str]))
-                    # logger.debug("save_plan_step_date.updateSavedObjectsFromSaveFields() savedObjects=%s" %(self.savedObjects));
-                    # logger.debug("save_plan_step_date.updateSavedObjectsFromSaveFields() savedFields=%s" %(self.savedFields));
 
-        # logger.debug("EXIT save_plan_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])=%s; self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]));
-
-    def updateFromStep(self, updated_step):
-        # logger.debug("ENTER save_plan_step_data.updateFromStep() updated_step.stepName=%s; self.savedFields=%s" %(updated_step.getStepName(), self.savedFields))
-
-        if updated_step.getStepName() not in self._dependsOn:
-            for sectionKey, sectionObj in self.step_sections.items():
-                if sectionObj:
-                    # logger.debug("save_plan_step_data.updateFromStep() sectionKey=%s" %(sectionKey))
-                    for key in sectionObj.getCurrentSavedFieldDict().keys():
-                        sectionObj.updateFromStep(updated_step)
-            return
-
+    def alternateUpdateFromStep(self, updated_step):
+        """
+        also runs if editing a plan post-sequencing and Application is updated
+        """
         if updated_step.getStepName() == StepNames.APPLICATION:
-
-            if not updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
-                logger.debug("save_plan_step_data.updateFromStep() --- NO-OP --- APPLICATION APPL_PRODUCT IS NOT YET SET!!! ")
-                return
 
             if updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE]:
                 runTypeObj = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE]
@@ -547,7 +534,24 @@ class SavePlanStepData(AbstractStepData):
             else:
                 self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = ""
 
-            # logger.debug("save_plan_step_data.updateFromStep() going to update RUNTYPE value=%s" %(self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]))
+
+    def updateFromStep(self, updated_step):
+
+        if updated_step.getStepName() not in self._dependsOn:
+            for sectionKey, sectionObj in self.step_sections.items():
+                if sectionObj:
+                    # logger.debug("save_plan_step_data.updateFromStep() sectionKey=%s" %(sectionKey))
+                    for key in sectionObj.getCurrentSavedFieldDict().keys():
+                        sectionObj.updateFromStep(updated_step)
+            return
+
+        self.alternateUpdateFromStep(updated_step)
+
+        if updated_step.getStepName() == StepNames.APPLICATION:
+
+            if not updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
+                logger.debug("save_plan_step_data.updateFromStep() --- NO-OP --- APPLICATION APPL_PRODUCT IS NOT YET SET!!! ")
+                return
 
         if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
             self.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]

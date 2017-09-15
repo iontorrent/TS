@@ -424,7 +424,7 @@ def update(request):
         try:
             # Disable Update Server button for some reason
             # Checking root partition for > 1GB free
-            allow_update = True if files.getSpaceKB("/") > 1048576 else False
+            allow_update = files.getSpaceKB("/") > 1048576 and files.getSpaceKB("/var") > 1048576
             if not allow_update:
                 GlobalConfig.objects.update(ts_update_status="Insufficient disk space")
             else:
@@ -879,17 +879,13 @@ class RigAdmin(admin.ModelAdmin):
     list_filter = ('ftpserver', 'location')
 
 
-class SharedServerAdmin(admin.ModelAdmin):
-    list_display = ('name', 'address', 'username', 'active')
-
-
 class SampleSetItemInline(admin.StackedInline):
     model = SampleSetItem
     extra = 0
     max_num = 1
     verbose_name = "Sample Set Item"
     fields = [('sample', 'dnabarcode', 'description', 'creator'), ('nucleotideType', 'pcrPlateColumn', 'pcrPlateRow'),
-        ('controlType', 'gender', 'relationshipRole', 'relationshipGroup'), ('cancerType', 'cellularityPct', 'biopsyDays', 'coupleId', 'embryoId')]
+        ('controlType', 'gender', 'relationshipRole', 'relationshipGroup'), ('cancerType', 'cellularityPct', 'biopsyDays', 'cellNum', 'coupleId', 'embryoId')]
     formfield_overrides = {models.CharField: {'widget': TextInput(attrs={'size': '25'})}, }
 
 
@@ -898,6 +894,12 @@ class SampleSetAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     exclude = ('libraryPrepInstrumentData', )
     inlines = [SampleSetItemInline, ]
+
+
+class SamplePrepDataAdmin(admin.ModelAdmin):
+    list_display = ('instrumentName', 'lastUpdate', 'samplePrepDataType', 'instrumentStatus', 'operationMode', 'startTime', 'endTime')
+    list_filter = ('instrumentName',)
+    ordering = ("instrumentName", 'lastUpdate')
 
 
 class ApplProductAdmin(admin.ModelAdmin):
@@ -915,7 +917,7 @@ class ApplicationGroupAdmin(admin.ModelAdmin):
 
 
 class IonMeshNodeAdmin(admin.ModelAdmin):
-    list_display = ('hostname', 'system_id', 'share_plans', 'share_data', 'share_monitoring')
+    list_display = ('name', 'hostname', 'active', 'system_id', )
 
 
 admin.site.register(Experiment, ExperimentAdmin)
@@ -972,10 +974,10 @@ admin.site.register(FileMonitor)
 admin.site.register(SupportUpload)
 admin.site.register(NewsPost)
 admin.site.register(AnalysisArgs, AnalysisArgsAdmin)
-admin.site.register(SharedServer, SharedServerAdmin)
 admin.site.register(SampleSet, SampleSetAdmin)
 admin.site.register(common_CV, common_CVAdmin)
 admin.site.register(ApplicationGroup, ApplicationGroupAdmin)
+admin.site.register(SamplePrepData, SamplePrepDataAdmin)
 
 # Add sessions to admin
 class SessionAdmin(admin.ModelAdmin):

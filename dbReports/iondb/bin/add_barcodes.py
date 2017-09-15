@@ -3,14 +3,12 @@
 barcode set name and the path to a barcode csv file in the same format
 uploaded to the Torrent Server.
 """
-
-
-__author__ = "Brian Kennedy"
-from iondb.bin.djangoinit import *
-from iondb.rundb.configure.views import *
+from iondb.bin import djangoinit
+from iondb.rundb.models import dnaBarcode
 from iondb.rundb.configure.views import _validate_barcode
 
 import sys
+import csv
 
 
 def _get_new_or_db_barcode(name, index):

@@ -272,7 +272,7 @@ class StepHelperDbSaver():
             chipBarcode = barcoding_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL]
 
         retval = {'planDisplayedName': planDisplayedName,
-                  'planName': planDisplayedName.replace(' ', '_'),
+                  'planName': "_".join(planDisplayedName.split()),
                   'sampleTubeLabel': sampleTubeLabel.strip() if sampleTubeLabel else "",
                   'chipBarcode': chipBarcode.strip() if chipBarcode else "",
                   'metaData': self.__update_metaData_for_LIMS(existing_meta, LIMS_meta),
@@ -348,7 +348,7 @@ class StepHelperDbSaver():
             existing_meta = save_step_data.savedObjects[SaveTemplateStepDataFieldNames.META]
 
         retval = {'planDisplayedName': planDisplayedName,
-                  'planName': planDisplayedName.replace(' ', '_'),
+                  'planName': "_".join(planDisplayedName.split()),
                   # 'sampleTubeLabel' : sampleTubeLabel.strip().lstrip("0") if sampleTubeLabel else "",
                   'sampleTubeLabel': sampleTubeLabel.strip() if sampleTubeLabel else "",
                   'chipBarcode': chipBarcode.strip() if chipBarcode else "",

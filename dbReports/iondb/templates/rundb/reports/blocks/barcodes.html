@@ -73,7 +73,8 @@
                 </td>
             </tr>
         </script>
-        <div class="spacer clear"></div>
+        <div class="spacer clear" style="margin-bottom: 34px"></div>
+    </div>
     {%elif CA_barcodes_json and not CA_barcodes_json == "[]" %}
         <script>
             function numberWithCommas(x) {
@@ -83,6 +84,7 @@
             }
            var CA_barcodes_json = {{CA_barcodes_json|safe}};
         </script>
+    <div>
         <div class="spacer clear"></div>
         <table id="CA_barcodes" class="">
             <thead>
@@ -129,5 +131,3 @@
         <a href="#" data-dismiss="modal" class="btn">Close</a>
     </div>
 </div>
-
-

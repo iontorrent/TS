@@ -6,44 +6,104 @@
     <li class="active"><a href="{% url "configure_references" %}">References</a></li>
 {% endblock tab-configure-references %}
 {% block extra_head %}
-
+<style type="text/css">
+    .download_bedfiles {
+        margin: 10px 0 10px 10px;
+    }
+</style>
 {% endblock extra_head %}
 
 {% block content %}
-	<div class="content">
+    <div class="content">
         <div class="row">
             <div class="span12">
                 <h1>Ion References</h1>
                 {% if not references %}
                     <p>Could not retrieve list of references from the Internet</p>
                 {% else %}
-                    <table class="table table-hover table-striped">
+                    <table class="table table-striped">
                     {% for ref in references %}
                         <tr>
                             <td>
                                 {% if ref.installed %}
                                     <a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.installed.status }}</a>
                                     <p>{{ ref.name }}</p>
+                                    {% if ref.notes %}
+                                        <p>{{ ref.notes }}</p>
+                                    {% endif %}
                                     {%if ref.installed.status == "complete" %}
-	                                    <form action="{% url "references_genome_download" %}" method="post">
-	                                    	{% if ref.refAnnotNotAvailable != 'N/A' %}
-	                                    		<i>Annotation</i>
-	                                    	{% endif %}
-	                                        <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
-	                                        <input type="hidden" name="annotation_meta" value="{{ ref.annotation_encoded }}" />
-	                                        <input type="hidden" name="reference_mask" value="{{ ref.reference_mask }}" />
-	                                        {% if ref.isAnnotCompleted and not ref.isNewAnnotPosted and not ref.noLink %}
-	                                        	<a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.isAnnotCompleted }}</a>
-	                                        {% else %}
-	                                        	<a class="pull-right" title="{{ref.errURL}}"><font color="#FF6666">{{ ref.noLinkMsg }}</font></a>
-	                                    	{% endif %}
-	                                        {%if ref.isNewAnnotPosted %}
-	                                    		<input type="hidden" name="missingAnnotation_meta" value="{{ ref.missingAnnotation_meta }}" />
-	                                    		<input id=test type=file name=test style="visibility:hidden;position:absolute;top:0;left:0" value="{{ ref.missingAnnotation_data }}">
-	                                    		<input type="submit" name="ref_annot_update" class="btn btn-small" value="Download" />
-	                                    	{% endif %}
-	                                    </form>
-	                                  {% endif %}
+                                        <form action="{% url "references_genome_download" %}" method="post">
+                                            {% if ref.refAnnotNotAvailable != 'N/A' %}
+                                                <i>Annotation</i>
+                                            {% endif %}
+                                            <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
+                                            <input type="hidden" name="annotation_meta" value="{{ ref.annotation_encoded }}" />
+                                            <input type="hidden" name="reference_mask" value="{{ ref.reference_mask }}" />
+                                            {% if ref.isAnnotCompleted and not ref.isNewAnnotPosted and not ref.noLink %}
+                                                <a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.isAnnotCompleted }}</a>
+                                            {% else %}
+                                                <a class="pull-right" title="{{ref.errURL}}"><font color="#FF6666">{{ ref.noLinkMsg }}</font></a>
+                                            {% endif %}
+                                            {%if ref.isNewAnnotPosted %}
+                                                <input type="hidden" name="missingAnnotation_meta" value="{{ ref.missingAnnotation_meta }}" />
+                                                <input id=test type=file name=test style="visibility:hidden;position:absolute;top:0;left:0" value="{{ ref.missingAnnotation_data }}">
+                                                <input type="submit" name="ref_annot_update" class="btn btn-small" value="Import Annotation" />
+                                            {% endif %}
+                                        </form>
+                                        {% if ref.bedfiles %}
+                                            <div>
+                                                <i>BED Files</i>
+                                                <button class="btn btn-small download_bedfiles" data-toggle="modal" data-target="#modal_upload_bedfiles_{{forloop.counter}}">Import BED Files</button>
+                                                <ul>
+                                                {% for bedfile in ref.bedfiles %}
+                                                    <li>
+                                                        {{bedfile.description}} ({{bedfile.source|basename}})
+                                                        {% if bedfile.status %}
+                                                            <span {% if 'error' in bedfile.status|lower %}class="text-error"{%else%}class="text-success"{%endif%}>
+                                                                &mdash; Status: {{bedfile.status}}
+                                                            </span>
+                                                        {% endif %}
+                                                    </li>
+                                                {% endfor %}
+                                                </ul>
+                                            </div>
+                                            <div id="modal_upload_bedfiles_{{forloop.counter}}" class="modal hide" role="dialog">
+                                                <form action="{% url "start_install_bedfiles" %}" method="post">
+                                                    <div class="modal-header">
+                                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                                        <h3 id="modal-header-text" class="modal-title">Import BED Files</h3>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <input type="hidden" name="bedfiles_meta" value="{{ ref.bedfiles_encoded }}" />
+                                                        <table id="bedfiles_table_{{forloop.counter}}" class="table table-striped bedfiles_table">
+                                                            <thead>
+                                                                <th><span rel='tooltip' title='(De)select All'><input  class='bedfiles_selectall' type='checkbox' checked></span></th>
+                                                                <th>Description</th>
+                                                                <th>BED File</th>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr></tr>
+                                                                {% for bedfile in ref.bedfiles %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <input type="checkbox" name="bedfiles" value="{{bedfile.source|basename}}"
+                                                                            {% if bedfile.status and not 'error' in bedfile.status|lower %} disabled {% else %} checked {%endif%}>
+                                                                    </td>
+                                                                    <td>{{bedfile.description}}</td>
+                                                                    <td>{{bedfile.source|basename}}</td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <input type="button" value="Cancel" class="btn" data-dismiss="modal"/>
+                                                        <input type="submit" href="{% url "start_install_bedfiles" %}" value="Import Selected" class="btn btn-primary install_bedfiles"/>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
                                 {% else %}
                                     <form action="{% url "references_genome_download" %}" method="post" class="pull-right">
                                         <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
@@ -53,9 +113,9 @@
                                         <input type="submit" class="btn btn-small" value="Import" />
                                     </form>
                                     <p><strong>{{ ref.name }}</strong></p>
-                                {% endif %}
-                                {% if ref.notes %}
-                                    <p>{{ ref.notes }}</p>
+                                    {% if ref.notes %}
+                                        <p>{{ ref.notes }}</p>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                         </tr>
@@ -66,8 +126,8 @@
         </div>
         <div class="row">
             <div class="span12">
-                <p>Note: these downloads are larger than the traditional zipped fasta file because they are pre-indexed for your convenience.</p>
-                <h2>References Downloading <a href="{% url "references_genome_download" %}" class="btn"><i class="icon-refresh"></i> Refresh list</a></h2>
+                <p>Note: Reference downloads are larger than the traditional zipped fasta file because they are pre-indexed for your convenience.</p>
+                <h2>Downloads <a href="{% url "references_genome_download" %}" class="btn"><i class="icon-refresh"></i> Refresh list</a></h2>
                 {% if downloads %}
                     <table class="table table-striped">
                         <thead>
@@ -86,7 +146,7 @@
                                     {{ download.percent_progress }}
                                 </td>
                                 <td>
-                                    {{ download.status }}
+                                    {% if download.status == "Complete" %}Download Complete{% else %}{{ download.status }}{% endif %}
                                 </td>
                             </tr>
                         {% endfor %}
@@ -97,5 +157,17 @@
             </div>
         </div>
     </div>
-{% endblock content %}	
+    <script type="text/javascript">
+        $(document).ready(function(){
+            $('.bedfiles_selectall').click(function(){
+                $(this).parents('.bedfiles_table').find('input').prop('checked', this.checked);
+            });
+
+            $('.bedfiles_selectall, [name=bedfiles]').change(function(e){
+                var selected = $(this).parents('.bedfiles_table').find('tbody input:checked');
+                $(this).parents('form').find(':input[type=submit]').prop('disabled', selected.length < 1);
+            });
+        });
+    </script>
+{% endblock content %}
 

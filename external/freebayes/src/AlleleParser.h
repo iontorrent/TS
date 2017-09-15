@@ -271,7 +271,31 @@ private:
 	PileUpAlleles(hotspot[j].pos, hotspot[j].ref_length, position_ticket);
 	return true;
   }
+  void handle_candidate_list(list<PositionInProgress>::iterator& position_ticket) {
+    if (not candidate_list_.is_open()) return;
+    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+      AlleleDetails& allele = I->second;
+      if (not allele.filtered) {
+         candidate_list_ << ref_reader_->chr_str(allele.chr) << '\t' << allele.position+ allele.minimized_prefix+1 << '\t' << ref_reader_->substr(position_ticket->chr,allele.position+ allele.minimized_prefix, allele.ref_length- allele.minimized_prefix) << '\t' << allele.alt_sequence.substr(allele.minimized_prefix) << '\t'  << allele.coverage_fwd << '\t' << allele.coverage_rev << '\t' << ref_pileup_.coverage_fwd << '\t' << ref_pileup_.coverage_rev << endl;
+      }
+    }
+  }
+  void handle_black_out(string &refstring) {
 
+    if (not blacked_var_.is_open()) return;
+    int pos = 0;
+    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+      AlleleDetails& allele = I->second;
+      pos = allele.position;
+      if (allele.is_black_listed != '.') {
+        int idx = allele.minimized_prefix;
+        if (not add_black(pos+idx, allele.alt_sequence.substr(idx), refstring.substr(idx, allele.ref_length-idx), allele.coverage_fwd,allele.coverage_rev, allele.is_black_listed, ref_pileup_.coverage_fwd, ref_pileup_.coverage_rev )) {
+           cerr << "ERROR:  Fail to add black list at position" << pos+idx << endl;
+           exit(1);
+        }
+      }
+    }
+  }
   void InferAlleleTypeAndLength(AlleleDetails& allele) const;
   bool filtered_by_coverage_novel_allele(AlleleDetails& allele);
 

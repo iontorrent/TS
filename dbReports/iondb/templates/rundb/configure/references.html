@@ -18,9 +18,8 @@
   <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
   <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
 
-  <script type="text/javascript" src="/site_media/js/chosen.jquery.min.js"></script>
-  <link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
-
+  <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
+  <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 <!--
   Ignoring fileinput because it doesn't seem to work properly.
   <script type="text/javascript" src="{% static "jquery/js/fileinput/jquery.fileinput.min.js"%}"></script>
@@ -106,8 +105,12 @@
               <input id="targets-search" type="text" class="search-query" placeholder="Search" data-prev="">
           </div>
           <div class="pull-left">
-            <select id="targets-ref-dropdown" name="reference" class="dropdown" style="width:400px;">
-              <option value=''>Show All References</option>
+            <select id="targets-ref-dropdown" name="reference" class="selectpicker"
+                   title="Reference:" data-persist-title="true" data-width="350px" data-live-search="true">
+            <option value="">All</option>
+            {% for ref in active_references %}
+              <option value="{{ ref.short_name }}">{{ ref.short_name }} ({{ ref.name }})</option>
+            {% endfor %}
             </select>
           </div>
           <div class="pull-right">
@@ -126,8 +129,12 @@
             <input id="hotspots-search" type="text" class="search-query" placeholder="Search" data-prev="">
           </div>
           <div class="pull-left">
-            <select id="hotspots-ref-dropdown" name="reference" class="dropdown" style="width:400px;">
-              <option value=''>Show All References</option>
+            <select id="hotspots-ref-dropdown" name="reference" class="selectpicker"
+                    title="Reference:" data-persist-title="true" data-width="350px" data-live-search="true">
+            <option value="">All</option>
+            {% for ref in active_references %}
+              <option value="{{ ref.short_name }}">{{ ref.short_name }} ({{ ref.name }})</option>
+            {% endfor %}
             </select>
           </div>
           <div class="pull-right">
@@ -163,6 +170,18 @@
     </div>
   </div>
 </div>
+
+<script id="uploadStatusTemplate" type="text/x-kendo-template">
+  # var emph = "text-success"; #
+  # if (status.indexOf('Complete') !== -1) { #
+    # emph = "text-info"; #
+  # } else if (status.indexOf('Error') !== -1) { #
+    # emph = "text-error"; #
+  # } #
+  <span style="font-weight:bold;" class="#=emph#">
+    #=status#
+  </span>
+</script>
 
 <script type="text/javascript">
 $(function () {
@@ -211,51 +230,27 @@ $(function () {
 
 $(document).ready(function() {
 
-  // Populate Upload History table
+  // Upload History
 
-  $.get('/rundb/api/v1/contentupload/?format=json&limit=0', function (data) {
-
-    var uploads_data = new kendo.data.DataSource({
-      data: [],
-      schema: {
-        model: {
-          fields: {
-            id: { type: "number" },
-            file: { type: "string" },
-            upload_type: { type: "string" },
-            upload_date: {type: "date" },
-            status: { type: "string" },
-            label: {type: "string"},
-          }
-        }
+    var uploads_data = {
+      type : "json",
+      transport : {
+          read : {
+              url : '/rundb/api/v1/contentupload/?format=json&limit=0',
+              contentType : 'application/json; charset=utf-8',
+              type : 'GET',
+              dataType : 'json'
+          },
       },
+      schema: {
+        data : "objects",
+        total : "meta.total_count",
+      },
+      serverPaging : false,
+      pageSize : 5000,
+      serverSorting : false,
       sort: { field: "upload_date", dir: "desc" },
-      pageSize: 5000
-    });
-
-    $.each(data.objects, function (int_index, result) {
-
-      label = '#5bb75b';
-      if (result.status.indexOf('Complete') !== -1) {
-        label = '#0088cc';
-      }
-      if (result.status.indexOf('Error') !== -1) {
-        label = '#d14';
-      }
-      var upload_date = null;
-      if (result.meta.upload_date) {
-        upload_date = new Date(Date.parse(result.meta.upload_date));
-      }
-
-      uploads_data.add({
-        id: result.id,
-        file: result.name,
-        upload_type: result.upload_type,
-        upload_date: upload_date,
-        status: result.status,
-        label: label
-      });
-    });
+    };
 
     $("#uploads").kendoGrid({
       dataSource: uploads_data,
@@ -266,18 +261,17 @@ $(document).ready(function() {
       sortable: true,
       pageable: false,
       columns: [
-        { field: "file", title: "Uploaded File", width: '40%', template: "<a href='/rundb/uploadstatus/${id}/'>${file}</a>"},
+        { field: "name", title: "Uploaded File", width: '40%', template: "<a href='/rundb/uploadstatus/${id}/'>${name}</a>"},
         { field: "upload_type", title: "Type", width: '20%'},
-        { field: "upload_date", title: "Date", width: '20%', template: '#= upload_date?kendo.toString(upload_date,"yyyy/MM/dd H:mm:ss"):""  #' },
-        { field: "status", title: "Status", width: '20%', template: "<span style='font-weight:bold;color:${label};'>${status}</span>"}
+        { field: "upload_date", title: "Date", width: '20%', template: '#=upload_date?kendo.toString(new Date(Date.parse(upload_date)),"yyyy/MM/dd hh:mm tt"):"" #'},
+        { field: "status", title: "Status", width: '20%', template: kendo.template($("#uploadStatusTemplate").html())}
       ]
     });
 
-  });
 
+  // Target Regions and Hotspots
 
-
-  $.get('/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED', function (data) {
+  $.get('/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__contains=/unmerged/detail/', function (data) {
 
     var targets_data = new kendo.data.DataSource({
       data: [],
@@ -323,49 +317,33 @@ $(document).ready(function() {
 
 
     $.each(data.objects, function (int_index, result) {
-      var targfile = result.file;
-      var i = targfile.lastIndexOf('/unmerged/detail/');
-      if (i < 0) return true;
-      var selName = targfile.substr(i + 17);
-      var j = selName.lastIndexOf('.bed');
-      if (j <= 0) return true;
-
-      selName = selName.substr(0, j);
+      var selName = result.file.split('/').pop().split('.')[0];
+      if (!selName || !result.file.endsWith('.bed')) {
+        return true;
+      }
       var description = result.meta.description || '';
       var notes = result.meta.notes || '';
-      var enabled = true;
-      if ('enabled' in result.meta) {
-        enabled = result.meta.enabled;
-      }
       var upload_date = null;
       if (result.meta.upload_date) {
         upload_date = new Date(Date.parse(result.meta.upload_date));
       }
 
+      var upload = {
+        id: result.id,
+        upload_id: result.contentupload.substr(28),
+        name: selName,
+        description: description,
+        notes: notes,
+        search_concat: selName + " " + description + " " + notes + " " + result.meta.reference,
+        enabled: ('enabled' in result.meta) ? result.meta.enabled : true,
+        upload_date: upload_date,
+        reference:result.meta.reference
+      }
+
       if (result.meta.hotspot) {
-        hotspots_data.add({
-          id: result.id,
-          upload_id: result.contentupload.substr(28),
-          name: selName,
-          description: description,
-          notes: notes,
-          search_concat: selName + " " + description + " " + notes + " " + result.meta.reference,
-          enabled: enabled,
-          upload_date: upload_date,
-          reference:result.meta.reference
-        });
+        hotspots_data.add(upload);
       } else {
-        targets_data.add({
-          id: result.id,
-          upload_id: result.contentupload.substr(28),
-          name: selName,
-          description: description,
-          notes: notes,
-          search_concat: selName + " " + description + " " + notes + " " + result.meta.reference,
-          enabled: enabled,
-          upload_date: upload_date,
-          reference:result.meta.reference
-        });
+        targets_data.add(upload);
       }
     });
 
@@ -397,7 +375,7 @@ $(document).ready(function() {
       sortable: true,
       pageable: false,
       columns: [
-                { field: "name", title: "Name", width: '20%', template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
+        { field: "name", title: "Name", width: '20%', template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
         { field: "description", title: "Description", width: '25%'},
         { field: "notes", title: "Notes", width: '25%'},
         { field: "reference", title: "Reference", width: '10%'},
@@ -406,74 +384,31 @@ $(document).ready(function() {
       ]
     });
 
+  });  
+    
+  function update_targets_filter() {
+    var filters = get_bedfiles_filters($('#targets-search').val(), $('#targets-ref-dropdown').val());
+    $("#targetRegions").data('kendoGrid').dataSource.filter(filters);
+  }
 
-    function update_targets_filter() {
-      if ($("#targets-ref-dropdown").val() == "") {
-        targets_data.filter([
-          {field:"search_concat", operator: "contains", value: $("#targets-search").val()}
-        ]);
-      } else {
-        targets_data.filter([
-          {field:"reference", operator: "eq", value: $("#targets-ref-dropdown").val()},
-          {field:"search_concat", operator: "contains", value: $("#targets-search").val()}
-        ]);
+  function update_hotspots_filter() {
+    var filters = get_bedfiles_filters($('#hotspots-search').val(), $('#hotspots-ref-dropdown').val());
+    $("#hotspots").data('kendoGrid').dataSource.filter(filters);
+  }
+
+  function get_bedfiles_filters(search_filter, reference_filter){
+    var filters = [];
+      if (reference_filter){
+        filters.push({field:"reference", operator: "eq", value: reference_filter });
       }
-      $("#targets-search").data("prev", $("#targets-search").val());
-    }
-
-    function update_hotspots_filter() {
-      console.log("Applying hotspots filter " + $("#hotspots-ref-dropdown").val() + " and " + $("#hotspots-search").val());
-      if ($("#hotspots-ref-dropdown").val() == "") {
-        hotspots_data.filter([
-          {field:"search_concat", operator: "contains", value: $("#hotspots-search").val()}
-        ]);
-      } else {
-        hotspots_data.filter([
-          {field:"reference", operator: "eq", value: $("#hotspots-ref-dropdown").val()},
-          {field:"search_concat", operator: "contains", value: $("#hotspots-search").val()}
-        ]);
+      if (search_filter){
+        filters.push({field:"search_concat", operator: "contains", value: search_filter });
       }
-      $("#hotspots-search").data("prev", $("#hotspots-search").val());
-    }
+    return filters;
+  }
 
-
-
-    // Step 1. Fetch list of references and populate the dropdown.
-
-    $.get('/rundb/api/v1/referencegenome/?format=json&limit=0&enabled=true&index_version=tmap-f3&order_by=short_name', function (data) {
-
-      if (data.meta.total_count == 0) {
-        $("#targets-ref-dropdown").append("<option value=''>None</option>");
-        $("#hotspots-ref-dropdown").append("<option value=''>None</option>");
-      } else {
-        $.each(data.objects, function (intIndex, result) {
-          $("#targets-ref-dropdown").append("<option value='" + result.short_name + "'>" +
-              result.short_name + " - " + result.name + "</option>");
-          $("#hotspots-ref-dropdown").append("<option value='" + result.short_name + "'>" +
-              result.short_name + " - " + result.name + "</option>");
-        });
-      }
-      //chosen wants this to update the dropdowns
-      $("#targets-ref-dropdown").trigger("liszt:updated");
-      $("#hotspots-ref-dropdown").trigger("liszt:updated");
-      $("#targets-ref-dropdown").chosen().change(update_targets_filter);
-      $("#hotspots-ref-dropdown").chosen().change(update_hotspots_filter);
-
-      update_targets_filter();
-      update_hotspots_filter();
-
-      setInterval(function() {
-        if ($("#targets-search").data("prev") != $("#targets-search").val()) {
-          update_targets_filter();
-        }
-        if ($("#hotspots-search").data("prev") != $("#hotspots-search").val()) {
-          update_hotspots_filter();
-        }
-      }, 250);
-
-    });
-
-  });
+  $('#targets-ref-dropdown, #targets-search').on('change keyup', update_targets_filter);
+  $('#hotspots-ref-dropdown, #hotspots-search').on('change keyup', update_hotspots_filter);
 
 });
 
@@ -577,6 +512,7 @@ $(document).ready(function(){
                 field: "status"
                 , title: "Status"
                 , sortable: true
+                , template: '#= status==="complete" ? "Successfully Completed" : status #'
             } , {
                 field: "enabled"
                 , title: "Enabled"

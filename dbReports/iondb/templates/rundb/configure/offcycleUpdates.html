@@ -3,7 +3,9 @@
 {% load pagetools %}
 {% load static from staticfiles %}
 
-{% block extra_head %}
+{% block extra_head_styles %}
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 <style>
     .k-grid-content {
         overflow: visible !important;
@@ -24,11 +26,16 @@
     .col3 {
         width: 40%;
      }
-    
 </style>
-<script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
-<script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
-{% endblock extra_head %}
+{% endblock extra_head_styles %}
+
+{% block extra_head_js %}
+   <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
+   <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
+   <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
+   <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
+   <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
+{% endblock extra_head_js %}
 
 {% block tab-configure-updates %}
     <li class="active"><a href="{% url "offcycle_updates" %}">Updates</a></li>
@@ -75,6 +82,66 @@
         </table>
         {% else %}
             No Product updates available at this time
+        {% endif %}
+    </div>
+</div>
+
+<div class="content">
+    <div id = "plugins">
+        <h2>Update Plugins</h2>
+        {% if plugins.error %}
+            <div class="alert alert-error">{{plugins.error}}</div>
+        {% else %}
+            <div class="alert hide"></div>
+        {% endif %}
+        {% if plugins.pluginContents %}
+        <table id="plugins_table" >
+            <thead>
+                <tr>
+                    <th class="col1">Name</th>
+                    <th class="col2">Version</th>
+                    <th class="col3">Description</th>
+                    <th class="col4">Available Versions</th>
+                    <th class="col5">Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plugin in plugins.pluginContents %}
+                <tr>
+                    <td>{{ plugin.name }}</td>
+                    <td>{{ plugin.currentVersion }}</td>
+                    <td>{{ plugin.description }}</td>
+                    <td>{{ plugin.availableVersions|join:" | " }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a class="btn dropdown-toggle needsPermission" data-toggle="dropdown" href="#">
+                                <img src="{% static "resources/img/gear-active.png"%}" border="0" />
+                                <span class="caret" />
+                            </a>
+                            <ul class="dropdown-menu pull-right">
+                                {% if plugin.upgradable %}
+                                <li>
+                                    <a href='/rundb/api/v1/plugin/{{plugin.pk}}/upgrade/' class="do_update" data-confirm_msg="Upgrade {{plugin.name}} to latest version?">
+                                        Upgrade to Latest</a>
+                                </li>
+                                {% endif %}
+                                {% for version in plugin.availableVersions %}
+                                    {% if not version == plugin.currentVersion %}
+                                    <li>
+                                        <a href='/rundb/api/v1/plugin/{{plugin.pk}}/{{version}}/install_to_version/' class="do_update" data-confirm_msg="Install {{plugin.name}} version {{version}}?">
+                                            Install {{version}}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            No Plugin updates available at this time
         {% endif %}
     </div>
 </div>
@@ -140,62 +207,13 @@
 </div>
 
 <div class="content">
-    <div id = "plugins">
-        <h2>Update Plugins</h2>
-        {% if plugins.error %}
-            <div class="alert alert-error">{{plugins.error}}</div>
-        {% else %}
-            <div class="alert hide"></div>
-        {% endif %}
-        {% if plugins.pluginContents %}
-        <table id="plugins_table" >
-            <thead>
-                <tr>
-                    <th class="col1">Name</th>
-                    <th class="col2">Version</th>
-                    <th class="col3">Description</th>
-                    <th class="col4">Available Versions</th>
-                    <th class="col5">Update</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for plugin in plugins.pluginContents %}
-                <tr>
-                    <td>{{ plugin.name }}</td>
-                    <td>{{ plugin.currentVersion }}</td>
-                    <td>{{ plugin.description }}</td>
-                    <td>{{ plugin.availableVersions|join:" | " }}</td>
-                    <td>
-                        <div class="btn-group">
-                            <a class="btn dropdown-toggle needsPermission" data-toggle="dropdown" href="#">
-                                <img src="{% static "resources/img/gear-active.png"%}" border="0" />
-                                <span class="caret" />
-                            </a>
-                            <ul class="dropdown-menu pull-right">
-                                {% if plugin.upgradable %}
-                                <li>
-                                    <a href='/rundb/api/v1/plugin/{{plugin.pk}}/upgrade/' class="do_update" data-confirm_msg="Upgrade {{plugin.name}} to latest version?">
-                                        Upgrade to Latest</a>
-                                </li>
-                                {% endif %}
-                                {% for version in plugin.availableVersions %}
-                                    {% if not version == plugin.currentVersion %}
-                                    <li>
-                                        <a href='/rundb/api/v1/plugin/{{plugin.pk}}/{{version}}/install_to_version/' class="do_update" data-confirm_msg="Install {{plugin.name}} version {{version}}?">
-                                            Install {{version}}</a>
-                                    </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-            No Plugin updates available at this time
-        {% endif %}
+    <div class="clearfix">
+        <h2>Manual Upload</h2>
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+        <div id="manualOffcycle" class="alert alert-success hide"></div>
+        <div class="pull-left btn-group">
+            <a href="{% url 'configure_offline_bundle' %}" class="btn pull-left needsPermission install_offcycle_manually">Click to Upload and Install</a>
+        </div>
     </div>
 </div>
 
@@ -208,9 +226,11 @@
         {% if not user_can_update %}
             $('.needsPermission').addClass('disabled');
             $('.needsPermission').attr('title','Logged in user has insufficient permissions').attr('rel', 'tooltip');
+            $(".install_offcycle_manually").removeAttr('href');
+            $(".do_update").removeAttr('href');
         {% endif %}
-        
-        $('.do_update').click(function(e){
+
+        $('.do_update:enabled').click(function(e){
             var url = $(this).attr('href');
             var msg = $(this).data('confirm_msg');
             var $alert_div = $(this).parents('#products,#instruments,#plugins').find('.alert');
@@ -236,6 +256,23 @@
             });
             return false;
         });
+
+        $('.install_offcycle_manually:enabled').click(function (e) {
+            e.preventDefault();
+            $('#error-messages').hide().empty();
+            $('#manualOffcycle').hide().empty();
+
+            var url = $(this).attr('href');
+            $.get(url, function(data) {
+                $('body').append(data);
+                $('#modal_plugin_or_publisher_install').modal('show');
+
+            }).fail(function(data) {
+                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                console.log("error:", data);
+            });
+        });
     });
+
 </script>
 {% endblock content %}

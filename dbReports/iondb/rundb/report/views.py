@@ -52,33 +52,56 @@ def url_with_querystring(path, **kwargs):
 
 
 @login_required
-def getCSA(request, pk):
-    '''Python replacement for the pipeline/web/db/writers/csa.php script'''
+def get_csa(request, pk):
+    """Python replacement for the pipeline/web/db/writers/csa.php script"""
+
+    def get_coverage_analysis_files(results_path):
+        """Helper method for collecting a list of all of the files to transfer"""
+        report_files = list()
+        for root, dirnames, filenames in os.walk(results_path):
+            for filename in filenames:
+                if filename.endswith(('.html', '.jpg', '.js', '.png', '.jpeg')):
+                    report_files.append(os.path.join(root, filename))
+
+        return report_files
+
     try:
+        import zipfile
         # From the database record, get the report information
         result = models.Results.objects.get(pk=pk)
-        reportDir = result.get_report_dir()
-        rawDataDir = result.experiment.expDir
+        report_dir = result.get_report_dir()
+        raw_data_dir = result.experiment.expDir
 
         # Generate report PDF file.
         # This will create a file named report.pdf in results directory
         makePDF.write_report_pdf(pk)
-        csaPath = makeCSA.makeCSA(reportDir, rawDataDir)
+        csa_path = makeCSA.makeCSA(report_dir, raw_data_dir)
 
         # thumbnails will also include fullchip report pdf
         if result.isThumbnail:
             fullchip = result.experiment.results_set.exclude(metaData__contains='thumb').order_by('-timeStamp')
             if fullchip:
+                fullchip_result = fullchip.first()
                 try:
-                    fullchipPDF = makePDF.write_report_pdf(fullchip[0].pk)
-                    import zipfile
-                    with zipfile.ZipFile(csaPath, mode='a', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as f:
-                        f.write(fullchipPDF, 'full_%s' % os.path.basename(fullchipPDF))
+                    fullchip_pdf = makePDF.write_report_pdf(fullchip_result.pk)
+                    with zipfile.ZipFile(csa_path, mode='a', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as f:
+                        f.write(fullchip_pdf, 'full_%s' % os.path.basename(fullchip_pdf))
                 except:
                     logger.error(traceback.format_exc())
 
-        response = http.HttpResponse(FileWrapper(open(csaPath)), mimetype='application/zip')
-        response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(csaPath)
+                # get the coverage analysis results set
+                coverage_analysis_results_set = fullchip_result.pluginresult_set.filter(plugin__name='coverageAnalysis')
+                if coverage_analysis_results_set:
+                    coverage_analysis_result = coverage_analysis_results_set.first()
+                    coverage_analysis_result_path = coverage_analysis_result.path()
+                    coverage_analysis_files = get_coverage_analysis_files(coverage_analysis_result_path)
+                    with zipfile.ZipFile(csa_path, mode='a', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as csa_handle:
+                        for coverage_analysis_file in coverage_analysis_files:
+                            relative_path = coverage_analysis_file.replace(coverage_analysis_result_path + '/', '', 1)
+                            csa_handle.write(coverage_analysis_file, os.path.join('coverageAnalysis', relative_path))
+
+        response = http.HttpResponse(FileWrapper(open(csa_path)), mimetype='application/zip')
+        response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(csa_path)
     except:
         logger.error(traceback.format_exc())
         response = http.HttpResponse(status=500)
@@ -537,9 +560,10 @@ def report_chef_display(report):
     if not report.experiment.chefInstrumentName:
         return chef_info
 
-    chef_infoList = [
+    chef_infoList_experiment = [
         ("chefLastUpdate", "Chef Last Updated"),
         ("chefInstrumentName", "Chef Instrument Name"),
+        ("chefOperationMode", "Chef Operation Mode"),
         ("chefSamplePos", "Sample Position"),
         ("chefTipRackBarcode", "Tip Rack Barcode"),
         ("chefChipType1", "Chip Type 1"),
@@ -556,34 +580,51 @@ def report_chef_display(report):
         ("chefSolutionsLot", "Solution Lot Number"),
         ("chefSolutionsPart", "Solution Part Number"),
         ("chefSolutionsExpiration", "Solution Expiration"),
+        ("chefProtocolDeviationName", "Templating Protocol Executed"),
         ("chefScriptVersion", "Chef Script Version"),
         ("chefPackageVer", "Chef Package Version"),
+        ("chefStartTime", "Start Time"),
+        ("chefEndTime", "Completion Time"),
+        
     ]
+    chef_info = _get_value_from_experiment(report.experiment, chef_infoList_experiment, [])
+  
+    plan_samplePrepProtocol = ("samplePrepProtocol", "Templating Protocol Planned")
+    chef_info.insert(17, _get_chef_protocol_value_from_plan(report.experiment.plan, plan_samplePrepProtocol))
+    return chef_info
 
-    for key, label in chef_infoList:
-        value = getattr(report.experiment, key)
+
+def _get_value_from_experiment(experiment, key_label_list, kvp_list):
+    for key, label in key_label_list:
+        value = getattr(experiment, key)
 
         if key in ["chefChipType1", 'chefChipType2']:
             chips = models.Chip.objects.filter(name=value)
             if chips:
                 value = chips[0].description
-        chef_info.append((label, value))
 
-    chef_planInfoList = [
-        ("samplePrepProtocol", "Templating Protocol"),
-    ]
+        if key in ["chefProtocolDeviationName"]:
+            value = _get_chef_protocol_displayed_value(value)
+ 
+        kvp_list.append((label, value))
+    
+    return kvp_list
 
-    plan = report.experiment.plan
-    if plan:
-        for key, label in chef_planInfoList:
-            value = getattr(plan, key)
-            if value:
-                protocol_cvList = models.common_CV.objects.filter(value = value)
-                value = protocol_cvList[0].displayedValue if protocol_cvList else value
-            else:
-                value = "(use instrument default)"
-            chef_info.append((label, value))
-    return chef_info
+
+def _get_chef_protocol_value_from_plan(plan, key_label_pair):
+    value = getattr(plan, key_label_pair[0])
+    return (key_label_pair[1], _get_chef_protocol_displayed_value(value))
+
+
+def _get_chef_protocol_displayed_value(value):
+    if value:
+        protocol_cvList = models.common_CV.objects.filter(value = value)
+        value = protocol_cvList[0].displayedValue if protocol_cvList else value
+    else:
+        value = "(use instrument default)"
+ 
+    return value
+
 
 def get_msgDesc():
     msgDesc = {"001": "Missing {0} information",
@@ -681,6 +722,7 @@ def report_chef_libPrep_display(report):
     libraryPrepInstrumentData_keys = [
         ("lastUpdate", "Last Updated"),
         ("instrumentName", "Instrument Name"),
+        ("operationMode", "Operation Mode"),
         ("tipRackBarcode", "Tip Rack Barcode"),
         ("kitType", "Kit Type"),
         ("reagentsLot", "Reagent Lot Number"),
@@ -691,6 +733,8 @@ def report_chef_libPrep_display(report):
         ("solutionsExpiration", "Solution Expiration"),
         ("scriptVersion", " Script Version"),
         ("packageVer", "Package Version"),
+        ("startTime", "Start Time"),
+        ("endTime", "Completion Time"),        
     ]
 
     plan = report.experiment.plan
@@ -909,6 +953,8 @@ def _report_context(request, report_pk):
 
     chipLot = parse_chip_efuse(report).get("L", "Missing")
     chipWafer = parse_chip_efuse(report).get("W", "Missing")
+
+    operationMode  = _get_sequencer_operation_mode(report)
 
     # special case: combinedAlignments output doesn't have any basecaller results
     if report.resultsType and report.resultsType == 'CombinedAlignments':
@@ -1158,7 +1204,28 @@ def _report_context(request, report_pk):
     elif not report.status.startswith('Completed'):
         context['disable_actions'].extend(['upload_to_ir'])
 
+    context['csaAvailable'] = experiment.platform == 'PGM' or report.isThumbnail
+    context['chefInfoListSampleSet'] = ["Last Updated", "Start Time", "Completion Time"]
+    context['chefInfoList'] = ["Chef Last Updated", "Start Time", "Completion Time"]
+
     return context
+
+
+def _get_sequencer_operation_mode(report):
+    DEFAULT = "Unknown"
+    SERVICE = "Service mode"
+    ADVANCED = "Advanced mode"
+    CUSTOM = "Customer mode"
+    explog_key = "service_mode"
+    pgm_explog_key = "advanced_user"
+
+    if explog_key in report.experiment.log:
+        value = report.experiment.log.get(explog_key)
+        return SERVICE if (value.lower() in ["yes", "true"]) else CUSTOM
+    elif pgm_explog_key in report.experiment.log:
+        value = report.experiment.log.get(pgm_explog_key)
+        return ADVANCED if (value.lower() in ["yes", "true"]) else CUSTOM
+    return DEFAULT
 
 
 @login_required

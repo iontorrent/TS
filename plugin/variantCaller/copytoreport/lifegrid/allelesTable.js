@@ -183,6 +183,7 @@ $(function () {
             poll.always(function (data) {
                 if ('url' in data) {
                     $("#inspectOutput").html('<a class="btn btn-primary" href="' + data['url'] + '"> <i class="icon-download"></i> Download the zip</a> ');
+                    $("#exportInspect").removeAttr("disabled");
                 } else {
                     if ('split_status' in data) {
                     	if (data["split_status"]=='failed'){
@@ -194,6 +195,7 @@ $(function () {
                     			error_text += 'log file for details.</div>';
                     		}
                     		$("#inspectOutput").html(error_text);
+                        	$("#exportInspect").removeAttr("disabled");
                     	}else{
                             $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + data["split_status"]);
                             poll_status();
@@ -209,8 +211,11 @@ $(function () {
 
 
     $(document).on("click", "#exportInspect", function () {
-
-        var sp = get_json("startplugin.json");
+    	if ($('#exportInspect').attr("disabled")) {
+    		return;
+    	}
+    	$("#exportInspect").attr("disabled", "disabled");
+    	var sp = get_json("startplugin.json");
         var post = {"startplugin": sp, "variants": TVC.inspect, "barcode": get_barcode()};
 
         $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>Starting");
@@ -228,6 +233,7 @@ $(function () {
 
             if ('failed' in data) {
                 $("#inspectOutput").html('<div class="alert alert-danger" role="alert"> <i class="icon-info-sign"></i> <span class="sr-only"> Error: </span> SGE Job Failed.</div>');
+            	$("#exportInspect").removeAttr("disabled");
             } else {
                 poll_status();
             }
@@ -715,7 +721,7 @@ $(function () {
             formatter: Fixed1Format, asyncPostRender: MarkFilter
         },
         {
-            id: "spacer", name: "", width: 1, minWidth: 1, maxWidth: 2, cssClass: "separator-bar"
+            id: "spacer", name: "", width: 10, minWidth: 10, maxWidth: 10, cssClass: "separator-bar"
         });
 
     //the columns shown in allele search view

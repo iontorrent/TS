@@ -11,6 +11,11 @@ import os
 import math
 import subprocess
 import apt
+import traceback
+
+from dateutil.parser import parse as parse_date
+import types
+
 
 logger = logging.getLogger(__name__)
 
@@ -287,4 +292,85 @@ def is_internal_server():
     except:
         logger.exception("Failed to create isInternalServer variable")
     return isInternalServer
+
+
+def send_email(recipient, subject_line, text, html=None):
+    '''sends an email to recipients'''
+    import socket
+    from django.core import mail
+    from iondb.rundb.models import GlobalConfig
+
+    if not recipient:
+        logger.warning("No email recipient for %s" % subject_line)
+        return False
+    else:
+        recipient = recipient.replace(',', ' ').replace(';', ' ').split()
+
+    #Needed to send email
+    settings.EMAIL_HOST = 'localhost'
+    settings.EMAIL_PORT = 25
+    settings.EMAIL_USE_TLS = False
+
+    site_name = GlobalConfig.get().site_name or 'Torrent Server'
+    hname = socket.getfqdn()
+
+    message = 'From: %s (%s)\n\n' % (site_name, hname)
+    message += text
+    message += '\n'
+
+    if html:
+        html_message = 'From: %s (<a href=%s>%s</a>)<br>' % (site_name, hname, hname)
+        html_message += html
+        html_message += '<br>'
+    else:
+        html_message = ''
+
+    reply_to = 'donotreply@iontorrent.com'
+
+    # Send the email
+    try:
+        if html_message:
+            sendthis = mail.EmailMultiAlternatives(subject_line, message, reply_to, recipient)
+            sendthis.attach_alternative(html_message, "text/html")
+            sendthis.send()
+        else:
+            mail.send_mail(subject_line, message, reply_to, recipient)
+    except:
+        logger.error(traceback.format_exc())
+        return False
+    else:
+        logger.info("%s email sent to %s" % (subject_line, recipient))
+        return True
+
+
+def convert_seconds_to_hhmmss_string(seconds):
+    if not seconds:
+        return ""
+    secs = datetime.timedelta(seconds = seconds)
+    return str(secs)
+
+
+def convert_seconds_to_datetime_string(startDateTime, seconds):
+    if (not startDateTime or not seconds):
+        return ""
+    
+    secs = datetime.timedelta(seconds = seconds)
+    newDateTime = startDateTime + secs
+    return newDateTime
+
+
+def is_endTime_after_startTime(startDateTime, endDateTime):
+    if (startDateTime and endDateTime):
+        startTime = startDateTime
+        endTime = endDateTime
+        
+        if type(startDateTime) is types.UnicodeType:
+           startTime = parse_date(startDateTime)
+        if type(endDateTime) is types.UnicodeType:
+           endTime = parse_date(endDateTime)
+           
+        startTime = startTime.replace(tzinfo=None)
+        endTime = endTime.replace(tzinfo=None)
+        return endTime >= startTime
+    return True
 

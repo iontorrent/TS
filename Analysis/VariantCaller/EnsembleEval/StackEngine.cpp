@@ -1413,6 +1413,7 @@ void EnsembleEval::CalculateTagSimilarity(const MolecularTagManager& mol_tag_man
 	}
 }
 
+// Compare the lists by comparing their first elements
 bool CompareIntList(const list<int>& list_1, const list<int>& list_2){
     if (list_1.empty()){
         return false;
@@ -1525,6 +1526,43 @@ private:
 };
 
 
+// Merge the groups that start at the same position, since it is required that the position of a vcf record should be unique.
+void JoinGroupsStartAtTheSamePosition(const vector<AlleleIdentity>& allele_identity_vector, list<list<int> >& allele_groups, bool is_groups_sorted){
+	// Sort alleles and groups if hasn't been done.
+	if (not is_groups_sorted){
+		// Used to sort the groups
+		CompareAlleleGroups compare_groups(&allele_identity_vector);
+		// Used to sort the alleles in a group
+		CompareAllelePositions compare_positions(&allele_identity_vector);
+		// Must sort the alleles in each group first (because compare_groups will use the pos of the first allele for sorting).
+		for (list<list<int> >::iterator group_it = allele_groups.begin(); group_it != allele_groups.end(); ++group_it){
+			group_it->sort(compare_positions);
+		}
+		// Then sort the groups of alleles.
+		allele_groups.sort(compare_groups);
+	}
+
+	list<list<int> >::iterator last_group_it = allele_groups.begin();
+	list<list<int> >::iterator group_it = allele_groups.begin();
+	++group_it;
+	while (group_it != allele_groups.end()){
+		// Assume the groups are sorted by the minimum start positions among the alleles in the group.
+		// i.e., the start position of the group is the start variant window of the first allele in the group.
+		if (allele_identity_vector[*(group_it->begin())].start_variant_window == allele_identity_vector[*(last_group_it->begin())].start_variant_window){
+			// last_group_it and group_it has the same start position.
+			// Merge *group_it into *last_group_it.
+			last_group_it->splice(last_group_it->end(), *group_it);
+			// Remove *group_it since it is now empty after merging.
+			group_it = allele_groups.erase(group_it);
+		}
+		else{
+			// March to the next group.
+			++last_group_it;
+			++group_it;
+		}
+	}
+}
+
 // Finalize the splitting:
 // 1) Sort the alleles and groups
 // 2) Further split the groups if the group size is too large.
@@ -1532,15 +1570,24 @@ private:
 // 2.b) Stage 2: break the connectivity between all Fake HS and others
 // 2.c) Stage 3: break all connectivity
 // 2.d) Stage 4: repeat stage 3 again (in case the alleles from the big group move to a small group and let the small group too big.).
-void FinalizeSplitting(vector<vector<bool> >& allele_connectivity_matrix, const vector<AlleleIdentity>& allele_identity_vector, int max_group_size_allowed, list<list<int> > &allele_groups){
+void FinalizeSplitting(vector<vector<bool> >& allele_connectivity_matrix, const vector<AlleleIdentity>& allele_identity_vector, int max_group_size_allowed, list<list<int> > &allele_groups, unsigned int max_iteration = 4){
 	int debug = allele_identity_vector[0].DEBUG;
 	// Used to sort the groups
 	CompareAlleleGroups compare_groups(&allele_identity_vector);
 	// Used to sort the alleles in a group
 	CompareAllelePositions compare_positions(&allele_identity_vector);
-	unsigned int max_iteration = 4;
 	unsigned int num_iter = 0;
 	bool keep_itertate = true;
+	bool final_splitting_applied = false;
+	// Must sort the alleles in each group first (because compare_groups will use the pos of the first allele for sorting).
+	for (list<list<int> >::iterator group_it = allele_groups.begin(); group_it != allele_groups.end(); ++group_it){
+		group_it->sort(compare_positions);
+	}
+	// Then sort the groups of alleles.
+	allele_groups.sort(compare_groups);
+	// Merge the groups that start at the same position
+	JoinGroupsStartAtTheSamePosition(allele_identity_vector, allele_groups, true);
+
 	while (keep_itertate and num_iter < max_iteration){
 		if (debug > 0){
 			cout <<"+ Final variant splitting. Round "<< (num_iter + 1) << ":" << endl;
@@ -1556,35 +1603,39 @@ void FinalizeSplitting(vector<vector<bool> >& allele_connectivity_matrix, const 
 						 << " contains "<< group_it->size() << " alleles (> max_alt_num = " << max_group_size_allowed <<"): splitting needed." << endl;
 				}
 				// I let the alleles in this group be isolated unless the other allele has the same start position.
-				for (list<int>::iterator idx_it = group_it->begin(); idx_it != group_it->end(); ++idx_it){
+				for (list<int>::iterator idx_it_1 = group_it->begin(); idx_it_1 != group_it->end(); ++idx_it_1){
 					// At the first two rounds (num_iter < 2), I only want to break Fake HS.
-					if (num_iter < 2 and allele_identity_vector[*idx_it].status.isFakeHsAllele){
-						for (unsigned int idx = 0; idx < allele_connectivity_matrix.size(); ++idx){
-							if (allele_connectivity_matrix[*idx_it][idx] and allele_identity_vector[*idx_it].start_variant_window != allele_identity_vector[idx].start_variant_window){
-								if ( (num_iter == 0 and (allele_identity_vector[idx].status.isHPIndel or allele_identity_vector[*idx_it].ref_length > 10))
-										or (num_iter == 1)){
-									allele_connectivity_matrix[*idx_it][idx] = false;
-									allele_connectivity_matrix[idx][*idx_it] = false;
-									connectivity_changed = true;
-									if (debug > 0){
-										cout << "    - Breaking the connectivity between alt"<<  *idx_it << ": "<<  allele_identity_vector[*idx_it].altAllele << "@[" << allele_identity_vector[*idx_it].position0 << ", " <<  allele_identity_vector[*idx_it].position0 + allele_identity_vector[*idx_it].ref_length
-										     << ") and alt" << idx << ": " << allele_identity_vector[idx].altAllele << "@[" << allele_identity_vector[idx].position0 << ", " <<  allele_identity_vector[idx].position0 + allele_identity_vector[idx].ref_length << ")." << endl;
-									}
+					if (num_iter < 2 and allele_identity_vector[*idx_it_1].status.isFakeHsAllele){
+						for (list<int>::iterator idx_it_2 = group_it->begin(); idx_it_2 != group_it->end(); ++idx_it_2){
+							if (*idx_it_1 == *idx_it_2 or (not allele_connectivity_matrix[*idx_it_1][*idx_it_2])){
+								continue;
+							}
+							if ( (num_iter == 0 and allele_identity_vector[*idx_it_2].status.isClearlyNonFD and allele_identity_vector[*idx_it_1].end_variant_window - allele_identity_vector[*idx_it_1].start_variant_window >= 8)
+									or (num_iter == 1)){
+								allele_connectivity_matrix[*idx_it_1][*idx_it_2] = false;
+								allele_connectivity_matrix[*idx_it_2][*idx_it_1] = false;
+								connectivity_changed = true;
+								if (debug > 0){
+									cout << "    - Breaking the connectivity between alt"<<  *idx_it_1 << ": "<<  allele_identity_vector[*idx_it_1].altAllele << "@[" << allele_identity_vector[*idx_it_1].position0 << ", " <<  allele_identity_vector[*idx_it_1].position0 + allele_identity_vector[*idx_it_1].ref_length
+										 << ") and alt" << *idx_it_2 << ": " << allele_identity_vector[*idx_it_2].altAllele << "@[" << allele_identity_vector[*idx_it_2].position0 << ", " <<  allele_identity_vector[*idx_it_2].position0 + allele_identity_vector[*idx_it_2].ref_length << ")." << endl;
 								}
 							}
 						}
 					}
 					// Then, I will break all alleles in the group.
 					else if (num_iter >= 2){
-						for (unsigned int idx = 0; idx < allele_connectivity_matrix.size(); ++idx){
-							if (allele_connectivity_matrix[*idx_it][idx] and (allele_identity_vector[*idx_it].start_variant_window != allele_identity_vector[idx].start_variant_window)){
-								allele_connectivity_matrix[*idx_it][idx] = false;
-								allele_connectivity_matrix[idx][*idx_it] = false;
-								connectivity_changed = true;
-								if (debug > 0){
-									cout << "    - Breaking the connectivity between alt"<<  *idx_it << ": "<< allele_identity_vector[*idx_it].altAllele << "@[" << allele_identity_vector[*idx_it].position0 << ", " <<  allele_identity_vector[*idx_it].position0 + allele_identity_vector[*idx_it].ref_length
-									     << ") and alt" << idx << ": " <<  allele_identity_vector[idx].altAllele << "@[" << allele_identity_vector[idx].position0 << ", " <<  allele_identity_vector[idx].position0 + allele_identity_vector[idx].ref_length << "), "<< endl;
-								}
+						list<int>::iterator idx_it_2 = idx_it_1;
+						++idx_it_2;
+						for (; idx_it_2 != group_it->end(); ++idx_it_2){
+							if (not allele_connectivity_matrix[*idx_it_1][*idx_it_2]){
+								continue;
+							}
+							allele_connectivity_matrix[*idx_it_1][*idx_it_2] = false;
+							allele_connectivity_matrix[*idx_it_2][*idx_it_1] = false;
+							connectivity_changed = true;
+							if (debug > 0){
+								cout << "    - Breaking the connectivity between alt"<<  *idx_it_1 << ": "<< allele_identity_vector[*idx_it_1].altAllele << "@[" << allele_identity_vector[*idx_it_1].position0 << ", " <<  allele_identity_vector[*idx_it_1].position0 + allele_identity_vector[*idx_it_1].ref_length
+									 << ") and alt" << *idx_it_2 << ": " << allele_identity_vector[*idx_it_2].altAllele << "@[" << allele_identity_vector[*idx_it_2].position0 << ", " <<  allele_identity_vector[*idx_it_2].position0 + allele_identity_vector[*idx_it_2].ref_length << "), "<< endl;
 							}
 						}
 					}
@@ -1596,6 +1647,7 @@ void FinalizeSplitting(vector<vector<bool> >& allele_connectivity_matrix, const 
 			// Split the variant using the modified allele_connectivity_matrix.
 			if (connectivity_changed){
 				FindNodesInIsoSubGraph(allele_connectivity_matrix, allele_groups, false);
+				JoinGroupsStartAtTheSamePosition(allele_identity_vector, allele_groups, false);
 			}
 		}else{
 			keep_itertate = false;
@@ -1605,32 +1657,12 @@ void FinalizeSplitting(vector<vector<bool> >& allele_connectivity_matrix, const 
 		}
 		++num_iter;
 	}
-	// Must sort the alleles in each group first (because compare_groups will use the pos of the first allele for sorting).
-	for (list<list<int> >::iterator group_it = allele_groups.begin(); group_it != allele_groups.end(); ++group_it){
-		group_it->sort(compare_positions);
-	}
-	// Then sort the groups of alleles.
-	allele_groups.sort(compare_groups);
 }
 
-
-// This function helps the candidate to split the multi-allele variant into smaller variants
-void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vector, list<list<int> >& allele_groups, const ReferenceReader &ref_reader, int max_group_size_allowed)
-{
+void GetPaddingRemovedAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vector, const ReferenceReader &ref_reader, vector<AlleleIdentity>& padding_removed_allele_identity_vector){
 	int num_alt = (int) allele_identity_vector.size();
 	map<pair<int, int>, LocalReferenceContext> contex_dict;
-	vector<vector<bool> > allele_connectivity_matrix(num_alt, vector<bool>(num_alt));
 
-	if (num_alt == 1){
-		// Don't waste my time on the trivial splitting.
-		allele_groups = {{0}};
-		return;
-	}
-
-	// (Step 1): Get the padding removed allele_identity_vector
-	// Note that allele connectivity should be determined using the "padding removed version" of the alt alleles.
-	// In particular, I need the splicing window of padding removed allele.
-	vector<AlleleIdentity> padding_removed_allele_identity_vector;
 	padding_removed_allele_identity_vector.resize(num_alt);
 	for (int i_alt = 0; i_alt < num_alt; ++i_alt){
 		int num_padding = allele_identity_vector[i_alt].num_padding_added.first + allele_identity_vector[i_alt].num_padding_added.second;
@@ -1659,18 +1691,46 @@ void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vec
 		padding_removed_allele_identity_vector[i_alt].ref_length = allele_identity_vector[i_alt].ref_length - num_padding;
 		padding_removed_allele_identity_vector[i_alt].chr_idx = allele_identity_vector[i_alt].chr_idx;
 		padding_removed_allele_identity_vector[i_alt].status.isFakeHsAllele = allele_identity_vector[i_alt].status.isFakeHsAllele;
+		padding_removed_allele_identity_vector[i_alt].status.isHotSpotAllele = allele_identity_vector[i_alt].status.isHotSpotAllele;
+
 		if (not padding_removed_allele_identity_vector[i_alt].CharacterizeVariantStatus(context_finder.first->second, ref_reader)){
 			padding_removed_allele_identity_vector[i_alt].status.isProblematicAllele = true;
 			continue;
 		}
 		padding_removed_allele_identity_vector[i_alt].CalculateWindowForVariant(context_finder.first->second, ref_reader);
 	}
+}
+
+// This function helps the candidate to split the multi-allele variant into smaller variants
+void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vector, list<list<int> >& allele_groups, const ReferenceReader &ref_reader, int max_group_size_allowed, bool padding_already_removed, unsigned int max_final_split_iteration = 4)
+{
+	int num_alt = (int) allele_identity_vector.size();
+	map<pair<int, int>, LocalReferenceContext> contex_dict;
+	vector<vector<bool> > allele_connectivity_matrix(num_alt, vector<bool>(num_alt));
+
+	if (num_alt == 1){
+		// Don't waste my time on the trivial splitting.
+		allele_groups = {{0}};
+		return;
+	}
+
+	// (Step 1): Get the padding removed allele_identity_vector
+	// Note that allele connectivity should be determined using the "padding removed version" of the alt alleles.
+	// In particular, I need the splicing window of padding removed allele.
+	vector<AlleleIdentity> const * padding_removed_allele_identity_vector = &allele_identity_vector;
+	vector<AlleleIdentity>* padding_removed_allele_identity_vector_temp = NULL;
+
+	if (not padding_already_removed){
+		padding_removed_allele_identity_vector_temp = new vector<AlleleIdentity>[1];
+		GetPaddingRemovedAlleleIdentityVector(allele_identity_vector, ref_reader, *padding_removed_allele_identity_vector_temp);
+		padding_removed_allele_identity_vector = padding_removed_allele_identity_vector_temp;
+	}
 
 	// (Step 2): Determine allele connectivity
 	for (int i_alt = 0; i_alt < num_alt; ++i_alt){
 		allele_connectivity_matrix[i_alt][i_alt] = true;
 		for (int j_alt = i_alt + 1; j_alt < num_alt; ++j_alt){
-			allele_connectivity_matrix[i_alt][j_alt] = IsAllelePairConnected(padding_removed_allele_identity_vector[i_alt], padding_removed_allele_identity_vector[j_alt]);
+			allele_connectivity_matrix[i_alt][j_alt] = IsAllelePairConnected(padding_removed_allele_identity_vector->at(i_alt), padding_removed_allele_identity_vector->at(j_alt));
 			allele_connectivity_matrix[j_alt][i_alt] = allele_connectivity_matrix[i_alt][j_alt];
 		}
 	}
@@ -1681,39 +1741,75 @@ void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vec
 	// (Step 4): Finalize the groups and alleles:
 	// (4.a) Sort the alleles and groups
 	// (4.b) Further split the groups that contain too many alleles.
-	FinalizeSplitting(allele_connectivity_matrix, padding_removed_allele_identity_vector, max_group_size_allowed, allele_groups);
+	FinalizeSplitting(allele_connectivity_matrix, *padding_removed_allele_identity_vector, max_group_size_allowed, allele_groups, max_final_split_iteration);
+
+	// (Step 5): Delete padding_removed_allele_identity_vector_temp
+	if (padding_removed_allele_identity_vector_temp != NULL){
+		delete [] padding_removed_allele_identity_vector_temp;
+	}
 }
 
 // Given variant candidates, calculate the end of the look ahead window for candidate generator,
 // where look ahead window = [variant_window_end, look_ahead_end).
 // I.e., the candidate generator should make sure that there is NO other variant till the (0-based) position at (look_ahead_end_0 - 1), while a variant @ look_ahead_end_0 is fine.
-int EnsembleEval::CalculateLookAheadEnd0(const ReferenceReader &ref_reader){
+int EnsembleEval::CalculateLookAheadEnd0(const ReferenceReader &ref_reader, int current_candidate_gen_window_end /*= -1*/){
 	int chr_size = ref_reader.chr_size(seq_context.chr_idx); // The size of the chromosome.
-	// (Step 1): At least lookahead to the end of the splicing window to make sure there is no splicing hazard of the current variant interfered the variant at the future position.
-	int look_ahead_end_0 = multiallele_window_end;
-	// Can't lookahead beyond the chromosome!
-	if (look_ahead_end_0 >= chr_size)
-		return chr_size;
-
-	// (Step 2): Keep looking ahead until this variant will not interfere any variant at the future position.
-	// I.e., the splicing lower bound at look_ahead_end_0 should >= variant_window_end.
-	// Note that all windows defined here are left-closed, right-open.
-	LocalReferenceContext future_context; // The context at the future position
-	bool keep_lookahead = true;
-	// I assume that Freebayes doesn't add right anchors to an alt allele for no reason. There must be another alt allele pushes the variant window to the right. (Of course it is not true for HS allele).
-	// If the assumption doesn't hold, then the look ahead will be more conservative, not hurt.
+	int non_fake_variant_window_end = (int) seq_context.position0;  // non_fake_variant_window_end is the largest variant_window_end of non-Fake-HS alleles.
 	const int variant_window_end = (int) seq_context.position0 + (int) seq_context.reference_allele.size();
-	int splicing_lower_bound_at_look_ahead_end = -1;
-	bool keep_look_ahead = true;
+	current_candidate_gen_window_end = max(current_candidate_gen_window_end, variant_window_end);
+
+	for (unsigned int i_alt = 0; i_alt < allele_identity_vector.size(); ++i_alt){
+		if ((not allele_identity_vector[i_alt].status.isFakeHsAllele) and non_fake_variant_window_end < allele_identity_vector[i_alt].end_variant_window){
+			non_fake_variant_window_end = allele_identity_vector[i_alt].end_variant_window;
+			if (non_fake_variant_window_end == variant_window_end){
+				break;
+			}
+		}
+	}
+	// (Note): If I see non_fake_variant_window_end == (int) seq_context.position0, it means that every allele is FakeHS.
+
+	// (Step 1): Determine the at-least-end of the lookahead window, which may be pushed to the right later.
+	// The look ahead window must cover (multiallele_window_end - 1) to make sure that the variant is not interfered by future variants
+	// Note that multiallele_window_end can be dummy if there is a problematic. I will set look_ahead_end_0 to be variant_window_end.
+	int look_ahead_end_0 = max(multiallele_window_end, current_candidate_gen_window_end);
 
 	if (DEBUG){
 		cout << "+ Investigating lookahead window (0-based) for the variant (1-based) (" << PrintVariant(*variant) <<"): "<< endl
-			 << "  - Current splicing window end = " << multiallele_window_end << ", which is the lower bound of lookahead window end." << endl
+			 << "  - Current multi-allele splicing window end = " << multiallele_window_end << ", which is the \"at least\" look ahead window end." << endl
 			 << "  - Current variant window end = " << variant_window_end << endl
-	         << "  + Finding the smallest future position that won't be interfered by this variant (i.e., splicing lower bound@pos >= current variant window end):" << endl;
+			 << "  - Current candidate gen window end = " << current_candidate_gen_window_end << endl
+			 << "  - Current non-fake-variant window end = " << non_fake_variant_window_end << (non_fake_variant_window_end == (int) seq_context.position0? " (all alleles are FakeHS)" : "") << endl
+	         << "  + Finding the smallest future position that won't be interfered by this variant (i.e., splicing lower bound@pos >= non-fake-variant window end):" << endl;
 	}
 
-	while (keep_look_ahead){
+	// Deal with exceptions:
+	string exception_reason;
+	if (non_fake_variant_window_end == (int) seq_context.position0){
+		exception_reason =  " (All alleles are FakeHS which won't interfere others)."; // This may happen quite often!
+	}else if (look_ahead_end_0 >= chr_size){
+		look_ahead_end_0 = chr_size;
+		exception_reason = " (reached the end of the chromosome)." ;
+	}
+	else if (look_ahead_end_0 < variant_window_end){
+		exception_reason = " (problematic)";
+	}
+
+	if (not exception_reason.empty()){
+		if (DEBUG){
+				cout << "  - Lookahead window end = " << look_ahead_end_0 << exception_reason << endl;
+		}
+		return max(look_ahead_end_0, variant_window_end); // Safety: lookahead end = variant_window_end means no look ahead.
+	}
+
+	// (Step 2): Keep looking ahead until the non-Fake alleles will not interfere any variant at the future position.
+	// I.e., the splicing lower bound at look_ahead_end_0 should >= non_fake_variant_window_end.
+	// Note that all windows defined here are left-closed, right-open.
+	LocalReferenceContext future_context; // The context at the future position
+	// I assume that the candidate generator doesn't add right anchors to an alt allele for no reason. There must be another alt allele pushes the variant window to the right. (Of course it is not true for HS allele).
+	// If the assumption doesn't hold, then the look ahead will be more conservative, not hurt.
+	int splicing_lower_bound_at_look_ahead_end = -1;
+
+	while (look_ahead_end_0 < chr_size){
 		future_context.DetectContextAtPosition(ref_reader, seq_context.chr_idx, look_ahead_end_0, 1);
 		// Calculate the splicing lower bound at look_ahead_end_0
 		splicing_lower_bound_at_look_ahead_end = future_context.SplicingLeftBound(ref_reader);
@@ -1722,17 +1818,19 @@ int EnsembleEval::CalculateLookAheadEnd0(const ReferenceReader &ref_reader){
 			cout <<	"    - pos = " << look_ahead_end_0 << ", Splicing lower bound@pos = " << splicing_lower_bound_at_look_ahead_end << endl;
 		}
 
-		if (splicing_lower_bound_at_look_ahead_end >= variant_window_end) {
-			keep_look_ahead = false;
+		// I push the look ahead window end to the right until this variant won't interfere any variant outside the RHS of the look ahead window.
+		if (splicing_lower_bound_at_look_ahead_end >= non_fake_variant_window_end){
+			break;
 		}
-		else{
-			keep_look_ahead = (++look_ahead_end_0 < chr_size);
-		}
+		++look_ahead_end_0;
 	}
 
 	if (DEBUG){
-		cout << "  - Lookahead window end = " << look_ahead_end_0
-			 << ", splicing lower bound @(lookahead end) = " << splicing_lower_bound_at_look_ahead_end << endl;
+		if (look_ahead_end_0 < chr_size){
+		    cout << "  - Lookahead window end = " << look_ahead_end_0 << ", splicing lower bound @(lookahead end) = " << splicing_lower_bound_at_look_ahead_end << endl;
+		}else{
+			cout << "  - Lookahead window end = " << look_ahead_end_0 << " (reached the end of the chromosome).";
+		}
 	}
 	return look_ahead_end_0;
 }
@@ -1740,7 +1838,7 @@ int EnsembleEval::CalculateLookAheadEnd0(const ReferenceReader &ref_reader){
 // Given the candidate alleles, determine the maximally possible split of the variant (or group of the alternative alleles) that can be correctly (i.e., w/o high FXX) evaluated by the evaluator.
 // e.g. output: allele_groups = {{0,1,2}, {3, 4}, {5}}. Then alt[0], alt[1], alt[2] must be evaluated jointly; alt[3], alt[4] must be evaluated jointly; alt[5] can be evaluated individually.
 void EnsembleEval::SplitMyAlleleIdentityVector(list<list<int> >& allele_groups, const ReferenceReader &ref_reader, int max_group_size_allowed){
-	SplitAlleleIdentityVector(allele_identity_vector, allele_groups, ref_reader, max_group_size_allowed);
+	SplitAlleleIdentityVector(allele_identity_vector, allele_groups, ref_reader, max_group_size_allowed, false);
 
 	if (DEBUG){
 		cout << "+ Investigating variant splitting for the variant (" << PrintVariant(*variant) <<"): "<< endl
@@ -1752,6 +1850,234 @@ void EnsembleEval::SplitMyAlleleIdentityVector(list<list<int> >& allele_groups, 
 	    }
 	}
 }
+
+void EnsembleEval::FinalSplitReadyToGoAlleles(list<list<int> >& allele_groups_ready_to_go, const ReferenceReader &ref_reader, int max_group_size_allowed){
+	unsigned int max_group_size = 0;
+	unsigned int num_ready_to_go_alleles = 0;
+	for (list<list<int> >::iterator g_it = allele_groups_ready_to_go.begin(); g_it != allele_groups_ready_to_go.end(); ++g_it){
+		num_ready_to_go_alleles += g_it->size();
+		if (g_it->size() > max_group_size){
+			max_group_size = g_it->size() ;
+		}
+	}
+	if ((int) max_group_size <= max_group_size_allowed){
+		// No final splitting needed.
+		return;
+	}
+
+	// Create a vector of AlleleIdentity objects that contains read-to-go alleles only.
+	vector<AlleleIdentity> ready_to_go_allele_identity_vector;
+	// Map the index from the ready_to_go_allele_identity_vector to allele_identity_vector.
+	vector<int> read_to_go_index_to_original;
+	ready_to_go_allele_identity_vector.reserve(num_ready_to_go_alleles);
+	read_to_go_index_to_original.reserve(num_ready_to_go_alleles);
+	for (list<list<int> >::iterator g_it = allele_groups_ready_to_go.begin(); g_it != allele_groups_ready_to_go.end(); ++g_it){
+		for (list<int>::iterator a_it = g_it->begin(); a_it != g_it->end(); ++a_it){
+			ready_to_go_allele_identity_vector.push_back(allele_identity_vector[*a_it]);
+			read_to_go_index_to_original.push_back(*a_it);
+		}
+	}
+	if (DEBUG){
+		cout << "+ Final splitting ready-to-go alleles that contains a group of " << max_group_size << " alleles." <<endl;
+	}
+
+	// Final split ready-to-go alleles
+	SplitAlleleIdentityVector(ready_to_go_allele_identity_vector, allele_groups_ready_to_go, ref_reader, max_group_size_allowed, false, 4);
+	// Recover the index from ready_to_go_allele_identity_vector to allele_identity_vector.
+	for (list<list<int> >::iterator g_it = allele_groups_ready_to_go.begin(); g_it != allele_groups_ready_to_go.end(); ++g_it){
+		for (list<int>::iterator a_it = g_it->begin(); a_it != g_it->end(); ++a_it){
+			*a_it = read_to_go_index_to_original[*a_it];
+		}
+	}
+}
+
+// (Inputs): ref_reader, current_candidate_gen_window_end_0.
+// (Outputs): allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0
+// current_candidate_gen_window_end_0: the end position of the current window for "de novo" candidate generation.
+// allele_groups_ready_to_go: the list of allele groups that are safe for evaluation right now. That is, the variants outside current_look_ahead_window_end_0 won't interfere or be interfere the ready-to-go alleles.
+// alleles_on_hold: the vector of the indices of alleles that may not be evaluated at this moment. I.e., they potentially interfere or be interfered by the variants outside the current candidate generation window.
+// If the alleles in allele_groups_ready_to_go are output to the evaluator, then the candidate generator only needs to discover new variants in the look ahead "sliding" windows as follows.
+// The candidate generator only needs to generating "novel" candidates in [sliding_window_start_0, sliding_window_end_0)
+// The candidate generator only needs to generating "hotspots" candidates whose start position in [sliding_window_start_0, sliding_window_end_0)
+// !!! Important !!! All the windows are defined as [win_start, win_end).
+// !!! Important !!! If sliding_window_start_0 == sliding_window_end_0 == current_look_ahead_window_end_0, then all alleles are ready to go. No need to look ahead.
+// !!! Important !!! It shall guarantee both conditions as follows: a) All on-hold alleles will be generated in the new sliding window. b) No ready-to-go alleles will be generated in the new sliding window.
+void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0,
+		const ReferenceReader &ref_reader,
+		list<list<int> >& allele_groups_ready_to_go,
+		vector<int>& alleles_on_hold,
+		int& sliding_window_start_0,
+		int& sliding_window_end_0,
+		int max_group_size_allowed){
+	const int num_alt_alleles = (int) allele_identity_vector.size();
+	int splicing_lower_bound_at_current_candidate_gen_window_end_0 = -1;
+	LocalReferenceContext current_candidate_gen_window_context;
+	vector<AlleleIdentity> padding_removed_allele_identity_vector;
+	CompareAllelePositions compare_positions(&allele_identity_vector);
+	// (Step 1.a): Initial Step
+	allele_groups_ready_to_go.clear();
+	alleles_on_hold.clear();
+
+	// I first let start positions of the sliding window be their upper bound. They will be shrunk later.
+	sliding_window_start_0 = current_candidate_gen_window_end_0;
+	// I look ahead just 1bp every time.
+	sliding_window_end_0 = min(current_candidate_gen_window_end_0 + 1, (int) ref_reader.chr_size(seq_context.chr_idx));
+
+	// (Step 1.b): The trivial (and perhaps the most common) case:
+	// If every allele and its end of the variant window hits the lookahead window end, then every allele is on hold.
+	bool is_trivial_all_on_hold = true;
+	for (int i_alt = 0; i_alt < num_alt_alleles; ++i_alt){
+		if (allele_identity_vector[i_alt].end_variant_window < current_candidate_gen_window_end_0){
+			is_trivial_all_on_hold = false;
+			break;
+		}
+	}
+
+	if (is_trivial_all_on_hold){
+		for (int i_alt = 0; i_alt < num_alt_alleles; ++i_alt){
+			alleles_on_hold.push_back(i_alt);
+			// Sort alleles_on_hold
+			sort(alleles_on_hold.begin(), alleles_on_hold.end(), compare_positions);
+			sliding_window_start_0 = min(sliding_window_start_0, allele_identity_vector[i_alt].start_variant_window);
+		}
+
+		if (DEBUG){
+			cout << "+ Calculating the look ahead \"sliding\" window for (" << PrintVariant(*variant) <<"): "<< endl
+				 << "  - Current candidate window end = " << current_candidate_gen_window_end_0 << endl
+				 << "  - Current variant window = [" << seq_context.position0 << ", " << (int) seq_context.position0 + (int) seq_context.reference_allele.size() << ")" << endl
+			     << "  - All alleles are on-hold, and none of them is ready to go." << endl
+			     << "  - New look ahead sliding window = [" << sliding_window_start_0 << ", " << sliding_window_end_0 << ")" << endl;
+		}
+		return;
+	}
+
+	// (Step 2): Split the alleles into groups pretending every allele is ready to go.
+	GetPaddingRemovedAlleleIdentityVector(allele_identity_vector, ref_reader, padding_removed_allele_identity_vector);
+	if (DEBUG){
+		cout << "+ Splitting the variant (" << PrintVariant(*variant) <<") for determining look ahead sliding window:" << endl;
+	}
+
+	// I don't do final splitting.
+	SplitAlleleIdentityVector(padding_removed_allele_identity_vector, allele_groups_ready_to_go, ref_reader, num_alt_alleles, true, 0);
+
+	// (Step 2.b): Trivial case: No need to look ahead => all alleles are ready to go.
+	if (current_candidate_gen_window_end_0 == sliding_window_end_0){
+		sliding_window_start_0 = sliding_window_end_0;
+		if (DEBUG){
+			cout << "+ Calculating the look ahead \"sliding\" window for (" << PrintVariant(*variant) <<"): "<< endl
+				 << "  - Current candidate window end = " << current_candidate_gen_window_end_0 << endl
+				 << "  - Current variant window = [" << seq_context.position0 << ", " << (int) seq_context.position0 + (int) seq_context.reference_allele.size() << ")" << endl
+			     << "  - All alleles are ready to go and no need to look ahead. "  << endl;
+		}
+	    FinalSplitReadyToGoAlleles(allele_groups_ready_to_go, ref_reader, max_group_size_allowed);
+		return;
+	}
+
+	// (Step 3): Remove on_hold_alleles from allele_groups_ready_to_go and determine sliding_window_start_0.
+	// Specifically, an allele is ready to go if and only if all other alleles in the same group won't cause any interference for future variants.
+	current_candidate_gen_window_context.DetectContextAtPosition(ref_reader, seq_context.chr_idx, current_candidate_gen_window_end_0, 1);
+	splicing_lower_bound_at_current_candidate_gen_window_end_0 = current_candidate_gen_window_context.SplicingLeftBound(ref_reader);
+
+	list<list<int> >::iterator group_it = allele_groups_ready_to_go.begin();
+	while (group_it != allele_groups_ready_to_go.end()){
+		bool is_group_ready_to_go = true;  // Everyone starts as ready-to-go.
+
+		for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+			int my_splicing_end = max(padding_removed_allele_identity_vector[*allele_it].end_splicing_window, padding_removed_allele_identity_vector[*allele_it].end_variant_window); // In case not defined for problematic alleles.
+			if (my_splicing_end > current_candidate_gen_window_end_0){
+				// The allele is potentially interfered by future variants
+				is_group_ready_to_go = false;
+				break;
+			}
+
+			if (padding_removed_allele_identity_vector[*allele_it].end_variant_window > splicing_lower_bound_at_current_candidate_gen_window_end_0
+					and (not padding_removed_allele_identity_vector[*allele_it].status.isFakeHsAllele)){
+				// The allele is real and can potentially interfere future variants
+				is_group_ready_to_go = false;
+				break;
+			}
+		}
+		// A group is ready to go if every allele in the group is ready to go.
+		if (is_group_ready_to_go){
+			++group_it;
+		}else{
+			// The group is not ready to go.
+			// Put all alleles in the group in the on hold vector.
+			for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+				alleles_on_hold.push_back(*allele_it);
+				sliding_window_start_0 = min(sliding_window_start_0, padding_removed_allele_identity_vector[*allele_it].start_variant_window);
+			}
+			// Remove the group from allele_groups_ready_to_go.
+			// I must remove the iterator carefully!
+			group_it = allele_groups_ready_to_go.erase(group_it);
+		}
+	}
+
+	// All alleles are ready to go. No need to look ahead.
+	if (alleles_on_hold.empty()){
+		sliding_window_end_0 = current_candidate_gen_window_end_0;
+		sliding_window_start_0 = current_candidate_gen_window_end_0;
+		if (DEBUG){
+			cout << "+ Calculating the look ahead \"sliding\" window for (" << PrintVariant(*variant) <<"): "<< endl
+				 << "  - Current candidate window end = " << current_candidate_gen_window_end_0 << endl
+				 << "  - Current variant window = [" << seq_context.position0 << ", " << (int) seq_context.position0 + (int) seq_context.reference_allele.size() << ")" << endl
+			     << "  - No need to look ahead and all alleles are ready to go!"  << endl;
+		}
+	    FinalSplitReadyToGoAlleles(allele_groups_ready_to_go, ref_reader, max_group_size_allowed);
+		return;
+	}
+
+	// (Step 4): Move the ready-to-go alleles whose start position >= sliding_window_start_0 to be on hold.
+	// I.e., I want to make sure that no ready-to-go allele will be generated in the new sliding window.
+	// This will lose some ready-to-go alleles but I will have only sliding window.
+	group_it = allele_groups_ready_to_go.begin();
+	while (group_it != allele_groups_ready_to_go.end()){
+		bool is_force_to_be_on_hold = false;
+		for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+			if (allele_identity_vector[*allele_it].start_variant_window >= sliding_window_start_0){
+				is_force_to_be_on_hold = true;
+				break;
+			}
+			//TODO: This is my hypothesis that all ready-to-go novel allele won't be generated in the new sliding window.
+			if (not allele_identity_vector[*allele_it].status.isHotSpotAllele){
+				assert(allele_identity_vector[*allele_it].end_variant_window <= sliding_window_start_0);
+			}
+		}
+
+		if (is_force_to_be_on_hold){
+			for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+				alleles_on_hold.push_back(*allele_it);
+				//TODO: This is my hypothesis that all force-on-hold alleles have start variant window >= sliding_window_start_0. Remove it later.
+				assert(allele_identity_vector[*allele_it].start_variant_window >= sliding_window_start_0);
+			}
+			group_it = allele_groups_ready_to_go.erase(group_it);
+		}else{
+			++group_it;
+		}
+	}
+	// Sort alleles_on_hold
+	sort(alleles_on_hold.begin(), alleles_on_hold.end(), compare_positions);
+	// Final safey splitting for ready-to-go alleles.
+    FinalSplitReadyToGoAlleles(allele_groups_ready_to_go, ref_reader, max_group_size_allowed);
+
+	// Final debug message
+	if (DEBUG){
+		cout << "+ Calculating the look ahead \"sliding\" window for (" << PrintVariant(*variant) <<"): "<< endl
+			 << "  - Current candidate window end = " << current_candidate_gen_window_end_0 << endl
+			 << "  - Current variant window = [" << seq_context.position0 << ", " << (int) seq_context.position0 + (int) seq_context.reference_allele.size() << ")" << endl
+		     << "  - New look ahead sliding window = [" << sliding_window_start_0 << ", " << sliding_window_end_0 << ")" << endl
+			 << "  + Number of on-hold alleles = "<< alleles_on_hold.size() << endl
+			 << "    - List of on-hold alleles = {" << PrintIteratorToString(alleles_on_hold.begin(), alleles_on_hold.end(), "", "", ", ", "alt ") << "}"<< endl
+			 << "  + Number of ready-to-go groups = "<< allele_groups_ready_to_go.size() << endl
+			 << "    - Total number of ready-to-go alleles = " << (num_alt_alleles - (int) alleles_on_hold.size()) << endl;
+		int group_idx = 0;
+	    for (list<list<int> >::iterator g_it = allele_groups_ready_to_go.begin(); g_it != allele_groups_ready_to_go.end(); ++g_it, ++group_idx){
+	    	cout << "    - Group #" << group_idx << " consists of "<< g_it->size() << " alt alleles: "
+	    		 << PrintIteratorToString(g_it->begin(), g_it->end(), "{", "}", ", ", "alt ") << endl;
+	    }
+	}
+}
+
 
 void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
                                                  const InputStructures  &global_context,
@@ -1890,7 +2216,6 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
 	}
     info_fields.push_back(my_info.str());
   }
-
 }
 
 // Read and process records appropriate for this variant; positions are zero based

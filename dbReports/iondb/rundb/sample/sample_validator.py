@@ -31,6 +31,7 @@ MAX_LENGTH_SAMPLE_ATTRIBUTE_DESCRIPTION = 1024
 MAX_LENGTH_SAMPLE_ATTRIBUTE_VALUE = 1024
 
 MAX_LENGTH_PCR_PLATE_SERIAL_NUM = 64
+MAX_LENGTH_SAMPLE_CELL_NUM = 127
 MAX_LENGTH_SAMPLE_COUPLE_ID = 127
 MAX_LENGTH_SAMPLE_EMBRYO_ID = 127
 
@@ -496,6 +497,10 @@ def validate_sample_pgx_attributes_for_sampleSet(queryDict):
     if not isValid:
         return isValid, errorMessage
 
+    isValid, errorMessage = validate_sampleCellNum(queryDict.get("cellNum", "").strip())
+    if not isValid:
+        return isValid, errorMessage
+
     isValid, errorMessage = validate_sampleEmbryoId(queryDict.get("embryoId", "").strip())
     return isValid, errorMessage
 
@@ -504,6 +509,8 @@ def validate_sampleBiopsyDays(sampleBiopsyDays):
     isValid, errorMessage = _validate_intValue(sampleBiopsyDays, "Biopsy Days")
     return isValid, errorMessage
 
+def validate_sampleCellNum(sampleCellNum):
+    return _validate_optional_text(sampleCellNum,  MAX_LENGTH_SAMPLE_CELL_NUM, "Cell Number")
 
 def validate_sampleCoupleId(sampleCoupleId):
     return _validate_optional_text(sampleCoupleId,  MAX_LENGTH_SAMPLE_COUPLE_ID, "Couple ID")

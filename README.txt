@@ -2,29 +2,24 @@ Please see buildTools/BUILD.txt for build requirements and instructions.
 Note especially the section BUILD SPECIFIC MODULES.
 
 To build Analysis module, the command is:
-MODULES=Analysis ./buildTools/build.sh
 
-To build dbReports module, the command is:
-MODULES=dbReports ./buildTools/build.sh
+    MODULES=Analysis ./buildTools/build.sh
 
 
 Tips:
 
-- If you are building this software for the first time, it's suggested to use the Torrent Suite Virtual Machine as your Ubuntu 10.04 build environment.  That will reduce the chance of your being blocked by any environment dependencies.  Once you are familiar with the build process on Ubuntu 10.04, you'll have more confidence when getting creative with other operating systems.  You can find the virtual machine and helpful people on ionCommunity:
+- If you are building this software for the first time, it's suggested to use
+  a Docker container to build. That will reduce the chance of being blocked by
+  any environment dependencies.
 
-http://ioncommunity.lifetechnologies.com/welcome
+  https://hub.docker.com/r/iontorrent/tsbuild/
 
-- Note that the code that was formerly in the ion-alignment and tmap packages is now rolled into the ion-analysis packages
+- Note that the code that was formerly in the ion-alignment and tmap packages is now
+  rolled into the ion-analysis packages
 
 - For standalone Torrent Variant Caller, please see the below link for instructions.
+  There are supported Docker containers for various platform.
 
-http://updates.iontorrent.com/tvc_standalone/README.txt
+  http://updates.iontorrent.com/tvc_standalone/README.txt
+  https://hub.docker.com/r/iontorrent/tvcbuild/
 
-Note:
-
-Due to github file size restricion, these two files are not included:
-
-- plugin/RNASeqAnalysis/annotations/mm10/gene.gtf
-- plugin/RNASeqAnalysis/annotations/hg19/gene.gtf
-
-https://help.github.com/articles/working-with-large-files/

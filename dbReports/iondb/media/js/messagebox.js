@@ -77,7 +77,10 @@ MessageView = Backbone.View.extend({
 
     close: function() {
         var self = this;
-        $(this.el).slideUp(function(){self.remove();});
+        $(this.el).slideUp(function () {
+            self.remove();
+            $(window).trigger("ion.messageRemoved");
+        });
         this.model.close();
     },
 
@@ -116,7 +119,9 @@ MessageBox = Backbone.View.extend({
         var tag = message.get('tags');
         if (tag) this.$el.find('.'+tag).remove();
         this.$el.prepend(view.el);
-        view.$el.slideDown();
+        view.$el.slideDown(function () {
+            $(window).trigger("ion.messageAdded");
+        });
     },
 
     addAll: function() {
@@ -124,6 +129,7 @@ MessageBox = Backbone.View.extend({
             return new MessageView({model: message}).el;
         });
         this.$el.prepend(views);
+        $(window).trigger("ion.messageAdded");
     },
 
     poll: function() {

@@ -5,9 +5,15 @@ import dateutil
 import matplotlib.dates as dates
 from matplotlib import pyplot as plt
 import numpy as np
+from time import strptime
+import os
 
-df = pd.read_csv("cpu_util.log",
-names = ['time', 'j1', 'j2', 'usr', 'nice', 'sys', 'iowait', 'irq', 'soft', 'steal', 'guest', 'gnice', 'idle'],
+# put the date on the same line with the cpu data
+os.system("awk 'NR%2{printf \"%s \",$0;next;}1' cpu_util.log > cpu_data.log")
+
+df = pd.read_csv("cpu_data.log",
+names = ['dow', 'mon', 'day', 'time', 'tz', 'year', 'lcpu', 'us', 'lus', 'sy', 'lsy',
+         'ni', 'lni',  'id', 'lid', 'wa', 'lwa', 'hi', 'lhi', 'si', 'lsi', 'st', 'lst'],
 delim_whitespace=True, header=None)
 
 data = df.T.to_dict().values()#export the data frame to a python dictionary
@@ -20,18 +26,17 @@ y_axis_nice = np.zeros(len(data))
 y_axis_nice_smoothed = np.zeros(len(data))
 y_axis_sys = np.zeros(len(data))
 y_axis_sys_smoothed = np.zeros(len(data))
-now = datetime.date.today().isoformat() + ' '
 span=5
 span_gpu=10
 
 for key in range(0,len(data)):
-    datekey = now + data[key]['time']
+    month = str(strptime(data[key]['mon'],'%b').tm_mon).zfill(2)
+    datekey = str(data[key]['year']) + '-' + month + '-' + str(data[key]['day']) + 'T' + data[key]['time']
     x_axis[key] = np.datetime64(datekey)
-    y_axis_idle[key] = int(data[key]['idle'])
-    y_axis_usr[key] = int(data[key]['usr'])
-    y_axis_nice[key] = int(data[key]['nice'])
-    y_axis_sys[key] = int(data[key]['sys'])
-
+    y_axis_idle[key] = int(data[key]['id'])
+    y_axis_usr[key] = int(data[key]['us'])
+    y_axis_nice[key] = int(data[key]['ni'])
+    y_axis_sys[key] = int(data[key]['sy'])
 
 # now, read in the gpu data
 df=pd.read_csv("gpu_util.log", names=['systemtime', 'percent'],sep=',',parse_dates=[0]) #or:, infer_datetime_format=True)
@@ -109,3 +114,4 @@ plt.plot(x_axis, y_axis_gpu_smoothed,  '#000000', linewidth=0.4, label='% gpu')
 plt.legend(loc='right', bbox_to_anchor=(1.25, 0.5), fontsize=fsz)
 plt.savefig("oiaTiming.png")
 
+os.remove("cpu_data.log")

@@ -49,6 +49,7 @@ import dateutil
 import urlparse
 from iondb.utils import raid as raid_utils
 from iondb.utils import files as file_utils
+from iondb.utils.utils import send_email
 from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest, queue_info, sge_ctrl
 
 logger = get_task_logger(__name__)
@@ -617,36 +618,15 @@ def scheduled_update_check():
 
 @app.task
 def check_updates():
-    """Currently this is passed a TSConfig object; however, there might be a
-    smoother design for this control flow.
-    """
+    """Currently this is passed a TSConfig object; however, there might be a smoother design for this control flow."""
+
+    # putting the import statement here to prevent circular imports
     from iondb.rundb import models
-    from iondb.utils.files import rename_extension
+
     try:
-        from iondb.utils.usb_check import getUSBinstallerpath, change_list_files
-
-        path = getUSBinstallerpath()
-        if path:
-            change_list_files(path)
-        if not path:
-            rename_extension('etc/apt/', '.USBinstaller', '')
-            if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
-                os.remove('/etc/apt/sources.list.d/usb.list')
-
-        cmd = ['sudo', '/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--poll']
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = p.communicate()
-        if p.returncode != 0:
-            raise Exception(stderr)
-        else:
-            return int(stdout)
-    except Exception as err:
-        rename_extension('etc/apt/', '.USBinstaller', '')
-        if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
-            os.remove('/etc/apt/sources.list.d/usb.list')
-        logger.error("TSConfig raised '%s' during update check." % err)
-        models.GlobalConfig.objects.update(ts_update_status=str(err))
-        raise
+        return int(subprocess.check_output(["sudo", "/opt/ion/iondb/bin/administrative/check_updates.py"]))
+    except subprocess.CalledProcessError as cpe:
+        models.GlobalConfig.objects.update(ts_update_status=str(cpe.output))
 
 
 @app.task
@@ -897,47 +877,14 @@ def notify_services_error(subject_line, msg, html_msg):
     except:
         logger.warning("Could not retrieve it_contact.  No email sent.", extra=logid)
         return False
-    # Check for blank email
-    # TODO: check for valid email address
-    if not recipient:
-        logger.warning("No it_contact email configured.", extra=logid)
-        return False
 
-    #Needed to send email
-    settings.EMAIL_HOST = 'localhost'
-    settings.EMAIL_PORT = 25
-    settings.EMAIL_USE_TLS = False
-
-    try:
-        site_name = models.GlobalConfig.get().site_name
-    except:
-        site_name = "Torrent Server"
-
-    hname = socket.getfqdn()
-
-    reply_to = 'donotreply@iontorrent.com'
-    message = 'From: %s (%s)\n' % (site_name, hname)
-    message += '\n'
-    message += msg
-    message += "\n"
-    html_content = 'From: %s (<a href=%s>%s</a>)<br>' % (site_name, hname, hname)
-    html_content += '<br>'
-    html_content += html_msg
-    html_content += "<br>"
-
-    # Send the email
-    try:
-        recipient = recipient.replace(',', ' ').replace(';', ' ').split()
-        logger.debug(recipient, extra=logid)
-        sendthis = mail.EmailMultiAlternatives(subject_line, message, reply_to, recipient)
-        sendthis.attach_alternative(html_content, "text/html")
-        sendthis.send()
-    except:
-        logger.warning(traceback.format_exc(), extra=logid)
-        return False
+    done = send_email(recipient, subject_line, msg, html_msg)
+    if done:
+        logger.info("Notification email sent for services alert", extra=logid)
     else:
-        logger.info("email sent for services alert", extra=logid)
-        return True
+        logger.warning("Services alert notification email not sent", extra=logid)
+
+    return done
 
 
 def notify_diskfull(msg):
@@ -950,42 +897,14 @@ def notify_diskfull(msg):
         logger.warning("Could not retrieve dm_contact.  No email sent.", extra=logid)
         return False
 
-    # Check for blank email
-    # TODO: check for valid email address
-    if not recipient:
-        logger.warning("No dm_contact email configured.  No email sent.", extra=logid)
-        return False
-
-    #Needed to send email
-    settings.EMAIL_HOST = 'localhost'
-    settings.EMAIL_PORT = 25
-    settings.EMAIL_USE_TLS = False
-
-    try:
-        site_name = models.GlobalConfig.get().site_name
-    except:
-        site_name = "Torrent Server"
-
-    hname = socket.getfqdn()
-
     subject_line = 'Torrent Server Data Management Disk Alert'
-    reply_to = 'donotreply@iontorrent.com'
-    message = 'From: %s (%s)\n' % (site_name, hname)
-    message += '\n'
-    message += msg
-    message += "\n"
-
-    # Send the email
-    try:
-        recipient = recipient.replace(',', ' ').replace(';', ' ').split()
-        logger.debug(recipient, extra=logid)
-        mail.send_mail(subject_line, message, reply_to, recipient)
-    except:
-        logger.warning(traceback.format_exc(), extra=logid)
-        return False
+    done = send_email(recipient, subject_line, msg)
+    if done:
+        logger.info("Notification email sent for disk full", extra=logid)
     else:
-        logger.info("Notification email sent for user acknowledgement", extra=logid)
-        return True
+        logger.warning("Disk full notification email not sent", extra=logid)
+
+    return done
 
 
 #TS-5495: Refactored from a ionadmin cron job
@@ -1216,7 +1135,7 @@ def get_raid_stats_json():
     '''Wrapper to bash script calling MEGAraid tool'''
     raid_stats = None
     try:
-        raidCMD = ["/usr/bin/ion_raidinfo_json"]
+        raidCMD = ["sudo /usr/bin/ion_raidinfo_json"]
         q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
         stdout, stderr = q.communicate()
         if q.returncode == 0:

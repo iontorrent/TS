@@ -1,3 +1,0 @@
-date >> /mnt/ionFirstLog
-/etc/init.d/mountExternal -t restart_TS >> /mnt/ionFirstLog 2>&1
-

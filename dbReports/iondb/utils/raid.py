@@ -190,19 +190,6 @@ def get_raid_status_json(raidinfojson):
     return raid_status
 
 
-def get_raid_stats_json():
-    '''Execute shell command to query the RAID subsystem'''
-    raid_cmd = ["/usr/bin/ion_raidinfo_json"]
-    retval = subprocess.Popen(raid_cmd, shell=True, stdout=subprocess.PIPE)
-    stdout, _ = retval.communicate()
-    if retval.returncode == 0:
-        raid_stats = stdout
-    else:
-        raid_stats = None
-        print 'There was an error executing %s' % raid_cmd[0]
-    return raid_stats
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='''Parse raid info from ion_raidinfo_json script''')
     parser.add_argument(dest='filename',

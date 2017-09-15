@@ -59,7 +59,7 @@ class VarButton {
   bool isProblematicAllele; // There is something wrong with this allele, we should filter it.
   bool isNoVariant;         // The alternative allele is not a variant, i.e., altAllele = reference_context.reference_allele
   bool doRealignment;       // Switch to turn realignment on or off 
-
+  bool isClearlyNonFD;      // Is the allele clearly non-FD that can be told by the context?
   VarButton() {
     isHPIndel      = false;
     isSNP          = false;
@@ -75,6 +75,7 @@ class VarButton {
     isProblematicAllele = false;
     isNoVariant    = false;
     doRealignment  = false;
+    isClearlyNonFD = false;
   }
 };
 
@@ -180,6 +181,8 @@ class AlleleIdentity {
 
     bool IdentifyMultiNucRepeatSection(const LocalReferenceContext &seq_context, unsigned int rep_period,
         const ReferenceReader &ref_reader);
+
+    void IdentifyClearlyNonFD(const LocalReferenceContext &reference_context);
 
     void CalculateWindowForVariant(const LocalReferenceContext &seq_context,
         const ReferenceReader &ref_reader);

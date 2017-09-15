@@ -1,3 +1,11 @@
+function _get_query_string(val){
+    val = val || "";
+    if ($.isArray(val)){
+        return val.join(",")
+    }
+    return val;
+}
+
 function filter(e){
 	  e.preventDefault();
 	  e.stopPropagation();
@@ -26,22 +34,22 @@ function filter(e){
           {
 			field: "sigproc_filter",
 			operator: "",
-			value: $("#filter_sigproc_"+id).val()
+			value: _get_query_string($("#filter_sigproc_"+id).val())
 		  },
           {
 			field: "basecall_filter",
 			operator: "",
-			value: $("#filter_basecall_"+id).val()
+			value: _get_query_string($("#filter_basecall_"+id).val())
 		  },
           {
 			field: "output_filter",
 			operator: "",
-			value: $("#filter_output_"+id).val()
+			value: _get_query_string($("#filter_output_"+id).val())
 		  },
           {
 			field: "misc_filter",
 			operator: "",
-			value: $("#filter_misc_"+id).val()
+			value: _get_query_string($("#filter_misc_"+id).val())
 		  }
 	  ]);
 }
@@ -125,7 +133,7 @@ $(document).ready(function () {
 	$('.clear_filters').click(function (e) {
 		var id = $(e.currentTarget).data('id');
 		$('#search_bar_'+id).find('input').each(function(){$(this).val(''); });
-		$('#search_bar_'+id).find('select').each(function(){$(this).val(''); });
+		$('#search_bar_'+id+' .selectpicker').selectpicker('deselectAll');
 		filter(e);
 	});
 });

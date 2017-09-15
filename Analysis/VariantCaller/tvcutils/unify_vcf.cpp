@@ -25,6 +25,7 @@
 
 #include "OptArgs.h"
 #include "IonVersion.h"
+#include "MiscUtil.h"
 #include "json/json.h"
 #include "unify_vcf.h"
 
@@ -433,7 +434,7 @@ void VcfOrderedMerger::perform() {
 // -----------------------------------------------------------------------------------
 
 void VcfOrderedMerger::write_header(vcf::VariantCallFile& vcf, string json_path) {
-  extend_header(vcf, allele_subset.check_enabled);
+  extend_header(vcf, allele_subset.check_enabled, filter_by_target);
   parse_parameters_from_json(json_path, vcf);
   // write out the header to output
   bgz_out << vcf.header << "\n";
@@ -793,6 +794,9 @@ bool VcfOrderedMerger::filter_VCF_record(vcf::Variant* record) const
   if (filter_by_target){
     // vcf->position is 1-based, whereas target bed fiels are 0-based indices.
     int hs_only = targets_manager.ReportHotspotsOnly(*current_target, reference_reader.chr_idx(record->sequenceName.c_str()), record->position-1);
+    // In case filtering by target is enabled, we add an info field indicating the target meta information
+    record->info["HS_ONLY"].clear();
+    record->info["HS_ONLY"].push_back(convertToString(hs_only));
     if (hs_only > 0 and not is_HS)
       return true;
   }
@@ -874,7 +878,8 @@ void VcfOrderedMerger::process_and_write_vcf_entry(vcf::Variant* current) {
 
 void VcfOrderedMerger::gvcf_out_variant(vcf::Variant *current) {
   if (gvcf_out) {
-      while (current_cov_info && current_cov_info->position - current->position < (int)current->ref.length()) next_cov_entry();
+      int chr = reference_reader.chr_idx(current->sequenceName.c_str());
+      while (current_cov_info && current_cov_info->chr() == chr && current_cov_info->position - current->position < (int)current->ref.length()) next_cov_entry();
       *gvcf_out << *current << "\n";
     }
 }
@@ -1062,7 +1067,7 @@ int compare(const T1& p11, const T2& p12, const T1& p21, const T2& p22) {
   return compare(make_pair(p11, p12), make_pair(p21, p22));
 }
 
-void extend_header(vcf::VariantCallFile &vcf, bool add_subset) {
+void extend_header(vcf::VariantCallFile &vcf, bool add_subset, bool filter_by_target) {
   // extend header with new info fields
   vcf.addHeaderLine("##INFO=<ID=OID,Number=.,Type=String,Description=\"List of original Hotspot IDs\">");
   vcf.addHeaderLine("##INFO=<ID=OPOS,Number=.,Type=Integer,Description=\"List of original allele positions\">");
@@ -1073,6 +1078,8 @@ void extend_header(vcf::VariantCallFile &vcf, bool add_subset) {
   if (add_subset)
     vcf.addHeaderLine("##INFO=<ID=SUBSET,Number=A,Type=String,Description="
                         "\"1-based index in ALT list of genotyped allele(s) that are a strict superset\">");
+  if (filter_by_target)
+    vcf.addHeaderLine("##INFO=<ID=HS_ONLY,Number=1,Type=Integer,Description=\"Corresponding value from target file meta information\">");
 }
 
 void parse_parameters_from_json(string filename, vcf::VariantCallFile& vcf) {
@@ -1279,7 +1286,7 @@ bool AlleleSubsetCheck::mnp_subset_check(const string & ref, const string &subse
 
   for (unsigned int i=0; i< subset.length(); ++i){
     rmatch = ref[i]==subset[i];
-    smatch = subset[i]!=super[i];
+    smatch = subset[i]==super[i];
 
     if (not rmatch) {
       ++n_edits_ref;

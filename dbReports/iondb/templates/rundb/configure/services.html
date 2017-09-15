@@ -10,13 +10,14 @@
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 
 <script type="text/javascript">
-function terminate_job(url,name){
+function terminate_job(el,url,name){
     apprise("\nAre you sure you want to terminate " + name + "?\n", {'verify': true}, function (r) {
         if (r) {
             //Terminate the job
-            $.ajax({
-                type: "POST",
-                url: url
+            $.get(url, function(){
+                $(el).replaceWith('<div>Job is being terminated</div>');
+            }).fail(function(){
+                $(el).replaceWith('<div class="text-error">Failed to terminate job</div>');
             });
         }
     });
@@ -249,7 +250,7 @@ $(document).ready(function () {
                             <td>{{ j.name }}</td>
                         {% endif %}
                         <td class="termtd">
-                            <a href="javascript:terminate_job('{{j.term_url}}', '{{ j.name }}')">Terminate</a>
+                            <a onclick="javascript:terminate_job(this,'{{j.term_url}}','{{ j.name }}'); return false;">Terminate</a>
                         </td>
                     </tr>
                   {% endspaceless %}

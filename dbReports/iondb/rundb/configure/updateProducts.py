@@ -19,6 +19,12 @@ import xmlrpclib
 import iondb.utils
 import traceback
 import subprocess
+import os
+import glob
+import time
+import shutil
+import tempfile
+from iondb.rundb import tasks
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render_to_response, get_object_or_404
@@ -43,19 +49,22 @@ errorCode = {
     "E003": "HTTPError {0}",
     "E004": "User ({0}) not authorized to update the Product. Please consult Torrent Suite Administrator",
     "E005": "Validation Error",
-    #"E006" : "TBD. This error code should be overridden for future update".
+    "E006" : "Invalid product file found. Please check",
     "E007": "Host not reachable. Please check your internet connectivity and try again ({0})",
     "E008": "{0}. Please check the network and try again",
     "E009": "System Template Add/Update Failed"
 }
 
+PRODUCT_UPDATE_PATH_LOCAL = os.path.join(settings.OFFCYCLE_UPDATE_PATH_LOCAL, "products")
 
-def get_productUpdateList(url=None):
+
+def get_productUpdateList(url=None, offcycle_type = "online"):
     h = httplib2.Http()
     isValid = True
     productContents = []
     errorMsg = ""
-    PRODUCT_UPDATE_LIST_URL = settings.PRODUCT_UPDATE_BASEURL + settings.PRODUCT_UPDATE_PATH
+    PRODUCT_UPDATE_LIST_URL = os.path.join(settings.PRODUCT_UPDATE_BASEURL, settings.PRODUCT_UPDATE_PATH)
+    product_local_main = os.path.join(PRODUCT_UPDATE_PATH_LOCAL, "main.json")
     try:
         response, content = h.request(PRODUCT_UPDATE_LIST_URL)
         if response['status'] == '200':
@@ -70,30 +79,148 @@ def get_productUpdateList(url=None):
         logger.debug("httplib2.ServerNotFoundError: iondb.rundb.configure.updateProducts.get_productUpdateList %s", err)
     except Exception, err:
         logger.debug("urllib2.HTTPError: iondb.rundb.configure.updateProducts.get_productUpdateList %s", err)
+
+    # Handle the users with and without internet connection
+    # Generate the main.json only if user has already uploaded the product zip/json and only when product exists
+    if os.path.exists(PRODUCT_UPDATE_PATH_LOCAL) and os.listdir(PRODUCT_UPDATE_PATH_LOCAL):
+        isValid = True
+        if offcycle_type == 'manual':
+            isValid, errorMsg = generate_mainJson_local(productContents)
+        if isValid and os.path.exists(product_local_main):
+            try:
+                errorMsg = ""
+                productJson_local = json.loads(open(product_local_main).read())
+                productContents_local = productJson_local["contents"]
+                for product in productContents_local:
+                    manual_update_version = product["update_version"].strip()
+                    manual_product_name = product["name"].strip()
+                    productDone = False
+                    for p in productContents:
+                        if (manual_product_name == p["name"].strip() and
+                                LooseVersion(manual_update_version) <= LooseVersion(p["update_version"].strip())):
+                                productDone = True
+                    if not productDone:
+                        productContents.append(product)
+            except Exception, err:
+                errorMsg = errorCode['E005'].format(err)
+                logger.debug("Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
     return (productContents, isValid, errorMsg)
 
+
+def generate_mainJson_local(onlineMainContents=None):
+    # Generate the main.json contents for the manual upload and store into /results/uploads/offcycle/products folder
+    # Compare the uploaded products contents with the online contents and existing old manual main.json,
+    # Save the unique product contents into local main.json
+    offline_main = {}
+    mainFileMeta = {}
+    available_manualUploadProducts = []
+    mainFileContents = []
+    isValid = True
+    error = None
+    productDone = None
+    local_mainFile = os.path.join(PRODUCT_UPDATE_PATH_LOCAL, 'main.json')
+
+
+    # Get the product info from the main file if exists
+    if os.path.exists(local_mainFile):
+        mainFileData = json.loads(open(local_mainFile).read())
+        mainFileContents = mainFileData["contents"]
+        available_manualUploadProducts = [(p["name"].strip(), p["update_version"].strip()) for p in mainFileContents]
+        mainFileMeta = mainFileData["meta"]
+
+    # Get the unique product listing from manual and online offcycle update
+    if onlineMainContents:
+        onlineMainProducts = [(p["name"].strip(),p["update_version"]) for p in onlineMainContents]
+        available_Products = list(set(available_manualUploadProducts + onlineMainProducts))
+    else:
+        available_Products = list(set(available_manualUploadProducts))
+
+    # Construct the main.json on the fly using the uploaded product.json files
+    # Ignore any online product which clashes with the offline products for those users with internet option
+    # skip the product if update version is equal/less than the installed version
+
+    for productFile in glob.glob(PRODUCT_UPDATE_PATH_LOCAL +'/*.json'):
+        if os.path.basename(productFile) == "main.json":
+            continue
+        try:
+            mainContentDict = {}
+            productFileContent = json.loads(open(productFile).read())
+            if available_Products:
+                for available_Product in available_Products:
+                    name, update_version = available_Product # extract product meta data from tuple
+                    productDone = False
+                    if (name == productFileContent["name"].strip()):
+                        if (LooseVersion(productFileContent["update_version"].strip()) <= LooseVersion(update_version.strip())):
+                            productDone = True
+                            break
+                if productDone:
+                    continue # proceed with the next productFile
+            mainContentDict["name"] = productFileContent["name"]
+
+            # backward compatibility
+            if "version_required" in productFileContent:
+                mainContentDict["version_req"] = productFileContent["version_required"]
+            elif "version_req" in productFileContent:
+                mainContentDict["version_req"] = productFileContent["version_req"]
+            mainContentDict["version_max"] = productFileContent["version_max"]
+            mainContentDict["url"] = os.path.basename(productFile)
+            mainContentDict["update_version"] = productFileContent["update_version"]
+            mainContentDict["product_desc"] =  productFileContent["productDesc"]
+            mainContentDict["offcycle_type"] = "manual"
+            mainFileContents.append(mainContentDict)
+        except Exception,Err:
+            logger.debug("Invalid product file uploaded {0}. Please check".format(Err))
+            raise Exception("Invalid product file uploaded. Please check %s" % Err)
+
+    offline_main["contents"] = mainFileContents
+    # get the meta if exists or generate one if not
+    if mainFileMeta:
+        offline_main["meta"] = mainFileMeta
+    else:
+        mainFileMeta["dateCreated"] = time.strftime("%d/%m/%Y")
+        mainFileMeta["lastUpdated"] = time.strftime("%d/%m/%Y")
+        offline_main["meta"] = {
+            "dateCreated" : time.strftime("%m/%d/%Y"),
+            "lastUpdated" : time.strftime("%m/%d/%Y")
+        }
+
+    # Finally create the main.json and store the product info
+    with open(local_mainFile, mode='w') as main:
+        json.dump(offline_main, main)
+
+    return (isValid, error)
 
 def validate_product_fixture(productjsonURL):
     productInfo = None
     error = ""
-    try:
-        productInfo = urllib2.urlopen(productjsonURL)
-    except urllib2.HTTPError, err:
-        if err.code == 404:
-            logger.debug("Missing Product Fixture{0}. Try again later".format(productjsonURL))
-            error = errorCode['E002'].format(err)
-        else:
-            error = errorCode['E003'].format(err)
-            logger.debug("urllib2.HTTPError: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
-    except urllib2.URLError, err:
-        error = errorCode["E007"].format(err)
-        logger.debug("urllib2.URLError: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
-    except Exception, err:
-        error = errorCode['E008'].format(err)
-        logger.debug("Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
+    product_individual_local = os.path.join(PRODUCT_UPDATE_PATH_LOCAL, productjsonURL)
+    if "http://" in productjsonURL:
+        try:
+            product = urllib2.urlopen(productjsonURL)
+            productInfo = json.loads(product.read())
+        except urllib2.HTTPError, err:
+            if err.code == 404:
+                logger.debug("Missing Product Fixture{0}. Try again later".format(productjsonURL))
+                error = errorCode['E002'].format(err)
+            else:
+                error = errorCode['E003'].format(err)
+                logger.debug("urllib2.HTTPError: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
+        except urllib2.URLError, err:
+            error = errorCode["E007"].format(err)
+            logger.debug("urllib2.URLError: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
+        except Exception, err:
+            error = errorCode['E008'].format(err)
+            logger.debug("Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
+    elif os.path.exists(product_individual_local):        # validate for the offline product
+        try:
+            productInfo = json.loads(open(product_individual_local).read())
+        except Exception, err:
+            error = errorCode['E005'].format(err)
+            logger.debug("Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s", err)
+    else:
+        error = errorCode['E006']
 
     return productInfo, error
-
 
 def validate_product_updateVersion(productContents):
     ''' Updates and returns productContents:
@@ -196,12 +323,23 @@ def get_update_plugins():
     return {'pluginContents': pluginUpdates, 'error': error }
 
 
-def get_update_products():
-    productContents, isValid, error = get_productUpdateList() or []
+def get_update_products(offcycle_type = "online"):
+    productContents, isValid, error = get_productUpdateList(offcycle_type = offcycle_type) or []
     if isValid:
         productContents = validate_product_updateVersion(productContents)
+        if productContents and offcycle_type == "manual":
+            manual_product_install(productContents)
 
     return {'productContents': productContents, 'error': error }
+
+
+def manual_product_install(productContents):
+    for product in productContents:
+        offcycleType = product.get("offcycle_type", None)
+        productDone = product.get("done", False)
+        # make sure that the online product is not updated via manual automatic update
+        if not productDone and offcycleType == "manual":
+            update_product(product["name"], product["update_version"])
 
 
 def update_product(name, update_version):
@@ -212,18 +350,18 @@ def update_product(name, update_version):
         raise Exception(network_or_file_errorMsg)
 
     product = [ p for p in productContents if name == p['name'] and update_version == p['update_version'] ]
+
     if not product:
         raise Exception('Invalid product name: %s version: %s' % (name, update_version))
     else:
         product = product[0]
 
     productjsonURL = product['url']
-    productInfo, errMsg = validate_product_fixture(productjsonURL)
+    data, errMsg = validate_product_fixture(productjsonURL)
     if errMsg:
         logger.debug("Error: iondb.rundb.configure.updateProducts.update_product %s", errMsg)
         raise Exception(errMsg)
 
-    data = json.loads(productInfo.read())
     productName = data['productName']
     
     if 'models_info' in data or 'sys_template_info' in data:
@@ -401,22 +539,29 @@ def updateFileMonitor(filemonitor_pk, status):
 
 
 def get_update_packages():
-    installPackages = [
-        ('ion-chefupdates', 'Ion Chef scripts'),
-    ]
+    installPackages = settings.SUPPORTED_INSTALL_PACKAGES
     contents = []
     error = ""
     try:
         for name, description in installPackages:
             package, cache = get_apt_cache(name)
-            if package.installed.version not in package.candidate.version:
+            current_version = None
+            if package.installed:
+                current_version = package.installed.version
+
+            if not current_version or current_version not in package.candidate.version:
                 availableVersions = package.versions.keys()
-                installableVersions = [version for version in availableVersions if StrictVersion(version) > StrictVersion(package.installed.version)]
+
+                if not current_version:
+                    installableVersions = [version for version in availableVersions]
+                else:
+                    installableVersions = [version for version in availableVersions if StrictVersion(version) > StrictVersion(current_version)]
+
                 if installableVersions or package.is_upgradable:
                     contents.append({
                         'name': name,
                         'description': description,
-                        'currentVersion': package.installed.version,
+                        'currentVersion': current_version,
                         'candidateVersion': package.candidate.version,
                         'availableVersions': installableVersions,
                         'upgradable': package.is_upgradable
@@ -444,3 +589,122 @@ def update_package(name, version):
     if process.returncode:
         logger.debug("Error: iondb.rundb.configure.updateProducts.update_package: %s" % error)
         raise Exception(error)
+
+
+def InstallProducts(pathToProductFile, extension, fileName=None):
+    """
+    Installs a off-cycle bundle from a zip file
+    :param pathToZip: A local file path to the zip file in question
+    """
+
+    logger.info("Starting install process for offline offcycle at " + pathToProductFile)
+
+    # check that the file exists
+    if not os.path.exists(pathToProductFile):
+        raise Exception("Attempt to install offcycle bundle from zip failed because " + pathToProductFile + " does not exist.")
+
+    zipSize = os.path.getsize(pathToProductFile)
+    if zipSize == 0:
+        raise Exception("The zip file " + pathToProductFile + " is of zero size and has no contents.")
+
+    try:
+        # single product update using a single json file
+        if extension == "json":
+            if not validate_productFile(pathToProductFile, fileName):
+                raise Exception("Error: %s" % errorCode['E006'])
+        else:
+            # Proceed below if the product file is a zip bundle
+            # create a temporary directory to extract the zip file to
+            pathToExtracted = tempfile.mkdtemp()
+            try:
+                # extract the zip file
+                tasks.extract_zip(pathToProductFile, pathToExtracted, logger=logger)
+
+                listOfDirectories = [name for name in os.listdir(pathToExtracted) if
+                                     os.path.isdir(os.path.join(pathToExtracted, name))]
+                if len(listOfDirectories) > 1:
+                    raise Exception("The zip file contained a number of directories where the specification only calls for one.  "
+                                    "This has caused an ambiguous state where the product Update cannot be divined.")
+                else:
+                    if len(listOfDirectories) == 1:
+                        extractedDir = listOfDirectories[0].strip()
+                        grepFiles = os.path.join(pathToExtracted, extractedDir, "*.json")
+                    else:
+                        # handle when product file is zipped without directory
+                        grepFiles = os.path.join(pathToExtracted, "*.json")
+
+                    grepFiles_filtered = filter(os.path.isfile, glob.glob(grepFiles))
+                    if not grepFiles_filtered:
+                        raise Exception("The zip file " + fileName + " has no product contents to install")
+                    for productFile in grepFiles_filtered:
+                        if not validate_productFile(productFile):
+                            raise Exception("Error: %s" % errorCode['E006'])
+            finally:
+                shutil.rmtree(pathToExtracted, True)
+    except Exception, Err:
+        raise Exception("The product file uploaded has some issues. %s" % Err)
+
+def validate_productFile(productFile, fileName = None):
+    """
+     - Validate the product file  : manual upload
+     - Error out if any missing fields in uploaded product
+    """
+    isValid = True
+    offcycle_localPath = settings.OFFCYCLE_UPDATE_PATH_LOCAL
+    offcycleProducts_localPath = os.path.join(offcycle_localPath, "products")
+
+    if not os.path.exists(offcycleProducts_localPath):
+        os.makedirs(offcycleProducts_localPath)
+        os.chmod(offcycleProducts_localPath, 0777)
+
+    if not fileName:
+        fileName = os.path.basename(productFile)
+
+    destinationFilePath = os.path.join(offcycleProducts_localPath, fileName)
+    productFileContent = json.loads(open(productFile).read())
+
+    required_product_keys = ("name", "version_max", "update_version", "productDesc")
+    if not (set((required_product_keys)) <= set(productFileContent)):
+        isValid = False
+
+    if isValid and not set(['version_required']).issubset(productFileContent):
+        if not set(['version_req']).issubset(productFileContent):
+            isValid = False
+
+    if isValid:
+        if os.path.exists(destinationFilePath):
+            logger.info("Product already installed on this Torrent Server. Going to overwrite with the new one: %s" % destinationFilePath)
+            os.remove(destinationFilePath)
+        shutil.move(productFile, destinationFilePath)
+    else:
+        os.remove(productFile)
+
+    return isValid
+
+def InstallDeb(pathToDeb, actualFileName = None):
+    """
+    Install a misc. package[Ex:ion-chefupdates] from a deb package file
+    :param pathToDeb: A path to the deb file which will be installed.
+    """
+
+    # do some sanity checks on the package
+    if not os.path.exists(pathToDeb):
+        raise Exception("No file at " + pathToDeb)
+
+    # call the ion plugin deb install script which handles the misc deb packages installation
+    p = subprocess.Popen(["sudo", "/opt/ion/iondb/bin/ion_plugin_install_deb.py", pathToDeb, "miscDeb"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    out, err = p.communicate()
+
+    # raise if any error
+    if p.returncode:
+        logger.debug("System Error at iondb.rundb.configure.updateProduct.InstallDeb : %s" % err)
+        if "SystemError" in err:
+            err = ("Invalid file (%s) uploaded or file corrupted. Please check the file and try again." % actualFileName)
+        elif "conflicts" in err or "not part of the offcycle" in err:
+            err = err
+        else:
+            err = ("Something went wrong. Check the file (%s) uploaded and try again. "
+                   "If problem exists again, please consult with your Torrent Suite administrator." % actualFileName)
+        raise Exception(err)

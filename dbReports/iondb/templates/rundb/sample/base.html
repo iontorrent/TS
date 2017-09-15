@@ -3,10 +3,7 @@
 
 {% block plan_menu %}active{% endblock %}
 {% block sub-nav %}
-
-<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
-<li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
-<li><a href="{% url "plan_templates" %}">Templates</a></li>
-<li><a href="{% url "planned" %}">Planned Run List</a></li>
-
+    <li><a href="{% url "plan_templates" %}">Templates</a></li>
+    <li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
+    <li><a href="{% url "planned" %}">Planned Runs</a></li>
 {% endblock sub-nav %}

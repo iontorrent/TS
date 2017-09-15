@@ -13,7 +13,6 @@ import os
 import re
 import pytz
 import traceback
-import socket
 import time
 from datetime import timedelta, datetime
 from celery.task import task
@@ -35,6 +34,7 @@ from iondb.rundb.data import exceptions as DMExceptions
 from iondb.rundb.data import dmactions
 from iondb.rundb.data.dm_utils import slugify
 from iondb.rundb.data import dm_utils
+from iondb.utils.utils import send_email
 from iondb.anaserve import client
 logger = get_task_logger('data_management')
 logid = {'logid': "%s" % ('DM')}
@@ -369,7 +369,6 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                     # Get email recipient
                     try:
                         recipient = User.objects.get(username='dm_contact').email
-                        recipient = recipient.replace(',', ' ').replace(';', ' ').split()
                     except:
                         recipient = None
 
@@ -737,49 +736,27 @@ def backfill_create_dmfilestat():
 def notify(name_list, recipient):
     '''sends an email with list of experiments slated for removal'''
 
-    # Check for blank email
-    # TODO: check for valid email address
-    if recipient is None or recipient == "":
-        return False
-
-    # Needed to send email
-    settings.EMAIL_HOST = 'localhost'
-    settings.EMAIL_PORT = 25
-    settings.EMAIL_USE_TLS = False
-
-    try:
-        site_name = GlobalConfig.get().site_name
-    except:
-        site_name = "Torrent Server"
-
-    hname = socket.gethostname()
+    if not len(name_list) > 0:
+        return
 
     subject_line = 'Torrent Server Data Management Action Request'
-    reply_to = 'donotreply@iontorrent.com'
-    message = 'From: %s (%s)\n' % (site_name, hname)
-    message += '\n'
-    message += 'Results drive capacity threshold has been reached.\n'
+    message = 'Results drive capacity threshold has been reached.\n'
     message += 'Signal Processing files have been identified for removal.\n'
-    message += 'Please go to Services Page and acknowledge so that removal can proceed.\n'
+    message += 'Please go to Data Management Page and acknowledge so that removal can proceed.\n'
     message += 'Removal will not occur without this acknowledgement.\n'
     message += '\n'
     message += 'The following Reports have Signal Processing files selected for Deletion:'
     message += "\n"
-    count = 0
+
     for e in name_list:
         message += "- %s\n" % e
-        count += 1
 
-    # Send the email only if there are runs that have not triggered a notification
-    if count > 0:
-        try:
-            mail.send_mail(subject_line, message, reply_to, recipient)
-        except:
-            logger.warning(traceback.format_exc(), extra=logid)
-            return False
-        else:
-            logger.info("Notification email sent for user acknowledgement", extra=logid)
-            return True
+    done = send_email(recipient, subject_line, message)
+    if done:
+        logger.info("Notification email sent for user acknowledgement", extra=logid)
+    else:
+        logger.warning("User acknowledgement notification email not sent", extra=logid)
+    return done
 
 
 def update_files_in_use():
@@ -802,10 +779,16 @@ def update_files_in_use():
         # check the status - completed results still show up on the running list for a short time
         if result.status == 'Completed' or result.status == 'TERMINATED':
             continue
-        # set files_in_use for current result plus any related sigproc dmfilestats
-        dmfilestats = result.dmfilestat_set.all() | DMFileStat.objects.filter(
-            dmfileset__type=dmactions_types.SIG, result__experiment_id=result.experiment_id)
+
+        # update files_in_use for current result
         msg = "%s (%s), status = %s" % (result.resultsName, result.id, result.status)
+        dmfilestats = result.dmfilestat_set.all()
+        dmfilestats.update(files_in_use=msg)
+        active.extend(dmfilestats.values_list('pk', flat=True))
+
+        # update files_in_use for related sigproc dmfilestats
+        dmfilestats = DMFileStat.objects.filter(dmfileset__type=dmactions_types.SIG,
+                result__experiment_id=result.experiment_id).exclude(result__pk=result.pk)
         dmfilestats.update(files_in_use=msg)
         active.extend(dmfilestats.values_list('pk', flat=True))
 

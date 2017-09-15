@@ -198,12 +198,18 @@
     {% endfor %}
 
     var controlTypes = [];
+    var cancerTypes = [];
     {% for obj in step.prepopulatedFields.sampleAnnotations %}
         {% if obj.annotationType == "controlType" %}
-        controlTypes.push({
-           "value": "{{obj.value}}",
-           "display": "{{obj.value}}" || "None"
-        });
+            controlTypes.push({
+               "value": "{{obj.value}}",
+               "display": "{{obj.value}}" || "None"
+            });
+        {% elif obj.annotationType == "cancerType" %}
+            cancerTypes.push({
+               "value": "{{obj.value}}",
+               "display": "{{obj.value}}" || "None"
+            });
         {% endif %}
     {% endfor %}
 

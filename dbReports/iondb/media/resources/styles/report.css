@@ -11,18 +11,20 @@
 	align: center;
 }	
 
-.pluginGroupHead{
 
-	background-color: #F5F5F5;
-
+#plugins-sub-nav {
+    width: 100%;
+    max-height: 262px;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
-div > .pluginLog{
-	float: right;
+#progress {
+    margin-top: 20px;
 }
 
-div > .pluginRemove {
-    float: right;
+#PluginOutput {
+    margin-bottom: 20px;
 }
 
 .pluginBlock{
@@ -33,44 +35,70 @@ div > .pluginRemove {
     border-radius: 4px;
     border: 1px solid #E3E3E3;
     margin: 20px 0 10px 0;
+    padding: 10px;
+}
+
+.pluginGroup:first-of-type {
+    margin-top: 0px;
 }
 
 .plugin-controls {
   margin: 0 0 0 12px;
 }
 
-#major_blocks .pluginGroup {
-    border: none;
-    margin: 0;
-}
-
-#major_blocks .pluginGroup .section {
-    border-radius: 4px;
-    border-color: #E3E3E3;
-}
-
 .pluginGroupHeadInner{
     padding: 4px;
 }
 
-.pluginGroupList{
+.pluginGroupHeadInner h2 {
+    display: inline;
+    margin-right: 6px;
+}
+
+.pluginVersion, span.changePluginResult {
+    color: #999;
+}
+
+.pluginGroupHeadInner select {
+    position: relative;
+    top: 2px;
+}
+
+.pluginGroupList {
 	padding: 4px;
 }
 
+.pluginGroupButtons {
+    position: absolute;
+    right: 0;
+    padding-right: 34px;
+}
+
 #pluginStatusTable{
-	margin-top: 20px;
+	margin-top: 0px;
+    margin-bottom: 34px;
 }
 
 #RunSummary {
     padding-top: 0;
 }
+#RunSummary .well {
+    -webkit-box-shadow: none;
+    box-shadow: none;
+}
 #runSection {
-    padding: 0 0 15px 0;
+    padding: 0 0 0 0;
     margin-top: 20px;
     border: none;
 }
-.aligned, .unaligned {
+#runSection .aligned, #runSection .unaligned {
     padding-bottom: 0;
+}
+#runSection .aligned > div {
+    min-height: 570px;
+}
+#runSection .unaligned > div {
+    min-height: 570px;
 }
 .well .signal {
     margin: 15px auto 15px auto;
@@ -119,6 +147,11 @@ hr{
     text-align: left;
 }
 
+.report-label {
+    font-size: 12px;
+    color: #777;
+}
+
 /* ---------- 4. Plugin Iframe Modal ---------- */
 
 #plugin-iframe-modal iframe{
@@ -127,4 +160,87 @@ hr{
     border: none;
     margin: 0;
     padding: 0;
+}
+
+/* --- Side nav --- */
+
+.report-side-nav {
+    margin-top: 11px;
+}
+
+.report-side-nav.affix {
+    top: 43px;
+}
+
+
+.report-side-nav .nav-list>li>a {
+    padding: 3px;
+}
+
+
+.report-side-nav .nav-list > .active > a, .nav-list > .active > a:hover {
+    color: #000;
+    text-shadow: none;
+    background-color: #fff;
+}
+.report-side-nav .nav-list a:hover {
+    background-color: #fff;
+}
+
+.section-header {
+    color: #005daa;
+    border-bottom: 1px solid #005daa;
+}
+
+/* --- Correct for floating header --- */
+
+.anchor:before {
+    display: block;
+    content: "";
+    height: 50px;
+    margin: -50px 0 0;
+}
+
+#summary-section:before {
+    height: 210px;
+    margin: -210px 0 0;
+}
+
+/* --- Top nav --- */
+
+#top-nav-container {
+    height: 43px;
+    width: 100%;
+}
+
+#top-nav {
+    width: 100%;
+    padding: 6px 20px 3px 20px;
+    box-sizing: border-box;
+    z-index: 1040; /* to still be under the modal backdrop */
+    left: 0;
+}
+
+#top-nav.affix-top {
+    padding: 6px 0 3px 0;
+}
+
+#top-nav.affix {
+    background: white;
+    top: 0;
+    border-bottom: 1px solid #e4e6ea;
+}
+
+/* --- Bottom Section --- */
+
+#ReportDetailsTabContent {
+    min-height: 400px;
+}
+
+#fileSection .k-grid {
+    margin-top: 0px;
+}
+
+#report {
+    margin-top: 14px;
 }

@@ -11,12 +11,14 @@ import zipfile
 
 from ion.plugin import *
 from ion.utils import blockprocessing
-from subprocess import *
+
 
 class FileExporter(IonPlugin):
-    version = '5.4.0.0'
-    runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
-    runlevels = [ RunLevel.DEFAULT ]
+    """This is a torrent suite plugin used to convert and export data sets."""
+
+    version = '5.6.0.0'
+    runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
+    runlevels = [RunLevel.LAST]
 
     pluginDir = ''
     envDict = dict(os.environ)
@@ -26,9 +28,9 @@ class FileExporter(IonPlugin):
     isBarcodedRun = False
     variantCallerPath = "variantCaller_out" # path to the most recently run variant caller plugin, TS 4.4 and newer enables multiple instances, so this path may change
     delim = '.'
-    selections= ""
+    selections = ""
     variantExists = False
-    downloadDir =''
+    downloadDir = ''
     run_name = ''
     report_name = ''
     run_date = ''
@@ -38,9 +40,9 @@ class FileExporter(IonPlugin):
 
     # set defaults for user options
     fastqCreate = False
-    vcfCreate   = False
-    xlsCreate   = False
-    bamCreate   = False
+    vcfCreate = False
+    xlsCreate = False
+    bamCreate = False
 
     zipFASTQ = False
     zipBAM = False
@@ -49,7 +51,7 @@ class FileExporter(IonPlugin):
     wantTar = True
 
     # imported from FastqCreator
-    alignment_dir  = ''
+    alignment_dir = ''
     reference_path = ''
     basecaller_dir = ''
     datasets_basecaller = dict()

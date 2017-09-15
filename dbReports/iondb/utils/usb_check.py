@@ -3,11 +3,16 @@
 
 import os
 import fnmatch
+import time
 
 
 def getUSBinstallerpath():
+    start_time = time.time()
+    time_limit = 300
     for path, dirs, files in os.walk("/media"):
         for directory in dirs:
+            if (time.time() - start_time) > time_limit:
+                return ""
             if directory.startswith("TS"):
                 if os.path.exists(os.path.join(path, directory, "runme")):
                     return os.path.join(path, directory)

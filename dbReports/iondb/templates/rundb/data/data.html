@@ -219,8 +219,6 @@
                     <option value="-chipType">Chip Desc.</option>
                     <option value="flows">No. of Flows Asc.</option>
                     <option value="-flows">No. of Flows Desc.</option>
-                    <option value="repResult__qualitymetrics__q0_bases">Output Asc.</option>
-                    <option value="-repResult__qualitymetrics__q0_bases">Output Desc.</option>
                 </select>
             </div>
             <div class="search-field clearfix optional hide">
@@ -251,11 +249,7 @@
                 <label for="id_chip" class=" hide">Chip</label>
                 <select id="id_chip" name="chipType" data-placeholder="Any Chip" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="Find Chips..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Chip:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for chip in search.experiment.chipType %}
-                        {% if chip == "900" %}
-                            <option value="{{ chip }}">PI</option>
-                        {% else %}
-                            <option value="{{ chip }}">{{ chip }}</option>
-                        {% endif %}
+                        <option value="{{ chip.value }}">{{ chip.display_name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -523,7 +517,7 @@
                     <th class="k-header"><a class="sort_link" data-name="expName" href="#">Run Name<span class="order_indicator"></span></a></th>
                     <th class="k-header">Sample</th>
                     {{#more_columns}}<th class="k-header">Sample Set</th>{{/more_columns}}
-                    <th class="k-header">App</th>
+                    <th class="k-header">Res App</th>
                     <th class="k-header"><a class="sort_link" data-name="date" href="#">Run<span class="order_indicator"></span></a></th>
                     <th class="k-header"><a class="sort_link" data-name="resultDate" href="#">Analysis<span class="order_indicator"><span class="k-icon k-i-arrow-s"></span></span></a></th>
                     <th class="k-header">Status</th>
@@ -536,7 +530,7 @@
                     {{#more_columns}}<th class="k-header">Total Reads</th>{{/more_columns}}
                     {{#more_columns}}<th class="k-header">Mean Read Len.</th>{{/more_columns}}
                     <th class="k-header">Q20 Bases</th>
-                    <th class="k-header"><a class="sort_link" data-name="repResult__qualitymetrics__q0_bases" href="#">Output<span class="order_indicator"></span></a></th>
+                    <th class="k-header">Output</th>
                     <th class="k-header"></th>
                 </tr>
             </thead>

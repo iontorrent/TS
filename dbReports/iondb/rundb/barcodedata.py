@@ -8,12 +8,13 @@ import logging
 import iondb.bin.dj_config
 from django.conf import settings
 from django.utils.functional import cached_property
-from iondb.rundb.models import Results, dnaBarcode
+from iondb.rundb.models import Results, dnaBarcode, ReferenceGenome
 
 logger = logging.getLogger(__name__)
 
 REFERENCE = 'reference'
 REFERENCE_FULL_PATH = 'reference_fullpath'
+REFERENCE_FULL_NAME = 'reference_full_name'
 TARGET_REGION_FILEPATH = 'target_region_filepath'
 TARGET_REGION_BED = 'targetRegionBedFile'
 HOT_SPOT_FILE_PATH = 'hotspot_filepath'
@@ -48,6 +49,11 @@ NTC_CONTROL = 'control_type'
 # TODO: for later release
 #ANALYSIS_PARAMETERS = 'analysis_parameters'
 
+def get_reference(short_name, tmap_version):
+    reference = ReferenceGenome.objects.filter(short_name=short_name, enabled=True, index_version=tmap_version).first()
+    if not reference:
+        reference = ReferenceGenome.objects.filter(short_name=short_name).first()
+    return reference
 
 class BarcodeSampleInfo(object):
 
@@ -105,9 +111,11 @@ class BarcodeSampleInfo(object):
         referenceGenome = self.eas.reference
         tmap_version = iondb.bin.dj_config.get_tmap_version()
         samples = self.result.experiment.samples.all()
+        referenceObj = get_reference(referenceGenome, tmap_version)
 
         unbarcodedEntry[REFERENCE] = referenceGenome
-        unbarcodedEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, referenceGenome, "%s.fasta" % referenceGenome) if unbarcodedEntry[REFERENCE] else ''
+        unbarcodedEntry[REFERENCE_FULL_PATH] = os.path.join(referenceObj.reference_path, "%s.fasta" % referenceGenome) if referenceObj else ''
+        unbarcodedEntry[REFERENCE_FULL_NAME] = referenceObj.name if referenceObj else ''
         unbarcodedEntry[ALIGNED] = (REFERENCE in unbarcodedEntry) and bool(unbarcodedEntry[REFERENCE])
         unbarcodedEntry[BAM] = singleDataset['basecaller_bam'] if not unbarcodedEntry[REFERENCE] else "rawlib.bam"
         unbarcodedEntry[FILTERED] = singleReadGroup[FILTERED] if FILTERED in singleReadGroup else False
@@ -230,7 +238,9 @@ class BarcodeSampleInfo(object):
                     # intentionally do nothing....
                     pass
 
-            barcodeEntry[REFERENCE_FULL_PATH] = os.path.join('/results', 'referenceLibrary', tmap_version, barcodeEntry[REFERENCE], "%s.fasta" % barcodeEntry[REFERENCE]) if barcodeEntry[REFERENCE] else ''
+            referenceObj = get_reference(barcodeEntry[REFERENCE], tmap_version)
+            barcodeEntry[REFERENCE_FULL_PATH] = os.path.join(referenceObj.reference_path, "%s.fasta" % barcodeEntry[REFERENCE]) if referenceObj else ''
+            barcodeEntry[REFERENCE_FULL_NAME] = referenceObj.name if referenceObj else ''
             barcodeEntry[ALIGNED] = (REFERENCE in barcodeEntry) and bool(barcodeEntry[REFERENCE]) and not barcodeEntry[FILTERED]
             barcodeEntry[BAM] = dataset['file_prefix'] + (".bam" if barcodeEntry[ALIGNED] else ".basecaller.bam")
             barcodeEntry[BAM_FULL_PATH] = BarcodeSampleInfo.getFullBamPath(reportFullPath, barcodeEntry[REFERENCE], barcodeEntry[BAM], barcodeEntry[FILTERED])

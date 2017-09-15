@@ -13,7 +13,6 @@ INTERACTIVE=true
 DO_IMPORT=true
 BASIC_SERVER=false
 DIST=trusty
-EXTERNAL=${EXTERNAL-"0"}
 
 #=======================================================================
 # Common variables
@@ -26,9 +25,6 @@ source ${WHERE}/tsvm-include
 function on_intranet
 {
     host updates.ite > /dev/null
-    if [[ "$EXTERNAL" != "0" ]]; then
-        false
-    fi
     return $?
 }
 

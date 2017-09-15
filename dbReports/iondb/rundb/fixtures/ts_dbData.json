@@ -85,7 +85,7 @@
     "fields": {
       "uid": "APPLGROUP_0009",
       "name": "immune_repertoire",
-      "isActive": false,
+      "isActive": true,
       "description": "Immune Repertoire"
     }
   },
@@ -361,7 +361,24 @@
       "uid": "APPCAT0006"
     }
   },
-     
+  {
+    "pk": 10,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "immunology",
+      "displayedValue": "Immunology",
+      "description": "Immunology",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": true,
+      "categories": "AMPS_RNA",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0007"
+    }
+  },
+      
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -1636,7 +1653,7 @@
       "defaultControlSeqKit": null,
       "isVisible": true,
       "isDefaultBarcoded" : true,
-      "defaultBarcodeKitName": "IonCode - TagSequencing",
+      "defaultBarcodeKitName": "TagSequencing",
       "defaultTemplateKit" : [
         "ICPREP0005"
        ],
@@ -2550,7 +2567,7 @@
       "applicationGroup": ["APPLGROUP_0009"],
       "productName": "IMMUNE_REPERTOIRE_default",
       "defaultFlowCount": 800,
-      "isActive": false,
+      "isActive": true,
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
@@ -2606,7 +2623,7 @@
       "applicationGroup": ["APPLGROUP_0009"],
       "productName": "IMMUNE_REPERTOIRE_S5",
       "defaultFlowCount": 800,
-      "isActive": false,
+      "isActive": true,
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
@@ -3574,7 +3591,105 @@
       "isActive": true
     }
   },
-
+  {
+    "pk": 37,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0037",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Acute Myelogenous Leukemia",
+      "iRValue": "Acute Myelogenous Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 38,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0038",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Cervical Cancer",
+      "iRValue": "Cervical Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+   {
+    "pk": 39,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0039",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Chronic Myelogenous Leukemia",
+      "iRValue": "Chronic Myelogenous Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+   {
+    "pk": 40,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0040",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Chronic Myelomonocytic Leukemia",
+      "iRValue": "Chronic Myelomonocytic Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+   {
+    "pk": 41,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0041",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Juvenile Myelomonocytic Leukemia",
+      "iRValue": "Juvenile Myelomonocytic Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+   {
+    "pk": 42,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0042",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Myelodysplastic Syndrome",
+      "iRValue": "Myelodysplastic Syndrome",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+   {
+    "pk": 43,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0043",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Myeloproliferative Neoplasms",
+      "iRValue": "Myeloproliferative Neoplasms",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  
   {
     "pk": 1,
     "model": "rundb.sampleattributedatatype",

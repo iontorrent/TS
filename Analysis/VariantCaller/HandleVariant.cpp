@@ -212,13 +212,20 @@ int EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantCa
   // set parameters for the evaluator
   my_ensemble.SetAndPropagateParameters(vc.parameters, use_molecular_tag, candidate_variant.variant_specific_params);
 
-  if (vc.parameters->program_flow.DEBUG > 0){
-	  list<list<int> >allele_groups;
+
+  //TODO: For test only. Remove in the release version.
+  if (vc.parameters->program_flow.DEBUG > 0 or true){
+	  list<list<int> >allele_groups_ready_to_go;
+	  vector<int> alleles_on_hold;
+	  int sliding_window_start_0;
+	  int sliding_window_end_0;
+	  int my_cand_end = (int) my_ensemble.seq_context.position0 + (int) my_ensemble.seq_context.reference_allele.size();
 	  CandidateExaminer my_examiner(&thread_objects, &vc);
 	  my_examiner.SetupVariantCandidate(candidate_variant);
-	  my_examiner.FindLookAheadEnd0();
-	  my_examiner.SplitCandidateVariant(allele_groups);
+	  my_examiner.LookAheadSlidingWindow0(allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0, my_cand_end);
+	  my_examiner.LookAheadSlidingWindow0(allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0, my_cand_end + 2);
   }
+
 
   // We read in one stack per multi-allele variant
   if (use_molecular_tag){
@@ -307,14 +314,14 @@ CandidateExaminer::CandidateExaminer(){
 	thread_objects_ = NULL;
 	vc_ = NULL;
 	my_ensemble_ = NULL;
-	max_group_size_allowed_ = 32;
+	max_group_size_allowed_ = 20;
 }
 
 CandidateExaminer::CandidateExaminer(PersistingThreadObjects* thread_objects, VariantCallerContext* vc){
 	thread_objects_ = NULL;
 	vc_ = NULL;
 	my_ensemble_ = NULL;
-	max_group_size_allowed_ = 32;
+	max_group_size_allowed_ = 20;
 	Initialize(thread_objects, vc);
 }
 
@@ -401,15 +408,65 @@ void CandidateExaminer::SplitCandidateVariant(list<list<int> >& allele_groups){
 	my_ensemble_->SplitMyAlleleIdentityVector(allele_groups, *(vc_->ref_reader), max_group_size_allowed_);
 }
 
+// (Inputs): current_candidate_gen_window_end_0.
+// (Outputs): allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0
+// current_candidate_gen_window_end_0: the end position of the current window for "de novo" candidate generation.
+// allele_groups_ready_to_go: the list of allele groups that are safe for evaluation right now. That is, the variants outside current_look_ahead_window_end_0 won't interfere or be interfere the ready-to-go alleles.
+// alleles_on_hold: the vector of the indices of alleles that may not be evaluated at this moment. I.e., they potentially interfere or be interfered by the variants outside the current candidate generation window.
+// If the alleles in allele_groups_ready_to_go are output to the evaluator, then the candidate generator only needs to discover new variants in the look ahead "sliding" windows as follows.
+// The candidate generator only needs to generating "novel" candidates in [sliding_window_start_0, sliding_window_end_0)
+// The candidate generator only needs to generating "hotspots" candidates whose start position in [sliding_window_start_0, sliding_window_end_0)
+// !!! Important !!! All the windows are defined as [win_start, win_end).
+// !!! Important !!! If sliding_window_start_0 == sliding_window_end_0 == current_look_ahead_window_end_0, then all alleles are ready to go. No need to look ahead.
+// !!! Important !!! It shall guarantee both conditions as follows: a) All on-hold alleles will be generated in the new sliding window. b) No ready-to-go alleles will be generated in the new sliding window.
+void CandidateExaminer::LookAheadSlidingWindow0(list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int current_candidate_gen_window_end_0){
+    my_ensemble_->LookAheadSlidingWindow(current_candidate_gen_window_end_0, *(vc_->ref_reader), allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0, max_group_size_allowed_);
+}
+
+// The 1-based coordinate version of LookAheadSlidingWindow0.
+void CandidateExaminer::LookAheadSlidingWindow1(list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_1, int& sliding_window_end_1, int current_candidate_gen_window_end_1){
+	my_ensemble_->LookAheadSlidingWindow(--current_candidate_gen_window_end_1, *(vc_->ref_reader), allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_1, sliding_window_end_1, max_group_size_allowed_);
+	++sliding_window_start_1;
+	++sliding_window_end_1;
+}
+
+// (Optional) Input: current_candidate_gen_win_end0 is the end of the current candidate generation window. Use the end variant window if not provided.
 // Given the variant candidates, calculate the end of the look ahead window for candidate generator,
 // where (0-based) look ahead window = [last seen position + 1, look_ahead_end_0)
 // I.e., the candidate generator should make sure that there is NO other de novo variant till the (0-based) position @ (look_ahead_end_0 - 1), while a variant @ look_ahead_end_0 is fine.
-int CandidateExaminer::FindLookAheadEnd0(){
-	int look_ahead_end_0 = my_ensemble_->CalculateLookAheadEnd0(*(vc_->ref_reader));
+// !!! Important !!! If look_ahead_end_0 is the same as the current_candidate_gen_win_end0, then it means that "NO" need to look ahead.
+// I.e., the no interference will be incurred by the variants at position >= current_candidate_gen_win_end0.
+int CandidateExaminer::FindLookAheadEnd0(int current_candidate_gen_win_end0 /*= -1*/){
+	int look_ahead_end_0 = my_ensemble_->CalculateLookAheadEnd0(*(vc_->ref_reader), current_candidate_gen_win_end0);
 	return look_ahead_end_0;
 }
 
 // return 1-based look ahead end
-int CandidateExaminer::FindLookAheadEnd1(){
-	return FindLookAheadEnd0() + 1;
+int CandidateExaminer::FindLookAheadEnd1(int current_candidate_gen_win_end1 /*= 0*/){
+	return FindLookAheadEnd0(current_candidate_gen_win_end1 - 1) + 1;
+}
+
+bool IsAlleleInVariant(const vcf::Variant& variant, long position_1, const string& ref, const string& alt_allele, const pair<int, int>& alt_orig_padding /*= {0, 0}*/){
+	int my_variant_win_start = (int) position_1 + alt_orig_padding.first;
+	int my_variant_win_end = (int) position_1 + (int) ref.size() - alt_orig_padding.second;
+	int my_alt_len = (int) alt_allele.size() - alt_orig_padding.first - alt_orig_padding.second;
+	string my_alt = alt_allele.substr(alt_orig_padding.first, my_alt_len);
+
+	int test_ref_start = (int) variant.position;
+	int test_ref_end = test_ref_start + (int) variant.ref.size();
+	if (my_variant_win_start < test_ref_start or my_variant_win_end > test_ref_end){
+		return false;
+	}
+
+	for (unsigned int i_alt = 0; i_alt < variant.alt.size(); ++i_alt){
+		int test_variant_win_start = test_ref_start + variant.alt_orig_padding[i_alt].first;
+		int test_variant_win_end = test_ref_end - variant.alt_orig_padding[i_alt].second;
+		int test_alt_len = (int) variant.alt[i_alt].size() - variant.alt_orig_padding[i_alt].first - variant.alt_orig_padding[i_alt].second;
+		if (my_variant_win_start == test_variant_win_start and my_variant_win_end == test_variant_win_end and my_alt_len == test_alt_len){
+			if (my_alt == variant.alt[i_alt].substr(variant.alt_orig_padding[i_alt].first, test_alt_len)){
+				return true;
+			}
+		}
+	}
+	return false;
 }

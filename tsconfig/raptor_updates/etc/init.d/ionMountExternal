@@ -1,3 +1,0 @@
-date >> /mnt/ionFirstLog
-/etc/init.d/mountExternal -t build_results >> /mnt/ionFirstLog 2>&1
-

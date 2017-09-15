@@ -17,9 +17,10 @@ import mimetypes
 import re
 import subprocess
 import urllib2
+import traceback
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render_to_response, get_object_or_404
-from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect, HttpResponseServerError
 from django.template import RequestContext
 from django.conf import settings
 from django.core import urlresolvers
@@ -27,7 +28,7 @@ from django.core.files import File
 
 from iondb.rundb.ajax import render_to_json
 from iondb.rundb.forms import EditReferenceGenome
-from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor, Publisher
+from iondb.rundb.models import ReferenceGenome, ContentUpload, Content, FileMonitor, Publisher
 from iondb.rundb import tasks, publishers
 
 from iondb.rundb.configure.util import plupload_file_upload
@@ -476,6 +477,7 @@ def get_references():
             ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation", "")))
             ref["reference_mask_encoded"] = ref.get("reference_mask", None)
             ref["bedfiles"] = ref.get("bedfiles", [])
+            ref["bedfiles_encoded"] = base64.b64encode(json.dumps(ref["bedfiles"]))
         return references
     else:
         return None
@@ -488,6 +490,30 @@ def download_genome_annotation(annotation_lists, reference_args):
 
         if remoteAnnotUrl:
             tasks.new_annotation_download.delay(remoteAnnotUrl, remoteAnnotUpdateVersion, **reference_args)
+
+
+def get_bedfile_status(bedfile, reference):
+    # Checks the status of BED file available for Pre-loaded references
+    url = bedfile['source']
+
+    # check if file already installed
+    bedfile_path = '/%s/unmerged/detail/%s' % (reference, os.path.basename(url))
+    found = Content.objects.filter(publisher__name="BED", path=bedfile_path)
+    if found:
+        return "_installed"
+
+    # check if download is in progress
+    monitor = FileMonitor.objects.filter(tags="bedfile", url=url).order_by('-pk')
+    if monitor:
+        if monitor[0].status == "Complete":
+            # check if installation is in progress
+            upload = ContentUpload.objects.filter(publisher__name='BED', file_path__contains=os.path.basename(url)).order_by('-pk')
+            if upload:
+                return upload[0].status
+
+        return monitor[0].status
+
+    return ""
 
 
 @login_required
@@ -526,10 +552,22 @@ def download_genome(request):
 
     elif request.method == "GET":
         references = get_references() or []
-        downloads = FileMonitor.objects.filter(tags__contains="reference").order_by('-created')
+        downloads = FileMonitor.objects.filter(tags__in=["reference","bedfile"]).order_by('-created')
         downloads_annot = FileMonitor.objects.filter(tags__contains="reference_annotation").order_by('-created')
 
         (references, downloads_annot) = get_annotation(references, downloads_annot)
+
+        # update BED files available for pre-loaded references
+        for ref in references:
+            if ref['installed']:
+                bedfiles = []
+                for bedfile in ref.get('bedfiles',[]):
+                    status = get_bedfile_status(bedfile, ref['meta']['short_name'])
+                    if status != "_installed":
+                        bedfile['status'] = status
+                        bedfiles.append(bedfile)
+
+                ref['bedfiles'] = bedfiles
 
         ctx = {
             'downloads': downloads,
@@ -688,4 +726,20 @@ def start_reference_download(url, reference, callback=None, reference_mask_filen
     except Exception as err:
         monitor.status = "System Error: " + str(err)
         monitor.save()
+
+def start_install_bedfiles(request):
+    from iondb.rundb.tasks import install_BED_files
+
+    bedfiles = request.POST.getlist('bedfiles',[])
+    bedfiles_meta = json.loads(base64.b64decode(request.POST.get('bedfiles_meta','')))
+
+    bedfileList = [bed for bed in bedfiles_meta if os.path.basename(bed['source']) in bedfiles]
+    try:
+        install_BED_files.delay(bedfileList)
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return HttpResponseServerError('Error: ' + str(e))
+
+    return HttpResponsePermanentRedirect(urlresolvers.reverse("references_genome_download"))
+
 

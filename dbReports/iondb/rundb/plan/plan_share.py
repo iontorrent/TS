@@ -7,7 +7,8 @@ import logging
 import json
 import time
 
-from iondb.rundb.models import SharedServer, PlannedExperiment, PlannedExperimentQC, QCType, dnaBarcode, User, \
+from django.conf import settings
+from iondb.rundb.models import IonMeshNode, PlannedExperiment, PlannedExperimentQC, QCType, dnaBarcode, User, \
     Sample, SampleSet, SampleSetItem, Content, Plugin, EventLog, SamplePrepData
 from django.core.serializers.json import DjangoJSONEncoder
 
@@ -285,14 +286,46 @@ def check_for_existing_plan(plan, session, status):
 
 
 def setup_session(server_name):
-    # get shared server and set up authenticated session to use for requests
+    # get mesh server and set up authenticated session to use for requests
     try:
-        ts = SharedServer.objects.filter(active=True).get(name=server_name)
+        mesh_node = IonMeshNode.objects.filter(active=True).get(name=server_name)
     except:
         raise Exception('Unable to get login credentials for destination Torrent Server: %s' % server_name)
 
-    session = ts.setup_session()
-    return session
+    try:
+        s = requests.Session()
+        # convenient variables for communication
+        s.api_url = 'http://%s/rundb/api/v1/' % mesh_node.hostname
+        s.address = mesh_node.hostname
+        s.server = mesh_node.name
+        # set up session
+        s.params = {
+            "api_key": mesh_node.apikey_remote,
+            "system_id": settings.SYSTEM_UUID
+        }
+        r = s.get(s.api_url + 'ionmeshnode/')
+        r.raise_for_status()
+    except (requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
+        raise Exception('Connection Error: Torrent Server %s (%s) is unreachable' % (s.server, s.address))
+    except requests.exceptions.HTTPError as e:
+        if r.status_code == 401:
+            msg = 'Invalid user credentials.'
+        else:
+            msg = 'Unable to connect to Torrent Server %s (%s).' % (s.server, s.address)
+        msg += '<br>Please visit <a href="/configure/mesh/" target="_blank">Ion Mesh</a> page to make sure remote server connection is established.'
+        raise Exception(msg)
+    except Exception as e:
+        raise Exception('Error: Unable to access Torrent Server %s (%s): %s' % (s.server, s.address, e))
+
+    try:
+        # get software version
+        r = s.get(s.api_url + 'torrentsuite/version')
+        version = r.json()['meta_version']
+    except:
+        msg = 'Error getting software version for Torrent Server %s (%s). ' % (s.server, s.address)
+        raise Exception(msg)
+
+    return s, version
 
 
 def transfer_plan(plan, serialized, server_name, username):

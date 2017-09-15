@@ -3,9 +3,6 @@
 {% load static from staticfiles %}
 {% block extra_head %}
 
-<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
-<script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
-
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 
@@ -13,6 +10,9 @@
 
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
+
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 
 <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
@@ -23,11 +23,18 @@
     .search-field {
         display: inline-block;
         zoom: 1;
-		*display: inline;
-        width: 180px;
-        height: 10px;
+        *display: inline;
+        height: 20px;
         float: left;
-        margin: 10px 15px 15px 0;
+        margin: 10px 10px 15px 0;
+    }
+
+    .search-field select {
+        width: 200px;
+    }
+
+    tbody .btn.dropdown-toggle {
+        padding: 2px 4px;
     }
 
     ::-webkit-scrollbar {
@@ -39,7 +46,6 @@
         background-color: rgba(0,0,0,.5);
         -webkit-box-shadow: 0 0 1px rgba(255,255,255,.5);
     }
-
 </style>
 <script src="{% static "js/date.min.js"%}"></script>
 <script src="{% static "js/jquery.daterangepicker.js"%}"></script>
@@ -47,52 +53,99 @@
 
 {% endblock extra_head %}
 {% block sub-nav %}
-<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
-<li><a href="{% url "samplesets" %}">Samples</a></li>
 <li><a href="{% url "plan_templates" %}">Templates</a></li>
-<li class="active"><a href="{% url "planned" %}">Planned Run List</a></li>
+<li><a href="{% url "samplesets" %}">Samples</a></li>
+<li class="active"><a href="{% url "planned" %}">Planned Runs</a></li>
 {% endblock sub-nav %}
 {% block content %}
 
 <div class="content clearfix">
 	<h1 style="">Planned Runs</h1>
-	
+
     <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
     	<a id="all" href="#all" class="active setview">All</a>&nbsp;&nbsp;|&nbsp;&nbsp;
 		<a id="byTemplate" href="#byTemplate" class="setview";>by Template</a>&nbsp;&nbsp;|&nbsp;&nbsp;
 		<a id="bySample" href="#bySample" class="setview">by Sample</a>
     </div>
     
-	<div class="row-fluid">
-		<div class="search-field">
-			<label for="dateRange" class=" hide">Date</label>
-			<input type="text" id="dateRange" placeholder="Date" style="width:180px;"/>
-		</div>
-		<div class="input-append search-field" style="width: 230px;">
-			<label for="searchText" class=" hide">Search Names</label>                			         
-			<input id="search_text" type="text" placeholder="Search names or code" style="width: 150px;" />
+    <div id="search_bar" class="row-fluid">
+        <div class="input-append search-field">
+            <input id="search_text" type="text" placeholder="Search by Plan Name or Code"
+                   data-selected_filter="name_or_id" style="width:160px;" />
 
-            <div class="btn-group" style="width: 50px;" >
-                <label for="searchSubject" id="search_subject" class=" hide">planName</label> 
-                
-                <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by plan name or code" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
-
-                <ul id="plan_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
-                    <li><a href="#" class="search_chipBarcode"><span class="search_chipBarcode_selected icon-white"></span>Chip barcode</a></li>
-                    <li><a href="#" class="search_planName"><span class="search_planName_selected icon-check"></span>Plan name or code</a></li>
-                    <li><a href="#" class="search_sampleTubeLabel"><span class="search_sampleTubeLabel_selected icon-white"></span>Sample tube label</a></li>
-                    <li><a href="#" class="search_combinedLibraryTubeLabel"><span class="search_combinedLibraryTubeLabel_selected icon-white"></span>Combined library tube label</a></li>
+            <div class="btn-group">
+                <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by Plan name or code" data-toggle="dropdown" style="border-radius:0;">
+                    <i class="icon-search" border="0"></i><span class="caret"></span>
+                </a>
+                <ul id="plan_search_dropdown_menu" class="dropdown-menu pull-right">
+                    <li><a data-filter="name_or_id"><span class="icon-check"></span>Plan Name or Code</a></li>
+                    <li><a data-filter="experiment__samples__name"><span class="icon-white"></span>Sample Name</a></li>
+                    <li><a data-filter="chipBarcode"><span class="icon-white"></span>Chip Barcode</a></li>
+                    <li><a data-filter="sampleTubeLabel"><span class="icon-white"></span>Sample Tube Label</a></li>
+                    <li><a data-filter="sampleSets__combinedLibraryTubeLabel"><span class="icon-white"></span>Combined Library Tube Label</a></li>
                 </ul>
                 
-                <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px">Go</button>
+                <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px; font-size:11px;">Go</button>
             </div>
-		</div>
-            
-		<div class="search-field" style="width: 40px;">
-			<button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
-		</div>
-	</div>
-	
+        </div>
+        <div class="search-field">
+            <input type="text" id="dateRange" placeholder="Date" style="width:140px;"/>
+        </div>
+        <div class="search-field">
+            <select id="id_status" name="status" class="selectpicker" data-width="140px" title="Status:" data-persist-title="true">
+                <option value="">All</option>
+                <option value="planned">Planned</option>
+                <option value="pending">Pending</option>
+                <option value="reserved">Reserved</option>
+                <option value="voided">Voided</option>
+            </select>
+        </div>
+        <div class="search-field">
+            <select id="id_runtype" name="runtype" class="selectpicker" data-width="140px" title="Research App:">
+                <option value="">Research App: All</option>
+                {% for runType in runTypes %}
+                <option value="{{runType.runType}}">{{runType.description}}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-field">
+            <label for="id_project" class=" hide">Project</label>
+            <select id="id_project" name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
+                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
+                    data-live-search-placeholder="Find Projects..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="Project:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                {% for project in projects %}
+                    <option value="{{ project }}">{{ project }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-field">
+            <label for="id_barcodes" class=" hide">Barcodes</label>
+            <select id="id_barcodes" name="barcodes" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
+                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
+                    data-live-search-placeholder="Find Barcodes..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="Barcodes:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                {% for barcode in barcodes %}
+                    <option value="{{ barcode }}">{{ barcode }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-field">
+            <label for="id_reference" class=" hide">Reference</label>
+            <select id="id_reference" name="reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
+                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
+                    data-live-search-placeholder="Find References..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="Reference:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                {% for reference in references %}
+                    <option value="{{ reference }}">{{ reference }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-field">
+            <button id="clear_filters" class="btn" type="button">Clear All</button>
+        </div>
+    </div>
+
 	<div id='grid'></div>
 	
 	<div class="btn-group pull-left">						
@@ -118,7 +171,7 @@
 
 {%include "rundb/common/application_kendo_template.html"%}
 {%include "rundb/common/samples_popover_template.html"%}
-{%include "rundb/common/samplesets_popover_template.html"%}
+{%include "rundb/common/popover_template.html"%}
 
 <!--20130626-TODO -->
 <!-- //# var planRunCode = data.planShortID; #  <span><div class="shortcode128" data-barcode=data.planShortID data-href=""></div></span> -->
@@ -129,7 +182,7 @@
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
 	# var _id = id;# 
-	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
+	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
 			<a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
@@ -143,7 +196,7 @@
 		<li>
 			<a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
 		</li>
-        # if (data.planStatus == 'pending') { #
+        # if (data.planStatus == 'pending' || data.planStatus == 'reserved') { #
 		<li>
 		    <a href="\\#" class="force-planned" data-id="#=_id#">Completed on Chef</a>
 		</li>
@@ -172,19 +225,5 @@
 <script type="text/javascript">
 	var checked_ids = [];
 </script>
-
-    <!--script>
-//$(".shortcode128").each(function () {
-//	console.log("i am at planned.html shortcode128!!!");
-//	
-//	$(this).barcode(
-//			$(this).data("barcode"), 
-//			"code128", {
-//			barWidth: 2, 
-//			barHeight: 30, 
-//            bgColor: $(this).parent().parent().css("background-color") 
-//    });
-//});
-</script -->
 
 {% endblock content %}

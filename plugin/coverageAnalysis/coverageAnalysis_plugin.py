@@ -218,14 +218,21 @@ def run_plugin(skiprun=False,barcode=""):
   # Check sample tracking is appropriate to reference and set path to sample ID target BED file
   sampleidBed = ''
   if samp_track:
+    # check for non-supported reference alignments
+    trackset = ""
+    refid = pluginParams['genome_id']
+    if refid.startswith("hg19") or refid.startswith("GRCh37"):
+      trackset = "KIDDAME"
+    elif refid.startswith("GRCh38") or refid.startswith("hg38"):
+      trackset = "hg38_KIDDAME"
     if not librarytype.startswith('AMPS'):
-      printlog("WARNING: Sample Tracking option ignored. This is only available for AmpliSeq Libraries.")
+      printlog("WARNING: Sample Tracking option ignored. Only available for AmpliSeq Libraries.")
       samp_track = False
-    elif pluginParams['genome_id'] != "hg19":
-      printlog("WARNING: Sample Tracking option ignored. This is only available for reads aligned to the hg19 reference.")
+    elif not trackset:
+      printlog("WARNING: Sample Tracking option ignored. Only available for reads aligned to a hg19 or GRCh38 reference.")
       samp_track = False
     else:
-      sampleidBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_regions.bed')
+      sampleidBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets',trackset+'_sampleID_regions.bed')
 
   # skip the actual and assume all the data already exists in this file for processing
   if skiprun:

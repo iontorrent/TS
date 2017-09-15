@@ -167,9 +167,13 @@ public:
     //! @brief Filter out undesired alleles
     void FilterAllAlleles(const ControlCallAndFilters& my_controls, const vector<VariantSpecificParams>& variant_specific_params);
     //! @brief Calculate the end of the look ahead window (primarily for candidate generator)
-    int CalculateLookAheadEnd0(const ReferenceReader &ref_reader);
+    int CalculateLookAheadEnd0(const ReferenceReader &ref_reader, int current_candidate_gen_window_end = -1);
     //! @brief Split the current variant into as many callable smaller variants as possible (primarily for candidate generator))
     void SplitMyAlleleIdentityVector(list<list<int> >& allele_group, const ReferenceReader &ref_reader, int max_group_size_allowed);
+    //! @brief The "one-window" approach
+    void LookAheadSlidingWindow(int current_candidate_gen_window_end_0, const ReferenceReader &ref_reader, list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int max_group_size_allowed);
+    void FinalSplitReadyToGoAlleles(list<list<int> >& allele_groups_ready_to_go, const ReferenceReader &ref_reader, int max_group_size_allowed);
+
     //------------------------------------------------------------------
     // Functions for filling read stack are defined here
     //! @brief Fill the read stack w/o molecular tagging
@@ -224,7 +228,7 @@ private:
 string PrintVariant(const vcf::Variant& variant); // just for debug message
 
 void FindNodesInIsoSubGraph(const vector<vector<bool> >& connectivity_matrix, list<list<int> >& subgraph_to_nodes, bool sort_by_index);
-void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vector, list<list<int> >& allele_groups, const ReferenceReader& ref_reader, int max_group_size_allowed);
+void SplitAlleleIdentityVector(const vector<AlleleIdentity>& allele_identity_vector, list<list<int> >& allele_groups, const ReferenceReader& ref_reader, int max_group_size_allowed, bool padding_already_removed, unsigned int max_final_splitting_iteration);
 BasicFilters const * ServeBasicFilterByType(const AlleleIdentity& variant_identity, const ControlCallAndFilters& my_controls);
 float FreqThresholdByType(const AlleleIdentity& variant_identity, const ControlCallAndFilters &my_controls, const VariantSpecificParams& variant_specific_params);
 

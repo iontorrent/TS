@@ -214,33 +214,17 @@ def runplugins(plugins, env, level=RunLevel.DEFAULT, params={}):
 
 
 def get_pgm_log_files(rawdatadir):
-    # Create a tarball of the pgm raw data log files for inclusion into CSA.
+    # Create a tarball of the instrument raw data log files for inclusion into CSA.
     # tarball it now before the raw data gets deleted.
+    from ion.utils.makeCSA import rawdata_patterns as files
+
     # inst diagnostic files are always in toplevel raw data dir:
     if 'thumbnail' in rawdatadir:
         rawdatadir = rawdatadir.replace('thumbnail', '')
-    files = [
-        'explog_final.txt',
-        'explog.txt',
-        'InitLog.txt',
-        'InitLog1.txt',
-        'InitLog2.txt',
-        'RawInit.txt',
-        'RawInit.jpg',
-        'InitValsW3.txt',
-        'InitValsW2.txt',
-        'Controller',
-        'debug',
-        'Controller_1',
-        'debug_1',
-        'chipCalImage.bmp.bz2',
-        'InitRawTrace0.png',
-    ]
+
     for afile in files:
         if os.path.exists(os.path.join(rawdatadir, afile)):
             make_zip('pgm_logs.zip', os.path.join(rawdatadir, afile), arcname=afile)
-
-    return
 
 
 def GetBlocksToAnalyze(env):
@@ -425,7 +409,7 @@ if __name__ == "__main__":
     with open('ReportConfiguration.txt', 'wb') as reportconfigfile:
         report_config.write(reportconfigfile)
 
-    # drops a zip file of the pgm log files
+    # drops a zip file of the instrument log files
     get_pgm_log_files(env['pathToRaw'])
 
     # Generate a system information file for diagnostics purposes.

@@ -118,7 +118,7 @@ if [[ "$HAPLOCODE" =~ ^F ]]; then
   awk '$1!~/^chrY/ {print}' "$TARGETS_BEDFILE" > "$TARGETS_BED"
 fi
 OUTCMD=">> \"${WORKDIR}/$TARGET_STATS_OUT\""
-gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$TARGETS_BED"`
+gnm_size=`awk 'BEGIN {gs = 0} NR>1 {gs += $3-$2} END {printf "%.0f",gs+0}' "$TARGETS_BED"`
 COVERAGE_ANALYSIS="samtools depth -G 4 -b \"$TARGETS_BED\" \"$BAMFILE\" 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
 eval "$COVERAGE_ANALYSIS $OUTCMD" >&2
 if [ $? -ne 0 ]; then
@@ -132,7 +132,7 @@ fi
 
 # SNPs coverage stats
 OUTCMD=">> \"${WORKDIR}/$SNP_STATS_OUT\""
-gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$SNPS_BEDFILE"`
+gnm_size=`awk 'BEGIN {gs = 0} NR>1 {gs += $3-$2} END {printf "%.0f",gs+0}' "$SNPS_BEDFILE"`
 COVERAGE_ANALYSIS="samtools depth -G 4 -b \"$SNPS_BEDFILE\" \"$BAMFILE\" 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
 eval "$COVERAGE_ANALYSIS $OUTCMD" >&2
 if [ $? -ne 0 ]; then

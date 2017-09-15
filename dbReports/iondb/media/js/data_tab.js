@@ -837,7 +837,7 @@ $(function () {
             var params = {
                 //Top Row
                 'star': $("#id_star:checked").exists(),
-                'all_text': $("#search_text").val(),
+                'all_text': $("#search_text").val().trim().replace(/ /g, '_'),
                 'all_date': $("#rangeA").data("daterange"),
                 'result_status': $("#id_status").val(),
                 'results__projects__name__in': this._array_to_query_string_value($("#id_project").val()),

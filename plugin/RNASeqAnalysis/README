@@ -1,3 +1,0 @@
-This plugin is used to analyze cDNA reads, as produced by RNA-Seq. Reads are aligned to the reference genome using STAR and bowtie2 aligners to find reads aligned to annotated genes and transcript isoforms, the latter being performed by cufflinks. In addition to statistics, down-loadable data files and plots for individual barcodes, a number of files and plots are generated comparing the data across samples (barcodes).
-
-Author: Guy Del Mistro

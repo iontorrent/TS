@@ -8,6 +8,8 @@ import time
 import copy
 import socket
 
+from iondb.utils.hostip import gethostfqdn
+
 
 class IonMeshDiscoveryManager(threading.Thread):
     """This class will monitor avahi via dbus in order to detect the current mesh network setup"""
@@ -25,7 +27,7 @@ class IonMeshDiscoveryManager(threading.Thread):
     __threadLock = threading.Lock()
 
     # local host name
-    __localhost = ''
+    __localhost = gethostfqdn()
 
     def __new__(cls, *args, **kwargs):
         if not cls.__singleton:
@@ -67,18 +69,24 @@ class IonMeshDiscoveryManager(threading.Thread):
     def getMeshComputers(self):
         """
         This will create a copy of the list of the comupters in the mesh by hostname
-        :return: List of hostnames
+        :return: List of hostnames converted to fully qualified domain names
         """
         self.__threadLock.acquire()
         try:
-            return copy.deepcopy(self.__meshComputers)
+            ret = []
+            for name in self.__meshComputers:
+                fqdn = socket.getfqdn(name)
+                if fqdn not in ['localhost', 'tsvm']:
+                    ret.append(fqdn)
+
+            return ret
         finally:
             self.__threadLock.release()
 
 
     def getLocalComputer(self):
         """Gets the localhost name"""
-        return self.__localhost or socket.getfqdn()
+        return self.__localhost
 
 
     def __serviceFound(self, interface, protocol, name, stype, domain, flags):
@@ -86,7 +94,6 @@ class IonMeshDiscoveryManager(threading.Thread):
         # skip local services
         # http://sources.debian.net/src/avahi/0.6.32-1/avahi-python/avahi/__init__.py/?hl=50#L50
         if flags & avahi.LOOKUP_RESULT_LOCAL:
-            self.__localhost = str(name)
             return
 
         # add the computer name to the list of mesh computers

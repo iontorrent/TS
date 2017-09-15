@@ -17,6 +17,7 @@ import sys
 import TvcVcfFile as vcf
 import os
 from Bio import SeqIO
+import pysam
 
 def make_regions_ref(bed_file, genome):
 
@@ -43,7 +44,10 @@ def make_regions_ref(bed_file, genome):
         else:
             idd = fields[3]
 
-        ref = genome[contig].seq[pos:endpos]
+        #ref = genome[contig].seq[pos:endpos]
+        # Get the reference genome in the left-close right-open interval [reference_start_0, reference_end_0) in the 0-based coordinate.
+        ref = genome.fetch(contig, pos, endpos)
+
         regions[idd] = [contig, pos, str(ref)]
 
     return (regions)
@@ -249,9 +253,16 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
             raise ValueError('reference not found in this vcf: ' + vcf_file)
 
         #genome =  SeqIO.to_dict(SeqIO.parse(open(sys.argv[3]), 'fasta'))
-        genome =  SeqIO.to_dict(SeqIO.parse(open(genome_file), 'fasta'))
+        #genome =  SeqIO.to_dict(SeqIO.parse(open(genome_file), 'fasta'))
+        try:
+            # Fastafile -> FastaFile since pysam 0.8.1
+            genome = pysam.FastaFile(genome_file)
+        except AttributeError:
+            # Use the deprecated one if older than 0.8.1
+            genome = pysam.Fastafile(genome_file)
 
         regions = make_regions_ref(bed_file, genome)
+        genome.close()
 
         for vcf_record in f_vcf:
 

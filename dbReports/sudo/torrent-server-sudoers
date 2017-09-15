@@ -15,12 +15,14 @@ www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
                              /opt/ion/iondb/bin/ion_add_nfs_mount.py, \
                              /opt/ion/iondb/bin/ion_remove_nfs_mount.py, \
                              /opt/ion/iondb/bin/ion_check_for_new_tsvm.py, \
+                             /opt/ion/iondb/bin/administrative/check_updates.py, \
                              /usr/sbin/TSstaticip, \
                              /usr/sbin/TSsetproxy, \
                              /usr/sbin/grp_connect_nodetest, \
                              /usr/sbin/grp_config_nodetest, \
                              /usr/bin/qmod, \
                              /usr/bin/ion_raidinfo, \
+                             /usr/bin/ion_raidinfo_json, \
                              /usr/bin/timedatectl, \
                              /results/tsvm/tsvm-include, \
                              /results/tsvm/tsvm-tsvm-isvtenabled, \

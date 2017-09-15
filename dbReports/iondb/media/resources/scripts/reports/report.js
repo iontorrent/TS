@@ -27,20 +27,11 @@ String.prototype.endsWith = function (str) {
 
 function resizeiFrames() {
     //Resize the iframe blocks
-
     $("iframe.pluginBlock:visible").each(function () {
         var height = $(this).contents().height(),
             width = $(this).parent().css("width");
         if ($(this).height() != height) $(this).height(height);
         if ($(this).width() != width) $(this).width(width);
-    });
-
-    $("iframe.pluginMajorBlock:visible").each(function () {
-        var height = $(this).contents().find("body").height() + 20;
-        //console.log($(this).attr("id") + " " + height);
-        var width = parseInt($(".section").css("width"), 10) - 20;
-        if ($(this).height() != height) $(this).height(height);
-        if ($(this).width() != width)  $(this).width(width);
     });
 }
 
@@ -54,8 +45,26 @@ function update_plugin_show(controls) {
     });
 }
 
+function getPluginStateIcon(state) {
+    switch (state) {
+        case "Completed":
+            return "icon-ok-circle";
+        case "Failed":
+            return "icon-ban-circle";
+        default:
+            return "icon-time";
+    }
+}
+
 //get the status of the plugins from the API
 function pluginStatusLoad() {
+    //Get the plugin template
+    var pluginResultsTemplate = ktmpl("#pluginStatusTemplate");
+    var pluginSubNavTemplate = ktmpl("#pluginSubNavTemplate");
+
+    var pluginStatusTable = $("#pluginStatusTable");
+    var pluginSubNav = $("#plugins-sub-nav");
+
     //init the spinner -- this is inside of the refresh button
     $('#pluginRefresh').activity({
         segments: 10,
@@ -67,82 +76,62 @@ function pluginStatusLoad() {
         padding: '3',
         align: 'left'
     });
-
+    pluginStatusTable.fadeOut();
+    pluginStatusTable.html("");
+    pluginSubNav.html("");
     $.ajax({
         type: 'GET',
         url: pluginresultsAPI,
         contentType: "application/json; charset=utf-8",
         dataType: "json",
-        async: false,
-        success: function (data) {
-            console.log(data);
-            $('#major_blocks').html('');
-            iframescroll = ($.browser.msie) ? "yes" : "no";
-            for (var i = 0; i < data.length; i++) {
-                if(data[i].Major) {
-                    var name_row = plugin_major_template(data[i]);
-                    var majorblock = $(name_row).appendTo("#major_blocks");
-                    var plugin_links = majorblock.find(".plugin_links")
-                    for (var o = 0; o < data[i].Files.length; o++) {
-                        var f = data[i].Files[o];
-                        if (f.indexOf('_block')==-1) {
-                            plugin_links.append('<a href="' + data[i].URL + f + '">' + f + '</a>');
-                        }
+        success: function (pluginResultsList) {
+            if (pluginResultsList.length == 0){
+                // No plugins to display
+                pluginStatusTable.append($("<h2/>", {text: "No plugins have been run"}));
+            } else {
+                var groupedPluginResults = {};
+                //Group plugin results by name
+                pluginResultsList.forEach(function (result) {
+                    if (!groupedPluginResults.hasOwnProperty(result.Name)) {
+                        groupedPluginResults[result.Name] = [];
                     }
-                    if (data[i].Files.length == 0) {
-                        majorblock.append('<div class="section">No plugin output at this time.</div>');
-                    }
-                    for (var j = 0; j < data[i].Files.length; j++) {
-                        var f = data[i].Files[j];
-                        if (f.indexOf('_block')>-1) {
-                            majorblock.append('<div class="section"><iframe scrolling="' + iframescroll + '" id="' + data[i].Name + '" class="pluginMajorBlock" src="' + data[i].URL + f + '" frameborder="0" ></iframe></div>');
-                        }
-                    }
-                }
-            }
-        },
-        error: function (event, request, settings) {
-            $('#major_blocks').text('Failed to get Plugin Status');
-            console.log("Error fetching" + settings.url + ": " + event.responseText);
-        }
-    });
-    $("#pluginStatusTable").fadeOut();
-    $("#pluginStatusTable").html("");
-    $.ajax({
-        type: 'GET',
-        url: pluginresultsAPI,
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        async: false,
-        success: function (data) {
-            table_plugin_names = [];
-            for (var i = 0; i < data.length; i++) {
-                //console.log(data[i]);
-                var row = plugin_status_template(data[i]);
-                var name = data[i].Name;
-                table_plugin_names.push(name);
-                (function (name) {
-                    $("#pluginStatusTable").append(row);
-                    if (row.indexOf('plugin-collapse') > -1){
-                        $("#pluginStatusTable").find(".plugin-collapse:last").click(function () {
-                            $(this).text($(this).text() == '-' ? '+' : '-');
-                            var block = $(this).closest(".pluginGroup").find(".pluginGroupList");
-                            var is_visible = block.is(":visible");
-                            var control = {};
-                            control[name] = !is_visible;
-                            update_plugin_show(control);
-                            block.slideToggle(250);
-                            return false;
+                    groupedPluginResults[result.Name].push(result);
+                });
+                //Render each group in alpha order by name (case insensitive)
+                Object.keys(groupedPluginResults).sort(function (a, b) {
+                    return a.toLowerCase().localeCompare(b.toLowerCase());
+                }).forEach(function (name) {
+                    var results = groupedPluginResults[name];
+                    //Render template
+                    pluginStatusTable.append(pluginResultsTemplate({name: name, results: results}));
+                    //Add to sidebar
+                    pluginSubNav.append(pluginSubNavTemplate({
+                        name: name,
+                        iconClass: getPluginStateIcon(results[0].State)
+                    }))
+                });
+                //Bind events for plugin result selectors
+                $(".changePluginResult").change(function () {
+                    var select = $(this);
+                    //Hide and show the results
+                    $("#" + select.attr("data-parent-id")).hide(0, function () {
+                        //Show the new result
+                        $("#" + select.val()).show(0, function () {
+                            //Reset the select box. Cannot prevent the box from changing
+                            $(this).find("option").prop('selected', function () {
+                                return this.defaultSelected;
+                            });
+                            $(window).trigger("ion.pluginsRefreshed");
                         });
-                    }
-                })(name);
+                    });
+                });
             }
         },
         error: function (msg) {
-            $("#pluginStatusTable").text("Failed to get Plugin Status");
+            pluginStatusTable.text("Failed to get Plugin Status");
         }
     }); //for ajax call
-    $("#pluginStatusTable").fadeIn();
+    pluginStatusTable.fadeIn();
     $('#pluginRefresh').activity(false);
 }
 
@@ -212,10 +201,15 @@ function ktmpl(selector){
     return (el.length) ? kendo.template(el.html()): kendo.template("");
 }
 
+// Browsers remember where you were scrolled to when reloading a page.
+//
+// This makes the browser scroll to the top when leaving this page which makes the browser store the
+// scrolled position as 0.
+$(window).on('beforeunload', function() {
+    $(window).scrollTop(0);
+});
 
 $(document).ready(function () {
-    plugin_status_template = ktmpl("#pluginStatusTemplate");
-    plugin_major_template = ktmpl("#pluginMajorBlockTemplate");
     plugin_dropdown_template = ktmpl("#pluginDropdownTemplate");
 
     $(".dropdown-menu > li.disabled > a").click(function(event) {
@@ -234,6 +228,7 @@ $(document).ready(function () {
         url: "/rundb/api/v1/results/" + djangoPK + "/scan_for_orphaned_plugin_results",
         type: "GET"
     })
+
 
     //If IRU is has configs then add them to a dropdown button for easy uploading
     var iru_xhr = $.ajax({
@@ -385,11 +380,6 @@ $(document).ready(function () {
         });
     });
 
-    //remove the focus from the report dropdown
-    $("#resultList").blur();
-
-    $("#resultList").chosen();
-
     //keep this incase we want to bind to something
     $('#barcodes tr').click(function () {
         var id = $(this).find('td:first').text().trim();
@@ -509,26 +499,17 @@ $(document).ready(function () {
     $('.pluginRemove').live("click", function (e) {
         e.preventDefault();
         var url = $(this).attr("href");
-        var parent = $(this).closest('div.pluginGroup');
-        // TODO: Are you sure?
-        $.ajax({
-            type: 'DELETE',
-            url: url,
-            async: true,
-            beforeSend: function () {
-                parent.animate({'backgroundColor': '#fb6c6c'}, 300);
-            }
-        }).fail(function (msg) {
-            parent.append('<div class=" alert alert-error" data-dismiss="alert">Failed to remove plugin result.</div>');
-            parent.fadeOut(3000, function () {
-                parent.remove();
+        if (confirm("Are you sure you want to delete this plugin result?")) {
+            $.ajax({
+                type: 'DELETE',
+                url: url,
+                async: true,
+            }).fail(function (msg) {
+                alert("Failed to remove plugin result.")
+            }).done(function () {
+                pluginStatusLoad();
             });
-        }).done(function () {
-            parent.append('<div class="alert alert-info" data-dismiss="alert">Successfully removed plugin result.</div>');
-            parent.fadeOut(3000, function () {
-                parent.remove();
-            });
-        });
+        }
         return false;
     });
 
@@ -597,28 +578,15 @@ $(document).ready(function () {
 
     $("#pluginRefresh").click(function () {
         pluginStatusLoad();
-    });
-    $("#pluginExpandAll").click(function () {
-        $("#pluginStatusTable .plugin-collapse").text('-');
-        $("#pluginStatusTable .pluginGroupList").slideDown('fast');
-        var controls = {};
-        for (var i = 0; i < table_plugin_names.length; i++)
-            controls[table_plugin_names[i]] = true;
-        update_plugin_show(controls);
-    });
-    $("#pluginCollapseAll").click(function () {
-        $("#pluginStatusTable .plugin-collapse").text('+');
-        $("#pluginStatusTable .pluginGroupList").slideUp('fast');
-        var controls = {};
-        for (var i = 0; i < table_plugin_names.length; i++)
-            controls[table_plugin_names[i]] = false;
-        update_plugin_show(controls);
+        $(window).trigger("ion.pluginsRefreshed");
     });
 
     //the plugin launcher
+    var pluginLauncherTemplate = ktmpl("#pluginLauncherTemplate");
+
     $(".pluginDialogButton").click(function () {
         //open the dialog
-        $("#modal-header").html('Select a plugin');
+        $("#modal-header").html('Select a Plugin to Run');
         $("#modal-body").html("<div id='pluginLoad'></div><div id='pluginList'></div>");
         $("#pluginLoad").html("<span>Loading Plugin List <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
         $('#plugin-modal').modal('show');
@@ -636,7 +604,7 @@ $(document).ready(function () {
                     $("#pluginList").html('<p>No plugins enabled. Go to <a href="/configure/plugins/">Configure:Plugins</a> to install and enable plugins.</p>');
                     return false;
                 }
-                $("#pluginList").html('<table id="plugin_table" class="table table-striped"></table>');
+                $("#pluginList").html(pluginLauncherTemplate({}));
                 plugins = data.objects.sort(function (a, b) {
                     return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
                 });
@@ -781,8 +749,9 @@ $(document).ready(function () {
         //try to resize the plugin block all the time
         //Once a second is Plenty for this.
 
-        resizeIntervalTimer = setInterval(function () {
+        var resizeIntervalTimer = setInterval(function () {
             resizeiFrames();
+            $(window).trigger("ion.pluginsRefreshed");
         }, 1000);
 
         //init the Kendo Grids
@@ -941,4 +910,36 @@ $(document).ready(function () {
             pageable: true
         });
     }
+
+    // Setup the search box of the plugin launcher
+    var launcherModal = $('#plugin-modal');
+    var launcherSearchInput = $("#plugin_search_input");
+    var launcherClearButton = $("#plugin_search_clear");
+    var launcherTableContainer = $("#plugin-modal .modal-body");
+
+    // Search box
+    launcherSearchInput.bind("input", function (event) {
+        launcherTableContainer.find("tr").each(function (_, element) {
+            var row = $(element);
+            if (row.find("a").text().toLowerCase().search(event.target.value.toLowerCase()) == -1) {
+                row.hide();
+            } else {
+                row.show();
+            }
+        });
+    });
+
+    // Clear button
+    launcherClearButton.click(function () {
+        launcherSearchInput.val("");
+        launcherSearchInput.trigger("input");
+    });
+
+    // Focus and clear
+    launcherModal.on('shown', function () {
+        setTimeout(function () {
+            launcherSearchInput.val("").focus();
+        }, 0);
+    });
+
 });

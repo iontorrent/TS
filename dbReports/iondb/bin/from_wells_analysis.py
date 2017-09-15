@@ -189,10 +189,7 @@ def isChefInfoAvailable(folder):
     chefLog_parsed = {}
     JSON_BASENAME = "chef_params.json"
     chefLog = load_log(folder, JSON_BASENAME)
-    if chefLog is None:
-        payload = "Chef summary info not available read %s" % (os.path.join(folder, JSON_BASENAME))
-        logger.warn(payload)
-    else:
+    if chefLog is not None:
         try:
             chefLog_parsed = json.loads(chefLog)
         except:
@@ -223,6 +220,8 @@ def update_plan_info(_plan_json, planObj, easObj):
                 setattr(planObj, key, _plan_json[key])
                 if key == "planName":
                     setattr(planObj, "planDisplayedName", _plan_json[key])
+
+        planObj.applicationGroup = models.ApplicationGroup.objects.get(id=_plan_json['applicationGroup_id'])
         easObj.save()
         planObj.save()
     except:
@@ -244,9 +243,9 @@ def getReportURL(_report_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Initiate from-wells analysis Report")
-    parser.add_argument("--thumbnail-only", dest="thumbnail_only",
-                        action="store_true", default=False, help="Flag indicating thumbnail analysis only")
+    parser.add_argument("is_thumbnail", metavar="is_thumbnail", default=False, help="Flag indicating thumbnail analysis only")
     parser.add_argument("directory", metavar="directory", help="Path to data to analyze")
+
 
     # If no arguments, print help and exit
     if len(sys.argv) == 1:
@@ -271,8 +270,10 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if os.path.exists(os.path.join(src_dir, 'onboard_results', 'sigproc_results')):
-        os.symlink(os.path.join(src_dir, 'onboard_results', 'sigproc_results'),
-                   os.path.join(src_dir, 'sigproc_results'))
+        symlink_path = os.path.join(src_dir, 'sigproc_results')
+        if os.path.exists(symlink_path):
+            os.remove(symlink_path)
+        os.symlink(os.path.join(src_dir, 'onboard_results', 'sigproc_results'), symlink_path)
         is_fullchip = True
     else:
         is_fullchip = False
@@ -337,7 +338,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Submit analysis job URL
-    report_name = generate_http_post(newExp, src_dir, thumbnail_analysis=args.thumbnail_only)
+    report_name = generate_http_post(newExp, src_dir, thumbnail_analysis=args.is_thumbnail == 'True')
     if report_name == "Failure to generate POST":
         print("Could not start a new analysis")
         print("STATUS: Error")

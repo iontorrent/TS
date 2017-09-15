@@ -618,6 +618,14 @@
                     return -1;
                 }
 
+                if (typeof a === 'string' ){
+                    a = a.toLowerCase();
+                }
+
+                if (typeof b === 'string' ){
+                    b = b.toLowerCase();
+                }
+
                 return a > b ? 1 : (a < b ? -1 : 0);
             };
         },
@@ -638,6 +646,14 @@
 
                 if ((b && !a) || a == null) {
                     return 1;
+                }
+
+                if (typeof a === 'string' ){
+                    a = a.toLowerCase();
+                }
+
+                if (typeof b === 'string' ){
+                    b = b.toLowerCase();
                 }
 
                 return a < b ? 1 : (a > b ? -1 : 0);

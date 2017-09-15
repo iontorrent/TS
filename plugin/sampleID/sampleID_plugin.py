@@ -88,7 +88,8 @@ def printStartupMessage():
   printlog('  Barcodes:         %s' % pluginParams['barcodeInput'])
   printlog('  Output folder:    %s' % pluginParams['results_dir'])
   printlog('  Output file stem: %s' % pluginParams['prefix'])
-  printlog('  Reference Name:   %s' % pluginParams['genome_id'])
+  printlog('  Reference genome: %s' % pluginParams['genome_id'])
+  printlog('  Tracking set ID:  %s' % pluginParams['track_set'])
   printlog('')
 
 
@@ -116,8 +117,9 @@ def run_plugin(skiprun=False,barcode=""):
   pluginParams['genome_id'] = barcodeData['reference']
 
   # Hard-coded path to sample ID target BED file - may be user definable later
-  regionsBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_regions.bed')
-  lociBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_loci.bed')
+  track_set = pluginParams['track_set']
+  regionsBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets',track_set+'_sampleID_regions.bed')
+  lociBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets',track_set+'_sampleID_loci.bed')
 
   # skip the actual and assume all the data already exists in this file for processing
   if skiprun:
@@ -130,7 +132,7 @@ def run_plugin(skiprun=False,barcode=""):
         pluginParams['prefix'], sample, reference, bamfile, regionsBed, lociBed )
     if logopt: printlog('\n$ %s\n'%runcmd)
     if( os.system(runcmd) ):
-      raise Exception("Failed running run_coverage_analysis.sh. Refer to Plugin Log.")
+      raise Exception("Failed running run_sampleid.sh. Refer to Plugin Log.")
 
   if pluginParams['cmdOptions'].cmdline: return ({},{})
   printtime("Generating report...")
@@ -517,8 +519,14 @@ def loadPluginParams():
     addAutorunParams()
 
   # check for non-supported reference alignments
-  if pluginParams['genome_id'] != "hg19":
-    printlog("WARNING: This plugin is intended to be used with reads compatible with an hg19 reference.")
+  refid = pluginParams['genome_id']
+  if refid.startswith("hg19") or refid.startswith("GRCh37"):
+    pluginParams['track_set'] = "KIDDAME"
+  elif refid.startswith("GRCh38") or refid.startswith("hg38"):
+    pluginParams['track_set'] = "hg38_KIDDAME"
+  else:
+    pluginParams['track_set'] = "KIDDAME"
+    printlog("WARNING: This plugin is intended to be used with reads compatible with a hg19 or GRCh38 reference.")
 
   # plugin configuration becomes basis of results.json file
   global pluginResult, pluginReport

@@ -1,12 +1,13 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 from django.conf.urls import patterns, url
+from django.views.generic import RedirectView
 from iondb.rundb.plan.views import PlanDetailView
 
 urlpatterns = patterns(
     'iondb.rundb.plan',
-    url(r'^$', 'views.plan_run_home', name="planRuns"),
-    # url(r'^plan/$', 'views.plans', name="plans"),
+    url(r'^$', RedirectView.as_view(pattern_name="plan_templates"), name="plan"),
+    url(r'^$', RedirectView.as_view(pattern_name="plan_templates"), name="planRuns"),
     url(r'^plan_templates/$', 'views.plan_templates', name="plan_templates"),
     url(r'^planned/$', 'views.planned', name="planned"),
     url(r'^reset_page_plan_session/$', 'views.reset_page_plan_session', name="reset_page_plan_session"),

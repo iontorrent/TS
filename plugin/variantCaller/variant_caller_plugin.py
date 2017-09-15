@@ -156,6 +156,8 @@ class ConfigureOptionsManager:
         if self.configuration_name == '':
             self.__options['parameters_file'] = os.path.join(TSP_FILEPATH_PLUGIN_DIR, BASENAME_PARAMETERS_JSON)
         else:
+            # The configuration name in a configured run can not be ""
+            # So I shall not see collision of the file names if one configuration named 'local' and one configuration named 'local', assuming BASENAME_PARAMETERS_JSON = 'local_parameters.json'  
             self.__options['parameters_file'] = os.path.join(TSP_FILEPATH_PLUGIN_DIR, '%s_parameters.json' %self.configuration_name)
             
         with open(os.path.join(DIRNAME, 'pluginMedia/parameter_sets/parameter_sets.json'),'r') as fin:
@@ -704,32 +706,31 @@ def run_tmap(tmap_cmd, realigned_bam_path):
         tmap_cmd = TMAPBIN + tmap_cmd[4:]
     
     try:
-        tmap_cmd += " | samtools sort -m 1000M -l1 -@12 - " + realigned_bam_path[:-4]
+        tmap_cmd += " | samtools sort -m 1000M -l1 -@12 - %s" %realigned_bam_path[:-4]
         if PLUGIN_DEV_SKIP_VARIANT_CALLING:
             printtime('Skipping realignment of the bam file.') 
             printtime('Command: %s' %tmap_cmd)
             return True
-        printtime(tmap_cmd)        
-        subprocess.call(tmap_cmd, shell=True)
-        index_cmd = "samtools index " + realigned_bam_path
-        printtime(index_cmd)
-   
-        subprocess.call(index_cmd, shell=True)
+        run_command(tmap_cmd, "Realign the bam file.")
+        
+        index_cmd = "samtools index %s" %realigned_bam_path
+        run_command(index_cmd, "Index the bam file.")
+        
         mark_duplicates = False
         with open(os.path.join(ANALYSIS_DIR, 'ion_params_00.json'),'r') as fin:
             plan_data = json.load(fin, parse_float=str)
             mark_duplicates = plan_data.get('experimentAnalysisSettings',{}).get('isDuplicateReads',False)
-        printtime("mark_duplicates = " + str(mark_duplicates))
+        printtime("mark_duplicates = %s" %str(mark_duplicates))
         if mark_duplicates:
             temp_realigned_bam_path = realigned_bam_path + ".temp.bam"
             os.rename(realigned_bam_path,temp_realigned_bam_path)
             os.rename(realigned_bam_path+'.bai',temp_realigned_bam_path+'.bai')            
             
-            cmd = "BamDuplicates -i " + temp_realigned_bam_path + " -o " + realigned_bam_path
-            printtime(cmd)
-            subprocess.call(cmd,shell=True)
-            cmd = "samtools index " + realigned_bam_path
-            printtime(cmd)
+            cmd = "BamDuplicates -i %s -o %s" %(temp_realigned_bam_path, realigned_bam_path)
+            run_command(cmd, "Mark duplicates")
+
+            cmd = "samtools index %s" %realigned_bam_path
+            run_command(cmd, "Indexing bam file")
             
             # And clean up temp files
             os.remove(temp_realigned_bam_path)
@@ -741,8 +742,7 @@ def run_tmap(tmap_cmd, realigned_bam_path):
 
 def cmd_args_to_dict_items(cmd_args):
     args_dict_items = []
-    cmd_args = cmd_args.replace('\t', ' ')
-    splitted_cmd_args = [value for value in cmd_args.split(' ') if value != '']
+    splitted_cmd_args = cmd_args.split()
     
     for index, value in enumerate(splitted_cmd_args):
         if value == '':
@@ -787,9 +787,7 @@ def get_pg_cmd_from_header(bam_path, pg_id):
     return cl
 
 def cleanup_cmd(my_cmd):
-    my_cmd = my_cmd.replace('\t', ' ').strip(' ')
-    if '  ' in my_cmd:
-        my_cmd = ' '.join([value for value in my_cmd.split(' ') if value != ''])
+    my_cmd = ' '.join(my_cmd.split())
     return my_cmd
 
 def get_realign_cmd(bam, realigned_bam_path, planned_tmap_args, desirable_tmap_args, options, tmap_server_key):
@@ -828,18 +826,43 @@ def get_realign_cmd(bam, realigned_bam_path, planned_tmap_args, desirable_tmap_a
     planned_args_dict = cmd_args_to_dict(planned_tmap_args.replace(' ... ', ' '))
     # Remove the args in XXX and YYY from tamp_cl_in_header gives additional_args
     additional_args_dict = cmd_args_to_dict(tamp_cl_in_header)
+    # The tmap arg I want to use to realign the bam
+    desirable_tmap_args_dict = cmd_args_to_dict(desirable_tmap_args)        
+
     for key in planned_args_dict:
+        if key in ['-q', '--reads-queue-size'] and (key not in desirable_tmap_args_dict):
+            #  I should keep '-q' unless it is specified in desirable_tmap_args.
+            continue
         additional_args_dict.pop(key, None)
+
     # Clean-up additional_args_dict.
-    for key in ['-f', '--fn-fasta', '-r', '--fn-reads', '-s', '--fn-sam', '-k', '--shared-memory-key']:
+    for key in ['tmap',
+                '-f', '--fn-fasta', 
+                '-r', '--fn-reads', 
+                '-s', '--fn-sam', 
+                '-k', '--shared-memory-key',
+                '--bam-start-vfo',
+                '--bam-end-vfo']:
         # Clean-up the file I/O options and tmap server option
         additional_args_dict.pop(key, None)
-    # Further, anything shows up in desirable_tmap_args_dict should not be in additional_args.
-    desirable_tmap_args_dict = cmd_args_to_dict(desirable_tmap_args)        
-    for key in additional_args_dict:
-        if desirable_tmap_args_dict.has_key(key):
-            additional_args_dict.pop(key)
-    
+
+    # TS-15287 Handle the case of empty planned_tmap_args  
+    if planned_tmap_args == '':
+        for key in additional_args_dict.keys():
+            if key not in ['-i', '--reads-format', 
+                           '-v', '--verbose',
+                           '-q', '--reads-queue-size',
+                           '-Y', '--sam-flowspace-tags',
+                           '-u', '--rand-read-name', 
+                           '--prefix-exclude',
+                           '-o', '--output-type',
+                           '-n', '--num-threads']:
+                additional_args_dict.pop(key, None)        
+        
+    # Finally, anything shows up in desirable_tmap_args_dict should not be in additional_args.
+    for key in desirable_tmap_args_dict:
+        additional_args_dict.pop(key, None)
+
     # Now fill the "..." in desirable_tmap_args
     desirable_dot_dot_dot_args = ' '
     if tmap_server_key != 0:
@@ -999,7 +1022,7 @@ def get_configurations(barcoded_run, configured_run, start_mode, multisample):
         printtime("Run is using configurations")
         for element in STARTPLUGIN_JSON['pluginconfig']['barcodes']:
             configuration_name = element['json']['pluginconfig'].get('meta',{}).get('configuration_name','')
-            if not configurations.has_key(configuration_name):
+            if configuration_name not in configurations:
                 new_configuration = {'json': copy.deepcopy(element['json']), 'error': [], 'warning': [], 'bams': []}
                 new_configuration['json'] ['plan'] = copy.deepcopy(STARTPLUGIN_JSON['plan'])
                 new_configuration['json'] ['expmeta'] = copy.deepcopy(STARTPLUGIN_JSON['expmeta'])
@@ -1107,7 +1130,7 @@ def is_need_realignment(bam, options, desirable_tmap_args, planned_tmap_args):
     is_same_reference = BARCODES_JSON[bam['name']]['reference'] == options.serve_option('reference_genome_name', bam['name'])
     if not is_same_reference:
         # I want to realign the bam because the reference genome is different.
-        printtime('Detected change of the reference. Realign %s.' %(bam['file']))       
+        printtime('Detected the change of the reference genome. Realign %s.' %(bam['file']))       
         return True
     if ' --bed-file ' in planned_tmap_args and BARCODES_JSON[bam['name']]['target_region_filepath'] != options.serve_option('targets_bed_unmerged', bam['name']):
         # I want to realign the bam because the tmap needs the target bed file and it is changed.
@@ -1118,6 +1141,11 @@ def is_need_realignment(bam, options, desirable_tmap_args, planned_tmap_args):
         # I didn't specify the desirable tmap args. No need to realign.
         return False
 
+    if planned_tmap_args == '':
+        # TS-15287 I realign the bam file anyway if I can't find the tmaparg in the run plan.
+        printtime('Planned tmap args not found. Realign %s' %(bam['file']))
+        return True
+    
     # More clean-up
     planned_tmap_args = planned_tmap_args.replace(' ... ', ' ')
     planned_tmap_args = planned_tmap_args.replace(' --bed-file ', ' --bed-file %s ' %BARCODES_JSON[bam['name']]['target_region_filepath'])
@@ -1125,6 +1153,12 @@ def is_need_realignment(bam, options, desirable_tmap_args, planned_tmap_args):
     desirable_tmap_args = desirable_tmap_args.replace(' --bed-file ', ' --bed-file %s ' %options.serve_option('targets_bed_unmerged', bam['name']))
     planned_tmap_args_dict = cmd_args_to_dict(planned_tmap_args)
     desirable_tmap_args_dict = cmd_args_to_dict(desirable_tmap_args)
+    
+    # -q may be specify in the run plan but it doesn't affect the alignment.
+    ignore_options = ['-q', '--reads-queue-size']
+    for key in ignore_options:
+        planned_tmap_args_dict.pop(key, None)
+        desirable_tmap_args_dict.pop(key, None)
     
     #TODO(czb): Handle the long/short args ambiguity.
     need_realn = planned_tmap_args_dict != desirable_tmap_args_dict
@@ -1146,10 +1180,7 @@ def process_reference(configuration, bam, tmap_server_key):
     # planned_tmap_args is the tmap args used in the plan (i.e., basically the cmd args for rawlib.bam).
     planned_tmap_args = ion_param_00_json.get('experimentAnalysisSettings', {}).get('alignmentargs', '')
     desirable_tmap_args = configuration['json']['pluginconfig'].get('meta',{}).get('tmapargs','')
-    if planned_tmap_args == '':
-        printtime('ERROR: Can not get alignment args from %s' %os.path.join(ANALYSIS_DIR, 'ion_params_00.json'))
-        bam['status'] = 'error'
-        return
+
     if is_need_realignment(bam, configuration['options'], desirable_tmap_args, planned_tmap_args):
         printtime('Planned alignemnt does not match the desirable alignment. Realign %s' %(bam['file']))
         assert(bam['file'].endswith('.bam'))
@@ -1956,11 +1987,11 @@ def get_global_options(configurations):
     global_options = {}
 
     for config in configurations.itervalues():
-        if global_options.has_key('configurations'):
+        if 'configurations' in global_options:
             assert(global_options['configurations'] == config['configured_run'])
         else:
             global_options['configurations'] = config['configured_run']
-        if global_options.has_key('barcoded_run'):
+        if 'barcoded_run' in global_options:
             assert(global_options['barcoded_run'] == config['barcoded_run'])
         else:
             global_options['barcoded_run'] = config['barcoded_run']            
@@ -2039,10 +2070,6 @@ def generate_report_htmls(configurations, process_status):
     generate_barcode_links_block(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), process_status, global_options, error_msg, warning_msg)
     if global_options['barcoded_run']:
         generate_barcode_links_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_RESULTS), process_status, global_options, error_msg, warning_msg)
-            
-def my_symlink(source, dest):
-    if not os.path.exists(dest):
-        os.symlink(source, dest)
 
 def plugin_main():
     global PLUGIN_DEV_SKIP_VARIANT_CALLING
@@ -2084,7 +2111,7 @@ def plugin_main():
        TMAPBIN = 'tmap'
     
     if PLUGIN_DEV_SKIP_VARIANT_CALLING:
-        os.symlink = my_symlink
+        os.symlink = lambda source, dest: None
     
     setup_run()
 
@@ -2096,8 +2123,12 @@ def plugin_main():
     try:
         with open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,'startplugin.json'), 'r') as json_file:
             STARTPLUGIN_JSON = json.load(json_file,parse_float=str)
+        my_pluginconfig = STARTPLUGIN_JSON['pluginconfig']
     except:
         printtime('ERROR: Failed to load and parse startplugin.json')
+        return 1
+    if STARTPLUGIN_JSON['pluginconfig'] == {}:
+        printtime('ERROR: The plugin is not configured. Perhaps select the plugin in the plan w/o configuring it?')
         return 1
     
     printtime('Loading ' + os.path.join(TSP_FILEPATH_PLUGIN_DIR, 'barcodes.json'))

@@ -131,8 +131,7 @@ string getVCFHeader(const ExtendParameters *parameters, ReferenceReader& ref_rea
   << "##INFO=<ID=SSEP,Number=A,Type=Float,Description=\"Strand-specific-error prediction on positive strand.\">" << endl
   << "##INFO=<ID=PB,Number=A,Type=Float,Description=\"Bias of relative variant position in reference reads versus variant reads. Equals Mann-Whitney U rho statistic P(Y>X)+0.5P(Y=X)\">" << endl
   << "##INFO=<ID=PBP,Number=A,Type=Float,Description=\"Pval of relative variant position in reference reads versus variant reads.  Related to GATK ReadPosRankSumTest\">" << endl
-  << "##INFO=<ID=FDVR,Number=A,Type=Integer,Description=\"Level of Flow Disruption of the alternative allele versus reference.\">" << endl
-  << "##INFO=<ID=SUBSET,Number=.,Type=String,Description=\"1-based index in ALT list of genotyped allele(s) that are a strict superset\">" << endl;
+  << "##INFO=<ID=FDVR,Number=A,Type=Integer,Description=\"Level of Flow Disruption of the alternative allele versus reference.\">" << endl;
 
   // If we want to output multiple min-allele-freq
   if (parameters->program_flow.is_multi_min_allele_freq){

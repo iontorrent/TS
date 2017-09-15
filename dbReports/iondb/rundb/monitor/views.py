@@ -8,6 +8,7 @@ from django.core.paginator import Paginator, InvalidPage
 from iondb.rundb.api import MonitorResultResource
 from iondb.rundb.models import GlobalConfig
 from iondb.rundb import models
+from iondb.utils import utils
 
 import datetime
 import json
@@ -104,7 +105,9 @@ def chef(request):
 
     days_ago = datetime.datetime.now() - datetime.timedelta(days=days)
 
-    plans = models.PlannedExperiment.objects.exclude(planStatus = "run").filter(experiment__chefLastUpdate__gte=days_ago)
+    # monitoring page should show Chef plans that are currently in progress or have recently finished Chef processing, 
+    # regardless if they are being or have been sequenced
+    plans = models.PlannedExperiment.objects.filter(experiment__chefLastUpdate__gte=days_ago)    
     sampleSets = models.SampleSet.objects.filter(libraryPrepInstrumentData__lastUpdate__gte=days_ago)
 
     libprep_done = []
@@ -117,8 +120,12 @@ def chef(request):
             'last_updated' : plan.experiment.chefLastUpdate,
             'instrumentName': plan.experiment.chefInstrumentName,
             'template_prep_progress': plan.experiment.chefProgress,
-            'template_prep_status': plan.experiment.chefStatus
+            'template_prep_status': plan.experiment.chefStatus,
+            'template_prep_operation_mode': plan.experiment.chefOperationMode,
+            'template_prep_remaining_time': utils.convert_seconds_to_hhmmss_string(plan.experiment.chefRemainingSeconds),
+            'template_prep_estimated_end_time': utils.convert_seconds_to_datetime_string(plan.experiment.chefLastUpdate, plan.experiment.chefRemainingSeconds)           
         }
+
         samplesets_w_libprep = plan.sampleSets.filter(libraryPrepInstrumentData__isnull=False)
         if samplesets_w_libprep:
             libprep_done.extend(list(samplesets_w_libprep.values_list('pk', flat=True)))
@@ -138,7 +145,10 @@ def chef(request):
                 'last_updated' : sampleSet.libraryPrepInstrumentData.lastUpdate,
                 'instrumentName': sampleSet.libraryPrepInstrumentData.instrumentName,
                 'lib_prep_progress': sampleSet.libraryPrepInstrumentData.progress,
-                'lib_prep_status': sampleSet.libraryPrepInstrumentData.instrumentStatus
+                'lib_prep_status': sampleSet.libraryPrepInstrumentData.instrumentStatus,
+                'operation_mode': sampleSet.libraryPrepInstrumentData.operationMode,
+                'remaining_time': utils.convert_seconds_to_hhmmss_string(sampleSet.libraryPrepInstrumentData.remainingSeconds),
+                'estimated_end_time': utils.convert_seconds_to_datetime_string(sampleSet.libraryPrepInstrumentData.lastUpdate, sampleSet.libraryPrepInstrumentData.remainingSeconds)
             })
 
     chef_table = sorted(chef_table, key=lambda plan: plan['last_updated'], reverse=True)

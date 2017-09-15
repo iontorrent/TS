@@ -12,7 +12,7 @@ include(../cmake/CMakeLists.PluginGetVersion.txt)
 include(../cmake/CMakeLists.PluginSetAttributes.txt)
 
 # these are the package specific attributues which cannot be automated
-SET(CPACK_PACKAGE_DESCRIPTION "This plugin assembles reads into long sequences (contigs) and allows for basic level analysis, with metrics such as number of contigs, N50, and other analysis metrics.")
+SET(CPACK_PACKAGE_DESCRIPTION "This plugin analyzes RNA species reads mapped to a coanonical transcriptome reference, as produced from an AmpliSeq run targeting cDNA. Reads are collected for individual barcodes and a summary report made comparing the relative expressions of genes for different samples, as represented by individual barcodes.")
 SET(CPACK_DEBIAN_PACKAGE_DEPENDS "python, ion-pipeline")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Brian Bourke-Martin")
 

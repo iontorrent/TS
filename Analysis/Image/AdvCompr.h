@@ -198,6 +198,7 @@ private:
 	int t0estIdx;         // frame index for t0
     int doGain;           // internal flag used for controling gain correction
     int pinnedTrcs;       // number of pinned trcs
+    int doPairPixelXtalkCorr; // 1 by default for PQ..turn off for 550 chip
 
     int frameRate;        // incomming data frame rate
     int npts_newfr;

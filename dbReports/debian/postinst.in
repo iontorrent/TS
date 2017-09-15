@@ -251,7 +251,6 @@ ENDOFAPACHEENV
     mkdir -p /var/log/ion
     chown www-data.www-data /var/log/ion
     chmod a+w /var/log/ion
-    chown www-data.www-data /var/spool/ion  # created in CMakeLists.txt
     chmod g+w /var/spool/ion    # set in CMakeLists.txt but want to be certain
 
     # touchy code
@@ -375,7 +374,7 @@ EOF
     invoke-rc.d apache2 start
     invoke-rc.d celeryd start
     invoke-rc.d celerybeat start
-    service DjangoFTP start
+    invoke-rc.d DjangoFTP start
 
     #load the references for a first time
     (wget -q -O /dev/null http://localhost/configure/references/ > /dev/null) || \
@@ -402,6 +401,9 @@ EOF
     invoke-rc.d ionPlugin restart
     invoke-rc.d ionCrawler restart
     invoke-rc.d avahi-daemon restart
+
+    # update system services alerts after install process is complete
+    python /opt/ion/iondb/bin/check_system_services.py -n
 
     # fire off the grooming script
     /opt/ion/iondb/bin/grooming.py

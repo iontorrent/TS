@@ -36,7 +36,7 @@ def base_context_processor(request):
 
     return {"base_site_name": gconfig.site_name, "global_messages": serialized_messages,
             "user_messages": user_serialized_messages, "base_js_extra": base_js_extra,
-            "unread_news": unread_news, "DEBUG": settings.DEBUG}
+            "unread_news": unread_news, "DEBUG": settings.DEBUG, "version": settings.VERSION}
 
 
 def message_binding_processor(request):

@@ -170,7 +170,7 @@ tmap_seqs_io_to_bam_header(tmap_refseq_t *refseq,
   sam_header_record_t *record = NULL;
   sam_header_record_t **record_list = NULL;
   char tag[2];
-  char *command_line= NULL;
+  char* command_line = NULL;
   char *id = NULL;
   char *id_pp = NULL;
   int32_t i, j;
@@ -307,24 +307,70 @@ tmap_seqs_io_to_bam_header(tmap_refseq_t *refseq,
       }
   }
 
-  // @PG - program group
-  // TODO: check for previous program group ID and set @PG.PP
-  record = sam_header_record_init("PG"); // new program group
-  if(0 == sam_header_record_add(record, "ID", id)) tmap_bug(); // @PG.ID
-  if(0 == sam_header_record_add(record, "VN", PACKAGE_VERSION)) tmap_bug(); // @PG.VN
-  // @PG.CL
-  command_line = NULL;
-  j = 1; // for the EOL
-  command_line = tmap_realloc(command_line, sizeof(char) * j, "command_line");
-  command_line[j-1] = '\0';
-  for(i=0;i<argc;i++) {
-      if(0 < i) j++;
-      j += strlen(argv[i]);
-      command_line = tmap_realloc(command_line, sizeof(char) * j, "command_line");
-      if(0 < i) strcat(command_line, " ");
-      strcat(command_line, argv[i]);
-      command_line[j-1] = '\0';
-  }
+    // @PG - program group
+    // TODO: check for previous program group ID and set @PG.PP
+    record = sam_header_record_init("PG"); // new program group
+    if(0 == sam_header_record_add(record, "ID", id)) tmap_bug(); // @PG.ID
+    if(0 == sam_header_record_add(record, "VN", PACKAGE_VERSION)) tmap_bug(); // @PG.VN
+    // @PG.CL
+    command_line = NULL;
+    j = 1; // j is memory taken by command line string, including terminating zero
+    command_line = tmap_realloc (command_line, sizeof (char) * j, "command_line");
+    command_line [j-1] = '\0';
+    for (i = 0; i < argc; i++) 
+    {
+        // IR-29686: TMAP should escape spaces in command line arguments when recording PG.CL tag
+
+        // add space delimiting arguments if this is not the very first arg
+        if (i > 0)
+        {
+            j += 1;
+            command_line = tmap_realloc (command_line, sizeof (char) * j, "command_line");
+            strcat (command_line, " ");
+        }
+        // convert every whitespace character into "\ " (escaped space) sequence (all kinds of whitespaces are converged)
+        {
+            static char const* wspace = " \f\n\r\t\v";
+            char* wspace_ptr = NULL;
+            char* head = argv [i];
+            int span = 0;
+            int cmdline_len = j - 1;
+            while ((wspace_ptr = strpbrk (head, wspace)))
+            {
+                span = wspace_ptr - head;
+                // expand cmdline memory 
+                j += span + 2; // need 2 extra bytes for escaped space
+                command_line = tmap_realloc (command_line, sizeof (char) * j, "command_line"); // reallocate cmdline space to acommodate for an escaped space and a non-whitespace token
+                if (span > 0)
+                {
+                    // add non-whitespaced token
+                    memcpy (command_line + cmdline_len, head, span); // add non-whitespace token to the end of cmdline
+                    cmdline_len += span; // adjust cmdline len
+                    command_line [cmdline_len] = 0; // put terminating zero at the end of currently built cmdline
+                }
+                strcat (command_line, "\\ "); // add escaped space
+                cmdline_len += 2; // adjust cmdline len
+                head = wspace_ptr + 1; // head now points past the found whitespace
+            }
+            // now process the last non-ws token
+            if (*head) // head not at the end of the string
+            {
+                span = strlen (head);
+                j += span; // need 2 extra bytes for escaped space
+                command_line = tmap_realloc (command_line, sizeof (char) * j, "command_line"); // reallocate cmdline space to acommodate for an escaped space and a non-whitespace token
+                // add non-whitespaced token
+                memcpy (command_line + cmdline_len, head, span); // add non-whitespace token to the end of cmdline
+                cmdline_len += span; // adjust cmdline len
+                command_line [cmdline_len] = 0; // put terminating zero at the end of currently built cmdline
+            }
+        }
+        // j += strlen (argv [i]);
+        // command_line = tmap_realloc (command_line, sizeof (char) * j, "command_line");
+        // if (0 < i) 
+        //     strcat (command_line, " ");
+        // strcat (command_line, argv [i]);
+        // command_line [j-1] = '\0';
+    }
   if(0 == sam_header_record_add(record, "CL", command_line)) tmap_bug(); // @PG.CL
   if(NULL != id_pp) { // @PG.PP
       if(0 == sam_header_record_add(record, "PP", id_pp)) tmap_bug(); // @PG.CL

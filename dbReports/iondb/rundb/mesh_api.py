@@ -177,7 +177,7 @@ class MeshPrefetchResource(ModelResource):
             }
         }
 
-        compatible_nodes = list(IonMeshNode.objects.all())
+        compatible_nodes = list(IonMeshNode.objects.filter(active=True))
 
         for node in compatible_nodes:
             container_object["nodes"][node.hostname] = {
@@ -441,7 +441,8 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
 
         if len(servers_with_truncated_data) > 0:
             warnings.append(
-                "The Torrent Server(s) %s have too many results to display. Only experiments newer than %s are displayed!" %
+                "The Torrent Server(s) %s have too many results to display. "
+                "Only experiments newer than %s are displayed. Try searching or adding additional filters." %
                 (",".join(servers_with_truncated_data), str(object_truncation_date))
             )
 

@@ -228,5 +228,6 @@ private:
 };
 
 bool IsHpIndel(const string& seq_1, const string& seq_2);
+void RemoveHp(const string& base_seq, string& hp_removed_base_seq);
 
 #endif // CROSSHYPOTHESES_H

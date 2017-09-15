@@ -6,6 +6,7 @@
 {% endblock tab-configure-analysisargs %}
 {% block content %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -24,10 +25,11 @@
             <input type="text" class="filter" id="search_name" placeholder="Search Name"/>
         </div>
         <div class="search-field">
-            <select id='search_chip' class="filter">
+            <select id="search_chip" class="selectpicker filter"
+                   title="Chip:" data-persist-title="true" data-live-search="true">
                 <option value="">All Chips</option>
                 {% for chip in chips %}
-                    <option value={{chip.name}}>{{chip.name}}</option>
+                    <option value={{chip.name}}>{{chip.description}}</option>
                 {% endfor %}
             </select>
         </div>
@@ -44,8 +46,17 @@
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 <script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 
 <script type="text/javascript">
+var chips = [];
+{% for chip in chips %}
+    chips.push({
+        "name": "{{chip.name}}",
+        "description": "{{chip.description}}"
+    });
+{% endfor %}
+
 
 function filter(e){
     e.preventDefault();
@@ -117,6 +128,7 @@ $(document).ready(function(){
                 field: "chipType",
                 title: "Chip Type",
                 width : "10%",
+                template: kendo.template($("#chipTypeColumnTemplate").html())
             } , {
                 field: "created",
                 title: "Source",
@@ -205,5 +217,10 @@ $(document).ready(function(){
         # } #
     </ul>
 </div>  
+</script>
+
+<script id="chipTypeColumnTemplate" type="text/x-kendo-template">
+    # var chip = chips.filter(function(obj){ return (obj.name==data.chipType); })[0] #
+    #=chip ? chip.description : data.chipType #
 </script>
 {% endblock content %}

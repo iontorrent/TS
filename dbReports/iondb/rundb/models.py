@@ -303,6 +303,7 @@ class KitInfo(models.Model):
         ('', 'Unspecified'),
         ('OT', 'OneTouch'),
         ('IC', 'IonChef'),
+        ('IA', 'IsoAmp'),
         ("OT_IC", "Both OneTouch and IonChef")
     )
     #compatible sample prep instrument type
@@ -427,7 +428,7 @@ class common_CV(models.Model):
 
     ALLOWED_CONTROL_VACABULORIES = (
         ('samplePrepProtocol', 'Sample Prep Protocol'),
-        ('applicationCategory', 'Application Category')
+        ('applicationCategory', 'Research Category')
     )
 
     cv_type = models.CharField(max_length=127, choices=ALLOWED_CONTROL_VACABULORIES, blank=False, null=False)
@@ -778,7 +779,7 @@ class PlannedExperiment(models.Model):
 
     #"reserved" status: the original intent of this status is to indicate that part of a group plan
     #(e.g., forward of a paired-end plan) has been claimed for a run - user can't further edit a reserved plan
-    #from the plan wizard
+    #from the plan wizard. Paired-end plan is now obsolete. Chef now marks a plan as "reserved" for exclusivity during templating.
 
     #"voided" status  : the original intent of this status is to indicate this group plan has been abandoned
     #even though it has not been fully used for its sequencing runs - user can't further edit a voided plan
@@ -1238,6 +1239,16 @@ class PlannedExperiment(models.Model):
                     return True
 
         return False
+
+    def is_isoAmp(self):
+        kitName = self.templatingKitName
+        if kitName:
+            for iaKit in KitInfo.objects.filter(kitType="TemplatingKit", samplePrep_instrumentType="IA"):
+                if (kitName == iaKit.name):
+                    return True
+        return False
+
+
 
     def is_duplicateReads(self):
         if self.latest_eas:
@@ -1882,6 +1893,11 @@ class Experiment(models.Model):
     chefExtraInfo_1 = models.CharField(max_length=128, blank=True, default='')
     chefExtraInfo_2 = models.CharField(max_length=128, blank=True, default='')
     chefScriptVersion = models.CharField(max_length=64, blank=True, default='')
+    chefOperationMode = models.CharField(max_length=64, blank=True, default='')
+    chefRemainingSeconds = models.IntegerField(blank=True, null=True)
+    chefStartTime = models.DateTimeField(null=True, blank=True)
+    chefProtocolDeviationName = models.CharField(max_length=127, blank=True, null=True)
+    chefEndTime = models.DateTimeField(null=True, blank=True)
 
     def __unicode__(self): return self.expName
 
@@ -2578,10 +2594,13 @@ class SamplePrepData(models.Model):
 
     packageVer = models.CharField(max_length=64, blank=True, default='')
     scriptVersion = models.CharField(max_length=64, blank=True, default='')
-
+    operationMode = models.CharField(max_length=64, blank=True, default='')
+    remainingSeconds = models.IntegerField(blank=True, null=True)
+    startTime = models.DateTimeField(null=True, blank=True)
+    endTime = models.DateTimeField(null=True, blank=True)
 
     def __unicode__(self):
-        return u'%s/%d' % (self.instrumentName, self.pk)
+        return u'%s/%s' % (self.instrumentName, self.pk)
 
     def __iter__(self):
         for field_name in self._meta.get_all_field_names():
@@ -2631,6 +2650,7 @@ class SampleSetItem(models.Model):
     pcrPlateRow = models.CharField(max_length=10, default='', blank=True, null=True)
 
     biopsyDays = models.IntegerField(blank=True, null=True, default=0)
+    cellNum = models.CharField(max_length=127, blank=True, null=True, default="")
     coupleId = models.CharField(max_length=127, blank=True, null=True, default="")
     embryoId = models.CharField(max_length=127, blank=True, null=True, default="")
 
@@ -3555,6 +3575,12 @@ class Cruncher(models.Model):
         except:
             log_date = None
         return log_date
+
+    def save(self, *args, **kwargs):
+        # cluster nodes don't support domain name
+        if '.' in self.name:
+            self.name = os.path.splitext(self.name)[0]
+        super(Cruncher, self).save(*args, **kwargs)
 
 
 class AnalysisMetrics(models.Model):
@@ -6009,6 +6035,9 @@ class IonMeshNode(models.Model):
     # the name of the node mesh computer
     hostname = models.CharField(max_length=128, unique=True, null=False)
 
+    # user supplied name, optional
+    name = models.CharField(max_length=128, unique=True, blank=True, null=True)
+
     # this is the identifie
     system_id = models.CharField(max_length=37, unique=True)
 
@@ -6018,96 +6047,33 @@ class IonMeshNode(models.Model):
     # this is the key to be checked against for verifying incoming requests
     apikey_local = models.CharField(max_length=256, blank=True, null=True)
 
-    share_plans = models.BooleanField(default=True)
-    share_data = models.BooleanField(default=True)
-    share_monitoring = models.BooleanField(default=True)
+    active = models.BooleanField(default=True)
 
     @classmethod
     def create(cls, system_id):
         """Create a ion mesh node with keys"""
 
-        node, existed = IonMeshNode.objects.get_or_create(system_id=system_id)
+        node, created = IonMeshNode.objects.get_or_create(system_id=system_id)
         if not node.apikey_local:
             node.apikey_local = _generate_key()
             node.save()
 
-        return node
+        return node, created
 
 
     @classmethod
-    def canAccess(cls, system_id, api_key, data_type):
+    def canAccess(cls, system_id, api_key):
         """determines if a system with a given id can access information from this system"""
 
         try:
             # get the node from the database
             node = IonMeshNode.objects.get(system_id=system_id)
 
-            # get the data access type
-            data_access = False
-            if data_type == 'admin':
-                data_access = True
-            elif data_type == 'data':
-                data_access = node.share_data
-            elif data_type == 'plans':
-                data_access = node.share_plans
-            elif data_type == 'monitoring':
-                data_access = node.share_monitoring
-
             # return if access is allowed
-            return data_access and node.apikey_local == api_key
+            return node.apikey_local == api_key
         except IonMeshNode.DoesNotExist:
             return False
 
-
-class SharedServer(models.Model):
-    name = models.CharField(max_length=128, unique=True)
-    address = models.CharField(max_length=128)
-    username = models.CharField(max_length=64)
-    password = models.CharField(max_length=64)
-    active = models.BooleanField(default=True)
-    comments = models.TextField(blank=True)
-
-    def setup_session(self):
-        import requests
-
-        try:
-            s = requests.Session()
-            # convenient variables for communication
-            s.api_url = 'http://%s/rundb/api/v1/' % self.address
-            s.address = self.address
-            s.server = self.name
-            # call the account api, this also sets up a session cookie
-            # TODO api_key authentication
-            r = s.get(s.api_url + 'account/', auth=(self.username, self.password))
-            # throw exception if unsuccessful
-            r.raise_for_status()
-        except (requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
-            raise Exception('Connection Error: Torrent Server %s (%s) is unreachable' % (s.server, s.address))
-        except requests.exceptions.HTTPError as e:
-            raise Exception('HTTP Error: Unable to connect to Torrent Server %s (%s): %s' % (s.server, s.address, e))
-        except Exception as e:
-            raise Exception('Error: Unable to access Torrent Server %s (%s): %s' % (s.server, s.address, e))
-
-        try:
-            # get software version
-            r = s.get(s.api_url + 'torrentsuite/version')
-            version = r.json()['meta_version']
-        except:
-            msg = 'Error getting software version for Torrent Server %s (%s). ' % (s.server, s.address)
-            raise Exception(msg + 'Only TSS 4.4 and above are supported for Plan Transfer')
-
-        return s, version
-
-    def clean(self):
-        # if active server make sure we can set up communication
-        if self.active:
-            try:
-                self.setup_session()
-            except Exception as e:
-                raise ValidationError(str(e))
-
-    def __unicode__(self):
-        return self.name
 
 class PlanSession(models.Model):
     ''' Stores temporary step_helper session data during Run Planning '''

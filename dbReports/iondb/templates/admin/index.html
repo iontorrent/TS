@@ -53,6 +53,11 @@
                 {% endif %}
               </tr>
             {% endfor %}
+            {% if app.app_label == "rundb" %}
+            <tr><th scope="row">
+                <b><a href="/configure/mesh/">SharedServer</a></b>
+            </th></tr>
+            {% endif %}
           </table>
         </div>
       {% endfor %}

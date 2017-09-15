@@ -114,31 +114,12 @@
                         else if(key == "chiptype"){
                             document.getElementById("chiptype").value = chipType;
                         }
-
-                        //set the value of thumbnail_only checkbox
-                        else if(key == "thumbnailonly"){
-                            if (val == "off") {
-                                $("#thumbnailonly").prop('checked', false);
-                            } else {
-                                $("#thumbnailonly").prop('checked', true);
-                            }
-
-                            if (chipType.substring(0,1) === "P" & runData['results'].metaData.thumb) {
-                                //This is Proton thumbnail; show the option
-                                $("#thumbnailonly").prop('disabled', false);
-                            } else {
-                                //This is PGM or Proton fullchip; option makes no sense so disable it
-                                $("#thumbnailonly").prop('disabled', true).prop('checked', false);
-                            }
-                        }
                     });
                 }
             });
             if(document.getElementById("upload_path").value == ""){
                 document.getElementById("upload_path").value = "/results/uploads/";
             }
-
-
         });
 
         //process form to grab html objects and turn them into json objects
@@ -194,6 +175,9 @@
 
                     //the name of the form used here, in this case "inputform" should match the one in the html code
                     obj =  $('#inputform').serializeObject();
+
+                    // strip out the password
+                    delete obj.user_password;
 
                     pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
                     pluginAPIJSON = JSON.stringify(pluginAPIJSON);
@@ -264,9 +248,6 @@
                     <tr>
                         <td>Upload Path: </td>
                         <td><input id="upload_path" name="upload_path" value="" size="50"/></td>
-                    <tr>
-                        <td>Thumbnail-only: </td>
-                        <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" uncheckedtitle="Only affects Proton datasets" size="50"/></td>
                     </tr>
                 </table>
             </div>

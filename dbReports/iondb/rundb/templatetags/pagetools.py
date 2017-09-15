@@ -158,3 +158,12 @@ def makeColumns(mylist, ncol):
     nrows = 1+int(l/ncol) if (l%ncol > 0) else int(l/ncol)
     return [mylist[nrows*i:nrows*(i+1)] for i in range(ncol) if i<l]
 
+
+# Custom filter to check if a template exists
+@register.filter
+def template_exists(template_name):
+    try:
+        template.loader.get_template(template_name)
+        return True
+    except template.TemplateDoesNotExist:
+        return False

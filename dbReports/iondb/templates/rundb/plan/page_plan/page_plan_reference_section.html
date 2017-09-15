@@ -3,7 +3,7 @@
 <input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
 
 <div class="row-fluid">    
-    <div class="span12 summary-section">
+    <div class="span12 collapsible-section">
         <h3>
             <a class="pull-right" href="#"><i class="showhide icon-minus"></i></a>                    
          Default Reference & BED Files</h3>
@@ -50,7 +50,11 @@
                             {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile %}
                                 <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                             {% else %}
-                                <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                                {% ifequal bedFile.path helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile %}
+                                   <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                {% else %}
+                                   <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                                {% endifequal %}
                             {% endifequal %}
                         {%endfor%}
                
@@ -72,8 +76,12 @@
                             {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile %}
                                 <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                             {% else %}
-                                <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
-                            {% endifequal %}                                                                              
+                                {% ifequal bedFile.path  helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile %}
+                                   <option SELECTED value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                {% else %}
+                                   <option value="{{bedFile.file}}" data-reference="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                                {% endifequal %}
+                            {% endifequal %}
                         {%endfor%}
                
                         {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFileMissing %}

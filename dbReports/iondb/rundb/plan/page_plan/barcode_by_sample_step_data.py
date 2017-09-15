@@ -59,7 +59,7 @@ class BarcodeBySampleStepData(AbstractStepData):
 
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = []
         self.prepopulatedFields[BarcodeBySampleFieldNames.SHOW_SAMPLESET_INFO] = False
-        self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
+        self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.filter(isActive=True).order_by("annotationType", "value"))
         self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "1"
 
         self.savedObjects[SavePlanFieldNames.IR_PLUGIN_ENTRIES] = []
@@ -100,14 +100,12 @@ class BarcodeBySampleStepData(AbstractStepData):
     def getStepName(self):
         return StepNames.BARCODE_BY_SAMPLE
 
-    def updateFromStep(self, updated_step):
-        if updated_step.getStepName() not in self._dependsOn:
-            return
 
+    def alternateUpdateFromStep(self, updated_step):
+        """
+        also runs if editing a plan post-sequencing and Application is updated
+        """
         if updated_step.getStepName() == StepNames.APPLICATION:
-            if not updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
-                logger.debug("barcode_by_sample_step_data.updateFromStep() --- NO-OP --- APPLICATION APPL_PRODUCT IS NOT YET SET!!! ")
-                return
 
             if updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE]:
                 runTypeObj = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE]
@@ -124,7 +122,17 @@ class BarcodeBySampleStepData(AbstractStepData):
             else:
                 self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = ""
 
-            logger.debug("barcode_by_sample_step_data.updateFromStep() APPLICATION going to update RUNTYPE value=%s" % (self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]))
+
+    def updateFromStep(self, updated_step):
+        if updated_step.getStepName() not in self._dependsOn:
+            return
+
+        self.alternateUpdateFromStep(updated_step)
+
+        if updated_step.getStepName() == StepNames.APPLICATION:
+            if not updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
+                logger.debug("barcode_by_sample_step_data.updateFromStep() --- NO-OP --- APPLICATION APPL_PRODUCT IS NOT YET SET!!! ")
+                return
 
         if updated_step.getStepName() == StepNames.IONREPORTER:
             ir_account_id = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
@@ -147,6 +155,7 @@ class BarcodeBySampleStepData(AbstractStepData):
                             row[SavePlanFieldNames.IR_CANCER_TYPE] = sampleset_item[0].cancerType
                             row[SavePlanFieldNames.IR_CELLULARITY_PCT] = sampleset_item[0].cellularityPct
                             row[SavePlanFieldNames.IR_BIOPSY_DAYS] = sampleset_item[0].biopsyDays
+                            row[SavePlanFieldNames.IR_CELL_NUM] = sampleset_item[0].cellNum
                             row[SavePlanFieldNames.IR_COUPLE_ID] = sampleset_item[0].coupleId
                             row[SavePlanFieldNames.IR_EMBRYO_ID] = sampleset_item[0].embryoId
 

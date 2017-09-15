@@ -110,7 +110,7 @@
         "configuration" : "tagseq_cfdna",
         "replaces"      : ["tagseq_cfdna"],
         "compatibility" : {
-          "chip"        : ["510","520","530","540","pgm"],
+          "chip"        : ["510","520","530","540","pgm","proton_p1"],
           "library"     : ["tag_sequencing"],
           "frequency"   : ["rare_somatic"],
           "stringency"  : ["low"]
@@ -123,7 +123,7 @@
         "configuration" : "tagseq_ffpe",
         "replaces"      : ["tagseq_ffpe"],
         "compatibility" : {
-          "chip"        : ["510","520","530","540","pgm"],
+          "chip"        : ["510","520","530","540","pgm","proton_p1"],
           "library"     : ["tag_sequencing"],
           "frequency"   : ["rare_somatic"],
           "stringency"  : ["low"]

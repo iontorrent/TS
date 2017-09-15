@@ -3,7 +3,11 @@
 <div id="modal_plugin_or_publisher_install" title="" class="modal hide" data-width="800">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Install or Upgrade {{what|capfirst}}</h3>
+        {% if what == "Install Updates"%}
+                <h3>{{what|capfirst}}</h3>
+        {% else %}
+                <h3>Install or Upgrade {{what|capfirst}}</h3>
+        {% endif %}
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
@@ -46,13 +50,33 @@
 
 <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
 <script type="text/javascript">
+
+//install the offcycle product when uploaded manually
+function install_products_manual() {
+    $.ajax({
+            type: 'POST',
+            url: "{{install_product_url}}",
+            contentType: "application/x-www-form-urlencoded",
+            dataType: "json",
+            success: function (data) {
+                $('#manualOffcycle').html('<p>Product installation successfully completed for ' + uploader.files[0].name + '.This page will now reload</p>').delay(6000).show(0);
+                $.unblockUI();
+                window.location.reload(true);
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                $('#manualOffcycle').addClass('alert alert-error').append('<p>Error: ' + jqXHR.responseText + '</p>').show();
+                $.unblockUI();
+            }
+    });
+}
+
 var file_filters = [];
 {% for ext, label in file_filters %}
     file_filters.push({
         title: "{{label}}", extensions: "{{ext}}"
     })
 {% endfor %}
-    
+
 var uploader = new plupload.Uploader({
     runtimes: 'html5,flash,silverlight',
     filters: file_filters,
@@ -94,18 +118,36 @@ $(function(){
 
         $("#msg").addClass('alert-info').html("Attempting to install ...");
         $("#msg").show();
-
+        inputData = {"file": file_name};
+        if ("{{what}}" == "Install Updates") {
+            inputData["actualFileName"] = uploader.files[0].name;
+            $("#msg").addClass('alert-info').html("The install process may take a few minutes to complete...");
+            setTimeout(function() { $('#modal_plugin_or_publisher_install').modal('hide'); }, 4000);
+            $.blockUI();
+            $('.blockMsg').prepend('<h1>Installing, please wait ...</h1>');
+        }
         $.ajax({
             type: 'POST',
             url: "{{install_url}}",
             contentType: "application/json; charset=utf-8",
-            data: JSON.stringify({"file": file_name}),
+            data: JSON.stringify(inputData),
             dataType: "json",
             success: function () {
                 $("#msg").removeClass('alert-info alert-error').addClass('alert-success').html("Started {{what}} install");
+
                 setTimeout(function () {
-                    if ("{{what}}" == "publisher"){
+                    if ("{{what}}" == "publisher") {
                         window.location.reload(true);
+                    } else if ("{{what}}" == "Install Updates") {
+
+                         if (file_name.indexOf(".deb") >= 0){
+                             $.unblockUI();
+                             $('#manualOffcycle').append('<p>Installation successfully completed for ' + uploader.files[0].name + '.This page will now reload</p>').show();
+                             window.location.reload(true);
+                         } else {
+                             $('#manualOffcycle').html('<p>Product upload successfull. Update in progress...</p>').delay(6000).show(0);
+                             setTimeout(install_products_manual, 6000);
+                         }
                     } else {
                         $('#grid').data('kendoGrid').dataSource.read();
                         $('#grid').data('kendoGrid').refresh();
@@ -114,7 +156,15 @@ $(function(){
                 }, 2000);
             },
             error:function(jqXHR, textStatus, errorThrown){
-                $("#msg").removeClass('alert-info alert-success').addClass('alert-error').html(jqXHR.responseText);
+                if ("{{what}}" == "Install Updates") {
+                    $('#modal_plugin_or_publisher_install').modal('hide');
+                    $.unblockUI();
+                    //console.log(jqXHR.responseText);
+                    $('#manualOffcycle').addClass('alert alert-error').append('<p>Error: ' + jqXHR.responseText + '</p>').show();
+                }
+                else {
+                    $("#msg").removeClass('alert-info alert-success').addClass('alert-error').html(jqXHR.responseText);
+                }
             }
         });
     });

@@ -45,6 +45,7 @@ result_patterns = [
 ]
 rawdata_patterns = [
     'explog_final.txt',
+    'explog.txt',
     'InitLog.txt',
     'InitLog1.txt',
     'InitLog2.txt',
@@ -54,9 +55,11 @@ rawdata_patterns = [
     'InitValsW2.txt',
     'Controller',
     'debug',
+    'liveview',
     'Controller_1',
     'debug_1',
     'chipCalImage.bmp.bz2',
+    'InitRawTrace0.png',
 ]
 
 

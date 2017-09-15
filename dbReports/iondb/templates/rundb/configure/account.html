@@ -70,15 +70,24 @@ $(document).ready(function() {
     <h1>User Profile / Account Information  <small>Allows to view and update your existing user profile and account information</small></h1>
     <form method="post" action="" class="form-horizontal">
         {% csrf_token %}
-        <div id="form-error-messages" class="alert alert-danger hide">
-            {% for error in form.errors %}
-            <p>{{ error }}</p>
+        {% if form.errors %}
+            {% for field in form %}
+                {% for error in field.errors %}
+                    <div class="alert alert-danger">
+                        <strong>{{ field.label }} - {{ error|escape }}</strong>
+                    </div>
+                {% endfor %}
             {% endfor %}
-        </div>
+            {% for error in form.non_field_errors %}
+                <div class="alert alert-danger">
+                    <strong>{{ error|escape }}</strong>
+                </div>
+            {% endfor %}
+        {% endif %}
         <fieldset>
             <div class="control-group">
                 <label for="input01" class="control-label">Username</label>
-                <div class="controls">
+                <div class="controls" id="username">
                     {{ user.username }}
                     <p class="help-block">
                     </p>
@@ -86,7 +95,7 @@ $(document).ready(function() {
             </div>
             <div class="control-group">
                 <label for="fileInput" class="control-label">Full Name</label>
-                <div class="controls">
+                <div class="controls" id="fullname">
                     {{ user.get_full_name|default:"[Not Set]" }}
                     <p class="help-block">
                     </p>
@@ -94,7 +103,7 @@ $(document).ready(function() {
             </div>
             <div class="control-group">
                 <label for="fileInput" class="control-label">REST API Key</label>
-                <div class="controls">
+                <div class="controls" id="apikey">
                     <pre>{{ user.api_key.key }}</pre>
                     <p class="help-block">
                     </p>
@@ -102,7 +111,7 @@ $(document).ready(function() {
             </div>
             <div class="control-group">
                 <label for="fileInput" class="control-label">Account Level</label>
-                <div class="controls">
+                <div class="controls" id="is_superuser">
                     {% if user.is_superuser %}Admin{% else %}{% if user.is_staff %}Staff{% else %}User{% endif %}{% endif %}
                     <p class="help-block">
                     </p>
@@ -110,7 +119,7 @@ $(document).ready(function() {
             </div>
             <div class="control-group">
                 <label for="fileInput" class="control-label">{{form.name.label}}</label>
-                <div class="controls">
+                <div class="controls" id="name">
                     {{form.name}}
                     <p class="help-block">
                     </p>
@@ -118,7 +127,7 @@ $(document).ready(function() {
             </div>
             <div class="control-group">
                 <label for="fileInput" class="control-label">{{form.email.label}}</label>
-                <div class="controls">
+                <div class="controls" id="email">
                     {{form.email}}
                     <p class="help-block">
                     </p>
@@ -126,14 +135,28 @@ $(document).ready(function() {
             </div>
             <div class="control-group">
                 <label for="fileInput" class="control-label">{{form.phone_number.label}}</label>
-                <div class="controls">
+                <div class="controls" id="phone_number">
                     {{form.phone_number}}
                     <p class="help-block">
                     </p>
                 </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">{{form.password.label}}</label>
+                <div class="controls" id="password">
+                    {{form.password}}
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">{{form.password_confirm.label}}</label>
+                <div class="controls" id="password_confirm">
+                    {{form.password_confirm}}
+                </div>
+            </div>
+            <div>
                 <div class="form-actions">
-                    <input type="reset" class="btn" value="Reset"/>
-                    <input type="submit" class="btn btn-primary" value="Submit"/>
+                    <input type="reset" class="btn" id="reset_button" value="Reset"/>
+                    <input type="submit" class="btn btn-primary" id="submit_button" value="Submit"/>
                 </div>
             </div>
         </fieldset>

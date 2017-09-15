@@ -426,6 +426,7 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     pcrPlateRow = queryDict.get("pcrPlateRow", "").strip()
 
     biopsyDays = queryDict.get("biopsyDays", "0")
+    cellNum = queryDict.get("cellNum", "")
     coupleId = queryDict.get("coupleId", "")
     embryoId = queryDict.get("embryoId", "")
 
@@ -460,6 +461,7 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['cellularityPct'] = cellularityPct
 
     sampleSetItem_dict["biopsyDays"] = biopsyDays if biopsyDays else "0"
+    sampleSetItem_dict["cellNum"] = cellNum
     sampleSetItem_dict["coupleId"] = coupleId
     sampleSetItem_dict["embryoId"] = embryoId
 
@@ -501,6 +503,7 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     barcode = queryDict.get("barcode", "")
 
     biopsyDays = queryDict.get("biopsyDays", "0")
+    cellNum = queryDict.get("cellNum", "")
     coupleId = queryDict.get("coupleId", "")
     embryoId = queryDict.get("embryoId", "")
 
@@ -535,6 +538,7 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['attribute_dict'] = sampleAttributes_dict
 
     sampleSetItem_dict["biopsyDays"] = biopsyDays if biopsyDays else "0"
+    sampleSetItem_dict["cellNum"] = cellNum
     sampleSetItem_dict["coupleId"] = coupleId
     sampleSetItem_dict["embryoId"] = embryoId
 
@@ -711,8 +715,10 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" % (attributeValue.id))
 
 
-def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, sampleControlType, selectedBarcodeKit, \
-                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow, sampleBiopsyDays, sampleCoupleId, sampleEmbryoId, sampleSetItemDescription):
+def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, sampleControlType,
+        selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType,
+        pcrPlateRow, sampleBiopsyDays, sampleCellNum, sampleCoupleId, sampleEmbryoId, sampleSetItemDescription):
+
     if selectedBarcode:
         dnabarcode = models.dnaBarcode.objects.get(name=selectedBarcodeKit, id_str=selectedBarcode)
     else:
@@ -737,6 +743,7 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
             'pcrPlateRow': pcrPlateRow,
             'pcrPlateColumn': pcrPlateColumn,
             'biopsyDays': sampleBiopsyDays,
+            'cellNum': sampleCellNum,
             'coupleId': sampleCoupleId,
             'embryoId': sampleEmbryoId,
             'description': sampleSetItemDescription,
@@ -785,6 +792,7 @@ def _create_or_update_sampleSetItem(request, user, sample):
     pcrPlateColumn = "1" if pcrPlateRow else ""
 
     sampleBiopsyDays = queryDict.get("biopsyDays", "0")
+    sampleCellNum = queryDict.get("cellNum", "")
     sampleCoupleId = queryDict.get("coupleId", "")
     sampleEmbryoId = queryDict.get("embryoId", "")
 
@@ -802,6 +810,7 @@ def _create_or_update_sampleSetItem(request, user, sample):
             'pcrPlateRow': pcrPlateRow,
             'pcrPlateColumn': pcrPlateColumn,
             'biopsyDays': sampleBiopsyDays if sampleBiopsyDays else "0",
+            'cellNum': sampleCellNum,
             'coupleId': sampleCoupleId,
             'embryoId': sampleEmbryoId,
             'description': sampleSetItemDescription,

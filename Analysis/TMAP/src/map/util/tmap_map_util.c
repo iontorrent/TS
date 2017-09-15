@@ -3952,19 +3952,22 @@ static int32_t end_repair_helper (
 
     // tmap_map_util_end_repair expects no softclips if they are not explicitely allowed; 
     // if there are such, replace them with INSs
-    if (TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) == BAM_CSOFT_CLIP &&
-        ((softclip_start == 0 && dest_sam->strand == 0) ||
-         (softclip_end   == 0 && dest_sam->strand == 1)))
+    // TS-15331: only change S->I on the read side thatiws being repaired in this call. Otherwise, lead/trail softclips introduced in first call get replaced with INS during second call.
+    if (TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) == BAM_CSOFT_CLIP && // the cigar starts with softclip
+        ((softclip_start == 0 && dest_sam->strand == 0 && five_prime != 0) || // (reparing 5') and (5' softclip is not allowed) && (cigar start is 5' end, as the read is forward)
+         (softclip_end   == 0 && dest_sam->strand == 1 && five_prime == 0)))  // (reparing 3') and (3' softclip is not allowed) && (cigar start is 3' end, as the read is reverse)
     {
+        // replace leading softclip with INS
         int32_t op_len = TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [0]);
         TMAP_SW_CIGAR_STORE (dest_sam->cigar [0], BAM_CINS, op_len);
         qlen += op_len;
         adjusted_query -= op_len;
     }
-    if (TMAP_SW_CIGAR_OP (dest_sam->cigar [dest_sam->n_cigar-1]) == BAM_CSOFT_CLIP &&
-        ((softclip_end   == 0 && dest_sam->strand == 0) ||
-         (softclip_start == 0 && dest_sam->strand == 1)))
+    if (TMAP_SW_CIGAR_OP (dest_sam->cigar [dest_sam->n_cigar-1]) == BAM_CSOFT_CLIP && // the cigar ends with softclip
+        ((softclip_end   == 0 && dest_sam->strand == 0 && five_prime == 0) || // (reparing 3') and (3' softclip is not allowed) && ((cigar end is 3', as the read is forward
+         (softclip_start == 0 && dest_sam->strand == 1 && five_prime != 0)))  // (reparing 5') and (5' softclip is not allowed) && ((cigar end is 5', as the read is reverse
     {
+        // replace trailing softclip with INS
         int32_t op_len = TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [dest_sam->n_cigar - 1]);
         TMAP_SW_CIGAR_STORE (dest_sam->cigar [dest_sam->n_cigar - 1], BAM_CINS, op_len);
         qlen += op_len;

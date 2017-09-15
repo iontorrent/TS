@@ -1,0 +1,143 @@
+[
+  {
+    "pk": 8,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "521",
+      "slots": 1,
+      "description": "521",
+      "isActive": false,
+      "instrumentType": "S5"
+    }
+  },
+   {
+    "pk": 13,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.0.20",
+      "slots": 1,
+      "description": "P0",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 20,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "541",
+      "slots": 1,
+      "description": "541",
+      "isActive": false,
+      "instrumentType": "S5",
+      "earlyDatFileDeletion" : "1"
+    }
+  },
+  {
+    "pk": 22,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.0.1",
+      "slots": 1,
+      "description": "P2.0.1",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 23,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.1.1",
+      "slots": 1,
+      "description": "P2.1.1",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 24,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.3.1",
+      "slots": 1,
+      "description": "P2.3.1",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 25,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.1.541",
+      "slots": 1,
+      "description": "PI Ti-Cup",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 26,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "522",
+      "slots": 1,
+      "description": "521-P2.0",
+      "isActive": false,
+      "instrumentType": "S5"
+    }
+  },
+ 
+  {
+    "pk": 20095,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion Chef S541 V1",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "libraryReadLength" : 200,
+      "templatingSize" : "200;400",
+      "uid": "ICPREP0008",
+      "instrumentType": "S5",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": false,
+      "description": "Ion 541 Kit-Chef",
+      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;s5541",
+      "chipTypes" : "541"
+    }
+  },
+
+  {
+    "pk": 20221,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A30523",
+      "kit": [
+        "ICPREP0008"
+      ]
+    }
+  },
+  {
+    "pk": 20222,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27755",
+      "kit": [
+        "ICPREP0008"
+      ]
+    }
+  },
+  {
+    "pk": 20223,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27754",
+      "kit": [
+        "ICPREP0008"
+      ]
+    }
+  } 
+]

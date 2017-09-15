@@ -22,6 +22,7 @@ urlpatterns = patterns(
 
     url(r'^plugins/$', 'views.configure_plugins', name="configure_plugins"),
     url(r'^mesh/$', 'views.configure_mesh', name="configure_mesh"),
+    url(r'^mesh/link/$', 'views.link_mesh_node', name="link_mesh_node"),
     url(r'^plugins/plugin/install/$', 'views.configure_plugins_plugin_install', name="configure_plugins_plugin_install"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/$', 'views.configure_plugins_plugin_configure', name="configure_plugins_plugin_configure"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/pluginMedia/(?P<path>.*)$', 'views.configure_plugins_pluginmedia', name="configure_plugins_pluginmedia"),
@@ -49,6 +50,8 @@ urlpatterns = patterns(
     url(r'^references/genome/rebuild/(?P<reference_id>\w+)$', 'genomes.start_index_rebuild', name='references_genome_start_index_rebuild'),
     url(r'^references/genome/status/(\d+)$', 'genomes.genome_status', name='references_genome_status'),
 
+    url(r'^references/genome/install_bedfiles/$', 'genomes.start_install_bedfiles', name='start_install_bedfiles'),
+
     url(r'^references/barcodeset/$', 'views.references_barcodeset_add', name="references_barcodeset_add"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/$', 'views.references_barcodeset', name="references_barcodeset"),
     url(r'^references/barcodeset/(?P<barcodesetid>\d+)/delete/$', 'views.references_barcodeset_delete', name="references_barcodeset_delete"),
@@ -74,8 +77,13 @@ urlpatterns = patterns(
     url(r'^configure/check_nas_perms/', 'views.check_nas_perms'),
 
     url(r'^newupdates/$', 'views.offcycle_updates', name = 'offcycle_updates'),
+    url(r'^newupdates/(?P<offcycle_type>\w+)/$', 'views.offcycle_updates', name='offcycle_updates'),
     url(r'^newupdates/product/(.+)/(.+)/$', 'views.offcycle_updates_install_product', name = 'update_product'),
     url(r'^newupdates/package/(.+)/(.+)/$', 'views.offcycle_updates_install_package', name = 'update_package'),
+
+    url(r'^newupdates/offline/bundle/$', 'views.configure_offline_bundle', name="configure_offline_bundle"),
+    url(r'^newupdates/offline/bundle/upload/$', 'views.configure_offline_bundle_upload', name="configure_offline_bundle_upload"),
+    url(r'^newupdates/offline/offcyle/install/$', 'views.configure_offline_install', name="configure_offline_install"),
 
     url(r'^services/controljob/(\d+)/((?:term)|(?:stop)|(?:cont))$', 'views.control_job', name='control_job'),
     (r'^chips/$', 'chips.showpage'),

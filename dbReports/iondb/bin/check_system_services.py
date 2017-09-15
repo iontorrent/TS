@@ -13,6 +13,7 @@ import os
 import sys
 sys.path.append('/opt/ion/')
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 
 import subprocess
 import traceback
@@ -31,7 +32,7 @@ def process_status():
         stdout, stderr = proc.communicate()
         #logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
         return proc.returncode == 0
-    
+
     def complicated_status(filename, parse):
         try:
             if os.path.exists(filename):
@@ -42,6 +43,13 @@ def process_status():
                 return proc.returncode == 0
         except Exception as err:
             return False
+
+    def upstart_status(name):
+        # Upstart jobs status command always returns 0.
+        proc = subprocess.Popen("service %s status" % name, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
+        return "start/running" in stdout
 
     proc_set = {}
     processes = [
@@ -54,6 +62,10 @@ def process_status():
 
     for name in processes:
         proc_set[name] = simple_status(name)
+
+
+    # get the DjangoFTP status
+    proc_set['DjangoFTP'] = upstart_status("DjangoFTP")
 
     proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid", int)
     proc_set["gridengine"] = complicated_status("/var/run/gridengine/execd.pid", int)
@@ -116,12 +128,13 @@ if __name__ == '__main__':
     if args.start:
         if os.geteuid() != 0:
             sys.exit('Run this script with root permissions to start services')
-        
+
         start_order = ['postgresql',
                        'apache2',
                        'gridengine-master', 'gridengine-exec',
                        'rabbitmq-server', 'celeryd', 'celerybeat',
-                       'ionJobServer', 'ionCrawler', 'ionPlugin'
+                       'ionJobServer', 'ionCrawler', 'ionPlugin',
+                       'DjangoFTP'
                        ]
         for name in start_order:
             start_service(name)
@@ -145,5 +158,3 @@ if __name__ == '__main__':
                 except:
                     logger.error('check_system_services: unable to send email alert')
                     print traceback.format_exc()
-
-

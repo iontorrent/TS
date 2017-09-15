@@ -53,16 +53,22 @@ def validate_notes(value, displayedName='Notes'):
     return errors
 
 
-def validate_sample_name(value, displayedName='Sample Name'):
+def validate_sample_name(value, displayedName='Sample Name', isTemplate=None, barcodeId=None):
     errors = []
-    if not validation.is_valid_chars(value):
-        errors.append(validation.invalid_chars_error(displayedName))
-
-    if not validation.is_valid_leading_chars(value):
-        errors.append(validation.invalid_chars_error(displayedName))
-
-    if not validation.is_valid_length(value, MAX_LENGTH_SAMPLE_NAME):
-        errors.append(validation.invalid_length_error(displayedName, MAX_LENGTH_SAMPLE_NAME))
+    if not value:
+        if not isTemplate:
+            errors.append(validation.required_error(displayedName))
+    else:
+        if isTemplate:
+            errors.append("Invalid input. Sample information cannot be saved in the template")
+        if barcodeId:
+            errors.append("Invalid input. Barcode kit should not be provided (%s) for non barcoded plan" % barcodeId)
+        if not validation.is_valid_chars(value):
+            errors.append(validation.invalid_chars_error(displayedName))
+        if not validation.is_valid_leading_chars(value):
+            errors.append(validation.invalid_chars_error(displayedName))
+        if not validation.is_valid_length(value, MAX_LENGTH_SAMPLE_NAME):
+            errors.append(validation.invalid_length_error(displayedName, MAX_LENGTH_SAMPLE_NAME))
 
     return errors
 
@@ -763,13 +769,14 @@ def validate_kit_chip_combination(bundle):
                                         return errorMsg
 
                             # if instrument type and chip type are valid: validate if application type of selected kit is in the supported list
-                            selectedKit_applicationType = selectedKit.applicationType
-                            if selectedKit_applicationType:
-                                if "AMPS_ANY" in selectedKit_applicationType:
-                                    selectedKit_applicationType = ['AMPS', 'AMPS_DNA_RNA', 'AMPS_EXOME', 'AMPS_RNA']
-                                if runType not in selectedKit_applicationType:
-                                    errorMsg = "specified Kit (%s) is not supported for %s (runType=%s)" % (selectedKit.name, selectedKit.get_applicationType_display(), runType)
-                                    return errorMsg
+                            if runType:
+                                selectedKit_applicationType = selectedKit.applicationType
+                                if selectedKit_applicationType:
+                                    if "AMPS_ANY" in selectedKit_applicationType:
+                                        selectedKit_applicationType = ['AMPS', 'AMPS_DNA_RNA', 'AMPS_EXOME', 'AMPS_RNA']
+                                    if runType not in selectedKit_applicationType:
+                                        errorMsg = "specified Kit (%s) is not supported for %s (runType=%s)" % (selectedKit.name, selectedKit.get_applicationType_display(), runType)
+                                        return errorMsg
     except Exception, Err:
         logger.debug("Error during plan creation %s" % str(Err))
         errorMsg = str(Err)

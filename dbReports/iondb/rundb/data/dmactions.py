@@ -446,7 +446,7 @@ def _copy_to_dir(filepath, _start_dir, _destination):
                 raise
 
         # Calling rsync command in a shell
-        cmd = ["rsync", "--times", "--copy-links", "--owner", "--group", src, dst]
+        cmd = ["rsync", "--times", "--copy-links", src, dst]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         _, stderr = proc.communicate()
         if proc.returncode != 0:
@@ -529,9 +529,14 @@ def _get_file_list_dict(dmfilestat, action, user, user_comment, msg_banner):
 
     # Create a list of files eligible to process
     list_of_file_dict = []
-    is_thumbnail = dmfilestat.result.isThumbnail
+
+    # exclude onboard_results folder if thumbnail or if fullchip was reanalyzed from signal processing
+    sigproc_results_dir = os.path.join(dmfilestat.result.get_report_dir(), 'sigproc_results')
+    exclude_onboard_results = dmfilestat.result.isThumbnail or ('onboard_results' not in os.path.realpath(sigproc_results_dir))
+
     add_linked_sigproc = False if (
         action == DELETE or dmfilestat.dmfileset.type == dmactions_types.INTR) else True
+
     for start_dir in search_dirs:
         logger.debug("Searching: %s" % start_dir, extra=logid)
         to_process = []
@@ -541,7 +546,7 @@ def _get_file_list_dict(dmfilestat, action, user, user_comment, msg_banner):
                                                           dmfilestat.dmfileset.include,
                                                           dmfilestat.dmfileset.exclude,
                                                           kpatterns,
-                                                          is_thumbnail,
+                                                          exclude_onboard_results,
                                                           add_linked_sigproc,
                                                           cached=cached_file_list)
         logger.info("%d files to process at %s" %
@@ -871,7 +876,7 @@ def _emptydir_delete(search_dirs):
     '''
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=logid)
     for start_dir in search_dirs:
-        for root, dirs, files in os.walk(start_dir, topdown=True):
+        for root, dirs, files in os.walk(start_dir, topdown=False):
             for name in dirs:
                 filepath = os.path.join(root, name)
                 try:
@@ -1173,14 +1178,17 @@ def get_file_list(dmfilestat):
         kpatterns = _get_keeper_list(dmfilestat, '')
 
         # Create a list of files eligible to process
-        is_thumbnail = dmfilestat.result.isThumbnail
+        # exclude onboard_results folder if thumbnail or if fullchip was reanalyzed from signal processing
+        sigproc_results_dir = os.path.join(dmfilestat.result.get_report_dir(), 'sigproc_results')
+        exclude_onboard_results = dmfilestat.result.isThumbnail or ('onboard_results' not in os.path.realpath(sigproc_results_dir))
+
         for start_dir in search_dirs:
             if os.path.isdir(start_dir):
                 tmp_process, tmp_keep = dm_utils._file_selector(start_dir,
                                                                 dmfilestat.dmfileset.include,
                                                                 dmfilestat.dmfileset.exclude,
                                                                 kpatterns,
-                                                                is_thumbnail,
+                                                                exclude_onboard_results,
                                                                 cached=cached_file_list)
                 to_process += tmp_process
                 to_keep += tmp_keep

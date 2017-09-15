@@ -17,8 +17,8 @@ from ion.utils import makeCSA
 
 class FieldSupport(IonPlugin):
     """Generate an enhanced CSA"""
-    version = '5.4.0.3'
-    runtypes = [RunType.FULLCHIP]
+    version = '5.6.0.1'
+    runtypes = [RunType.THUMB]
     runlevels = [RunLevel.LAST]
 
     plugin_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)))

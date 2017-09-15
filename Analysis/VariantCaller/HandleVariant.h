@@ -73,13 +73,21 @@ public:
 	//! @brief Clear variant candidates
 	void ClearVariantCandidate();
 	//! @brief Calculate the 0-based end position of the look ahead window
-	int FindLookAheadEnd0();
+	int FindLookAheadEnd0(int current_candidate_gen_win_end0 = -1);
 	//! @brief Calculate the 1-based end position of the look ahead window
-	int FindLookAheadEnd1();
+	int FindLookAheadEnd1(int current_candidate_gen_win_end1 = 0);
 	//! @brief Split the candidate variant into smaller callable variants
 	void SplitCandidateVariant(list<list<int> >& allele_groups);
 	//! @brief Calculate the FD of the (reference, alternatives) alleles vs. reads as called on test_read_stack
 	void QuickExamFD(vector<const Alignment *>& test_read_stack, vector<vector<int> >& flow_disruptive_code);
+	//! @brief The interface for the look ahead "sliding" window in the 0-based coordinate
+	void LookAheadSlidingWindow0(list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int current_candidate_gen_window_end_0);
+	//! @brief The interface for the look ahead "sliding" window in the 1-based coordinate
+	void LookAheadSlidingWindow1(list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_1, int& sliding_window_end_1, int current_candidate_gen_window_end_1);
 };
+
+//! @brief Check if the allele described by position_1, ref, alt_allele, alt_orig_padding is in variant.
+bool IsAlleleInVariant(const vcf::Variant& variant, long position_1, const string& ref, const string& alt_allele, const pair<int, int>& alt_orig_padding = {0, 0});
+
 
 #endif //HANDLEVARIANT_H

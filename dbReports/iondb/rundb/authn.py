@@ -82,7 +82,7 @@ class IonAuthentication(MultiAuthentication):
     # set to true for secure connections only
     secure_only = False
 
-    def __init__(self, allow_get=None, ion_mesh_data_type='', secure_only=False, **kwargs):
+    def __init__(self, allow_get=None, ion_mesh_access=False, secure_only=False, **kwargs):
         backends = [
             # Basic must be first, so it sets WWW-Authenticate header in 401.
             BasicAuthentication(realm='Torrent Browser'), ## Apache Basic Auth
@@ -94,8 +94,8 @@ class IonAuthentication(MultiAuthentication):
         self.secure_only = secure_only
         # if this resource is shared as part of the ion mesh network then we need to add an
         # extra authenticaiton method to check for the keys
-        if ion_mesh_data_type:
-            backends.append(IonMeshAuthentication(data_type=ion_mesh_data_type))
+        if ion_mesh_access:
+            backends.append(IonMeshAuthentication())
 
         if allow_get is None:
             allow_get = getattr(settings, 'IONAUTH_ALLOW_REST_GET', False)
@@ -145,21 +145,13 @@ class IonAuthentication(MultiAuthentication):
 class IonMeshAuthentication(Authentication):
     """This will authenticate based on ion mesh authentication"""
 
-    # a method to check against the api key
-    data_type = ''
-
-    def __init__(self, data_type, **kwargs):
-        """Constructor: data_type must be 'data', 'plans' or 'monitoring' """
-        super(IonMeshAuthentication, self).__init__(**kwargs)
-        self.data_type = data_type
-
-
     def is_authenticated(self, request, **kwargs):
         """This will attempt to match the request to a known ion mesh node entry"""
 
         try:
             request.user = User.objects.get(username='ionmesh')
             system_id, api_key = _extract_system_id_and_key(request)
-            return IonMeshNode.canAccess(system_id, api_key, self.data_type)
+            return IonMeshNode.canAccess(system_id, api_key)
         except:
             return False
+

@@ -53,6 +53,8 @@
                     <th>Library Prep Status</th>
                     <th>Template Prep Progress</th>
                     <th>Template Prep Status</th>
+                    <th>Estimated Time Remaining</th>
+                    <th>Estimated Time Until User Intervention</th>
                 </tr>
                 {% for prepData in plans %}
                     <tr>
@@ -72,6 +74,13 @@
                             </div>
                         </td>
                         <td>{{ prepData.template_prep_status }}</td>
+                        {% if prepData.planName %}
+                         	<td style="word-wrap: break-word;">{{ prepData.template_prep_remaining_time }}</td>
+                        	<td style="word-wrap: break-word;">{{ prepData.template_prep_estimated_end_time }}</td>
+                         {% else %}                                              
+                        	<td style="word-wrap: break-word;">{{ prepData.remaining_time }}</td>
+                        	<td style="word-wrap: break-word;">{{ prepData.estimated_end_time }}</td>                    
+                        {% endif %}                    
                     </tr>
                 {% endfor %}
             </table>

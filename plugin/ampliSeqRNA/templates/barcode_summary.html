@@ -212,6 +212,9 @@ $(document).ready(function() {
 {% if rpmbcmatrix %}
 <li><a href="{{rpmbcmatrix}}" title='Click to download a table file of RPM (Reads Per Million reads) values assigned to individual {{bcmtype}}s for each barcode.'>Download absolute normalized reads matrix</a></li>
 {% endif %}
+{% if rpmchp %}
+<li><a href="{{rpmchp}}" title='Click to download a zipped folder containing log2(RPM+1) gene reads data in CHP file format for individual barcodes.'>Download CHP files normalized by RPM</a></li>
+{% endif %}
 
 {% if deratiomatrix %}
 <br/><b>{{deratiotargets}}</b>

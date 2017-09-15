@@ -296,7 +296,7 @@ template <typename T1, typename T2>
 int compare(const T1& p11, const T2& p12, const T1& p21, const T2& p22);
 
 void push_value_to_vector(vector<string>& v, long index, const string& entry);
-void extend_header(vcf::VariantCallFile &vcf, bool add_subset);
+void extend_header(vcf::VariantCallFile &vcf, bool add_subset, bool filter_by_target);
 void parse_parameters_from_json(string filename, vcf::VariantCallFile& vcf);
 
 bool validate_filename_parameter(string filename, string param_name);

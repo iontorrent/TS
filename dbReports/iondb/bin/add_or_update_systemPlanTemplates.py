@@ -634,7 +634,7 @@ def add_or_update_ampliseq_system_templates():
         "flows": 360,
         "libraryKitName": "Ion AmpliSeq 2.0 Library Kit",
         "reference": "hg19",
-        "targetRegionBedFile": "/hg19/unmerged/detail/4477685_CCP_bedfile_20120517.bed",
+        "targetRegionBedFile": "/hg19/unmerged/detail/CCP.20170413.designed.bed",
         "categories": CATEGORIES
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -659,19 +659,7 @@ def add_or_update_ampliseq_system_templates():
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
 
-    # 9
-    templateParams = TemplateParams("Ion AmpliSeq Inherited Disease Panel", PGM, "AMPS")
-    templateParams.update({
-        "chipType": "318",
-        "flows": 500,
-        "libraryKitName": "Ion AmpliSeq 2.0 Library Kit",
-        "reference": "hg19",
-        "categories": "inheritedDisease",
-        "targetRegionBedFile": "/hg19/unmerged/detail/4477686_IDP_bedfile_20120613.bed",
-    })
-    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams)
-
+    # 9 - retired: Ion AmpliSeq Inherited Disease Panel
 
 def add_or_update_ampliseq_rna_system_templates():
     # ampliseq RNA
@@ -887,7 +875,7 @@ def add_or_update_oncomine_system_templates():
         "chipType": "318",
         "flows": 400,
         "controlSequencekitname": "Ion AmpliSeq Sample ID Panel",
-        "sampleGrouping": "Self",
+        "sampleGrouping": "Single Fusions",
         "categories": CATEGORIES,
         "libraryKitName": "Ion AmpliSeq RNA Library Kit",
         "barcodeKitName": "IonXpress",
@@ -974,8 +962,8 @@ def add_or_update_onconet_system_templates():
         "templatingKitName": "Ion PI Template OT2 200 Kit v3",
         "libraryKitName": "Ion AmpliSeq Library Kit Plus",
         "barcodeKitName": "IonXpress",
-        "reference": "hg19_AmpliSeq_Transcriptome_ERCC_v1",
-        "targetRegionBedFile": "/hg19_AmpliSeq_Transcriptome_ERCC_v1/unmerged/detail/hg19_AmpliSeq_Transcriptome_ERCC_v1.bed",
+        "reference": "hg19_AmpliSeq_Transcriptome_v1.1",
+        "targetRegionBedFile": "/hg19_AmpliSeq_Transcriptome_v1.1/unmerged/detail/hg19_AmpliSeq_Transcriptome_v1.1.04042016.Designed.bed",
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     
@@ -1016,7 +1004,7 @@ def add_or_update_ocp_focus_system_templates():
         "chipType": "318D",
         "flows": 400,
         "templatingKitName": OCP_FOCUS_TEMPLATE_KIT_NAME,
-        "sampleGrouping": "Self",
+        "sampleGrouping": "Single Fusions",
         "categories": CATEGORIES,
         "sequencekitname": OCP_FOCUS_SEQ_KIT_NAME,
         "libraryKitName": OCP_FOCUS_LIB_KIT_NAME,
@@ -1075,9 +1063,8 @@ def add_or_update_reproseq_system_templates():
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
-    #TODO- need finalized barcodeKit 
     # 33 is S5 System Default Template
-    flowOrderList = models.FlowOrder.objects.filter(name="Ion samba.contradanza")
+    flowOrderList = models.FlowOrder.objects.filter(name="Ion samba.c.2step.pgs")
     PGS_S5_FLOWORDER = flowOrderList[0].flowOrder if flowOrderList else ""
 
     threePrimeAdapterList = models.ThreePrimeadapter.objects.filter(name = "Ion P1B")
@@ -1106,47 +1093,54 @@ def add_or_update_reproseq_system_templates():
 def add_or_update_tagseq_system_templates():
     LIQUID_BIOPSY_PLUGIN_CONFIG_FILENAME = "rundb/fixtures/systemtemplateparams/tagseq_liquidbiopsy_parameters.json"
     TUMOR_PLUGIN_CONFIG_FILENAME = "rundb/fixtures/systemtemplateparams/tagseq_tumor_parameters.json"
-   
+
+    LUNG_TARGET_REGION_BED = "/hg19/unmerged/detail/Oncomine_Lung_cfDNA.07112017.Designed.bed"
+    LUNG_HOTSPOT_BED = "/hg19/unmerged/detail/Oncomine_Lung_cfDNA.07112017.Hotspots.bed"
+    BREAST_TARGET_REGION_BED = "/hg19/unmerged/detail/Oncomine_Breast_cfDNA.03062017.Designed.bed"
+    BREAST_HOTSPOT_BED = "/hg19/unmerged/detail/Oncomine_Breast_cfDNA.03062017.Hotspots.bed"    
+    COLON_TARGET_REGION_BED = "/hg19/unmerged/detail/Oncomine_Colon_cfDNA.03062017.Designed.bed"
+    COLON_HOTSPOT_BED = "/hg19/unmerged/detail/Oncomine_Colon_cfDNA.03062017.Hotspots.bed"
+
     # 34 Lung Liquid Biopsy DNA
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Lung Liquid Biopsy DNA")
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Lung Liquid Biopsy DNA", LUNG_TARGET_REGION_BED, LUNG_HOTSPOT_BED)
     liquid_biopsy_plugins = create_tagseq_plugins(LIQUID_BIOPSY_PLUGIN_CONFIG_FILENAME)
     
     templateParams.selectedPlugins = liquid_biopsy_plugins
     finish_sys_template(sysTemplate, isCreated, templateParams, liquid_biopsy_plugins)
 
     # 35 Lung Tumor DNA
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Lung Tumor DNA")
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Lung Tumor DNA", LUNG_TARGET_REGION_BED, LUNG_HOTSPOT_BED)
     tumor_plugins = create_tagseq_plugins(TUMOR_PLUGIN_CONFIG_FILENAME)
     
     templateParams.selectedPlugins = tumor_plugins
     finish_sys_template(sysTemplate, isCreated, templateParams, tumor_plugins)
 
     # 36 Breast Liquid Biopsy DNA
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Breast Liquid Biopsy DNA")
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Breast Liquid Biopsy DNA", BREAST_TARGET_REGION_BED, BREAST_HOTSPOT_BED)
     templateParams.selectedPlugins = liquid_biopsy_plugins    
     finish_sys_template(sysTemplate, isCreated, templateParams, liquid_biopsy_plugins)
 
     # 37 Breast Tumor DNA
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Breast Tumor DNA")
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Breast Tumor DNA", BREAST_TARGET_REGION_BED, BREAST_HOTSPOT_BED)
     templateParams.selectedPlugins = tumor_plugins
     finish_sys_template(sysTemplate, isCreated, templateParams, tumor_plugins)
 
     # 38 Colon Liquid Biopsy DNA
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Colon Liquid Biopsy DNA")
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Colon Liquid Biopsy DNA", COLON_TARGET_REGION_BED, COLON_HOTSPOT_BED)
     templateParams.selectedPlugins = liquid_biopsy_plugins
     finish_sys_template(sysTemplate, isCreated, templateParams, liquid_biopsy_plugins)
 
     # 39 Colon Tumor DNA
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Colon Tumor DNA")
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_system_template("Oncomine Colon Tumor DNA", COLON_TARGET_REGION_BED, COLON_HOTSPOT_BED)
     templateParams.selectedPlugins = tumor_plugins
     finish_sys_template(sysTemplate, isCreated, templateParams, tumor_plugins)
 
 
-def add_or_update_tagseq_system_template(templateName):
+def add_or_update_tagseq_system_template(templateName, targetRegionBedFile = "", hotSpotBedFile = ""):
     # Tag Sequencing
     TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
     TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
-    TAG_SEQ_CATEGORIES = "barcodes_8"
+    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
     TAG_SEQ_CHIP_NAME = "530"
     TAG_SEQ_FLOWS = 500
     TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
@@ -1156,7 +1150,7 @@ def add_or_update_tagseq_system_template(templateName):
     TAG_SEQ_SAMPLE_GROUPING = "Self"    
     TAG_SEQ_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TAG_SEQ_TEMPLATE_KIT_NAME = "Ion Chef S530 V1"
-    
+
     templateParams = TemplateParams(templateName, S5, TAG_SEQ_RUN_TYPE)
     templateParams.update({
         "applicationGroup" : TAG_SEQ_APPLICATION_GROUP,
@@ -1164,11 +1158,13 @@ def add_or_update_tagseq_system_template(templateName):
         "categories": TAG_SEQ_CATEGORIES,
         "chipType": TAG_SEQ_CHIP_NAME,
         "flows": TAG_SEQ_FLOWS,
+        "hotSpotRegionBedFile": hotSpotBedFile,
         "libraryKitName": TAG_SEQ_LIB_KIT_NAME,        
         "libraryReadLength" : TAG_SEQ_LIBRARY_READ_LENGTH,
         "reference": TAG_SEQ_REFERENCE,
         "sampleGrouping": TAG_SEQ_SAMPLE_GROUPING,
         "sequencekitname": TAG_SEQ_SEQ_KIT_NAME,
+        "targetRegionBedFile" : targetRegionBedFile,
         "templatingKitName": TAG_SEQ_TEMPLATE_KIT_NAME
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1343,7 +1339,7 @@ def add_or_update_oncomine_ocav3_system_templates():
         "libraryKitName": OCAV3_FUSION_LIB_KIT_NAME,  
         "libraryReadLength" : OCAV3_LIBRARY_READ_LENGTH,
         "reference": "",
-        "sampleGrouping": "Self",
+        "sampleGrouping": "Single Fusions",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
         "planStatus" : OCAV3_STATUS
@@ -1352,26 +1348,31 @@ def add_or_update_oncomine_ocav3_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
 
-def add_or_update_oncomine_pediatric_system_templates():
-    # pediatric
-    BARCODE_KIT_NAME = "IonXpress"    
-    CATEGORIES = "onco_solidTumor;onco_heme"
+def add_or_update_oncomine_childhood_cancer_system_templates():
+    BARCODE_KIT_NAME = "IonXpress"
+    CATEGORIES_DNA = "Oncomine;barcodes_8;onco_solidTumor;onco_heme"
+    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_40;onco_solidTumor;onco_heme"
+    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_16;onco_solidTumor;onco_heme"              
     CHIP_NAME = "540"
-    FLOWS = 400
-    FUSION_LIB_KIT_NAME = "Ion AmpliSeq RNA Library Kit"
-    LIB_KIT_NAME = "Ion AmpliSeq 2.0 Library Kit"
+    FLOWS = 500
+    FUSION_LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
+    LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     LIBRARY_READ_LENGTH = 200
     REFERENCE = "hg19"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
     PLAN_STATUS = "inactive"
+       
+    # pre-select plugins
+    plugins = {}
+    plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
     
-    # 46 AmpliSeq Pediatric Cancer Research Panel DNA
-    templateParams = TemplateParams("AmpliSeq Pediatric Cancer Research Panel DNA", S5, "AMPS")
+    # 46 Oncomine Childhood Cancer Research DNA
+    templateParams = TemplateParams("Oncomine Childhood Cancer Research DNA", S5, "AMPS")
     templateParams.update({
         "applicationGroup" : "DNA",
         "barcodeKitName": BARCODE_KIT_NAME,
-        "categories": CATEGORIES,           
+        "categories": CATEGORIES_DNA,           
         "chipType": CHIP_NAME,
         "flows": FLOWS,
         "libraryKitName": LIB_KIT_NAME,  
@@ -1383,14 +1384,14 @@ def add_or_update_oncomine_pediatric_system_templates():
         "planStatus" : PLAN_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
         
-    # 47 AmpliSeq Pediatric Cancer Research Panel DNA and Fusion
-    templateParams = TemplateParams("AmpliSeq Pediatric Cancer Research Panel DNA and Fusion", S5, "AMPS_DNA_RNA")
+    # 47 Oncomine Childhood Cancer Research DNA and Fusions
+    templateParams = TemplateParams("Oncomine Childhood Cancer Research DNA and Fusions", S5, "AMPS_DNA_RNA")
     templateParams.update({
         "applicationGroup": "DNA + RNA",
         "barcodeKitName": BARCODE_KIT_NAME,
-        "categories": CATEGORIES, 
+        "categories": CATEGORIES_DNA_n_FUSIONS, 
         "chipType": CHIP_NAME,
         "flows": FLOWS,
         "libraryKitName": LIB_KIT_NAME,  
@@ -1402,26 +1403,26 @@ def add_or_update_oncomine_pediatric_system_templates():
         "planStatus" : PLAN_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
                 
-    # 48 AmpliSeq Pediatric Cancer Research Panel Fusion
-    templateParams = TemplateParams("AmpliSeq Pediatric Cancer Research Panel Fusion", S5, "AMPS_RNA")
+    # 48 Oncomine Childhood Cancer Research Fusions
+    templateParams = TemplateParams("Oncomine Childhood Cancer Research Fusions", S5, "AMPS_RNA")
     templateParams.update({
         "applicationGroup": "DNA + RNA",
         "barcodeKitName": BARCODE_KIT_NAME,
-        "categories": CATEGORIES, 
+        "categories": CATEGORIES_RNA_FUSIONS, 
         "chipType": CHIP_NAME,
         "flows": FLOWS,
         "libraryKitName": FUSION_LIB_KIT_NAME,  
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE,
-        "sampleGrouping": "Self",
+        "sampleGrouping": "Single Fusions",
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
         "planStatus" : PLAN_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
 
 def add_or_update_oncomine_BRCA_system_templates():
@@ -1438,6 +1439,7 @@ def add_or_update_oncomine_BRCA_system_templates():
     SEQ_KIT_NAME_S5 = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME_PGM = "Ion PGM Hi-Q View Chef Kit"
     TEMPLATE_KIT_NAME_S5 = "Ion Chef S530 V1"
+    TEMPLATING_SIZE_PGM = 200
 
     # 49 Oncomine BRCA for PGM
     templateParams = TemplateParams("Oncomine BRCA Research for PGM", PGM, "AMPS")
@@ -1452,7 +1454,8 @@ def add_or_update_oncomine_BRCA_system_templates():
         "reference": REFERENCE,
         "sampleGrouping": "Self",
         "sequencekitname": SEQ_KIT_NAME_PGM,
-        "templatingKitName": TEMPLATE_KIT_NAME_PGM
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
+        "templatingSize": TEMPLATING_SIZE_PGM
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1561,7 +1564,7 @@ def add_or_update_S5_ocp_focus_system_templates():
         "flows": OCP_S5_FOCUS_FLOWS,
         "libraryKitName": OCP_S5_FOCUS_LIBRARY_KIT_NAME,
         "templatingKitName": OCP_S5_FOCUS_TEMPLATE_KIT_NAME,
-        "sampleGrouping": "Self",
+        "sampleGrouping": "Single Fusions",
         "categories": OCP_S5_FOCUS_CATEGORIES,
         "barcodeKitName": OCP_S5_FOCUS_BARCODE_KIT_NAME
     })
@@ -1606,9 +1609,9 @@ def add_or_update_hid_system_templates():
     SAMPLE_PREP_PROTOCOL_STR = samplePrepProtocolList[0].value if samplePrepProtocolList else ""
     SAMPLE_PREP_PROTOCOL = ""
     SEQ_KIT_NAME_PGM = "IonPGMHiQ"
-    SEQ_KIT_NAME_S5 = "Ion S5 Sequencing Kit"
+    SEQ_KIT_NAME_HID_S5 = "precisionIDS5Kit"
     TEMPLATE_KIT_NAME_PGM = "Ion PGM Hi-Q Chef Kit"
-    TEMPLATE_KIT_NAME_S5 = "Ion Chef S530 V1"
+    TEMPLATE_KIT_NAME_HID_S5 = "Ion Chef HID S530 V2"
     TEMPLATING_SIZE_PGM = "200"
     TEMPLATING_SIZE_S5 = None
     
@@ -1668,8 +1671,8 @@ def add_or_update_hid_system_templates():
         "reference": REFERENCE,
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
-        "sequencekitname": SEQ_KIT_NAME_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "sequencekitname": SEQ_KIT_NAME_HID_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
         "templatingSize": TEMPLATING_SIZE_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1711,8 +1714,8 @@ def add_or_update_hid_system_templates():
         "reference": REFERENCE,
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
-        "sequencekitname": SEQ_KIT_NAME_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "sequencekitname": SEQ_KIT_NAME_HID_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
         "templatingSize": TEMPLATING_SIZE_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1754,8 +1757,8 @@ def add_or_update_hid_system_templates():
         "reference": REFERENCE_mtDNA,
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
-        "sequencekitname": SEQ_KIT_NAME_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "sequencekitname": SEQ_KIT_NAME_HID_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
         "templatingSize": TEMPLATING_SIZE_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1797,8 +1800,8 @@ def add_or_update_hid_system_templates():
         "reference": REFERENCE_mtDNA,
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
-        "sequencekitname": SEQ_KIT_NAME_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_S5,
+        "sequencekitname": SEQ_KIT_NAME_HID_S5,
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
         "templatingSize": TEMPLATING_SIZE_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1823,7 +1826,7 @@ def add_or_update_hid_dexter_system_templates():
     TEMPLATING_SIZE = None
     
     # 65 HID STR
-    templateParams = TemplateParams("Applied Biosystems Precision ID GlobalFiler Mixture ID Panel - S5", PGM, "AMPS")
+    templateParams = TemplateParams("Applied Biosystems Precision ID GlobalFiler Mixture ID Panel - S5", S5, "AMPS")
     templateParams.update({
         "applicationGroup" : "HID",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -1867,9 +1870,9 @@ def add_or_update_hid_dexter_system_templates():
 
 def add_or_update_ocp_myeloid_pgm_system_templates():    
     BARCODE_KIT_NAME = "IonXpress"
-    CATEGORIES_DNA = "barcodes_6;onco_heme"
-    CATEGORIES_RNA_FUSIONS = "barcodes_24;onco_heme"
-    CATEGORIES_DNA_n_FUSIONS = "barcodes_12;onco_heme"         
+    CATEGORIES_DNA = "Oncomine;barcodes_4;onco_heme"
+    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_16;onco_heme"
+    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_8;onco_heme"         
     CHIP_NAME = "318"
     FLOWS = 850
     LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -1879,15 +1882,15 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
     SAMPLE_PREP_PROTOCOL = ""
     SEQ_KIT_NAME = "IonPGMHiQView"
     TEMPLATE_KIT_NAME = "Ion PGM Hi-Q View Chef Kit"
-    ##TEMPLATING_SIZE = "400"
     PLAN_STATUS = "inactive"
-
+    ##TEMPLATING_SIZE = "400"
+        
     # pre-select plugins
     plugins = {}
     plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
 
     # 67
-    templateParams = TemplateParams("AmpliSeq Myeloid Research DNA for PGM", PGM, "AMPS")
+    templateParams = TemplateParams("Oncomine Myeloid Research DNA for PGM", PGM, "AMPS")
     templateParams.update({
         "applicationGroup" : "DNA",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -1906,7 +1909,7 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)    
 
     # 68
-    templateParams = TemplateParams("AmpliSeq Myeloid Research Fusions for PGM", PGM, "AMPS_RNA")
+    templateParams = TemplateParams("Oncomine Myeloid Research Fusions for PGM", PGM, "AMPS_RNA")
     templateParams.update({
         "applicationGroup": "DNA + RNA",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -1915,8 +1918,8 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
         "flows": FLOWS,
         "libraryKitName": LIB_KIT_NAME,        
         "libraryReadLength" : LIBRARY_READ_LENGTH,
-        "reference": REFERENCE,
-        "sampleGrouping": SAMPLE_GROUPING,
+        "reference": "",
+        "sampleGrouping": "Single Fusions",
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
         "planStatus": PLAN_STATUS
@@ -1925,7 +1928,7 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     # 69
-    templateParams = TemplateParams("AmpliSeq Myeloid Research DNA and Fusions for PGM", PGM, "AMPS_DNA_RNA")
+    templateParams = TemplateParams("Oncomine Myeloid Research DNA and Fusions for PGM", PGM, "AMPS_DNA_RNA")
     templateParams.update({
         "applicationGroup": "DNA + RNA",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -1946,9 +1949,9 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
 
 def add_or_update_ocp_myeloid_s5_system_templates():    
     BARCODE_KIT_NAME = "IonXpress"
-    CATEGORIES_DNA = "barcodes_12;onco_heme;chef_myeloid_protocol"
-    CATEGORIES_RNA_FUSIONS = "barcodes_48;onco_heme;chef_myeloid_protocol"
-    CATEGORIES_DNA_n_FUSIONS = "barcodes_24;onco_heme;chef_myeloid_protocol"
+    CATEGORIES_DNA = "Oncomine;barcodes_12;onco_heme;chef_myeloid_protocol"
+    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_48;onco_heme;chef_myeloid_protocol"
+    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_24;onco_heme;chef_myeloid_protocol"
     CHIP_NAME = "530"
     FLOWS = 850
     LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -1958,15 +1961,15 @@ def add_or_update_ocp_myeloid_s5_system_templates():
     SAMPLE_PREP_PROTOCOL = "denature30_cycles45_20"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
-    ##TEMPLATING_SIZE = "400"
     PLAN_STATUS = "inactive"
-
+    ##TEMPLATING_SIZE = "400"
+    
     # pre-select plugins
     plugins = {}
     plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
 
     # 70
-    templateParams = TemplateParams("AmpliSeq Myeloid Research DNA for S5", S5, "AMPS")
+    templateParams = TemplateParams("Oncomine Myeloid Research DNA for S5", S5, "AMPS")
     templateParams.update({
         "applicationGroup" : "DNA",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -1986,7 +1989,7 @@ def add_or_update_ocp_myeloid_s5_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     # 71
-    templateParams = TemplateParams("AmpliSeq Myeloid Research Fusions for S5", S5, "AMPS_RNA")
+    templateParams = TemplateParams("Oncomine Myeloid Research Fusions for S5", S5, "AMPS_RNA")
     templateParams.update({
         "applicationGroup": "DNA + RNA",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -1995,8 +1998,8 @@ def add_or_update_ocp_myeloid_s5_system_templates():
         "flows": FLOWS,
         "libraryKitName": LIB_KIT_NAME,        
         "libraryReadLength" : LIBRARY_READ_LENGTH,
-        "reference": REFERENCE,
-        "sampleGrouping": SAMPLE_GROUPING,
+        "reference": "",
+        "sampleGrouping": "Single Fusions",
         "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
@@ -2006,7 +2009,7 @@ def add_or_update_ocp_myeloid_s5_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     # 72
-    templateParams = TemplateParams("AmpliSeq Myeloid Research DNA and Fusions for S5", S5, "AMPS_DNA_RNA")
+    templateParams = TemplateParams("Oncomine Myeloid Research DNA and Fusions for S5", S5, "AMPS_DNA_RNA")
     templateParams.update({
         "applicationGroup": "DNA + RNA",
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -2064,7 +2067,8 @@ def add_or_update_mouse_transcriptome_s5_system_templates():
     LIBRARY_KIT_NAME = "Ampliseq DNA V1"
     LIBRARY_KIT_NAME_MANUAL = "Ion AmpliSeq Library Kit Plus"
     LIBRARY_READ_LENGTH = 200
-    REFERENCE = "mm10"
+    REFERENCE = "AmpliSeq_Mouse_Transcriptome_v1"
+    BEDFILE = "/AmpliSeq_Mouse_Transcriptome_v1/unmerged/detail/AmpliSeq_Mouse_Transcriptome_V1.Designed.bed"
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
@@ -2073,6 +2077,7 @@ def add_or_update_mouse_transcriptome_s5_system_templates():
     # pre-select plugins
     plugins = {}
     plugins["ampliSeqRNA"] = _get_plugin_dict("ampliSeqRNA")
+
 
     # 74
     templateParams = TemplateParams("Ion AmpliSeq Transcriptome Mouse Gene Expression Chef-S5", S5, "AMPS_RNA")
@@ -2085,6 +2090,7 @@ def add_or_update_mouse_transcriptome_s5_system_templates():
         "libraryKitName": LIBRARY_KIT_NAME,
         "libraryReadLength": LIBRARY_READ_LENGTH,
         "reference": REFERENCE,
+        "targetRegionBedFile": BEDFILE,
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
@@ -2104,6 +2110,7 @@ def add_or_update_mouse_transcriptome_s5_system_templates():
         "libraryKitName": LIBRARY_KIT_NAME_MANUAL,
         "libraryReadLength": LIBRARY_READ_LENGTH,      
         "reference": REFERENCE,
+        "targetRegionBedFile": BEDFILE,
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
@@ -2120,9 +2127,10 @@ def add_or_update_mouse_transcriptome_proton_system_templates():
     CHIP = "P1.1.17"
     FLOWS = 500
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
-    REFERENCE = "mm10"
+    REFERENCE = "AmpliSeq_Mouse_Transcriptome_v1"
+    BEDFILE = "/AmpliSeq_Mouse_Transcriptome_v1/unmerged/detail/AmpliSeq_Mouse_Transcriptome_V1.Designed.bed"
     SAMPLE_GROUPING = "Self"
-    SEQ_KIT_NAME = "    ProtonI200Kit-v3"
+    SEQ_KIT_NAME = "ProtonI200Kit-v3"
     TEMPLATE_KIT_NAME = "Ion PI Template OT2 200 Kit v3"
     PLAN_STATUS = "inactive"
                 
@@ -2140,6 +2148,7 @@ def add_or_update_mouse_transcriptome_proton_system_templates():
         "flows": FLOWS,
         "libraryKitName": LIBRARY_KIT_NAME,
         "reference": REFERENCE,
+        "targetRegionBedFile": BEDFILE,
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
@@ -2152,7 +2161,7 @@ def add_or_update_mouse_transcriptome_proton_system_templates():
 def add_or_update_mutation_load_s5_system_templates():
     APPLICATION_GROUP = "DNA"
     BARCODE_KIT_NAME = "IonCode Barcodes 1-32" 
-    CATEGORIES = "onco_immune"
+    CATEGORIES = "Oncomine;immunology"
     CHIP = "540"
     FLOWS = 400
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -2184,28 +2193,22 @@ def add_or_update_mutation_load_s5_system_templates():
 
 
 def add_or_update_tagseq_cfdna_system_templates():
-    LIQUID_BIOPSY_PLUGIN_CONFIG_FILENAME = "rundb/fixtures/systemtemplateparams/tagseq_liquidbiopsy_parameters.json"
-    TUMOR_PLUGIN_CONFIG_FILENAME = "rundb/fixtures/systemtemplateparams/tagseq_tumor_parameters.json"
-   
     # 78
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_cfdna_s5_chef_system_template("Oncomine TagSeq Tumor") 
-    tumor_plugins = create_tagseq_plugins(TUMOR_PLUGIN_CONFIG_FILENAME)
-    templateParams.selectedPlugins = tumor_plugins
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_cfdna_s5_530_chef_system_template("Oncomine TagSeq Tumor") 
+    tumor_plugins = {}
     finish_sys_template(sysTemplate, isCreated, templateParams, tumor_plugins)
    
     # 79
-    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_cfdna_s5_chef_system_template("Oncomine TagSeq Liquid Biopsy")
-    liquid_biopsy_plugins = create_tagseq_plugins(LIQUID_BIOPSY_PLUGIN_CONFIG_FILENAME)
-    templateParams.selectedPlugins = liquid_biopsy_plugins
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_cfdna_s5_530_chef_system_template("Oncomine TagSeq Liquid Biopsy")
+    liquid_biopsy_plugins = {}
     finish_sys_template(sysTemplate, isCreated, templateParams, liquid_biopsy_plugins)
 
 
-
-def add_or_update_tagseq_cfdna_s5_chef_system_template(templateName):
+def add_or_update_tagseq_cfdna_s5_530_chef_system_template(templateName):
     # Tag Sequencing
     TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
     TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
-    TAG_SEQ_CATEGORIES = "barcodes_8"
+    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
     TAG_SEQ_CHIP_NAME = "530"
     TAG_SEQ_FLOWS = 500
     TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
@@ -2236,26 +2239,70 @@ def add_or_update_tagseq_cfdna_s5_chef_system_template(templateName):
     return sysTemplate, isCreated, isUpdated, templateParams
 
 
+def add_or_update_tagseq_cfdna_540_system_templates():
+    # 80
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_cfdna_s5_540_chef_system_template("Oncomine TagSeq S540 Tumor") 
+    tumor_plugins = {}
+    finish_sys_template(sysTemplate, isCreated, templateParams, tumor_plugins)
+   
+    # 81
+    sysTemplate, isCreated, isUpdated, templateParams = add_or_update_tagseq_cfdna_s5_540_chef_system_template("Oncomine TagSeq S540 Liquid Biopsy")
+    liquid_biopsy_plugins = {}
+    finish_sys_template(sysTemplate, isCreated, templateParams, liquid_biopsy_plugins)
+
+
+def add_or_update_tagseq_cfdna_s5_540_chef_system_template(templateName):
+    # Tag Sequencing
+    TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
+    TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
+    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
+    TAG_SEQ_CHIP_NAME = "540"
+    TAG_SEQ_FLOWS = 500
+    TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
+    TAG_SEQ_LIBRARY_READ_LENGTH = 200
+    TAG_SEQ_REFERENCE = "hg19"
+    TAG_SEQ_RUN_TYPE = "TAG_SEQUENCING"
+    TAG_SEQ_SAMPLE_GROUPING = "Self"    
+    TAG_SEQ_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
+    TAG_SEQ_TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
+    PLAN_STATUS = "planned"
+    
+    templateParams = TemplateParams(templateName, S5, TAG_SEQ_RUN_TYPE)
+    templateParams.update({
+        "applicationGroup" : TAG_SEQ_APPLICATION_GROUP,
+        "barcodeKitName": TAG_SEQ_BARCODE_KIT_NAME,
+        "categories": TAG_SEQ_CATEGORIES,
+        "chipType": TAG_SEQ_CHIP_NAME,
+        "flows": TAG_SEQ_FLOWS,
+        "libraryKitName": TAG_SEQ_LIB_KIT_NAME,        
+        "libraryReadLength" : TAG_SEQ_LIBRARY_READ_LENGTH,
+        "reference": TAG_SEQ_REFERENCE,
+        "sampleGrouping": TAG_SEQ_SAMPLE_GROUPING,
+        "sequencekitname": TAG_SEQ_SEQ_KIT_NAME,
+        "templatingKitName": TAG_SEQ_TEMPLATE_KIT_NAME,
+        "planStatus": PLAN_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    return sysTemplate, isCreated, isUpdated, templateParams
+
+
 def add_or_update_immune_repertoire_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
-    BARCODE_KIT_NAME = "IonXpress"    
-    CATEGORIES = "onco_immune"
+    BARCODE_KIT_NAME = "Ion Select BC Set-1"    
+    CATEGORIES = "onco_immune;immunology"
     CHIP = "530"
-    FLOWS = 800
+    FLOWS = 850
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     LIBRARY_READ_LENGTH = 400
     REFERENCE = ""
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
-    PLAN_STATUS = "inactive"
-            
-    # pre-select plugins
-    plugins = {}
-    plugins["TCR_Repertoire"] = _get_plugin_dict("TCR_Repertoire")
+    TEMPLATING_SIZE = 400
+    PLAN_STATUS = "planned"
 
-    # 80
-    templateParams = TemplateParams("Oncomine Immune Repertoire TCRB Assay - S5", S5, "AMPS_RNA")
+    # 82
+    templateParams = TemplateParams("Ion AmpliSeq Immune Repertoire Assay Plus - TCRB for S5", S5, "AMPS_RNA")
     templateParams.update({
         "applicationGroup": APPLICATION_GROUP,
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -2268,17 +2315,17 @@ def add_or_update_immune_repertoire_s5_system_templates():
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
+        "templatingSize": TEMPLATING_SIZE,
         "planStatus": PLAN_STATUS
     })
     
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
-
+    finish_sys_template(sysTemplate, isCreated, templateParams)
 
 def add_or_update_immune_repertoire_pgm_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
-    BARCODE_KIT_NAME = "IonXpress"    
-    CATEGORIES = "onco_immune"
+    BARCODE_KIT_NAME = "Ion Select BC Set-1"    
+    CATEGORIES = "onco_immune;immunology"
     CHIP = "318"
     FLOWS = 800
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -2287,14 +2334,10 @@ def add_or_update_immune_repertoire_pgm_system_templates():
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "IonPGMHiQView"
     TEMPLATE_KIT_NAME = "Ion PGM Hi-Q View Chef Kit"
-    PLAN_STATUS = "inactive"
-                
-    # pre-select plugins
-    plugins = {}
-    plugins["TCR_Repertoire"] = _get_plugin_dict("TCR_Repertoire")
+    PLAN_STATUS = "planned"
 
-    # 81
-    templateParams = TemplateParams("Oncomine Immune Repertoire TCRB Assay - PGM", PGM, "AMPS_RNA")
+    # 83
+    templateParams = TemplateParams("Ion AmpliSeq Immune Repertoire Assay Plus - TCRB for PGM", PGM, "AMPS_RNA")
     templateParams.update({
         "applicationGroup": APPLICATION_GROUP,
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -2311,8 +2354,7 @@ def add_or_update_immune_repertoire_pgm_system_templates():
     })
     
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
-
+    finish_sys_template(sysTemplate, isCreated, templateParams)
 
 @transaction.commit_manually()
 def add_or_update_all_system_templates():
@@ -2334,7 +2376,7 @@ def add_or_update_all_system_templates():
         add_or_update_oncomine_ocav1_system_templates()
         add_or_update_oncomine_ocav2_system_templates()        
         add_or_update_oncomine_ocav3_system_templates()
-        add_or_update_oncomine_pediatric_system_templates()
+        add_or_update_oncomine_childhood_cancer_system_templates()
         add_or_update_oncomine_BRCA_system_templates()
         add_or_update_immune_response_system_templates()
         add_or_update_S5_ocp_focus_system_templates()
@@ -2349,6 +2391,7 @@ def add_or_update_all_system_templates():
         add_or_update_tagseq_cfdna_system_templates()
         add_or_update_immune_repertoire_s5_system_templates()
         add_or_update_immune_repertoire_pgm_system_templates()
+        add_or_update_tagseq_cfdna_540_system_templates()
     except:
         print format_exc()
         transaction.rollback()
@@ -2400,7 +2443,19 @@ def clean_up_obsolete_templates():
             "Oncomine Lung Liquid Biopsy Total Nucleic Acid",
             "Oncomine Lung Tumor Total Nucleic Acid",
             "Oncomine Breast Liquid Biopsy DNA v2",
-            "Oncomine Breast Tumor DNA v2"
+            "Oncomine Breast Tumor DNA v2",
+            "Oncomine Immune Repertoire TCRB Assay - S5",
+            "Oncomine Immune Repertoire TCRB Assay - PGM",
+            "AmpliSeq Pediatric Cancer Research Panel DNA",
+            "AmpliSeq Pediatric Cancer Research Panel DNA and Fusion",
+            "AmpliSeq Pediatric Cancer Research Panel Fusion",
+            "AmpliSeq Myeloid Research DNA for PGM",
+            "AmpliSeq Myeloid Research Fusions for PGM",
+            "AmpliSeq Myeloid Research DNA and Fusions for PGM",
+            "AmpliSeq Myeloid Research DNA for S5",
+            "AmpliSeq Myeloid Research Fusions for S5",
+            "AmpliSeq Myeloid Research DNA and Fusions for S5",
+            "Ion AmpliSeq Inherited Disease Panel"
             ]
 
         templates = models.PlannedExperiment.objects.filter(

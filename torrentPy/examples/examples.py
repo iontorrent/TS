@@ -107,7 +107,7 @@ def treephaser( dir_name ):
     flowOrder = bamreader.header['FlowOrder'][0]
     key=torrentPy.seqToFlow(keySeq,flowOrder[0:8])
 
-    bamreader.SetSampleSize(3)
+    #bamreader.SetSampleSize(3)
     bamlist_sample = list(bamreader)
     #apply different basecaller solvers to a list of reads
     bamlist_sample[0].pop('predicted',None)
@@ -139,9 +139,13 @@ def treephaser( dir_name ):
     tp.setStateProgression(True)
     res=tp.Simulate("TCAGGTTTACG",60)
     print(res)
+    try: 
+        rr=torrentPy.LightFlowAlignment(b['keySeq']+b['qseq_bases'],b['keySeq']+b['tseq_bases'],b['flowOrder'],False,0.1);
+        print(rr)
+    except: 
+        print "Failure in LightFlowAlignment"
+        pass
 
-    rr=torrentPy.LightFlowAlignment(b['keySeq']+b['qseq_bases'],b['keySeq']+b['tseq_bases'],b['flowOrder'],False,0.1);
-    print(rr)
     return locals()
     
 

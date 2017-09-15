@@ -80,6 +80,21 @@
 </div>
 
 <div class="control-group">
+	<label class="control-label" for="cellNum">Cell Number</label>
+	<div class="controls">
+		{% if intent == "edit" %}
+			<input maxlength="127" id="cellNum" name="cellNum" placeholder="Optional" value="{{sampleSetItem.cellNum}}" />
+		{% elif intent == "edit_pending" %}
+			<input maxlength="127" id="cellNum" name="cellNum" placeholder="Optional" value="{{pending_sampleSetItem.cellNum}}" />                        
+		{% else %}
+			<input maxlength="127" id="cellNum" name="cellNum" placeholder="Optional"></input>
+		{% endif %}
+		<div class="help-block"> 
+		</div>                                  
+	</div>
+</div>
+
+<div class="control-group">
 	<label class="control-label" for="coupleId">Couple ID</label>
 	<div class="controls">
 		{% if intent == "edit" %}

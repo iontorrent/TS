@@ -99,12 +99,15 @@ include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
 
 CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
 CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
+CUDA_ADD_EXECUTABLE(matrixMul matrixMul.cu)
 
 add_dependencies(bandwidthTest cuda_toolkit)
 add_dependencies(deviceQuery cuda_toolkit)
+add_dependencies(matrixMul cuda_toolkit)
 
 install(PROGRAMS ${PROJECT_BINARY_DIR}/deviceQuery DESTINATION .)
 install(PROGRAMS ${PROJECT_BINARY_DIR}/bandwidthTest DESTINATION .)
+install(PROGRAMS ${PROJECT_BINARY_DIR}/matrixMul DESTINATION .)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")

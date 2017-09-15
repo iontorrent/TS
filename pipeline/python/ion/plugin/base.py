@@ -244,7 +244,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
         if not self.exit_status:
             self.exit_status = bool(not status)
 
-        self.log.info("Plugin complete: '%s' v%si -- exit_status = %d",
+        self.log.info("Plugin complete: '%s' v%s -- exit_status = %d",
                       self.name, self.version, self.exit_status)
 
         return status

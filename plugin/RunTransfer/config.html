@@ -20,6 +20,11 @@
             height:30px;
         }
 
+        input[type="radio"] {
+          margin-top: -1px;
+          vertical-align: middle;
+        }
+
         body {
             font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
             font-size: 14px;
@@ -60,10 +65,11 @@
 
                         //set the value of thumbnailonly
                         else if(key == "thumbnailonly"){
-                            if (val == "off") {
-                                $("#thumbnailonly").prop('checked', false);
-                            } else {
-                                $("#thumbnailonly").prop('checked', true);
+                            if(val === "true") {
+                                $("input[name=thumbnailonly][value=true]").prop('checked', true);
+                            }
+                            else{
+                                $("input[name=thumbnailonly][value=false]").prop('checked', true);
                             }
                         }
                     });
@@ -129,6 +135,8 @@
                     <!-- this form name "pluginconfig" should match the one used in the html page-->
                     //use the data retreived from the GET and modify it only the config key is changed
                     pluginGET.config = $('#pluginconfig').serializeObject();
+                    // strip out the password
+                    delete pluginGET.config.user_password;
                     pluginAPIJSON = JSON.stringify(pluginGET);
                     pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
                     $.ajax({
@@ -196,8 +204,12 @@
                         <td><input id="upload_path" name="upload_path" value="" size="50" title="The upload path."/></td>
                     </tr>
                     <tr>
-                        <td align=right>Thumbnail-only: </td>
-                        <td><input id="thumbnailonly" name="thumbnailonly" type="checkbox" title="Only affects Proton datasets" size="50"/></td>
+                        <td>Data Set Type:</td>
+                        <td>
+                            <!-- we are required to maintain the "thumbnailonly" name so when it's communicated to the plugin it has the same name -->
+                            <input name="thumbnailonly" type="radio" value="true">Thumbnails/PGM</input><br />
+                            <input name="thumbnailonly" type="radio" value="false">Thumbnails/PGM and Full Chip</input>
+                        </td>
                     </tr>
                 </table>
             </div>

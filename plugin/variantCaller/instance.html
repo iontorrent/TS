@@ -16,9 +16,17 @@
         width: 400px;
     }
     
-	.chzn-container.chzn-container-single {
-    	width: 400px !important;
-	}
+    .chzn-search input {
+        width: 365px !important;
+    }
+    
+    .chzn-drop.chzn-drop {
+        width: 400px !important;
+    }
+    
+    .chzn-container.chzn-container-single {
+        width: 400px !important;
+    }
 	    
     .help {
         cursor: default;
@@ -99,7 +107,7 @@
 <body>
     <div class="container">
         <div style="margin-bottom:0px">
-            <h3>Torrent Variant Caller 5.4</h3>
+            <h3>Torrent Variant Caller 5.6</h3>
         </div>
 		<div style="display:none">
 			<input type="checkbox" id="multisample" value="multisample"> Batch configurations into multi-sample runs<br>
@@ -1002,7 +1010,7 @@ function initialize() {
           //if (!("configuration" in new_config["meta"]))
             new_config["meta"]["configuration"] = "custom";
           //if (!("ts_version" in new_config["meta"]))
-            new_config["meta"]["ts_version"] = "5.4";
+            new_config["meta"]["ts_version"] = "5.6";
           //if (!("repository_id" in new_config["meta"]))
           //  new_config["meta"]["repository_id"] = "";
           //if (!("compatibility" in new_config["meta"]))
@@ -1578,7 +1586,7 @@ function ampliseq_panel_load() {
                 if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
                     new_config["meta"]["configuration"] = "";
                 if (!("ts_version" in new_config["meta"]))
-                    new_config["meta"]["ts_version"] = "5.4";
+                    new_config["meta"]["ts_version"] = "5.6";
                 //if (!("repository_id" in new_config["meta"]))
                 //    new_config["meta"]["repository_id"] = "";
                 new_config["meta"]["compatibility"] = {
@@ -1647,7 +1655,7 @@ function tagseq_panel_load() {
                 if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
                     new_config["meta"]["configuration"] = "";
                 if (!("ts_version" in new_config["meta"]))
-                    new_config["meta"]["ts_version"] = "5.4";
+                    new_config["meta"]["ts_version"] = "5.6";
                 //if (!("repository_id" in new_config["meta"]))
                 //    new_config["meta"]["repository_id"] = "";
                 new_config["meta"]["compatibility"] = {
@@ -1733,7 +1741,7 @@ function set_values() {
         "name"          : "Custom",
         "tooltip"       : "Manually created custom set",
         "configuration" : "custom",
-        "ts_version"    : "5.4",
+        "ts_version"    : "5.6",
         //"repository_id" : "",
         "compatibility" : {},
         "custom"        : true,
@@ -2543,11 +2551,15 @@ function unserializeForm(json) {
 	    $(".dropdown").trigger("liszt:updated");
 
 	    ApplyParameterFilters();
-        var config = obj["pluginconfig"]["meta"]["parameters"]["config"];
-        var idx = parseInt(config.substr(14), 10);
+        //czb: Using obj["pluginconfig"]["meta"]["parameters"]["config"] is dangerous!
+	    //var config = obj["pluginconfig"]["meta"]["parameters"]["config"];
+        //var idx = parseInt(config.substr(14), 10);
+        var idx = parameter_sets.length - 1; // I will force it to be "custom" if the parameter set is lost, which can happen in different version.
         var library_selection = $("#library_type option:selected").val();
         var topparams = get_top_params(library_selection);
-		if (obj["pluginconfig"]["meta"]["parameters"]['value'] == "custom") {idx = parameter_sets.length - 1;}
+		if (obj["pluginconfig"]["meta"]["parameters"]['value'] == "custom") {
+			idx = parameter_sets.length - 1;
+		}
 		else {
 	        for (var temp_idx = 0; temp_idx < parameter_sets.length - 1; temp_idx++) {
 	            var param = parameter_sets[temp_idx]["meta"]["configuration"];
@@ -2556,6 +2568,9 @@ function unserializeForm(json) {
 					break;
 				}
 			}
+	        if (idx == parameter_sets.length - 1){
+	        	console.warn('The parameter "' +  obj["pluginconfig"]["meta"]["parameters"]['value'] + '" can not be found from the current parameters. Force the parameter to be "custom".');
+	        }
 		}
         $("#parameter_set_" + idx).prop("checked", true);
 		//$("#parameter_sets_table input[value='" + obj["pluginconfig"]["meta"]["parameters"]["value"] + "']").attr("checked", true);
@@ -2564,7 +2579,7 @@ function unserializeForm(json) {
 		$("#tvcargs").val(obj["pluginconfig"]["meta"]["tvcargs"]);
 		$("#tmapargs").val(obj["pluginconfig"]["meta"]["tmapargs"]);
 		$("#unifyargs").val(obj["pluginconfig"]["meta"]["unifyargs"]);		
-		if (obj["pluginconfig"]["meta"]["parameters"]["value"] == 'custom') {
+		if (idx == parameter_sets.length - 1) {
 			var param_sections = ['torrent_variant_caller', 'long_indel_assembler', 'freebayes'];
 			for (var section_idx = 0; section_idx < param_sections.length; section_idx++){
 				var key = param_sections[section_idx];
@@ -2942,7 +2957,7 @@ function restoreForm(data) {
     if (!("tooltip" in restore_form_data["meta"]))
       restore_form_data["meta"]["tooltip"] = "Legacy";
     if (!("ts_version" in restore_form_data["meta"]))
-      restore_form_data["meta"]["ts_version"] = "5.4";
+      restore_form_data["meta"]["ts_version"] = "5.6";
     //if (!("repository_id" in restore_form_data["meta"]))
     //  restore_form_data["meta"]["repository_id"] = "";
     if (!("compatibility" in restore_form_data["meta"]))

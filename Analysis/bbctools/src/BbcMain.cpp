@@ -24,8 +24,11 @@ using namespace BamTools;
 
 // Number alignments returned using SetRegion() appears incorrect when using closed regions!
 // It appears to work when using right-open regions but has MASSIVE performance issue.
-// Direct index Jump() works! (With care t avoid reviewing reads more than once.)
+// Direct index Jump() mostly works! (With care to avoid reviewing reads more than once.)
 const bool s_useBamReaderJump = true;
+
+// Turns out Jump(), like SetRegion(), only appears to work reliably for the first region
+const bool s_useBamReaderJumpOnce = true;
 
 // A large initial value is used since making lots of Jump() calls is itself inefficient
 const int s_initialMinJumpLen = 1000000;
@@ -34,7 +37,7 @@ const int s_initialMinJumpLen = 1000000;
 const int s_initialMaxReadLen = 1000;
 
 // Current version number string for bbctools executable
-const uint16_t s_versionNumber = 1103;
+const uint16_t s_versionNumber = 1200;
 
 // Forward declarations of functions used by main()
 int bbctools_create( BbcUtils::OptParser &optParser );
@@ -47,6 +50,7 @@ int main( int argc, char* argv[] ) {
 	// general command line argument validation
 	//
  	if( argc <= 1 ) {
+    	cout << "BBCtools version " << BbcUtils::numberToString( (double)s_versionNumber/1000, 3 ) << endl;
 		Usage("");
 		return 1;
 	}
@@ -389,6 +393,7 @@ int bbctools_create( BbcUtils::OptParser &optParser ) {
 			}
 			if( bamReaderSetRegions ) {
 				bamReader.Jump( trgContig, trgSrtPos-maxReadLen );
+				if( s_useBamReaderJumpOnce ) bamReaderSetRegions = false;
 			}
 		}
 		BamAlignment aln;
