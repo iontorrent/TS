@@ -1,0 +1,15 @@
+<div class="row-fluid">
+    <div class="span12">
+        <h1 id="time-span-container" class="section-header">Runs
+            <label for="time-span" class=" hide">Show activity within</label>
+            <select id="time-span" name="time-span" class="selectpicker" title="Activity:" data-width="fit"
+                    data-persist-title="true">
+                <option value="hour" {% if runs.time_span == "hour" %}selected{% endif %}>Last Hour</option>
+                <option value="today" {% if runs.time_span == "today" %}selected{% endif %}>Today</option>
+                <option value="24hours" {% if runs.time_span == "24hours" %}selected{% endif %}>Last 24 Hours</option>
+                <option value="7days" {% if runs.time_span == "7days" %}selected{% endif %}>Last 7 Days</option>
+            </select>
+        </h1>
+        <div id="runs-fragment-container">{{ initial_html|safe }}</div>
+    </div>
+</div>

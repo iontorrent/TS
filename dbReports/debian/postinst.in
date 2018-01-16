@@ -21,13 +21,6 @@ case "$1" in
     # updated all instances of the key file to this permission level as per TS-14740
     chmod 0440 $KEY_FILE
 
-    # create or update the off-cycle release source url
-    if [ -f /etc/apt/sources.list.d/iontorrent-offcycle.list ]; then
-        sed -i "s/deb http:\/\/ionupdates.com\/updates\/software\/offcycle\/[^0-9.]*\([0-9.]*\).*/deb http:\/\/ionupdates.com\/updates\/software\/offcycle\/@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@\/ @LSB_RELEASE_CODENAME@\//" /etc/apt/sources.list.d/iontorrent-offcycle.list
-    else
-        echo "deb http://ionupdates.com/updates/software/offcycle/@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@/ @LSB_RELEASE_CODENAME@/" > /etc/apt/sources.list.d/iontorrent-offcycle.list
-    fi
-
     #MegaCli64 library support
     if [ -e /lib/libsysfs.so.2.0.1 ]; then
         if [ ! -h /usr/lib64/libsysfs.so.2.0.2 ]; then
@@ -254,7 +247,7 @@ ENDOFAPACHEENV
     chmod g+w /var/spool/ion    # set in CMakeLists.txt but want to be certain
 
     # touchy code
-    for log_file in django.log crawl.log ionPlugin.log celery_plugins.log data_management.log
+    for log_file in django.log crawl.log ionPlugin.log celery_plugins.log data_management.log product_integration.log
     do
         touch /var/log/ion/$log_file
         chown :www-data /var/log/ion/$log_file

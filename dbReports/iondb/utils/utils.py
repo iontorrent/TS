@@ -284,6 +284,15 @@ def is_TsVm():
     # returns True if the TS is running as a VM instance on S5
     return os.path.exists('/etc/init.d/mountExternal')
 
+def is_s5orig():
+    # returns True if the TS is running on the initially released S5 sequencer
+    if is_TsVm():
+        try:
+            memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
+            return memTotalGb < 70
+        except:
+            logger.error("Unable to determine system memory")
+    return False
 
 def is_internal_server():
     isInternalServer = False  

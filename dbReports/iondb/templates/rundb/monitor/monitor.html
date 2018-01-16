@@ -70,13 +70,13 @@
                 <div class="run-name">
                     <div class="run-instrument">
                         {{#is_proton}}
-                            {% endraw %}<img src="{% static "resources/img/proton_jumbo_icon.png"%}" />{% raw %}
+                            {% endraw %}<img style="width: 85px" src="{% static "resources/img/instrument_icons/proton.png"%}" />{% raw %}
                         {{/is_proton}}
                         {{#is_s5}}
-                            {% endraw %}<img src="{% static "resources/img/raptor-thumbnail_icon.png"%}" />{% raw %}
+                            {% endraw %}<img style="width: 85px" src="{% static "resources/img/instrument_icons/s5.png"%}" />{% raw %}
                         {{/is_s5}}
                         {{#other_instrument}}
-                            {% endraw %}<img src="{% static "resources/img/pgm_jumbo_icon.png"%}" />{% raw %}
+                            {% endraw %}<img style="width: 85px" src="{% static "resources/img/instrument_icons/pgm.png"%}" />{% raw %}
                         {{/other_instrument}}
                     </div>
                     <div style="float:left;">

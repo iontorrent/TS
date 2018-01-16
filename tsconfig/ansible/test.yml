@@ -1,10 +1,13 @@
 ---
 # file: test.yml
-- hosts: headnode
+# ansible-playbook -i "localhost," -c local test.yml
+- hosts: all
   vars:
     - startline: "#start TSconfig added mountpoints"
     - endline: "#end TSconfig added mountpoints"
   tasks:
     - name:
       include: globals.yml
+  vars_files:
+      - [ "group_vars/all" ]
 

@@ -754,9 +754,11 @@ void BAMWalkerEngine::FinishPositionProcessingTask(list<PositionInProgress>::ite
         <<" has unexpected processing time of " << delta << " seconds." << endl;
   }
   if (position_ticket == positions_in_progress_.begin()) {
-    first_useful_read_ = max(first_useful_read_,position_ticket->begin->read_number);
+	if (position_ticket->begin != NULL){
+	  first_useful_read_ = max(first_useful_read_,position_ticket->begin->read_number);
+	}
     positions_in_progress_.erase(position_ticket);
-    if (not positions_in_progress_.empty()) {
+    if ((not positions_in_progress_.empty()) and positions_in_progress_.begin()->begin != NULL) {
       first_useful_read_ = max(first_useful_read_,positions_in_progress_.begin()->begin->read_number);
     }
   } else {
@@ -885,7 +887,7 @@ void ConsensusBAMWalkerEngine::BeginTargetProcessingTask(list<PositionInProgress
 	    tmp_end_ = tmp_begin_;
 
 	  while (tmp_end_ and (
-	      (tmp_end_->alignment.RefID == next_target_->chr and tmp_end_->original_position < target_end)
+	      (tmp_end_->alignment.RefID == next_target_->chr and tmp_end_->original_position < target_end - 1)
 	      or tmp_end_->alignment.RefID < next_target_->chr)
 	      and tmp_end_->processed)
 	    tmp_end_ = tmp_end_->next;
@@ -941,7 +943,6 @@ bool BAMWalkerEngine::GetMostPopularTmap(SamProgram& most_popular_tmap){
     for (map<string, unsigned int>::iterator it = read_counts_of_pg_.begin(); it != read_counts_of_pg_.end(); ++it){
     	if ((int) it->second > current_popular_count){
     		most_popular_pg = it->first;
-    		current_popular_count = (int) it->second;
     	}
     }
     if (most_popular_pg.substr(0, 4) != "tmap"){

@@ -58,6 +58,7 @@ public:
     bool last, int last_flow );
   
   ~GlobalWriter();
+  void AllocDataCubeResErr(int col,int row, int flow); //RegionalizedData &region_data);
   void DumpTimeCompressionH5 ( int reg, TimeCompression &time_c, int max_frames );
   void DumpRegionFitParamsH5 (int region_ndx, int flow, reg_params &rp, int flow_block_size, int flow_block_id );
   void DumpRegionOffsetH5(int reg, int col, int row );
@@ -69,6 +70,7 @@ public:
   void DumpDarkMatterH5(int reg, TimeCompression &time_c, RegionTracker &my_reg_tracker, int max_frames);
   void DumpTimeAndEmphasisByRegionH5 (int reg, TimeCompression &time_c, EmphasisClass &emphasis_data, int max_frames);
   void SendErrorVectorToHDF5 (BeadParams *p, error_track &err_t, Region *region, FlowBufferInfo &my_flow, int flow_block_start);
+  void SendErrorVectorToWells (BeadParams *p, error_track &err_t, Region *region, FlowBufferInfo &my_flow, int flow_block_start);
   void SendPredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras &my_region_data_extras, int max_frames, int flow_block_start);
   void SendCorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras &my_region_data_extras, int max_frames, int flow_block_start);
   void SendXtalkToHDF5 (int ibd, float *block_signal_xtalk, RegionalizedData &my_region_data, SlicedChipExtras &my_region_data_extras, int max_frames, int flow_block_start );

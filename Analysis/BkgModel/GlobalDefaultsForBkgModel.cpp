@@ -180,7 +180,7 @@ void GlobalDefaultsForBkgModel::ReadXtalk ( char *name )
 }
 
 
-void GlobalDefaultsForBkgModel::GoptDefaultsFromJson(char *fname){
+void GlobalDefaultsForBkgModel::GoptDefaultsFromJson(char *fname, const std::string& blockId){
   Json::Value all_params;
   std::ifstream in(fname, std::ios::in);
 
@@ -190,25 +190,38 @@ void GlobalDefaultsForBkgModel::GoptDefaultsFromJson(char *fname){
   }
   in >> all_params;
 
-  if (all_params.isMember("parameters")){
+  Json::Value gopt_params;
+  if (all_params.isMember(blockId)) {
+    Json::Value blockGopt = all_params[blockId];
+    if(blockGopt.isMember("parameters")) {
+      std::cout << "Reading Gopt parameters for block: " << blockId << std::endl;
+      gopt_params = blockGopt["parameters"];
+    }
+    else {
+      std::cout << "ABORT: gopt file contains no parameters " << fname << "\n";
+      exit(1);
+    }
+  }
+  else if (all_params.isMember("parameters")){
     // strip down to the correct subset of the file
-    Json::Value gopt_params = all_params["parameters"];
-
-    region_param_start.FromJson(gopt_params);
-    data_control.FromJson(gopt_params);
-    fitter_defaults.FromJson(gopt_params);
+    gopt_params = all_params["parameters"];
   }else{
     std::cout << "ABORT: gopt file contains no parameters " << fname << "\n";
     exit(1);
   }
+    
+  region_param_start.FromJson(gopt_params);
+  data_control.FromJson(gopt_params);
+  fitter_defaults.FromJson(gopt_params);
+
   // echo as test
    //std::cout << gopt_params.toStyledString();
   in.close();
 }
 
 
-// Load optimized defaults from GeneticOptimizer runs
-void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname, char *results_folder )
+// Load optimized defaults from GeneticOptimizer runsvoid GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname, char *results_folder )
+void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname, char *results_folder, const std::string& blockId )
 {
   if(fname == NULL)
     return;
@@ -219,7 +232,7 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname, char *results_fol
     isJson = true;
   //json way
   if(isJson){
-    GoptDefaultsFromJson(fname);
+    GoptDefaultsFromJson(fname, blockId);
   } else{
     printf("Abort: %s not a json file", fname);
     exit(1);
@@ -259,7 +272,7 @@ void GlobalDefaultsForBkgModel::PrintHelp()
     signal_process_control.PrintHelp();
 }
 
-void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
+void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params, const std::string& blockId)
 {
 	// from SetBkgModelGlobalDefaults
 	chipType = GetParamsString(json_params, "chipType", "");
@@ -278,7 +291,7 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 
 			char *tmp_config_file = NULL;
 			tmp_config_file = GetIonConfigFile (filename.c_str());
-			SetGoptDefaults(tmp_config_file,(char*)(results_folder.c_str()));
+			SetGoptDefaults(tmp_config_file,(char*)(results_folder.c_str()), blockId);
 			if (tmp_config_file)
 			  free(tmp_config_file);
 		}
@@ -298,13 +311,13 @@ void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 				tmp_config_file = GetIonConfigFile (filename.c_str());
 			}
 
-			SetGoptDefaults(tmp_config_file,(char*)(results_folder.c_str()));
+			SetGoptDefaults(tmp_config_file,(char*)(results_folder.c_str()), blockId);
 			if (tmp_config_file)
 			  free(tmp_config_file);
 		}
 		else
 		{
-		    SetGoptDefaults ((char*)(gopt.c_str()),(char*)(results_folder.c_str())); //parameter file provided cmd-line
+		    SetGoptDefaults ((char*)(gopt.c_str()),(char*)(results_folder.c_str()), blockId); //parameter file provided cmd-line
 			//ReadEmphasisVectorFromFile ((char*)(results_folder.c_str()));   //GeneticOptimizer run - load its vector
 		}
 	}

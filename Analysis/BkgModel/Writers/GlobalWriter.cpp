@@ -11,6 +11,13 @@
 #include "RegionalizedData.h"
 #include "SlicedChipExtras.h"
 
+void GlobalWriter::AllocDataCubeResErr(int col, int row, int flow){
+  int w = col; //= region_data.region->w + region_data.get_region_col();
+  int h = row; //region_data.region->h + region_data.get_region_row();
+  printf("allocating datacube  %d %d %d \n", w, h, flow);
+  mPtrs->mResError->Init(w, h, flow);
+  mPtrs->mResError->AllocateBuffer();
+}
 void GlobalWriter::WriteOneBeadToDataCubes ( BeadParams &p, int flow, int iFlowBuffer, int last, int ibd, Region *region, BkgTrace &my_trace, int flow_block_size, int flow_block_id )
 {
   int x = p.x+region->col;
@@ -63,25 +70,39 @@ void GlobalWriter::WriteBeadParameterstoDataCubes ( int iFlowBuffer, bool last,R
 }
 
 
-
-
-void GlobalWriter::SendErrorVectorToHDF5 ( BeadParams *p, error_track &err_t, Region *region, FlowBufferInfo &my_flow, int flow_block_start )
-{
-    //if ( ! hasPointers() ) return;
-    if ( mPtrs->mResError!=NULL )
+void GlobalWriter::SendErrorVectorToHDF5 ( BeadParams *p, error_track &err_t,
+ Region *region, FlowBufferInfo &my_flow, int flow_block_start )
+{   
+    if ( mPtrs->mResError != NULL )
     {
-      int x = p->x+region->col;
-      int y = p->y+region->row;
+      int x = p->x + region->col;
+      int y = p->y + region->row;
       if ( mPtrs->mResError!=NULL )
       {
         for ( int fnum=0; fnum<my_flow.flowBufferCount; fnum++ )
         {
-          // use copyCube_element to copy DataCube element to mResError
-          mPtrs->copyCube_element ( mPtrs->mResError,x,y,flow_block_start + fnum,err_t.mean_residual_error[fnum] );
+          mPtrs->copyCube_element ( mPtrs->mResError,x,y,fnum + flow_block_start,err_t.mean_residual_error[fnum] );
         }
       }
     }
 }
+
+void GlobalWriter::SendErrorVectorToWells( BeadParams *p, error_track &err_t,
+		 Region *region, FlowBufferInfo &my_flow, int flow_block_start ){
+	if ( mPtrs->mResError1 != NULL )
+	    {
+	      int x = p->x + region->col;
+	      int y = p->y + region->row;
+	      if ( mPtrs->mResError1!=NULL )
+	      {
+	        for ( int fnum=0; fnum<my_flow.flowBufferCount; fnum++ )
+	        {
+	          mPtrs->copyCube_element ( mPtrs->mResError1, x, y, fnum + flow_block_start,err_t.mean_residual_error[fnum] );
+	        }
+	      }
+	    }
+}
+
 
 void GlobalWriter::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
@@ -1375,7 +1396,6 @@ void GlobalWriter::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk,
 void GlobalWriter::WriteAnswersToWells ( int iFlowBuffer, Region *region, RegionTracker *my_regions, BeadTracker &my_beads, int flow_block_start )
 {
   int flow = flow_block_start + iFlowBuffer;
-
   // make absolutely sure we're up to date
   my_regions->rp.copy_multiplier[iFlowBuffer] = my_regions->rp.CalculateCopyDrift ( flow );
   //Write one flow's data to 1.wells
@@ -1385,20 +1405,31 @@ void GlobalWriter::WriteAnswersToWells ( int iFlowBuffer, Region *region, Region
     if (false == rawWells->GetSaveAsUShort())
       val *= my_beads.params_nn[ibd].Copies;
 
-	int x = my_beads.params_nn[ibd].x+region->col;
+	 int x = my_beads.params_nn[ibd].x+region->col;
     int y = my_beads.params_nn[ibd].y+region->row;
-    
+
     if (my_beads.params_nn[ibd].my_state->pinned or my_beads.params_nn[ibd].my_state->corrupt)
       val = 0.0f; // actively suppress pinned wells in case we are so unfortunate as to have an estimate for them
 
-    if(rawWells->GetSaveCopies())
-	{
+    
+    if(rawWells->GetSaveCopies() && rawWells->GetSaveRes())
+    {
+        float my_res = mPtrs->mResError1->At(x, y, flow);
+        rawWells->WriteFlowgram ( flow, x, y, val, my_beads.params_nn[ibd].Copies, my_res );
+    }
+    else if (rawWells->GetSaveCopies())
+    {
       rawWells->WriteFlowgram ( flow, x, y, val, my_beads.params_nn[ibd].Copies );
-	}
-	else
-	{
-      rawWells->WriteFlowgram ( flow, x, y, val );
-	}
+    }
+    else if (rawWells->GetSaveRes())
+    {
+      float my_res = mPtrs->mResError1->At(x, y, flow);
+      rawWells->WriteFlowgramWithRes ( flow, x, y, val, my_res );
+    }
+    else
+    {
+        rawWells->WriteFlowgram ( flow, x, y, val );
+    }
   }
 }
 

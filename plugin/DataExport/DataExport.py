@@ -8,17 +8,18 @@ import sys
 import json
 import urllib
 import traceback
-import subprocess
-from ion.plugin import PluginCLI, IonPlugin, RunLevel
+from ion.plugin import PluginCLI, IonPlugin, RunLevel, RunType
 
 
 class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.6.0.1'
+    version = '5.8.0.2'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
+    runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     runlevels = [RunLevel.LAST]
+    requires_configuration = True
 
     # Copied from dmactions.py and dmactions_import.py
     ARCHIVE = 'archive'
@@ -39,63 +40,68 @@ class DataExport(IonPlugin):
         self.output_dir = ''
         self.dest_dir = ''
 
+    def custom_validation(self, configuration, run_mode):
+        """Always return error messages"""
+
+        errors = list()
+        upload_path = configuration.get('upload_path', '')
+        output = configuration.get('output', False)
+        basecalling = configuration.get('basecalling', False)
+        intermediate = configuration.get('intermediate', False)
+        sigproc = configuration.get('sigproc', False)
+
+        # handle string type condition
+        output = 'on' == output if isinstance(output, basestring) else output
+        basecalling = 'on' == basecalling if isinstance(basecalling, basestring) else basecalling
+        intermediate = 'on' == intermediate if isinstance(intermediate, basestring) else intermediate
+        sigproc = 'on' == sigproc if isinstance(sigproc, basestring) else sigproc
+
+        if not upload_path:
+            errors.append('No upload path specified.')
+        elif not os.path.exists(upload_path):
+            errors.append('The specified upload path does not exist.')
+        elif not os.path.isdir(upload_path):
+            errors.append('The specified upload path is not a directory.')
+
+        if not any([output, basecalling, intermediate, sigproc]):
+            errors.append('You need to specify at least one data type to export.')
+
+        return errors
 
     # main method of plugin execution
     def launch(self, data=None):
-
-        print "==============================================================================="
-
-        # Configuration and Instance pages will have
-        # username
-        #username = 'ionadmin'
-        # password
-        #password = 'iongenomes'
-        # server address
-        #server = 'enderman.ite'
-        # destination directory
-        #dest_dir = '/ion-data'
-        #dest_dir = '/media/77f2a9df-7668-41ba-8f84-c567f8418eb0'
-        # Boolean flag for each category
-        # - Signal Processing Input
-        # - Basecalling Input
-        # - Output Files
-        # - Intermediate Files
-        #data_categories = [
-        #    {self.SIG:False},
-        #    {self.BASE:True},
-        #    {self.OUT:True},
-        #    {self.INTR:False},
-        #]
+        """Launch the plugin and hit the data management api endpoint"""
+        print("===============================================================================")
 
         try:
             # Get values from plugin environment
             with open('startplugin.json', 'r') as fh:
                 spj = json.load(fh)
-                self.result_pk      = spj['runinfo']['pk']
-                self.output_dir     = spj['runinfo']['results_dir']
-                self.report_name    = os.path.basename(spj['runinfo']['report_root_dir'])
-                self.dest_dir       = spj['pluginconfig'].get('upload_path', '')
-                sigproc             = spj['pluginconfig'].get('sigproc', 'off')
-                basecalling         = spj['pluginconfig'].get('basecalling', 'off')
-                output              = spj['pluginconfig'].get('output', 'off')
-                intermediate        = spj['pluginconfig'].get('intermediate', 'off')
+                self.result_pk = spj['runinfo']['pk']
+                self.output_dir = spj['runinfo']['results_dir']
+                self.report_name = os.path.basename(spj['runinfo']['report_root_dir'])
+                self.dest_dir = spj['pluginconfig'].get('upload_path', '')
+                sigproc = spj['pluginconfig'].get('sigproc', 'off')
+                basecalling = spj['pluginconfig'].get('basecalling', 'off')
+                output = spj['pluginconfig'].get('output', 'off')
+                intermediate = spj['pluginconfig'].get('intermediate', 'off')
         except Exception:
             # something unexpected.
-            print traceback.format_exc()
+            print(traceback.format_exc())
             self.plugin_exception(traceback.format_exc())
             return True
 
         data_categories = [
-            {self.SIG:False if sigproc == 'off' else True},
-            {self.BASE:False if basecalling == 'off' else True},
-            {self.OUT:False if output == 'off' else True},
-            {self.INTR:False if intermediate == 'off' else True},
+            {self.SIG: False if sigproc == 'off' else True},
+            {self.BASE: False if basecalling == 'off' else True},
+            {self.OUT: False if output == 'off' else True},
+            {self.INTR: False if intermediate == 'off' else True},
         ]
 
-        #Input validation
+        # Input validation
         if self.dest_dir == "":
             # Error - probably global config has not been completed by user.
-            print "Upload path has not been configured. Did you run the global configuration for this plugin?"
+            print("Upload path has not been configured. Did you run the global configuration for this plugin?")
             self.plugin_not_configured_error()
             return True
 
@@ -114,19 +120,19 @@ class DataExport(IonPlugin):
         }
 
         if len(self.categories):
-            #===============================================
+            # ===============================================
             # Copying to local directory
-            #===============================================
+            # ===============================================
             self.generate_completion_html()
-            print "Uploading %s" % (self.report_name)
-            print "File categories: %s" % (self.categories)
-            print "Destination: %s" % (self.dest_dir)
+            print("Uploading %s" % self.report_name)
+            print("File categories: %s" % self.categories)
+            print("Destination: %s" % self.dest_dir)
             error_msg = []
             connection_url = "http://localhost/data/datamanagement/dm_actions/%s/%s/" % (self.result_pk, self.EXPORT)
             try:
                 conn = urllib.urlopen(connection_url, json.dumps(raw_post_data))
             except IOError:
-                print 'could not make connection %s' % connection_url
+                print('could not make connection %s' % connection_url)
                 try:
                     connection_url = 'https://localhost/data/datamanagement/dm_actions/%s/%s/' % (self.result_pk, self.EXPORT)
                     conn = urllib.urlopen(connection_url, json.dumps(raw_post_data))
@@ -134,7 +140,7 @@ class DataExport(IonPlugin):
                     error_msg.append(" !! Failed to submit URL.  could not connect to %s" % connection_url)
                     for line in traceback.format_exc().splitlines():
                         error_msg.append(line)
-                    print error_msg
+                    print(error_msg)
                     self.generate_completion_html(stat_line='Failure', error_msg=error_msg)
                     conn = None
 
@@ -144,18 +150,17 @@ class DataExport(IonPlugin):
                     error_msg.append(" !! URL failed with error code %d for %s" % (error_code, conn.geturl()))
                     for line in conn.readlines():
                         error_msg.append(line)
-                    print error_msg
+                    print(error_msg)
                     self.generate_completion_html(stat_line='Failure', error_msg=error_msg)
                 else:
                     self.generate_completion_html()
         else:
-            print "Nothing to do.  No categories were selected to transfer"
+            print("Nothing to do.  No categories were selected to transfer")
             self.generate_completion_html(stat_line="No files were selected")
 
         # Exit the launch function; exit the plugin
-        print "==============================================================================="
+        print("===============================================================================")
         return True
-
 
     def get_files_to_transfer(self):
         raw_post_data = {
@@ -165,38 +170,37 @@ class DataExport(IonPlugin):
             'comment': "Wildfires",
         }
         connection_url = "http://localhost/data/datamanagement/dm_list_files/%s/%s/" % (self.result_pk, self.EXPORT)
+        file_payload = dict()
         try:
             conn = urllib.urlopen(connection_url, json.dumps(raw_post_data))
             file_payload = json.loads(conn.read())
         except IOError:
-            print traceback.format_exc()
+            print(traceback.format_exc())
 
         return file_payload
-
 
     def generate_completion_html(self, stat_line="Started", **kwargs):
         stat_fs_path = os.path.join(self.output_dir, 'status_block.html')
         try:
             display_fs = open(stat_fs_path, "wb")
         except:
-            print "Could not write status report"
-            print traceback.format_exc()
+            print("Could not write status report")
+            print(traceback.format_exc())
             raise
 
-        msg = "%s" % (self.dest_dir)
         _status_msg = "Progress is not available here.  Look for a message banner at the top of any webpage indicating that the action was scheduled, or completed"
         display_fs.write("<html><head>\n")
-        #display_fs.write("<link href=\"/pluginMedia/IonCloud/bootstrap.min.css\" rel=\"stylesheet\">\n")
+        # display_fs.write("<link href=\"/pluginMedia/IonCloud/bootstrap.min.css\" rel=\"stylesheet\">\n")
         display_fs.write("</head><body>\n")
         display_fs.write("<bold><h2>DATA EXPORT</h2></bold>")
-        #display_fs.write("<p>REPORT NAME: %s</p>" % (self.report_name))
-        #display_fs.write("<p>REPORT ID: %s</p>" % (self.result_pk))
-        display_fs.write("<p>FILE CATEGORIES:</p>" % (self.categories))
+        # display_fs.write("<p>REPORT NAME: %s</p>" % (self.report_name))
+        # display_fs.write("<p>REPORT ID: %s</p>" % (self.result_pk))
+        display_fs.write("<p>FILE CATEGORIES:</p>" % self.categories)
         display_fs.write("<ul>")
         for entry in self.categories:
-            display_fs.write("<li>%s</li>" % (entry))
+            display_fs.write("<li>%s</li>" % entry)
         display_fs.write("</ul>")
-        display_fs.write("<p>DESTINATION: %s</p>" % (msg))
+        display_fs.write("<p>DESTINATION: %s</p>" % self.dest_dir)
         if stat_line not in ["Started", "Completed"]:
             display_fs.write("<p>STATUS: <font color=\"red\">%s</font></p>" % stat_line)
         else:
@@ -209,16 +213,15 @@ class DataExport(IonPlugin):
         display_fs.write("</body></html>\n")
         display_fs.close()
 
-
     def plugin_not_configured_error(self):
-        print "Function: %s()" % sys._getframe().f_code.co_name
-        #print report
+        print("Function: %s()" % sys._getframe().f_code.co_name)
+        # print report
         stat_fs_path = os.path.join(self.output_dir, 'status_block.html')
         try:
             display_fs = open(stat_fs_path, "wb")
         except:
-            print "Could not write status report"
-            print traceback.format_exc()
+            print("Could not write status report")
+            print(traceback.format_exc())
             raise
 
         display_fs.write("<html><head>\n")
@@ -232,15 +235,14 @@ class DataExport(IonPlugin):
         display_fs.write("</center></body></html>\n")
         display_fs.close()
 
-
     def plugin_exception(self, _exception):
-        print "Function: %s()" % sys._getframe().f_code.co_name
+        print("Function: %s()" % sys._getframe().f_code.co_name)
         stat_fs_path = os.path.join(self.output_dir, 'status_block.html')
         try:
             display_fs = open(stat_fs_path, "wb")
         except:
-            print "Could not write status report"
-            print traceback.format_exc()
+            print("Could not write status report")
+            print(traceback.format_exc())
             raise
 
         display_fs.write("<html><head>\n")

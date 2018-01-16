@@ -447,7 +447,24 @@ void * VariantCallerWorker(void *input)
     	        my_molecular_families_multisample.resize(sample_num);
     			my_family_generator.GenerateMyMolecularFamilies(vc.mol_tag_manager, *position_ticket, overloaded_sample_index, my_molecular_families_multisample[sample_index]);
     		}
+    		// Clear previous consensus_position_ticket
+			while ((consensus_position_ticket->begin != NULL) and (consensus_position_ticket->begin != consensus_position_ticket->end)) {
+				Alignment* p = consensus_position_ticket->begin;
+				consensus_position_ticket->begin = consensus_position_ticket->begin->next;
+				delete p;
+			}
+			if (consensus_position_ticket->begin != NULL) {
+				delete consensus_position_ticket->begin;
+				consensus_position_ticket->begin = NULL;
+				consensus_position_ticket->end = NULL;
+			}
     		GenerateConsensusPositionTicket(my_molecular_families_multisample, vc, consensus, consensus_position_ticket);
+			for (Alignment *p = consensus_position_ticket->begin; p; p = p->next) {
+				// Unpack the read for candidate gen if it is not copied from a actual read.
+				if (p->refmap_has_allele.empty()){
+					vc.candidate_generator->UnpackReadAlleles(*p);
+				}
+			}
         }
         if (position_ticket->begin != NULL and position_ticket->end != NULL){
         	prev_positioin_ticket_begin = position_ticket->begin->read_number;
@@ -460,21 +477,10 @@ void * VariantCallerWorker(void *input)
 
     // Candidate Generation
     int haplotype_length = 1;
-    if(consensus_position_ticket->begin != NULL){
-  		for (Alignment *p = consensus_position_ticket->begin; p; p = p->next) {
-            vc.candidate_generator->UnpackReadAlleles(*p);
-        }
-        vc.bam_walker->SetupPositionTicket(consensus_position_ticket);
-        vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length);
-        while ((consensus_position_ticket->begin != NULL) and (consensus_position_ticket->begin != consensus_position_ticket->end)) {
-            Alignment* p = consensus_position_ticket->begin;
-            consensus_position_ticket->begin = consensus_position_ticket->begin->next;
-            delete p;
-        }
-		if (consensus_position_ticket->begin != NULL) {
-			delete consensus_position_ticket->begin;
-			consensus_position_ticket->begin = NULL;
-			consensus_position_ticket->end = NULL;
+    if (use_molecular_tag){
+		if(consensus_position_ticket->begin != NULL){
+			vc.bam_walker->SetupPositionTicket(consensus_position_ticket);
+			vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length);
 		}
     }
     else{

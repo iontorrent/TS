@@ -239,7 +239,8 @@ $(document).ready(function () {
 
         var result = template(data); //Execute the template
         $("#iru-list").html(result); //Append the result
-
+        $("#iru-list").addClass("nav-list pre-scrollable"); //use navigation list styling and enable scrollpane if needed
+        
         $('#iru-button').on("click", ".iru-account", function (event) {
             event.preventDefault();
             var id = $(this).data("id");

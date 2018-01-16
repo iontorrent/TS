@@ -42,7 +42,7 @@ sed_string = "s/%s/%s/g" % (find_string, replace_string)
 #     /etc/apt/sources.list
 #     /etc/apt/sources.list.d/*.list
 #
-filepaths = [os.path.join("/etc/apt/sources.list.d", x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list']
+filepaths = [os.path.join("/etc/apt/sources.list.d", x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list' and x != 'iontorrent-offcycle.list']
 filepaths.append("/etc/apt/sources.list")
 for filepath in filepaths:
     print("Looking in %s" % filepath)

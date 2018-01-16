@@ -11,6 +11,5 @@ ioncompute_ionpkg_list:
     - ion-gpu
     - ion-analysis
     - ion-pipeline
-    - ion-rsmts
     - ion-torrentr
     - ion-torrentpy

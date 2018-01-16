@@ -131,7 +131,7 @@ public:
 
   //! @brief  Perform a more advanced simulation to generate QV predictors
   void  ComputeQVmetrics(BasecallerRead& read);
-  void  ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_=false);
+  void  ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_=false, const bool flow_quality = false);
 
   int nuc_char_to_int(char nuc) {if (nuc=='A') return 0; if (nuc=='C') return 1; if (nuc=='G') return 2; if (nuc=='T') return 3; return -1;}
 

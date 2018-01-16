@@ -80,10 +80,11 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 
         hasErrors = false;
         var error = "";
+        var warning = "";
 
         if (msg.toLowerCase().indexOf("error") >= 0) {
             hasErrors = true;
-        	error += "<p>" + msg + "</p>";
+            error += "<p>" + msg + "</p>";
         }
 
         // Do not process if un-supported csv/zip are uploaded
@@ -98,8 +99,8 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             }
         }
         else if (responseText.failed) {
-        	if (!hasErrors) {
-            	error += "<p>" + msg + "<br>";
+            if (!hasErrors) {
+                error += "<p>" + msg + "<br>";
             }
             error +=  plansFailed  + " / " + inputPlanCount + " plan(s) failed" + "<br>";
             error += "Total no. of failures: " + total_errors + "</p>";
@@ -171,11 +172,27 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             //console.log(error);
         }
 
+        if (responseText.warnings) {
+            for (var key in responseText.warnings) {
+                plan_no = key.match(/\d+/) - 1;
+                warning += "<div><strong>" + key + " (Plan " + plan_no + ") contained warning(s):</strong><ul>";
+                for (var i = 0; i < responseText.warnings[key].length; i++) {
+                    warning += '<li>'+ responseText.warnings[key][i] +'</li>';
+                }
+                warning +='</ul></div>'
+                $('#modal_batch_planning_upload .modal-body #modal-error-messages').removeClass('hide').html(warning);
+            }
+        }
+
         if (hasErrors) {
             $('#modal_batch_planning_upload .modal-body #modal-error-messages').removeClass('hide').html(error);
             processing = false;
-        }
-        else  {
+        } else if (warning){
+            $('#modal_batch_planning_upload .modal-body #modal-success-messages').html(responseText.status).show();
+            $('#modal_batch_planning_upload .modal-body #modal-error-messages').html(warning).show();
+            $('#modal_batch_planning_upload #submitUpload').hide();
+            $('#modal_batch_planning_upload #dismissUpload').text("Close");
+        } else {
             $('#modal_batch_planning_upload').modal("hide");
             window.location = plannedUrl;
         }

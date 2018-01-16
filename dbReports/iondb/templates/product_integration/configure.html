@@ -1,0 +1,35 @@
+{% load static from staticfiles %}
+
+<div id="modal_tfc_configure" title="" class="modal hide" data-width="800" style="padding: 20px 20px 20px 20px">
+    <form id="tfc_configure_form">
+        <fieldset>
+            <legend>AmpliSeq.com</legend>
+            <h3>{{ form.tfc_username.label }}</h3>
+            {{ form.tfc_username }}
+            <h3>{{ form.tfc_password.label }}</h3>
+            {{ form.tfc_password }}
+            <h3 id="error" style="color: red">{{ error }}</h3>
+            <div class="modal-footer">
+                <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+                <a id="save_tfc" class="btn btn-primary" href="#">Save</a>
+            </div>
+        </fieldset>
+    </form>
+</div>
+
+<script type="text/javascript">
+
+    $('#save_tfc').click(function (e) {
+        $('#modal_tfc_configure').block();
+        var postData = $('#tfc_configure_form').serialize();
+        $.post("{% url 'tfc_configure' %}", postData).done(function(data){
+            $('#modal_tfc_configure').unblock();
+            $("#error").text(data.error);
+            if (data.error === ''){
+              // print "success" on the html somewhere
+              location.reload()
+            }
+        });
+        e.preventDefault(); // This stops page reload
+    });
+</script>

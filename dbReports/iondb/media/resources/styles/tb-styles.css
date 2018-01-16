@@ -1663,6 +1663,17 @@ tr.new_plan td {
   background-size: 100% 100%;
 }
 
+.MUTATION_LOAD {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  *margin-right: .3em;
+  text-indent: 28px;
+  vertical-align: text-top;
+  background: url('../img/appl_mutationLoad.png') no-repeat center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
 /* =============================================================================
    Ion plugin report
    ========================================================================== */
@@ -2574,4 +2585,11 @@ div.valid {
 table > thead > tr > th a:link,
 table > thead > tr > th a:visited {
   color: #333;
+}
+
+/* Class to allow kendo cells to wrap */
+
+td.wrap-words {
+  word-break: break-all !important;
+  word-wrap: break-word !important;
 }

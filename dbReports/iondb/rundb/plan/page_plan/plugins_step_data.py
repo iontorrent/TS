@@ -1,15 +1,13 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 import json
+import logging
+from collections import OrderedDict
 from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import Plugin
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
-import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -133,3 +131,22 @@ class PluginsStepData(AbstractStepData):
             if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.CONFIG]:
                 return True
         return False
+
+    def validateStep(self):
+        """This method overrides the abstract class'es implementation and will validate each of the plugins individually."""
+
+        # we don't need to perform this validation for templates
+        if self.sh_type in StepHelperType.TEMPLATE_TYPES:
+            return
+
+        self.updateSavedObjectsFromSavedFields()
+        # reset the validation errors
+        self.validationErrors.clear()
+
+        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
+            if values[PluginFieldNames.SELECTED]:
+                configuration = dict() if values[PluginFieldNames.CONFIG] is None else json.loads(values[PluginFieldNames.CONFIG])
+                plugin_validation_errors = Plugin.validate(plugin_id, configuration, 'Automatic')
+
+                if plugin_validation_errors:
+                    self.validationErrors[values[PluginFieldNames.PLUGIN].name] = plugin_validation_errors

@@ -23,6 +23,7 @@ urlpatterns = patterns(
     url(r'^plugins/$', 'views.configure_plugins', name="configure_plugins"),
     url(r'^mesh/$', 'views.configure_mesh', name="configure_mesh"),
     url(r'^mesh/link/$', 'views.link_mesh_node', name="link_mesh_node"),
+    url(r'^mesh/delete/(?P<pk>\d+)/$', 'views.delete_mesh_node', name="delete_mesh_node"),
     url(r'^plugins/plugin/install/$', 'views.configure_plugins_plugin_install', name="configure_plugins_plugin_install"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/$', 'views.configure_plugins_plugin_configure', name="configure_plugins_plugin_configure"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/pluginMedia/(?P<path>.*)$', 'views.configure_plugins_pluginmedia', name="configure_plugins_pluginmedia"),

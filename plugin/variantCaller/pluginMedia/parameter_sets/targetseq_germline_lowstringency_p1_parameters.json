@@ -3,9 +3,9 @@
         "name"          : "TargetSeq - Proton - Germ Line - Low Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants and minimum false negatives on TargetSeq libraries and Proton chips",
         "configuration" : "germline_low_stringency_targetseq",
-        "ts_version"    : "5.6",
+        "ts_version"    : "5.8",
         "compatibility" : {
-          "chip"        : ["540","proton_p1"],
+          "chip"        : ["540", "550","proton_p1"],
           "library"     : ["targetseq","wholegenome"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]

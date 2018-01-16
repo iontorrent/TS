@@ -145,7 +145,7 @@ struct BaseCallerContext {
     string                    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased, "wells" - Raw values (unnormalized and not dephased), "key-normalized" - Key normalized and not dephased, "adaptive-normalized" - Adaptive normalized and not dephased, and "unclipped" - Normalized and phased but unclipped.
     string                    output_directory;       //!< Root directory for all output files
     string                    wells_norm_method;      //!< Normalization method for wells file before any processing
-    bool                      flow_predictors_;       //!< If set to false, TF-related BAM will not be generated
+    bool                      flow_predictors_;       //!< If set to true, flow space quality score will be enabled
     bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
     int                       windowSize;             //!< Normalization window size
     bool                      have_calibration_panel; //!< Signales the presence of a recalibration panel

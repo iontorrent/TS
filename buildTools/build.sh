@@ -15,8 +15,6 @@ MODULES=${MODULES-"
   pipeline
   publishers
   tsconfig
-  RSM
-  tsvm
 "}
 
 BUILD_ROOT=`pwd`
@@ -35,6 +33,20 @@ for M in $MODULES; do
   fi
 done
 
+# set number of jobs
+DEFAULT_JOB_NUM=13
+if `which nproc &> /dev/null`; then
+    # not to overload less capable system
+    num_jobs=$(( $(nproc)+1 ))
+else
+    num_jobs=$DEFAULT_JOB_NUM
+fi
+
+# only limit to the original number
+if [[ $num_jobs -gt $DEFAULT_JOB_NUM ]]; then
+    num_jobs=13
+fi
+
 ERR=0
 ERRMSG=""
 for MODULE in $MODULES; do
@@ -51,7 +63,7 @@ for MODULE in $MODULES; do
       if [ "$MODULE" = "rndplugins" ]; then
         make
       else
-        make -j13
+        make -j $num_jobs
       fi
     if [ "$?" != 0 ]; then LOCALERR=1; fi
       make test

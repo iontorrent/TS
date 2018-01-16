@@ -19,6 +19,7 @@
 struct FlowGram {
   size_t flow, x, y;
   float val;
+  float res;
 };
 
 struct WellHeader {
@@ -156,6 +157,7 @@ public:
   WellChunk bufferChunk;
   int32_t* indexes;
   float* flowData;
+  float* resData;
   float* dsBuffer;
   unsigned int spaceSize;
   unsigned int numFlows;
@@ -316,12 +318,20 @@ public:
   float At(size_t well, size_t flow) const;
   float AtWithoutChecking(size_t row, size_t col, size_t flow) const;
   float AtWithoutChecking(size_t well, size_t flow) const;
+
+  float ResAtWithoutChecking(size_t row, size_t col, size_t flow) const;
+  float ResAtWithoutChecking(size_t well, size_t flow) const;
   /** Warning - Subsequent calls to this function will overwrite returned data pointed too */
   const WellData *ReadXY(int x, int y); 
   void Set(size_t row, size_t col, size_t flow, float val) { Set(ToIndex(col, row), flow, val); }
   void Set(size_t idx, size_t flow, float val);
+  void SetRes ( size_t idx, size_t flow, float val );
+  void SetRes(size_t row, size_t col, size_t flow, float val) { SetRes(ToIndex(col, row), flow, val); }
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies);
+  virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float resError);
+  virtual void WriteFlowgramWithRes ( size_t flow, size_t x, size_t y, float val, float resError );
+
 
   void ResetCurrentWell() { mCurrentWell = 0; }
   void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = 0, mFirsttimeGetRegionData = true,  mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
@@ -358,7 +368,9 @@ public:
   size_t GetNextRegionData();
 
   void WriteWells();
+  void WriteRes();
   void ReadWells();
+  void ReadRes();
   void OpenForIncrementalRead();
   void WriteRanks();
   void WriteInfo();
@@ -370,6 +382,7 @@ public:
   const SumTimer & GetWriteTimer() const { return writeTimer; }
   bool GetSaveAsUShort() { return mSaveAsUShort; }
   bool GetSaveCopies() { return mSaveCopies; }
+  bool GetSaveRes() { return mSaveRes; }
   bool GetConvertWithCopies(){ return mConvertWithCopies; }
   void SetSaveCopies(bool saveCopies);
   void SetConvertWithCopies(bool withCopies);
@@ -396,6 +409,9 @@ public:
 
   void OpenWellsForWrite();
   void OpenWellsToRead();
+
+  void OpenResForWrite();
+  void OpenResToRead();
 
   void ReadWellsRegion();
   void ReadWellsSubset();
@@ -425,7 +441,9 @@ protected:
   WellChunk mChunk;
   std::vector<int32_t> mIndexes; ///< Conversion of well index on chip to index in mFlowData below.
   std::vector<float> mFlowData; ///< Big chunk of data...
-  bool mSaveCopies;
+  std::vector<float> mResData; ///< residual error
+  bool mSaveCopies;  
+  bool mSaveRes; /// flag that saves the residual data into well
   bool mConvertWithCopies;
 
 private:
@@ -435,6 +453,7 @@ private:
   std::vector<int32_t> mWriteSubset; ///< Subset of wells to read/write into or from RAM.
   std::vector<float> mZeros; ///< Small vector used for WellData->flowValues
   std::vector<float> mInputBuffer; // temporary for writes.
+  std::vector<float> mInputBuffer1; // temporary for residual.
   size_t mStepSize;
   int mCompression;   ///< What level of compression is being used.
   hid_t mHFile;       ///< Id for hdf5 file operations.
@@ -443,6 +462,8 @@ private:
 
   RWH5DataSet mRanks;       ///< Ranks hdf5 dataset
   RWH5DataSet mWells;       ///< Wells hdf5 dataset
+  //Chao
+  RWH5DataSet mResErr;       ///< residual hdf5 dataset
   RWH5DataSet mInfoKeys;    ///< Dataset for keys matching mInfoValues order
   RWH5DataSet mInfoValues;  ///< Dataset for values matching mInfoKeys order
   size_t mWellChunkSizeRow;
@@ -500,6 +521,9 @@ public:
   // We have to buffer stuff that isn't in the current chunk.
   void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
   void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies);
+  void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float resError);
+  void WriteFlowgramWithRes ( size_t flow, size_t x, size_t y, float val, float resError );
+
 
   // Because of parallel stuff, we don't always know when an individual flow is done.
   // We only know about the end of a flow block.

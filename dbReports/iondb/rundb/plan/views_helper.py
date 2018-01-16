@@ -260,7 +260,8 @@ def get_template_categories():
     applicationGroup_HID = ApplicationGroup.objects.filter(name='HID')
     applicationGroup_tagSeq = ApplicationGroup.objects.filter(name='onco_liquidBiopsy')    
     applicationGroup_immuneRepertoire = ApplicationGroup.objects.filter(name='immune_repertoire')
-
+    applicationGroup_mutationLoad = ApplicationGroup.objects.filter(name='mutation_load')
+        
     category_solidTumor = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_solidTumor")
     category_onco_immune = common_CV.objects.filter(cv_type = "applicationCategory", value = "onco_immune")
     category_repro = common_CV.objects.filter(cv_type = "applicationCategory", value = "repro")
@@ -342,7 +343,7 @@ def get_template_categories():
         {
             'tag': 'immune_repertoire',
             'displayedName': applicationGroup_immuneRepertoire[0].description,
-            'api_filter':'&runType=AMPS_RNA&applicationGroup__name__iexact=immune_repertoire',
+            'api_filter':'&applicationGroup__name__iexact=immune_repertoire',
             'img': 'resources/img/appl_immuneRepertoire.png',
             'isActive': applicationGroup_immuneRepertoire[0].isActive if applicationGroup_immuneRepertoire else False,           
             'code': 12,
@@ -367,6 +368,15 @@ def get_template_categories():
             'ampliSeq_upload': True,   
             'code': 1,
         },
+        # Mutation load
+        {
+            'tag': 'mutation_load',
+            'displayedName': applicationGroup_mutationLoad[0].description,
+            'api_filter':'&applicationGroup__name__iexact=mutation_load',
+            'img': 'resources/img/appl_mutationLoad.png',
+            'isActive': applicationGroup_mutationLoad[0].isActive if applicationGroup_mutationLoad else False,           
+            'code': 13,
+        },                  
         # Oncology - hemeOnc
         {
             'tag': 'category_onco_hemeOnc',

@@ -140,6 +140,7 @@
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
+    <div id="chipTypeWarning" class="alert alert-error hide"></div>
     <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">&larr; Previous</a>
     {% if helper.isEditRun %}
         <a class="submitStepForm btn btn-primary btn-100 pull-right" style="margin-left:10px;" onclick="USERINPUT.validate=true;"
@@ -167,6 +168,7 @@
 <script type="text/javascript">
 
     var BARCODES = {{step.prepopulatedFields.barcodeSets_barcodes|safe}};
+    var ENDBARCODES = {{step.prepopulatedFields.endBarcodeSets_barcodes|safe}};
 
     var REFERENCE_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.references}}";
 
@@ -209,6 +211,10 @@
 
         {% endfor %}
 
+        var chipTypeWarning = chipNameToWarning['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}'];
+        if (chipTypeWarning){
+            $("#chipTypeWarning").html(chipTypeWarning).show();
+        }
     });
     
 </script>

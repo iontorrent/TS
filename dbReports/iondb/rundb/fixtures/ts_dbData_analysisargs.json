@@ -507,11 +507,12 @@
     "pk": 27,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "ion_318_smallRNA",
-      "description" : "Ion 318 chip v2 small RNA analysis arguments",
+      "name": "ion_318_RNA",
+      "description" : "Ion 318 chip v2 RNA analysis arguments",
       "isSystem" : true,
       "active": true,
       "chipType": "318",
+	  "applGroup": ["APPLGROUP_0002"],
       "libraryKitName": "Ion Total RNA Seq Kit v2",
       "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_318_beadfind.json",
       "analysisargs"               : "Analysis --args-json /opt/ion/config/args_318_analysis.json",
@@ -528,7 +529,7 @@
     "fields": {
       "name": "ion_default_550",
       "description" : "Ion 550 chip analysis arguments",
-      "active": false,
+      "active": true,
       "isSystem" : true,
       "chipType": "550",
       "chip_default": true,
@@ -1459,7 +1460,7 @@
     "fields": {
       "name": "ion_550_tagSeq",
       "description" : "Ion 550 chip tag sequencing analysis arguments",
-      "active": false,
+      "active": true,
       "isSystem" : true,
       "chipType": "550",
       "applType": ["TAG_SEQUENCING"], 
@@ -2249,7 +2250,34 @@
       "ionstatsargs"               : "ionstats alignment"
     }
   },
- 
+  {
+    "pk": 124,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "ion_550_HiQ_AmpliSeqExome",
+      "description" : "Ion 550 chip Hi-Q AmpliSeq Exome analysis arguments",
+      "active": true,
+      "isSystem" : true,
+      "chipType": "550",
+      "sequenceKitName": "Ion S5 Sequencing Kit",
+      "samplePrepKitName": "Ion AmpliSeq Exome Kit",
+      "beadfindargs"               : "justBeadFind --args-json /opt/ion/config/args_550_beadfind.json",
+      "analysisargs"               : "Analysis --args-json /opt/ion/config/args_550_analysis.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --max-phasing-levels 2",
+      "calibrateargs"              : "Calibration",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0 --max-phasing-levels 2 --num-unfiltered 1000 --barcode-filter-postpone 1",
+      "alignmentargs"              : "tmap mapall -q 50000 ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
+      "thumbnailbeadfindargs"      : "justBeadFind --args-json /opt/ion/config/args_550_beadfind.json --thumbnail true",
+      "thumbnailanalysisargs"      : "Analysis --args-json /opt/ion/config/args_550_analysis.json --thumbnail true",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0",
+      "thumbnailcalibrateargs"     : "Calibration",
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --phasing-residual-filter=2.0",
+      "thumbnailalignmentargs"     : "tmap mapall -q 50000 ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
+    }
+  },
+
   {
     "pk": 10000,
     "model": "rundb.analysisargs",

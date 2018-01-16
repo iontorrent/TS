@@ -163,6 +163,7 @@ INSTALLED_APPS = (
     'iondb.ftpserver',
     'iondb.rundb',
     'iondb.security',
+    'iondb.product_integration',
     'tastypie',
     'south',
 )
@@ -225,6 +226,11 @@ LOGGING = {
             'filename': '/var/log/ion/data_management.log',
             'formatter': 'uniqueid',
         },
+        'product_integration': {
+            'class': 'logging.handlers.WatchedFileHandler',
+            'filename': '/var/log/ion/product_integration.log',
+            'formatter': 'standard',
+        },
     },
     'filters': {
         'require_debug_false': {
@@ -249,12 +255,23 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False
         },
+        'iondb.product_integration': {
+            'handlers': ['product_integration'],
+            'level': 'DEBUG',
+            'propagate': False
+        },
         # When DEBUG is True, django.db will log every SQL query.  That is too
         # much stuff that we don't normally need, so it's logged elsewhere.
         'django.db': {
             'handlers': ['default'],
             'level': 'INFO',
             'propagate': False
+        },
+        'django.request': {
+            'propagate': True,
+        },
+        'django.security': {
+            'propagate': True,
         },
         'data_management': {
             'handlers': ['data_management'],
@@ -377,7 +394,7 @@ CACHES = {
     },
     'file': {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-        'LOCATION': '/var/spool/ion',
+        'LOCATION': '/var/spool/ion/djcache',
     }
 }
 NOSE_ARGS = ['--nocapture', '--nologcapture', ]

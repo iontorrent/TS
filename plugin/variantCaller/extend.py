@@ -734,6 +734,51 @@ def slicer_main(path, temp_path, barcode):
     with open(os.path.join(path, "split_status.json"), "w+") as f:
         f.write(json.dumps({"split_status": "done", "url" : os.path.join(temp_path, results_name + ".zip")}))
 
+def are_parameters_valid(bucket):
+    return_dict = {'param_error_msg': [], 'debug_msg': []}
+    try:
+        # import from pluginMedia/parameter_sets/test_format.py
+        parameter_sets_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pluginMedia/parameter_sets')
+        if parameter_sets_dir not in sys.path:
+            sys.path.append(parameter_sets_dir)
+        from test_format import check_one_parameter            
+        from test_format import custom_check
+        
+        # Load range.json
+        description_json_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pluginMedia/configs/description.json')
+        with open(description_json_path, 'rb') as f_json:
+            description_json = json.load(f_json)
+        
+        # Note that base_set is stringified if it is sent by plugin api. Must be decoded by json.loads
+        # But I will still let it handle the unstringified case.
+        my_parameter_json = bucket["request_get"].get("base_set", "")
+        if not isinstance(my_parameter_json, dict):           
+            my_parameter_json = json.loads(my_parameter_json)
+        if not my_parameter_json:
+            return_dict['debug_msg'].append('Fail to get the requested base_set.')
+            return return_dict
+        
+        # Check the following sections
+        for section_key in ['torrent_variant_caller', 'long_indel_assembler', 'freebayes']:
+            if section_key not in my_parameter_json:
+                return_dict['debug_msg'].append('The section "%s" is not found in base_set.'%(section_key))
+                continue
+            for param_key, param_value in my_parameter_json[section_key].iteritems():
+                if param_key not in description_json[section_key]:
+                    return_dict['debug_msg'].append('The parameter "%s.%s" has no discription specified in %s' %(section_key, param_key, description_json_path))
+                else:
+                    try:
+                        check_one_parameter(param_value, description_json[section_key][param_key])                    
+                    except Exception as e_param:
+                        return_dict['param_error_msg'].append('Invalid parameter "%s.%s": %s' %(section_key, param_key, e_param.message))
+        try:
+            custom_check(my_parameter_json)
+        except Exception as e_param:
+            return_dict['param_error_msg'].append(e_param.message)
+    except Exception as e_debug:
+        return_dict['debug_msg'].append(e_debug.message)
+    return return_dict
+
 if __name__ == '__main__':
     """
     extend.py main will do the data slicing, and spit out a zip

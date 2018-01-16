@@ -72,7 +72,7 @@ private:
 	void GetConsensus(ReferenceReader& ref_reader, unsigned int RefID);
 	unsigned int TrimConsensus();
 	void CalculateCigar();
-	void PartiallyResetAlignment_(Alignment& alignment);
+	void PartiallyCopyAlignmentFromAnother_(Alignment& alignment, Alignment const * const template_alignment, int read_count);
 
 public:	
 	Consensus();

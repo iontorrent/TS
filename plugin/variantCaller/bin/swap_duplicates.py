@@ -115,11 +115,11 @@ def find_uncalled_hotspots(vcf_record, regions):
 
     omapalts = vcf_record['INFO']['OMAPALT']
     oids = vcf_record['INFO']['OID']
-            
+
     # Find labeled OIDs not in the genotype
     ret = []
     for ii, alt in enumerate(alts):
-        if genotype and ii+1 in genotype:
+        if genotype and ii in genotype:
             continue
         ix = [i for i, allele in enumerate(omapalts) if allele == alt]
         for i in ix:
@@ -176,7 +176,6 @@ def find_called_hotspots(vcf_record, regions):
     
 # in-place update of a novel with a hotspot allele
 def swap_ids(alt_pad, novel_entry, hotspot_entry):
-
     hotspot_record = hotspot_entry[0]
     i_hs = hotspot_entry[1]
 
@@ -243,6 +242,7 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
     other_vcf = []
 
     with vcf.TvcVcfFile(vcf_file, 'r') as f_vcf:
+        f_vcf.allow_same_position(True)
         f_vcf.set_bypass_size_check_tags(['FR',])
 
         ref = [x for x in f_vcf.vcf_double_hash_header if x.find('##reference=') == 0]
@@ -264,7 +264,21 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
         regions = make_regions_ref(bed_file, genome)
         genome.close()
 
+        hs_error_found = False
+        swap_found = False
+
         for vcf_record in f_vcf:
+
+            # fix errors in HS tag assignment.
+            # Assume that if and only if all de-novo alleles then ID = '.'
+            if vcf_record['ID'] == '.' and 'HS' in vcf_record['INFO']:
+                # no hotspots here, get rid of the HS
+                vcf_record['INFO'].remove('HS')
+                hs_error_found = True
+            elif vcf_record['ID'] != '.' and 'HS' not in vcf_record['INFO']:
+                # must be hotspots, add HS if it is not there
+                vcf_record['INFO']['HS'] = None
+                hs_error_found = True
 
             # bug if multiple novels map to the same allele, but we will ignore this
 
@@ -290,7 +304,7 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
                         uncalled_hotspots[alt_pad].append([vcf_record, i])
                     else:
                         uncalled_hotspots[alt_pad] = [[vcf_record, i]]
-
+ 
             # multiple hotspots may map to the same allele
             for v in find_called_hotspots(vcf_record, regions):
                 alt_pad = v[0]
@@ -301,8 +315,6 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
                     else:
                         called_hotspots[alt_pad] = [[vcf_record, i]]
 
-        swap_found = False
-
         for key in novels:
             if key in uncalled_hotspots:
                 # there is one or more an uncalled hotspot matching a called variant
@@ -310,18 +322,19 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
                 # novel is 1/2, one or more hotspots match only one of the 2 alleles
 
                 for hotspot_entry in uncalled_hotspots[key]:
-
                     # probably a bug in tvcutils merging that more than 1 duplicate novel entry has the same allele but given the limitations of this fix, we don't care, just take the first
                     novels_entry = novels[key][0]
                     swap_ids(key, novels_entry, hotspot_entry)
                     swap_found = True
 
-        if swap_found:
+        if hs_error_found or swap_found:
             f_vcf_w = vcf.TvcVcfFile(out_vcf_file, 'w')
+            f_vcf_w.allow_same_position(True)
             # write header
             f_vcf_w.set_header(f_vcf)
 
-            f_vcf_w.add_to_header('##INFO=<ID=UFR,Number=.,Type=String,Description="List of ALT alleles with Unexpected Filter thresholds">')
+            if swap_found:
+                f_vcf_w.add_to_header('##INFO=<ID=UFR,Number=.,Type=String,Description="List of ALT alleles with Unexpected Filter thresholds">')
         
             for key, entry in novels.iteritems():
                 for e in entry:
@@ -354,7 +367,10 @@ if __name__ == '__main__':
 
     if len(sys.argv) < 4:
         status = 1
-        print "Requires input vcf, input bed and output vcf files as an argument, if no swaps are found then output vcf is not produced"
+        print "Post processing fixup to handle bugs/limitations"
+        print "Swap ID of genotyped de-novo alleles that match non-genotyped hotspot alleles"
+        print "Add HS if no HS tag when ID is not '.', remove bogus HS tags when ID is '.'"
+        print "Requires input vcf, input bed and output vcf files as an argument, if no swaps or HS tag mixups are found then output vcf is not produced"
         exit(status)
 
     regions = None

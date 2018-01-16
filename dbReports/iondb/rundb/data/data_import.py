@@ -264,12 +264,6 @@ def copy_files_to_destination(source_dir, destination, dmfileset, cached_file_li
         if os.path.exists(pdf_dir):
             shutil.rmtree(pdf_dir, ignore_errors=True)
 
-    # for onboard results need to create sigproc_results link
-    if dmfileset.type == dmactions_types.BASE:
-        if os.path.exists(os.path.join(destination, 'onboard_results')):
-            os.symlink(os.path.join(destination, 'onboard_results', 'sigproc_results'),
-                       os.path.join(destination, 'sigproc_results'))
-
     log('Copy files to destination %s done.' % dmfileset.type)
 
 
@@ -366,8 +360,10 @@ class ImportData:
                 if dmtype == dmactions_types.OUT:
                     category['dest_path'] = self.result.get_report_dir()
                 elif dmtype == dmactions_types.BASE:
-                    category['dest_path'] = self.exp.expDir if 'onboard_results' in category[
-                        'src_path'] else self.result.get_report_dir()
+                    if os.path.exists(os.path.join(category['src_path'], 'onboard_results')):
+                        category['dest_path'] = self.exp.expDir
+                    else:
+                        category['dest_path'] = self.result.get_report_dir()
                 elif dmtype == dmactions_types.SIG:
                     category['dest_path'] = self.exp.expDir
 
@@ -522,6 +518,16 @@ def process_import(importing, copy_data, copy_report):
                     source_dir, destination, dmfileset, file_list, importing.log, importing.add_warning)
             except:
                 raise
+
+            # for OIA results need sigproc_results link
+            if dmtype == dmactions_types.BASE and os.path.exists(os.path.join(destination, 'onboard_results')):
+                if result:
+                    sigproc_results_link = os.path.join(result.get_report_dir(), 'sigproc_results')
+                else:
+                    sigproc_results_link = os.path.join(destination, 'sigproc_results')
+
+                if not os.path.exists(sigproc_results_link):
+                    os.symlink(os.path.join(destination, 'onboard_results', 'sigproc_results'), sigproc_results_link)
 
         elif dmtype == dmactions_types.OUT:
             # special case: importing Report as Archived (copy_report=False)

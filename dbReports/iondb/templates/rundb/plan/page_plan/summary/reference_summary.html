@@ -23,14 +23,14 @@
     </tr>
 {% endif %}
 
-{% ifequal helper.getApplicationGroupName "DNA + RNA"%}
+{% if helper.isDualNucleotideTypeBySample %}
     <tr>
-        <td><b>Fusions Reference Library:</b></td>
+        <td><b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Reference Library:</b></td>
         <td id="selectedMixedTypeRNAReferenceLibrary">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference|default_if_none:""}}</td>
     </tr>
     <tr>
-        <td><b>Fusions Target Regions:</b></td>
+        <td><b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Target Regions:</b></td>
         <td id="selectedMixedTypeRNATargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile|default_if_none:""}}</td>
     </tr>
-{% endifequal %}
+{% endif %}
 {% endif %}

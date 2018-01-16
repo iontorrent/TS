@@ -284,6 +284,7 @@
       document.ampliSeqRNA.targetregions_id.value = document.getElementById('targetregions')[tarn].text;
       document.ampliSeqRNA.barcodetargetregions.value = bcTargetList;
       obj = $('#ampliSeqRNA').serializeObject();
+      obj.barcodetable = parent.TB_plugin_functions.get_plugin_barcodetable();
       pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
       pluginAPIJSON = JSON.stringify(pluginAPIJSON);
       pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
@@ -385,7 +386,8 @@ and a suitable targets panel, e.g. hg19_AmpliSeq_Transcriptome_21K_v1.
 The Filter Barcodes option may be checked to indicate to remove whole barcodes
 from the subsequent analysis if they have relatively low number of reads, e.g. as might result from barcode contamination.
 A warning will be issued to the barcode summary report if any barcodes were discounted from the analysis.
-This option is ignored for runs not employing barcodes.</p>
+This option is ignored for runs not employing barcodes. The Barcode Sample Settings link at the top left expands
+to show the barcodes and samples available for this run and may be used to exclude specific barcodes from the analysis.</p>
     <p>
 The ERCC Tracking option is recommended if your AmpliSeq RNA targets (amplicons) were 'spiked' with ERCC tracking
 targets. This will inform the analysis to produce an extra statistic for reads mapped to these targets so that

@@ -249,22 +249,17 @@ class GetInstallProgress(apt.progress.base.InstallProgress):
 # List of packages used by GUI updates webpage to check if a TS update is Available
 # This is NOT the complete list of packages that are installed by TSconfig
 #
+# Note: this list is duplicated in pipeline/python/ion/utils/TSVersion.py
 #-------------------------------------------------------------------------------
 ION_PACKAGES = [
     'ion-analysis',
-    'ion-chefupdates',
     'ion-dbreports',
     'ion-docs',
     'ion-gpu',
-    'ion-onetouchupdater',
-    'ion-pgmupdates',
     'ion-pipeline',
-    'ion-plugins',
-    'ion-protonupdates',
     'ion-publishers',
     'ion-referencelibrary',
     'ion-rsmts',
-    'ion-s5updates',
     'ion-sampledata',
     'ion-torrentpy',
     'ion-torrentr',

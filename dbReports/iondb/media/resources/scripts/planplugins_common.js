@@ -1,10 +1,18 @@
 serializeIframe = function(iframe){
-    var json_obj;
+    var json_obj = {};
     if ($.isFunction(iframe[0].contentWindow.serializeForm)){
         json_obj = iframe[0].contentWindow.serializeForm();
     }else{
         json_obj = $(iframe[0].contentDocument.forms).serializeJSON();
     }
+    console.log("Getting unchecked checkboxes.");
+    var inputs = iframe[0].contentDocument.getElementsByTagName('input');
+    for(var i=0; i<inputs.length; i++){
+        var el = inputs[i];
+        if(el.getAttribute('type') === 'checkbox') {
+            json_obj[el.name] = el.checked;
+        }
+    };
     return json_obj;
 };
 

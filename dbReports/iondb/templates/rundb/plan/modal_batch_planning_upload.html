@@ -21,6 +21,7 @@ table {
         <h3 id="modal_batch_plan_title">Upload Plan Runs</h3>
     </div>
     <div class="modal-body" style="max-height: 480px;">
+        <div id="modal-success-messages" class="alert alert-success hide"></div>
         <div id="modal-error-messages" class="alert alert-error hide"></div>
         <form class="form-horizontal" id="modalBatchPlanningUpload" method="POST" action="{% url "save_uploaded_plans_for_template" %}" enctype="multipart/form-data" style="margin-bottom: 0px;">
             <div class="control-group">
@@ -90,7 +91,7 @@ table {
         </div>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a class="btn" href="#" id="dismissUpload" data-dismiss="modal">Cancel</a>
         <a href="#" id="submitUpload" class="btn btn-primary submitUpload" >Upload CSV for batch planning</a>
     </div>
 </div>

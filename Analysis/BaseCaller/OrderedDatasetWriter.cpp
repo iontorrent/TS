@@ -262,6 +262,9 @@ void OrderedDatasetWriter::WriteRegion(int region, deque<ProcessedRead> &region_
 
 void OrderedDatasetWriter::PhysicalWriteRegion(int region)
 {
+	/*printf("current_region - %d \n",region);
+	printf("region_dropbox_ size - %lu \n", region_dropbox_[region].size());*/
+
   for (deque<ProcessedRead>::iterator entry = region_dropbox_[region].begin(); entry != region_dropbox_[region].end(); ++entry) {
 
     // Step 1: Read filtering and trimming accounting
@@ -327,6 +330,7 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
         exit(EXIT_FAILURE);
       }
     }
+
     if (not bam_writer_[target_file_idx]->SaveAlignment(entry->bam)){
       cerr << "BaseCaller IO error: Failed to write to bam file " << bam_filename_[target_file_idx] << endl;
       exit(EXIT_FAILURE);

@@ -17,14 +17,6 @@
                     <label for="pickfile" class="control-label">Upload a FASTA file (required)</label>
                     <div class="controls">
                         <div id="filelist"><a id="pickfile" name="pickfile" class="btn">Select File</a></div>
-                        <div id="upload-help" class="help-block" >
-                            In order to provide a better uploading experience Microsoft Silverlight plugin is required
-                            for file uploading.
-                            <ul>
-                                <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/">microsoft.com</a></li>
-                            </ul>
-                            You may need to contact your local system administrator for assistance.
-                        </div>
                         <div id="file_info" class="help-block"></div>
                     </div>
                     <div class="controls">
@@ -175,7 +167,7 @@ $(function(){
             $('#filelist').append('<div class="file_item" id="' + file.id + '">' + file.name + ' (' + plupload.formatSize(file.size) + ') <b></b>' + '</div>');
             if ($("#short_name").val() == '') {
                 var name_no_extension = file.name.replace(/\.[^/.]+$/, '');
-                var suggest_short_name = name_no_extension.replace(/[^\w\s]/g, '').replace(/\s+/g, '_');
+                var suggest_short_name = name_no_extension.replace(/[^\w\s\.\-]/g, '').replace(/\s+/g, '_');
                 $("#short_name").val(suggest_short_name);
             }
             //if they are using flash and select a file greater than 2 gigs give them a warning.

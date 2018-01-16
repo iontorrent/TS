@@ -59,7 +59,7 @@ def merge_bam_files(bamfilelist, composite_bam_filepath, mark_duplicates, new_sa
 
     try:
         # do BAM files merge
-        cmd = 'samtools merge -l1 -@8'
+        cmd = 'samtools merge -l1 -@8 -c'
         if mark_duplicates:
             cmd += ' - '
         else:

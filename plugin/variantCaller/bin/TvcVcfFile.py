@@ -27,6 +27,8 @@ class TvcVcfFile:
             self.__data_to_write = {}
         self.__bypass_size_check_tags = ()
         self.__uniq_flag = False
+        self.__allow_same_position = False
+        self.__previous = None
 
     def __enter__(self):
         '''
@@ -58,29 +60,40 @@ class TvcVcfFile:
         self.__f_vcf.write('\n'.join(self.vcf_double_hash_header))
         # write the column header
         self.__f_vcf.write('\n#%s\n' %'\t'.join(self.columns + self.samples))
-        for contig in self.contig_list:
-            data_in_contig = self.__data_to_write[contig['ID']]
-            sorted_pos = [int(p) for p in data_in_contig.keys()]
+        for contig_id in self.__contig_id_list:
+            data_in_contig = self.__data_to_write[contig_id]
+            sorted_pos = map(int, data_in_contig.keys())
             sorted_pos.sort()
             for pos_key in sorted_pos:
-                if self.__uniq_flag:
-                    for line in set(data_in_contig[str(pos_key)]):
-                        self.__f_vcf.write('%s\n' %line)
-                else:
-                    for line in data_in_contig[str(pos_key)]:
-                        self.__f_vcf.write('%s\n' %line)
+                data_to_be_written = set(data_in_contig[str(pos_key)]) if self.__uniq_flag else data_in_contig[str(pos_key)]
+                if (not self.__allow_same_position) and len(data_to_be_written) > 1:
+                    raise(ValueError('Writing multiple vcf lines at the same position %s:%d is not allowed. Use self.allow_same_position(True) to allow.' %(contig_id, pos_key)))
+                for line in data_to_be_written:
+                    self.__f_vcf.write('%s\n' %line)
         
     def uniq(self, flag):
         '''
         uniq(flag) -> Bool
-        If flag = True remove any records that are exact duplicates
-        If flag = False do not remove any records that are exact duplicates (default)
+        If flag = True remove any records that are exact duplicates when writing the vcf file
+        If flag = False do not remove any records that are exact duplicates when writing the vcf file (default)
         '''
         if flag:
             self.__uniq_flag = True
         else:
             self.__uniq_flag = False
         return self.__uniq_flag
+
+    def allow_same_position(self, flag):
+        '''
+        allow_same_position(flag) -> Bool
+        If flag = True, allow different vcf lines at the same chromosome and position
+        If flag = False, do not allow different vcf lines at the same chromosome and position (default)
+        '''
+        if flag:
+            self.__allow_same_position = True
+        else:
+            self.__allow_same_position = False
+        return self.__allow_same_position
 
     def close(self):
         '''
@@ -140,6 +153,70 @@ class TvcVcfFile:
             return self
         raise(IOError('File not open for iterate'))
 
+    def __vcf_record_basic_sanity_check(self, my_vcf_dict, my_offset = None):
+        '''
+        __vcf_record_basic_sanity_check(dict) -> bool
+        Basic sanity check of the vcf record. Return True if pass, False otherwise.
+        '''
+        # Is CHROM defined in the header?
+        try:
+            my_contig_idx = self.__contig_id_list.index(my_vcf_dict['CHROM'])
+        except ValueError:
+            raise(ValueError('The CHROM of the vcf line %s:%d is not in the contigs specified in the header.' %(my_vcf_dict['CHROM'], my_vcf_dict['POS'])))
+            return False
+
+        my_pos = my_vcf_dict['POS']
+
+        # Is the reference allele inside the chromosome?
+        if my_pos < 1 or my_pos + len(my_vcf_dict['REF']) > self.contig_list[my_contig_idx]['length'] + 1:
+            raise(ValueError('The reference allele %s at %s:%d is beyond the contig of length %d.' %(my_vcf_dict['REF'], my_vcf_dict['CHROM'], my_vcf_dict['POS'], self.contig_list[my_contig_idx]['length'])))            
+            return False
+
+        # I check sortedness only for the read mode.
+        if self.__mode != 'r':
+            return True
+        
+        assert(my_offset is not None) # I must input my_offset
+        
+        current = {'where': my_offset, 'contig_idx': my_contig_idx, 'pos': my_pos}        
+        # I can't check sortedness if I didn't got any record previously.
+        if self.__previous is None:
+            self.__previous = current
+            return True
+        
+        # Prepare for checking sortedness 
+        if current['where'] > self.__previous['where']: # The most common case  (i.e., iterate over the vcf file) comes first
+            large_offset = current
+            small_offset = self.__previous
+        elif current['where'] < self.__previous['where']:
+            small_offset = current
+            large_offset = self.__previous         
+        else:
+            assert(current == self.__previous)
+            return current == self.__previous
+
+        # Check sortedness
+        if large_offset['contig_idx'] == small_offset['contig_idx']: # The most common case: the same chromosome
+            if large_offset['pos'] > small_offset['pos']:
+                # sorted
+                self.__previous = current
+                return True
+            elif large_offset['pos'] < small_offset['pos']:
+                raise(ValueError('The vcf file is not sorted: The line %s:%d comes before the line %s:%d' %(self.contig_list[small_offset['contig_idx']]['ID'], small_offset['pos'], self.contig_list[large_offset['contig_idx']]['ID'], large_offset['pos'])))
+            else: # two different lines start at the same position
+                if self.__allow_same_position:
+                    self.__previous = current
+                    return True
+                else:
+                    raise(ValueError('Two vcf lines are at the same position %s:%d. Use self.allow_same_position(True) to bypass this check.' %(self.contig_list[small_offset['contig_idx']]['ID'], small_offset['pos'])))
+            return False
+        elif large_offset['contig_idx'] < small_offset['contig_idx']:
+            raise(ValueError('The vcf file is not sorted: The line %s:%d comes before the line %s:%d' %(self.contig_list[small_offset['contig_idx']]['ID'], small_offset['pos'], self.contig_list[large_offset['contig_idx']]['ID'], large_offset['pos'])))
+            return False
+        #else:  # The case of large_offset['contig_idx'] > small_offset['contig_idx']
+        self.__previous = current
+        return True
+    
     def next(self): # Python 3: def __next__(self)
         '''
         next() -> dict. 
@@ -151,7 +228,11 @@ class TvcVcfFile:
                 line = self.__f_vcf.readline()
                 if line == '':
                     raise(StopIteration)
-            return self.read_vcf_record(line.strip('\n'))
+            
+            my_record = self.read_vcf_record(line.strip('\n'))
+            my_offset = self.__f_vcf.tell()
+            self.__vcf_record_basic_sanity_check(my_record, my_offset)
+            return my_record
 
         raise(IOError('File not open for iterate'))
 
@@ -160,7 +241,7 @@ class TvcVcfFile:
         is_missing_header() -> bool 
         Check is there any missing header information (return True if missing header, return False if not)
         ''' 
-        missing_header = self.info_field_dict == {} or self.format_tag_dict == {} or self.contig_list == [] or self.column_to_index == {} or self.columns == [] or self.vcf_double_hash_header == []
+        missing_header = self.info_field_dict == {} or self.format_tag_dict == {} or self.contig_list == [] or self.__contig_id_list == [] or self.column_to_index == {} or self.columns == [] or self.vcf_double_hash_header == []
         return missing_header
     
     def __reset_header_info(self):
@@ -171,6 +252,7 @@ class TvcVcfFile:
         self.info_field_dict = {}
         self.format_tag_dict = {}
         self.contig_list = []
+        self.__contig_id_list = []
         self.column_to_index = {}
         self.columns = []
         self.sample_to_index = {}
@@ -221,9 +303,10 @@ class TvcVcfFile:
             self.vcf_double_hash_header = copy.deepcopy(template_tvc_vcf.vcf_double_hash_header)
             self.set_samples(template_tvc_vcf.samples)
             # sanity check
-            for column, index in self.column_to_index .iteritems():
-                assert(self.columns[index] == column)    
-            self.__data_to_write = dict([(contig['ID'], {}) for contig in self.contig_list])
+            for column, index in self.column_to_index.iteritems():
+                assert(self.columns[index] == column)
+            self.__contig_id_list = [contig['ID'] for contig in self.contig_list]
+            self.__data_to_write = dict([(contig_id, {}) for contig_id in self.__contig_id_list])
             return
         else:
             raise(IOError('File open not for changing header.'))
@@ -264,6 +347,9 @@ class TvcVcfFile:
                    'Number': line[find_indices[1] + len(find_text_list[1]) : find_indices[2]],
                    'Type': line[find_indices[2] + len(find_text_list[2]) : find_indices[3]],
                    'Description': line[find_indices[3] + len(find_text_list[3]) : -1]}
+        # Use my_dict['TypeConvMethod'] to do data conversion
+        my_dict['TypeConvMethod'] = {'Float': float, 'Integer': int, 'String': str}.get(my_dict['Type'], lambda x : None)
+        my_dict['IsMultipleEntries'] = self.__is_multiple_entries(my_dict)
         try:
             my_dict['Number'] = int(my_dict['Number'])
         except ValueError:
@@ -277,6 +363,9 @@ class TvcVcfFile:
                    'length': int(line[find_indices[1] + len(find_text_list[1]) : find_indices[2]]),
                    'assembly': line[find_indices[2] + len(find_text_list[2]) : -1]}
         self.contig_list.append(my_dict)
+        if my_dict['ID'] in self.__contig_id_list:
+            raise(ValueError('The header has duplicated contig id: %s' %my_dict['ID']))
+        self.__contig_id_list.append(my_dict['ID'])
         
 
     def __read_header_line(self, line):
@@ -294,19 +383,16 @@ class TvcVcfFile:
         else:
             return
 
-    def __convert_to_type(self, text, text_type):
+    def __convert_to_type(self, text, my_dict):
         if text == '.':
             return text
-        if text_type == 'Integer':
-            return int(text)
-        if text_type == 'Float':
-            return float(text)
-        if text_type == 'String':
-            return str(text)
-        if text_type == 'Flag':
-            raise(ValueError('A \"Flag\" should not have a value.'))
-        raise(ValueError('Unknown type: %s' %text_type))
-        return None
+        value = my_dict['TypeConvMethod'](text)
+        if value is None:
+            if my_dict['Type'] == 'Flag':
+                raise(ValueError('A \"Flag\" can not have a value.'))
+            else:
+                raise(ValueError('Unsupported type for data conversion: %s' %my_dict['Type']))
+        return value
     
     def set_bypass_size_check_tags(self, tags):
         '''
@@ -316,37 +402,35 @@ class TvcVcfFile:
         if type(tags) is str:
             self.__bypass_size_check_tags = tuple([tags, ])
         else:
-             self.__bypass_size_check_tags  = tuple(tags)
+            self.__bypass_size_check_tags  = tuple(tags)
 
-    def __decode_value(self, my_key, my_value, my_dict, num_alt):
-        my_type = my_dict['Type']
-        if self.__is_multiple_entries(my_dict):
+    def __decode_value(self, my_value, my_dict, num_alt):
+        if my_dict['IsMultipleEntries']:
             splitted_value = my_value.split(',')
-            self.__check_size(my_key, splitted_value, my_dict, num_alt)            
-            return [self.__convert_to_type(value, my_type) for value in splitted_value]   
+            self.__check_size(splitted_value, my_dict, num_alt)            
+            return [self.__convert_to_type(value, my_dict) for value in splitted_value]   
         else:
-            return self.__convert_to_type(my_value, my_type)  
+            return self.__convert_to_type(my_value, my_dict)
+        
+    def __encode_one_value(self, value):
+        # The convention is to set 0.0 and 1.0 to be '0' and '1' in the vcf record
+        return str(int(value)) if value in [0.0, 1.0] else str(value)
+    
+    def __encode_values(self, my_value, my_dict, num_alt):
+        self.__check_size(my_value, my_dict, num_alt)
+        if my_dict['IsMultipleEntries']:
+            return ','.join([self.__encode_one_value(self.__convert_to_type(v, my_dict)) for v in my_value])
+        else:
+            return self.__encode_one_value(self.__convert_to_type(my_value, my_dict))
 
-    def __encode_values(self, my_key, my_value, my_dict, num_alt):
-        my_type = my_dict['Type']
-        self.__check_size(my_key, my_value, my_dict, num_alt)
-        if self.__is_multiple_entries(my_dict):
-            return ','.join([str(self.__convert_to_type(v, my_type)) for v in my_value])
-        else:
-            return str(self.__convert_to_type(my_value, my_type))
-
-    def __get_key_dict(self, key, source_of_key):
-        if source_of_key == 'info field':
-            header_dict = self.info_field_dict            
-        elif source_of_key == 'format tag':
-            header_dict = self.format_tag_dict            
-        else:
-            raise(KeyError('Unkown source of key: %s' %source_of_key))
-            return None
+    def __get_key_dict(self, key, is_info_field):
+        '''
+        is_info_field = True if it is info field, False if it is format tag 
+        '''
         try:
-            return header_dict[key]
+            return self.info_field_dict[key] if is_info_field else self.format_tag_dict[key]
         except KeyError:
-            raise(KeyError('Unknow key \"%s\" in the %s: not specified in the header.' %(key, source_of_key)))
+            raise(KeyError('Unknow key \"%s\" in %s: not specified in the header.' %(key, 'INFO' if is_info_field else 'FORMAT')))
             return None
             
     def __is_multiple_entries(self, format_dict):
@@ -358,29 +442,25 @@ class TvcVcfFile:
             return True
         return False
             
-    def __check_size(self, key, value, format_dict, num_alt):
-        if key in self.__bypass_size_check_tags:
-            return
-        try:
+    def __check_size(self, value, format_dict, num_alt):
+        if value in ['.', ['.',]] or format_dict['Number'] == '.' or format_dict['ID'] in self.__bypass_size_check_tags:
             # TS-14886, IR-29193
-            if list(value) == ['.', ]:
-                return
-        except TypeError:
-            pass
-        if format_dict['Number'] in [0, 1]:
-            if type(value) is list or type(value) is tuple:
-                raise(TypeError('%s conflicts the \"Number\" specified in the header.'%str({key, value})))
-        if format_dict['Number'] == 'A':
-            if len(value) != num_alt:
-                raise(IndexError('The length of %s does not match the number of ALT = %d' %(str({key: value}), num_alt)))
-        elif type(format_dict['Number']) is int and format_dict['Number'] > 1:
-            if (len(value) != format_dict['Number']):
-                raise(IndexError('The length of %s does not match the one specified in the header %d' %(str({key: value}, format_dict['Number']))))
-    
+            return True
+
+        my_len = len(value) if type(value) in [list, tuple] else 1
+        expected_len = format_dict['Number'] if format_dict['Number'] != 'A' else num_alt
+        if expected_len != my_len:
+            if format_dict['Number'] == 'A':
+                raise(IndexError('The length of %s does not match len(ALT) = %d' %(str({format_dict['ID']: value}), num_alt)))
+            else:
+                raise(TypeError('%s conflicts the \"Number\" specified in the header.'%str({format_dict['ID']: value})))
+            return False
+        return True
+
     
     def __decode_format_tag_one_entry(self, tag_key, tag_value, num_alt):
-        my_tag_dict = self.__get_key_dict(tag_key, 'format tag')
-        return tag_key, self.__decode_value(tag_key, tag_value, my_tag_dict, num_alt)
+        my_tag_dict = self.__get_key_dict(tag_key, False)
+        return tag_key, self.__decode_value(tag_value, my_tag_dict, num_alt)
 
     def __decode_format_tag(self, format_keys, samples_tags, num_alt):
         splitted_format_tag_key = format_keys.split(':')
@@ -409,7 +489,7 @@ class TvcVcfFile:
             info_key = splitted_info_text[0]
             info_value = splitted_info_text[1]
 
-        my_info_dict = self.__get_key_dict(info_key, 'info field')
+        my_info_dict = self.__get_key_dict(info_key, True)
 
         my_type = my_info_dict['Type']
         if info_value is None: 
@@ -417,7 +497,7 @@ class TvcVcfFile:
                 raise(TypeError('The INFO FIELD \"%s\" conflicts %s' %(info_text_one_entry, str(my_info_dict))))
             return info_key, info_value
         
-        return info_key, self.__decode_value(info_key, info_value, my_info_dict, num_alt)
+        return info_key, self.__decode_value(info_value, my_info_dict, num_alt)
 
 
     def read_vcf_record(self, line):
@@ -454,14 +534,14 @@ class TvcVcfFile:
         info_keys = info_dict.keys()
         info_keys.sort()
         for key in info_keys:
-            my_info_dict = self.__get_key_dict(key, 'info field')
+            my_info_dict = self.__get_key_dict(key, True)
             if my_info_dict['Type'] == 'Flag':
                 if key == 'HS' :
                     # The convention is to put HS in the end of INFO FIELD
                     continue 
                 info_list.append(key)
             else:
-                info_list.append('%s=%s'%(key, self.__encode_values(key, info_dict[key], my_info_dict, num_alt)))
+                info_list.append('%s=%s'%(key, self.__encode_values(info_dict[key], my_info_dict, num_alt)))
         if 'HS' in info_dict and self.info_field_dict['HS']['Type'] == 'Flag':
             # The convention is to put HS in the end of INFO FIELD
             info_list.append('HS')
@@ -477,9 +557,8 @@ class TvcVcfFile:
 
         format_tag_list = []
         for key in format_order:
-            my_format_dict = self.__get_key_dict(key, 'format tag')
-           
-            format_tag_list.append('%s'%(self.__encode_values(key, format_tag_dict[key], my_format_dict, num_alt)))
+            my_format_dict = self.__get_key_dict(key, False)
+            format_tag_list.append(self.__encode_values(format_tag_dict[key], my_format_dict, num_alt))
 
         return ':'.join(format_order), format_order,':'.join(format_tag_list)
 
@@ -494,11 +573,8 @@ class TvcVcfFile:
             return
         
         vcf_text = self.vcf_dict_to_text(vcf_dict)
-        pos_key = str(vcf_dict['POS'])
-        if pos_key not in self. __data_to_write[vcf_dict['CHROM']]:
-            self.__data_to_write[vcf_dict['CHROM']][pos_key] = [vcf_text, ]
-        else:
-            self.__data_to_write[vcf_dict['CHROM']][pos_key].append(vcf_text)
+        my_lines_at_pos = self.__data_to_write[vcf_dict['CHROM']].setdefault(str(vcf_dict['POS']), [])
+        my_lines_at_pos.append(vcf_text)
 
     def vcf_dict_to_text(self, vcf_dict):
         '''
@@ -535,7 +611,6 @@ class TvcVcfFile:
         splitted_vcf_text += format_tag_list
 
         vcf_line = '\t'.join(splitted_vcf_text)
-
         return vcf_line
         
 

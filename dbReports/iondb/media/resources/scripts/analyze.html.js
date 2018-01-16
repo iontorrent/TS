@@ -4,6 +4,7 @@ $('#report_analyze_form').submit(function(e) {
 });
 
 $('#submitButton').click(function(e){
+    console.log("I have been clicked.");
     e.preventDefault();
     
     get_barcodedReferences();

@@ -514,13 +514,23 @@ void Consensus::CalculateCigar() {
 	}
 	if (m_count > 0) {new_cigar_.push_back(CigarOp('M', m_count)); m_count = 0;}
 }
-void Consensus::PartiallyResetAlignment_(Alignment& alignment)
-{
-	long int start = alignment.start;
-	long int end = alignment.end;
-	alignment.Reset();
-	alignment.start = start;
-	alignment.end = end;
+
+// I want to copy the information needed for candidate gen. No need to copy those flowspace related stuff.
+void Consensus::PartiallyCopyAlignmentFromAnother_(Alignment& alignment, Alignment const * const template_alignment, int read_count){
+	alignment = Alignment();
+	alignment.alignment = template_alignment->alignment;
+	alignment.original_position = template_alignment->original_position;
+	alignment.start = template_alignment->start;
+	alignment.end = template_alignment->end;
+	alignment.sample_index = template_alignment->sample_index;
+	alignment.primary_sample = template_alignment->primary_sample;
+	alignment.snp_count = template_alignment->snp_count;
+	alignment.refmap_start = template_alignment->refmap_start;
+	alignment.refmap_code = template_alignment->refmap_code;
+	alignment.refmap_has_allele = template_alignment->refmap_has_allele;
+	alignment.refmap_allele = template_alignment->refmap_allele;
+	alignment.target_coverage_indices = template_alignment->target_coverage_indices;
+	alignment.read_count = read_count;
 }
 
 
@@ -530,24 +540,11 @@ bool Consensus::CalculateConsensus(ReferenceReader& ref_reader, vector<Alignment
 		return false;
 	}
 
-	// Trivial tie case
-	if (family_members.size() == 2){
-		if (family_members[0]->read_count == family_members[1]->read_count){
-			// I pick the read with the better mapping quality to be the consensus.
-			// In this case, I implicitly prefer to get the reference alleles.
-			alignment = (family_members[0]->alignment.MapQuality > family_members[1]->alignment.MapQuality)? *(family_members[0]) : *(family_members[1]);
-			alignment.read_count = family_members[0]->read_count + family_members[1]->read_count;
-			PartiallyResetAlignment_(alignment);
-			return true;
-		}
-	}
-
-	int fam_size = 0;
-	int max_read_count = -1;
-	unsigned int max_read_count_idx = 0;
-
 	// Calculate the family size and find the read w/ max read count.
-	for (unsigned int read_idx = 0; read_idx < family_members.size(); ++read_idx){
+	unsigned int max_read_count_idx = 0;
+	int max_read_count = family_members[0]->read_count;
+	int fam_size = max_read_count;
+	for (unsigned int read_idx = 1; read_idx < family_members.size(); ++read_idx){
 		int read_count = family_members[read_idx]->read_count;
 		fam_size += read_count;
 		if (read_count > max_read_count){
@@ -555,13 +552,19 @@ bool Consensus::CalculateConsensus(ReferenceReader& ref_reader, vector<Alignment
 			max_read_count_idx = read_idx;
 		}
 	}
+
+	// Trivial basespace consensus from flowspace consensus
 	// Check if family_members has a consensus read that dominates all the others.
-	// If true, I am actually calculating the consensus of consensus reads, which is trivial in this case.
 	// It should be the case most of the time if the input bam is a consensus bam.
 	if (2 * max_read_count >= fam_size){
-		alignment = *(family_members[max_read_count_idx]);
-		alignment.read_count = fam_size;
-		PartiallyResetAlignment_(alignment);
+		int template_idx = max_read_count_idx;
+		if (family_members.size() == 2 and 2 * max_read_count == fam_size){
+			// The family consists of two reads that have equal read count.
+			// I pick the read with the better mapping quality to be the basespace consensus.
+			// In this case, I implicitly prefer to get the reference alleles.
+			template_idx = (family_members[0]->alignment.MapQuality > family_members[1]->alignment.MapQuality)? 0 : 1;
+		}
+		PartiallyCopyAlignmentFromAnother_(alignment, family_members[template_idx], fam_size);
 		return true;
 	}
 
@@ -572,9 +575,9 @@ bool Consensus::CalculateConsensus(ReferenceReader& ref_reader, vector<Alignment
 	}
 
 	flow_order_ = flow_order;
-	alignment = Alignment(*(family_members[0]));
+	alignment = Alignment();
+	alignment.alignment = family_members[0]->alignment;
 	alignment.read_count = fam_size;
-	PartiallyResetAlignment_(alignment);
 	reverse_ = alignment.is_reverse_strand;
 	debug_ = false;
 	bool show_variants = false;

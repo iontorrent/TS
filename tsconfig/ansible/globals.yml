@@ -21,32 +21,65 @@
 
 # Load the platform-specific variables, if the file exists
 - name:
-  stat: path='group_vars/{{ ansible_product_name }}'
+  stat:
+      path: "group_vars/{{ ansible_product_name }}"
   register: p
-- include_vars: 'group_vars/{{ ansible_product_name }}'
+- include_vars: "group_vars/{{ ansible_product_name }}"
   when: p.stat.exists and p.stat.isdir == False
+# ...if its a T630 S5 with >128G memory, load PowerEdge T630 v2
+- include_vars: "group_vars/PowerEdge T630 v2"
+  when: ansible_product_name == "PowerEdge T630" and ansible_memtotal_mb|int > 130000
 # ...or if its an S5, load the S5 variables
-- include_vars: 'group_vars/S5'
+- include_vars: "group_vars/S5"
   when: S5_virtual_guest
 
 # set docker variables
 # include statement will be enabled by Dockerfile
 - name:
-  set_fact: docker_image="false"
+  set_fact:
+      docker_image: false
   #include: 'dockerparams.yml'
 
 # Define the default_interface
 # By design, it is first slot on the PCI network card for T7500 or first on-board NIC for all others
 # Either em1, eth0
 - name: define the interface string for T7500
-  set_fact: default_interface=eth0
+  set_fact:
+      default_interface: "eth0"
   when: ansible_product_name == "Precision WorkStation T7500"
 - name: define the interface string for non-T7500
-  set_fact: default_interface=em1
+  set_fact:
+      default_interface: "em1"
   when: ansible_product_name != "Precision WorkStation T7500"
 - name: set the default_interface
-  set_fact: default_interface={{ ansible_default_ipv4.interface|default(default_interface) }}
+  set_fact:
+      default_interface: "{{ ansible_default_ipv4.interface|default(default_interface) }}"
+
 - debug: var=default_interface
+
+
+# check if fields for static IP exits
+- name: check default interface static ip fields
+  set_fact:
+      STATIC_IP: false
+  when:
+      - STATIC_IP|bool == true
+      - static_ip|default(None) == None
+      - static_nm|default(None) == None
+      - static_gw|default(None) == None
+
+- debug: var=STATIC_IP
+
+- name: check tap interface static ip fields
+  set_fact:
+      TAP_STATIC_IP: false
+  when:
+      - TAP_STATIC_IP|bool == true
+      - tap_static_ip|default(None) == None
+      - tap_static_nm|default(None) == None
+      - tap_static_gw|default(None) == None
+
+- debug: var=TAP_STATIC_IP
 
 # Define CIDR variable needed when exporting directories via /etc/exports
 # Default netmask is needed when current network settings are unavailable
@@ -56,7 +89,8 @@
   ignore_errors: yes
 
 - name: set fact CIDR
-  set_fact: CIDR="{{ cidr_response.maskbit }}"
+  set_fact:
+      CIDR: "{{ cidr_response.maskbit }}"
   when: cidr_response|success
 
 - debug: var=CIDR
@@ -64,3 +98,4 @@
 # setup the spool directory
 - name: Create the ion spool directory
   file: path=/var/spool/ion owner=www-data group=www-data mode=0775 state=directory
+

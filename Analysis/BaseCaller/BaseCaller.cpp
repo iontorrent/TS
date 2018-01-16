@@ -23,6 +23,7 @@
 #include <iostream>
 #include <set>
 #include <vector>
+#include <fenv.h> // Floating point exceptions
 
 #include "json/json.h"
 #include "MaskSample.h"
@@ -277,6 +278,12 @@ int main (int argc, const char *argv[])
         exit (EXIT_SUCCESS);
     }
 
+    // enable floating point exceptions during program execution
+    if (opts.GetFirstBoolean('-', "float-exceptions", true)) {
+    	cout << "BaseCaller: Floating point exceptions enabled." << endl;
+        feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+    } //*/
+
     // Command line processing *** Main directories and file locations first
     bc_params.InitializeFilesFromOptArgs(opts);
     bc_params.InitContextVarsFromOptArgs(opts);
@@ -371,6 +378,7 @@ int main (int argc, const char *argv[])
     // initialize the per base quality score generator - dependent on calibration
     bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, hist_calibration.is_enabled());
 
+
     // Barcode classification
     BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, bc_params.GetFiles().output_directory,
     		                   bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
@@ -429,7 +437,6 @@ int main (int argc, const char *argv[])
     bc.calibration_barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
 
     MemUsage("BeforeBasecalling");
-
 
     //
     // Step 3. Open wells and output BAM files & initialize writers
@@ -582,6 +589,8 @@ void * BasecallerWorker(void *input)
     vector<float>     residual(num_flows, 0);
     vector<float>     scaled_residual(num_flows, 0);
     vector<float>     wells_measurements(num_flows, 0);
+    //vector<float>     wells_measurements_org(num_flows, 0);
+    //vector<float>     wells_residual(num_flows, 0);
     vector<float>     local_noise(num_flows, 0);
     vector<float>     minus_noise_overlap(num_flows, 0);
     vector<float>     homopolymer_rank(num_flows, 0);
@@ -591,8 +600,10 @@ void * BasecallerWorker(void *input)
     vector<int16_t>   flowgram2(num_flows);
     vector<int16_t>   filtering_details(13,0);
     vector<uint8_t>   quality(3*num_flows);
+    vector<uint8_t>   quality_flow(3*num_flows);
     vector<int>       base_to_flow (3*num_flows);             //!< Flow of in-phase incorporation of each base.
     vector<int>       flow_to_base (num_flows,-1);            //!< base pos of each flow, -1 if not available
+    vector< vector<float> >  errD_table;
 
     DPTreephaser      treephaser(bc.flow_order, bc.windowSize);
     treephaser.SetStateProgression(bc.diagonal_state_prog);
@@ -661,6 +672,7 @@ void * BasecallerWorker(void *input)
 
         wells.SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows);
         wells.ReadWells();
+        //wells.ReadRes();
         wells_norm.CorrectSignalBias(bc.keys);
         wells_norm.DoKeyNormalization(bc.keys);
 
@@ -713,6 +725,7 @@ void * BasecallerWorker(void *input)
 
                 for (int flow = 0; flow < num_flows; ++flow)
                     wells_measurements[flow] = wells.At(y,x,flow);
+
 
                 // Sanity check. If there are NaNs in this read, print warning
                 vector<int> nanflow;
@@ -879,54 +892,96 @@ void * BasecallerWorker(void *input)
                 //sprintf(short_name, "%05d:%05d", bc.chip_subset.GetRowOffset() + y, bc.chip_subset.GetColOffset() + x);
                 //bc.quality_generator.GenerateBaseQualities(short_name, processed_read.filter.n_bases, num_flows,
                 vector<float> homopolymer_rank_flow(num_flows, 0);
-                bool use_flow_predictors = bc.flow_predictors_;
-                if (bc.quality_generator.toSavePredictors()) {
+                bool use_flow_predictors = bc.quality_generator.toGenerateFlowPredictors();
+                if (use_flow_predictors || (bc.flow_predictors_ && bc.quality_generator.toSavePredictors())) {
                     int num_predictor_bases = min(num_flows, processed_read.filter.n_bases);
-                    PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
-                    PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
-                    //PerBaseQual::PredictorNoiseOverlap(minus_noise_overlap, num_predictor_bases, read.normalized_measurements, read.prediction,use_flow_predictors);
-                    PerBaseQual::PredictorBeverlyEvents(minus_noise_overlap, num_predictor_bases, base_to_flow, scaled_residual,use_flow_predictors);
-                    PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, read.sequence, homopolymer_rank_flow, flow_to_base, use_flow_predictors);
+                    // Get the error distribution table from phred table h5
+                    bc.quality_generator.GetErrorDistribution(errD_table);
+                    PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases,
+                    		base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
+                    PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases,
+                    		base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
+                    //PerBaseQual::PredictorNoiseOverlap(minus_noise_overlap, num_predictor_bases, read.normalized_measurements, read.prediction, use_flow_predictors);
+                    PerBaseQual::PredictorBeverlyEvents(minus_noise_overlap, num_predictor_bases,
+                    		base_to_flow, scaled_residual,use_flow_predictors);
+                    PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases,
+                    		read.sequence, homopolymer_rank_flow, flow_to_base, use_flow_predictors);
+                    // flow space quality generator
+                    bc.quality_generator.GenerateFlowQualities(read_name, processed_read.filter.n_bases, num_flows,
+                    		read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
+                    		homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
+                    		base_to_flow, quality_flow,
+                    		read.additive_correction, // candidate1
+                    		read.multiplicative_correction, // candidate2
+                    		read.state_inphase, // candidate3
+                    		read.penalty_residual_flow, // predictor1_flow
+                    		read.penalty_mismatch_flow, // predictor5_flow
+                    		homopolymer_rank_flow, // predictor4_flow
+                    		//wells_residual, //added
+                    		flow_to_base,
+                    		use_flow_predictors);
+                    if(bc.quality_generator.toSavePredictors()){
+                    	bc.quality_generator.DumpPredictors(read_name, processed_read.filter.n_bases, num_flows,
+                    			read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
+                    			homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
+                    			base_to_flow, quality_flow,
+                    			read.additive_correction,
+                    			read.multiplicative_correction,
+                    			read.state_inphase,
+                    			read.penalty_residual_flow,
+                    			read.penalty_mismatch_flow,
+                    			homopolymer_rank_flow,
+                    			//wells_residual, //added
+                    			// wells_measurements_org,
+                    			flow_to_base,
+                    			use_flow_predictors);
+                    }
+                }
+                if(!use_flow_predictors){ // base space quality
+                	bool redo_genPred = ! bc.quality_generator.toSavePredictors();
 
-                    bc.quality_generator.DumpPredictors(read_name, processed_read.filter.n_bases, num_flows,
-                            read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
-                            homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
-                            base_to_flow, quality,
-                            read.additive_correction,
-                            read.multiplicative_correction,
-                            read.state_inphase,
-                            read.penalty_residual_flow,
-                            read.penalty_mismatch_flow,
-                            homopolymer_rank_flow,
-                            flow_to_base,
-                            use_flow_predictors);
+                	if (redo_genPred) {
+                		int num_predictor_bases = min(num_flows, processed_read.filter.n_bases);
+                		PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases,
+                				base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
+                		PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases,
+                				base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
+                		PerBaseQual::PredictorBeverlyEvents(minus_noise_overlap, num_predictor_bases, base_to_flow, scaled_residual,use_flow_predictors);
+                		PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, read.sequence, homopolymer_rank_flow, flow_to_base, use_flow_predictors);
+                	}
+                	// Calculate Base Qualities
+                	bc.quality_generator.GenerateBaseQualities(read_name, processed_read.filter.n_bases, num_flows,
+                			read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
+                			homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
+                			base_to_flow, quality,
+                			read.additive_correction,
+                			read.multiplicative_correction,
+                			read.state_inphase,
+                			read.penalty_residual_flow,
+                			read.penalty_mismatch_flow,
+                			homopolymer_rank_flow,
+                			flow_to_base,
+                			use_flow_predictors);
+
+                	if(bc.quality_generator.toSavePredictors()){
+                		bc.quality_generator.DumpPredictors(read_name, processed_read.filter.n_bases, num_flows,
+                				read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
+                				homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
+                				base_to_flow, quality,
+                				read.additive_correction,
+                				read.multiplicative_correction,
+                				read.state_inphase,
+                				read.penalty_residual_flow,
+                				read.penalty_mismatch_flow,
+                				homopolymer_rank_flow,
+                				//wells_residual, //added
+                				// wells_measurements_org,
+                				flow_to_base,
+                				use_flow_predictors);
+                	}
                 }
 
-                // 8/18/2016, ew: still use base-predictors to predict quality scores for now
-                use_flow_predictors = false;
-                bool redo_genPred = ((! bc.quality_generator.toSavePredictors()) || bc.flow_predictors_) ? true:false;
-                //redo_genPred = true;
-                if (redo_genPred) {
-					int num_predictor_bases = min(num_flows, processed_read.filter.n_bases);
-                    PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
-                    PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
-                    //PerBaseQual::PredictorNoiseOverlap(minus_noise_overlap, num_predictor_bases, read.normalized_measurements, read.prediction,use_flow_predictors);
-                    PerBaseQual::PredictorBeverlyEvents(minus_noise_overlap, num_predictor_bases, base_to_flow, scaled_residual,use_flow_predictors);
-                    PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, read.sequence, homopolymer_rank_flow, flow_to_base, use_flow_predictors);
-                }
-                //bc.quality_generator.GenerateBaseQualities(processed_read.bam.Name, processed_read.filter.n_bases, num_flows,
-                bc.quality_generator.GenerateBaseQualities(read_name, processed_read.filter.n_bases, num_flows,
-                        read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
-                        homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
-                        base_to_flow, quality,
-                        read.additive_correction,
-                        read.multiplicative_correction,
-                        read.state_inphase,
-                        read.penalty_residual_flow,
-                        read.penalty_mismatch_flow,
-                        homopolymer_rank_flow,
-                        flow_to_base,
-                        use_flow_predictors);
+
 
                 //
                 // Step 4a. Barcode classification of library reads
@@ -950,7 +1005,6 @@ void * BasecallerWorker(void *input)
                     }
                 }
 
-
                 //
                 // Step 4. Calculate/save read metrics and apply filters
                 // The order of the filtering/trimming operations actually matters.
@@ -961,13 +1015,25 @@ void * BasecallerWorker(void *input)
                 bc.filters->FilterFailedKeypass (read_index, read_class, processed_read.filter, read.sequence);
                 bc.filters->FilterHighResidual  (read_index, read_class, processed_read.filter, residual);
                 //bc.filters->FilterBeverly       (read_index, read_class, processed_read.filter, scaled_residual, base_to_flow);
-                bc.filters->FilterQuality       (read_index, read_class, processed_read.filter, quality);
-
+                if (use_flow_predictors){
+                	bc.filters->FilterQuality       (read_index, read_class, processed_read.filter, quality_flow);
+                }else{
+                	bc.filters->FilterQuality       (read_index, read_class, processed_read.filter, quality);
+                }
                 // Read trimming shortens a read or remove it if it's too short after trimming
                 bc.filters->TrimAdapter         (read_index, read_class, processed_read, scaled_residual, base_to_flow, treephaser, read);
                 bc.filters->TrimSuffixTag       (read_index, read_class, processed_read, read.sequence, bc.tag_trimmer);
                 bc.filters->TrimExtraRight      (read_index, read_class, processed_read, read.sequence);
-                bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality);
+                // quality trimming
+                if (use_flow_predictors){ //flow space
+                	bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality_flow,
+                			use_flow_predictors, flow_to_base, base_to_flow);
+                	// Transfer quality (flow) to quality (base)
+                	bc.filters->TransferQuality( read_index, read_class, processed_read.filter, quality_flow, quality, base_to_flow, errD_table);
+                }else{ //base space
+                	bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality,
+                			use_flow_predictors, flow_to_base, base_to_flow);
+                }
 
                 //! New mechanism for dumping potentially useful metrics.
                 if (bc.metric_saver->save_anything() and (is_random_unfiltered or !bc.metric_saver->save_subset_only())) {
@@ -1054,8 +1120,6 @@ void * BasecallerWorker(void *input)
 
                 //
                 // Step 5. Pass basecalled reads to appropriate writers
-                //
-
                 // Create BAM entries
                 if (processed_read.filter.n_bases > 0) {
                     processed_read.bam.QueryBases.reserve(processed_read.filter.n_bases);
@@ -1063,6 +1127,10 @@ void * BasecallerWorker(void *input)
                     for (int base = processed_read.filter.n_bases_prefix; base < processed_read.filter.n_bases_filtered; ++base) {
                         processed_read.bam.QueryBases.push_back(read.sequence[base]);
                         processed_read.bam.Qualities.push_back(quality[base] + 33);
+                    }
+                    // flow space quality
+                    if (use_flow_predictors){
+                    	processed_read.bam.AddTag("ZQ", quality_flow);
                     }
                     processed_read.bam.AddTag("ZF","i", base_to_flow[processed_read.filter.n_bases_prefix]);
                 } else

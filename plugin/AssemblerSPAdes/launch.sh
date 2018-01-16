@@ -16,7 +16,7 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-VERSION="5.6.0.0"
+VERSION='5.8.0.0'
 
 # set the ram
 #$ -l mem_free=${PLUGINCONFIG__RAM},s_vmem=${PLUGINCONFIG__RAM}
@@ -121,7 +121,7 @@ if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
 	    fi
 
             #build call to the assembler.pl script which will take care of the rest
-	    run "python ${ASSEMBLER_PATH}/RunAssembler.py \"${BARCODE_ID}\" \"${BARCODE_SEQ}\" \"${BARCODE_BAM_NAME}\"";
+	    run "python ${ASSEMBLER_PATH}/RunAssembler.py \"${BARCODE_ID}\" \"${BARCODE_SEQ}\" \"${BARCODE_BAM_NAME}\" \"${TSP_FILEPATH_PLUGIN_DIR}\"";
 	    CTR=`expr ${CTR} + 1`;
 	fi
     done
@@ -159,6 +159,6 @@ else
 	run "ln -snf ${BAM_PATH} ${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAM_NAME}";
     fi
 
-    run "python ${ASSEMBLER_PATH}/RunAssembler.py ${PLUGIN_OUT_BAM_NAME}"
-    run "python ${ASSEMBLER_PATH}/GenerateReport.py ${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json"
+    run "python ${ASSEMBLER_PATH}/RunAssembler.py ${PLUGIN_OUT_BAM_NAME} \"${TSP_FILEPATH_PLUGIN_DIR}\""
+    run "python ${ASSEMBLER_PATH}/GenerateReport.py ${TSP_FILEPATH_PLUGIN_DIR}/info.json"
 fi

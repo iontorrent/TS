@@ -156,7 +156,14 @@
                 });
                 $('#modal_references_edit_TF').modal("hide");
             }).fail(function(data) {
-                $('#modal_references_edit_TF #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                try {
+                    error = JSON.parse(data.responseText);
+                    err_text = $.map(error.template, function(val){ return val}).join('; ');
+                }
+                catch(e) {
+                    err_text = data.responseText;
+                }
+                $('#modal_references_edit_TF #modal-error-messages').empty().append('<p class="error">ERROR: ' + err_text + '</p>').show();
                 console.log("error:", data);
             }).always(function(data) {/*console.log("complete:", data);*/
             });

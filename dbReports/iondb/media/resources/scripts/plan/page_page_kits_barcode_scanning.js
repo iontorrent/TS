@@ -38,7 +38,7 @@ function update_kit_selection(kitInfoObject){
         errMsg = "<div class='span10 alertScannerError alert alert-danger'>Scanned barcode not compatible with the selected chip/instrument type.";
         errMsg = errMsg + "<p>" + kitType + ":" + kitDisplayedName + "</p></div>";
         $("#scannerValidationError").html(errMsg);
-        $("#scannerValidationError").show().delay(6000).fadeOut();
+        $("#scannerValidationError").show().delay(12000).fadeOut();
     }
 }
 
@@ -47,6 +47,8 @@ $(document).scannerDetection({
     avgTimeByChar: 100, // it's not a barcode if a character takes longer than 100ms
     onComplete: function (kitBarcode_scanner, qty) {
         var parsedBarcode = "";
+        // sometimes, the scanner is detecting some junk chars during scanning, make sure no invalid chars
+         kitBarcode_scanner = kitBarcode_scanner.replace(/[^A-Za-z 0-9 \.,\?""!@#\$%\^&\*\(\)-_=\+;:<>\/\\\|\}\{\[\]`~]*/g, '');
         if ((kitBarcode_scanner.substring(0, 2) == "91") && (kitBarcode_scanner.indexOf("]") > 0)) {
             console.log("The scanned barcode does comply with the expected format : ", kitBarcode_scanner);
             parsedBarcode = kitBarcode_scanner.substring(2, kitBarcode_scanner.indexOf("]"));
@@ -60,7 +62,7 @@ $(document).scannerDetection({
             errMsg = "<div class='span10 alertScannerError alert alert-danger'>The scanned barcode does not comply with the expected format. Please check.";
             console.log("The scanned barcode does not comply with the expected format : ", kitBarcode_scanner);
             $("#scannerValidationError").html(errMsg);
-            $("#scannerValidationError").show().delay(5000).fadeOut();
+            $("#scannerValidationError").show().delay(12000).fadeOut();
         }
         //Barcode info detected, proceed to find which kit is scanned
         if (parsedBarcode) {

@@ -33,3 +33,24 @@ add_custom_target(parameter_sets ALL
                    COMMENT "Combining individual parameter sets into a single parameter_sets.json")
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/parameter_sets.json" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/pluginMedia/parameter_sets")
+
+message(STATUS "${CMAKE_CURRENT_BINARY_DIR}")
+
+SET(ANALYSIS_BUILD_DIR)
+if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/../../Analysis")
+  SET(ANALYSIS_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../Analysis")
+endif()
+
+# when build variantCaller only
+if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/../../../build/Analysis")
+  SET(ANALYSIS_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../../build/Analysis")
+endif()
+
+if(DEFINED ANALYSIS_BUILD_DIR)
+    message(STATUS "Adding tmap from Analysis build")
+    install(PROGRAMS "${ANALYSIS_BUILD_DIR}/TMAP/tmap" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/bin/")
+    message(STATUS "Adding tvc from Analysis build")
+    install(PROGRAMS "${ANALYSIS_BUILD_DIR}/tvc" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/bin/")
+    message(STATUS "Adding tvcutils from Analysis build")
+    install(PROGRAMS "${ANALYSIS_BUILD_DIR}/tvcutils" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/bin/")
+endif()

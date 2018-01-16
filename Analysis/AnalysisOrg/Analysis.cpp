@@ -21,6 +21,7 @@
 #include <iostream>
 #include <iomanip>
 #include <armadillo>
+#include <fenv.h> // Floating point exceptions
 
 #include "Image.h"
 #include "Region.h"
@@ -429,6 +430,11 @@ int main (int argc, char *argv[])
   OptArgs opts;
   opts.ParseCmdLine(argc, (const char**)argv2);
 
+  // enable floating point exceptions during program execution
+  if (opts.GetFirstBoolean('-', "float-exceptions", false)) {
+      cout << "Analysis: Floating point exceptions enabled." << endl;
+      feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+  } //*/
 
   for(int k = 0; k < argc ; ++k)
   {

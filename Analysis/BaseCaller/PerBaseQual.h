@@ -12,9 +12,10 @@
 #include <fstream>
 #include <stdint.h>
 #include "OptArgs.h"
-
+#include "NNModel.h"
 #include "json/json.h"
 
+#define QV_MAX 43
 
 using namespace std;
 
@@ -42,7 +43,8 @@ public:
   //! @param[in]  chip_type           Chip type, may determine default phred table
   //! @param[in]  input_directory     Directory where 1.wells could be found
   //! @param[in]  output_directory    Directory where predictor dump file may be saved
-  void Init(OptArgs& opts, const string& chip_type, const string &input_directory, const string &output_directory, bool recalib);
+  void Init(OptArgs& opts, const string& chip_type,
+		  const string &input_directory, const string &output_directory, bool recalib);
 
   //! @brief  Generate quality values for all bases in a read.
   //! @param[in]  read_name           Read name used in predictor dump
@@ -64,13 +66,24 @@ public:
       const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
       const vector<int>& flow_to_base, const bool flow_predictors_=false);
 
+  void GenerateFlowQualities(const string& read_name, int num_bases, int num_flows,
+      const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
+      const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
+      const vector<int>& base_to_flow, vector<uint8_t> &quality_flow,
+      const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
+      const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+      //const vector<float> &wells_residual,
+      const vector<int>& flow_to_base, const bool flow_predictors_=false);
+
   void DumpPredictors(const string& read_name, int num_bases, int num_flows,
       const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
       const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
       const vector<int>& base_to_flow, vector<uint8_t> &quality,
       const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
       const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
-      const vector<int>& flow_to_base, const bool flow_predictors_=false);
+      //const vector<float> &candidate4,
+	  //const vector<float> &wells_measurements,
+	  const vector<int>& flow_to_base, const bool flow_predictors_=false);
 
   //! @brief  Calculate Local Noise predictor for all bases in a read
   //! @param[out] local_noise               Local Noise predictor
@@ -110,6 +123,8 @@ public:
       const vector<float>& scaled_residual, const bool flow_predictors_);
 
   bool toSavePredictors() {return (save_predictors_ ? true:false);}
+  bool toGenerateFlowPredictors() {return (flow_predictor_ ? true:false);}
+  void GetErrorDistribution( vector<vector<float>>  & err);
 
 protected:
 
@@ -117,22 +132,38 @@ protected:
   //! @param[in]  pred                Array of predictor values. May be modified in place
   //! @return Quality value
   uint8_t CalculatePerBaseScore(float* pred) const;
+  uint8_t CalculatePerFlowScore(float* pred) const;
+  uint8_t CalculatePerFlowScoreNN(float* pred) const;
+
 
   const static int        kNumPredictors = 6;         //!< Number of predictors used for quality value determination
+  const static int 		  kNumPredictorsFlowNN = 9;
   const static int        kMinQuality = 5;            //!< Lowest possible quality value
 
+  bool 					  flow_predictor_;
   vector<vector<float> >  phred_thresholds_;          //!< Predictor threshold table, kNumPredictors x num_phred_cuts.
   vector<float>           phred_thresholds_max_;      //!< Maximum threshold for each predictor
   vector<uint8_t>         phred_quality_;             //!< Quality value associated with each predictor cut.
 
   vector<vector<float> >  phred_cuts_;				  //!< Predictor threshold table, kNumPredictors x num_phred_cuts.
-  unsigned char*		  phred_table_;				  //!< Predictor table of QV values.
+  unsigned char*		  phred_table_;   			  //!< Predictor table of QV values.
   vector<size_t>		  offsets_;					  //!< Indexing offsets.
+
+  vector<vector<float>>   errD_table_;				  //!< Error distribution of flow space QV values.
+  int*		  			  dims_;					  //!< Dimension of the error distribution table
 
   bool                    save_predictors_;           //!< If true, dump predictor values for each processed read and base
   ofstream                predictor_dump_;            //!< File to which predictor values are dumped
   pthread_mutex_t         predictor_mutex_;           //!< Mutex protecting writes to predictor dump file
+  //debug
+  bool                    save_qs_;
+  pthread_mutex_t         qs_mutex_;
+  ofstream                qs_dump_;
+  bool					  errD_table_enable_;
+  bool					  network_model_enable_;
+  bool 					  load_phred_table_;
   //string                  enzyme_name_;               //!< Name of the "enzyme"
+  NN::NNModel             *model_;
 
 private:
   float transform_P1(float p);
@@ -145,6 +176,7 @@ private:
   float transform_P9(float p);
 
 public:
+
   bool hasBinaryExtension(string &filename);
   char *get_KnownAlternate_PhredTable(string chip_type, bool recalib, string enzymeName="", bool binTable=true);
   char *get_phred_table_name(string chip_type, bool recalib, string enzymeName="");

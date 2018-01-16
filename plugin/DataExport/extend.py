@@ -8,19 +8,23 @@ pluginName = 'DataExport'
 pluginDir = ""
 
 networkFS = ["nfs", "cifs"]
-localFS = ["ext4", "ext3", "xfs", "ntfs", "exfat"]
+localFS = ["ext4", "ext3", "xfs", "ntfs", "exfat", "vboxsf"]
 supportedFS = ",".join(localFS + networkFS)
+
 
 def test(bucket):
     return bucket
+
 
 def runProcess(exe):
     p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return iter(p.stdout.readline, b'')
 
+
 def runProcessAndReturnLastLine(exe):
     p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return  p.stdout.readlines()[-1]
+    return p.stdout.readlines()[-1]
+
 
 def backupDevices(bucket):
     devices = ""

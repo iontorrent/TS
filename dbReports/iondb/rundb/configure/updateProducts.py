@@ -145,27 +145,27 @@ def generate_mainJson_local(onlineMainContents=None):
         try:
             mainContentDict = {}
             productFileContent = json.loads(open(productFile).read())
+            p_name = productFileContent.get("name") or productFileContent.get("productName")
+            if p_name:
+                p_name = p_name.strip()
             if available_Products:
                 for available_Product in available_Products:
                     name, update_version = available_Product # extract product meta data from tuple
                     productDone = False
-                    if (name == productFileContent["name"].strip()):
+                    if (name == p_name):
                         if (LooseVersion(productFileContent["update_version"].strip()) <= LooseVersion(update_version.strip())):
                             productDone = True
                             break
                 if productDone:
                     continue # proceed with the next productFile
-            mainContentDict["name"] = productFileContent["name"]
 
             # backward compatibility
-            if "version_required" in productFileContent:
-                mainContentDict["version_req"] = productFileContent["version_required"]
-            elif "version_req" in productFileContent:
-                mainContentDict["version_req"] = productFileContent["version_req"]
+            mainContentDict["name"] = p_name
+            mainContentDict["version_req"] = productFileContent.get("version_req") or productFileContent.get("version_required")
             mainContentDict["version_max"] = productFileContent["version_max"]
             mainContentDict["url"] = os.path.basename(productFile)
             mainContentDict["update_version"] = productFileContent["update_version"]
-            mainContentDict["product_desc"] =  productFileContent["productDesc"]
+            mainContentDict["product_desc"] =  productFileContent.get("product_desc") or productFileContent.get("productDesc")
             mainContentDict["offcycle_type"] = "manual"
             mainFileContents.append(mainContentDict)
         except Exception,Err:
@@ -362,7 +362,7 @@ def update_product(name, update_version):
         logger.debug("Error: iondb.rundb.configure.updateProducts.update_product %s", errMsg)
         raise Exception(errMsg)
 
-    productName = data['productName']
+    productName = data.get('productName') or data.get('name')
     
     if 'models_info' in data or 'sys_template_info' in data:
         monitor_pk = start_update_product(productName, productjsonURL, update_version)
@@ -644,12 +644,30 @@ def InstallProducts(pathToProductFile, extension, fileName=None):
     except Exception, Err:
         raise Exception("The product file uploaded has some issues. %s" % Err)
 
+def validate_productFile_params(productFileContent):
+    isValid = True
+    # handle backward compatability
+    name = productFileContent.get("name") or productFileContent.get("productName")
+    version_req = productFileContent.get("version_required") or productFileContent.get("version_req")
+    product_desc = productFileContent.get("productDesc") or productFileContent.get("product_desc")
+
+    if not name or not product_desc or not version_req:
+        isValid = False
+
+    if isValid:
+        required_product_keys = ("version_max", "update_version")
+        if not (set((required_product_keys)) <= set(productFileContent)):
+            isValid = False
+
+    return isValid, name
+
 def validate_productFile(productFile, fileName = None):
     """
      - Validate the product file  : manual upload
      - Error out if any missing fields in uploaded product
     """
     isValid = True
+    name = None
     offcycle_localPath = settings.OFFCYCLE_UPDATE_PATH_LOCAL
     offcycleProducts_localPath = os.path.join(offcycle_localPath, "products")
 
@@ -663,17 +681,36 @@ def validate_productFile(productFile, fileName = None):
     destinationFilePath = os.path.join(offcycleProducts_localPath, fileName)
     productFileContent = json.loads(open(productFile).read())
 
-    required_product_keys = ("name", "version_max", "update_version", "productDesc")
-    if not (set((required_product_keys)) <= set(productFileContent)):
-        isValid = False
+    # validate,
+    #   - mandatory fields
+    #   - version_required vs system version
+    #   - name or Productname exists
+    #   - no content/object provided in the product file
 
-    if isValid and not set(['version_required']).issubset(productFileContent):
-        if not set(['version_req']).issubset(productFileContent):
-            isValid = False
-
+    isValid, name = validate_productFile_params(productFileContent)
     if isValid:
+        tsVersion = get_TSversion()
+        if not (TS_version_comparison(tsVersion,
+                                        productFileContent.get('version_req') or
+                                        productFileContent.get('version_required'),
+                                        productFileContent['version_max'])):
+            raise Exception("%s for %s." % (errorCode['E001'].format(tsVersion), name))
+
+        if not (('models_info' in productFileContent and productFileContent['models_info']) or
+                ('sys_template_info' in productFileContent and productFileContent["sys_template_info"])):
+            logger.debug("Did not find any object to update. Missing either models_info or system_template_info fields")
+            raise Exception('Missing product content, please consult Torrent Suite administrator.')
+
         if os.path.exists(destinationFilePath):
-            logger.info("Product already installed on this Torrent Server. Going to overwrite with the new one: %s" % destinationFilePath)
+            existingProductData = json.loads(open(destinationFilePath).read())
+            existingProductName = existingProductData.get("name") or existingProductData.get("productName")
+            isProductOld = StrictVersion(str(productFileContent.get('update_version'))) <= StrictVersion(str(existingProductData.get('update_version')))
+            if name == existingProductName and isProductOld:
+                logger.info("Product already installed on this Torrent Server. Going to skip the product install: %s" % destinationFilePath)
+                os.remove(productFile)
+                return isValid
+            else:
+                logger.info("Product already installed on this Torrent Server but the product contents are new. Going to overwrite with the updated version: %s" % destinationFilePath)
             os.remove(destinationFilePath)
         shutil.move(productFile, destinationFilePath)
     else:

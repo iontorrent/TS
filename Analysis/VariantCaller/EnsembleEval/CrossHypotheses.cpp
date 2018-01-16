@@ -144,13 +144,10 @@ void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, 
   // We search for test flows in the flow interval [(splice_start_flow-3*max_flows_to_test), (splice_end_flow+4*max_flows_to_test)]
   // We need to simulate further than the end of the search interval to get good predicted values within
   int flow_upper_bound = splice_end_flow + 4*max_flows_to_test + 20;
-  max_last_flow = CalculateHypPredictions(thread_objects, my_read, global_context, instance_of_read_by_state,
-                                          same_as_null_hypothesis, predictions_all_flows, normalized_all_flows, flow_upper_bound);
+  CalculateHypPredictions(thread_objects, my_read, global_context, instance_of_read_by_state,
+                                          same_as_null_hypothesis, predictions_all_flows, normalized_all_flows, min_last_flow, max_last_flow, flow_upper_bound);
   SetModPredictions();
-  if (my_read.is_reverse_strand)
-    strand_key = 1;
-  else
-    strand_key = 0;
+  strand_key = my_read.is_reverse_strand? 1 : 0;
 
   // read_counter and measurements_sd for consensus reads
   read_counter = my_read.read_count;
@@ -165,7 +162,7 @@ void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, 
 
 void CrossHypotheses::InitializeTestFlows() {
   // Compute test flows for all hypotheses: flows changing by more than 0.1, 10 flows allowed
-  success = ComputeAllComparisonsTestFlow(min_delta_for_flow, max_flows_to_test);
+  ComputeAllComparisonsTestFlow(min_delta_for_flow, max_flows_to_test);
   InitializeRelevantToTestFlows();
   delta_state.ComputeDelta(predictions); // depends on predicted
   // compute cross-data across the deltas for multialleles
@@ -598,73 +595,118 @@ void CrossHypotheses::InitializeSigma() {
   }
 }
 
-
-// The target number of test flows is max_choice, however
-// - we add all valid test flows flows in between splice_start_flow and splice_end_flow
-// - we limit potential test flows to a vicinity around splice_start_flow and splice_end_flow
-bool CrossHypotheses::IsValidTestFlowIndexNew(unsigned int flow,unsigned int max_choice) {
-
-  // Restriction to +40 flows around the splicing vicinity
-  /*
-  bool is_valid = (flow<(unsigned int)splice_end_flow+4*max_choice) and (flow<(unsigned int)max_last_flow) and (flow<predictions[0].size());
-  is_valid = is_valid and ((test_flow.size()<max_choice) or (flow < (unsigned int)splice_end_flow));
-  return is_valid;
-  */
-  return test_flow.size() < max_choice or flow < (unsigned int)splice_end_flow;
+bool CompareDelta(const pair<float, unsigned int>& delta_1, const pair<float, unsigned int>& delta_2){
+	return delta_1.first > delta_2.first;
 }
 
-bool CrossHypotheses::IsValidTestFlowIndexOld(unsigned int flow,unsigned int max_choice) {
-
-  // No restriction to flows around the splicing vicinity and strict enforcement of max_choice
-  bool is_valid = (flow<(unsigned int)max_last_flow) and (flow<predictions_all_flows[0].size()) and (test_flow.size()<max_choice);
-  return is_valid;
+bool CompareDeltaNum(const vector<pair<float, unsigned int> >& delta_vec_1,  const vector<pair<float, unsigned int> >& delta_vec_2){
+	return delta_vec_1.size() > delta_vec_2.size();
 }
 
+// Select the flows to test.
+// The rules are as follows:
+// 1) Assuming the measurements are somehow close to the null hyp. A flow is informative for accept/reject i_hyp if fabs(prediction[0][i_flow] - prediction[i_hyp][i_flow]) >= threshold.
+// 2) Must make sure the read has at least one flow to accept/reject every hypothesis. Otherwise, not success.
+// 3) I force to pick up the most informative flow for each pair (i_hyp vs. null). This may cause the number of test flows > max_choice, but this is what we want.
+// 4) Fill the test flows until the number of test flows reaches max_choice.
+void CrossHypotheses::ComputeAllComparisonsTestFlow(float threshold, int max_choice){
+	unsigned int window_start = (unsigned int) max(0, splice_start_flow - 2 * max_choice);
+	// window_end needs to be consistent with the flow_upper_bound in this->FillInPrediction.
+	// Which one works better? window_end <= window_end min_last_flow or window_end <= max_last_flow ?
+	// My test shows  window_end <= max_last_flow gets better results.
+	//@TODO: Can test_flows >= min_last_flow screw up delta correlation if I get a lot of zero padding prediction of the hyp?
+	//unsigned int window_end = (unsigned int) min(splice_end_flow + 4 * max_choice, min_last_flow);
+	unsigned int window_end = (unsigned int) min(splice_end_flow + 4 * max_choice, max_last_flow);
+	// I pick up the flow in the window [start_flow, end_flow)
+	unsigned int num_flows_in_window = window_end - window_start;
+	unsigned int num_hyp = predictions_all_flows.size();
+	// is_flow_selected[win_idx] tells flow (win_idx + window_start) is selected or not.
+	vector<bool> is_flow_selected(num_flows_in_window, false);
+	// pairwise_delta[pair_idx] records the candidate test flows for the hypotheses pair (null, i_hyp).
+	vector<vector<pair<float, unsigned int> > > pairwise_delta;
 
-bool CrossHypotheses::ComputeAllComparisonsTestFlow(float threshold, int max_choice)
-{
-  // test flows from all predictions
+	// Always make sure test_flow is empty.
+	test_flow.resize(0);
 
-  bool tmp_success=true;
-  test_flow.reserve(2*max_choice);
-  test_flow.clear();
-  float best = -1.0f;
-  int bestlocus = 0;
-  // Make sure our test flows are within a window of the splicing interval
-  unsigned int start_flow = max(0, splice_start_flow-3*max_choice);
-  unsigned int end_flow = min(splice_end_flow+4*max_choice, max_last_flow);
+	// Invalid read.
+	if ((not success) or num_flows_in_window == 0){
+		test_flow.push_back(splice_start_flow);
+		success = false;
+		return;
+	}
 
-  // over all flows
-  for (unsigned int j_flow=start_flow; j_flow < end_flow and IsValidTestFlowIndexNew(j_flow, max_choice); j_flow++) {
-    // all comparisons(!)
-    float m_delta = 0.0f;
-    for (unsigned int i_hyp=0; i_hyp<predictions_all_flows.size(); i_hyp++){
-      for (unsigned int j_hyp=i_hyp+1; j_hyp<predictions_all_flows.size(); j_hyp++){
-        float t_delta = fabs(predictions_all_flows[i_hyp][j_flow]-predictions_all_flows[j_hyp][j_flow]);
-        if (t_delta>m_delta)
-          m_delta=t_delta;
-      }
-    }
-    // maximum of any comparison
-    if (m_delta>best) {
-      best = m_delta;
-      bestlocus = j_flow;
-    }
-    // I'm a test flow if I differ between anyone by more than threshold
-    // need to make sure outliers are fully compelled
-    if (m_delta>threshold) {
-      test_flow.push_back(j_flow);
-    }
-  }
-  // always some test flow
-  if (test_flow.size() < 1) {
-    test_flow.push_back(bestlocus); // always at least one difference if nothing made threshold
-    tmp_success = false; // but don't want it?
-  }
+	// Reserve some memory for the vectors.
+	test_flow.reserve(max((int) num_hyp - 1, max_choice));
+	pairwise_delta.reserve(num_hyp - 1);
 
-  return(tmp_success);
+	// Get the informative flows
+	for (unsigned int i_hyp = 1; i_hyp < num_hyp; ++i_hyp){
+		// Skip the i_hyp if it is the same as null hyp.
+		if (same_as_null_hypothesis[i_hyp]){
+			continue;
+		}
+		pairwise_delta.push_back(vector<pair<float, unsigned int> >(0));
+		vector<pair<float, unsigned int> >& my_delta_vec = pairwise_delta.back();
+		my_delta_vec.reserve(32);  // num_flows_in_window is too large. I usually don't get so many informative flows, particularly for HP-INDEL.
+		unsigned int flow_idx = window_start;
+		//@TODO: Since my_delta is calculated for each hyp vs. null hyp, I can speed up the multi-allele case by using a hyp-specific window.
+		for (unsigned int win_idx = 0; win_idx < num_flows_in_window; ++win_idx, ++flow_idx){
+			// Note that the measurements and predictions are all resize to the length of flow order, so accessing flow_idx should be safe.
+			float my_delta = fabs(predictions_all_flows[0][flow_idx] - predictions_all_flows[i_hyp][flow_idx]);
+			// Is it an informative flow to accept/reject i_hyp vs. null?
+			if (my_delta >= threshold){
+				my_delta_vec.push_back(pair<float, unsigned int>(my_delta, win_idx));
+			}
+		}
+
+		// Not success if I didn't get any informative flow for i_hyp vs. null.
+
+		if (my_delta_vec.empty()){
+			if (test_flow.empty()){
+				test_flow.push_back(splice_start_flow);
+			}
+			success = false;
+			return;
+		}
+
+		// Sort the informative flows for i_hyp vs null (First one is the best).
+		sort(my_delta_vec.begin(), my_delta_vec.end(), CompareDelta);
+
+		// Always pick up the most informative flow for (i_hyp vs null).
+		unsigned int best_flow_for_i_hyp = my_delta_vec[0].second;
+		if (not is_flow_selected[best_flow_for_i_hyp]){
+			is_flow_selected[best_flow_for_i_hyp] = true;
+			test_flow.push_back(best_flow_for_i_hyp + window_start);
+		}
+	}
+
+	// Not success if so far I can't get any test flow. Shouldn't happen, just for safety.
+	if (test_flow.empty()){
+		test_flow.push_back(splice_start_flow);
+		success = false;
+		return;
+	}
+
+	// Sort pairwise_delta by the number of informative flows of the pairs (first pair has the most flows).
+	sort(pairwise_delta.begin(), pairwise_delta.end(), CompareDeltaNum);
+
+	// At the round = j, add the j-th best informative flow for each hyp pair. Stop as soon as the number of test_flows >= max_choice.
+	// Note that round = 0 has been carried out.
+	for (unsigned int round = 1; round < pairwise_delta[0].size() and (int) test_flow.size() <= max_choice; ++round){
+		// Continue to the next round if round < pairwise_delta[pair_idx].size() because pairwise_delta is sorted by the size of each entry in the descending order.
+		for (unsigned int pair_idx = 0; pair_idx < pairwise_delta.size() and round < pairwise_delta[pair_idx].size() and (int) test_flow.size() <= max_choice; ++pair_idx){
+			// Pick up this flow.
+			unsigned int add_this_flow = pairwise_delta[pair_idx][round].second;
+			if (not is_flow_selected[add_this_flow]){
+				is_flow_selected[add_this_flow] = true;
+				test_flow.push_back(add_this_flow + window_start);
+			}
+		}
+	}
+
+	// Finally sort test_flow.
+	sort(test_flow.begin(), test_flow.end());
 }
-
 
 float CrossHypotheses::ComputeLLDifference(int a_hyp, int b_hyp) {
   // difference in likelihoods between hypotheses
@@ -920,9 +962,7 @@ void CrossHypotheses::FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_
 	int common_prefix_len = -1; // length of common starting bases of all hypotheses. What I mean prefix here is NOT my_read.prefix_bases. It is the common starting bases used in splicing.
 	int min_instance_of_read_by_state_len = (int) instance_of_read_by_state[0].size();
 	for (unsigned int i_hyp = 1; i_hyp < instance_of_read_by_state.size(); ++i_hyp){
-		if ((int) instance_of_read_by_state[i_hyp].size() < min_instance_of_read_by_state_len){
-			min_instance_of_read_by_state_len = (int) instance_of_read_by_state[i_hyp].size();
-		}
+		min_instance_of_read_by_state_len = min(min_instance_of_read_by_state_len, (int) instance_of_read_by_state[i_hyp].size());
 	}
 
 	// Find the length of common starting bases for all hypotheses
@@ -968,6 +1008,14 @@ void CrossHypotheses::FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_
 				local_flow_disruptiveness_matrix[j_hyp][0] = 0;
 				continue;
 			}
+
+			// Skip the non-null hyp whcih is the same as the null hyp, since it has been carried out.
+			if (i_hyp > 0 and same_as_null_hypothesis[i_hyp]){
+				local_flow_disruptiveness_matrix[i_hyp][j_hyp] = local_flow_disruptiveness_matrix[0][j_hyp];
+				local_flow_disruptiveness_matrix[j_hyp][i_hyp] = local_flow_disruptiveness_matrix[0][j_hyp];
+				continue;
+			}
+
 			// determine the common_prefix_len for i_hyp, j_hyp
 			int common_prefix_len_i_j_pair = common_prefix_len;
 			while (instance_of_read_by_state[i_hyp][common_prefix_len_i_j_pair] == instance_of_read_by_state[j_hyp][common_prefix_len_i_j_pair]){

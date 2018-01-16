@@ -18,7 +18,7 @@
 #include "Serialization.h"
 #include "GpuMultiFlowFitControl.h"
 #include "ChipIdDecoder.h"
-
+#include <iostream>
 #include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -155,7 +155,7 @@ void ImageToWells::DoThreadedSignalProcessing()
   {
     ExecuteFlowByFlowSignalProcessing(); //flow by flow execution after first 20
   }else{
-    ExecuteFlowBlockSignalProcessing(); //current pipeline with blokc of 20 flow executoon for whole experiment
+    ExecuteFlowBlockSignalProcessing(); //current pipeline with block of 20 flow execution for whole experiment
   }
 }
 
@@ -341,6 +341,7 @@ void ImageToWells::SetupDirectoriesAndFiles()
 {
   // set up the directory for a new temporary wells file
   // clear out previous ones (can be bad with re-entrant processing!)
+	//printf("inside SetupDirectoriesAndFiles \n");
   ClearStaleWellsFile();
   inception_state.sys_context.MakeNewTmpWellsFile ( inception_state.sys_context.GetResultsFolder() );
 }
@@ -354,6 +355,7 @@ void ImageToWells::InitGlobalFitter( Json::Value &json_params)
 
   // Make a BkgFitterTracker object, and then either load its state from above,
   // or build it fresh.
+
   if( !isRestart()){
     // Get the object that came from serialization.
     // GlobalFitter.LoadRegParamsFromJson(inception_state.bkg_control.restartRegParamsFile);
@@ -361,7 +363,9 @@ void ImageToWells::InitGlobalFitter( Json::Value &json_params)
     //else {
     GlobalFitter.global_defaults.flow_global.SetFlowOrder ( inception_state.flow_context.flowOrder ); // @TODO: 2nd duplicated code instance
 
-    GlobalFitter.global_defaults.SetOpts(opts, json_params);
+    // create block ID for block specific gopt params if available, otherwise take in default params
+    std::string blockId = "X" + std::to_string(inception_state.loc_context.chip_offset_x) + "_Y" + std::to_string(inception_state.loc_context.chip_offset_y);
+    GlobalFitter.global_defaults.SetOpts(opts, json_params, blockId);
 
     // >creates but does not open wells file<
     fprintf(stdout, "Opening wells file %s ... ", getWellsFile().c_str());
@@ -378,6 +382,7 @@ void ImageToWells::InitGlobalFitter( Json::Value &json_params)
     GlobalFitter.SetUpTraceTracking ( my_prequel_setup, inception_state, my_image_spec,
         FromBeadfindMask,
         getFlowBlockSeq().MaxFlowsInAnyFlowBlock() );
+    // printf("before AllocateRegionData, num of regions %d \n", my_prequel_setup.region_list.size());
     GlobalFitter.AllocateRegionData(my_prequel_setup.region_list.size(), & inception_state );
   }
 }
@@ -438,13 +443,13 @@ void ImageToWells::CreateAndInitRawWells()
 
   // do we have a wells file?
   ION_ASSERT( isFile(getWellsFile().c_str()), "Wells file "+ getWellsFile() + " does not exist" );
+  printf("Creating a wells file \n");
   ptrRawWells = new ChunkyWells( inception_state.sys_context.wellsFilePath,
       inception_state.sys_context.wellsFileName,
       inception_state.bkg_control.signal_chunks.save_wells_flow,
       inception_state.flow_context.startingFlow,
       inception_state.flow_context.endingFlow
   );
-
 
   bool saveCopies = inception_state.sys_context.wells_save_number_copies;
   if(isRestart()) {
@@ -481,7 +486,6 @@ void ImageToWells::CreateAndInitImageTracker()
 void ImageToWells::InitFlowDataWriter()
 {
   // JZ start flow data writer thread
-
   unsigned int saveQueueSize;
 
   if (GlobalFitter.GpuQueueControl.useFlowByFlowExecution())
@@ -490,7 +494,7 @@ void ImageToWells::InitFlowDataWriter()
     saveQueueSize = (unsigned int) inception_state.sys_context.wells_save_queue_size;
 
   if(saveQueueSize > 0) {
-
+	  //printf("before WriteFlowDataClass \n");
     ptrWriteFlowData = new WriteFlowDataClass(saveQueueSize,inception_state, my_image_spec,*ptrRawWells);
     ptrWriteFlowData->start();
     //todo: error handling
@@ -564,6 +568,7 @@ void ImageToWells::DoClonalFilter(int flow)
 //this one does the basic block of n flow execution for all flows of the experiment
 void ImageToWells::ExecuteFlowBlockSignalProcessing(){
 
+	//printf("inside ExecuteFlowBlockSignalProcessing \n");
   Timer flow_block_timer;
   Timer signal_proc_timer;
   master_fit_type_table *LevMarSparseMatrices = NULL;
@@ -607,8 +612,8 @@ void ImageToWells::ExecuteFlowBlockSignalProcessing(){
 
     DoClonalFilter(flow);
 
-
     if (inception_state.bkg_control.pest_control.bkg_debug_files) {
+    	printf("+++ dumping debug files flow - %d  \n ", flow);
       GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),
           flow, last_flow, flow_block );
       GlobalFitter.DumpBkgModelBeadInfo( inception_state.sys_context.GetResultsFolder(),
@@ -630,11 +635,14 @@ void ImageToWells::ExecuteFlowBlockSignalProcessing(){
     if ( (flow == flow_block->end() - 1 ) || last_flow) {
       // Make sure that we've written everything.
       if(useFlowDataWriter()) {
+      	printf(" ExecuteFlowBlockSignalProcessing - before DoneUpThroughFlow flow - %d useFlowDataWriter \n", flow);
         ptrRawWells->DoneUpThroughFlow( flow, ptrWriteFlowData->GetPackQueue(), ptrWriteFlowData->GetWriteQueue());
       }
       else {
+      	printf("ExecuteFlowBlockSignalProcessing - before DoneUpThroughFlow flow - %d \n", flow);
         ptrRawWells->DoneUpThroughFlow( flow );
       }
+
 
       // Cleanup.
       delete LevMarSparseMatrices;
@@ -649,7 +657,6 @@ void ImageToWells::ExecuteFlowBlockSignalProcessing(){
     // and release resources associated with this image
     // my_img_set knows what buffer is associated with the absolute flow
     ptrMyImgSet->FinishFlow ( flow );
-
   } // end flow loop
 
 }
@@ -666,7 +673,6 @@ void ImageToWells::ExecuteFlowByFlowSignalProcessing()
   Timer signal_proc_timer;
 
   master_fit_type_table *LevMarSparseMatrices = NULL;
-
   for ( int flow = inception_state.flow_context.startingFlow;
       flow < (int)inception_state.flow_context.endingFlow; flow++ )
   {
@@ -697,7 +703,7 @@ void ImageToWells::ExecuteFlowByFlowSignalProcessing()
     // isolate this object so it can carry out actions in any order it chooses.
     if(GlobalFitter.GpuQueueControl.isCurrentFlowExecutedAsFlowByFlow(flow))
     {// flow by flow execution after first block of 20
-
+    	printf("+++ isCurrentFlowExecutedAsFlowByFlow flow - %d \n ",flow );
       GlobalFitter.checkAndInitGPUPipelineSwitch(inception_state,
           my_image_spec,
           &(ptrWriteFlowData->GetPackQueue()),

@@ -73,6 +73,13 @@ install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.ta
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/ansible" DESTINATION share/ion-tsconfig
     USE_SOURCE_PERMISSIONS )
 
+configure_file (
+    "${PROJECT_SOURCE_DIR}/torrent_suite_version.in"
+    "${PROJECT_BINARY_DIR}/torrent_suite_version" @ONLY
+)
+
+install(FILES "${PROJECT_BINARY_DIR}/torrent_suite_version" DESTINATION /etc )
+
 #################################
 # Install python library files
 #################################

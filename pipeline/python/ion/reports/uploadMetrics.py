@@ -257,7 +257,7 @@ def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPe
                 kwargs['i%sQ%s_reads' % (bp, q)] = sum(ionstats_alignment['AQ'+q]['read_length_histogram'][bp:])
 
         try:
-            raw_accuracy = round((1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 1)
+            raw_accuracy = round((1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 2)
             kwargs['raw_accuracy'] = raw_accuracy
         except:
             kwargs['raw_accuracy'] = 0.0

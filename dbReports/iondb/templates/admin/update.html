@@ -10,6 +10,7 @@
   <style type="text/css">
     #warning_msg {
       color: #b22222;
+      text-align: left;
     }
     #interface {
       min-height: 150px;
@@ -96,7 +97,7 @@
               <p><strong>Update is disabled until more disk space is available on root partition</strong></p>
             {% endif %}
         </div>
-        <div id="update_confirmation" class="modal fade" data-backdrop="static" data-keyboard="false" role="dialog">
+        <div id="update_confirmation" class="modal modal-800 fade" data-backdrop="static" data-keyboard="false" role="dialog">
           <div class="modal-dialog">
             <div class="modal-content">
                {% if not eula_error %}
@@ -110,8 +111,7 @@
                      </div>
                   </div>
                   <div class="modal-footer bg-info">
-                    <p align="left">The system will be unavailable during the update.<br />
-                    <span id="warning_msg"><strong>Note</strong>: Make sure all the runs are completed and analyzed before starting the upgrade process.</span></p>
+                    <span id="warning_msg" class="pull-left">System will be unavailable during the update.<br>Make sure ongoing analyses are completed before starting the update process.</span>
                     <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
                     <button id="start_update" type="button" class="btn btn-primary" disabled>Agree and Update now</button>
                   </div>

@@ -40,7 +40,9 @@
             <div class='pluginGroupHead'>
                 <div class='pluginGroupHeadInner'>
                     <div class="pluginGroupButtons">
-                        <a class="pluginLog btn" title="Log File for #= result.Name #" href="#= result.URL #drmaa_stdout.txt">View Log</a>
+                        # if(result.validation_errors.length === 0) { #
+                            <a class="pluginLog btn" title="Log File for #= result.Name #" href="#= result.URL #drmaa_stdout.txt">View Log</a>
+                        # } #
                         # if (result.can_terminate) { #
                             <a class="pluginCancel btn" data-id="#=result.id#" href="##">Stop</a>
                         # } else { #
@@ -64,10 +66,22 @@
                             </select>
                         # } #
                         <br>
-                        <span rel='tooltip' title="Size (bytes): #=result.Size#, Inode Count: #=result.inodes#">  #= result.State #</span>
-                        # if (!result.can_terminate) { #
-                            <span rel='tooltip' title="Size (bytes): #=result.Size#, Inode Count: #=result.inodes#">#= precisionUnits(result.Size, 1024) #B</span>
+
+                        # if(result.validation_errors.length > 0) { #
+                            <span>Plugin did not pass validation step and returned the reasons.</span>
+                            <ul>
+                                # result.validation_errors.forEach(function(validation_error, i){ #
+                                    <li>#= validation_error #</li>
+                                # }) #
+                            </ul>
+                        # } else { #
+                            <span rel='tooltip' title="Size (bytes): #=result.Size#, Inode Count: #=result.inodes#">  #= result.State #</span>
+                            # if (!result.can_terminate) { #
+                                <span rel='tooltip' title="Size (bytes): #=result.Size#, Inode Count: #=result.inodes#">#= precisionUnits(result.Size, 1024) #B</span>
+                            # } #
                         # } #
+
+
                     </div>
                 </div>
             </div>

@@ -1012,6 +1012,12 @@ ExtendParameters::ExtendParameters(int argc, char** argv)
     exit(0);
   }
 
+  // enable floating point exceptions during program execution
+  if (opts.GetFirstBoolean('-', "float-exceptions", true)) {
+    cout << "TVC: Floating point exceptions enabled." << endl;
+    feraiseexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+  } //*/
+
   Json::Value tvc_params(Json::objectValue);
   Json::Value freebayes_params(Json::objectValue);
   Json::Value params_meta(Json::objectValue);

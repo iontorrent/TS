@@ -54,14 +54,15 @@ void ConsensusHelp() {
   printf("     --min-cov-fraction                 FLOAT       do not use reads with fraction of covering the best assigned (unmerged) target region below this [0.0]\n");
   printf("\n");
 
-  printf("Consensus read output options:\n");
+  printf("Consensus read output options (command line only):\n");
   printf("     --need-3-end-adapter               on/off      do not output consensus reads w/o 3\" adapter found [off]\n");
   printf("     --filter-qt-reads                  on/off      do not output quality-trimmed consensus reads [off]\n");
   printf("     --filter-single-read-consensus     on/off      do not output single-read consensus [off]\n");
   printf("\n");
 
-  printf("Debug:\n");
+  printf("Coverage counting options (command line only):\n");
   printf("     --skip-consensus                   on/off      skip all calculations for consensus; output targets_depth.txt only [off]\n");
+  printf("     --read-count-by-best-target        on/off      count the read depth based on the best target assignment of reads [off]\n");
   printf("\n");
 
 }
@@ -141,7 +142,7 @@ ConsensusParameters::ConsensusParameters(int argc, char** argv)
   filter_qt_reads                       = opts.GetFirstBoolean('-', "filter-qt-reads", false);
   filter_single_read_consensus          = opts.GetFirstBoolean('-', "filter-single-read-consensus", false);
   skip_consensus                        = opts.GetFirstBoolean('-', "skip-consensus", false);
-
+  read_count_by_best_target             = opts.GetFirstBoolean('-', "read-count-by-best-target", false);
   SetMolecularTagTrimmerOpt(tvc_params);
 
   cout << endl;

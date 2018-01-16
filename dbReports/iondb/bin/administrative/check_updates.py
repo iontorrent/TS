@@ -8,6 +8,7 @@ This script will be for checking for updates via the TSconfig and checking for t
 import os
 import subprocess
 import sys
+from distutils.sysconfig import get_python_lib
 from iondb.utils.files import rename_extension
 from iondb.utils.usb_check import getUSBinstallerpath, change_list_files
 
@@ -27,7 +28,7 @@ try:
         if os.path.isfile('/etc/apt/sources.list.d/usb.list'):
             os.remove('/etc/apt/sources.list.d/usb.list')
 
-    print(subprocess.check_output(['/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--poll']))
+    print(subprocess.check_output([os.path.join(get_python_lib(), 'ion_tsconfig/TSconfig.py'), '--poll']))
 
 except Exception as err:
     rename_extension('etc/apt/', '.USBinstaller', '')

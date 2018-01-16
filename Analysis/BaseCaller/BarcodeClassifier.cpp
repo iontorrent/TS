@@ -29,7 +29,7 @@ void BarcodeClassifier::PrintHelp()
   printf ("     --barcode-filter-postpone     INT        switch to disable{2} / reduce barcode filters{1} in basecaller. Range: {0,1,2}\n" );
   printf ("     --barcode-filter-named        BOOL       If true, include barcodes with a specified sample name in filtering [false]\n");
   printf ("     --barcode-ignore-flows        INT,INT    Specify a (open ended) interval of flows to ignore for barcode classification.\n");
-  printf ("     --barcode-compute-dmin        BOOL       If true, computes minimum Hamming distance of barcode set [false]\n");
+  printf ("     --barcode-compute-dmin        BOOL       If true, computes minimum Hamming distance of barcode set [true]\n");
   printf ("     --barcode-auto-config         BOOL       If true, automatically selects barcode cutoff and separation parameters. [false]\n");
   printf ("     --barcode-check-limits        BOOL       If true, performs a basic sanity check on input options. [true]\n");
   printf ("     --barcode-adapter-check       FLOAT      Maximum allowed squared residual per adapter flow (off=0) [0.15]\n");
@@ -91,7 +91,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   barcode_filter_named_           = opts.GetFirstBoolean('-', "barcode-filter-named", false);
   check_limits_                   = opts.GetFirstBoolean('-', "barcode-check-limits", true);
   score_auto_config_              = opts.GetFirstBoolean('-', "barcode-auto-config", false);
-  bool compute_dmin               = opts.GetFirstBoolean('-', "barcode-compute-dmin", false);
+  bool compute_dmin               = opts.GetFirstBoolean('-', "barcode-compute-dmin", true);
   adapter_cutoff_                 = opts.GetFirstDouble ('-', "barcode-adapter-check", 0.15);
 
   trim_barcodes_                  = opts.GetFirstBoolean('-', "trim-barcodes", true);
@@ -352,6 +352,11 @@ void BarcodeClassifier::ComputeHammingDistance()
         hamming_dmin_ = my_distance;
 
     }
+  }
+  // Zero distance means there is a duplicate entry in the barcode set that needs to be removed!
+  if (hamming_dmin_ == 0){
+    cout << "ERROR: Barcode set contains duplicate barcode entries. Please fix the barcode set before proceeding." << endl;
+    exit(EXIT_FAILURE);
   }
   cout << "   Computed minimum Hamming distance of barcode set as d_min = " << hamming_dmin_ << endl;
 
@@ -732,24 +737,18 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
     datasets.barcode_filters()["hamming_distance"] = hamming_dmin_;
 
   // Generate Filter Thresholds for barcode filtering (minreads filter only active if filtering done in basecaller)
-  int read_threshold = 0;
+  unsigned int read_threshold = 0;
   if(barcode_filter_postpone_ == 0)
 	read_threshold = barcode_filter_minreads_;
 
   // Adjust filter threshold based on barcode frequencies if desired
   if (barcode_filter_postpone_ < 2 and barcode_filter_ > 0.0) {
-    //vector<int> read_counts;
-    //for (Json::Value::iterator rg = datasets.read_groups().begin(); rg != datasets.read_groups().end(); ++rg){
-    //  if ((*rg).isMember("read_count") and (*rg).isMember("barcode_sequence"))
-    //    read_counts.push_back((*rg)["read_count"].asInt());
-    //}
-    //sort (read_counts.begin(), read_counts.end(), std::greater<int>());
-	int max_read_count = 0;
+	unsigned int max_read_count = 0;
 	for (Json::Value::iterator rg = datasets.read_groups().begin(); rg != datasets.read_groups().end(); ++rg){
       if ((*rg).isMember("read_count") and (*rg).isMember("barcode_sequence"))
-        max_read_count = max(max_read_count, (*rg)["read_count"].asInt());
+        max_read_count = max(max_read_count, (*rg)["read_count"].asUInt());
 	}
-	read_threshold = max(read_threshold, (int)((double)max_read_count*barcode_filter_*barcode_filter_weight_));
+	read_threshold = max(read_threshold, (unsigned int)((double)max_read_count*barcode_filter_*barcode_filter_weight_));
   }
 
   // Below is the actual filtering of barcodes and file writing
@@ -763,7 +762,7 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
   for (Json::Value::iterator rg = datasets.read_groups().begin(); rg != datasets.read_groups().end(); ++rg) {
     if ((*rg).isMember("read_count") and (*rg).isMember("barcode_sequence")) {
 
-      int read_count = (*rg)["read_count"].asInt();
+      unsigned int read_count = (*rg)["read_count"].asUInt();
       bool i_am_filtered = false;
       bool filter_this_bc = barcode_filter_named_ or (*rg)["sample"].asString() == "none";
 
@@ -778,6 +777,16 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
         double one_error  = (*rg)["barcode_errors_hist"][1].asDouble();
         double two_errors = (*rg)["barcode_errors_hist"][2].asDouble();
         i_am_filtered = ((one_error + 2.0*two_errors) / (double)read_count) > barcode_error_filter_;
+      }
+
+      // Filter read groups where a too large proportion of reads failed adapter verification
+      // Likely to be a highly contaminated sample and should not be analyzed
+      if (not i_am_filtered)
+      {
+        unsigned int adapter_filtered = (*rg)["barcode_adapter_filtered"].asUInt();
+        i_am_filtered = (5*adapter_filtered > read_count) ? true : false;
+        if (i_am_filtered)
+          cerr << "WARNING: Read group " << (*rg)["barcode_name"].asString() << " is likely to be contaminated and is being filtered." << endl;
       }
 
       // Set status in datasets

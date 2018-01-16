@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+# To change the server location, edit /usr/share/ion-tsconfig/ansible/group_vars/all_local
+# and change the value of keyword 'ion_apt_server'
+deb http://{{ion_apt_server}}/updates/software/offcycle/{{ TSS_VERSION }}/ {{ansible_distribution_release}}/

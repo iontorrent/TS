@@ -183,7 +183,11 @@ public:
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
-  void TrimQuality                  (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+  void TrimQuality                  (int read_index, int read_class, ReadFilteringHistory& filter_history,
+		  const vector<uint8_t>& quality, bool use_flow, const vector<int>& flow_to_base, const vector<int>& base_to_flow);
+
+  void TransferQuality                  (int read_index, int read_class, ReadFilteringHistory& filter_history,
+		  const vector<uint8_t>& quality_flow, vector<uint8_t>& quality,  const vector<int>& flow_to_base, const vector< vector<float> > errD_table);
 
   //! @brief    Sliding window quality trimming algorithm.
   //! @param    read_index          Read index
@@ -196,6 +200,7 @@ public:
   //! @param    sff_entry           Basecalling results for this read
   //! @param    return value        Read trimming point
   int TrimQuality_ExpectedErrors    (int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+  int TrimMaxInfo    (int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality, int max_flow);
 
   //! @brief    Apply adapter trimmer to a valid read.
   //! @param    read_index          Read index
@@ -274,6 +279,8 @@ protected:
   double              trim_qual_slope_;                   //!< Expected number of errors allowed per base for expected error qv trimmer
   double              trim_qual_offset_;                  //!< Offset for expected errors to allow for variation in expected qv trimmer
   double              trim_qual_quadr_;                   //!< Extra  expected errors to allow for variation in expected qv trimmer
+  double			  trim_strictness_;
+  double 			  trim_target_length_;
 
   bool                trim_barcodes_;                     //!< Switch indicating whether barcode trimming is turned on.
   int                 extra_trim_left_;                   //!< Delete a fixed number of bases on the 5' end of the read

@@ -198,12 +198,12 @@
       <td class="inright">{{Uniformity_of_amplicon_coverage}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_1_read}}">Amplicons with at least 1 read</span></td>
       <td class="inright">{{Amplicons_with_at_least_1_read}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_20_reads}}">Amplicons with at least 20 reads</span></td>
-      <td class="inright">{{Amplicons_with_at_least_20_reads}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_100_reads}}">Amplicons with at least 100 reads</span></td>
-      <td class="inright">{{Amplicons_with_at_least_100_reads}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_500_reads}}">Amplicons with at least 500 reads</span></td>
-      <td class="inright">{{Amplicons_with_at_least_500_reads}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of all amplicons that had at least {{covdepth1}} reads.">Amplicons with at least {{covdepth1}} reads</span></td>
+      <td class="inright">{{targs_covTier1}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of all amplicons that had at least {{covdepth2}} reads.">Amplicons with at least {{covdepth2}} reads</span></td>
+      <td class="inright">{{targs_covTier2}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of all amplicons that had at least {{covdepth3}} reads.">Amplicons with at least {{covdepth3}} reads</span></td>
+      <td class="inright">{{targs_covTier3}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_no_strand_bias}}">Amplicons with no strand bias</span></td>
       <td class="inright">{{Amplicons_with_no_strand_bias}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Amplicons_reading_end_to_end}}">Amplicons reading end-to-end</span></td>
@@ -222,14 +222,14 @@
       <td class="inright">{{Average_base_coverage_depth_per_target|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage_per_target}}">Uniformity of base coverage per target</span></td>
       <td class="inright">{{Uniformity_of_base_coverage_per_target}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_1x}}">Targets with base coverage at 1x</span></td>
+  <tr><td class="inleft"><span title="">Targets with base coverage at 1x</span></td>
       <td class="inright">{{Targets_with_base_coverage_at_1x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_20x}}">Targets with base coverage at 20x</span></td>
-      <td class="inright">{{Targets_with_base_coverage_at_20x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_100x}}">Targets with base coverage at 100x</span></td>
-      <td class="inright">{{Targets_with_base_coverage_at_100x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_500x}}">Targets with base coverage at 500x</span></td>
-      <td class="inright">{{Targets_with_base_coverage_at_500x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of targets that had an average base coverage depth of at least {{covdepth1}} bases.">Targets with base coverage at {{covdepth1}}x</span></td>
+      <td class="inright">{{targs_covTier1}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of targets that had an average base coverage depth of at least {{covdepth2}} bases.">Targets with base coverage at {{covdepth2}}x</span></td>
+      <td class="inright">{{targs_covTier2}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of targets that had an average base coverage depth of at least {{covdepth3}} bases.">Targets with base coverage at {{covdepth3}}x</span></td>
+      <td class="inright">{{targs_covTier3}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Targets_with_no_strand_bias}}">Targets with no strand bias</span></td>
       <td class="inright">{{Targets_with_no_strand_bias}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Targets_with_full_coverage}}">Targets with full coverage</span></td>
@@ -248,12 +248,12 @@
       <td class="inright">{{Uniformity_of_base_coverage}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_1x}}">Genome base coverage at 1x</span></td>
       <td class="inright">{{Genome_base_coverage_at_1x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_20x}}">Genome base coverage at 20x</span></td>
-      <td class="inright">{{Genome_base_coverage_at_20x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_100x}}">Genome base coverage at 100x</span></td>
-      <td class="inright">{{Genome_base_coverage_at_100x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_500x}}">Genome base coverage at 500x</span></td>
-      <td class="inright">{{Genome_base_coverage_at_500x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of reference genome bases covered by at least {{covdepth1}} reads.">Genome base coverage at {{covdepth1}}x</span></td>
+      <td class="inright">{{bases_covTier1}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of reference genome bases covered by at least {{covdepth2}} reads.">Genome base coverage at {{covdepth2}}x</span></td>
+      <td class="inright">{{bases_covTier2}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of reference genome bases covered by at least {{covdepth3}} reads.">Genome base coverage at {{covdepth3}}x</span></td>
+      <td class="inright">{{bases_covTier3}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Genome_bases_with_no_strand_bias}}">Genome bases with no strand bias</span></td>
       <td class="inright">{{Genome_bases_with_no_strand_bias}}</td></tr>
  </table></div></td>
@@ -269,12 +269,12 @@
       <td class="inright">{{Uniformity_of_base_coverage}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_1x}}">Target base coverage at 1x</span></td>
       <td class="inright">{{Target_base_coverage_at_1x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_20x}}">Target base coverage at 20x</span></td>
-      <td class="inright">{{Target_base_coverage_at_20x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_100x}}">Target base coverage at 100x</span></td>
-      <td class="inright">{{Target_base_coverage_at_100x}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_500x}}">Target base coverage at 500x</span></td>
-      <td class="inright">{{Target_base_coverage_at_500x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least {{covdepth1}} reads.">Target base coverage at {{covdepth1}}x</span></td>
+      <td class="inright">{{bases_covTier1}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least {{covdepth2}} reads.">Target base coverage at {{covdepth2}}x</span></td>
+      <td class="inright">{{bases_covTier2}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least {{covdepth3}} reads.">Target base coverage at {{covdepth3}}x</span></td>
+      <td class="inright">{{bases_covTier3}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Target_bases_with_no_strand_bias}}">Target bases with no strand bias</span></td>
       <td class="inright">{{Target_bases_with_no_strand_bias}}</td></tr>
   {% if Percent_end_to_end_reads %}

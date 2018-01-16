@@ -9,6 +9,17 @@
     copytruncate
     create 664 ionian www-data
 }
+/var/log/ion/product_integration.log {
+    size 10M
+    daily
+    missingok
+    rotate 20
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
 /var/log/ion/celery_w1.log {
     size 5M
     missingok

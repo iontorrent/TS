@@ -54,6 +54,20 @@ static void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vec
   deque<float> ppf;
   deque<float> ssq;
   deque<float> nrm;
+
+  // skip filter if no live wells to train and apply on
+  bool liveWells = false; 
+  for (unsigned int r=0; r<sliced_chip.size(); ++r)
+  {
+    if (sliced_chip[r]->GetNumLiveBeads() != 0) {
+      liveWells = true;
+      break;
+    }
+  }
+
+  if (!liveWells)
+    return;
+  
   GetFilterTrainingSample (row, col, ppf, ssq, nrm, sliced_chip);
   DumpPPFSSQ(results_folder, row, col, ppf, ssq, nrm);
   DumpPPFSSQtoH5(results_folder, sliced_chip);
@@ -232,8 +246,10 @@ void DumpPPFSSQtoH5 (const char* results_folder, std::vector<RegionalizedData *>
     }
   }
 
-  string fname = string (results_folder) + "/BkgModelFilterData.h5";
-  SaveH5(fname.c_str(), row, col, ppf, ssq, nrm);
+  if (row.size() > 0) {
+    string fname = string (results_folder) + "/BkgModelFilterData.h5";
+    SaveH5(fname.c_str(), row, col, ppf, ssq, nrm);
+  }
 }
 
 static void SaveH5(

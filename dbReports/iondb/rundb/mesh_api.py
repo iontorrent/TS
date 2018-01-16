@@ -173,7 +173,8 @@ class MeshPrefetchResource(ModelResource):
                 "projects": [],
                 "samples": [],
                 "references": [],
-                "rigs": []
+                "rigs": [],
+                "plugins": [],
             }
         }
 
@@ -259,6 +260,22 @@ class MeshPrefetchResource(ModelResource):
                 else:
                     for object in values["objects"]:
                         container_object["values"]["rigs"].append(object["name"])
+
+        # Fetch all mesh plugins
+        if len(compatible_nodes) > 0:
+            references = self._fetch_resource(
+                compatible_nodes,
+                "plugin",
+            )
+            for host, values in references.iteritems():
+                if len(values["warnings"]) > 0:
+                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
+                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["compatible"] = False
+                else:
+                    for object in values["objects"]:
+                        container_object["values"]["plugins"].append(object["name"])
+            container_object["values"]["plugins"].sort(reverse=True)
 
         # Remove duplicates
         for key in container_object["values"]:

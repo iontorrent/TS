@@ -21,6 +21,7 @@ from iondb.utils.utils import is_TsVm
 
 urlpatterns = patterns(
     r'',
+    (r'^product_integration/', include('iondb.product_integration.urls')),
     (r'^configure/', include('iondb.rundb.configure.urls')),
     (r'^data/', include('iondb.rundb.data.urls')),
     (r'^monitor/', include('iondb.rundb.monitor.urls')),
@@ -29,6 +30,8 @@ urlpatterns = patterns(
     (r'^report/', include('iondb.rundb.report.urls')),
     (r'^rundb/', include('iondb.rundb.urls')),
     (r'^security/', include('iondb.security.urls')),
+    # Dashboard
+    (r'^dashboard/', include('iondb.rundb.dashboard.urls')),
     # From extra/
     url(r'^news/$', 'iondb.rundb.extra.views.news', name="news"),
     # Admin

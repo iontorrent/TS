@@ -767,8 +767,7 @@ def update_files_in_use():
     """
     old_in_use = DMFileStat.objects.exclude(files_in_use='')
 
-    conn = client.connect(settings.JOBSERVER_HOST, settings.JOBSERVER_PORT)
-    running = conn.running()
+    running = client.get_running_jobs(settings.JOBSERVER_HOST, settings.JOBSERVER_PORT)
     active = []
     for item in running:
         try:

@@ -33,6 +33,7 @@ ionmaster_ionpkg_list:
     - ion-docs
     - ion-publishers
     - ion-plugins
+    - ion-rsmts
 
 ionmaster_pluginpkg_list:
     - ion-plugin-ionreporteruploader

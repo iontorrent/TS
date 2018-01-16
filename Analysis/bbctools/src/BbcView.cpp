@@ -346,7 +346,13 @@ string BbcView::ReadRange( const string &range, bool isolateRegions,
 
 	// select and check binning options
 	bool viewToRegions = m_regionCoverage && !m_useRegionAnnotation;
-	bool fixedWidth = (binSize >= numBins);	// either or both are 0
+	bool fixedWidth = (binSize >= numBins);	// either numBins or both are 0
+    if( !fixedWidth && numBins > m_windowSize ) {
+		cerr << "WARNING: --numbins (" << numBins << ") decreased to the number of bases in the specified ";
+		cerr << "contiguous region of the reference (" << m_windowSize << ")." << endl;
+		numBins = m_windowSize;
+    }
+	uint32_t pullMode = (numBins || binSize) ? 0 : 1; // binned contiguous (regadless of region)
 	uint32_t *contigBins = NULL;
 	if( isolateRegions ) {
 		// if binSize > 0 then divide regions evenly by this value (except overflow in last bin)
@@ -374,10 +380,6 @@ string BbcView::ReadRange( const string &range, bool isolateRegions,
 		}
 		numBins = m_windowSize / binSize;
 		if( m_windowSize % binSize ) ++numBins;	// last bin typically smaller
-	} else if( numBins > m_windowSize ) {
-		cerr << "WARNING: --numbins (" << numBins << ") decreased to the number of bases in the specified ";
-		cerr << "contiguous region of the reference (" << m_windowSize << ")." << endl;
-		numBins = m_windowSize;
 	}
 	// set/check bin output range
 	if( srtBin ) {
@@ -440,8 +442,9 @@ string BbcView::ReadRange( const string &range, bool isolateRegions,
 			bool newContigRegion = true, firstPull = true;
 			bool outputBin = bin >= firstBin && bin <= lastBin;
 			while( pullSize > 0 ) {
-				// endContig here is contig for the targeted sub-region just pulled
-				uint32_t reglen = m_regionCoverage->PullSubRegion( pullSize, endContig, srtPos, endPos, newContigRegion );
+				// endContig here is contig for the targeted sub-region just pulled and contig start window is set
+				endContig = rangeSrtContig, srtPos = rangeSrtPos;
+				uint32_t reglen = m_regionCoverage->PullSubRegion( pullSize, endContig, srtPos, endPos, newContigRegion, pullMode );
 				if( !reglen ) {
 					delete [] contigBins;
 					return "ERROR: Unexpected failure to collect data from targeted sub-region\n";
@@ -509,7 +512,7 @@ string BbcView::ReadRange( const string &range, bool isolateRegions,
 			if( bin >= firstBin && bin <= lastBin ) {
 				// assume if a region is used here then it is for annotation
 				if( m_regionCoverage ) {
-					annotation = m_regionCoverage->FieldsOnRegion( srtContig, srtPos, endPos );
+					annotation = m_regionCoverage->AnnotationOnRegion( srtContig, srtPos, endPos, endContig );
 				}
 				if( !ReadSum( srtContig, srtPos, endPos+1, endContig ) ) {
 					delete [] contigBins;
@@ -1187,7 +1190,7 @@ bool BbcView::ReadSum(
 }
 
 bool BbcView::ReadSumFragment( uint32_t srtContig, uint32_t srtPosition, uint32_t endPosition,
-		uint64_t &fcovSum, uint64_t &rcovSum, uint64_t &fcovSumTrg, uint64_t &rcovSumTrg )
+	uint64_t &fcovSum, uint64_t &rcovSum, uint64_t &fcovSumTrg, uint64_t &rcovSumTrg )
 {
 	// returns summed base coverage over (short) region on single contig
 	fcovSum = rcovSum = fcovSumTrg = rcovSumTrg = 0;
@@ -1221,7 +1224,8 @@ bool BbcView::ReadSumNoCbc(
 	if( endContig < srtContig ) endContig = srtContig;
 	if( endPosition == 0 ) endPosition = m_references[endContig].RefLength+1;
 
-	if( !SeekStart( srtContig, srtPosition ) ) return false;
+	// disable soft-rewind to prevent rewind for (large) empty regions
+	if( !SeekStart( srtContig, srtPosition, false ) ) return false;
 
 	uint32_t endPos = srtContig < endContig ? m_references[srtContig].RefLength+1 : endPosition;
 	while( srtContig <= endContig ) {
@@ -1339,7 +1343,7 @@ bool BbcView::ReadFileHeader()
 	return true;
 }
 
-bool BbcView::SeekStart( uint32_t contigIdx, uint32_t position )
+bool BbcView::SeekStart( uint32_t contigIdx, uint32_t position, bool softRewind )
 {
 	// Set current file read position (the cursor) to the given start locus, using indexer if provided
 	// endPos is only required for testing if a Rewind() is necessary and where no indexer is provided
@@ -1355,8 +1359,12 @@ bool BbcView::SeekStart( uint32_t contigIdx, uint32_t position )
 		m_lastSeekContig = contigIdx;
 		return true;
 	}
-	// If not an explicit back seek BUT cursor contig is ahead of requested seek assume coverage run-off
-	bool backSeek = contigIdx < m_lastSeekContig || (contigIdx == m_lastSeekContig && position <= m_lastSeekPos);
+	// A hard-rewind is necessary for previous contig or a reset to before last file seek made.
+	// If the current cursor (m_position) is ahead of the position it typically means that the intervening
+	// region may have been skipped forward over regions of 0 coverage, and therefore rewind is not desired.
+	// A soft-rewind is relative to last read and to force re-reading, e.g. for overlapping targets.
+	uint32_t curpos = softRewind ? m_position : m_lastSeekPos;
+	bool backSeek = contigIdx < m_lastSeekContig || (contigIdx == m_lastSeekContig && position <= curpos);
 	if( !backSeek && m_contigIdx > contigIdx ) {
 		return true;
 	}

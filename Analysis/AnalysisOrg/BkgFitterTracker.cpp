@@ -158,16 +158,6 @@ BkgFitterTracker::BkgFitterTracker (int numRegions)
 }
 
 
-
-void BkgFitterTracker::InitGlobalDefaults(CommandLineOpts &inception_state, OptArgs &opts, Json::Value& json_params){
-
-  global_defaults.flow_global.SetFlowOrder ( inception_state.flow_context.flowOrder ); // @TODO: 2nd duplicated code instance
-  global_defaults.SetOpts(opts, json_params);
-
-}
-
-
-
 void BkgFitterTracker::SetNumRegions(int numRegions){
   //signal_proc_fitters = new SignalProcessingMasterFitter * [numRegions];
   numFitters=numRegions;
@@ -464,6 +454,13 @@ void BkgFitterTracker::ThreadedInitialization (
         num_flow_blocks
     );
   }
+  /*else{ // even if no debug file is output, we still need to allocate ptrs for residual error
+	  //printf("allocabeadRes... \n");
+	  all_params_hdf.AllocBeadRes(inception_state.loc_context,
+        my_image_spec, inception_state.flow_context.GetNumFlows(), max_frames,
+        inception_state.bkg_control.signal_chunks.flow_block_sequence.MaxFlowsInAnyFlowBlock(),
+        num_flow_blocks);
+  }*/
 
   // designate a set of reads that will be processed regardless of whether they pass filters
   set<int> randomLibSet;
@@ -525,10 +522,10 @@ void BkgFitterTracker::ThreadedInitialization (
     {
       linfo[r].ptrs = &all_params_hdf.ptrs;
     }
-    else
-    {
-      linfo[r].ptrs = NULL;
-    }
+    //else
+    //{
+      linfo[r].ptrs = &all_params_hdf.ptrs;
+    //}
     linfo[r].restart = restart;
 
 

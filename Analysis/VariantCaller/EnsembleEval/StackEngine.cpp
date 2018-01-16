@@ -157,12 +157,7 @@ void HypothesisStack::AllocateFrequencyStarts(int num_hyp_no_null, vector<Allele
    // int num_hyp = 2; // ref + alt, called doesn't count as a "start"
     //int num_start = num_hyp_no_null + 1;
     vector<float> try_me(num_hyp_no_null);
-    float safety_zero = 0.0f;
-
-    // we need safety_zero for mol_tag because we use it to call cfDNA.
-    if(total_theory.GetIsMolecularTag()){
-    	safety_zero = 0.01f;
-    }
+    float safety_zero = 0.001f;
 
     // I try at most (1 + num_hyp_no_null) frequencies: one uniform allele freq and num_hyp_no_null pure freq
     try_hyp_freq.reserve(1 + num_hyp_no_null);
@@ -1666,7 +1661,7 @@ void GetPaddingRemovedAlleleIdentityVector(const vector<AlleleIdentity>& allele_
 	padding_removed_allele_identity_vector.resize(num_alt);
 	for (int i_alt = 0; i_alt < num_alt; ++i_alt){
 		int num_padding = allele_identity_vector[i_alt].num_padding_added.first + allele_identity_vector[i_alt].num_padding_added.second;
-		if (num_padding == 0 or allele_identity_vector[i_alt].status.isProblematicAllele){
+		if (num_padding == 0){
 			// Usually, calling this function means that there are padding bases added. Copying the original allele_identity would be rare.
 			padding_removed_allele_identity_vector[i_alt] = allele_identity_vector[i_alt];
 			continue;
@@ -1698,6 +1693,7 @@ void GetPaddingRemovedAlleleIdentityVector(const vector<AlleleIdentity>& allele_
 			continue;
 		}
 		padding_removed_allele_identity_vector[i_alt].CalculateWindowForVariant(context_finder.first->second, ref_reader);
+		padding_removed_allele_identity_vector[i_alt].status.isProblematicAllele += allele_identity_vector[i_alt].status.isProblematicAllele;
 	}
 }
 
@@ -2030,31 +2026,48 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 	// (Step 4): Move the ready-to-go alleles whose start position >= sliding_window_start_0 to be on hold.
 	// I.e., I want to make sure that no ready-to-go allele will be generated in the new sliding window.
 	// This will lose some ready-to-go alleles but I will have only sliding window.
-	group_it = allele_groups_ready_to_go.begin();
-	while (group_it != allele_groups_ready_to_go.end()){
-		bool is_force_to_be_on_hold = false;
-		for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
-			if (allele_identity_vector[*allele_it].start_variant_window >= sliding_window_start_0){
-				is_force_to_be_on_hold = true;
-				break;
+	bool is_sliding_window_start_0_changed = false;
+	do{
+		is_sliding_window_start_0_changed = false;
+		group_it = allele_groups_ready_to_go.begin();
+		while (group_it != allele_groups_ready_to_go.end()){
+			bool is_force_to_be_on_hold = false;
+			for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+				if (allele_identity_vector[*allele_it].start_variant_window >= sliding_window_start_0
+						or ((not allele_identity_vector[*allele_it].status.isFakeHsAllele) and allele_identity_vector[*allele_it].end_variant_window > sliding_window_start_0)){
+					// This allele can be generated in the new slidgin window. Force the entire group to be on hold.
+					is_force_to_be_on_hold = true;
+					break;
+				}
 			}
-			//TODO: This is my hypothesis that all ready-to-go novel allele won't be generated in the new sliding window.
-			if (not allele_identity_vector[*allele_it].status.isHotSpotAllele){
+
+			if (is_force_to_be_on_hold){
+				for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+					// I need to make sure that the on-hold allele can be generated in the new sliding_window
+					if (allele_identity_vector[*allele_it].start_variant_window < sliding_window_start_0){
+						// Need to push sliding_window_start_0 to the left to generate this allele.
+						is_sliding_window_start_0_changed = true;
+						sliding_window_start_0 = allele_identity_vector[*allele_it].start_variant_window;
+					}
+					alleles_on_hold.push_back(*allele_it);
+				}
+				group_it = allele_groups_ready_to_go.erase(group_it);
+			}else{
+				++group_it;
+			}
+		}
+	}while(is_sliding_window_start_0_changed);
+
+	// Sanity check that makes sure no ready-to-go allele will be generated in the new sliding window.
+	for (group_it = allele_groups_ready_to_go.begin(); group_it != allele_groups_ready_to_go.end(); ++group_it){
+		for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
+			assert(allele_identity_vector[*allele_it].start_variant_window < sliding_window_start_0);
+			if (not allele_identity_vector[*allele_it].status.isFakeHsAllele){
 				assert(allele_identity_vector[*allele_it].end_variant_window <= sliding_window_start_0);
 			}
 		}
-
-		if (is_force_to_be_on_hold){
-			for (list<int>::iterator allele_it = group_it->begin(); allele_it != group_it->end(); ++allele_it){
-				alleles_on_hold.push_back(*allele_it);
-				//TODO: This is my hypothesis that all force-on-hold alleles have start variant window >= sliding_window_start_0. Remove it later.
-				assert(allele_identity_vector[*allele_it].start_variant_window >= sliding_window_start_0);
-			}
-			group_it = allele_groups_ready_to_go.erase(group_it);
-		}else{
-			++group_it;
-		}
 	}
+
 	// Sort alleles_on_hold
 	sort(alleles_on_hold.begin(), alleles_on_hold.end(), compare_positions);
 	// Final safey splitting for ready-to-go alleles.

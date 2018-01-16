@@ -170,18 +170,19 @@ class AssemblerRunner(object):
 
 import sys
 if __name__ == "__main__":
-    if len(sys.argv) == 4:
+    if len(sys.argv) == 5:
         sample_id = sys.argv[1]
         sample_seq = sys.argv[2]
         bam_file = sys.argv[3]
+        out_dir =  sys.argv[4]
         runner = AssemblerRunner(sample_id, sample_seq, bam_file)
         runner.execute()
-        runner.writeInfo("info_%s.%s.json" % (sample_id, sample_seq))
+        runner.writeInfo("%s/info_%s.%s.json" % (out_dir,sample_id, sample_seq))
     else:
-        assert(len(sys.argv) == 2) # not a barcode run
+        assert(len(sys.argv) == 3) # not a barcode run
         bam_file = sys.argv[1]
-
+        out_dir =  sys.argv[2]
         # HACK: sample_name = '.' => essentially vanishes from all paths
         runner = AssemblerRunner('', '', bam_file)
         runner.execute()
-        runner.writeInfo("info.json")
+        runner.writeInfo("%s/info.json" % (out_dir))

@@ -1,0 +1,30 @@
+<html>
+<h2>The FilterDuplicates Plugin</h2>
+<p>The FilterDuplicates plugin allows you to remove duplicate reads after a run is completed. BAM files with duplicate reads removed are saved in the FilterDuplicates directory. The original BAM files in the main analysis directory are not modified.</p>
+<p><span>FilterDuplicates is applied <span>only</span> to merged data.</span></p>
+<p>The Mark Duplicate feature in the main analysis pipeline marks reads as duplicates but does not remove them from the BAM files.</p>
+<h3 id="FilterDuplicatesPlugin-PluginOutputoutput">Plugin output</h3>
+<p>The plugin output section contains links to the BAM files that have duplicate reads removed.</p>
+<p>This section also shows the percentage of reads that were removed and the percentage of all reads that reached the adapter.</p>
+<h3 id="FilterDuplicatesPlugin-BarcodedBarcodedruns">Barcoded runs</h3>
+<p>For barcoded runs, FilterDuplicates runs on each barcode separately.</p>
+<h3 id="FilterDuplicatesPlugin-Pluginconfiguration">Plugin configuration</h3>
+<p>The sampleID plugin does not take any options or configuration.</p>
+<h3 id="FilterDuplicatesPlugin-Runthepluginautomatically">Run the plugin automatically</h3>
+<p>You set up the plugin to run automatically when you configure your template or run plan. In the Plugin chevron of the template wizard, you select which plugins run automatically on planned runs created from that template. See the Templates page in the Torrent Browser User Interface Guide</p>
+<h3 id="FilterDuplicatesPlugin-Runthepluginmanually">Run the plugin manually</h3>
+<p>You can launch the plugin manually from a completed run report.</p>
+<p>Follow these steps to run the plugin manually:</p>
+<ol><li>Open the run report and scroll down to the Plugin Summary button. Click <strong>Select plugins to run</strong>.</li>
+<li>In the<strong> Select a plugin</strong> list, click <strong>FilterDuplicates</strong>. The plugin does not take user input. The plugin is<em> submitted immediately</em> when you click it in the <strong>Select a plugin </strong>list.</li>
+</ol>
+<h3 id="FilterDuplicatesPlugin-ZCtag">ZC tag</h3>
+<p>The BAM header ZC tag is produced by the base caller to indicate the flow index of the last base of the template. FilterDuplicates plugin uses the ZC tag's information about adapter position, when possible, to improve the resolution of duplicate marking on fragment reads.</p>
+<p>The base caller o</span>nly creates <span>ZC tag for </span>reads in which the adapter is found.</p><p>The FilterDuplicates plugin groups reads with matching start coordinate, strand, and ZC tag value, and selects one read from each group to not be a duplicate read:</p>
+<ol><li>For every read, the 5' sequencing strand coordinate, mapping strand, and ZC value (if present) are recorded.</li>
+<li>The plugin groups together reads that have the same 5&#8242; start coordinate, strand, and ZC tag value.</li>
+<li>The plugin also adds to this group those reads that do not have a ZC tag but have the same start and strand coordinates as the group.</li>
+<li>The next step depends on the longest read in the group:
+<ol><li>If the longest read in the group has a ZC tag, the plugin does not mark the first read from the group as a duplicate. The rest of the reads in the group are marked as duplicate.
+</li><li>If the longest read in the group does not have a ZC tag, that read is not marked as a duplicate. The rest of the reads in the group are marked as duplicate. (In this case the base caller did not find the adapter in the read that is not a duplicate and that remains in the plugin output BAM file while the other reads are deleted.) </li></ol></li></ol>
+</html>

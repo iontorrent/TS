@@ -21,6 +21,7 @@ public:
   bool filter_qt_reads = false;
   bool filter_single_read_consensus = false;
   bool skip_consensus = false;
+  bool read_count_by_best_target = false;
 //  bool use_flowspace_clustering; // generate one consensus read for each flowspace cluster
   // functions
   ConsensusParameters(int argc, char** argv);

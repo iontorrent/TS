@@ -73,6 +73,7 @@
             "sampleName":       "{{item.sample.displayedName}}",
             "display":          display,
             "barcodeId":        "{{item.dnabarcode.id_str}}",
+            "endBarcodeId":     "{{item.endBarcode.id_str}}",
             "externalId":       "{{item.sample.externalId}}",
             "description":      "{{item.sample.description}}",
             "controlType":      "{{item.controlType}}",
@@ -89,6 +90,7 @@
     {% endfor %}
 
     var BARCODES = {{step.prepopulatedFields.barcodeSets_barcodes|safe}};
-
+    var ENDBARCODES = {{step.prepopulatedFields.endBarcodeSets_barcodes|safe}};
+    
 </script>
 {% endblock post-raw %}

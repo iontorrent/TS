@@ -7,14 +7,16 @@
 #include "HypothesisEvaluator.h"
 
 // Function to fill in prediceted signal values
-int CalculateHypPredictions(
+void CalculateHypPredictions(
     PersistingThreadObjects  &thread_objects,
     const Alignment          &my_read,
     const InputStructures    &global_context,
     const vector<string>     &Hypotheses,
     const vector<bool>       &same_as_null_hypothesis,
     vector<vector<float> >   &predictions,
-    vector<float>   &normalizedMeasurements,
+    vector<float>            &normalizedMeasurements,
+	int                      &min_last_flow,
+	int                      &max_last_flow,
     int flow_upper_bound) {
 
     // --- Step 1: Initialize Objects
@@ -56,8 +58,8 @@ int CalculateHypPredictions(
     flow_upper_bound = min(flow_upper_bound, min(my_read.measurements_length, num_flows));
 
     vector<BasecallerRead> hypothesesReads(Hypotheses.size());
-    int max_last_flow  = 0;
-
+    max_last_flow = 0;
+    min_last_flow = flow_upper_bound;
     for (unsigned int i_hyp=0; i_hyp<hypothesesReads.size(); ++i_hyp) {
 
     	// No need to simulate if a hypothesis is equal to the read as called
@@ -88,7 +90,7 @@ int CalculateHypPredictions(
 
             // Find last main incorporating flow of all hypotheses
             max_last_flow = max(max_last_flow, i_flow);
-
+            min_last_flow = min(min_last_flow, i_flow);
             // Solver simulates beginning of the read and then fills in the remaining clipped bases
             // Above checks on flow_upper_bound and i_flow guarantee that i_flow <= flow_upper_bound <= num_flows
             thread_objects.SolveRead(my_read.flow_order_index, hypothesesReads[i_hyp], min(i_flow,flow_upper_bound), flow_upper_bound);
@@ -107,8 +109,6 @@ int CalculateHypPredictions(
     if (global_context.DEBUG>2)
       PredictionGenerationVerbose(Hypotheses, hypothesesReads, my_read, predictions, prefix_size, global_context);
 
-    //return max_last_flow;
-    return (max_last_flow);
 }
 
 // ----------------------------------------------------------------------

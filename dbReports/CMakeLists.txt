@@ -138,7 +138,11 @@ install(FILES "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.py" DESTINATION iondb
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/bin/ionMesh.service" DESTINATION /etc/avahi/services)
 
 # install the sudoers file
-install(FILES "${PROJECT_SOURCE_DIR}/sudo/torrent-server-sudoers" DESTINATION /etc/sudoers.d)
+configure_file (
+    "${PROJECT_SOURCE_DIR}/sudo/torrent-server-sudoers.in"
+    "${PROJECT_BINARY_DIR}/sudo/torrent-server-sudoers" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/sudo/torrent-server-sudoers" DESTINATION /etc/sudoers.d)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")

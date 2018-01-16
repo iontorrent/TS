@@ -19,17 +19,15 @@
             var url = $('#modal_confirm_plugin_version_to_install').attr('action')
                 , type = $('#modal_confirm_plugin_version_to_install').attr('method');
 
-            $('#single_msg').text("Now installing, please wait.");
-            $('#cancel_button').attr('disabled','disabled');
-            $('#install_button').attr('disabled','disabled');
-            console.log('transmitting :', type, url);
+            $('#modal_confirm_plugin_version_to_install #single_msg').text("Now installing, please wait.");
+            $('#modal_confirm_plugin_version_to_install #cancel_button').attr('disabled','disabled');
+            $('#modal_confirm_plugin_version_to_install #install_button').attr('disabled','disabled');
             var jqxhr = $.ajax(url, {
                                 type: type
                                , contentType: 'application/json'
                                , dataType: 'json'
                                , processData: false
                 }).done(function(data) {
-                    console.log("success:",  url);
                     if ($('#modal_confirm_plugin_version_to_install').data('customevents')) {
                         jQuery.each($('#modal_confirm_plugin_version_to_install').data('customevents'), function(i, elem) {
                             $('#modal_confirm_plugin_version_to_install').trigger(elem, {})
@@ -43,7 +41,6 @@
                 .fail(function(data) {
                     $('#modal_confirm_plugin_version_to_install #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
                     console.log("error:", data);
-
                 })
         });
         $('#modal_confirm_plugin_version_to_install').on('hidden', function () {

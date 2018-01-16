@@ -217,13 +217,10 @@ void SignalProcessingMasterFitter::ExportAllAndReset ( int flow, bool last, int 
 
     // external updates here
     ExportStatusToMask(flow); // export status to bf mask
-
     ExportDataToWells( flow_block_start ); // export condensed data to wells - note we munged the amplitude values in Proton data
 
     if (write_debug_files)
       ExportDataToDataCubes ( last, flow, flow_block_id, flow_block_start ); // export hdf5 data if writing out - may want to put >this< before Proton wells correction
-
-
 
     //@TODO: we reset here rather than explicitly locking: no guarantee that data remains invariant if accessed after this point
     ResetForNextBlockOfData(); // finally done, reset for next block of flows
@@ -260,7 +257,7 @@ void SignalProcessingMasterFitter::ExportDataToWells( int flow_block_start )
 void SignalProcessingMasterFitter::ExportDataToDataCubes ( bool last, int last_flow, int flow_block_id, int flow_block_start )
 {
   for ( int fnum=0; fnum<region_data_extras.my_flow->flowBufferCount; fnum++ )
-  {
+  { 
     global_state.WriteBeadParameterstoDataCubes ( fnum,last,region_data->region,
                                                   region_data->my_beads, *region_data_extras.my_flow, region_data->my_trace, flow_block_id,
                                                   flow_block_start );
@@ -293,7 +290,7 @@ void SignalProcessingMasterFitter::MultiFlowRegionalFitting ( int flow, bool las
       region_data->fitters_applied = TIME_TO_DO_MULTIFLOW_FIT_ALL_WELLS;
     }
     else
-    {
+    { 
       RegionalFittingForLaterFlowBlock( flow_key, flow_block_size, table, flow_block_start );
       region_data->fitters_applied = TIME_TO_DO_DOWNSTREAM;
     }

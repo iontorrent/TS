@@ -149,6 +149,11 @@ class SignalProcessingMasterFitter
       global_state.SetHdf5Pointer( ptrs );
     }
 
+    void AllocResDataCube (int col, int row, int flow)
+    {
+          global_state.AllocDataCubeResErr(col, row, flow);
+    }
+
     void SetImageParams (int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps)
     {
       region_data->my_trace.SetImageParams (_rows,_cols,_frames,_uncompFrames,_timestamps);

@@ -143,8 +143,8 @@ class processAmpliSeqPanel(object):
                     }
                     if self.platform == "proton":
                         plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = "proton_p1"
-                    elif self.chipType in ['520', '530', '540']:
-                        plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = self.chipType
+                    elif self.chipType in self.get_s5_chips():
+                            plugin_details["variantCaller"]["userInput"]["meta"]["user_selections"]["chip"] = self.chipType
 
                     if "tmapargs" in plugin_details["variantCaller"]["userInput"]["meta"]:
                         alignmentargs_override = plugin_details["variantCaller"]["userInput"]["meta"]["tmapargs"]
@@ -155,9 +155,15 @@ class processAmpliSeqPanel(object):
                     return None, None
         return plugin_details, alignmentargs_override
 
+
+    @staticmethod    
+    def get_s5_chips():
+        s5_chips = models.Chip.objects.filter(isActive=True, instrumentType="S5").values_list('name', flat=True).order_by('name')
+        return s5_chips
+        
     @staticmethod
     def decorate_S5_instruments(instrument_type):
-        if instrument_type in ['520', '530', '540']:
+        if instrument_type in processAmpliSeqPanel.get_s5_chips():
             instrument_type = "S5 Chip: " + instrument_type.upper()
         return instrument_type
 
@@ -200,7 +206,7 @@ class processAmpliSeqPanel(object):
         elif instrument_type == 'p1' or instrument_type.lower() == 'proton':
             chip_type = "P1.1.17"
             instrument_type = "proton"
-        elif instrument_type in ['520', '530', '540']:
+        elif instrument_type in self.get_s5_chips():
             decoratedInstType = self.decorate_S5_instruments(instrument_type)
             chip_type = instrument_type
             instrument_type = "s5"

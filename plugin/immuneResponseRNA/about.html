@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Immune Response Plugin</title>
+</head>
+<body>
+	<p>
+            This plugin generates statistics, downloadable data files and interactive visualization of representation of
+            immune response RNA transcripts.</p>
+        <p>
+            This plugin should be used with runs aligned to the hg19_rna_ImmuneResponsePanelv2 reference (or subsequent
+            version) and immune response targets panel.
+        <p>
+            The Filter Barcodes option may be checked to indicate to remove whole barcodes
+            from the subsequent analysis if they have relatively low number of reads, e.g. as might result from barcode
+            contamination.
+            A warning will be issued to the barcode summary report if any barcodes were discounted from the analysis.
+            This option is ignored for runs not employing barcodes.</p>
+        <p>
+            The ERCC Tracking option is recommended if your targets (amplicons) were 'spiked' with ERCC tracking
+            targets. This will inform the analysis to produce an extra statistic for reads mapped to these targets so
+            that
+            the true level of 'off-target' reads is accurately represented. Your reference does not have to include ERCC
+            references for
+            this to work but whether such reads are included with the fraction of reads considered 'on-target' will
+            depend on this.</p>
+
+
+</body>
+</html>

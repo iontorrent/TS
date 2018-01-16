@@ -170,7 +170,7 @@ tmap_seqs_io_to_bam_header(tmap_refseq_t *refseq,
   sam_header_record_t *record = NULL;
   sam_header_record_t **record_list = NULL;
   char tag[2];
-  char* command_line = NULL;
+  char *command_line= NULL;
   char *id = NULL;
   char *id_pp = NULL;
   int32_t i, j;
@@ -307,8 +307,8 @@ tmap_seqs_io_to_bam_header(tmap_refseq_t *refseq,
       }
   }
 
-    // @PG - program group
-    // TODO: check for previous program group ID and set @PG.PP
+  // @PG - program group
+  // TODO: check for previous program group ID and set @PG.PP
     record = sam_header_record_init("PG"); // new program group
     if(0 == sam_header_record_add(record, "ID", id)) tmap_bug(); // @PG.ID
     if(0 == sam_header_record_add(record, "VN", PACKAGE_VERSION)) tmap_bug(); // @PG.VN

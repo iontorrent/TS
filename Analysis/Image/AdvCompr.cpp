@@ -745,32 +745,60 @@ int AdvComprTest(const char *_fname, Image *image, char *options, bool do_cnc)
 
 //	int framerate=1000/image->raw->timestamps[0];
 //	printf("input_framerate=%d\n",framerate);
+    
+        switch(dbgType) {
+          case 1:
+            AdvComprPrintf("AdvCompression: DbgType: replace raw with pca/unpca'd data\n");
+          break;
+          case 2:
+            AdvComprPrintf("AdvCompression: DbgType: save residuals\n");
+          break;
+          case 3:
+            AdvComprPrintf("AdvCompression: DbgType: save smoothed residuals\n");
+          break;
+          case 4:
+            AdvComprPrintf("AdvCompression: DbgType: timeshift\n");
+          break;
+          case 5:
+            AdvComprPrintf("AdvCompression: DbgType: just do gain correct and cnc.  then write the data back to raw\n");
+          break;
+          case 6:
+            AdvComprPrintf("AdvCompression: DbgType: save corrected and zero'd traces\n");
+          break;
+          case 7:
+            AdvComprPrintf("AdvCompression: DbgType: write out file and read back in again\n");
+          break;
+          default:
+            AdvComprPrintf("AdvCompression: DbgType: Unknown\n");
+          break;
+        }
 
 	int fd = -1;
-	if (/*dbgType != 1 && */(dbgType > 6))
-		fd = open(tstName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	if (dbgType > 6)
+          fd = open(tstName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
-//	if(fd >= 0 || dbgType == 1 || (dbgType >= 4 && dbgType <= 5))
 	{
 		if (fd >= 0)
-			AdvComprPrintf("opened %s for writing fd=%d\n", tstName, fd);
-		{
-			int frameRate=1000/raw->timestamps[0];
-			AdvCompr advc(fd, raw->image, raw->cols, raw->rows,
-					raw->frames, raw->uncompFrames, raw->timestamps, raw->timestamps, dbgType, tstName,options,frameRate);
-                        advc.SetDoCNC(do_cnc);
-			advc.Compress(-1,0);
-		}
-		if (fd >= 0) {
+	          AdvComprPrintf("opened %s for writing fd=%d\n", tstName, fd);
+		  
+                int frameRate=1000/raw->timestamps[0];
+		AdvCompr advc(fd, raw->image, raw->cols, raw->rows,
+		    raw->frames, raw->uncompFrames, raw->timestamps, raw->timestamps, dbgType, tstName,options,frameRate);
+		advc.SetDoCNC(do_cnc);
+		advc.Compress(-1,0);
+		
+                if (fd >= 0) {
                   close(fd);
                   fd = -1;
                 }
-		if (dbgType > 7) {
+
+		if (dbgType > 6) {
                   // double check that we cleared everything out
                   memset(raw->image, 0, sizeof(short) * raw->rows * raw->cols);
 		  fd = open(tstName, O_RDONLY);
 		  assert(fd >= 0);
 		}
+
 		if (fd >= 0)
 		{
 			AdvComprPrintf("Debug Uncompressing %s\n", tstName);
@@ -1081,6 +1109,7 @@ float AdvCompr::ExtractVectors()
 	float ptgv[npts * hdr.nBasisVec];
 	float gv[npts];
 	int pt;
+
 
 	for (pt = 0; pt < npts; pt++)
 		gv[pt] = 1.0f;
@@ -2222,7 +2251,7 @@ int AdvCompr::ExtractTraceBlock()
 	double start = AdvCTimer();
 	int nbasisV=hdr.nBasisVec;
 
-#ifdef PCA_UNCOMP_MEAN_SMOOTHING
+        #ifdef PCA_UNCOMP_MEAN_SMOOTHING
 		int t0 = DCT0Finder(mean_trc, npts, NULL);
 
 		float nmean_trc[hdr.npts];
@@ -2311,6 +2340,7 @@ int AdvCompr::ExtractTraceBlock()
 						tmpV3.V += bV * coeffV[2];
 						tmpV4.V += bV * coeffV[3];
 					}
+                                     
 
 					CVT_VEC8F_VEC8S((ov[0]),tmpV1);
 					CVT_VEC8F_VEC8S((ov[1]),tmpV2);

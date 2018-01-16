@@ -1,0 +1,15 @@
+{% extends "rundb/dashboard/base.html" %}
+{% load static from staticfiles %}
+{% load url from future %}
+{% block extra_head %}
+    <link href="{% static "resources/styles/dashboard.css" %}" rel="stylesheet"/>
+    <link href="{% static "resources/bootstrap-select/bootstrap-select.css" %}" rel="stylesheet"/>
+{% endblock %}
+{% block content %}
+    {% include "rundb/dashboard/blocks/summary.html" with initial_html=initial_summary_html%}
+    {% include "rundb/dashboard/blocks/runs.html" with initial_html=initial_runs_html%}
+    {% include "rundb/dashboard/blocks/instruments.html" with initial_html=initial_instruments_html%}
+
+    <script src="{% static "resources/bootstrap-select/bootstrap-select.js" %}"></script>
+    <script src="{% static "resources/scripts/dashboard/dashboard.js" %}"></script>
+{% endblock content %}

@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Ion Torrent Systems, Inc. All Rights Reserved
-import os
-import zipfile
 import fnmatch
+import os
+import shutil
+import tarfile
+import tempfile
+import zipfile
+
 result_patterns = [
     'ion_params_00.json',
     'alignment.log',
@@ -73,7 +77,11 @@ def match_files(walk, pattern):
 
 def get_file_list(directory, patterns, block_list=[]):
     mylist = []
-    walk = list(os.walk(directory, followlinks=True))
+    try:
+        walk = list(os.walk(directory, followlinks=True))
+    except:
+        raise Exception('Unable to access files from %s' % directory)
+
     for pattern in patterns:
         for filename in match_files(walk, pattern):
             blockthis = False
@@ -98,8 +106,7 @@ def writeZip(fullnamepath, filelist, dirtrim="", openmode="w"):
     '''Add files to zip archive.  dirtrim is a string which will be deleted
     from each file entry.  Used to strip leading directory from filename.'''
     # Open a zip archive file
-    csa = zipfile.ZipFile(fullnamepath, mode=openmode,
-                          compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+    csa = zipfile.ZipFile(fullnamepath, mode=openmode, compression=zipfile.ZIP_DEFLATED, allowZip64=True)
 
     # Add each file to the zip archive file
     for item in filelist:
@@ -110,11 +117,10 @@ def writeZip(fullnamepath, filelist, dirtrim="", openmode="w"):
     # Close zip archive file
     csa.close()
 
-def migrateZip(logzipname, fullnamepath, openmode="w"):
 
+def migrateZip(logzipname, fullnamepath, openmode="w"):
     # Open a zip archive file
-    csa = zipfile.ZipFile(fullnamepath, mode=openmode,
-                      compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+    csa = zipfile.ZipFile(fullnamepath, mode=openmode, compression=zipfile.ZIP_DEFLATED, allowZip64=True)
     csa_files = sorted(csa.namelist())
 
     # Include files from pgm_logs.zip found in reportDir
@@ -126,7 +132,7 @@ def migrateZip(logzipname, fullnamepath, openmode="w"):
         # list of files included in zip should match list above
         pgmlogzip = zipfile.ZipFile(logzipname, mode="r")
         for item in pgmlogzip.namelist():
-            if not item in csa_files:
+            if item not in csa_files:
                 contents = pgmlogzip.read(item)
                 csa.writestr(item, contents)
         pgmlogzip.close()
@@ -135,7 +141,31 @@ def migrateZip(logzipname, fullnamepath, openmode="w"):
     return
 
 
-def makeCSA(reportDir, rawDataDir, csa_file_name=None):
+def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=''):
+    """Create the CSA zip file"""
+
+    def integrate_chef_log(csa_file_path, chef_log_path):
+        """Helper method to extract all of the chef log files and integrate them into the csa zip file"""
+        chef_log_handle = None
+        csa_handle = None
+        chef_log_temp_dir = None
+        try:
+            chef_log_temp_dir = tempfile.mkdtemp()
+            chef_log_handle = tarfile.open(chef_log_path, 'r')
+            csa_handle = zipfile.ZipFile(csa_file_path, mode='a', compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+            chef_log_files = chef_log_handle.getnames()
+            chef_log_handle.extractall(chef_log_temp_dir)
+            for chef_log_file in chef_log_files:
+                csa_handle.write(os.path.join(chef_log_temp_dir, chef_log_file), chef_log_file)
+        finally:
+            if os.path.exists(str(chef_log_temp_dir)):
+                shutil.rmtree(chef_log_temp_dir)
+
+            if chef_log_handle:
+                chef_log_handle.close()
+
+            if csa_handle:
+                csa_handle.close()
 
     # reportDir must exist
     if not os.path.exists(reportDir):
@@ -153,6 +183,9 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None):
     # Generate a list of files from rawdata dir to append to the archive
     zipList = get_list_from_rawdata(rawDataDir)
     writeZip(csaFullPath, zipList, dirtrim=rawDataDir, openmode="a")
+
+    if chefLogPath and os.path.exists(chefLogPath):
+        integrate_chef_log(csaFullPath, chefLogPath)
 
     # Append contents of pgm_logs.zip file in case rawdata contents has been deleted
     migrateZip(os.path.join(reportDir, "pgm_logs.zip"), csaFullPath, openmode="a")

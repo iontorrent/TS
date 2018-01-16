@@ -1598,7 +1598,7 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
 }
 
 
-void  TreephaserSSE::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_)
+void  TreephaserSSE::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_, const bool flow_quality_enable)
 {
   static const char nuc_int_to_char[5] = "ACGT";
   int num_flows = flow_order_.num_flows();
@@ -1706,7 +1706,7 @@ void  TreephaserSSE::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& fl
     read.state_total[solution_flow] = max(recent_state_total, 0.01f);
     }
 
-  if (flow_predictors_) { //if (flow_predictors_)
+  if (flow_predictors_ || flow_quality_enable) { //if (flow_predictors_)
       read.penalty_mismatch_flow.assign(num_flows, 0);
       read.penalty_residual_flow.assign(num_flows, 0);
       //vector<int> flows_to_proc;

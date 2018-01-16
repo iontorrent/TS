@@ -6,30 +6,30 @@
     {% block tab-configure-about %}
         <li><a href="{% url "configure_about" %}">About</a></li>
     {% endblock tab-configure-about %}
+    {% block tab-configure-accounts %}
+        <li><a href="{% url "configure_account" %}">Accounts</a></li>
+    {% endblock tab-configure-accounts %}
     {% block tab-configure-analysisargs %}
         <li><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
     {% endblock tab-configure-analysisargs %}
+    {% block tab-configure-configure %}
+        <li><a href="{% url "configure_configure" %}">Configure</a></li>
+    {% endblock tab-configure-configure %}
+    {% block tab-configure-mesh %}
+        <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
+    {% endblock tab-configure-mesh %}
+    {% block tab-configure-ionreporter %}
+        <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+    {% endblock tab-configure-ionreporter %}
+    {% block tab-configure-plugins %}
+        <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    {% endblock tab-configure-plugins %}
     {% block tab-configure-references %}
         <li><a href="{% url "configure_references" %}">References</a></li>
     {% endblock tab-configure-references %}
     {% block tab-configure-services %}
         <li><a href="{% url "configure_services" %}">Services</a></li>
     {% endblock tab-configure-services %}
-    {% block tab-configure-plugins %}
-        <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-    {% endblock tab-configure-plugins %}
-    {% block tab-configure-mesh %}
-        <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
-    {% endblock tab-configure-mesh %}
-    {% block tab-configure-configure %}
-        <li><a href="{% url "configure_configure" %}">Configure</a></li>
-    {% endblock tab-configure-configure %}
-    {% block tab-configure-ionreporter %}
-        <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-    {% endblock tab-configure-ionreporter %}
-    {% block tab-configure-accounts %}
-        <li><a href="{% url "configure_account" %}">Accounts</a></li>
-    {% endblock tab-configure-accounts %}
     {% block tab-configure-updates %}
         <li><a href="{% url "offcycle_updates" %}">Updates</a></li>
     {% endblock tab-configure-updates %}

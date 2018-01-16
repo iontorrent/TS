@@ -56,8 +56,8 @@
    "ImageControlOpts" : {
       "acqPrefix" : "acq_",
       "col-doubles-xtalk-correct" : false,
-      "col-flicker-correct" : true,
-      "col-flicker-correct-aggressive" : true,
+      "col-flicker-correct" : false,
+      "col-flicker-correct-aggressive" : false,
       "col-flicker-correct-verbose" : false,
       "corr-noise-correct" : false,
       "dat-postfix" : "dat",

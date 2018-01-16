@@ -1,11 +1,11 @@
 {
     "meta":{
         "name"          : "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)",
-        "tooltip"       : "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA",
-        "configuration" : "tagseq_cfdna",
-        "ts_version"    : "5.6",
+        "tooltip"       : "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.",
+        "configuration" : "tagseq_ffpe",
+        "ts_version"    : "5.8",
         "compatibility" : {
-          "chip"        : ["510","520","530","540","pgm","proton_p1"],
+          "chip"        : ["510","520","530","540","550","pgm","proton_p1"],
           "library"     : ["tag_sequencing"],
           "frequency"   : ["rare_somatic"],
           "stringency"  : ["low"],

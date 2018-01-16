@@ -75,3 +75,19 @@ if ! grep -q ^ubuntu_apt_server "$target"; then
     # insert this line above line starting with 'tsconfig_dir'
     sed -i "/^tsconfig_dir.*$/i $line\n" "$target"
 fi
+
+#=============================================================================
+# Edits for TSS5.8.0 release
+#=============================================================================
+# new varialbe to support TAP interface on S5 TSVM
+if ! grep -q ^enable_tap_interface "$target"; then
+    line="enable_tap_interface: False"
+    # insert this line above line starting with 'ion_apt_server'
+    sed -i "/^ion_apt_server.*$/i $line\n" "$target"
+fi
+if ! grep -q ^TAP_STATIC_IP "$target"; then
+    line="TAP_STATIC_IP: False"
+    # insert this line above line starting with 'ion_apt_server'
+    sed -i "/^ion_apt_server.*$/i $line\n" "$target"
+fi
+# other required fields such tap_static_ip will be added manually when enabled.

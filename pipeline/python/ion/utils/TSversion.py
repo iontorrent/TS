@@ -10,24 +10,27 @@ from django.utils.datastructures import SortedDict
 # Note this list is duplicated in TSconfig.py
 packages = [
     'ion-analysis',
-    'ion-chefupdates',
     'ion-dbreports',
     'ion-docs',
     'ion-gpu',
-    'ion-onetouchupdater',
-    'ion-pgmupdates',
     'ion-pipeline',
-    'ion-plugins',
-    'ion-protonupdates',
     'ion-publishers',
     'ion-referencelibrary',
     'ion-rsmts',
-    'ion-s5updates',
     'ion-sampledata',
     'ion-torrentpy',
     'ion-torrentr',
     'ion-tsconfig',
     ]
+
+offcycle_packages = [
+    'ion-plugins',
+    'ion-chefupdates',
+    'ion-onetouchupdater',
+    'ion-pgmupdates',
+    'ion-protonupdates',
+    'ion-s5updates',
+]
 
 
 def findVersions():
@@ -53,6 +56,22 @@ def findVersions():
 #    print meta_version
 
     return ret, meta_version
+
+
+def offcycleVersions():
+    ret = SortedDict()
+    for package in offcycle_packages:
+        # command for version checking
+        com = "dpkg -l %s | grep ^ii | awk '{print $3}'" % package
+        try:
+            a = subprocess.Popen(com, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # just get the version number
+            tolist = a.stdout.readlines()[0].strip()
+            ret[package] = tolist
+        except:
+            pass
+
+    return ret
 
 
 def findUpdates():

@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include <stdio.h>
+#include <fenv.h> // Floating point exceptions
 
 #include "IonVersion.h"
 
@@ -125,6 +126,10 @@ int main(int argc, const char *argv[])
   string program_str = string(argv[0]) + " " + string(argv[1]);
   OptArgs opts;
   opts.ParseCmdLine(argc-1, argv+1);
+  // enable floating point exceptions during program execution
+  if (opts.GetFirstBoolean('-', "float-exceptions", true)) {
+    feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+  } //*/
 
   if      (ionstats_command == "basecaller") return IonstatsBasecaller(opts);
   else if (ionstats_command == "alignment")  return IonstatsAlignment(opts, program_str);

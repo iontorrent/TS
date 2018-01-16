@@ -1,4 +1,4 @@
-<div id="modal_confirm_plugin_upgrade" title="" class="modal hide" action="{{action}}" method="{{method}}">
+<div id="modal_confirm_plugin_upgrade" title="Upgrade Plugin" class="modal hide" action="{{action}}" method="{{method}}">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
         <h3 id="single_h3">Confirm Upgrade {{type|title}}</h3>
@@ -19,17 +19,15 @@
             var url = $('#modal_confirm_plugin_upgrade').attr('action')
                 , type = $('#modal_confirm_plugin_upgrade').attr('method');
 
-            $('#single_msg').text("Now upgrading, please wait.");
-            $('#cancel_button').attr('disabled','disabled');
-            $('#install_button').attr('disabled','disabled');
-            console.log('transmitting :', type, url);
+            $('#modal_confirm_plugin_upgrade #single_msg').text("Now upgrading, please wait.");
+            $('#modal_confirm_plugin_upgrade #cancel_button').attr('disabled','disabled');
+            $('#modal_confirm_plugin_upgrade #install_button').attr('disabled','disabled');
             var jqxhr = $.ajax(url, {
                                 type: type
                                , contentType: 'application/json'
                                , dataType: 'json'
                                , processData: false
                 }).done(function(data) {
-                    console.log("success:",  url);
                     if ($('#modal_confirm_plugin_upgrade').data('customevents')) {
                         jQuery.each($('#modal_confirm_plugin_upgrade').data('customevents'), function(i, elem) {
                             $('#modal_confirm_plugin_upgrade').trigger(elem, {})
@@ -37,6 +35,8 @@
                     }
                     $('#modal_confirm_plugin_upgrade').trigger('modal_confirm_plugin_upgrade_done', { values: e.values } );
                     $('#modal_confirm_plugin_upgrade').modal("hide");
+                    $('#grid').data('kendoGrid').dataSource.read();
+                    $('#grid').data('kendoGrid').refresh();
                 })
                 .fail(function(data) {
                     $('#modal_confirm_plugin_upgrade #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();

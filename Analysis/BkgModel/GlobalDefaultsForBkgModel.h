@@ -176,16 +176,16 @@ public:
   void SetChipType(const char *name);
 
   // i/o from files for parameters
-  void SetGoptDefaults(char *gopt, char *results_folder);
+  void SetGoptDefaults(char *gopt, char *results_folder, const std::string& blockId);
   void ReadEmphasisVectorFromFile(char *experimentName);
   bool ReadEmphasisVectorFromJson(char *experimentName);
   void set_GoptParameter_byIndex(int iCase, float v);
   void DumpExcitingParameters(const char *fun_string);
-  void GoptDefaultsFromJson(char *fname);
+  void GoptDefaultsFromJson(char *fname, const std::string& blockId);
   void GoptDefaultsFromPoorlyStructuredFile(char *fname);
 
   void PrintHelp();
-  void SetOpts(OptArgs &opts, Json::Value& json_params);
+  void SetOpts(OptArgs &opts, Json::Value& json_params, const std::string& blockId);
 
 private:
   friend class boost::serialization::access;

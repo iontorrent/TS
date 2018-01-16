@@ -26,7 +26,7 @@ using namespace ion;*/
 
 
 // Function to calculate signal predictions
-int CalculateHypPredictions(
+void CalculateHypPredictions(
 		PersistingThreadObjects  &thread_objects,
 		const Alignment          &my_read,
         const InputStructures    &global_context,
@@ -34,6 +34,8 @@ int CalculateHypPredictions(
         const vector<bool>       &same_as_null_hypothesis,
         vector<vector<float> >   &predictions,
         vector<float>            &normalizedMeasurements,
+		int                      &min_last_flow,
+		int                      &max_last_flow,
         int flow_upper_bound);
 
 // Does what the name says

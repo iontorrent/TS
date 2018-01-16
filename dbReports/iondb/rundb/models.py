@@ -19,17 +19,19 @@ the data gathering and analysis.
 
 from __future__ import absolute_import
 
+import apt
 import datetime
 import re
 import os
 import traceback
 from django.core.exceptions import ValidationError
 from ion.plugin.info import PluginInfo
+from ion.plugin.loader import ModuleCache
 import iondb.settings
 
 from django.db import models
 from django.core.exceptions import ObjectDoesNotExist
-from iondb.utils.utils import bytesToHumanReadableSize, directorySize, getPackageName
+from iondb.utils.utils import bytesToHumanReadableSize, directorySize, getPackageName, is_s5orig
 from distutils.version import LooseVersion
 
 from django.db.models.query_utils import Q
@@ -224,7 +226,7 @@ class KitInfo(models.Model):
         ('', 'Any'),
         ('pgm', 'PGM'),
         ('proton', 'Proton'),
-        ('S5', 'S5'),
+        ('S5', 'Ion GeneStudio S5'),
         ('proton;S5', "Proton or S5")
     )
     #compatible instrument type
@@ -233,6 +235,7 @@ class KitInfo(models.Model):
     ALLOWED_APPLICATION_TYPES = (
         ('', 'Any'),
         ('AMPS_ANY', 'Any AmpliSeq application'),
+        ('AMPS_ANY;MIXED', 'Any AmpliSeq and mixed sample type applications'),
         ('RNA', 'RNA'),
         ('AMPS', "AmpliSeq DNA"),
         ('AMPS_RNA', 'AmpliSeq RNA'),
@@ -262,7 +265,7 @@ class KitInfo(models.Model):
     ALLOWED_CATEGORIES = (
         ('', 'Any'),
         ('flowOverridable', 'Flows can be overridden'),
-        ('flowOverridable;', 'Flow count can be overridden'),        
+        ('flowOverridable;', 'Flow count can be overridden'),
         ('bcShowSubset;bcRequired;', 'Mandatory barcode kit selection'),
         #("flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Hi-Q sequencing kit categories"),
         ("flowOverridable;readLengthDerivableFromFlows;", "Hi-Q sequencing kit categories"),
@@ -311,13 +314,14 @@ class KitInfo(models.Model):
 
     ALLOWED_CHIP_TYPES = (
         ('', 'Unspecified'),
-        ('510;520;530', 'S5 510, 520 or 530'),        
+        ('510;520;530', 'S5 510, 520 or 530'),
         ('520;530', 'S5 520 or 530'),
         ('540', 'S5 540'),
+        ('550', 'S5 550'),
         ('540;550', 'S5 540 or 550'),
         ('541', 'S5 541'),
         ('521;530', 'S5 521 or 530'),
-        ('510;520;521;530', 'S5 510, 520, 521 or 530'),     
+        ('510;520;521;530', 'S5 510, 520, 521 or 530'),
         ('520;521;530', 'S5 520, 521 or 530'),
         ('P2.2.1;P2.2.2', "Proton PQ"),
         ('900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.3.1', "Proton PI")
@@ -325,10 +329,13 @@ class KitInfo(models.Model):
 
     #compatible chip types
     chipTypes = models.CharField(max_length=127, choices=ALLOWED_CHIP_TYPES, default='', blank=True)
-    
+
     defaultFlowOrder = models.ForeignKey("FlowOrder", blank=True, null=True, default=None)
     defaultThreePrimeAdapter = models.ForeignKey("ThreePrimeadapter", blank=True, null=True, default=None)
-    
+    defaultCartridgeUsageCount = models.IntegerField(blank=True, null=True)
+    cartridgeExpirationDayLimit = models.IntegerField(blank=True, null=True)
+    cartridgeBetweenUsageAbsoluteMaxDayLimit = models.IntegerField(blank=True, null=True)
+
     uid = models.CharField(max_length=10, unique=True, blank=False)
 
     objects = KitInfoManager()
@@ -560,6 +567,13 @@ class ApplProduct(models.Model):
     isTargetRegionBEDFileBySampleSupported = models.BooleanField(default=False)
     isHotSpotBEDFileBySampleSupported = models.BooleanField(default=False)
     isDualNucleotideTypeBySampleSupported = models.BooleanField(default=False)
+    isDualBarcodingBySampleSupported = models.BooleanField(default=False)
+    
+    ALLOWED_DUAL_BARCODING_RULES = (
+        ('', 'Unspecified'),
+        ('no_reuse', 'No reuse of start barcode or end barcode')
+    )
+    dualBarcodingRule = models.CharField(max_length=64, choices=ALLOWED_DUAL_BARCODING_RULES, default='', blank=True)
 
     isBarcodeKitSelectionRequired = models.BooleanField(default=False)
 
@@ -579,7 +593,7 @@ class ApplProduct(models.Model):
         ('', 'Any'),
         ('pgm', 'PGM'),
         ('proton', 'Proton'),
-        ('s5', 'S5')
+        ('s5', 'Ion GeneStudio S5')
     )
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
@@ -593,7 +607,7 @@ class ApplProduct(models.Model):
         ('hidSamplePrep', 'HID Sample Prep Protocol'),
         ('protonRnaWTSamplePrep', 'Proton RNA WT Sample Prep Protocol'),
         ('s5RnaWTSamplePrep', 'S5 RNA WT Sample Prep Protocol'),
-        ('s5MyeloidSamplePrep', 'S5 Myeloid Sample Prep Protocol')   
+        ('s5MyeloidSamplePrep', 'S5 Myeloid Sample Prep Protocol')
     )
     categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
     defaultSamplePrepProtocol = models.ForeignKey(common_CV, related_name='common_CV_applProduct_set', blank=True, null=True)
@@ -656,6 +670,8 @@ class PlannedExperimentManager(models.Manager):
         # EAS
         extra_kwargs['barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
         extra_kwargs['barcodeKitName'] = kwargs.pop('x_barcodeId', "")
+        extra_kwargs['endBarcodeKitName'] = kwargs.pop('x_endBarcodeKitName', "")
+
         extra_kwargs['targetRegionBedFile'] = kwargs.pop('x_bedfile', "")
         extra_kwargs['hotSpotRegionBedFile'] = kwargs.pop('x_regionfile', "")
         extra_kwargs['sseBedFile'] = kwargs.pop('x_sseBedFile', "")
@@ -781,9 +797,8 @@ class PlannedExperiment(models.Model):
     #(e.g., forward of a paired-end plan) has been claimed for a run - user can't further edit a reserved plan
     #from the plan wizard. Paired-end plan is now obsolete. Chef now marks a plan as "reserved" for exclusivity during templating.
 
-    #"voided" status  : the original intent of this status is to indicate this group plan has been abandoned
-    #even though it has not been fully used for its sequencing runs - user can't further edit a voided plan
-    #from the plan wizard
+    #"voided" status  : Chef sets status to "voided" on Templating Prep error
+    # user can't further edit a voided plan from the plan wizard
 
     #"blank" status   : for backward compatibility, blank status + planExecuted = True is same as "executed"
     #while "blank" status + planExecuted = False is same as "planned" status. [TODO: replace blank status]
@@ -803,7 +818,7 @@ class PlannedExperiment(models.Model):
     )
 
     #planStatus
-    planStatus = models.CharField(max_length=512, blank=True, choices=ALLOWED_PLAN_STATUS, default='')
+    planStatus = models.CharField(max_length=512, blank=True, choices=ALLOWED_PLAN_STATUS, default='', db_index=True)
 
     #who ran this
     username = models.CharField(max_length=128, blank=True, null=True)
@@ -840,7 +855,7 @@ class PlannedExperiment(models.Model):
     preAnalysis = models.BooleanField(default=True)
 
     #RunType -- this is from a list of possible types (aka application)
-    runType = models.CharField(max_length=512, blank=False, null=False, default="GENS")
+    runType = models.CharField(max_length=512, blank=False, null=False, default="GENS", db_index=True)
 
     #adapter (20120313: this was probably for forward 3' adapter but was never used.  Consider this column obsolete)
     adapter = models.CharField(max_length=256, blank=True, null=True)
@@ -888,8 +903,8 @@ class PlannedExperiment(models.Model):
     runMode = models.CharField(max_length=64, choices=ALLOWED_RUN_MODES, default='', blank=True)
 
     #whether this is a plan template
-    isReusable = models.BooleanField(default=False)
-    isFavorite = models.BooleanField(default=False)
+    isReusable = models.BooleanField(default=False, db_index=True)
+    isFavorite = models.BooleanField(default=False, db_index=True)
 
     #whether this is a pre-defined plan template
     isSystem = models.BooleanField(default=False)
@@ -925,7 +940,8 @@ class PlannedExperiment(models.Model):
     sampleSets = models.ManyToManyField('SampleSet', related_name="plans", null=True, blank=True)
 
     sampleGrouping = models.ForeignKey("SampleGroupType_CV", blank=True, null=True, default=None)
-    applicationGroup = models.ForeignKey(ApplicationGroup, null=True)
+    
+    applicationGroup = models.ForeignKey(ApplicationGroup, null=True, db_index=True)
 
     latestEAS = models.OneToOneField('ExperimentAnalysisSettings', null=True, blank=True, related_name='+', on_delete=models.SET_NULL)
 
@@ -937,16 +953,16 @@ class PlannedExperiment(models.Model):
         ('barcodes_8', 'default to 8 barcodes'),
         ('onco_solidTumor', 'Solid tumor'),
         ('onco_solidTumor;inheritedDisease', 'Solid tumor and inherited disease'),
-        ('onco_solidTumor;onco_heme', 'Solid tumor and hematology'),           
+        ('onco_solidTumor;onco_heme', 'Solid tumor and hematology'),
         ('Oncomine;onco_solidTumor', 'Oncomine solid tumor'),
         ('Onconet;onco_solidTumor', 'Onconet solid tumor'),
-        ('Oncomine;onco_solidTumor;inheritedDisease', 'Oncomine solid tumor and inherited disease'),       
+        ('Oncomine;onco_solidTumor;inheritedDisease', 'Oncomine solid tumor and inherited disease'),
         ('Oncomine;ocav2;onco_solidTumor', ''),
         ('Oncomine;barcodes_8;onco_solidTumor', 'OCAv3 DNA only or Fusions only'),
         ('Oncomine;barcodes_16;onco_solidTumor', 'OCAv3 DNA and Fusions'),
         ('onco_immune', 'Immunology'),
         ('barcodes_6;onco_heme', 'PGM Oncomine Myeloid DNA only'),
-        ('barcodes_24;onco_heme', 'PGM Oncomine Myeloid RNA Fusions'),         
+        ('barcodes_24;onco_heme', 'PGM Oncomine Myeloid RNA Fusions'),
         ('barcodes_12;onco_heme', 'PGM Oncomine Myeloid DNA and Fusions'),
         ('barcodes_12;onco_heme;chef_myeloid_protocol', 'S5 Oncomine Myeloid DNA only'),
         ('barcodes_48;onco_heme;chef_myeloid_protocol', 'S5 Oncomine Myeloid RNA Fusions'),
@@ -956,7 +972,7 @@ class PlannedExperiment(models.Model):
         ('onco_heme', "Hematology")
     )
 
-    categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+    categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True, db_index=True)
     libraryReadLength = models.PositiveIntegerField(default=0)
 
     ALLOWED_TEMPLATING_SIZE = (
@@ -972,8 +988,16 @@ class PlannedExperiment(models.Model):
     # this is to use alternate chef script protocal
     samplePrepProtocol = models.CharField(max_length=64, blank=True, null=True, default="")
 
+    # this is used on Plan Wizard Kits chevron to pick "default" vs "custom" advanced settings
+    isCustom_kitSettings = models.BooleanField(default=False)
+
     objects = PlannedExperimentManager()
 
+
+    @property
+    def run_transfer_from_source(self):
+        """Helper method to get the information from the meta data"""
+        return self.metaData.get('runTransferFromSource', '')
 
     def __unicode__(self):
         if self.planName:
@@ -1059,6 +1083,12 @@ class PlannedExperiment(models.Model):
     def get_barcodeId(self):
         if self.latest_eas:
             return self.latest_eas.barcodeKitName
+        else:
+            return ""
+
+    def get_endBarcodeKitName(self):
+        if self.latest_eas:
+            return self.latest_eas.endBarcodeKitName
         else:
             return ""
 
@@ -1329,7 +1359,7 @@ class PlannedExperiment(models.Model):
 
     @staticmethod
     def get_applicationCategoryDisplayedName(categories):
-        """ 
+        """
         return the category displayed name with no validation
         """
         categoryDisplayedName = ""
@@ -1347,7 +1377,7 @@ class PlannedExperiment(models.Model):
 
     @staticmethod
     def get_validatedApplicationCategoryDisplayedName(categories, runType):
-        """ 
+        """
         return the category displayed name if the runType is compatible with the matching category controlled volcabulary
         """
         categoryDisplayedName = ""
@@ -1362,6 +1392,36 @@ class PlannedExperiment(models.Model):
                             categoryDisplayedName += " | "
                         categoryDisplayedName += category_cv.displayedValue if runType in category_cv.categories else ""
         return categoryDisplayedName
+
+
+    def get_composite_applCatDisplayedName(self):
+        """
+        return category displayed name(s) for UI pages
+        """
+        applicationCategoryDisplayedName = self.get_applicationCategoryDisplayedName(self.categories)
+        try:
+            runTypeObj = RunType.objects.filter(runType=self.runType)
+            if runTypeObj:
+                if applicationCategoryDisplayedName:
+                    categoryDisplayedName = applicationCategoryDisplayedName
+                    categoryDisplayedName += " | "
+                    categoryDisplayedName += runTypeObj[0].description
+                else:
+                    categoryDisplayedName = runTypeObj[0].description
+            else:
+                categoryDisplayedName = applicationCategoryDisplayedName
+        except Exception as err:
+            categoryDisplayedName = applicationCategoryDisplayedName if applicationCategoryDisplayedName else ""
+
+        return categoryDisplayedName
+
+
+    @staticmethod
+    def get_dualBarcodes_delimiter():
+        """
+        return the delimiter between the start and end barcodes in a dualBarcode selection
+        """
+        return "--"
     
     def save(self, *args, **kwargs):
 
@@ -1505,7 +1565,7 @@ class PlannedExperiment(models.Model):
         # ===================== ExperimentAnalysisSettings =====================
         eas_kwargs = {'status': self.planStatus}
         eas_keys = [
-            'barcodedSamples', 'barcodeKitName', 'targetRegionBedFile', 'hotSpotRegionBedFile', 'libraryKey', 'tfKey', 'threePrimeAdapter',
+            'barcodedSamples', 'barcodeKitName', 'endBarcodeKitName', 'targetRegionBedFile', 'hotSpotRegionBedFile', 'libraryKey', 'tfKey', 'threePrimeAdapter',
             'reference', 'selectedPlugins', 'isDuplicateReads', 'base_recalibration_mode', 'realign', 'libraryKitName',
             "mixedTypeRNA_reference", "mixedTypeRNA_targetRegionBedFile", "mixedTypeRNA_hotSpotRegionBedFile",
             "beadfindargs", "analysisargs", "prebasecallerargs", "calibrateargs", "basecallerargs", "alignmentargs", "ionstatsargs",
@@ -1699,7 +1759,7 @@ class PlannedExperiment(models.Model):
                     new_plugins = selectedPlugins[1].keys() if selectedPlugins[1] else ''
                     if set(old_plugins) != set(new_plugins):
                         self._temp_changedFields['plugins'] = [', '.join(old_plugins), ', '.join(new_plugins)]
-    
+
                     for name in selectedPlugins[1]:
                         old_userInput = selectedPlugins[0][name].get('userInput','') if selectedPlugins[0].get(name,{}) else ''
                         new_userInput = selectedPlugins[1][name].get('userInput','') if selectedPlugins[1][name] else ''
@@ -1881,15 +1941,18 @@ class Experiment(models.Model):
 
     chefReagentsPart = models.CharField(max_length=64, blank=True, default='')
     chefReagentsLot = models.CharField(max_length=64, blank=True, default='')
+    chefReagentsSerialNum = models.CharField(max_length=64, blank=True, default='')
     chefReagentsExpiration = models.CharField(max_length=64, blank=True, default='')
 
     chefSolutionsPart = models.CharField(max_length=64, blank=True, default='')
     chefSolutionsLot = models.CharField(max_length=64, blank=True, default='')
+    chefSolutionsSerialNum = models.CharField(max_length=64, blank=True, default='')
     chefSolutionsExpiration = models.CharField(max_length=64, blank=True, default='')
 
     chefSamplePos = models.CharField(max_length=64, blank=True, default='')
     chefPackageVer = models.CharField(max_length=64, blank=True, default='')
 
+    chefFlexibleWorkflow = models.CharField(max_length=64, blank=True, default='')
     chefExtraInfo_1 = models.CharField(max_length=128, blank=True, default='')
     chefExtraInfo_2 = models.CharField(max_length=128, blank=True, default='')
     chefScriptVersion = models.CharField(max_length=64, blank=True, default='')
@@ -2074,6 +2137,12 @@ class Experiment(models.Model):
         else:
             return ""
 
+    def get_endBarcodeKitName(self):
+        if self.latest_eas:
+            return self.latest_eas.endBarcodeKitName
+        else:
+            return ""
+
     def get_library(self):
         self.latest_eas = self.get_EAS_cached()
         if self.latest_eas:
@@ -2249,7 +2318,8 @@ class ExperimentAnalysisSettings(models.Model):
     status = models.CharField(max_length=512, blank=True, choices=ALLOWED_STATUS, default='')
 
     barcodeKitName = models.CharField(max_length=128, blank=True, null=True)
-
+    endBarcodeKitName = models.CharField(max_length=128, blank=True, null=True, default='')
+    
     libraryKey = models.CharField(max_length=64, blank=True)
     tfKey = models.CharField(max_length=64, blank=True)
 
@@ -2616,7 +2686,8 @@ class SampleSetItem(models.Model):
 
     #a sample can be in many sampleSets but a sample can only associate with one sampleSetItem
     sample = models.ForeignKey("Sample", related_name="sampleSets", blank=False, null=False)
-    dnabarcode = models.ForeignKey("dnaBarcode", blank=True, null=True)
+    dnabarcode = models.ForeignKey("dnaBarcode", related_name="startBarcode", blank=True, null=True)
+    endDnabarcode = models.ForeignKey("dnaBarcode", related_name="endBarcode", blank=True, null=True)
 
     #a sampleSet can have many sampleSetItem but a sampleSetItem can only associate with one sampleSet
     sampleSet = models.ForeignKey(SampleSet, related_name="samples", blank=False, null=False)
@@ -3502,6 +3573,8 @@ class Rig(models.Model):
     serial = models.CharField(max_length=24, blank=True, null=True)
 
     state = models.CharField(max_length=512, blank=True)
+    display_state = models.CharField(max_length=512, blank=True)
+
     version = json_field.JSONField(blank=True)
     alarms = json_field.JSONField(blank=True)
     last_init_date = models.CharField(max_length=512, blank=True)
@@ -3514,6 +3587,24 @@ class Rig(models.Model):
     updateCommand = json_field.JSONField(blank=True)
 
     def __unicode__(self): return self.name
+
+    def get_display_state(self):
+        display_state = self.display_state
+        if not display_state and self.state:
+            # display_state field is not available for PGM, try converting state string
+            state = self.state.strip().lower()
+            if "idle" in state or "Select Planned Run".lower() in state:
+                display_state = "Idle"
+            elif "cleaning" in state:
+                display_state = "Cleaning"
+            elif "initing" in state or "initializing" in state:
+                display_state = "Initializing"
+            elif state == "in run":
+                display_state = "Sequencing"
+            elif "Type-SwUpdate".lower() in state:
+                display_state = "Updating SW" if "done" not in state else "Idle"
+
+        return display_state
 
 
 class FileServer(models.Model):
@@ -3893,7 +3984,7 @@ class Chip(models.Model):
         ('', "Undefined"),
         ('pgm', 'PGM'),
         ('proton', 'Proton'),
-        ('S5', 'S5')
+        ('S5', 'Ion GeneStudio S5')
     )
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
@@ -3935,6 +4026,16 @@ class Chip(models.Model):
         isVersionInfoFound, prefixes = Chip.getChipDisplayedNameParts(self.getChipDisplayedName())
 
         return prefixes[-1] if len(prefixes) > 1 else ""
+
+    @cached_property
+    def getChipWarning(self):
+        """
+        Returns chip warning, some chips cannot be run on S5 system
+        """
+        warning = ''
+        if self.name == '550' and is_s5orig():
+            warning = 'Warning: Selected chip type (%s) is not compatible with S5 system. Create or transfer plan to another TS for sequencing.' % self.name
+        return warning
 
     @staticmethod
     def getChipDisplayedNameParts(value):
@@ -4068,6 +4169,8 @@ class Plugin(models.Model):
     The model which will be run against an result to produce plugin results
     """
 
+    apt_cache = None
+
     # the name of the shell script to launch for plugins
     LAUNCH_SHELL = 'launch.sh'
 
@@ -4119,11 +4222,16 @@ class Plugin(models.Model):
     # plan time alternative to instance.html
     userinputfields = json_field.JSONField(blank=True, null=True)
 
-    ## file containing plugin definition. launch.sh or PluginName.py
+    # file containing plugin definition. launch.sh or PluginName.py
     script = models.CharField(max_length=256, blank=True, default="")
 
     # link to the debian package name
     packageName = models.CharField(max_length=256, blank=True, default="", db_column="packagename")
+
+    @staticmethod
+    def update_apt_cache():
+        """Simple method to update the cache for this model"""
+        Plugin.apt_cache = apt.Cache()
 
     @cached_property
     def isConfig(self):
@@ -4188,39 +4296,35 @@ class Plugin(models.Model):
         """
         return True if self.packageName and self.packageName != 'ion-rndplugins' else False
 
-    @cached_property
+    @property
     def availableVersions(self):
         """
         For supported plugins only, this will get all of the versions available for the plugin
         :return: A list of verison names
         """
 
-        # Get the plugin package name and check if this is supported
-        pluginPackageName = self.packageName
-        if not pluginPackageName:
+        if Plugin.apt_cache == None:
+            Plugin.apt_cache = apt.Cache()
+
+        if self.packageName in Plugin.apt_cache:
+            return Plugin.apt_cache[self.packageName].versions.keys()
+        else:
             return list()
 
-        # return a list of the available version gotten from the plugin daemon
-        client = xmlrpclib.ServerProxy("http://" + settings.IPLUGIN_HOST + ":" + str(settings.IPLUGIN_PORT))
-        pluginDict = client.GetSupportedPluginInfo(pluginPackageName)
-        return pluginDict['AvailableVersions']
-
-    @cached_property
+    @property
     def isUpgradable(self):
         """
         For supported plugins this will indicate if an upgrade is available
         :return: True if the supported plugin has an aptitude version available, false otherwise
         """
 
-        # Get the plugin package name and check if this is supported
-        pluginPackageName = self.packageName
-        if not pluginPackageName:
-            return False
+        if Plugin.apt_cache == None:
+            Plugin.apt_cache = apt.Cache()
 
-        # return a list of the available version gotten from the plugin daemon
-        client = xmlrpclib.ServerProxy("http://" + settings.IPLUGIN_HOST + ":" + str(settings.IPLUGIN_PORT))
-        pluginDict = client.GetSupportedPluginInfo(pluginPackageName)
-        return pluginDict['UpgradeAvailable']
+        if self.packageName in Plugin.apt_cache:
+            return Plugin.apt_cache[self.packageName].is_upgradable
+        else:
+            return False
 
     def __unicode__(self):
         """
@@ -4580,6 +4684,34 @@ class Plugin(models.Model):
         # force a refresh with the TS database
         pluginmanager.rescan()
 
+    @staticmethod
+    def validate(pk, configuration, run_mode):
+        """This will create an instance of the plugin and run the validation on it"""
+        # disablign the validatino for the 5.8 release
+        return list()
+        # instance = Plugin.create_instance(pk)
+        # return instance.validate(configuration, run_mode) if instance is not None else list()
+
+    @staticmethod
+    def create_instance(pk):
+        """This method will create a new instance of the plugin contained"""
+        plugin_model = Plugin.objects.get(pk=pk)
+        module_cache = ModuleCache()
+        plugin_module = module_cache.load_module(plugin_model.name, plugin_model.pluginscript, False)
+
+        # if the module is none then we need to return and log whatever error was encountered
+        if plugin_module is None:
+            if plugin_model.name in module_cache.module_errors:
+                logger.error("Exception when trying to load plugin " + plugin_model.name + ": " + str(module_cache.module_errors))
+            return None
+
+        # return nothing since we are working with launch
+        if plugin_model.script and Plugin.LAUNCH_SHELL in plugin_model.script:
+            return None
+
+        plugin_definition = getattr(plugin_module, plugin_model.name)
+        return plugin_definition()
+
     def natural_key(self):
         """
         Gets the "natural key" for this data table
@@ -4627,12 +4759,15 @@ class PluginResult(models.Model):
     # the owner of the results folder
     owner = models.ForeignKey(User)
 
+    # this will host a list of all of the validation errors
+    validation_errors = json_field.JSONField(blank=True)
+
     # cache global context
     _gc = None
 
     def starttime(self):
         """Gets the first start time"""
-        prj = self.plugin_result_jobs.earliest('starttime')
+        prj = self.plugin_result_jobs.order_by('starttime').first()
         return prj.starttime if prj else None
 
     def endtime(self):
@@ -4642,6 +4777,9 @@ class PluginResult(models.Model):
 
     def state(self):
         """This will report the latest job's status"""
+        if self.validation_errors.get('validation_errors', list()):
+            return 'Failed Validation'
+
         prj = self.plugin_result_jobs.order_by('-starttime').first()
         return prj.state if prj else 'Unknown'
 

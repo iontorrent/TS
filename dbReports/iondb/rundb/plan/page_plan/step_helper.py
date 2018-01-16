@@ -179,6 +179,29 @@ class StepHelper(object):
             return True
         return False
 
+
+    def isDualBarcodingSupported(self):
+        if not self.isBarcoded():
+            return False
+        
+        if self.getApplProduct():
+            return self.getApplProduct().isDualBarcodingBySampleSupported
+        return False
+
+
+    def isDualBarcoded(self):
+        if not self.isDualBarcodingSupported():
+            return False
+        step = self.steps.get(StepNames.SAVE_PLAN, None)
+        if not step:
+            step = self.steps.get(StepNames.BARCODE_BY_SAMPLE, None)
+        if step and step.savedFields[SavePlanFieldNames.END_BARCODE_SET]:
+            return True
+        elif step and step.savedFields[SavePlanFieldNames.END_BARCODE_SET]:
+                return True
+        return False
+        
+    
     def isCreate(self):
         return self.sh_type in [StepHelperType.CREATE_NEW_PLAN, StepHelperType.CREATE_NEW_TEMPLATE, StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE]
 
@@ -225,7 +248,11 @@ class StepHelper(object):
         return target_index >= original_index
 
     def getApplProduct(self):
-        return self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.APPL_PRODUCT]
+        if self.steps[StepNames.APPLICATION] and self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
+            return self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.APPL_PRODUCT]
+        else:
+            return None
+
 
     def getApplProducts(self):
         """

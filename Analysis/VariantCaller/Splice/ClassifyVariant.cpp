@@ -766,6 +766,7 @@ bool IsAllelePairConnected(const AlleleIdentity& alt1, const AlleleIdentity& alt
 		cout << "  - (altX, altY) is Fake HS Allele? (" << alt1.status.isFakeHsAllele << ", " << alt2.status.isFakeHsAllele <<")" << endl;
 	}
 
+	/* CZB: Although it gives better splitting results, making exception for problematic allele might break lookahead sliding window. So I disable the speacial treatment.
 	// Exception for problematic alleles
 	if (alt1.status.isProblematicAllele or alt2.status.isProblematicAllele){
 		if (debug){
@@ -773,6 +774,7 @@ bool IsAllelePairConnected(const AlleleIdentity& alt1, const AlleleIdentity& alt
 		}
 		return is_connect;
 	}
+	*/
 
 	// Exceptions for Fake HS alleles
 	if (alt1.status.isFakeHsAllele and alt2.status.isFakeHsAllele){

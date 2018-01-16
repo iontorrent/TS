@@ -3,7 +3,7 @@
         "name"          : "Generic - 530 - Germ Line - Low Stringency",
         "tooltip"       : "Parameters optimized using Ampliseq for 48K NA12878 for generic low stringency for depth > 0",
         "configuration" : "germline_low_stringency_530",
-        "ts_version"    : "5.6",
+        "ts_version"    : "5.8",
         "compatibility" : {
           "chip"        : ["510", "520", "530"],
           "library"     : ["ampliseq"],
@@ -54,7 +54,7 @@
         "hotspot_strand_bias":0.98,
         "hotspot_strand_bias_pval":0.01,
 
-        "downsample_to_coverage":4000,
+        "downsample_to_coverage":400,
         "outlier_probability":0.014,
         "do_snp_realignment":0,
         "do_mnp_realignment":0,

@@ -70,27 +70,43 @@ uint32_t *RegionCoverage::CreateTargetBinSizes( uint32_t &numBins, uint32_t binS
 
 	// determine the number of regions covered by window
 	if( !SetCursorOnRegion( srtContig, srtPosition ) ) return NULL;
+	srtContig = m_bcovContigIdx;
+	// for combination isolated regions and binning target regions have to be effectively merged
+	bool mergeRegions = (numBins > 0 || binSize > 0);
 	uint32_t numRegions = 0;
+	uint32_t lastEndPos = 0;
 	for( TargetRegion *cur = m_bcovRegion; cur; cur = cur->next ) {
 		if( srtContig == endContig && cur->trgSrt > endPosition ) break;
-		++numRegions;
+		if( mergeRegions ) {
+			if( cur->trgSrt > lastEndPos ) ++numRegions;
+			if( lastEndPos < cur->trgEnd ) lastEndPos = cur->trgEnd;
+		} else {
+			++numRegions;
+		}
 	}
 	for( uint32_t contig = srtContig+1; contig <= endContig; ++contig ) {
+		lastEndPos = 0;
 		for( TargetRegion *cur = m_contigList[contig]->targetRegionHead; cur; cur = cur->next ) {
 			if( contig == endContig && cur->trgSrt > endPosition ) break;
-			++numRegions;
+			if( mergeRegions ) {
+				if( cur->trgSrt > lastEndPos ) ++numRegions;
+				if( lastEndPos < cur->trgEnd ) lastEndPos = cur->trgEnd;
+			} else {
+				++numRegions;
+			}
 		}
 	}
 	// make local copy of contig sizes required, noting partial srt/end contig lengths
 	uint32_t *csizes = new uint32_t[numRegions];
-	uint32_t lstContig = 0, srtPos = 0, endPos = 0;
 	bool firstContig = true;
+	uint32_t pullMode = mergeRegions ? 2 : 1;
 	for( size_t n = 0; n < numRegions; ++n ) {
-		csizes[n] = PullSubRegion( 0, lstContig, srtPos, endPos, firstContig );
-	}
-	// adjust last region size (if clipped)
-	if( lstContig == endContig && endPos > endPosition ) {
-		csizes[numRegions-1] -= endPos - endPosition;
+		uint32_t lstContig = srtContig, srtPos = srtPosition, endPos = 0;
+		csizes[n] = PullSubRegion( 0, lstContig, srtPos, endPos, firstContig, pullMode );
+		// adjust ends by window clipping - required for overlapping regions
+		if( lstContig == endContig && endPos > endPosition ) {
+			csizes[n] -= endPos - endPosition;
+		}
 	}
 	uint32_t *cnbins = new uint32_t[numRegions];
 	if( binSize > 0 ) {
@@ -182,6 +198,61 @@ uint32_t RegionCoverage::GetTargetedWindowSize(
 		}
 	}
 	return length;
+}
+
+string RegionCoverage::AnnotationOnRegion(
+    uint32_t srtContig, uint32_t srtPosition, uint32_t endPosition, uint32_t endContig, uint32_t maxValues )
+{
+	string fieldVals;
+	if( !m_numAuxFields || !maxValues ) return fieldVals;
+	uint32_t numVals = 0;
+	string last_tsv;
+	vector<string> all;
+	if( endContig < srtContig ) endContig = srtContig;
+	if( endPosition == 0 ) endPosition = m_contigList[endContig]->length;
+	for( uint32_t contig = srtContig; contig <= endContig; ++contig ) {
+		uint32_t srtPos = contig > srtContig ? 1 : srtPosition;
+		uint32_t endPos = contig < endContig ? m_contigList[contig]->length : endPosition;
+		if( !ReadOnRegion( contig, srtPos, endPos ) ) continue;
+		for( TargetRegion *cur = m_rcovRegion; cur; cur = cur->next ) {
+			if( endPos < cur->trgSrt ) break;
+			last_tsv = cur->auxData[0];
+			for( size_t i = 1; i < m_numAuxFields; ++i ) {
+				last_tsv += "\t" + cur->auxData[i];
+			}
+			if( ++numVals < maxValues ) {
+				all.push_back( last_tsv );
+			}
+		}
+	}
+	// invert the fields
+	if( numVals > maxValues ) {
+		const string sep = ",...(" + BbcUtils::integerToString(numVals-2) + ")...,";
+		vector<string> v1 = stringTrimSplit( all[0], '\t' );
+		vector<string> v2 = stringTrimSplit( last_tsv, '\t' );
+		for( size_t i = 0; i < m_numAuxFields; ++i ) {
+			if( i ) fieldVals += "\t";
+			fieldVals += v1[i] + sep + v2[i];
+		}
+	} else if( numVals ) {
+		all.push_back( last_tsv );
+		for( size_t i = 0; i < m_numAuxFields; ++i ) {
+			vector<string> v = stringTrimSplit( all[0], '\t' );
+			if( i ) fieldVals += "\t";
+			fieldVals += v[i];
+			for( size_t j = 1; j < numVals; ++j ) {
+				v = stringTrimSplit( all[j], '\t' );
+				fieldVals += "," + v[i];
+			}
+		}
+	}
+	// ensure there are the appropriate number of (empty) fields returned
+	if( fieldVals.empty() ) {
+		for( int i = 0; i < (int)m_numAuxFields-1; ++i ) {
+			fieldVals += "\t";
+		}
+	}
+	return fieldVals;
 }
 
 string RegionCoverage::FieldsOnRegion( uint32_t contigIdx, uint32_t readSrt, uint32_t readEnd, uint32_t maxValues )
@@ -406,16 +477,32 @@ string RegionCoverage::Load(
 }
 
 uint32_t RegionCoverage::PullSubRegion(
-	uint32_t pullSize, uint32_t &contig, uint32_t &srtPos, uint32_t &endPos, bool &firstContigRegion )
+	uint32_t pullSize, uint32_t &srtContig, uint32_t &srtPos, uint32_t &endPos,
+    bool &firstContigRegion, uint32_t pullMode )
 {
 	// Assumes an initial call to SetCursorOnRegion() but could be used with other iterators
 	// 0 return may be  valid if no more regions to pull (depending on whether expected)
 	if( !m_bcovRegion || m_bcovContigIdx >= m_numRefContigs ) return 0;
-	// set start to current locus and length to end of current region at cursor
-	contig = m_bcovContigIdx;
+	// this option is for individual region coverage where they might overlap
+	endPos = m_bcovRegion->trgEnd;
+	firstContigRegion = (m_bcovRegion == m_contigList[m_bcovContigIdx]->targetRegionHead);
+	if( pullMode ) {
+		// reset to start of current region in case pullMode changed
+		m_bcovRegionPos = m_bcovRegion->trgSrt;
+		if( m_bcovContigIdx == srtContig && m_bcovRegionPos < srtPos ) {
+			m_bcovRegionPos = srtPos;
+		}
+		// skip to last region overlapping the merged current region
+		if( pullMode >= 2 ) {
+			while( m_bcovRegion->next && m_bcovRegion->next->trgSrt <= endPos ) {
+				m_bcovRegion = m_bcovRegion->next;
+				if( m_bcovRegion->trgEnd > endPos ) endPos = m_bcovRegion->trgEnd;
+			}
+		}
+	}
+	srtContig = m_bcovContigIdx;
 	srtPos = m_bcovRegionPos;
-	firstContigRegion = m_bcovRegion == m_contigList[m_bcovContigIdx]->targetRegionHead;
-	uint32_t reglen = m_bcovRegion->trgEnd - m_bcovRegionPos + 1;	// +1 for inclusive
+	uint32_t reglen = endPos - m_bcovRegionPos + 1;	// +1 for inclusive
 	// Note: exception case for pullSize == 0; also guards against infinite loops for usage
 	if( pullSize && reglen > pullSize ) {
 		// return sub-region of current region
@@ -423,22 +510,23 @@ uint32_t RegionCoverage::PullSubRegion(
 		endPos = m_bcovRegionPos - 1; // -1 for inclusive
 		reglen = pullSize;
 	} else {
-		// return end of current region
-		endPos = m_bcovRegion->trgEnd;
-		m_bcovRegionPos = endPos + 1;	// assume next available region overlaps this one
-		// move cursor to start of next available region
+		// move to next region
 		m_bcovRegion = m_bcovRegion->next;
+		m_bcovRegionPos = endPos + 1;	// assume overlap not wanted
 		// skip regions that may have already been covered by last region
-		while( m_bcovRegion && m_bcovRegion->trgEnd <= endPos ) {
-			m_bcovRegion = m_bcovRegion->next;
+		if( pullMode != 1 ) {
+			// move cursor to start of next available region
+			while( m_bcovRegion && m_bcovRegion->trgEnd <= endPos ) {
+				m_bcovRegion = m_bcovRegion->next;
+			}
 		}
 		// move to next available contig if no more regions on current
 		while( !m_bcovRegion ) {
-			m_bcovRegionPos = 0;	// note move to new contig
+			m_bcovRegionPos = 0;
 			if( ++m_bcovContigIdx >= m_numRefContigs ) break;
 			m_bcovRegion = m_contigList[m_bcovContigIdx]->targetRegionHead;
 		}
-		// only set to start of next position if not moving backwards to ensure same region is not covered twice
+		// set start of next position if one available
 		if( m_bcovRegion && m_bcovRegion->trgSrt > m_bcovRegionPos ) {
 			m_bcovRegionPos = m_bcovRegion->trgSrt;
 		}

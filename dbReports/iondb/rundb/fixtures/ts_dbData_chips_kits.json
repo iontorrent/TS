@@ -284,7 +284,7 @@
       "name": "550",
       "slots": 1,
       "description": "550",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "S5"
     }
   }, 
@@ -1506,7 +1506,7 @@
       "instrumentType": "",
       "isActive": true,
       "description": "Ion AmpliSeq Library Kit Plus",
-      "applicationType" : "AMPS_ANY"
+      "applicationType" : "AMPS_ANY;MIXED"
     }
   },
   {
@@ -1771,7 +1771,7 @@
       "isActive": true,
       "description": "Ion 540 Kit-Chef",
       "categories" : "s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5RnaWTSamplePrep",
-      "chipTypes" : "540;550"
+      "chipTypes" : "540"
     }
   },
   {
@@ -1791,7 +1791,7 @@
       "isActive": true,
       "description": "Ion 540 Kit-OT2",
       "categories" : "s5v1Kit;flowOverridable;multipleReadLength;",
-      "chipTypes" : "540;550"
+      "chipTypes" : "540"
     }
   },  
   {
@@ -2280,7 +2280,29 @@
       ]
     }
   },
-  
+  {
+    "pk": 20113,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion Chef S550 V1",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "libraryReadLength" : 200,
+      "templatingSize" : "200",
+      "uid": "ICPREP0014",
+      "instrumentType": "S5",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion 550 Kit-Chef",
+      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;",
+      "defaultCartridgeUsageCount" : 2,
+      "cartridgeExpirationDayLimit" : 8,
+      "cartridgeBetweenUsageAbsoluteMaxDayLimit" : 30,
+      "chipTypes" : "550"
+    }
+  },
   {
     "pk": 20001,
     "model": "rundb.kitpart",
@@ -4861,6 +4883,26 @@
       "barcode": "100049484",
       "kit": [
         "SEQ0028"
+      ]
+    }
+  },
+  {
+    "pk": 20264,
+    "model": "rundb.kitpart",
+   "fields": {
+      "barcode": "A34540",
+      "kit": [
+        "ICPREP0014"
+      ]
+    }
+  },
+  {
+    "pk": 20265,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A34540C",
+      "kit": [
+        "ICPREP0014"
       ]
     }
   }

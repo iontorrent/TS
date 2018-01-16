@@ -50,6 +50,7 @@ OPTIONS="OPTIONS:
   -E <name> File name stem for auxilary output files. Default: 'tca_auxiliary'.
   -F <name> File name stem for analysis output files. Default: Use BAM file name provided (w/o extension).
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -K <list> Set read depth at which percent coverage is reported to this list of integers. Default: '20,100,500'.
   -L <name> Reference Library name, e.g. hg19. Defaults to <reference> if not supplied.
   -N <name> Sample name for use in summary output. Default: 'None'
   -M <int>  Minimium Mapped read length filter. Default: 0.
@@ -93,6 +94,7 @@ AUXSTEM=""
 CONTIGS=0
 MINMAPLEN=0
 MINMAPQUAL=0
+COVDEPTHS="20,100,500"
 
 TRACK=1
 PLOTERROR=0
@@ -100,7 +102,7 @@ LINKANNOBED=1
 TRGCOVDEPTH=1
 AMPE2EREADS=1
 
-while getopts "hlabcdgurtA:B:C:D:E:F:G:L:M:N:O:P:Q:R:S:" opt
+while getopts "hlabcdgurtA:B:C:D:E:F:G:K:L:M:N:O:P:Q:R:S:" opt
 do
   case $opt in
     A) ANNOBED=$OPTARG;;
@@ -110,6 +112,7 @@ do
     E) AUXSTEM=$OPTARG;;
     F) FILESTEM=$OPTARG;;
     G) GENOME=$OPTARG;;
+    K) COVDEPTHS=$OPTARG;;
     L) LIBRARY=$OPTARG;;
     M) MINMAPLEN=$OPTARG;;
     N) SAMPLENAME=$OPTARG;;
@@ -424,7 +427,7 @@ if [ $BASECOVERAGE -eq 1 ]; then
     fi
     # Here the sumStats will have on-target counts using the padded targets.
     # On-target reads could be gathered here vs. padded targets but was not done in original version
-    BBCMD="$BBCTOOLS create $FILTOPTS $BEDOPT $BASECOVOPTS '$BAMFILE'"
+    BBCMD="$BBCTOOLS create $FILTOPTS -D '$COVDEPTHS' $BEDOPT $BASECOVOPTS '$BAMFILE'"
     eval "$BBCMD" >&2
     if [ $? -ne 0 ]; then
       echo -e "\nERROR: bbctools create failed." >&2
@@ -444,7 +447,7 @@ fi
 
 # Set up for output of on-target reads tracking
 
-DEPTHS=""
+DEPTH="-D '$COVDEPTHS'"
 if [ $RNABED -ne 0 ];then
   # disable depth of base coverage report for RNA applications
   DEPTH="-D ''"
@@ -456,7 +459,7 @@ if [ -n "$ANNOBEDOPT" -a $NOTARGETANAL -eq 0 ]; then
   XTRAFIELDS="3:region_id,-2:attributes,-1:gc_count"
   if [ $AMPLICONS -eq 0 ]; then
     TARGETCOVFILE="${OUTFILEROOT}.target.cov.xls"
-    TARGETCOVOPTS="-C '$TARGETCOVFILE' -T trgbases -A '$XTRAFIELDS'"
+    TARGETCOVOPTS="-C '$TARGETCOVFILE' $DEPTH -T trgbases -A '$XTRAFIELDS'"
   else
     TRGCOVBYBASES=0
     if [ $RNA_CONTIGS -ne 0 ];then
@@ -642,12 +645,12 @@ fi
 echo "" >> "$STATSFILE"
 
 if [ $CONTIGS -ne 0 ];then
-  # AMPOPT to distinuish RNA-Seq
-  STATCMD="$RUNDIR/targetReadStats.pl -c $AMPOPT -M $MAPPED_READS '$SSTFILE'"
+  # AMPOPT to distinguish RNA-Seq
+  STATCMD="$RUNDIR/targetReadStats.pl -c $AMPOPT -K '$COVDEPTHS' -M $MAPPED_READS '$SSTFILE'"
 elif [ $AMPLICONS -ne 0 ]; then
-  STATCMD="$RUNDIR/targetReadStats.pl $AMPOPT -M $MAPPED_READS '$TARGETCOVFILE'"
+  STATCMD="$RUNDIR/targetReadStats.pl $AMPOPT -K '$COVDEPTHS' -M $MAPPED_READS '$TARGETCOVFILE'"
 else
-  STATCMD="$RUNDIR/targetReadStats.pl -b -P $PC_TARGET_READS '$TARGETCOVFILE'"
+  STATCMD="$RUNDIR/targetReadStats.pl -b -K '$COVDEPTHS' -P $PC_TARGET_READS '$TARGETCOVFILE'"
 fi
 eval "$STATCMD >> '$STATSFILE'" >&2
 if [ $? -ne 0 ]; then
@@ -672,8 +675,12 @@ if [ $BASECOVERAGE -eq 1 ]; then
   if [ $CONTIGS -eq 0 ];then
     TBEDOPT=$BEDOPT
   fi
+  # ensure 1x is included in base coverage at depths reported
+  if [ -n "$COVDEPTHS" ]; then
+    COVDEPTHS="1,$COVDEPTHS"
+  fi
   DOCFILE="${OUTFILEROOT}.base.cov.xls"
-  DOCCMD="$BBCTOOLS report -g $TBEDOPT -C '$DOCFILE' '$BBCFILE' >> '$STATSFILE'"
+  DOCCMD="$BBCTOOLS report -g $TBEDOPT -C '$DOCFILE' -D '$COVDEPTHS' '$BBCFILE' >> '$STATSFILE'"
   eval "$DOCCMD" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: bbctools view failed." >&2

@@ -228,7 +228,7 @@ class BbcView
 			uint32_t srtContig, uint32_t srtPosition, uint32_t endContig, uint32_t endPosition,
 			uint64_t fcovSum, uint64_t rcovSum, uint64_t fcovSumTrg, uint64_t rcovSumTrg, const string annotation = "" );
 
-		bool SeekStart( uint32_t contigIdx, uint32_t position );
+		bool SeekStart( uint32_t contigIdx, uint32_t position, bool softRewind = true );
 
 		// ---- Print stream formats as member functions ----
 

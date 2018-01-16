@@ -37,7 +37,7 @@ const int s_initialMinJumpLen = 1000000;
 const int s_initialMaxReadLen = 1000;
 
 // Current version number string for bbctools executable
-const uint16_t s_versionNumber = 1200;
+const uint16_t s_versionNumber = 1211;
 
 // Forward declarations of functions used by main()
 int bbctools_create( BbcUtils::OptParser &optParser );
@@ -49,7 +49,7 @@ int main( int argc, char* argv[] ) {
 	//
 	// general command line argument validation
 	//
- 	if( argc <= 1 ) {
+    	if( argc <= 1 ) {
     	cout << "BBCtools version " << BbcUtils::numberToString( (double)s_versionNumber/1000, 3 ) << endl;
 		Usage("");
 		return 1;

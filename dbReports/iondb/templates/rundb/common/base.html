@@ -50,7 +50,7 @@
     <link href="{% static "resources/kendo/styles/kendo.common.min.css"%}" rel="stylesheet" />
     <link href="{% static "resources/kendo/styles/kendo.bootstrap.min.css"%}" rel="stylesheet" />
     {% block extra_head_styles %}{% endblock extra_head_styles %}
-
+    <link rel="stylesheet" href="{% static "resources/font-awesome/css/font-awesome.min.css"%}">
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.min.css"%}" />
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
     <link type="text/css" rel="stylesheet" href="{% static "css/yamm.css"%}" />
@@ -165,14 +165,14 @@
                             </a>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url "configure_about" %}">About</a></li>
+                                <li><a href="{% url "configure_account" %}">Accounts</a></li>
                                 <li><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
+                                <li><a href="{% url "configure_configure" %}">Configure</a></li>
+                                <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
+                                <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+                                <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
                                 <li><a href="{% url "configure_references" %}">References</a></li>
                                 <li><a href="{% url "configure_services" %}">Services</a></li>
-                                <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-                                <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
-                                <li><a href="{% url "configure_configure" %}">Configure</a></li>
-                                <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-                                <li><a href="{% url "configure_account" %}">Accounts</a></li>
                                 <li><a href="{% url "offcycle_updates" %}">Updates</a></li>
                             </ul>
                         </li>
@@ -234,7 +234,7 @@
 {% block post-raw %}
 {% endblock post-raw %}
 {% include 'rundb/common/modals.html' %}
-{% if user.is_authenticated %}
+{% if user.is_authenticated and not disable_messages %}
 <script>
   $(function(){
     inbox = new MessageBox({models: {{global_messages|safe}} });

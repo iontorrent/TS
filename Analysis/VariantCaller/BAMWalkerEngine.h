@@ -68,6 +68,7 @@ struct Alignment {
     refmap_has_allele.clear();
     refmap_allele.clear();
     target_coverage_indices.clear();
+    best_coverage_target_idx = -1;
     is_reverse_strand = false;
     measurements.clear();
     measurements_length = 0;
@@ -118,6 +119,7 @@ struct Alignment {
   vector<char>          refmap_has_allele;
   vector<Allele>        refmap_allele;
   vector<int>           target_coverage_indices;
+  int                   best_coverage_target_idx;
 
   // Candidate evaluator information
   bool                  is_reverse_strand;  //! Indicates whether read is from the forward or reverse strand

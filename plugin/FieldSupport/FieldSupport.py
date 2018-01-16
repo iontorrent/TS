@@ -17,7 +17,7 @@ from ion.utils import makeCSA
 
 class FieldSupport(IonPlugin):
     """Generate an enhanced CSA"""
-    version = '5.6.0.1'
+    version = '5.8.0.1'
     runtypes = [RunType.THUMB]
     runlevels = [RunLevel.LAST]
 
@@ -134,8 +134,8 @@ class FieldSupport(IonPlugin):
             self.start_plugin = json.load(start_plugin_file)
 
         # Exit early if this is not a thumbnail run
-        if self.start_plugin["runplugin"]["run_type"] != "thumbnail":
-            self.state["warning"] = "This plugin can only be run on thumbnail reports. " \
+        if self.start_plugin["runplugin"]["run_type"] != "thumbnail" and self.start_plugin['runinfo']['platform'] != "pgm":
+            self.state["warning"] = "This plugin can only be run on thumbnail or PGM reports. " \
                                     "Please rerun this plugin on this run's thumbnail report."
             self.write_status()
             self.log.info("Field Support Aborted.")
@@ -152,7 +152,8 @@ class FieldSupport(IonPlugin):
         makeCSA.makeCSA(
             self.start_plugin["runinfo"]["report_root_dir"],
             self.start_plugin["runinfo"]["raw_data_dir"],
-            zip_path
+            zip_path,
+            self.start_plugin.get('chefSummary', dict()).get('chefLogPath', '')
         )
 
         self.state["progress"] = 30

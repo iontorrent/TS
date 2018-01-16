@@ -16,9 +16,8 @@
 #include "ChipIdDecoder.h"
 #include "Utils.h"
 #include "IonErr.h"
-
+#include "NNModel.h"
 #include <hdf5.h>
-
 
 using namespace std;
 
@@ -29,6 +28,7 @@ PerBaseQual::PerBaseQual()
   phred_thresholds_.resize(kNumPredictors);
   phred_thresholds_max_.resize(kNumPredictors);
   pthread_mutex_init(&predictor_mutex_, 0);
+  pthread_mutex_init(&qs_mutex_, 0);
 }
 
 
@@ -42,7 +42,10 @@ PerBaseQual::~PerBaseQual()
 
   if (save_predictors_)
     predictor_dump_.close();
+  if (save_qs_)
+	  qs_dump_.close();
   pthread_mutex_destroy(&predictor_mutex_);
+  pthread_mutex_destroy(&qs_mutex_);
 }
 
 
@@ -64,267 +67,398 @@ void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &inp
     phred_table_ = 0;
   }
 
+  flow_predictor_              	= opts.GetFirstBoolean('-', "flow-predictors", false);
   string phred_table_file       = opts.GetFirstString ('-', "phred-table-file", "");
   save_predictors_              = opts.GetFirstBoolean('-', "save-predictors", false);
+  save_qs_   					= opts.GetFirstBoolean('-', "save-qs", false);
+  errD_table_enable_ 			= opts.GetFirstBoolean('-', "errD-table", false);
+  string network_model_file     = opts.GetFirstString ('-', "network-model-file", "");
+  network_model_enable_ 		= opts.GetFirstBoolean('-', "network-model", false);
+
   //enzyme_name_                     = opts.GetFirstString ('-', "enzyme-name", "");
   // Determine the correct phred table filename to use
+  load_phred_table_ = false;
+  string nnfname = "";
+  string nnfname_full = "";
+  string fPhredfname = "";
+  if(flow_predictor_ && network_model_enable_ ){ // network model enabled
+	  cout << endl << "PerBaseQual::Init... flow space network model enabled. " << endl;
+	  if( network_model_file.empty() ) {  // no network model h5 file specified
+		  nnfname =  "nnmodel." + chip_type + ".h5";
+	  	  char* nnfname2 = GetIonConfigFile(nnfname.c_str());
+	  	  if(!nnfname2){ // no network model h5 found in ion config
+	  		  cout <<"WARNING: Can't find network model file, network model for this chip type is not supported" << endl;
+	  		  cout <<"WARNING: Switch to base space quality" << endl;
+	  		  load_phred_table_ = true;
+	  		  flow_predictor_ = false;
+	  	  }else
+	  		nnfname = nnfname2;
+	  }
+	  else
+		  nnfname = network_model_file;
+	  if(!load_phred_table_){
+		  model_ = new NN::NNModel(nnfname.c_str());
+		  //still need to load phredtable for errD_table
+		  load_phred_table_ = true;
+		  fPhredfname =  "phredTable." + chip_type + ".flow.Recal.h5";
+		  char* fPhredfname2 = GetIonConfigFile(fPhredfname.c_str());
+		  if(!fPhredfname2){
+		  	  cout <<"WARNING: Can't find flow phredTable file, flow phredTable for this chip type is not supported" << endl;
+		  	  cout <<"WARNING: Switch to base space quality" << endl;
+		  	  flow_predictor_ = false;
+		  }
+		  else{ // flow space phredtable method
+		  // let base phredtable read read flow space phredtable
+			  phred_table_file = fPhredfname2;
+		  }
+		  if (model_->GetInputLength() != kNumPredictorsFlowNN){
+			  ION_ABORT("ERROR: Dimension mismatch: Can't make inference from network model from " + nnfname);
+		  }
+	  }
+
+  }else if(flow_predictor_ && errD_table_enable_){   // phredtable based flow space
+	  cout << endl << "PerBaseQual::Init... flow space phredtable enabled. " << endl;
+	  if( phred_table_file.empty() ){   // no network model h5 file specified
+		  fPhredfname =  "phredTable." + chip_type + ".flow.Recal.h5";
+	  }else
+		  fPhredfname = phred_table_file;
+	  char* fPhredfname2 = GetIonConfigFile(fPhredfname.c_str());
+	  if(!fPhredfname2){
+	  	  cout <<"WARNING: Can't find flow phredTable file, flow phredTable for this chip type is not supported" << endl;
+	  	  cout <<"WARNING: Switch to base space quality" << endl;
+	  	  load_phred_table_ = true;
+	  	  flow_predictor_ = false;
+	  }
+	  else{ // flow space phredtable method
+		  // let base phredtable read read flow space phredtable
+		  load_phred_table_ = true;
+		  phred_table_file = fPhredfname2;
+	  }
+  }else{
+	  if(flow_predictor_){  // flow predictor on, but no option provided
+		  cout <<"WARNING: No method specified for flow space quality score" << endl;
+		  cout <<"WARNING: Switch to base space quality" << endl;
+	  }
+	  load_phred_table_ = true;
+	  flow_predictor_ = false;
+  }
 
   bool binTable = true;
   char *full_filename = NULL;
-  if (phred_table_file.empty()) { // no phred table specified via the --phred-table-file option
-    full_filename = get_phred_table_name(chip_type,recalib); // default table name (not enzyme-specific)
-    //if (!enzyme_name_.empty()) full_filename = get_phred_table_name(chip_type,recalib,enzyme_name_);
+  if(load_phred_table_){  // phredtable based method
+	  if (phred_table_file.empty()) { // no phred table specified via the --phred-table-file option
+		full_filename = get_phred_table_name(chip_type,recalib); // default table name (not enzyme-specific)
+		//if (!enzyme_name_.empty()) full_filename = get_phred_table_name(chip_type,recalib,enzyme_name_);
 
-    if(!full_filename)
-    {
-      printf("WARNING: cannot find binary phred table file %s, try to use non-binary phred table\n", phred_table_file.c_str());
-      //phred_table_file = phred_table_file.substr(0, phred_table_file.length() - 7); // get rid of .binary
-      phred_table_file = phred_table_file.substr(0, phred_table_file.length() - 3); // get rid of .h5
-      binTable = false;
-      char* full_filename2 = GetIonConfigFile(phred_table_file.c_str());
-      if(!full_filename2)
-        ION_ABORT("ERROR: Can't find phred table file " + phred_table_file);
+		if(!full_filename)
+		{
+		  printf("WARNING: cannot find binary phred table file %s, try to use non-binary phred table\n", phred_table_file.c_str());
+		  //phred_table_file = phred_table_file.substr(0, phred_table_file.length() - 7); // get rid of .binary
+		  phred_table_file = phred_table_file.substr(0, phred_table_file.length() - 3); // get rid of .h5
+		  binTable = false;
+		  char* full_filename2 = GetIonConfigFile(phred_table_file.c_str());
+		  if(!full_filename2)
+			ION_ABORT("ERROR: Can't find phred table file " + phred_table_file);
 
-      phred_table_file = full_filename2;
-      free(full_filename2);
-    }
-    else
-    {
-      phred_table_file = full_filename;
-      free(full_filename);
-    }
+		  phred_table_file = full_filename2;
+		  free(full_filename2);
+		}
+		else
+		{
+		  phred_table_file = full_filename;
+		  free(full_filename);
+		}
+	  }
+	  else if (recalib) // this is mainly to handle the phred_table_file passed by the pipeline that does not contain ".Recal"
+	  {
+		  phred_table_file = add_Recal_to_phredTableName(phred_table_file);
+	  }
+	  cout << endl << "PerBaseQual::Init... phred_table_file=" << phred_table_file << endl;
+	  binTable = hasBinaryExtension(phred_table_file);
+
+	  // Load the phred table
+	  if(binTable)
+	  {
+		cout << endl << "PerBaseQual::Init... load binary phred_table_file=" << phred_table_file << endl;
+		vector<size_t> vNumCuts(kNumPredictors, 0);
+
+		if(H5Fis_hdf5(phred_table_file.c_str()) > 0)
+		{
+		  hid_t root = H5Fopen(phred_table_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+		  if(root < 0)
+		  {
+			ION_ABORT("ERROR: cannot open HDF5 file " + phred_table_file);
+		  }
+
+		  hid_t grpQvTable = H5Gopen(root, "/QvTable", H5P_DEFAULT);
+		  if (grpQvTable < 0)
+		  {
+			H5Fclose(root);
+			ION_ABORT("ERROR: fail to open HDF5 group QvTable");
+		  }
+
+		  if(H5Aexists(grpQvTable, "NumPredictors") <= 0)
+		  {
+			H5Gclose(grpQvTable);
+			H5Fclose(root);
+			ION_ABORT("ERROR: HDF5 attribute NumPredictors does not exist");
+		  }
+
+		  hid_t attrNumPreds = H5Aopen(grpQvTable, "NumPredictors", H5P_DEFAULT);
+		  if (attrNumPreds < 0)
+		  {
+			H5Gclose(grpQvTable);
+			H5Fclose(root);
+			ION_ABORT("ERROR: fail to open HDF5 attribute NumPredictors");
+		  }
+
+		  unsigned int numPredictors = 0;
+		  herr_t ret = H5Aread(attrNumPreds, H5T_NATIVE_UINT, &numPredictors);
+		  H5Aclose(attrNumPreds);
+		  if(ret < 0 || numPredictors != (unsigned int)kNumPredictors)
+		  {
+			H5Gclose(grpQvTable);
+			H5Fclose(root);
+			ION_ABORT("ERROR: HDF5 attribute NumPredictors is wrong");
+		  }
+
+		  char buf[100];
+		  for(size_t i = 0; i < (size_t)kNumPredictors; ++i)
+		  {
+			offsets_.push_back(1);
+
+			sprintf(buf, "ThresholdsOfPredictor%d", (int)i);
+
+			if(H5Aexists(grpQvTable, buf) <= 0)
+			{
+			  H5Gclose(grpQvTable);
+			  H5Fclose(root);
+			  ION_ABORT("ERROR: HDF5 attribute ThresholdsOfPredictor does not exist");
+			}
+
+			hid_t attrCuts = H5Aopen(grpQvTable, buf, H5P_DEFAULT);
+			if (attrCuts < 0)
+			{
+			  H5Gclose(grpQvTable);
+			  H5Fclose(root);
+			  ION_ABORT("ERROR: fail to open HDF5 attribute ThresholdsOfPredictor");
+			}
+
+			hsize_t size = H5Aget_storage_size(attrCuts);
+			size /= sizeof(float);
+
+			float* fcuts = new float[size];
+
+			ret = H5Aread(attrCuts, H5T_NATIVE_FLOAT, fcuts);
+			H5Aclose(attrCuts);
+			if(ret < 0)
+			{
+			  H5Gclose(grpQvTable);
+			  H5Fclose(root);
+			  ION_ABORT("ERROR: fail to read HDF5 attribute ThresholdsOfPredictor");
+			}
+
+			vector<float> vCuts(size);
+			copy(fcuts, fcuts + size, vCuts.begin());
+
+			phred_cuts_.push_back(vCuts);
+
+			delete [] fcuts;
+			fcuts = 0;
+		  }
+
+		  // read qvs - the main phred table
+		  hid_t dsQvs = H5Dopen(grpQvTable, "Qvs", H5P_DEFAULT);
+		  if (dsQvs < 0)
+		  {
+			H5Gclose(grpQvTable);
+			H5Fclose(root);
+			ION_ABORT("ERROR: fail to open HDF5 dataset Qvs");
+		  }
+
+		  hsize_t tbSize = H5Dget_storage_size(dsQvs);
+
+		  phred_table_ = new unsigned char[tbSize];
+
+		  ret = H5Dread(dsQvs, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, phred_table_);
+		  H5Dclose(dsQvs);
+
+		  if (ret < 0)
+		  {
+			delete [] phred_table_;
+			phred_table_ = 0;
+
+			ION_ABORT("ERROR: fail to read HDF5 dataset Qvs");
+		  }
+		  //flow space transformation
+		  if(flow_predictor_ && errD_table_enable_ ){
+			  // read the err_dist matrix
+			  if(H5Aexists(grpQvTable, "err") <= 0)
+			  {
+				  H5Gclose(grpQvTable);
+				  H5Fclose(root);
+				  ION_ABORT("ERROR: HDF5 attribute err does not exist");
+			  }
+
+			  hid_t attrErr = H5Aopen(grpQvTable, "err", H5P_DEFAULT);
+			  if (attrErr < 0)
+			  {
+				  H5Gclose(grpQvTable);
+				  H5Fclose(root);
+				  ION_ABORT("ERROR: fail to open HDF5 attribute err");
+			  }
+			  hid_t dspace = H5Aget_space(attrErr);
+			  hsize_t d[2];
+			  H5Sget_simple_extent_dims(dspace, d, NULL); // dimension of error distribution table
+			  dims_ = new int[2];
+			  dims_[0] = static_cast<int> (d[0]);
+			  dims_[1] = static_cast<int> (d[1]);
+
+			  hsize_t size = H5Aget_storage_size(attrErr);
+			  size /= sizeof(float);
+
+			  float* ferr = new float[size];
+
+			  ret = H5Aread(attrErr, H5T_NATIVE_FLOAT, ferr);
+			  H5Aclose(attrErr);
+			  if(ret < 0)
+			  {
+				  H5Gclose(grpQvTable);
+				  H5Fclose(root);
+				  ION_ABORT("ERROR: fail to read HDF5 attribute attrErr");
+			  }
+			  for(int i = 0; i < dims_[0]; i++){
+				  vector<float> vErr(size/dims_[0]);
+				  copy(ferr + i * size/dims_[0], ferr + (i + 1) * size/dims_[0], vErr.begin());
+				  errD_table_.push_back(vErr);
+			  }
+
+			  //DEBUG
+			  /* cout << errD_table_.size() << endl;
+			  for (unsigned int i = 0; i < errD_table_.size(); i++)
+			  {
+				  for (unsigned int j = 0; j < errD_table_[0].size(); j++)
+					  cout << errD_table_[i][j] << " ";
+				  cout << endl;
+			  }*/
+			  H5Gclose(grpQvTable);
+			  H5Fclose(root);
+			  if (ret < 0)
+			  {
+
+				  ION_ABORT("ERROR: fail to read HDF5 dataset dserrD");
+			  }
+		  }
+		}
+		else
+		{
+		  printf("WARNING: binary phred table file %s is not a HDF5 file, try binary file mode.\n", phred_table_file.c_str());
+		  ifstream source;
+		  source.open(phred_table_file.c_str(), ios::in|ios::binary|ios::ate);
+		  if (!source.is_open())
+			ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
+
+		  long totalSize = source.tellg();
+		  char* tbBlock = new char [totalSize];
+
+		  source.seekg (0, ios::beg);
+		  source.read (tbBlock, totalSize);
+		  source.close();
+
+		  long headerSize = 0;
+		  char* ptr = tbBlock;
+		  int numPredictors = ptr[0]; //kNumPredictors
+		  if(numPredictors != kNumPredictors)
+		  {
+			delete [] tbBlock;
+			tbBlock = 0;
+			ION_ABORT("ERROR: Wrong number of predictors load from " + phred_table_file);
+		  }
+
+		  ptr += 4;
+		  headerSize += 4;
+
+		  for(int i = 0; i < kNumPredictors; ++i)
+		  {
+			vNumCuts[i] = ptr[0];
+			ptr += 4;
+			headerSize += 4;
+
+			offsets_.push_back(1);
+		  }
+
+		  long tbSize = 1;
+		  for(int i = 0; i < kNumPredictors; ++i)
+		  {
+			vector<float> vCuts;
+			tbSize *= vNumCuts[i];
+			for(size_t j = 0; j < vNumCuts[i]; ++j)
+			{
+			  float tmp;
+			  memcpy(&tmp, ptr, 4);
+			  vCuts.push_back(tmp);
+			  ptr += 4;
+			  headerSize += 4;
+			}
+
+			phred_cuts_.push_back(vCuts);
+		  }
+
+		  if(tbSize != (totalSize - headerSize))
+		  {
+			delete [] tbBlock;
+			tbBlock = 0;
+			ION_ABORT("ERROR: Wrong QV table size");
+		  }
+
+		  phred_table_ = new unsigned char[tbSize];
+		  memcpy(phred_table_, ptr, tbSize * sizeof(unsigned char));
+
+		  delete [] tbBlock;
+		  tbBlock = 0;
+		}
+
+		for(size_t i = kNumPredictors - 2; i > 0; --i)
+		{
+		  offsets_[i] *= phred_cuts_[i + 1].size();
+		  offsets_[i - 1] = offsets_[i];
+		}
+		offsets_[0] *= phred_cuts_[1].size();
+	  }
+	  else
+	  {
+		ifstream source;
+		source.open(phred_table_file.c_str());
+		if (!source.is_open())
+		  ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
+
+		while (!source.eof()) {
+		  string line;
+		  getline(source, line);
+
+		  if (line.empty())
+			break;
+
+		  if (line[0] == '#')
+			continue;
+
+		  stringstream strs(line);
+		  float temp;
+		  for (int k = 0; k < kNumPredictors; ++k) {
+			strs >> temp;
+			phred_thresholds_[k].push_back(temp);
+		  }
+		  strs >> temp; //skip n-th entry
+		  strs >> temp;
+		  phred_quality_.push_back(temp);
+		}
+
+		source.close();
+
+		for (int k = 0; k < kNumPredictors; ++k)
+		  phred_thresholds_max_[k] = *max_element(phred_thresholds_[k].begin(), phred_thresholds_[k].end());
+	  }
   }
-  else if (recalib) // this is mainly to handle the phred_table_file passed by the pipeline that does not contain ".Recal"
-  {
-      phred_table_file = add_Recal_to_phredTableName(phred_table_file);
-  }
-  cout << endl << "PerBaseQual::Init... phred_table_file=" << phred_table_file << endl;
-  binTable = hasBinaryExtension(phred_table_file);
-
-  // Load the phred table
-  if(binTable)
-  {
-    cout << endl << "PerBaseQual::Init... load binary phred_table_file=" << phred_table_file << endl;
-    vector<size_t> vNumCuts(kNumPredictors, 0);
-
-    if(H5Fis_hdf5(phred_table_file.c_str()) > 0)
-    {
-      hid_t root = H5Fopen(phred_table_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-      if(root < 0)
-      {
-        ION_ABORT("ERROR: cannot open HDF5 file " + phred_table_file);
-      }
-
-      hid_t grpQvTable = H5Gopen(root, "/QvTable", H5P_DEFAULT);
-      if (grpQvTable < 0)
-      {
-        H5Fclose(root);
-        ION_ABORT("ERROR: fail to open HDF5 group QvTable");
-      }
-
-      if(H5Aexists(grpQvTable, "NumPredictors") <= 0)
-      {
-        H5Gclose(grpQvTable);
-        H5Fclose(root);
-        ION_ABORT("ERROR: HDF5 attribute NumPredictors does not exist");
-      }
-
-      hid_t attrNumPreds = H5Aopen(grpQvTable, "NumPredictors", H5P_DEFAULT);
-      if (attrNumPreds < 0)
-      {
-        H5Gclose(grpQvTable);
-        H5Fclose(root);
-        ION_ABORT("ERROR: fail to open HDF5 attribute NumPredictors");
-      }
-
-      unsigned int numPredictors = 0;
-      herr_t ret = H5Aread(attrNumPreds, H5T_NATIVE_UINT, &numPredictors);
-      H5Aclose(attrNumPreds);
-      if(ret < 0 || numPredictors != (unsigned int)kNumPredictors)
-      {
-        H5Gclose(grpQvTable);
-        H5Fclose(root);
-        ION_ABORT("ERROR: HDF5 attribute NumPredictors is wrong");
-      }
-
-      char buf[100];
-      for(size_t i = 0; i < (size_t)kNumPredictors; ++i)
-      {
-        offsets_.push_back(1);
-
-        sprintf(buf, "ThresholdsOfPredictor%d", (int)i);
-
-        if(H5Aexists(grpQvTable, buf) <= 0)
-        {
-          H5Gclose(grpQvTable);
-          H5Fclose(root);
-          ION_ABORT("ERROR: HDF5 attribute ThresholdsOfPredictor does not exist");
-        }
-
-        hid_t attrCuts = H5Aopen(grpQvTable, buf, H5P_DEFAULT);
-        if (attrCuts < 0)
-        {
-          H5Gclose(grpQvTable);
-          H5Fclose(root);
-          ION_ABORT("ERROR: fail to open HDF5 attribute ThresholdsOfPredictor");
-        }
-
-        hsize_t size = H5Aget_storage_size(attrCuts);
-        size /= sizeof(float);
-
-        float* fcuts = new float[size];
-
-        ret = H5Aread(attrCuts, H5T_NATIVE_FLOAT, fcuts);
-        H5Aclose(attrCuts);
-        if(ret < 0)
-        {
-          H5Gclose(grpQvTable);
-          H5Fclose(root);
-          ION_ABORT("ERROR: fail to read HDF5 attribute ThresholdsOfPredictor");
-        }
-
-        vector<float> vCuts(size);
-        copy(fcuts, fcuts + size, vCuts.begin());
-
-        phred_cuts_.push_back(vCuts);
-
-        delete [] fcuts;
-        fcuts = 0;
-      }
-
-      hid_t dsQvs = H5Dopen(grpQvTable, "Qvs", H5P_DEFAULT);
-      if (dsQvs < 0)
-      {
-        H5Gclose(grpQvTable);
-        H5Fclose(root);
-        ION_ABORT("ERROR: fail to open HDF5 dataset Qvs");
-      }
-
-      hsize_t tbSize = H5Dget_storage_size(dsQvs);
-
-      phred_table_ = new unsigned char[tbSize];
-
-      ret = H5Dread(dsQvs, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, phred_table_);
-      H5Dclose(dsQvs);
-      H5Gclose(grpQvTable);
-      H5Fclose(root);
-      if (ret < 0)
-      {
-        delete [] phred_table_;
-        phred_table_ = 0;
-
-        ION_ABORT("ERROR: fail to read HDF5 dataset Qvs");
-      }
-    }
-    else
-    {
-      printf("WARNING: binary phred table file %s is not a HDF5 file, try binary file mode.\n", phred_table_file.c_str());
-      ifstream source;
-      source.open(phred_table_file.c_str(), ios::in|ios::binary|ios::ate);
-      if (!source.is_open())
-        ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
-
-      long totalSize = source.tellg();
-      char* tbBlock = new char [totalSize];
-
-      source.seekg (0, ios::beg);
-      source.read (tbBlock, totalSize);
-      source.close();
-
-      long headerSize = 0;
-      char* ptr = tbBlock;
-      int numPredictors = ptr[0]; //kNumPredictors
-      if(numPredictors != kNumPredictors)
-      {
-        delete [] tbBlock;
-        tbBlock = 0;
-        ION_ABORT("ERROR: Wrong number of predictors load from " + phred_table_file);
-      }
-
-      ptr += 4;
-      headerSize += 4;
-
-      for(int i = 0; i < kNumPredictors; ++i)
-      {
-        vNumCuts[i] = ptr[0];
-        ptr += 4;
-        headerSize += 4;
-
-        offsets_.push_back(1);
-      }
-
-      long tbSize = 1;
-      for(int i = 0; i < kNumPredictors; ++i)
-      {
-        vector<float> vCuts;
-        tbSize *= vNumCuts[i];
-        for(size_t j = 0; j < vNumCuts[i]; ++j)
-        {
-          float tmp;
-          memcpy(&tmp, ptr, 4);
-          vCuts.push_back(tmp);
-          ptr += 4;
-          headerSize += 4;
-        }
-
-        phred_cuts_.push_back(vCuts);
-      }
-
-      if(tbSize != (totalSize - headerSize))
-      {
-        delete [] tbBlock;
-        tbBlock = 0;
-        ION_ABORT("ERROR: Wrong QV table size");
-      }
-
-      phred_table_ = new unsigned char[tbSize];
-      memcpy(phred_table_, ptr, tbSize * sizeof(unsigned char));
-
-      delete [] tbBlock;
-      tbBlock = 0;
-    }
-
-    for(size_t i = kNumPredictors - 2; i > 0; --i)
-    {
-      offsets_[i] *= phred_cuts_[i + 1].size();
-      offsets_[i - 1] = offsets_[i];
-    }
-    offsets_[0] *= phred_cuts_[1].size();
-  }
-  else
-  {
-    ifstream source;
-    source.open(phred_table_file.c_str());
-    if (!source.is_open())
-      ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
-
-    while (!source.eof()) {
-      string line;
-      getline(source, line);
-
-      if (line.empty())
-        break;
-
-      if (line[0] == '#')
-        continue;
-
-      stringstream strs(line);
-      float temp;
-      for (int k = 0; k < kNumPredictors; ++k) {
-        strs >> temp;
-        phred_thresholds_[k].push_back(temp);
-      }
-      strs >> temp; //skip n-th entry
-      strs >> temp;
-      phred_quality_.push_back(temp);
-    }
-
-    source.close();
-
-    for (int k = 0; k < kNumPredictors; ++k)
-      phred_thresholds_max_[k] = *max_element(phred_thresholds_[k].begin(), phred_thresholds_[k].end());
-  }
-
   // Prepare for predictor dump here
 
   if (save_predictors_) {
@@ -333,7 +467,18 @@ void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &inp
     predictor_dump_.open(predictors_filename.c_str());
     if (!predictor_dump_.is_open())
       ION_ABORT("ERROR: Cannot open file: " + predictors_filename);
+
   }
+  if(save_qs_){
+	  string qs_filename = output_directory + "/qs_out.txt";
+	  qs_dump_.open(qs_filename.c_str());
+	  if (!qs_dump_.is_open())
+		  ION_ABORT("ERROR: Cannot open file: " + qs_filename);
+  }
+}
+
+void PerBaseQual::GetErrorDistribution(vector<vector<float>> & target){
+	target = errD_table_;
 }
 
 inline size_t GetIndex(const float predVal, const vector<float>& thresholds)
@@ -378,6 +523,7 @@ inline size_t GetIndex(const float predVal, const vector<float>& thresholds)
   return r;
 }
 
+
 uint8_t PerBaseQual::CalculatePerBaseScore(float* pred) const
 {
   if(phred_table_)
@@ -390,7 +536,6 @@ uint8_t PerBaseQual::CalculatePerBaseScore(float* pred) const
       vind.push_back(indi);
       index += (indi * offsets_[i]);
     }
-
     return phred_table_[index];
   }
   else
@@ -417,6 +562,64 @@ uint8_t PerBaseQual::CalculatePerBaseScore(float* pred) const
         return phred_quality_[j];
     }
 
+    return kMinQuality; //minimal quality score
+  }
+}
+
+uint8_t PerBaseQual::CalculatePerFlowScoreNN(float* pred) const
+{
+	int numPred = int(kNumPredictorsFlowNN);
+	vector<float> in(pred , pred + numPred);
+	float qv = 0.0;
+	NN::DataChunk *input = new NN::DataChunk();
+	input->SetData(in);
+	vector<float> output = model_->CalculateOutput(input);
+	if (output[0] > 0)
+		qv = -10 * log10(output[0]);
+	unsigned char qvc = (unsigned char)(qv + 0.5);
+	if (qvc > QV_MAX)
+		qvc = QV_MAX;
+	return qvc;
+}
+uint8_t PerBaseQual::CalculatePerFlowScore(float* pred) const
+{
+  if(phred_table_)
+  {
+    size_t index = 0;
+    vector<size_t> vind;
+    for(int i = 0; i < kNumPredictors; ++i)
+    {
+      size_t indi = GetIndex(pred[i], phred_cuts_[i]);
+      vind.push_back(indi);
+      index += (indi * offsets_[i]);
+
+    }
+    return phred_table_[index];
+  }
+  else
+  {
+    int num_phred_cuts = phred_quality_.size(); // number of rows/lines in the table
+
+    for (int k = 0; k < kNumPredictors; k++)
+      pred[k] = min(pred[k], phred_thresholds_max_[k]);
+
+    for ( int j = 0; j < num_phred_cuts; ++j )
+    {
+      bool valid_cut = true;
+
+      for ( int k = 0; k < kNumPredictors; ++k )
+      {
+        if (pred[k] > phred_thresholds_[k][j])
+        {
+          valid_cut = false;
+          break;
+        }
+      }
+
+      if (valid_cut)
+        return phred_quality_[j];
+
+    }
     return kMinQuality; //minimal quality score
   }
 }
@@ -620,27 +823,26 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
                                         const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
                                         const vector<int>& flow_to_base, const bool flow_predictors_)
 {
+	if (num_bases == 0)
+		return;
+	//! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
+	int last_base_to_flow = base_to_flow.back();
+	int max_eligible_flow = (int)(0.75*num_flows) + 1;
+	max_eligible_flow = min(max_eligible_flow,last_base_to_flow);
+	//save_predictors_ = false; // debugging only
+	int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
+	//int max_eligible_base = min(num_bases, max_eligible_flow); // avoid out of range in debugging
 
-  if (num_bases == 0)
-    return;
+	quality.clear();
+	stringstream predictor_dump_block;
+	//copy(quality.begin(), quality.end(), ostream_iterator<char>(predictor_dump_block));
 
-  //! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
-  int last_base_to_flow = base_to_flow.back();
-  int max_eligible_flow = (int)(0.75*num_flows) + 1;
-  max_eligible_flow = min(max_eligible_flow,last_base_to_flow);
-  //save_predictors_ = false; // debugging only
-  int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
-  //int max_eligible_base = min(num_bases, max_eligible_flow); // avoid out of range in debugging
-
-  quality.clear();
-  stringstream predictor_dump_block;
-
-  for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
-    float pred[kNumPredictors];
-    pred[1] = predictor2[base]; // P2: local noise
-    pred[2] = predictor3[base]; // P3: high-residual events
-    int base_or_flow = flow_predictors_ ? base : base_to_flow[base];
-    /*
+	for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
+		float pred[kNumPredictors];
+		pred[1] = predictor2[base]; // P2: local noise
+		pred[2] = predictor3[base]; // P3: high-residual events
+		int base_or_flow = flow_predictors_ ? base : base_to_flow[base];
+		/*
     if (save_predictors_) {
       // the following lines are only for predictor_dump_block
       // they are not the same in new QvTables
@@ -664,30 +866,29 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
       }
       //predictor_dump_block << base_to_flow[base] << endl;
     }
-    */
-    // v3.4: p1,2,3,4,6,9
-    // the real predictors used in the QvTable
-    pred[0] = transform_P1(predictor1[base]);
-    pred[3] = predictor4[base]; // P4: hp
-    //pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
-    pred[4] = transform_P6(predictor6[base]);
-    //pred[1] = transform_P2(predictor2[base]); // no transformation might help only if no Recalibration
-    //pred[5] = transform_P8(candidate2[base_to_flow[base]]);
-    pred[5] = candidate3[base_or_flow];
-    pred[5] = transform_P9(pred[5]);
+		 */
+		// v3.4: p1,2,3,4,6,9
+		// the real predictors used in the QvTable
+		pred[0] = transform_P1(predictor1[base]);
+		pred[3] = predictor4[base]; // P4: hp
+		//pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
+		pred[4] = transform_P6(predictor6[base]);
+		//pred[1] = transform_P2(predictor2[base]); // no transformation might help only if no Recalibration
+		//pred[5] = transform_P8(candidate2[base_to_flow[base]]);
+		pred[5] = candidate3[base_or_flow];
+		pred[5] = transform_P9(pred[5]);
 
-    // v3.0: p1,2,3,4,5,6
-    //pred[0] = predictor1[base];
-    //pred[0] = transform_P1(predictor1[base]);
-    //pred[4] = predictor5[base];
-    //pred[5] = predictor6[base];
-    quality.push_back(CalculatePerBaseScore(pred));
-  }
+		// v3.0: p1,2,3,4,5,6
+		//pred[0] = predictor1[base];
+		//pred[0] = transform_P1(predictor1[base]);
+		//pred[4] = predictor5[base];
+		//pred[5] = predictor6[base];
+		quality.push_back(CalculatePerBaseScore(pred));
+	}
 
-  for (int base = max_eligible_base; base < num_bases; base++)
-    quality.push_back(kMinQuality);
-
-  /*
+	for (int base = max_eligible_base; base < num_bases; base++)
+		quality.push_back(kMinQuality);
+	/*
   if (save_predictors_) {
     predictor_dump_block.flush();
     pthread_mutex_lock(&predictor_mutex_);
@@ -696,67 +897,134 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
     pthread_mutex_unlock(&predictor_mutex_);
   }
   */
+
+}
+
+void PerBaseQual::GenerateFlowQualities(const string& read_name, int num_bases, int num_flows,
+        const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
+        const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
+        const vector<int>& base_to_flow, vector<uint8_t> &quality_flow,
+        const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
+        const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+        //const vector<float> &wells_residual, //added
+        const vector<int>& flow_to_base, const bool flow_predictors_){
+
+	if(num_flows == 0)
+		return;
+	int last_base_to_flow = base_to_flow.back();
+	int max_eligible_flow = num_flows;//(int)(0.75*num_flows) + 1;
+	max_eligible_flow = min(max_eligible_flow, last_base_to_flow);
+	int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
+	quality_flow.clear();
+
+	for (int base = 0; base < max_eligible_flow; base++){
+		float pred[kNumPredictors];
+		int flow = base_to_flow[base];
+		pred[1] = predictor2[base]; //P2
+		pred[2] = predictor3[base]; // P3: high-residual events
+		//pred[5] = wells_residual[base];//transform_P9(candidate3[base]); // P6: neighborhood noise
+		pred[5] = transform_P9(candidate3[base]);
+		pred[0] = transform_P1(predictor1_flow[base]); //P1
+		pred[3] = predictor4_flow[base]; //P4
+		pred[4] = transform_P6(predictor6[base]); //P5
+
+		float predFlow[kNumPredictorsFlowNN];
+		if(network_model_enable_ && !load_phred_table_){
+			predFlow[0] = predictor1_flow[base];  //P1
+			predFlow[1] = predictor2[base];  	  //P2
+			predFlow[2] = predictor3[base];   	  //P3
+			predFlow[3] = predictor4_flow[base];
+			predFlow[4] = predictor5_flow[base];
+			predFlow[5] = predictor6[base];
+			predFlow[6] = candidate1[base];
+			predFlow[7] = candidate2[base];
+			predFlow[8] = candidate3[base];
+			quality_flow.push_back(CalculatePerFlowScoreNN(predFlow));
+		}
+		else{
+			quality_flow.push_back(CalculatePerFlowScore(pred));
+		}
+	}
+	for (int base = max_eligible_flow; base < num_flows; base++)
+	    quality_flow.push_back(kMinQuality);
+
+	//output flow space quality scores for debugging
+	if(save_qs_){
+		stringstream qs_dump_block;
+
+		for(vector<uint8_t>::const_iterator i = quality_flow.begin(); i != quality_flow.end(); ++i)
+		{
+			qs_dump_block << static_cast<unsigned int>(*i) << " ";
+		}
+		qs_dump_block << endl;
+
+		qs_dump_block.flush();
+		pthread_mutex_lock(&qs_mutex_);
+		qs_dump_ << qs_dump_block.str();
+		qs_dump_.flush();
+		pthread_mutex_unlock(&qs_mutex_);
+	}
 }
 
 
+// Save the predictors to file
 void PerBaseQual::DumpPredictors(const string& read_name, int num_bases, int num_flows,
                                         const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
                                         const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
                                         const vector<int>& base_to_flow, vector<uint8_t> &quality,
                                         const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3,
                                         const vector<float> &predictor1_flow, const vector<float> &predictor5_flow, const vector<float> &predictor4_flow,
+										//const vector<float> &candidate4, //added
+										//const vector<float> &wells_measurements, //disabled
                                         const vector<int>& flow_to_base, const bool flow_predictors_)
 {
+	if (num_bases == 0)
+		return;
+	stringstream predictor_dump_block;
+	//! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
+	int last_base_to_flow = base_to_flow.back();
+	int max_eligible_flow = (int)(0.75*num_flows) + 1;
+	max_eligible_flow = min(max_eligible_flow,last_base_to_flow);
+	//save_predictors_ = false; // debugging only
+	int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
+	//int max_eligible_base = min(num_bases, max_eligible_flow); // avoid out of range in debugging
 
-  if (num_bases == 0)
-    return;
+	for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
+		float pred[kNumPredictors];
+		pred[1] = predictor2[base]; // P2: local noise
+		pred[2] = predictor3[base]; // P3: high-residual events
+		pred[5] = predictor6[base]; // P6: neighborhood noise
 
-  //! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
-  int last_base_to_flow = base_to_flow.back();
-  int max_eligible_flow = (int)(0.75*num_flows) + 1;
-  max_eligible_flow = min(max_eligible_flow,last_base_to_flow);
-  //save_predictors_ = false; // debugging only
-  int max_eligible_base = flow_predictors_ ? max_eligible_flow : min(num_bases, max_eligible_flow);
-  //int max_eligible_base = min(num_bases, max_eligible_flow); // avoid out of range in debugging
+	  int always_flow = flow_predictors_ ? base : base_to_flow[base];
+	  //if (save_predictors_) {
+	  // the following lines are only for predictor_dump_block
+	  // they are not the same in new QvTables
+	  pred[0] = flow_predictors_ ? predictor1_flow[base] : predictor1[base]; // P1: penalty residual
+	  pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
+	  pred[4] = flow_predictors_ ? predictor5_flow[base] : predictor5[base]; // P5: penalty mismatch
 
-  stringstream predictor_dump_block;
-
-  for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
-    float pred[kNumPredictors];
-    pred[1] = predictor2[base]; // P2: local noise
-    pred[2] = predictor3[base]; // P3: high-residual events
-    int always_flow = flow_predictors_ ? base : base_to_flow[base];
-    //if (save_predictors_) {
-      // the following lines are only for predictor_dump_block
-      // they are not the same in new QvTables
-      pred[0] = flow_predictors_ ? predictor1_flow[base] : predictor1[base]; // P1: penalty residual
-      pred[3] = flow_predictors_ ? predictor4_flow[base] : predictor4[base]; // P4: hp
-      pred[4] = flow_predictors_ ? predictor5_flow[base] : predictor5[base]; // P5: penalty mismatch
-      pred[5] = predictor6[base]; // P6: neighborhood noise
-
-      predictor_dump_block << read_name << " " << base << " ";
-      for (int k = 0; k < kNumPredictors; ++k)
-        predictor_dump_block << pred[k] << " ";
-      predictor_dump_block << candidate1[always_flow] << " ";
-      predictor_dump_block << candidate2[always_flow] << " ";
-      predictor_dump_block << candidate3[always_flow] << " ";
-      if (flow_predictors_) {
-          int always_base = flow_predictors_ ? flow_to_base[base] : base;
-          predictor_dump_block << always_base << endl; // could be -1
-      } else {
-          predictor_dump_block << always_flow << endl; // cannot get flow if base=-1
-      }
-      //predictor_dump_block << base_to_flow[base] << endl;
-    //}
+	  predictor_dump_block << read_name << " " << base << " ";
+	  for (int k = 0; k < kNumPredictors; ++k){
+		  predictor_dump_block << pred[k] << " ";
+	  }
+	  predictor_dump_block << candidate1[always_flow] << " ";
+	  predictor_dump_block << candidate2[always_flow] << " ";
+	  predictor_dump_block << candidate3[always_flow] << " ";
+	  //predictor_dump_block << candidate4[always_flow] << " "; //wells_residual[flow]
+	  predictor_dump_block << static_cast<int>(quality[always_flow]) << " "; // disabled
+	  //predictor_dump_block << wells_measurements[always_flow] << " "; // disabled
+	  if (flow_predictors_) {
+		  int always_base = flow_predictors_ ? flow_to_base[base] : base;
+		  predictor_dump_block << always_base << endl; // could be -1
+	  } else {
+		  predictor_dump_block << always_flow << endl; // cannot get flow if base=-1
+	  }
   }
-
-  //if (save_predictors_) {
     predictor_dump_block.flush();
     pthread_mutex_lock(&predictor_mutex_);
     predictor_dump_ << predictor_dump_block.str();
     predictor_dump_.flush();
     pthread_mutex_unlock(&predictor_mutex_);
-  //}
 }
 
 

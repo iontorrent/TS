@@ -33,11 +33,11 @@ def process_status():
         #logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
         return proc.returncode == 0
 
-    def complicated_status(filename, parse):
+    def complicated_status(filename):
         try:
             if os.path.exists(filename):
                 data = open(filename).read()
-                pid = parse(data)
+                pid = int(data)
                 proc = subprocess.Popen("ps %d" % pid, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 proc.communicate()
                 return proc.returncode == 0
@@ -67,11 +67,12 @@ def process_status():
     # get the DjangoFTP status
     proc_set['DjangoFTP'] = upstart_status("DjangoFTP")
 
-    proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid", int)
-    proc_set["gridengine"] = complicated_status("/var/run/gridengine/execd.pid", int)
+    proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid")
+    proc_set["gridengine-master"] = complicated_status("/var/run/gridengine/qmaster.pid")
+    proc_set["gridengine-exec"] = complicated_status("/var/run/gridengine/execd.pid")
 
     for node in ['celerybeat', 'celery_w1', 'celery_plugins', 'celery_periodic', 'celery_slowlane', 'celery_transfer', 'celery_diskutil']:
-        proc_set[node] = complicated_status("/var/run/celery/%s.pid" % node, int)
+        proc_set[node] = complicated_status("/var/run/celery/%s.pid" % node)
 
     alerts = []
     for process, active in sorted(proc_set.items(), key=lambda s: s[0].lower()):

@@ -354,11 +354,15 @@ int VcfOrderedMerger::variant_cmp(const T* v1, const vcf::Variant* v2) const {
   return compare(idx_v1, v1->position, idx_v2, v2->position);
 }
 
+
 // -----------------------------------------------------------------------------------
 
 bool VcfOrderedMerger::too_far(vcf::Variant* v1, vcf::Variant* v2) {
     if (v2 == NULL) return true;
-    int far = 50;
+    int far = 250; 
+    far = v1->ref.length(); // now remove the need of constant. The flip side is that too_far is no longer transitive for list ordered by position
+			    // If a->position < b->position and too_far(b, v)=true no longer lead to too_far(a,v)=true. 
+			    // The above used to hold true when we use a constant. So this cannot be used as stop condition elsewhere in the code.
     v2->position -= far;
     int com = variant_cmp(v1, v2);
     v2->position += far; // return to the original position
@@ -756,7 +760,7 @@ void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf
 	list<vcf::Variant>::reverse_iterator it;
 	bool found = false;
 	for (it = variant_list.rbegin(); it != variant_list.rend(); it++ ) {
-	    if (too_far(&(*it), hotspot)) break;
+	    if (too_far(&(*it), hotspot)) continue; // not assume well ordered.
 	    int padding = hotspot->position-it->position;
 	    if (padding > (int) it->ref.length()) continue; // not contain
 	    long record_ref_ext = 0; // new 

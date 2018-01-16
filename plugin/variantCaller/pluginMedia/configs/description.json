@@ -1,453 +1,626 @@
 {
     "torrent_variant_caller":{
-        "data_quality_stringency":["A filter parameter: A called variant needs to have a mean log-likelihood difference per read greater than this Phred-scaled value",
-                                   "Related VCF field: MLLD",
-                                   "Allowed values: Decimal numbers >= 0",
-                                   "Suggested trial value >= 6.5"],
+        "data_quality_stringency": 
+            {"type": "Float", 
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter: A called variant needs to have a mean log-likelihood difference per read greater than this Phred-scaled value",
+                             "Related VCF field: MLLD",
+                             "Allowed values: Decimal numbers >= 0.0",
+                             "Suggested trial value >= 6.5"]},
 
-        "downsample_to_coverage":["Reduce coverage in over-sampled locations to this value to save computational time",
-                                  "Allowed values: Integers >= 1",
-                                  "Suggested trial value 400 (germline), 2000 (somatic)"],
-
-        "snp_min_cov_each_strand":["A filter parameter: Minimum coverage required on each strand for a SNP to be called",
-                                    "Allowed values: Integers >= 0",
-                                    "Suggested trial value >= 3"],
-
-        "snp_min_variant_score":["A filter parameter: A called SNP needs to have a QUAL score greater than this Phred-scaled value",
-                                 "Allowed values: Integers >= 0",
-                                 "Suggested trial value >= 10"],
-
-        "snp_min_allele_freq":["A filter parameter: A called SNP needs to have an allele frequency greater than this value",
-                               "Allowed values: Decimal between 0 and 1",
-                               "Suggested trial value between 0.01 and 0.2"],
-
-        "snp_min_coverage":["A filter parameter: A called SNP location needs to have a coverage greater than this value",
-                            "Allowed values: Integers >= 0 ",
-                            "Suggested trial value between 5 and 20 "],
-
-        "snp_strand_bias":["A filter parameter: A candidate SNP will be filtered out if its strand bias p-value is less than snp_strand_bias_pval and its strand bias is greater than snp_strand_bias",
-                           "Related VCF field: STB",
-                           "Allowed values: Decimal numbers between 0.5 and 1.0",
-                           "Suggested trial value 0.95"],
-
-        "snp_strand_bias_pval":["A filter parameter: A candidate SNP will be filtered out if its strand bias p-value is less than snp_strand_bias_pval and its strand bias is greater than snp_strand_bias",
-                                "Related VCF field: STBP",
-                                "Allowed values: Decimal numbers between 0 and 1",
-                                "Suggested trial value 0.01 for strand bias filter, 1 for no strand bias filter"],
-
-        "mnp_min_cov_each_strand":["A filter parameter: Minimum coverage required on each strand for a MNP to be called",
-                                    "Allowed values: Integers >= 0",
-                                    "Suggested trial value: match snp_min_cov_each_strand"],
-
-        "mnp_min_variant_score":["A filter parameter: A called MNP needs to have a QUAL score greater than this Phred-scaled value",
-                                 "Allowed values: Integers >= 0",
-                                 "Suggested trial value: match snp_min_variant_score "],
-
-        "mnp_min_allele_freq":["A filter parameter: A called MNP needs to have an allele frequency greater than this value",
-                               "Allowed values: Decimal numbers between 0 and 1",
-                               "Suggested trial value: match snp_min_allele_freq"],
-
-        "mnp_min_coverage":["A filter parameter: A called MNP location needs to have a coverage greater than this value",
-                            "Allowed values: Integers >= 0",
-                            "Suggested trial value: match snp_min_coverage"],
-
-        "mnp_strand_bias":["A filter parameter: A candidate MNP will be filtered out if its strand bias p-value is less than mnp_strand_bias_pval and its strand bias is greater than mnp_strand_bias",
-                           "Related VCF field: STB",
-                           "Allowed values: Decimal numbers between 0.5 and 1.0",
-                           "Suggested trial value: match snp_strand_bias"],
-
-        "mnp_strand_bias_pval":["A filter parameter: A candidate MNP will be filtered out if its strand bias p-value is less than mnp_strand_bias_pval and its strand bias is greater than mnp_strand_bias",
-                                "Related VCF field: STBP",
-                                "Allowed values: Decimal numbers between 0 and 1",
-                                "Suggested trial value: match snp_strand_bias_pval"],
-
-        "indel_min_cov_each_strand":["A filter parameter: Minimum coverage required on each strand for an indel to be called",
-                                     "Allowed values: Integers >= 0",
-                                     "Suggested trial value >= 3"],
-
-        "indel_min_variant_score":["A filter parameter: A called indel needs to have a QUAL score greater than this Phred-scaled value",
-                                   "Allowed values: Integers >= 0",
-                                   "Suggested trial value >= 10"],
-
-        "indel_min_allele_freq":["A filter parameter: A called indel needs to have an allele frequency greater than this value",
-                                 "Allowed values: Decimal numbers between 0 and 1",
-                                 "Suggested trial value between 0.05 and 0.2"],
-
-        "indel_min_coverage":["A filter parameter: A called indel location needs to have a coverage greater than this value",
-                              "Allowed values: Integers >= 0",
-                              "Suggested trial value between 15 and 30"],
-
-        "indel_strand_bias":["A filter parameter: A candidate indel will be filtered out if its strand bias p-value is less than indel_strand_bias_pval and its strand bias is greater than indel_strand_bias",
+        "downsample_to_coverage": 
+            {"type": "Integer",
+             "range": "[1,inf)", 
+             "description": ["Reduce coverage in over-sampled locations to this value to save computational time",
+                             "Allowed values: Integers >= 1",
+                             "Suggested trial value 400 (germline), 2000 (somatic)"]},
+            
+        "snp_min_cov_each_strand": 
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum coverage required on each strand for a SNP to be called",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value >= 3"]},
+            
+        "snp_min_variant_score": 
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter: A called SNP needs to have a QUAL score greater than this Phred-scaled value",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value >= 10"]},
+            
+        "snp_min_allele_freq":
+            {"type": "Float",
+             "range": "(0.0,1.0)",
+             "description": ["A filter parameter: A called SNP needs to have an allele frequency greater than this value",
+                            "Allowed values: Decimal between 0 and 1",
+                            "Suggested trial value between 0.01 and 0.2"]},
+            
+        "snp_min_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: A called SNP location needs to have a coverage greater than this value",
+                             "Allowed values: Integers >= 0 ",
+                             "Suggested trial value between 5 and 20"]},
+            
+        "snp_strand_bias":
+            {"type": "Float",
+             "range": "[0.5,1.0]",
+             "description": ["A filter parameter: A candidate SNP will be filtered out if its strand bias p-value is less than snp_strand_bias_pval and its strand bias is greater than snp_strand_bias",
                              "Related VCF field: STB",
                              "Allowed values: Decimal numbers between 0.5 and 1.0",
-                             "Suggested trial value 0.95"],
+                             "Suggested trial value 0.95"]},
+            
+        "snp_strand_bias_pval":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: A candidate SNP will be filtered out if its strand bias p-value is less than snp_strand_bias_pval and its strand bias is greater than snp_strand_bias",
+                             "Related VCF field: STBP",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 0.01 for strand bias filter, 1 for no strand bias filter"]},
+            
+        "mnp_min_cov_each_strand":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum coverage required on each strand for a MNP to be called",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value: match snp_min_cov_each_strand"]},
+            
+        "mnp_min_variant_score":
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter: A called MNP needs to have a QUAL score greater than this Phred-scaled value",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value: match snp_min_variant_score"]},   
+                 
+        "mnp_min_allele_freq":
+            {"type": "Float",
+             "range": "(0.0,1.0)",
+             "description": ["A filter parameter: A called MNP needs to have an allele frequency greater than this value",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value: match snp_min_allele_freq"]},
 
-        "indel_strand_bias_pval":["A filter parameter: A candidate indel will be filtered out if its strand bias p-value is less than indel_strand_bias_pval and its strand bias is greater than indel_strand_bias",
-                                 "Related VCF field: STBP",
-                                 "Allowed values: Decimal numbers between 0 and 1",
-                                 "Suggested trial value 1.0"],
+        "mnp_min_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: A called MNP location needs to have a coverage greater than this value",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value: match snp_min_coverage"]},
 
-        "hotspot_min_cov_each_strand":[" A filter parameter: Minimum coverage required on each strand for a hotspot variant to be called ",
-                                       "Allowed values: Integers >= 0",
-                                       "Suggested trial value >= 3"],
+        "mnp_strand_bias":
+            {"type": "Float",
+             "range": "[0.5,1.0]",
+             "description": ["A filter parameter: A candidate MNP will be filtered out if its strand bias p-value is less than mnp_strand_bias_pval and its strand bias is greater than mnp_strand_bias",
+                             "Related VCF field: STB",
+                             "Allowed values: Decimal numbers between 0.5 and 1.0",
+                             "Suggested trial value: match snp_strand_bias"]},
+        
+        "mnp_strand_bias_pval":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: A candidate MNP will be filtered out if its strand bias p-value is less than mnp_strand_bias_pval and its strand bias is greater than mnp_strand_bias",
+                             "Related VCF field: STBP",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value: match snp_strand_bias_pval"]},
 
-        "hotspot_min_variant_score":["A filter parameter: A called hotspot variant needs to have a QUAL score greater than this Phred-scaled value",
-                                     "Quality: Integers >= 0",
-                                     "Suggested trial value >= 10"],
+        "indel_min_cov_each_strand":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum coverage required on each strand for an indel to be called",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value >= 3"]},
 
-        "hotspot_min_allele_freq":["A filter parameter: A called hotspot variant needs to have an allele frequency greater than this value",
-                                   "Allowed values: Decimal numbers between 0 and 1",
-                                   "Suggested trial value between 0.01 and 0.2"],
+        "indel_min_variant_score":
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter: A called indel needs to have a QUAL score greater than this Phred-scaled value",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value >= 10"]},   
 
-        "hotspot_min_coverage":["A filter parameter: A called hotspot variant location needs to have a coverage greater than this value",
-                                "Allowed values: Integers >=0",
-                                "Suggested trial value between 5 and 20"],
+        "indel_min_allele_freq":
+            {"type": "Float",
+             "range": "(0.0,1.0)",
+             "description": ["A filter parameter: A called indel needs to have an allele frequency greater than this value",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value between 0.05 and 0.2"]},
 
-        "hotspot_strand_bias":["A filter parameter: A candidate hotspot variant will be filtered out if its strand bias p-value is less than hotspot_strand_bias_pval and its strand bias is greater than hotspot_strand_bias",
-                               "Related VCF field: STB",
-                               "Allowed values: Decimal numbers between 0.5 and 1.0",
-                               "Suggested trial value 0.95"],
+        "indel_min_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: A called indel location needs to have a coverage greater than this value",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value between 15 and 30"]},
 
-        "hotspot_strand_bias_pval":["A filter parameter: A candidate hotspot variant will be filtered out if its strand bias p-value is less than hotspot_strand_bias_pval and its strand bias is greater than hotspot_strand_bias",
-                                    "Related VCF field: STBP",
-                                    "Allowed values: Decimal numbers between 0 and 1.0",
-                                    "Suggested trial value 1.0"],
+        "indel_strand_bias":
+            {"type": "Float",
+             "range": "[0.5,1.0]",
+             "description": ["A filter parameter: A candidate indel will be filtered out if its strand bias p-value is less than indel_strand_bias_pval and its strand bias is greater than indel_strand_bias",
+                             "Related VCF field: STB",
+                             "Allowed values: Decimal numbers between 0.5 and 1.0",
+                             "Suggested trial value 0.95"]},
 
-        "prediction_precision":["A variant evaluation parameter: The number of pseudo data points suggesting our predictions match the measurements without bias",
-                                "Allowed values: Decimal numbers >= 0.1",
-                                "Suggested trial value 1.0"],
+        "indel_strand_bias_pval":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: A candidate indel will be filtered out if its strand bias p-value is less than indel_strand_bias_pval and its strand bias is greater than indel_strand_bias",
+                             "Related VCF field: STBP",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 1.0"]},
 
-        "outlier_probability":["A variant evaluation parameter: probability that a read comes from none of the models under consideration",
-                               "Related VCF fields: FXX",
-                               "Allowed values: Decimal numbers between 0 and 1.0",
-                               "Suggested trial value between 0.005 and 0.01"],
+        "hotspot_min_cov_each_strand":
+            {"type": "Integer", 
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum coverage required on each strand for a hotspot variant to be called ",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value >= 3"]},
 
-        "heavy_tailed":["A variant evaluation parameter: The degree of freedom of the t-distribution for modeling the heavy tail in signal residual distribution",
-                        "Allowed values: Integers >= 1",
-                        "Suggested trial value 3"],
+        "hotspot_min_variant_score":
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter: A called hotspot variant needs to have a QUAL score greater than this Phred-scaled value",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value >= 10"]},
 
-        "filter_unusual_predictions":["A filter parameter:  A called variant needs to have RBI less than this value",
-                                      "Related VCF fields: RBI = sqrt(FWDB ^ 2 + REVB ^ 2)",
-                                      "Allowed values: Decimal numbers >= 0",
-                                      "Suggested trial value 0.3"],
+        "hotspot_min_allele_freq":
+            {"type": "Float",
+             "range": "(0.0,1.0)",
+             "description": ["A filter parameter: A called hotspot variant needs to have an allele frequency greater than this value",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value between 0.01 and 0.2"]},
 
-        "filter_insertion_predictions":["A filter parameter:  Filter out an insertion if the observed clusters deviate from predictions more than this amount",
-                                        "Related VCF fields: VARB, REFB",
-                                        "Allowed values: Decimal numbers >= 0",
-                                        "Suggested trial value 0.2"],
+        "hotspot_min_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: A called hotspot variant location needs to have a coverage greater than this value",
+                             "Allowed values: Integers >=0",
+                             "Suggested trial value between 5 and 20"]},
 
-        "filter_deletion_predictions":["A filter parameter:  Filter out a deletion if the observed clusters deviate from predictions more than this amount",
-                                       "Related VCF fields: VARB, REFB",
-                                       "Allowed values: Decimal numbers >= 0",
-                                       "Suggested trial value 0.2"],
+        "hotspot_strand_bias":
+            {"type": "Float",
+             "range": "[0.5,1.0]",
+             "description": ["A filter parameter: A candidate hotspot variant will be filtered out if its strand bias p-value is less than hotspot_strand_bias_pval and its strand bias is greater than hotspot_strand_bias",
+                             "Related VCF field: STB",
+                             "Allowed values: Decimal numbers between 0.5 and 1.0",
+                             "Suggested trial value 0.95"]},
 
-        "indel_as_hpindel":["A filter parameter: A flag indicating whether INDEL filters or SNP filters should be applied to non-HP indels",
-                            "Allowed values: 0 = use SNP filter, 1 = use INDEL filter",
-                            "Suggested trial value (AmpliSeq) 1, (other) 0"],
+        "hotspot_strand_bias_pval":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: A candidate hotspot variant will be filtered out if its strand bias p-value is less than hotspot_strand_bias_pval and its strand bias is greater than hotspot_strand_bias",
+                             "Related VCF field: STBP",
+                             "Allowed values: Decimal numbers between 0 and 1.0",
+                             "Suggested trial value 1.0"]},
 
-        "hp_max_length":["A filter parameter: HP indels of more than this length will be filtered out",
-                         "Related VCF field: HRUN",
-                         "Allowed values: Integers >= 1",
-                         "Suggested trial value 8"],
+        "prediction_precision":
+            {"type": "Float",
+             "range": "[0.1,inf)",
+             "description": ["A variant evaluation parameter: The number of pseudo data points suggesting our predictions match the measurements without bias",
+                             "Allowed values: Decimal numbers >= 0.1",
+                             "Suggested trial value 1.0"]},
 
-        "sse_prob_threshold":["A filter parameter: Filter threshold for motif-predicted error probability",
-                              "Related VCF fields: SSEP, SSEN",
-                              "Allowed values: Decimal numbers between 0 and 1",
-                              "Suggested trial value 0.2"],
+        "outlier_probability":
+            {"type": "Float",
+             "range": "(0.0,1.0)",
+             "description": ["A variant evaluation parameter: probability that a read comes from none of the models under consideration",
+                             "Related VCF fields: FXX",
+                             "Allowed values: Decimal numbers between 0 and 1.0",
+                             "Suggested trial value between 0.005 and 0.01"]},
 
-        "min_ratio_reads_non_sse_strand":["A filter parameter: When the variant allele threshold is greater than this value based on one strand, allow a variant to pass the filter even if the error probability is high on the other strand",
-                                          "Allowed values: Decimals between 0 and 1",
-                                          "Suggested trial value 0.2"],
+        "heavy_tailed":
+            {"type": "Integer",
+             "range": "[1,inf)",
+             "description": ["A variant evaluation parameter: The degree of freedom of the t-distribution for modeling the heavy tail in signal residual distribution",
+                             "Allowed values: Integers >= 1",
+                             "Suggested trial value 3"]},
 
-        "do_snp_realignment":["A variant candidate evaluating parameter: Realign reads in the vicinity of SNP candidates when set",
-                              "Allowed values: 0 = do not realign, 1 = realign",
-                              "Suggested trial value 0"],
+        "filter_unusual_predictions":
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter:  A called variant needs to have RBI less than this value",
+                             "Related VCF fields: RBI = sqrt(FWDB ^ 2 + REVB ^ 2)",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value 0.3"]},
 
-        "do_mnp_realignment":["A variant candidate evaluating parameter: Realign reads in the vicinity of MNP candidates when set",
-                              "Allowed values: 0 = do not realign, 1 = realign",
-                              "Suggested trial value 0"],
+        "filter_insertion_predictions":
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter:  Filter out an insertion if the observed clusters deviate from predictions more than this amount",
+                             "Related VCF fields: VARB, REFB",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value 0.2"]},
 
-        "realignment_threshold":["A variant candidate evaluating parameter: Maximum allowed fraction of reads where realignment causes an alignment change",
-                                 "Allowed values: Decimals between 0 and 1",
-                                 "Suggested trial value 1"],
+        "filter_deletion_predictions":
+            {"type": "Float",
+             "range": "[0.0,inf)",
+             "description": ["A filter parameter:  Filter out a deletion if the observed clusters deviate from predictions more than this amount",
+                             "Related VCF fields: VARB, REFB",
+                             "Allowed values: Decimal numbers >= 0",
+                             "Suggested trial value 0.2"]},
 
-        "suppress_recalibration": ["A variant evaluation parameter: Homopolymer recalibration values should not be used when set",
-                                   "Allowed values: 0 = allow recalibration, 1 = don't allow recalibration",
-                                   "Suggested trial value 0"],
+        "indel_as_hpindel":
+            {"type": "Bool",
+             "description": ["A filter parameter: A flag indicating whether INDEL filters or SNP filters should be applied to non-HP indels",
+                             "Allowed values: 0 = use SNP filter, 1 = use INDEL filter",
+                             "Suggested trial value (AmpliSeq) 1, (other) 0"]},
 
-        "use_position_bias":["A filter parameter: Enable the position bias filter when set",
+        "hp_max_length":
+            {"type": "Integer",
+             "range": "[1,inf)",
+             "description": ["A filter parameter: HP indels of more than this length will be filtered out",
+                             "Related VCF field: HRUN",
+                             "Allowed values: Integers >= 1",
+                             "Suggested trial value 8"]},
+
+        "sse_prob_threshold":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: Filter threshold for motif-predicted error probability",
+                             "Related VCF fields: SSEP, SSEN",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 0.2"]},
+
+        "min_ratio_reads_non_sse_strand":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: When the variant allele threshold is greater than this value based on one strand, allow a variant to pass the filter even if the error probability is high on the other strand",
+                             "Allowed values: Decimals between 0 and 1",
+                             "Suggested trial value 0.2"]},
+
+        "do_snp_realignment":
+            {"type": "Bool",
+             "description": ["A variant candidate evaluating parameter: Realign reads in the vicinity of SNP candidates when set",
+                             "Allowed values: 0 = do not realign, 1 = realign",
+                             "Suggested trial value 0"]},
+
+        "do_mnp_realignment":
+            {"type": "Bool",
+             "description": ["A variant candidate evaluating parameter: Realign reads in the vicinity of MNP candidates when set",
+                             "Allowed values: 0 = do not realign, 1 = realign",
+                             "Suggested trial value 0"]},
+
+        "realignment_threshold":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A variant candidate evaluating parameter: Maximum allowed fraction of reads where realignment causes an alignment change",
+                             "Allowed values: Decimals between 0 and 1",
+                             "Suggested trial value 1"]},
+
+        "suppress_recalibration": 
+            {"type": "Bool",
+             "description": ["A variant evaluation parameter: Homopolymer recalibration values should not be used when set",
+                             "Allowed values: 0 = allow recalibration, 1 = don't allow recalibration",
+                             "Suggested trial value 0"]},
+
+        "use_position_bias":
+            {"type": "Bool",
+             "description": ["A filter parameter: Enable the position bias filter when set",
                              "Allowed values: 0 = disable, 1= enable",
-                             "Suggested trial value (AmpliSeq) 1, (other) 0"],
+                             "Suggested trial value (AmpliSeq) 1, (other) 0"]},
 
-        "position_bias":["A filter parameter: Filter out a variant if the position bias is greater than position_bias and the position bias p-value is less than position_bias_pval",
-                         "Related VCF field: POSBIAS",
-                         "Allowed values: Decimal numbers between 0 and 1",
-                         "Suggested trial value 0.75"],
+        "position_bias":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: Filter out a variant if the position bias is greater than position_bias and the position bias p-value is less than position_bias_pval",
+                             "Related VCF field: POSBIAS",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 0.75"]},
 
-        "position_bias_pval":["A filter parameter: Filter out a variant if the position bias is greater than position_bias and the position bias p-value is less than position_bias_pval",
-                              "Related VCF field: POSBIASPVAL",
-                              "Allowed values: Decimal numbers between 0 and 1",
-                              "Suggested trial value 0.05"],
+        "position_bias_pval":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: Filter out a variant if the position bias is greater than position_bias and the position bias p-value is less than position_bias_pval",
+                             "Related VCF field: POSBIASPVAL",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 0.05"]},
 
-        "position_bias_ref_fraction":["A filter parameter: Skip the position bias filter if (reference read count) / (reference and alt read count) <= this value",
-                                      "Allowed values: Decimal numbers between 0 and 1",
-                                      "Suggested trial value 0.05"],
+        "position_bias_ref_fraction":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: Skip the position bias filter if (reference read count) / (reference and alt read count) <= this value",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 0.05"]},
 
-		"min_tag_fam_size":[
-            "Minimum number of reads with same molecular tag required to form a functional family",
-            "Allowed values: Integers > 0",
-            "Suggested trial value between 3 and 7",
-            "Impact: Increasing values make variant calls less sensitive but more specific"
-        ],
+		"min_tag_fam_size":
+            {"type": "Integer",
+             "range": "[1,inf)",
+             "description": ["Minimum number of reads with same molecular tag required to form a functional family",
+                             "Allowed values: Integers > 0",
+                             "Suggested trial value between 3 and 7",
+                             "Impact: Increasing values make variant calls less sensitive but more specific"]},
 
-       "indel_func_size_offset":[
-            "A tagseq parameter: require family of size >= (min_tag_fam_size + this value) to be functional for calling HP-INDEL",
-            "Allowed values: Integers >= 0",
-            "Suggested trial value between 0 and 4",
-            "Impact: Increasing values make variant calls less sensitive but more specific" 
-        ],
+       "indel_func_size_offset":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A tagseq parameter: require family of size >= (min_tag_fam_size + this value) to be functional for calling HP-INDEL",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value between 0 and 4",
+                             "Impact: Increasing values make variant calls less sensitive but more specific"]},
 
-        "min_detail_level_for_fast_scan":[
-			"A variant candidate evaluating parameter: The minimum detail-level to trigger the fast scan algorithm that considerably speeds up the evaluator.",
-            "Allowed values: >=0 (0 = always apply the fast scan algorithm)",
-            "Suggested trial value: 0"
-         ],   
+        "min_detail_level_for_fast_scan":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A variant candidate evaluating parameter: The minimum detail-level to trigger the fast scan algorithm that considerably speeds up the evaluator.",
+                             "Allowed values: >=0 (0 = always apply the fast scan algorithm)",
+                             "Suggested trial value: 0"]},
         
-        "tag_trim_method":[
-            "A tagseq parameter: \"strict-trim\" requires that the UID must match the format specified in the run plan, while \"sloppy-trim\" does not.",
-            "Allowed values: \"sloppy-trim\" or \"strict-trim\"",
-            "Suggested trial value: \"sloppy-trim\""
-         ],
+        "tag_trim_method":
+        	{"type": "String",
+        	 "in": ["strict-trim", "sloppy-trim"],
+             "description": ["A tagseq parameter: \"strict-trim\" requires that the UID must match the format specified in the run plan, while \"sloppy-trim\" does not.",
+                             "Allowed values: \"sloppy-trim\" or \"strict-trim\"",
+                             "Suggested trial value: \"sloppy-trim\""]},
          
-        "snp_min_var_coverage":[
-            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a SNP call",
-            "Related VCF field: FAO",
-            "Allowed values: Integers > 0",
-            "Suggested trial value between 2 and 10",
-            "Impact: Increasing values make variant calls less sensitive but more specific"
-        ],
+        "snp_min_var_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a SNP call",
+                             "Related VCF field: FAO",
+                             "Allowed values: Integers > 0",
+                             "Suggested trial value between 2 and 10",
+                             "Impact: Increasing values make variant calls less sensitive but more specific"]},
         
-        "indel_min_var_coverage":[
-            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a INDEL call",
-            "Related VCF field: FAO",
-            "Allowed values: Integers > 0",
-            "Suggested trial value between 2 and 10",
-            "Impact: Increasing values make variant calls less sensitive but more specific"
-        ],
-        
-        "mnp_min_var_coverage":[
-            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a MNP call",
-            "Related VCF field: FAO",
-            "Allowed values: Integers > 0",
-            "Suggested trial value between 2 and 10",
-            "Impact: Increasing values make variant calls less sensitive but more specific"
-        ],         
+        "indel_min_var_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a INDEL call",
+                             "Related VCF field: FAO",
+                             "Allowed values: Integers > 0",
+                             "Suggested trial value between 2 and 10",
+                             "Impact: Increasing values make variant calls less sensitive but more specific"]},
 
-		"hotspot_min_var_coverage":[
-            "A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a hotspot call",
-            "Related VCF field: FAO",
-            "Allowed values: Integers > 0",
-            "Suggested trial value between 2 and 10",
-            "Impact: Increasing values make variant calls less sensitive but more specific"
-        ],
+        "mnp_min_var_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a MNP call",
+                             "Related VCF field: FAO",
+                             "Allowed values: Integers > 0",
+                             "Suggested trial value between 2 and 10",
+                             "Impact: Increasing values make variant calls less sensitive but more specific"]},
+
+		"hotspot_min_var_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Minimum number of variant coverage after flow-evaluation required to make a hotspot call",
+                             "Related VCF field: FAO",
+                             "Allowed values: Integers > 0",
+                             "Suggested trial value between 2 and 10",
+                             "Impact: Increasing values make variant calls less sensitive but more specific"]},
         
-  		"fd_nonsnp_min_var_cov":[
-            "A filter parameter: Override min_var_coverage of the flow-disrupted variants that are not SNPs (0 to disable the override)",
-            "Related VCF field: FAO",
-            "Allowed values: Integers >= 0",
-            "Suggested trial value between 0 and 10",
-            "Impact: Decreasing values make variant calls less specific but more sensitive"
-        ],
+  		"fd_nonsnp_min_var_cov":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Override min_var_coverage of the flow-disrupted variants that are not SNPs (0 to disable the override)",
+                             "Related VCF field: FAO",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value between 0 and 10",
+                             "Impact: Decreasing values make variant calls less specific but more sensitive"]},
          
-        "tag_sim_max_cov":[
-            "A filter parameter: Check the similarity of UID of variant molecules if the variant molecular coverage <= this value",
-            "Related VCF field: TGSM",
-            "Allowed values: Integers >= 0",
-            "Suggested trial value 20"
-        ],
+        "tag_sim_max_cov":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A filter parameter: Check the similarity of UID of variant molecules if the variant molecular coverage <= this value",
+                             "Related VCF field: TGSM",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value 20"]},
         
-        "use_lod_filter":[
-            "A filter parameter: Enable the Limit Of Detection (LOD) filter",
-            "Related VCF field: LOD",
-            "Allowed values: 0 = do not use LOD filter, 1 = use LOD filter",
-            "Suggested trial value (TagSeq) 1, (other) 0"
-        ],
+        "use_lod_filter":
+            {"type": "Bool",
+             "description": ["A filter parameter: Enable the Limit Of Detection (LOD) filter",
+                             "Related VCF field: LOD",
+                             "Allowed values: 0 = do not use LOD filter, 1 = use LOD filter",
+                             "Suggested trial value (TagSeq) 1, (other) 0"]},
         
-        "lod_multiplier":[
-            "A filter parameter: Multiplier of LOD for filtering out variants with low alt allele frequency",
-            "Allowed values: Decimal numbers > 0.0",
-            "Suggested trial value 0.6"
-        ],
-              
-        "try_few_restart_freq":[
-            "A variant evaluation parameter: Speed up the evaluator by trying fewer initial guesses of allele frequency",
-            "Allowed values: 0 = normal case, 1 = speed-up",
-            "Suggested trial value (TagSeq) 1, (other) 0"
-        ],
+        "lod_multiplier":
+            {"type": "Float",
+             "range": "(0.0,inf]",
+             "description": ["A filter parameter: Multiplier of LOD for filtering out variants with low alt allele frequency",
+                             "Allowed values: Decimal numbers > 0.0",
+                             "Suggested trial value 0.6"]},
 
-        "report_ppa":[
-        	"Report Possible Polyploidy Alleles (PPA) in the INFO FIELD of the vcf lines.",
-            "Related VCF field: PPA",        	
-        	"Allowed values: 1 = report PPA, 0 = do not report"
-        ],
+        "try_few_restart_freq":
+            {"type": "Bool",
+             "description": ["A variant evaluation parameter: Speed up the evaluator by trying fewer initial guesses of allele frequency",
+                             "Allowed values: 0 = normal case, 1 = speed-up",
+                             "Suggested trial value (TagSeq) 1, (other) 0"]},
+
+        "report_ppa":
+            {"type": "Bool",
+             "description": ["Report Possible Polyploidy Alleles (PPA) in the INFO FIELD of the vcf lines.",
+                             "Related VCF field: PPA",        	
+        	                 "Allowed values: 1 = report PPA, 0 = do not report"]},
         
-        "min_ratio_for_fd":[
-        	"A filter parameter: Claim flow-disruption if the portion of reads that are flow-disrupted >= this value",
-        	"Allowed values: Decimal numbers between 0 and 1",
-        	"Suggested trial value 0.1"
-        ],
+        "min_ratio_for_fd":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A filter parameter: Claim flow-disruption if the portion of reads that are flow-disrupted >= this value",
+        	                 "Allowed values: Decimal numbers between 0 and 1",
+        	                 "Suggested trial value 0.1"]},
         
-        "hotspots_as_de_novo ":[
-        	"A filter parameter: Use de novo (snp, mnp, indel) parameter sets for hotspot variants.",
-			"Allowed values: 0 = use hotspot parameter set, 1 = use de novo parameter set.",
-        	"Suggested trial value 0"
-        ],
+        "hotspots_as_de_novo":
+            {"type": "Bool",
+             "description": ["A filter parameter: Use de novo (snp, mnp, indel) parameter sets for hotspot variants.",
+			                 "Allowed values: 0 = use hotspot parameter set, 1 = use de novo parameter set.",
+        	                 "Suggested trial value 0"]},
         
-        "hp_indel_hrun":[
-        	"A filter parameter: Define the HRUN for filtering HP-INDEL variants with lengths specified by \"hp_del_len\" and \"hp_ins_len\".",
-        	"Allowed values: vector of positive integers (e.g. [1,2,3]) with size matches \"hp_del_len\" and \"hp_ins_len\".",
-        	"Suggested trial value []"
-        ],
+        "hp_indel_hrun":
+            {"type": "Vector",
+             "description": ["A filter parameter: Define the HRUN for filtering HP-INDEL variants with lengths specified by \"hp_del_len\" and \"hp_ins_len\".",
+        	                 "Allowed values: vector of positive integers (e.g. [1,2,3]) with size matches \"hp_del_len\" and \"hp_ins_len\".",
+        	                 "Suggested trial value []"]},
         
-		"hp_ins_len":[
-        	"A filter parameter: Filter out HP-INS variants whose INS length <= the corresponding entry of this vector if the HRUN is defined in \"hp_indel_hrun\".",
-        	"Allowed values: vector of non-negative integers (e.g. [1,2,3]) with size matches \"hp_del_len\" and \"hp_indel_hrun\".",
-        	"Suggested trial value []"		
-		],
+		"hp_ins_len":
+            {"type": "Vector",
+             "description": ["A filter parameter: Filter out HP-INS variants whose INS length <= the corresponding entry of this vector if the HRUN is defined in \"hp_indel_hrun\".",
+        	                 "Allowed values: vector of non-negative integers (e.g. [1,2,3]) with size matches \"hp_del_len\" and \"hp_indel_hrun\".",
+        	                 "Suggested trial value []"]},
 		
-		"hp_del_len":[
-        	"A filter parameter: Filter out HP-DEL variants whose DEL length <= the corresponding entry of this vector if the HRUN is defined in \"hp_indel_hrun\".",
-        	"Allowed values: vector of non-negative integers (e.g. [1,2,3]) with size matches \"hp_ins_len\" and \"hp_indel_hrun\".",
-        	"Suggested trial value []"			
-		],
+		"hp_del_len":
+            {"type": "Vector",
+             "description": ["A filter parameter: Filter out HP-DEL variants whose DEL length <= the corresponding entry of this vector if the HRUN is defined in \"hp_indel_hrun\".",
+        	                 "Allowed values: vector of non-negative integers (e.g. [1,2,3]) with size matches \"hp_ins_len\" and \"hp_indel_hrun\".",
+        	                 "Suggested trial value []"]},
 		
-        "use_fd_param":[
-            "A filtering parameter: Use Flow Disruptiveness (FD) instead of allele types (INDEL, SNP, MNP) as the criterion to choose the parameter set.",
-            "If turned on, the (non-FD, moderate FD, FD) allele applies the the (INDEL, SNP, MNP) parameters, respectively.",
-            "Allowed values: 0: do not use FD parameters, 1: use FD parameters."
-        ],
+        "use_fd_param":
+            {"type": "Bool",
+             "description": ["A filtering parameter: Use Flow Disruptiveness (FD) instead of allele types (INDEL, SNP, MNP) as the criterion to choose the parameter set.",
+                             "If turned on, the (non-FD, moderate FD, FD) allele applies the the (INDEL, SNP, MNP) parameters, respectively.",
+                             "Allowed values: 0: do not use FD parameters, 1: use FD parameters."]},
         
-        "max_flows_to_test":[
-        	"A variant candidate evaluating parameter: The maximum number of scoring flows being used.",
-        	"Allowed values: Integers > 0",
-            "Suggested trial value 10 (20 if the Hotspots file contains long variants)"
-        ],
-        
-        "error_motifs":[
-            "The file name of the error motif file."      
-        ]
+        "max_flows_to_test":
+            {"type": "Integer",
+             "range": "[1,inf)",
+             "description": ["A variant candidate evaluating parameter: The maximum number of scoring flows being used.",
+        	                 "Allowed values: Integers > 0",
+                             "Suggested trial value 10 (20 if the Hotspots file contains long variants)"]},
+
+        "error_motifs":
+            {"type": "String",
+             "description": ["The file name of the error motif file."]}
     },
 
     "freebayes":{
-        "read_snp_limit":[
-        	"Do not use reads with number of snps above this",
-            "Allowed values: Integers >= 0",
-            "Suggested trial value 10"],
+        "read_snp_limit":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["Do not use reads with number of snps above this",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value 10"]},
 
-        "allow_indels":[
-            "Candidate generation parameter: Allow indel candidates to be generated when set",
-            "Allowed values: 1 = generate indel candidates, 0 = don't generate",
-            "Suggested trial value 1"],
+        "allow_indels":
+            {"type": "Bool",
+             "description": ["Candidate generation parameter: Allow indel candidates to be generated when set",
+                             "Allowed values: 1 = generate indel candidates, 0 = don't generate",
+                             "Suggested trial value 1"]},
 
-        "allow_snps":[
-            "Candidate generation parameter: Allow SNP candidates to be generated when set",
-            "Allowed values: 1 = generate SNP hypotheses, 0 = don't generate",
-            "Suggested trial value 1"],
+        "allow_snps":
+            {"type": "Bool",
+             "description": ["Candidate generation parameter: Allow SNP candidates to be generated when set",
+                             "Allowed values: 1 = generate SNP hypotheses, 0 = don't generate",
+                             "Suggested trial value 1"]},
 
-        "allow_mnps":[
-            "Candidate generation parameter: Allow MNP candidates to be generated when set",
-            "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
-            "Suggested trial value 1"],
+        "allow_mnps":
+            {"type": "Bool",
+             "description": ["Candidate generation parameter: Allow MNP candidates to be generated when set",
+                             "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
+                             "Suggested trial value 1"]},
 
-        "allow_complex":[
-            "Candidate generation parameter: Allow complex variant candidates to be generated when set",
-            "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
-            "Suggested trial value 1"],
+        "allow_complex":
+            {"type": "Bool",
+             "description": ["Candidate generation parameter: Allow complex variant candidates to be generated when set",
+                             "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
+                             "Suggested trial value 1"]},
 
-        "min_mapping_qv":[
-            "A candidate generation and variant evaluation parameter: Minimum mapping quality value required for a read to be considered (for both candidate generation and variant evaluation)",
-            "Allowed values: Integers >= 0",
-            "Suggested trial value 4"],
+        "min_mapping_qv":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A candidate generation and variant evaluation parameter: Minimum mapping quality value required for a read to be considered (for both candidate generation and variant evaluation)",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value 4"]},
 
-        "read_max_mismatch_fraction":[
-            "A candidate generation parameter: Ignore reads with fraction of mismatch greater than this value",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value 1.0"],
+        "read_max_mismatch_fraction":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A candidate generation parameter: Ignore reads with fraction of mismatch greater than this value",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value 1.0"]},
 
-        "gen_min_alt_allele_freq":[
-            "A candidate generation parameter: A non-HP-indel candidate needs to have an allele frequency greater than this value in the pileup",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value between 0.02 and 0.15"],
+        "gen_min_alt_allele_freq":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A candidate generation parameter: A non-HP-indel candidate needs to have an allele frequency greater than this value in the pileup",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value between 0.02 and 0.15"]},
 
-        "gen_min_indel_alt_allele_freq":[
-            "A candidate generation parameter: An HP-indel candidate needs to have an allele frequency greater than this value in the pileup ",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value between 0.02 and 0.15"],
+        "gen_min_indel_alt_allele_freq":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A candidate generation parameter: An HP-indel candidate needs to have an allele frequency greater than this value in the pileup ",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value between 0.02 and 0.15"]},
 
-        "gen_min_coverage":[
-            "A candidate generation parameter: A variant candidate location needs to have coverage depth greater than this value",
-            "Allowed values: Integers >= 0",
-            "Suggested trial value 6"],
+        "gen_min_coverage":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A candidate generation parameter: A variant candidate location needs to have coverage depth greater than this value",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value 6"]},
             
-       "read_mismatch_limit":[
-            "A read filtering parameter: Do not use reads with number of mismatches (where 1 gap open counts 1) above this value",
-            "Allowed value: Integers >= 0, (0 to disable this filter)",
-            "Suggested trial value (TagSeq) 5, (other) 0"
-        ],
-        
-        "min_cov_fraction":[
-            "A read filtering parameter: Do not use reads with fraction of covering the best assigned unmerged target region below this",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value (TagSeq) 0.9, (other) 0"
-        ]
+       "read_mismatch_limit":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["A read filtering parameter: Do not use reads with number of mismatches (where 1 gap open counts 1) above this value",
+                             "Allowed value: Integers >= 0, (0 to disable this filter)",
+                             "Suggested trial value (TagSeq) 5, (other) 0"]},
+
+        "min_cov_fraction":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["A read filtering parameter: Do not use reads with fraction of covering the best assigned unmerged target region below this",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value (TagSeq) 0.9, (other) 0"]}
     },
 
     "long_indel_assembler":{
-        "kmer_len":[
-            "Size of the smallest k-mer used in assembly",
-            "Allowed values: Integers >= 5",
-            "Suggested trial value between 11 and 30",
-            "Impact: Increasing values make indel calls less sensitive but more specific"],
+        "kmer_len":
+            {"type": "Integer",
+             "range": "[5,inf)",
+             "description": ["Size of the smallest k-mer used in assembly",
+                             "Allowed values: Integers >= 5",
+                             "Suggested trial value between 11 and 30",
+                             "Impact: Increasing values make indel calls less sensitive but more specific"]},
 
-        "min_var_count":[
-            "Minimum support for a variant to be evaluated",
-            "Allowed values: Integers > 1",
-            "Suggested trial value between 3 and 30",
-            "Impact: Increasing values make indel calls less sensitive but more specific"],
+        "min_var_count":
+            {"type": "Integer",
+             "range": "[2,inf)",
+             "description": ["Minimum support for a variant to be evaluated",
+                             "Allowed values: Integers > 1",
+                             "Suggested trial value between 3 and 30",
+                             "Impact: Increasing values make indel calls less sensitive but more specific"]},
 
-        "short_suffix_match":[
-            "Minimum assembled sequence match on both sides of the variant",
-            "Allowed values: Integers > 2",
-            "Suggested trial value between 4 and kmer_len",
-            "Impact: Increasing values make indel calls less sensitive but more specific"],
+        "short_suffix_match":
+            {"type": "Integer",
+             "range": "[3,inf)",
+             "description": ["Minimum assembled sequence match on both sides of the variant",
+                             "Allowed values: Integers > 2",
+                             "Suggested trial value between 4 and kmer_len",
+                             "Impact: Increasing values make indel calls less sensitive but more specific"]},
 
-        "min_indel_size":[
-            "Minimum size indel reported by assembly",
-            "Allowed values: Integers > 0",
-            "Suggested trial value between 2 and 30",
-            "Impact: Increasing values make indel calls less sensitive but more specific"],
+        "min_indel_size":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": ["Minimum size indel reported by assembly",
+                             "Allowed values: Integers > 0",
+                             "Suggested trial value between 2 and 30",
+                             "Impact: Increasing values make indel calls less sensitive but more specific"]},
 
-        "max_hp_length":[
-            "Variants containing HP larger than this are not reported",
-            "Allowed values: Integers > 1",
-            "Suggested trial value between 2 and 11",
-            "Impact: Increasing values make indel calls more sensitive but less specific"],
+        "max_hp_length":
+            {"type": "Integer",
+             "range": "[2,inf)",
+             "description": ["Variants containing HP larger than this are not reported",
+                             "Allowed values: Integers > 1",
+                             "Suggested trial value between 2 and 11",
+                             "Impact: Increasing values make indel calls more sensitive but less specific"]},
 
-        "min_var_freq":[
-            "Minimum frequency of the variant to be reported",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value between 0.1 and 0.4",
-            "Impact: Increasing values make indel calls less sensitive but more specific"],
+        "min_var_freq":
+            {"type": "Float",
+             "range": "(0.0,1.0)",
+             "description": ["Minimum frequency of the variant to be reported",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value between 0.1 and 0.4",
+                             "Impact: Increasing values make indel calls less sensitive but more specific"]},
 
-        "relative_strand_bias":[
-            "Variants with strand bias above this are not reported",
-            "Allowed values: Decimal numbers between 0 and 1",
-            "Suggested trial value between 0.6 and 1.0",
-            "Impact: Increasing values make indel calls more sensitive but less specific"],
+        "relative_strand_bias":
+            {"type": "Float",
+             "range": "[0.0,1.0]",
+             "description": ["Variants with strand bias above this are not reported",
+                             "Allowed values: Decimal numbers between 0 and 1",
+                             "Suggested trial value between 0.6 and 1.0",
+                             "Impact: Increasing values make indel calls more sensitive but less specific"]},
 
-        "output_mnv":[
-            "Enables reporting of complex variants",
-            "Allowed values: 1 = report complex variants, 0 = don't report",
-            "Suggested trial value 0"]
+        "output_mnv":
+            {"type": "Bool",
+             "description": ["Enables reporting of complex variants",
+                             "Allowed values: 1 = report complex variants, 0 = don't report",
+                             "Suggested trial value 0"]}
     }
 }

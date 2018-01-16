@@ -15,6 +15,14 @@
         float: left;
         margin: 0 10px 15px 0;
 	}
+    .search-field-data-source {
+        display: inline-block;
+        zoom: 1;
+        *display: inline;
+        height: 30px;
+        float: left;
+        margin: 0 10px 15px 0;
+	}
     .search-field-run {
         display: inline-block;
         zoom: 1;
@@ -194,7 +202,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="search-field">
+            <div class="search-field-data-source">
                 <label for="id_data_source" class=" hide">Data Source</label>
                 <select id="id_data_source" disabled="disabled" name="data_source" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search-placeholder="Find Servers..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Server:" data-deselect-all-text="Clear" data-none-selected-text="Local TS" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     <option selected value="local">Local TS</option>
@@ -270,6 +278,14 @@
                 <select id="id_pgm" name="pgmName" data-placeholder="Any Instrument" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="Find Instruments..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Instrument:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for pgm in search.experiment.pgmName %}
                         <option value="{{ pgm }}">{{ pgm }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field optional hide">
+                <label for="id_plugin" class=" hide">Plugin</label>
+                <select id="id_plugin" name="plugin" data-placeholder="Any Plugin" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="Find Plugins..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Plugin:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    {% for plugin in search.combined.plugins %}
+                        <option value="{{ plugin }}">{{ plugin }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -353,17 +369,17 @@
 
                 {{#is_proton}}
 {% endraw %}
-                    <img src="{% static "resources/img/proton_jumbo_icon.png"%}" class="pull-left" />
+                    <img style="width: 85px" src="{% static "resources/img/instrument_icons/proton.png"%}" class="pull-left" />
 {% raw %}
                 {{/is_proton}}
                 {{#is_s5}}
 {% endraw %}
-                    <img src="{% static "resources/img/raptor-thumbnail_icon.png"%}" class="pull-left" />
+                    <img style="width: 85px" src="{% static "resources/img/instrument_icons/s5.png"%}" class="pull-left" />
 {% raw %}
                 {{/is_s5}}
                 {{#other_instrument}}
 {% endraw %}
-                    <img src="{% static "resources/img/pgm_jumbo_icon.png"%}" class="pull-left" />
+                    <img style="width: 85px" src="{% static "resources/img/instrument_icons/pgm.png"%}" class="pull-left" />
 {% raw %}
                 {{/other_instrument}}
                 {{#exp.plan}}<span class="{{exp.plan.runType}} app-icon-completed"></span>{{/exp.plan}}

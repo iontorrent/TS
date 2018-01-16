@@ -3,9 +3,9 @@
         "name"          : "AmpliSeq Panel - 540 - Germ Line - Low Stringency",
         "tooltip"       : "Parameters optimized using AmpliSeq Exome Panel and HiQ for depth > 50",
         "configuration" : "ampliseq_germline_low_stringency_540",
-        "ts_version"    : "5.6",
+        "ts_version"    : "5.8",
         "compatibility" : {
-          "chip"        : ["540"],
+          "chip"        : ["540", "550"],
           "library"     : ["ampliseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"],

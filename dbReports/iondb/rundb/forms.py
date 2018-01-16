@@ -535,8 +535,3 @@ class NetworkConfigForm(forms.Form):
                 ax_proxy()
 
         self.set_to_current_values()
-
-
-class AmpliseqLogin(forms.Form):
-    username = forms.CharField()
-    password = forms.CharField(widget=PasswordInput)

@@ -916,7 +916,7 @@ void AlleleParser::InferAlleleTypeAndLength(AlleleDetails& allele) const
   allele.minimized_prefix = 0;
   while (allele.minimized_prefix < alt_length-1 and allele.minimized_prefix < ref_length-1
       and allele.alt_sequence[allele.minimized_prefix] == ref_sequence[allele.minimized_prefix]) {
-    if (allele.raw_cigar.size() > 0 and ((unsigned) allele.minimized_prefix) < allele.raw_cigar.size() and allele.raw_cigar[allele.minimized_prefix] != 'M') break;
+    if (allele.raw_cigar.size() > 0 and ((unsigned) allele.minimized_prefix) < allele.raw_cigar.size()-1 and (allele.raw_cigar[allele.minimized_prefix] != 'M' or allele.raw_cigar[allele.minimized_prefix+1] != 'M')) break;
     ++allele.minimized_prefix;
   }
 
@@ -1165,18 +1165,25 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
     list<PositionInProgress>::iterator& position_ticket, int& haplotype_length)
 {
   // Generate candidates
+
+  new_hotspot_grouping = true; // reset in case it is set due to end of target last run
   flushblackpos(position_ticket->chr, position_ticket->pos);
   int lookahead = merge_lookahead_;
   int lookahead_flow = 2;
   if (lookahead_flow > lookahead-1) lookahead_flow = lookahead-1;
   int not_look_ahead = 0;
+  if (position_ticket->target_end > ref_reader_->chr_size(position_ticket->chr)) {
+    cerr << "Target is outside the chromosome length" << endl;
+    exit(1);
+  }
   int max_length = position_ticket->target_end-position_ticket->pos;
-  //if (max_length > 200) max_length = 200;
+  if (max_length > 1000) max_length = 1000;  // shall be enough
   //cout << "length " << max_length << " pos " <<  position_ticket->pos << endl;
   if (max_length < 0) return; // shall not happen in theory, the lock seems to be not working properly, every thread seem to be doing one more run. fix later.
 			      // This will be a gate keeper for now. ZZ 6/22/15
   string refstring;
   refstring = ref_reader_->substr(position_ticket->chr, position_ticket->pos, max_length);
+  int scan_length = 1;
   if (position_ticket->pos == (position_ticket->target_end-1)) {// Last base in target
     PileUpAlleles(allowed_allele_types_ & (ALLELE_REFERENCE|ALLELE_SNP), 1, false, position_ticket, 0);
     not_look_ahead = 1;
@@ -1265,6 +1272,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
               		    current_look_up_window = max(current_look_up_window, hapend - position_ticket->pos);
             		}
           	}
+		current_look_up_window = min((long int) max_length, current_look_up_window);
 	 	if (haplotype_length < current_look_up_window) haplotype_length = current_look_up_window;
 		PileUpAlleles(allowed_allele_types_, current_look_up_window, false, position_ticket, new_prefix);
 		VariantCandidate v(vcf_writer_->VariantInitializer());
@@ -1282,10 +1290,10 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		list<list<int> > allele_groups_ready_to_go;
 		vector<int>alleles_on_hold;
 		int look_ahead_sliding_win_start, look_ahead_sliding_win_end;
-		my_examiner_->LookAheadSlidingWindow0(allele_groups_ready_to_go, alleles_on_hold, look_ahead_sliding_win_start, look_ahead_sliding_win_end, position_ticket->pos+current_look_up_window);
+		my_examiner_->LookAheadSlidingWindow0(allele_groups_ready_to_go, alleles_on_hold, look_ahead_sliding_win_start, look_ahead_sliding_win_end, position_ticket->pos+scan_length);
 		//cout << position_ticket->pos << " ZZ hapl " << haplotype_length << " " << allele_groups_ready_to_go.size() << " " << alleles_on_hold.size() << endl;
 		//printf( "ZZ:lkbase %d pos %ld hapl %d lAE1 %d\n", lkbase, position_ticket->pos, haplotype_length, my_examiner_->FindLookAheadEnd1());
-		if (allele_groups_ready_to_go.size() > 0) {
+		if (allele_groups_ready_to_go.size() > 0 or current_look_up_window == max_length) {
 		    /*
 		    long int save_pos = position_ticket->pos;
 		    for (list<list<int> >::iterator it= allele_groups_ready_to_go.begin(); it != allele_groups_ready_to_go.end(); it++) {
@@ -1317,18 +1325,34 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		    */
 		    handle_candidate_list(position_ticket);
 		    handle_black_out(refstring);
-		    for (list<list<int> >::iterator it= allele_groups_ready_to_go.begin(); it != allele_groups_ready_to_go.end(); it++) {
+		    //cout << "Freebayes: look_ahead_sliding_win_start " << look_ahead_sliding_win_start << " look_ahead_sliding_win_end " << look_ahead_sliding_win_end << endl;
+		    if (allele_groups_ready_to_go.size() > 0) 
+		      for (list<list<int> >::iterator it= allele_groups_ready_to_go.begin(); it != allele_groups_ready_to_go.end(); it++) {
 			MakeVariant(variant_candidates, position_ticket, new_prefix, &(*it));
+		      }
+		    if (current_look_up_window == max_length) {
+  			list<int> co;
+			for (unsigned int i = 0; i < alleles_on_hold.size(); i++) co.push_back(alleles_on_hold[i]);
+			if (co.size() > 0) MakeVariant(variant_candidates, position_ticket, new_prefix, &co);
+			return;
 		    }
 		    if (look_ahead_sliding_win_start-position_ticket->pos > current_look_up_window)  {
 			cerr << "warning the skip ahead may be too much " << look_ahead_sliding_win_start-position_ticket->pos << " " << current_look_up_window<< endl;
 		    }
 		    haplotype_length = look_ahead_sliding_win_start-position_ticket->pos;
+		    //cout << "Freebayes: haplotype_length at return " << haplotype_length << endl;
+		    if (look_ahead_sliding_win_start == current_look_up_window) return;
+		    size_t old_pos = position_ticket->pos;
+		    position_ticket->pos = look_ahead_sliding_win_start;
+		    GenerateCandidates(variant_candidates, position_ticket, haplotype_length, my_examiner_);
+		    haplotype_length += position_ticket->pos-old_pos;
+		    position_ticket->pos = old_pos;
 		    return;
 		}
 		lkbase = look_ahead_sliding_win_end - position_ticket->pos-haplotype_length;
 		if (lkbase < 1) lkbase = 1; // advance at least one base
 		current_look_up_window = min(max_length, haplotype_length+lkbase);
+		scan_length = current_look_up_window;
 		PileUpAlleles(allowed_allele_types_, current_look_up_window, true, position_ticket, new_prefix);
 		old_haplotype_length = haplotype_length-1;
 		continue;
@@ -1512,6 +1536,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 	    // use the map to find duplicate, maybe we can get the coverage as well for AO. ZZ 6/29/15
 	    pileup::iterator x = allele_pileup_.find(Allele(allele.type,pos,ref_length,alt.size(),alt.c_str()));
 	    if (x == allele_pileup_.end()) continue;
+	    if (x->second.filtered) continue;
 	    /*
 	    if (x->second.is_hotspot) continue; // two hotspot are effective same, do nothing now.
 	    x->second.filtered = true;
@@ -1603,7 +1628,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 	} 
   }
   */
-  if (my_examiner_) {
+  if (my_examiner_ and not_look_ahead == 0) {
                 // set up the candidate
       	VariantCandidate v(vcf_writer_->VariantInitializer());
 	bool exist_allele = FillVariantFlowDisCheck(v, refstring, position_ticket, hotspot_present, haplotype_length);
@@ -1850,10 +1875,10 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
     */
     //cout << "find prefix " << allele.alt_sequence << " " << current_start_pos << " " << current_end_match << allele.raw_cigar[current_start_pos] << allele.raw_cigar[current_start_pos+1] << allele.minimized_prefix << endl;  
     if (allele.is_hotspot) {
-	current_start_pos = min(current_start_pos, allele.minimized_prefix);
+	current_start_pos = allele.minimized_prefix;
         current_end_match = min(current_end_match, allele.minimized_suffix);
     } else {
-        if (current_end_pos_ref-current_start_pos >= 2 and current_end_pos_alt-current_start_pos >=2 and current_start_pos > 0) current_start_pos--; // complex, mnp need one anchor base, per hotspot convention
+        //if (current_end_pos_ref-current_start_pos >= 2 and current_end_pos_alt-current_start_pos >=2 and current_start_pos > 0) current_start_pos--; // complex, mnp need one anchor base, per hotspot convention
     }
     //if (allele.ref_length < allele.alt_sequence.size() and current_start_pos != current_end_pos_ref-1 and current_start_pos > 0) current_start_pos--;
     //cout << "find prefix " << allele.alt_sequence << " " << current_start_pos << " " << current_end_match  << endl;   // ZZ

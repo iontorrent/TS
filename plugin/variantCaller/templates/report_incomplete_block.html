@@ -30,13 +30,17 @@
 <title>Torrent Variant Caller Report</title>
 <body>
 
-<div class="container-fluid">
-	<div>
-        <strong>{{message}}</strong>
-    </div>
-    <div>
-    	Output Directory: {{output_dir}}
-    </div>
+	<div class="container-fluid">
+	{% if error_msg != '' %}
+	<div class="alert alert-error"> <strong>Error:</strong> {{error_msg}} </div>
+	{% endif %}
+	
+	{% if warning_msg != '' %}
+	<div class="alert alert-warning"> <strong>Warning:</strong> {{warning_msg}} </div>
+	{% endif %}		
+    <div class="alert alert-info">
+	  	  <strong> Output directory: </strong> <a href="../../../../../report/{{startplugin_json.runinfo.pk}}/metal/plugin_out/{{output_dir}}" class="alert-link">{{output_dir}}</a>
+	</div>
 </div>
 </body>
 </html>

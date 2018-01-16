@@ -1,0 +1,4 @@
+---
+# file format: YAML
+# used by TSconfig (Ansible playbooks)
+TSS_VERSION: "@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@"

@@ -69,8 +69,8 @@
    "ImageControlOpts" : {
       "acqPrefix" : "acq_",
       "col-doubles-xtalk-correct" : false,
-      "col-flicker-correct" : true,
-      "col-flicker-correct-aggressive" : true,
+      "col-flicker-correct" : false,
+      "col-flicker-correct-aggressive" : false,
       "col-flicker-correct-verbose" : false,
       "corr-noise-correct" : false,
       "dat-postfix" : "dat",
@@ -190,9 +190,6 @@
       "wells-save-queue-size" : 0
    },
    "ThumbnailControl" : {
-      "bkg-debug-files" : true,
-      "bkg-debug-param" : 3,
-      "gpuworkload" : 0.0,
       "mask-datacollect-exclude-regions" : false,
       "region-size" : [ 100, 100 ],
       "total-timeout" : 36000

@@ -1,5 +1,5 @@
 ---
-# file: igv.yml
+# file: common.yml
 - hosts: iontorrent_master:iontorrent_computes
   roles:
     - common
@@ -7,3 +7,4 @@
     - common
   vars_files:
     - [ "group_vars/all_local", "group_vars/all" ]
+    - [ "group_vars/torrent_suite_version_local", "/etc/torrent_suite_version"]

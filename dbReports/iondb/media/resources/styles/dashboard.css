@@ -1,0 +1,270 @@
+/* ==========================================================================
+   Page styles
+   ========================================================================== */
+
+h1.section-header {
+    color: #005daa;
+    border-bottom: 1px solid #005daa;
+}
+
+/* ==========================================================================
+   Summary styles
+   ========================================================================== */
+
+.server-status {
+    font-weight: bold;
+    font-size: 12px;
+    background: #f9f9f9;
+}
+
+p.server-status-header {
+    color: #6A6A6A;
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.server-stat {
+    padding: 8px 12px;
+}
+
+.server-stat .fa {
+    font-size: 16px;
+    padding-right: 4px;
+    padding-bottom: 2px;
+    vertical-align: middle;
+}
+
+/* Triangle icon is too wide */
+.server-status i.fa-exclamation-triangle {
+    padding-right: 2px;
+}
+
+/* ==========================================================================
+   Runs styles
+   ========================================================================== */
+
+h1.section-header div.bootstrap-select {
+    float: right !important;
+    font-weight: normal;
+}
+
+h1.section-header a.btn {
+    margin-top: 5px;
+    font-weight: normal;
+    float: right !important;
+}
+
+.dash-run {
+    margin: 0;
+    padding: 8px 4px;
+}
+
+.dash-run .fa {
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.dash-run p {
+    margin-bottom: 0px;
+}
+
+.dash-run p, .dash-run span {
+    font-size: 12px;
+}
+
+.dash-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #6A6A6A;
+    margin-bottom: 2px;
+}
+
+.even {
+    background-color: #f9f9f9;
+}
+
+.sample-popover-table {
+    table-layout: fixed;
+    font-size: 11px;
+}
+
+.sample-popover-table tfoot tr td {
+    text-align: center;
+}
+
+.popover-title {
+    display: none;
+}
+
+span.run-type-icon {
+    vertical-align: middle;
+}
+
+/* Progress bar */
+ul.stage-list {
+    display: table;
+    list-style-type: none;
+    margin: 0 0 14px -16px;
+    padding: 0;
+    table-layout: fixed;
+    width: 100%;
+}
+
+ul.stage-list li {
+    display: table-cell;
+    text-align: center;
+    padding-bottom: 12px;
+    white-space: nowrap;
+    position: relative;
+    border-bottom: 3px solid #d9d9d9;
+}
+
+ul.stage-list li:before {
+    position: absolute;
+    bottom: -14px;
+    right: 0%;
+    margin-left: -7.5px;
+    color: white;
+    height: 20px;
+    width: 20px;
+    line-height: 20px;
+    border: 2px solid #d9d9d9;
+    border-radius: 20px;
+}
+
+ul.stage-list li.okay {
+    border-color: #00548b;
+}
+
+ul.stage-list li.okay:before {
+    content: "";
+    color: white;
+    background-color: #00548b;
+    border-color: #00548b;
+}
+
+ul.stage-list li:first-of-type {
+    border-bottom: none;
+    bottom: 3px;
+}
+
+ul.stage-list li.disabled:before {
+    content: "";
+    background-color: #d9d9d9;
+}
+
+ul.stage-list li.error:before {
+    content: "";
+    background-color: #b94a48;
+    border-color: #b94a48;
+}
+
+ul.stage-list li.error {
+    border-bottom: 3px solid #b94a48;
+}
+
+ul.stage-list li.active {
+    -webkit-animation: flickerActiveBorder 2s infinite;
+    -moz-animation: flickerActiveBorder 2s infinite;
+    -o-animation: flickerActiveBorder 2s infinite;
+    animation: flickerActiveBorder 2s infinite;
+}
+
+ul.stage-list .active:before {
+    -webkit-animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
+    -moz-animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
+    -o-animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
+    animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
+}
+
+@keyframes flickerActive {
+    0% {
+        background-color: #00548b;
+    }
+    50% {
+        background-color: #d9d9d9;
+    }
+    100% {
+        background-color: #00548b;
+    }
+}
+
+@keyframes flickerActiveBorder {
+    0% {
+        border-color: #00548b;
+    }
+    50% {
+        border-color: #d9d9d9;
+    }
+    100% {
+        border-color: #00548b;
+    }
+}
+
+@-o-keyframes flicker {
+    0% {
+        background-color: #00548b;
+    }
+    50% {
+        background-color: #d9d9d9;
+    }
+    100% {
+        background-color: #00548b;
+    }
+}
+
+@-moz-keyframes flicker {
+    0% {
+        background-color: #00548b;
+    }
+    50% {
+        background-color: #d9d9d9;
+    }
+    100% {
+        background-color: #00548b;
+    }
+}
+
+@-webkit-keyframes flicker {
+    0% {
+        background-color: #00548b;
+    }
+    50% {
+        background-color: #d9d9d9;
+    }
+    100% {
+        background-color: #00548b;
+    }
+}
+
+/* ==========================================================================
+   Instrument styles
+   ========================================================================== */
+
+.instrument-alarms {
+
+}
+
+#instruments-container > div.row-fluid {
+    margin-bottom: 10px;
+}
+
+.instrument p {
+    margin: 0;
+    font-size: 12px;
+}
+
+.instrument p.instrument-status {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.instrument p.instrument-name {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.instrument img.disabled {
+    opacity: 0.25;
+}

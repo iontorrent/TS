@@ -53,6 +53,13 @@ public:
 
   void add_observation(const Allele& observation, int sample_index, bool is_reverse_strand, int _chr, int num_samples, int read_count, string rawCg) {
 	if (not initialized) { raw_cigar = rawCg; }
+	else {
+		unsigned int s = raw_cigar.size();
+		if (s > rawCg.size()) s = rawCg.size();
+		for (unsigned int i = 0; i < s; i++) {
+		    if (raw_cigar[i] == 'M' and rawCg[i] != 'M') { raw_cigar = rawCg; break;}
+		}
+	}
 	add_observation(observation, sample_index, is_reverse_strand,  _chr, num_samples,  read_count);
   }
 
@@ -85,10 +92,12 @@ public:
 
 
   void add_hotspot(const HotspotAllele& observation, int num_samples, int p, int s) {
-    is_hotspot = true;
-    hotspot_params = &observation;
-    minimized_prefix = p; // special for hotspot
-    minimized_suffix = s; // special for hotspot, will not be unset
+    if (not is_hotspot) { // multiple hotspot same allele, present at the left most
+        is_hotspot = true;
+        hotspot_params = &observation;
+        minimized_prefix = p; // special for hotspot
+        minimized_suffix = s; // special for hotspot, will not be unset
+    }
     if (not initialized) {
       chr = observation.chr;
       position = observation.pos;

@@ -29,15 +29,16 @@
 </head>
 <title>Torrent Variant Caller Report</title>
 <body>
-
-<strong>Plugin is in progress: {{status.barcodes_carried_out}} out of {{status.num_barcodes}} barcodes have been carried out ...</strong>
+<div class="alert alert-info">
+	<strong>Plugin is in progress:</strong> {{status.barcodes_carried_out}} out of {{status.num_barcodes}} barcodes have been carried out ...
+</div>
 <div class="container-fluid">
 	<table style="width:auto">
 	    <tr><td>Total number of barcodes: </td>            <td>{{status.num_barcodes}}</td></tr>
 	    <tr><td>Number of barcodes filtered out: </td>     <td>{{status.filtered_barcodes}}</td></tr>
         <tr><td>Number of barcodes processed: </td>        <td>{{status.barcodes_processed}}</td></tr>
         <tr><td>Number of barcodes in the queue: </td>     <td>{{status.queued_barcodes}}</td></tr>
-        <tr><td>Output directory: </td>                    <td>{{output_dir}}</td></tr>
+  	    <tr><td>Output directory:</td>      <td><a href="../../../../../report/{{runinfo_pk}}/metal/plugin_out/{{output_dir}}">{{output_dir}}</a>
 	</table>
 	
 <script type="text/javascript">

@@ -1,6 +1,6 @@
 {
     "meta":{
-        "name"          : "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)",
+        "name"          : "Oncomine Tumor DNA - PGM (318) or S5 (5xx)",
         "tooltip"       : "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA",
         "configuration" : "tagseq_cfdna",
         "ts_version"    : "5.4",

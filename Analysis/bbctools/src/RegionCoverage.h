@@ -140,6 +140,7 @@ class RegionCoverage
         void     AddCovAtDepth( TargetRegion *tr, int totReads );
         uint32_t BaseOnRegion( uint32_t contigIdx, uint32_t position );
         uint32_t ReadOnRegion( uint32_t contigIdx, uint32_t readSrt, uint32_t readEnd );
+        string   FieldsOnRegion( uint32_t contigIdx, uint32_t readSrt, uint32_t readEnd, uint32_t maxValues );
 
     public:
 
@@ -158,7 +159,8 @@ class RegionCoverage
 
         // Return a comma separated list for up to maxValues of (first) loaded auxiliary fields spanned by
         // the given locus. If more than maxValues then return <first>,...(N)...,<last> (N>1).
-        string FieldsOnRegion( uint32_t contigIdx, uint32_t readSrt, uint32_t readEnd, uint32_t maxValues = 3 );
+        string AnnotationOnRegion(
+        	uint32_t srtContig, uint32_t srtPosition, uint32_t endPosition, uint32_t endContig = 0, uint32_t maxValues = 3 );
 
         // Return the target index for the region the last call to ReadOnRegion() mapped to, or 0 if none
         uint32_t GetLastReadOnRegionIdx(void) const;
@@ -183,11 +185,19 @@ class RegionCoverage
 
         // Return the sub-region for the next pullSize bases (or less) from the current base coverage iterator.
         // Used after a call to SetCovAtDepths(). The return value is the size of the region pulled (<= pullSize).
-        // (The size pulled depends on how long the current region is and where the last pull left off.)
-        // Special case for pullSize == 0: Return size for the current (partial) region and move to next.
+        // The size pulled depends pullMode and on how long the current region is and where the last pull left off.
+        // If pullMode == 0 (default) regions are contiguous and returned as partial or full target regions.
+        // If pullMode == 1 the full current region size is returned, regardless of whether regions overlap.
+        // If pullMode >= 2 the full merged region of those overlapping the current target is returned.
+        // srtContig and srtPos input values are used for global window bounds for the individual regions
+        // returned when fullRegionSize == true, otherwise their initial values are ignored.
+        // (endContig not required as this is controlled elsewhere by pullSize.)
+        // On return these are the individual (next) target region bounds.
         // firstContigRegion returns true if this is the first region of a new contig
+        // Special case for pullSize == 0: Return size for the current (partial) region and move to next.
         uint32_t PullSubRegion(
-        	uint32_t pullSize, uint32_t &contig, uint32_t &srtPos, uint32_t &endPos, bool &lastContigRegion );
+        	uint32_t pullSize, uint32_t &srtContig, uint32_t &srtPos, uint32_t &endPos,
+        	bool &lastContigRegion, uint32_t pullMode = 0 );
 
         // Sets the specific depths at which numbers of bases at those depths are covered
         // Should be comma-separated list of integers depths or "".

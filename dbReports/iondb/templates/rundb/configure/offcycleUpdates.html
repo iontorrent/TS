@@ -228,50 +228,50 @@
             $('.needsPermission').attr('title','Logged in user has insufficient permissions').attr('rel', 'tooltip');
             $(".install_offcycle_manually").removeAttr('href');
             $(".do_update").removeAttr('href');
+        {% else %}
+            $('.do_update').click(function(e){
+                var url = $(this).attr('href');
+                var msg = $(this).data('confirm_msg');
+                var $alert_div = $(this).parents('#products,#instruments,#plugins').find('.alert');
+                $alert_div.removeClass('alert-error', 'alert-success').hide();
+
+                bootbox.confirm('<h3>'+msg+'</h3><h4>The update process may take a few minutes to complete.</h4>', function(result){
+                    if(result){
+                        $.blockUI();
+                        $('.blockMsg').prepend('<h1>Installing, please wait ...</h1>')
+                        $.post(url).done(function(data){
+                            $alert_div.html('Successfully updated! This page will now reload');
+                            $alert_div.addClass('alert-success').show();
+                            setTimeout(function(){
+                                window.location.reload(true);
+                            }, 1000);
+                        }).fail(function(data){
+                            $alert_div.html('Error: ' + data.responseText);
+                            $alert_div.addClass('alert-error').show();
+                        }).always(function(){
+                            $.unblockUI();
+                        });
+                    }
+                });
+                return false;
+            });
+
+            $('.install_offcycle_manually').click(function (e) {
+                e.preventDefault();
+                $('#error-messages').hide().empty();
+                $('#manualOffcycle').hide().empty();
+
+                var url = $(this).attr('href');
+                $.get(url, function(data) {
+                    $('body').append(data);
+                    $('#modal_plugin_or_publisher_install').modal('show');
+
+                }).fail(function(data) {
+                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                    console.log("error:", data);
+                });
+            });
         {% endif %}
-
-        $('.do_update:enabled').click(function(e){
-            var url = $(this).attr('href');
-            var msg = $(this).data('confirm_msg');
-            var $alert_div = $(this).parents('#products,#instruments,#plugins').find('.alert');
-            $alert_div.removeClass('alert-error', 'alert-success').hide();
-
-            bootbox.confirm('<h3>'+msg+'</h3><h4>The update process may take a few minutes to complete.</h4>', function(result){
-                if(result){
-                    $.blockUI();
-                    $('.blockMsg').prepend('<h1>Installing, please wait ...</h1>')
-                    $.post(url).done(function(data){
-                        $alert_div.html('Successfully updated! This page will now reload');
-                        $alert_div.addClass('alert-success').show();
-                        setTimeout(function(){
-                            window.location.reload(true);
-                        }, 1000);
-                    }).fail(function(data){
-                        $alert_div.html('Error: ' + data.responseText);
-                        $alert_div.addClass('alert-error').show();
-                    }).always(function(){
-                        $.unblockUI();
-                    });
-                }
-            });
-            return false;
-        });
-
-        $('.install_offcycle_manually:enabled').click(function (e) {
-            e.preventDefault();
-            $('#error-messages').hide().empty();
-            $('#manualOffcycle').hide().empty();
-
-            var url = $(this).attr('href');
-            $.get(url, function(data) {
-                $('body').append(data);
-                $('#modal_plugin_or_publisher_install').modal('show');
-
-            }).fail(function(data) {
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
-                console.log("error:", data);
-            });
-        });
     });
 
 </script>

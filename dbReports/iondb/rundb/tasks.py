@@ -47,6 +47,7 @@ import requests
 import feedparser
 import dateutil
 import urlparse
+from distutils.sysconfig import get_python_lib
 from iondb.utils import raid as raid_utils
 from iondb.utils import files as file_utils
 from iondb.utils.utils import send_email
@@ -638,7 +639,7 @@ def download_updates(auto_install=False):
     from iondb.rundb import models
 
     try:
-        cmd = ['sudo', '/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--download']
+        cmd = ['sudo', os.path.join(get_python_lib(), 'ion_tsconfig/TSconfig.py'), '--download']
         if auto_install:
             cmd += ['--refresh']
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -659,7 +660,7 @@ def _do_the_install():
     """This function is expected to be run from a daemonized process"""
     from iondb.rundb import models
     try:
-        cmd = ['sudo', '/usr/lib/python2.7/dist-packages/ion_tsconfig/TSconfig.py', '--upgrade']
+        cmd = ['sudo', os.path.join(get_python_lib(), 'ion_tsconfig/TSconfig.py'), '--upgrade']
         p = subprocess.check_call(cmd)
         logger.info('TSConfig install success!')
         success = True

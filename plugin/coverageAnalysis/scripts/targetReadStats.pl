@@ -16,11 +16,13 @@ my $OPTIONS = "Options:
   -a Indicates target regions are Amplicons rather than generic targets. Overrides -b option and changes wording of output.
   -b Indicates target region coverage is measured by average Base coverage depth and that targets may be merged.
   -c Input file is contig reads summary. Targets are contigs; log10 reads output and no end-to-end. (Overrides -a, -b & -r options.)
+  -f Full stats mode. Includes a few additional statistics in the report.
   -l Show extra log information to STDERR.
   -r RNA AmpliSeq option: Coverage statistics output at log10 depths. Forces '-a' option.
-  -D <file> Output file name for depth of coverage Distribution table (tsv) file. Default: '' (None output).
   -C <pcnt> Percentage of target length covered by at least one base read for target to be considered 'fully' covered. Default: 98.
+  -D <file> Output file name for depth of coverage Distribution table (tsv) file. Default: '' (None output).
   -E <pcnt> Threshold for end-to-end read counting based on percent end-to-end reads greater or equal to <pcnt>. Default: 70.
+  -K <list> List of read depths at which percentage of target coverage is reported. Default: '20,100,500'.
   -P <pcnt> Percentage of assigned mapped reads. If provided this will be output as the percent assigned reads statistic.
   -M <int>  Number of Mapped reads. If provided the percent assigned reads statistic will be output (unless -b option used).
   -R <int>  Threshold for Read coverage for strand bias to be counted. Reset to 1 if less. Default: 10 reads/bases.
@@ -39,6 +41,7 @@ my $thresReads = 10;
 my $basedepths = 0;
 my $fullycov = 98;
 my $contigs = 0;
+my $covDepths = "20,100,500";
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -54,6 +57,7 @@ while( scalar(@ARGV) > 0 )
   elsif($opt eq '-r') {$rnaopt = 1;$ampout = 1;}
   elsif($opt eq '-C') {$fullycov = (shift)+0;}
   elsif($opt eq '-E') {$thresE2E = (shift)+0;}
+  elsif($opt eq '-K') {$covDepths = shift;}
   elsif($opt eq '-P') {$pc_mappedReads = (shift)+0;}
   elsif($opt eq '-M') {$mappedReads = int(shift);}
   elsif($opt eq '-R') {$thresReads = (shift)+0;}
@@ -97,6 +101,11 @@ $thresE2E  *= 0.01;
 $fullycov  *= 0.01;
 
 my $havedoc = ($docfile ne "" && $docfile ne "-" );
+
+my @cov_depths = ();
+if( int($covDepths) > 0 ) {
+  @cov_depths = split(",",$covDepths);
+}
 
 #--------- End command arg parsing ---------
 
@@ -256,12 +265,13 @@ sub outputStats
     }
   }
   if( $basedepths ) {
-    printf "%ss with base coverage at 1x:   %.2f%%\n",$tagU,$cumd[1]*$scl;
-    printf "%ss with base coverage at 10x:  %.2f%%\n",$tagU,$cumd[10]*$scl if( $fullstats );
-    printf "%ss with base coverage at 20x:  %.2f%%\n",$tagU,$cumd[20]*$scl;
-    printf "%ss with base coverage at 50x:  %.2f%%\n",$tagU,$cumd[50]*$scl if( $fullstats );
-    printf "%ss with base coverage at 100x: %.2f%%\n",$tagU,$cumd[100]*$scl;
-    printf "%ss with base coverage at 500x: %.2f%%\n",$tagU,$cumd[500]*$scl;
+    printf "%ss with base coverage at 1x: %.2f%%\n",$tagU,$cumd[1]*$scl;
+    for( my $i = 0; $i < scalar(@cov_depths); ++$i ) {
+      my $d = int($cov_depths[$i]);
+      my $n = 4 - length("$d");
+      my $s = $n > 0 ? " " x $n : "";
+      printf "%ss with base coverage at %dx: %s%.2f%%\n",$tagU,$d,$n,$cumd[$d]*$scl;
+    }
   } elsif( $rnaopt || $contigs ) {
     printf "%ss with at least 1 read:     %d\n",$tagU,$cumd[1];
     printf "%ss with at least 10 reads:   %d\n",$tagU,$cumd[10];
@@ -270,12 +280,13 @@ sub outputStats
     printf "%ss with at least 10K reads:  %d\n",$tagU,$cumd[10000];
     printf "%ss with at least 100K reads: %d\n",$tagU,$cumd[100000];
   } else {
-    printf "%ss with at least 1 read:     %.2f%%\n",$tagU,$cumd[1]*$scl;
-    printf "%ss with at least 10 reads:   %.2f%%\n",$tagU,$cumd[10]*$scl if( $fullstats );
-    printf "%ss with at least 20 reads:   %.2f%%\n",$tagU,$cumd[20]*$scl;
-    printf "%ss with at least 50 reads:   %.2f%%\n",$tagU,$cumd[50]*$scl if( $fullstats );
-    printf "%ss with at least 100 reads:  %.2f%%\n",$tagU,$cumd[100]*$scl;
-    printf "%ss with at least 500 reads:  %.2f%%\n",$tagU,$cumd[500]*$scl;
+    printf "%ss with at least 1 read: %.2f%%\n",$tagU,$cumd[1]*$scl;
+    for( my $i = 0; $i < scalar(@cov_depths); ++$i ) {
+      my $d = int($cov_depths[$i]);
+      my $n = 4 - length("$d");
+      my $s = $n > 0 ? " " x $n : "";
+      printf "%ss with at least %d reads: %s%.2f%%\n",$tagU,$d,$s,$cumd[$d]*$scl;
+    }
   }
   return \@cumd;
 }

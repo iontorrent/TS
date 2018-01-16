@@ -132,6 +132,10 @@
 					<tr><td>IonStats Args</td><td>{{ report.eas.thumbnailionstatsargs }}</td></tr>
 				{% endif %}
 				<tr><td>Analysis Parameters</td><td>{{report.eas.custom_args|yesno:"custom,default"}}</td></tr>
+                {% if experiment.plan and experiment.plan.run_transfer_from_source %}
+                    <tr><td>Run Transferred From</td><td>{{ experiment.plan.run_transfer_from_source }}</td></tr>
+                {% endif %}
+
 			</table>
 		</div>
 		

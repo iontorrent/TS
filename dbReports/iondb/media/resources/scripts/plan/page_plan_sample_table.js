@@ -288,6 +288,10 @@ $(document).ready(function () {
                         defaultValue: function getdefaultbarcodeid(){var barcodeSet = $('#barcodeSet').val(); return barcodeSet? BARCODES[barcodeSet][0].id_str : "";},
                         isValueRequired: true
                     },
+                    endBarcodeId:         { type: "string",
+                        defaultValue: function getdefaultEndBarcodeid(){var endBarcodeSet = $('#endBarcodeSet').val(); return endBarcodeSet? ENDBARCODES[endBarcodeSet][0].id_str : "";},
+                        isValueRequired: false
+                    },
                     sampleName:           { type: "string", defaultValue: "" },
                     sampleDescription:    { type: "string", defaultValue: "" },
                     sampleExternalId:     { type: "string", defaultValue: "" },
@@ -351,11 +355,19 @@ $(document).ready(function () {
             },
             {
                 field: "barcodeId", title: "Barcode",
-                width: '220px',
+                width: '100px',
                 attributes: { "name": "barcodeId" },
                 hidden: $('#chk_not_barcoded').is(':checked'),
                 editor: barcodeEditor, 
                 template: dropDnTemplate({'html': $('#barcodeColumnTemplate').html()})
+            },
+            {
+                field: "endBarcodeId", title: "End Barcode",
+                width: '100px',
+                attributes: { "name": "endBarcodeId" },
+                hidden: $('#chk_not_dualBarcoded').is(':checked'),
+                editor: endBarcodeEditor, 
+                template: dropDnTemplate({'html': $('#endBarcodeColumnTemplate').html()})
             },
             {
                 field: "sampleName", title: "Sample (required)",
@@ -484,11 +496,19 @@ $(document).ready(function () {
             var field = Object.keys(e.values)[0];
             var rowIndex = e.container.parent().index();
 
+            // strip leading and trailing spaces from input fields
+            var value = e.values[field];
+            if( $.type(value) == 'string' && (value.indexOf(' ') == 0 || value.lastIndexOf(' ') == value.length-1) ){
+                value = $.trim(value);
+                e.model.set(field, value);
+                e.preventDefault();
+            }
+
             // copy fields for RNA row if same sample for dual nuc type
             var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
             if (planOpt.isDualNucleotideType && isSameSampleForDual){
                 if ((rowIndex < ds.total()-1) && (fieldsToUpdateForRNASameSample.indexOf(field) >= 0)){
-                    ds.at(rowIndex+1).set(field, e.values[field]);
+                    ds.at(rowIndex+1).set(field, value);
                     gridRefresh(this);
                 }
             }
@@ -533,10 +553,28 @@ $(document).ready(function () {
                 dataSource: BARCODES[$('#barcodeSet').val()] || [],
                 dataTextField: "id_str",
                 dataValueField: "id_str",
-                template: '#=id_str# (#=sequence#)',
+                template: '#=id_str#',
+                //template: '#=id_str# (#=sequence#)',
             });
     }
 
+    function endBarcodeEditor(container, options) {
+        $('<input id="endBarcodeEditor" name="endBarcodeEditor" data-bind="value:' + options.field + '"/>')
+            .appendTo(container)
+            .kendoDropDownList({
+                dataSource: ENDBARCODES[$('#endBarcodeSet').val()] || [],
+                dataTextField: "id_str",
+                dataValueField: "id_str",
+                optionLabel: "---",
+                template: '#=id_str#',
+            	change: function(e) {
+                	if (options.model.endBarcodeId === "---") {
+                    	options.model.set('endBarcodeId', "");
+                	}
+                }
+            });
+    }
+    
     function controlTypeEditor(container, options) {
         $('<input id="controlTypeEditor" name="controlTypeEditor" data-bind="value:' + options.field + '"/>')
             .appendTo(container)
@@ -784,6 +822,7 @@ $(document).ready(function () {
             $('.barcoded').hide();
             $('.nonbarcoded').show();
             $('#barcodeSet').val('');
+            $('#endBarcodeSet').val('');
             $('#numRowsLabel').text("Number of chips");
         }
         $('#numRows').change();
@@ -825,23 +864,66 @@ $(document).ready(function () {
             $('input[id=chk_barcoded]').attr("checked", false);
             $('input[id=chk_not_barcoded]').attr("checked", true);
 
+            // not dualBarcoded
+            $('input[id=chk_dualBarcoded]').attr("checked", false);
+
             temp = $(this)
             $(".barcoded").hide();
             $(".nonbarcoded").show();
             $('#numRowsLabel').text("Number of chips");
 
             grid.hideColumn('barcodeId');
+            grid.hideColumn('endBarcodeId');
             grid.showColumn('tubeLabel');
             grid.showColumn('chipBarcode');
         }
     });
 
 
+    $('#endBarcodeSet').change(function () {
+        var grid = $('#grid').data('kendoGrid');
+        var barcodes = ENDBARCODES[this.value];
+        if (barcodes) {
+            // duaBarcoded
+            $('input[id=chk_dualBarcoded]').attr("checked", true);
+             
+            grid.showColumn('endBarcodeId');
+
+            // update samples table
+            var samplesTableJSON = grid.dataSource.data().toJSON();
+            $.each(samplesTableJSON, function(i){
+            	if (i < barcodes.length) {
+                	this.endBarcodeId = barcodes[i].id_str;
+                } else
+                	this.endBarcodeId = "";
+            });
+            grid.dataSource.data(samplesTableJSON);
+
+        } else {
+            // not dualBarcoded
+            $('input[id=chk_dualBarcoded]').attr("checked", false);
+
+            temp = $(this)
+            $(".endBarcoded").hide();
+
+            grid.hideColumn('endBarcodeId');
+
+            // update samples table
+            var samplesTableJSON = grid.dataSource.data().toJSON();
+            $.each(samplesTableJSON, function(i){
+                this.endBarcodeId = "";
+            });
+            grid.dataSource.data(samplesTableJSON);
+            
+        }
+    });
+
     $('#numRows').change(function () {
         var samplesTableJSON = $("#grid").data("kendoGrid").dataSource.data().toJSON();
         var nrows = samplesTableJSON.length;
         var nrows_new = parseInt(this.value);
         var barcoded = $('input[id=chk_barcoded]').is(':checked');
+        var isDualBarcoded = $('input[id=chk_dualBarcoded]').is(':checked');
 
         if ((nrows_new == '0') || (isNaN(nrows_new)) || (typeof(nrows_new) === 'undefined')){
             //Do not allow to enter 0 samples - Value Error TS-12548
@@ -852,6 +934,11 @@ $(document).ready(function () {
             // limit to number of barcodes in set
             var selected_barcodes = BARCODES[$('#barcodeSet').val()];
             this.value = nrows_new = (nrows_new > selected_barcodes.length) ? selected_barcodes.length : nrows_new;
+        }
+
+        var selected_endBarcodes = null;
+        if (isDualBarcoded) {
+        	selected_endBarcodes = ENDBARCODES[$('#endBarcodeSet').val()];
         }
 
         if (nrows_new > nrows) {
@@ -884,6 +971,8 @@ $(document).ready(function () {
                 }
 
                 if (barcoded) row['barcodeId'] = selected_barcodes[i].id_str;
+
+                row['endBarcodeId'] =  (isDualBarcoded && i < selected_endBarcodes.length) ? selected_endBarcodes[i].id_str : "";
 
                 // Ion Reporter fields
                 if (USERINPUT.is_ir_connected) {
@@ -990,9 +1079,11 @@ $(document).ready(function () {
         {name: "ircancerType",    action: "copy"},
         {name: "ircellularityPct",action: "copy"},
         {name: "irbiopsyDays",    action: "copy"},
-        {name: "ircellNum",      action: "copy"},
+        {name: "ircellNum",       action: "copy"},
         {name: "ircoupleID",      action: "copy"},
         {name: "irembryoID",      action: "copy"},
+        {name: "endBarcodeId",    action: "copy"},
+        {name: "nucleotideType",  action: "copy"},     
     ];
 
     //Only enable certain fields if not OCP planning.

@@ -3,6 +3,7 @@
 - hosts: iontorrent_master
   vars_files:
     - [ "group_vars/all_local", "group_vars/all" ]
+    - [ "group_vars/torrent_suite_version_local", "/etc/torrent_suite_version"]
   tasks:
     - name:
       include: globals.yml
@@ -27,6 +28,11 @@
     - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
       template: src=templates/iontorrent-ubuntu.j2
                 dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
+                owner=root group=root mode=644
+
+    - name: Add /etc/apt/sources.list.d/iontorrent-offcycle.list
+      template: src=templates/iontorrent-offcycle.j2
+                dest=/etc/apt/sources.list.d/iontorrent-offcycle.list{{ FUNKYEXT|default('') }}
                 owner=root group=root mode=644
 
     # Adding IonReporter plugin repository
@@ -158,6 +164,7 @@
       apt: name={{ item }} state=absent
       with_items:
         - samtools
+        - ion-rsmts
 
     # Install all available updates to installed packages
     - name: Install any available updates

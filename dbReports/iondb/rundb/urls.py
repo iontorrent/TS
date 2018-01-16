@@ -121,6 +121,7 @@ v1_api.register(api.common_CVResource())
 
 v1_api.register(api.FileMonitorResource())
 v1_api.register(api.SupportUploadResource())
+v1_api.register(api.GetChefCartridgeUsageResource())
 
 
 v1_api.register(api.PrepopulatedPlanningSessionResource())

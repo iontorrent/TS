@@ -554,7 +554,9 @@ set -o xtrace
 # Add plugin specific code to execute below this line
 # ===================================================
 {% if command %}
+(
 {{ command }}
+)
 {% else %}
 # Legacy script support
 "{{ pluginpath }}/launch.sh"

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <math.h>
 #include <sys/types.h>
 #include <algorithm>
 #include <iostream>
@@ -50,7 +51,8 @@ enum QualityTrimmingModes {
   kQvTrimOff,                    //!< Quality trimming disabled
   kQvTrimWindowed,               //!< Sliding window quality trimming
   kQvTrimExpectedErrors,         //!< Expected number of errors quality trimming
-  kQvTrimAll                     //!< Quality trimming using all available methods
+  kQvTrimAll,                    //!< Quality trimming using all available methods
+  kQvTrimMaxInfo				 //!< Maximum information quality filtering
 };
 
 
@@ -647,6 +649,9 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   trim_qual_offset_            = opts.GetFirstDouble       ('-', "trim-qual-offset",0.7);
   trim_qual_slope_             = opts.GetFirstDouble       ('-', "trim-qual-slope",0.005);
   trim_qual_quadr_             = opts.GetFirstDouble       ('-', "trim-qual-quadr",0.00);
+  // newly added for maxinfo trimming
+  trim_strictness_             = opts.GetFirstDouble       ('-', "trim-strictness",0.05);
+  trim_target_length_          = opts.GetFirstDouble       ('-', "trim-target-length",0.85);
 
   extra_trim_left_             = opts.GetFirstInt          ('-', "extra-trim-left", 0);
   extra_trim_right_            = opts.GetFirstInt          ('-', "extra-trim-right", 0);
@@ -658,6 +663,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
   else if (trim_qual_mode_ == "sliding-window")  { trim_qual_mode_enum_ = kQvTrimWindowed; }
   else if (trim_qual_mode_ == "expected-errors") { trim_qual_mode_enum_ = kQvTrimExpectedErrors; }
   else if (trim_qual_mode_ == "all")             { trim_qual_mode_enum_ = kQvTrimAll; }
+  else if (trim_qual_mode_  == "max-information") { trim_qual_mode_enum_ = kQvTrimMaxInfo;}
   else {
    cerr << "BaseCaller Option Error: Unrecognized quality trimming mode: "<< trim_qual_mode_ <<". Aborting!" << endl;
    exit(EXIT_FAILURE);
@@ -1581,45 +1587,163 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
   }
 }
 
+// ----------------------------------------------------------------------------
+void BaseCallerFilters::TransferQuality(int read_index, int read_class, ReadFilteringHistory& filter_history,
+		const vector<uint8_t>& quality_flow, vector<uint8_t>& quality,  const vector<int>& base_to_flow, const vector< vector<float> > errD_table)
+{
+	// Exception were we don't filter
+	if (filter_history.is_filtered) // Already filtered out?
+		return;
+	if (read_class != 0)
+		return;
+	int n_base = filter_history.n_bases;
+	int n_flow = quality_flow.size();
+	int hp = 0;
+	quality.clear();
+	if ((int)base_to_flow.size() != n_base){
+		printf("quality_flow.size() - %d \n", n_flow);
+		printf("base_to_flow.size() - %d \n", (int)base_to_flow.size());
+	}
+	int i = 0;
+	int j = i + 1;
+	while(j <= (int)base_to_flow.size()){
+		int flow = base_to_flow[i];
+		while(j < (int)base_to_flow.size() && flow == base_to_flow[j])
+			j++;
+		hp = j - i;
+		for (int k = i; k < j - 1; k++){ //hp >=2
+			float err = 0.0;
+			if ((hp - 1)< int(errD_table.size()) && k - i < int(errD_table[0].size()))
+				float err = errD_table[hp - 1][k - i];
+			if(err > 0.0001)
+				quality.push_back(int( -10 * log10(err)));
+			else
+				quality.push_back(40);
+		}
+		// push to the last base in the flow
+		quality.push_back(quality_flow.at(flow));
+		// ready for the next flow
+		i = j;
+		j = i + 1;
+	}
 
+	//printf("///baseq"); // , read_index, quality_base.size(), flow_to_base.size()
+	/*for(unsigned int i=0; i < quality.size(); ++i)
+		std::cout << static_cast<unsigned int>(quality[i]) << ' ' <<std::flush;
+	std::cout << endl;*/
+	/*//printf("filter_history.n_bases - %d \n", quality.size);
+	// DEBUGGING
+	printf("flowq");
+	for(unsigned int i=0; i < quality_flow.size(); ++i)
+		std::cout << static_cast<unsigned int>(quality_flow[i]) << ' ' <<std::flush;
+	std::cout << endl;
+	printf("filter_history.n_bases - %d \n", filter_history.n_bases);*/
+}
 // ----------------------------------------------------------------------------
 
-void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
+void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilteringHistory& filter_history,
+		const vector<uint8_t>& quality, bool use_flow, const vector<int>& flow_to_base, const vector<int>& base_to_flow)
 {
-  // Exception were we don't filter
-  if (filter_history.is_filtered) // Already filtered out?
-	return;
-  if (read_class != 0)  // Hardcoded: Don't trim TFs
-    return;
+	int last_flow = base_to_flow.back();
+	int max_eligible_flow = flow_order_.num_flows();
+	max_eligible_flow = min(max_eligible_flow, last_flow);
+	// Exception were we don't filter
+	if (filter_history.is_filtered) // Already filtered out?
+		return;
+	if (read_class != 0)  // Hardcoded: Don't trim TFs
+		return;
 
-  int temp_clip_qual_right, clip_qual_right;
+	int temp_clip_qual_right, clip_qual_right;
+	vector<uint8_t>   quality_hp_flow(last_flow);
+	vector<int>   cut2base(last_flow);
+	if(use_flow){ //flow space
+		int j = 0;
+		int last_hp = 0;
+		for(int i=0; i < last_flow and i < (int)flow_to_base.size(); i++){
+			if(flow_to_base.at(i) >= 0){
+				if(j < (int)quality_hp_flow.size())
+					quality_hp_flow.at(j) = quality.at(i);
+				cut2base.at(j) = flow_to_base.at(i);
+				j++;
+			}
+		}
+		last_hp = j;
+		quality_hp_flow.resize(last_hp);
+		switch (trim_qual_mode_enum_) {
+		case kQvTrimOff : return;
+		case kQvTrimWindowed :
+			clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality_hp_flow);
+			break;
+		case kQvTrimMaxInfo :
+			clip_qual_right = TrimMaxInfo(read_index, filter_history, quality, max_eligible_flow);
+			break;
 
-  switch (trim_qual_mode_enum_) {
-    case kQvTrimOff : return;
-    case kQvTrimWindowed :
-      clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality);
-      break;
-    case kQvTrimExpectedErrors :
-      clip_qual_right = TrimQuality_ExpectedErrors(read_index, filter_history, quality);
-      break;
-    default :
-      temp_clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality);
-      clip_qual_right = min(temp_clip_qual_right, TrimQuality_ExpectedErrors(read_index, filter_history, quality));
-  };
+		default :
+			clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality_hp_flow);
+		}
+		// Actual trimming here
+		if(clip_qual_right < last_hp)
+			clip_qual_right = cut2base.at(clip_qual_right);
+		else
+			clip_qual_right = filter_history.n_bases;
+	}else{  // base space
+		switch (trim_qual_mode_enum_) {
+		case kQvTrimOff : return;
+		case kQvTrimWindowed :
+			clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality);
+			break;
+		case kQvTrimExpectedErrors :
+			clip_qual_right = TrimQuality_ExpectedErrors(read_index, filter_history, quality);
+			break;
 
-  // Store trimming results if necessary and do base accounting
-  if (clip_qual_right >= filter_history.n_bases_filtered)
-     return;
+		default :
+			temp_clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality);
+			clip_qual_right = min(temp_clip_qual_right, TrimQuality_ExpectedErrors(read_index, filter_history, quality));
+		}
+	};
 
-  int trim_length = clip_qual_right - filter_history.n_bases_prefix;
+	// Store trimming results if necessary and do base accounting
+	/*if(use_flow){
+		// flow space trimming
+		int i = clip_qual_right;
+		while(i > 0 && flow_to_base.at(i - 1) < 0){
+			i--;
+		}
+		int clip_qual_right_base = i > 1 ? flow_to_base.at(i - 1): 0;
+		clip_qual_right = clip_qual_right_base;
+		//debugging
+		cout << "base2flow-";
+		for(unsigned int i = 0; i < base_to_flow.size(); ++i){
+			cout << base_to_flow[i] << " ";
+		}
+		cout << endl;
+		cout << "flow2base-";
+		for(unsigned int i = 0; i < flow_to_base.size(); ++i){
+			cout << flow_to_base[i] << " ";
+		}
+		cout << endl;
+		cout << "quality_filtered-";
+		for(unsigned int i = 0; i < quality_hp_flow.size(); ++i){
+			cout << static_cast<unsigned int>(quality_hp_flow.at(i)) << " ";
+		}
+		cout << endl;
+		cout << "cut-at-base-" <<clip_qual_right << " n_bases-"<< filter_history.n_bases << " n_bases_prefix-"<<filter_history.n_bases_prefix;
+		cout << endl;
+	}*/
 
-  if (trim_length < trim_min_read_len_) { // Quality trimming led to filtering
-    filter_mask_[read_index] = kFilterShortQualityTrim;
-    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = 0;
-    filter_history.is_filtered = true;
-  } else {
-     filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = clip_qual_right;
-  }
+	if (clip_qual_right >= filter_history.n_bases_filtered)
+		return;
+
+	int trim_length = clip_qual_right - filter_history.n_bases_prefix;
+	if (trim_length < trim_min_read_len_) { // Quality trimming led to filtering
+		filter_mask_[read_index] = kFilterShortQualityTrim;
+		filter_history.n_bases_after_quality_trim = 0;
+		filter_history.n_bases_filtered = 0;
+		filter_history.is_filtered = true;
+	} else {
+		filter_history.n_bases_after_quality_trim = clip_qual_right;
+		filter_history.n_bases_filtered = clip_qual_right;
+	}
 }
 
 
@@ -1627,31 +1751,31 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
 
 int BaseCallerFilters::TrimQuality_Windowed(int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
 {
-  if(trim_qual_cutoff_ >= 100.0 or trim_qual_cutoff_ == 0.0)   // 100.0 or more means disabled
-    return filter_history.n_bases;
+	int trim_qual_cutoff = filter_history.n_bases;
+	if(trim_qual_cutoff_ >= 100.0 or trim_qual_cutoff_ == 0.0)   // 100.0 or more means disabled
+		return filter_history.n_bases;
+	int window_start = 0;
+	int window_end = 0;
+	int minimum_sum, window_sum = 0;
 
-  int window_start = 0;
-  int window_end = 0;
-  int minimum_sum, window_sum = 0;
+	// Step 1: Accumulate over the initial window
+	while (window_end < trim_qual_window_size_ and window_end < trim_qual_cutoff) //filter_history.n_bases
+		window_sum += quality[window_end++];
+	minimum_sum = window_end * trim_qual_cutoff_;
 
-  // Step 1: Accumulate over the initial window
-  while (window_end < trim_qual_window_size_ and window_end < filter_history.n_bases)
-    window_sum += quality[window_end++];
-  minimum_sum = window_end * trim_qual_cutoff_;
+	// Step 2: Keep sliding as long as average q-score exceeds the threshold
+	int clip_qual_right = window_sum >= minimum_sum ? (window_end + window_start) / 2 : 0;
+	while (window_sum >= minimum_sum and window_end < trim_qual_cutoff) {//filter_history.n_bases
+		window_sum += quality[window_end++];
+		window_sum -= quality[window_start++];
+		clip_qual_right++;
+	}
 
-  // Step 2: Keep sliding as long as average q-score exceeds the threshold
-  int clip_qual_right = window_sum >= minimum_sum ? (window_end + window_start) / 2 : 0;
-  while (window_sum >= minimum_sum and window_end < filter_history.n_bases) {
-    window_sum += quality[window_end++];
-    window_sum -= quality[window_start++];
-    clip_qual_right++;
-  }
+	// We reached the end of the read - nothing to trim here, besides if extra trim is explicitly set.
+	if (window_end == trim_qual_cutoff)
+		clip_qual_right = trim_qual_cutoff;
 
-  // We reached the end of the read - nothing to trim here, besides if extra trim is explicitly set.
-  if (window_end == filter_history.n_bases)
-    clip_qual_right = filter_history.n_bases;
-
-  return clip_qual_right;
+	return clip_qual_right;
 }
 
 
@@ -1661,10 +1785,11 @@ int BaseCallerFilters::TrimQuality_ExpectedErrors(int read_index, ReadFilteringH
 {
   //for every base, compute cumulative expected errors and compare to threshold
   int clip_qual_right = 0; // assume all bad until proven otherwise
+  int trim_qual_cutoff = quality.size(); //filter_history.n_bases;
   double error_threshold = trim_qual_offset_;
   double cumulative_expected_error = 0.0;
 
-  for (int ibase=0; ibase<filter_history.n_bases; ibase++){
+  for (int ibase = 0; ibase < trim_qual_cutoff; ibase++){
      error_threshold += trim_qual_slope_;
      error_threshold += trim_qual_quadr_ * ibase;  // increase to handle rising error rate towards end of read
      cumulative_expected_error += exp(-quality[ibase]*0.2302585); // log(10)/10
@@ -1676,10 +1801,37 @@ int BaseCallerFilters::TrimQuality_ExpectedErrors(int read_index, ReadFilteringH
   clip_qual_right +=1; // clip at one base beyond?
 
   // keep the dynamics of the old school clipper: To be removed in the future!
-  if (clip_qual_right == filter_history.n_bases)
-    clip_qual_right = filter_history.n_bases;
+  if (clip_qual_right == trim_qual_cutoff)
+    clip_qual_right = trim_qual_cutoff;
 
   return clip_qual_right;
+}
+
+int BaseCallerFilters::TrimMaxInfo(int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality,
+		int max_flow)
+{
+	int clip_qual_right = max_flow;
+	float s = trim_strictness_;
+	float len_t = trim_target_length_;
+	if(trim_qual_cutoff_ >= 100.0 or trim_qual_cutoff_ == 0.0)   // 100.0 or more means disabled
+		return filter_history.n_bases;
+	//cout<<trim_qual_cutoff << " " <<filter_history.n_bases << " "<< trim_target_length_;
+	float score_lt= 0.0, score_cov = 0.0, score_err = 0.0, score = 0.0,max_score = 0.0;
+
+	for(int i = 0; i < max_flow; i++){
+		score_lt = 1/(1 + exp( (int)(len_t * max_flow) - i - 1));
+		score_cov = pow (i + 1,  1 - s);
+		if(i == 0)
+			score_err = 1 - pow(10, - ((float)quality[i] / 10.0));
+		else
+			score_err = score_err * (1 - pow(10, - ((float)quality[i] / 10.0)));
+		score = score_lt * score_cov * pow(score_err, s);
+		if(max_score < score){
+			max_score = score;
+			clip_qual_right = i;
+		}
+	}
+	return clip_qual_right;
 }
 
 // ----------------------------------------------------------------------------------

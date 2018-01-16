@@ -11,6 +11,7 @@
 #include "IonVersion.h"
 #include "Utils.h"
 #include "json/json.h"
+#include <fenv.h> // Floating point exceptions
 
 #include "CalibrationHelper.h"
 #include "HistogramCalibration.h"
@@ -88,6 +89,12 @@ int main (int argc, const char *argv[])
 
   OptArgs opts;
   opts.ParseCmdLine(argc, argv);
+
+  // enable floating point exceptions during program execution
+  if (opts.GetFirstBoolean('-', "float-exceptions", true)) {
+    cout << "Calibration: Floating point exceptions enabled." << endl;
+    feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+  } //*/
 
   CalibrationContext calib_context;
   if (not calib_context.InitializeFromOpts(opts)){

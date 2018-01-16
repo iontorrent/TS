@@ -89,6 +89,16 @@
       "description": "Immune Repertoire"
     }
   },
+  {
+    "pk": 10,
+    "model": "rundb.applicationgroup",
+    "fields": {
+      "uid": "APPLGROUP_0010",
+      "name": "mutation_load",
+      "isActive": true,
+      "description": "Mutation Load"
+    }
+  },
 
   {
     "pk": 1,
@@ -210,6 +220,19 @@
       "alternate_name" : "Tag Sequencing"
     }
   },  
+  {
+    "pk": 11,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "Mixed Samples (DNA/RNA)",
+      "nucleotideType": "dna_rna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "MIXED",
+      "isActive": false,
+      "alternate_name" : "Mixed Samples (DNA/RNA)"
+    }
+  },
   
   {
     "pk": 1,
@@ -267,7 +290,7 @@
       "cv_type": "applicationCategory",
       "value": "onco_immune",
       "displayedValue": "Oncology - ImmunoOncology",
-      "description": "Oncology - Immunology",
+      "description": "Oncology - ImmunoOncology",
       "isDefault": false,
       "isActive": true,
       "isVisible": true,
@@ -391,7 +414,7 @@
         "LIB0008"
       ],
       "productCode": "AMPS_0",
-      "defaultChipType": null,
+      "defaultChipType": "318",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -445,7 +468,7 @@
         "LIB0004"
       ],
       "productCode": "TARS_0",
-      "defaultChipType": null,
+      "defaultChipType": "318",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -499,7 +522,7 @@
         "LIB0004"
       ],
       "productCode": "WGNM_0",
-      "defaultChipType": null,
+      "defaultChipType": "318",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -666,7 +689,7 @@
         "LIB0004"
       ],
       "productCode": "GENS_0",
-      "defaultChipType": null,
+      "defaultChipType": "318",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -772,7 +795,7 @@
         "LIB0003"
       ],
       "productCode": "TARS_16S_0",
-      "defaultChipType": null,
+      "defaultChipType": "318",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -930,7 +953,7 @@
         "LIB0008"
       ],
       "productCode": "AMPS_DNA_RNA_0",
-      "defaultChipType": null,
+      "defaultChipType": "318",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1201,7 +1224,7 @@
         "AMPS"
       ],
       "applicationGroup": ["APPLGROUP_0006"],
-      "productName": "PGx_S5_S5XL_default",
+      "productName": "PGx_S5_default",
       "defaultFlowCount": 500,
       "isActive": true,
       "defaultTargetRegionBedFileName": "",
@@ -1252,7 +1275,7 @@
         "AMPS"
       ],
       "applicationGroup": ["APPLGROUP_0001"],
-      "productName": "AMPS_S5_S5XL_default",
+      "productName": "AMPS_S5_default",
       "defaultFlowCount": 500,
       "isActive": true,
       "defaultTargetRegionBedFileName": "",
@@ -1292,25 +1315,32 @@
         "LIB0008"
       ],
       "productCode": "AMPS_EXOME_2",
-      "defaultChipType": null,
+      "defaultChipType": 540,
       "isDefault": false,
+       "isDefaultForInstrumentType" : true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
       "applType": [
         "AMPS_EXOME"
       ],
       "applicationGroup": ["APPLGROUP_0001"],
-      "productName": "AMPS_EXOME_S5_S5XL_HiQ",
+      "productName": "AMPS_EXOME_S5_540",
       "defaultFlowCount": 520,
       "isActive": true,
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
-      "defaultSequencingKit": null,
+      "defaultSequencingKit": [
+        "SEQ0023"
+      ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": false,
-      "defaultIonChefPrepKit" : null,
-      "defaultIonChefSequencingKit" : null,
+      "defaultIonChefPrepKit" : [
+        "ICPREP0006"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0023"
+      ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
       "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
@@ -1345,7 +1375,7 @@
         "AMPS"
       ],
       "applicationGroup": ["APPLGROUP_0001"],
-      "productName": "AMPS_S5_S5XL_Hi-Q",
+      "productName": "AMPS_S5_Hi-Q",
       "defaultFlowCount": 520,
       "isActive": true,
       "defaultTargetRegionBedFileName": "",
@@ -1390,7 +1420,7 @@
         "RNA"
       ],
       "applicationGroup": ["APPLGROUP_0002"],
-      "productName": "RNA_S5_S5XL_default",
+      "productName": "RNA_S5_default",
       "defaultFlowCount": 500,
       "isActive": true,
       "defaultTargetRegionBedFileName": "",
@@ -1437,7 +1467,7 @@
         "AMPS_RNA"
       ],
       "applicationGroup": ["APPLGROUP_0002"],
-      "productName": "AMPS_RNA_S5_S5XL_default",
+      "productName": "AMPS_RNA_S5_default",
       "defaultFlowCount": 500,
       "isActive": true,
       "defaultTargetRegionBedFileName": "",
@@ -1968,7 +1998,7 @@
         "RNA"
       ],
       "applicationGroup": ["APPLGROUP_0002"],      
-      "productName": "RNA_S5_S5XL_RnaWT",
+      "productName": "RNA_S5_RnaWT",
       "defaultFlowCount": 500,
       "isActive": true,
       "categories": "s5RnaWTSamplePrep",
@@ -2981,7 +3011,333 @@
       "defaultSamplePrepProtocol":null
     }
   },
-     
+  {
+    "pk": 20050,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultTemplateKit": [
+        "TEMPLT0019"
+      ],
+      "defaultLibraryKit": [
+        "LIB0019"
+      ],
+      "productCode": "IMMUNE_REPERTOIRE_PGM_1",
+      "defaultChipType": "318",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "MIXED"
+      ],
+      "applicationGroup": ["APPLGROUP_0009"],
+      "productName": "IMMUNE_REPERTOIRE_MIXED_PGM",
+      "defaultFlowCount": 800,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0024"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultBarcoded" : true,
+      "defaultBarcodeKitName" : "IonXpress",
+      "defaultIonChefPrepKit" : [
+        "ICPREP0001"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0024"
+      ],
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,
+      "isDualNucleotideTypeBySampleSupported" : true,
+      "isDualBarcodingBySampleSupported" : true,
+      "dualBarcodingRule": "no_reuse",
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : false,
+      "instrumentType": "pgm",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20051,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultTemplateKit": [
+        "TEMPLT0019"
+      ],
+      "defaultLibraryKit": [
+        "LIB0019"
+      ],
+      "productCode": "IMMUNE_REPERTOIRE_S5_1",
+      "defaultChipType": "530",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "MIXED"
+      ],
+      "applicationGroup": ["APPLGROUP_0009"],
+      "productName": "IMMUNE_REPERTOIRE_MIXED_S5",
+      "defaultFlowCount": 800,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0023"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultBarcoded" : true,
+      "defaultBarcodeKitName" : "IonXpress",
+      "defaultIonChefPrepKit" : [
+        "ICPREP0012"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0023"
+      ],
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,
+      "isDualNucleotideTypeBySampleSupported" : true,
+      "isDualBarcodingBySampleSupported" : true,
+      "dualBarcodingRule": "no_reuse",
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : false,
+      "instrumentType": "pgm",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20052,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultTemplateKit": null,
+      "defaultLibraryKit": [
+        "LIB0008"
+      ],
+      "productCode": "AMPS_EXOME_3",
+      "defaultChipType": 550,
+      "isDefault": false,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS_EXOME"
+      ],
+      "applicationGroup": ["APPLGROUP_0001"],
+      "productName": "AMPS_EXOME_S5_550",
+      "defaultFlowCount": 520,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0023"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "defaultIonChefPrepKit" : [
+        "ICPREP0014"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0023"
+      ],
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20053,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultTemplateKit": [
+        "TEMPLT0003"
+      ],
+      "defaultLibraryKit": [
+        "LIB0019"
+      ],
+      "productCode": "MUTATION_LOAD_0",
+      "defaultChipType": 318,
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS"
+      ],
+      "applicationGroup": ["APPLGROUP_0010"],
+      "productName": "MUTATION_LOAD_PGM_default",
+      "defaultFlowCount": 500,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0009"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "defaultIonChefPrepKit" : [
+        "ICPREP0001"
+      ],
+      "defaultIonChefSequencingKit" : [
+        "SEQ0009"
+      ],
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "pgm",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20054,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultTemplateKit": [
+        "TEMPLT0008"
+      ],
+      "defaultLibraryKit": [
+        "LIB0019"
+      ],
+      "productCode": "MUTATION_LOAD_1",
+      "defaultChipType": "P1.1.17",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS"
+      ],
+      "applicationGroup": ["APPLGROUP_0010"],
+      "productName": "MUTATION_LOAD_proton_default",
+      "defaultFlowCount": 500,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0014"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "defaultIonChefPrepKit" : [
+      	"ICPREP0002"
+      ],
+      "defaultIonChefSequencingKit" : null,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "proton",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+  {
+    "pk": 20055,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultTemplateKit": [
+      	"TEMPLT0014"
+      ],
+      "defaultLibraryKit": [
+        "LIB0019"
+      ],
+      "productCode": "MUTATION_LOAD_2",
+      "defaultChipType": "540",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS"
+      ],
+      "applicationGroup": ["APPLGROUP_0010"],
+      "productName": "MUTATION_LOAD_S5_default",
+      "defaultFlowCount": 400,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0023"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "defaultIonChefPrepKit" : [
+      	"ICPREP0006"
+      ],
+      "defaultIonChefSequencingKit" : null,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultFlowOrder" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : true,
+      "defaultSamplePrepProtocol": null
+    }
+  },
+
+
   {
     "pk": 1,
     "model": "rundb.samplegrouptype_cv",
@@ -3913,6 +4269,30 @@
       ],
       "applicationgroup": [
         "APPLGROUP_0009"
+      ]
+    }
+  },
+  {
+    "pk": 19,
+    "model": "rundb.runtype_applicationgroups",
+    "fields": {
+      "runtype": [
+        "MIXED"
+      ],
+      "applicationgroup": [
+        "APPLGROUP_0009"
+      ]
+    }
+  },
+  {
+    "pk": 20,
+    "model": "rundb.runtype_applicationgroups",
+    "fields": {
+      "runtype": [
+        "AMPS"
+      ],
+      "applicationgroup": [
+        "APPLGROUP_0010"
       ]
     }
   }

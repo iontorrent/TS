@@ -131,6 +131,8 @@ public:
 
   int splice_start_flow; // Flow just before we start splicing in hypotheses (same for all hypotheses)
   int splice_end_flow;   // Flow of the first base after the variant window (maximum over all hypotheses)
+  int min_last_flow;     // Last flow that is being simulated in prediction generation (min over all hypotheses)
+  vector<int> last_flows;
   int max_last_flow;     // Last flow that is being simulated in prediction generation (max over all hypotheses)
 
   int read_counter;      // Indicating how many reads form this read (>1 means it is a consensus read)
@@ -184,12 +186,9 @@ public:
   void  InitializeResponsibility();
   void  UpdateResponsibility(const vector<float > &hyp_prob, float outlier_prob);
   void  UpdateRelevantLikelihoods();
-  void  ComputeDelta();
-  bool  ComputeAllComparisonsTestFlow(float threshold, int max_choice);
+  void  ComputeAllComparisonsTestFlow(float threshold, int max_choice);
   float ComputeLLDifference(int a_hyp, int b_hyp);
   int   MostResponsible() const;
-  bool  IsValidTestFlowIndexOld(unsigned int flow,unsigned int max_choice);
-  bool  IsValidTestFlowIndexNew(unsigned int flow,unsigned int max_choice);
 
   void  FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_order, const Alignment &my_alignment);
   bool  OutlierByFlowDisruptiveness() const;

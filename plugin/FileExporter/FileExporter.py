@@ -8,6 +8,7 @@ import tarfile
 import re
 import urllib2
 import zipfile
+import traceback
 
 from ion.plugin import *
 from ion.utils import blockprocessing
@@ -16,7 +17,7 @@ from ion.utils import blockprocessing
 class FileExporter(IonPlugin):
     """This is a torrent suite plugin used to convert and export data sets."""
 
-    version = '5.6.0.0'
+    version = '5.8.0.2'
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     runlevels = [RunLevel.LAST]
 
@@ -63,7 +64,7 @@ class FileExporter(IonPlugin):
         :param barcodeName:
         :return:
         """
-        if not barcodeName or barcodeName == 'nonbarcoded':
+        if not barcodeName:
             return self.renameString
 
         finalName = self.renameString.replace('@BARINFO@', barcodeName)
@@ -211,7 +212,7 @@ class FileExporter(IonPlugin):
                     htmlFiles = htmlFiles + '<span><pre>' + fileName + '</pre></span>\n'
 
             elif fileName.endswith('.bam') or fileName.endswith('.bai') or fileName.endswith('.fastq') or fileName.endswith('.vcf') or fileName.endswith('.xls'):
-                htmlOut.write('<a href="%s/%s" download>%s</a><br>\n'%(self.envDict['TSP_URLPATH_PLUGIN_DIR'],fileName, fileName))
+                htmlOut.write('<a href="./%s/%s" download>%s</a><br>\n' % (self.envDict['TSP_URLPATH_PLUGIN_DIR'], fileName, fileName))
 
         htmlFiles += "</div>\n"
         return htmlFiles

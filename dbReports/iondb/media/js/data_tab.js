@@ -514,7 +514,8 @@ $(function () {
         el: $("#data_view"),
 
         events: {
-            'change .search-field': 'search',
+            'change .search-field select': 'search', // All bootstrap selects
+            'change .search-field > input': 'search', // All other inputs
             'click #search_text_go': 'search',
             'keypress #search_text' : 'check_search_key',
             'click #clear_filters': 'clear_filters',
@@ -578,6 +579,7 @@ $(function () {
                 {element: $("#id_sample"), key: "samples"},
                 {element: $("#id_pgm"), key: "rigs"},
                 {element: $("#id_reference"), key: "references"},
+                {element: $("#id_plugin"), key: "plugins"},
             ];
 
             // If there are form fields with values loaded from the browser cache, we need to re fetch the table data
@@ -851,7 +853,8 @@ $(function () {
                 'flows__in': this._array_to_query_string_value($("#id_flows").val()),
                 'chipType__in': this._array_to_query_string_value($("#id_chip").val()),
                 'pgmName__in': this._array_to_query_string_value($("#id_pgm").val()),
-                'sample_prep': $("#id_sample_prep").val()
+                'sample_prep': $("#id_sample_prep").val(),
+                'plugins__name__in': this._array_to_query_string_value($("#id_plugin").val()),
             };
 
             //Mesh hosts
@@ -859,8 +862,8 @@ $(function () {
                 params["mesh_node_ids"] = this._array_to_query_string_value($("#id_data_source").val());
             }
             if (params['all_date']) {
-                var start = params['all_date'].start;
-                var end = params['all_date'].end.addHours(23).addMinutes(59);
+                var start = params['all_date'].start.clone();
+                var end = params['all_date'].end.clone().addHours(23).addMinutes(59);
                 params['all_date'] = start.toString('MM/dd/yyyy HH:mm') + "," + end.toString('MM/dd/yyyy HH:mm');
             }
             if (params['order_by'] == '-resultDate') {
@@ -895,6 +898,7 @@ $(function () {
             }else{
                 $("#download_csv").show();
             }
+            this.search();
         },
 
         csv_download: function () {

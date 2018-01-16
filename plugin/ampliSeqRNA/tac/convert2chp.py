@@ -12,6 +12,7 @@ class Tac(Run):
         self.add_option("-i", "--input-file", "string", "Input file")
         self.add_option("-o", "--output-dir", "string", "Directory for storing output from the run")
         self.add_option("-m", "--method", "string", "Normalization method")
+        self.add_option("-n", "--output-prefix", "string", "Prefix string to prepend to output file names.")
         self.add_option("-A", "--array-type", "string", "Data type or panel identifcation name")
         self.add_option("-P", "--program-name", "string", "Data creation program name (or source)")
         self.add_option("-V", "--program-version", "string", "Data creation program version")
@@ -20,6 +21,7 @@ class Tac(Run):
         """ Override json parameter values with command line arguments """
         self.parameters['input_file'] = self.options.input_file
         self.parameters['output_dir'] = self.options.output_dir
+        self.parameters['output_prefix'] = self.options.output_prefix
         self.parameters['method'] = self.options.method
         self.parameters['array_type'] = self.options.array_type
         self.parameters['program_name'] = self.options.program_name
@@ -33,6 +35,8 @@ class Tac(Run):
             self.fatal_error("Please specify an output-dir.")
         if (self.options.array_type == None):
             self.fatal_error("Please specify an array-type.")
+        if (self.options.output_prefix == None):
+            self.options.output_prefix = ""
         if (self.options.method == None):
             self.options.method = 'RPM'
         if (self.options.program_name == None):
@@ -76,7 +80,7 @@ class Tac(Run):
         for header in headers:
             if index > 0:
                 try:
-                    filename = self.parameters["output_dir"] + "/" + header
+                    filename = os.path.join(self.parameters["output_dir"],self.parameters["output_prefix"]+header)
                     print(filename)
                     fout = open(filename, 'w')
                 except IOError:

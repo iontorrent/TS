@@ -3,7 +3,7 @@
 #
 # NOTE: The only output to stdout should be the versions that are available for install
 #
-LATEST=5.6.0
-VER_AVAIL=( 4.6 5.0.5 5.2.2 5.4.0 $LATEST )
+LATEST=5.8.0
+VER_AVAIL=( 4.6 5.0.5 5.2.2 5.4.0 5.6.0 $LATEST )
 
 echo ${VER_AVAIL[@]}

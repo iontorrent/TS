@@ -315,13 +315,7 @@ def main():
         if line.startswith('#CHROM'):
             fields = line.split('\t')
             if len(fields) > 9:
-                sample_name = ""
-                elements = fields[9].strip().split('.')
-                for index in range(0, max(1, len(elements) - 2)):
-                    if len(sample_name) > 0:
-                        sample_name += "."
-                    sample_name += elements[index]
-                summary_json['sample_name'] = sample_name
+                summary_json['sample_name'] = fields[9].strip()
         if line[0]=='#':
             continue
 
@@ -332,6 +326,8 @@ def main():
         id = fields[2]
         ref = fields[3]
         alt = fields[4].split(',')
+        # Sanity check: every alt allele should be unique.
+        assert(len(alt) == len(set(alt)))
         qual = fields[5]
         info = {}
         for item in fields[7].split(';'):
@@ -458,15 +454,16 @@ def main():
         frs = [fr for fr in FR.split(',') if not (fr.startswith('SKIPREALIGNx') or fr.startswith('REALIGNEDx') or fr.startswith('HEALED'))]
         oid_dict = {}
 
+        # Create the oid_dict that maps an allele to its oid
         for oid,opos,oref,oalt,omapalt in zip(all_oid,all_opos,all_oref,all_oalt,all_omapalt):
-            if omapalt not in alt:
-                continue
-            idx = alt.index(omapalt)
-            key = str(opos) + ":" + oref + ":" + oalt + ":" + str(idx)
+            #if omapalt not in alt:
+            #    continue
+            idx = alt.index(omapalt)  # I let it crash if omapalt not in alt
+            key = "%s:%s:%s:%d" %(opos, oref, oalt, idx) 
             if oid != ".":
                 if key in oid_dict:
                     if oid_dict[key] != "":
-                        oid_dict[key] += "," + oid
+                        oid_dict[key] += ",%s" %oid
                     else:
                         oid_dict[key] = oid
                 else:
@@ -475,31 +472,27 @@ def main():
                 oid_dict[key] = ""
         
         if is_report_subset:
-            allele_name_list = []
-            for oid in all_oid:
-                if oid in ['', '.']:
+            # allele_name_list[i] is the allele name of the i-th alt allele.
+            allele_name_list = ['' for i in xrange(len(alt))]
+            for my_key, my_oid in oid_dict.iteritems():
+                # my_key is in the format of "%s:%s:%s:%d" %(opos, oref, oalt, idx)
+                my_idx = int(my_key.split(':')[-1])
+                if my_oid == '':
                     novel_counter_for_subset += 1
-                    # I need allele name for subset.
-                    allele_name_list.append('tvc.novel.%d' %novel_counter_for_subset)
+                    allele_name_list[my_idx] = 'tvc.novel.%d' %novel_counter_for_subset                    
                 else:
-                    allele_name_list.append(oid)
+                    allele_name_list[my_idx] = my_oid
         
         for oid,opos,oref,oalt,omapalt in zip(all_oid,all_opos,all_oref,all_oalt,all_omapalt):
-            if omapalt not in alt:
+            #if omapalt not in alt:
+            #    continue
+            idx = alt.index(omapalt) # I let it crash if omapalt not in alt
+            key = "%s:%s:%s:%d" %(opos, oref, oalt, idx) 
+            oid = oid_dict.pop(key, None)
+            if oid is None:
                 continue
-            idx = alt.index(omapalt)
-
-            key = str(opos) + ":" + oref + ":" + oalt + ":" + str(idx)
-            if key not in oid_dict:
-                continue
-            oid = oid_dict[key]
-            del oid_dict[key]
             if oid == "":
                 oid = "."
-
-            if (options.suppress_no_calls == "on"):
-                if oid == '.' and genotype1_int != (idx+1) and genotype2_int != (idx+1):
-                    continue
 
             allele = {}
             allele['chrom']             = chr
@@ -519,7 +512,7 @@ def main():
             allele['run_name']          = options.run_name if options.run_name else 'N/A'
 
             if is_report_ppa:
-                allele['is_ppa'] = '1' if str(idx + 1) in PPA else '0' 
+                allele['is_ppa'] = '1' if (str(idx + 1) in PPA and (str(idx + 1) not in genotype_parts) and genotype != './.') else '0' 
             
             if is_report_subset:
                 allele['name'] = allele_name_list[idx]
@@ -528,6 +521,11 @@ def main():
                     allele['subset_of'] = ','.join(my_super_sets)
                 else:
                     allele['subset_of'] = '---'
+
+            if (options.suppress_no_calls == "on"):
+                # Let the allele in if it is PPA.
+                if oid == '.' and genotype1_int != (idx+1) and genotype2_int != (idx+1) and allele.get('is_ppa', '0') != '1':
+                    continue
                 
             ref_len = len(oref.strip('-'))
             alt_len = len(oalt.strip('-'))
@@ -550,9 +548,9 @@ def main():
             if genotype1_int is None or genotype2_int is None:
                 allele['call'] = 'No Call'
                 summary_json['variants_by_call']['no_call'] += 1
-            elif genotype1_int == 0 and genotype2_int == 0:	
+            elif genotype1_int == 0 and genotype2_int == 0:    
                 allele['call'] = 'Absent'
-                summary_json['variants_by_call']['absent'] += 1			
+                summary_json['variants_by_call']['absent'] += 1            
             elif genotype1_int == (idx+1) and genotype2_int == (idx+1):
                 allele['call'] = 'Homozygous'
                 summary_json['variants_by_call']['homozygous'] += 1

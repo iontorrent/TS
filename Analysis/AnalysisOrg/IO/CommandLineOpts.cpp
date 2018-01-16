@@ -260,6 +260,8 @@ ValidateOpts::ValidateOpts()
 	m_opts["beadfindfile"] = VT_STRING;
 	m_opts["beadfindFile"] = VT_STRING;
 	m_opts["beadfind-mesh-step"] = VT_VECTOR_INT;
+	m_opts["beadfind-acq-threshold"] = VT_VECTOR_FLOAT;
+	m_opts["beadfind-bf-threshold"] = VT_VECTOR_FLOAT;
 
 	//ImageControlOpts
 	m_opts["pca-test"] = VT_STRING;

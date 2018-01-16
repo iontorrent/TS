@@ -159,13 +159,26 @@
     </div>
     <script type="text/javascript">
         $(document).ready(function(){
+            {% if refresh_progress %}
+                // set up page refresh if any downloads are in progress
+                setTimeout(function(){
+                    window.location.reload(true);
+                }, 5000);
+            {% endif %}
+
             $('.bedfiles_selectall').click(function(){
-                $(this).parents('.bedfiles_table').find('input').prop('checked', this.checked);
+                $(this).parents('.bedfiles_table').find('input').not(':disabled').prop('checked', this.checked);
             });
 
             $('.bedfiles_selectall, [name=bedfiles]').change(function(e){
                 var selected = $(this).parents('.bedfiles_table').find('tbody input:checked');
                 $(this).parents('form').find(':input[type=submit]').prop('disabled', selected.length < 1);
+            });
+
+            $('input[type=submit]').click(function(){
+                setTimeout(function(){
+                    window.location.reload(true);
+                }, 2000);
             });
         });
     </script>

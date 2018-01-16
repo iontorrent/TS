@@ -50,6 +50,10 @@
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
   }
+  function numberToPercent(x) {
+    if( isNaN(x) ) return x;
+    return (100 * x)+"%";
+  }
 </script>
 
 <!-- Capture django variable in to javascript -->
@@ -79,11 +83,11 @@ $(document).ready(function() {
           ercc_target: {type:"float"},
 {% endif %}
         } } },
-        pageSize: 10
+        pageSize: 20
       },
       columns: [
-        {field:"barcode_name"},
-        {field:"sample"},
+        {field:"barcode_name",width:"10%"},
+        {field:"sample",width:"40%"},
         {field:"mapped_reads"},
         {field:"valid_target"},
         {field:"detected_target"},
@@ -116,10 +120,10 @@ $(document).ready(function() {
         <td> #= barcode_details #</td>
         <td> #= (sample) ? sample : "None" #</td>
         <td> #= numberWithCommas(mapped_reads) # </td>
-        <td>#= valid_target #</td>
-        <td>#= detected_target #</td>
+        <td>#= numberToPercent(valid_target) #</td>
+        <td>#= numberToPercent(detected_target) #</td>
 {% if ercc_track %}
-        <td>#= ercc_target #</td>
+        <td>#= numberToPercent(ercc_target) #</td>
 {% endif %}
       </tr>
     </script>

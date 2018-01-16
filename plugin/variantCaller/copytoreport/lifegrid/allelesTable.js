@@ -711,7 +711,7 @@ $(function () {
     if (TVC.db_columns.indexOf("Possible Polyploidy Allele") >= 0){
     	TVC.all.push({
             id: "ppa", field: "ppa", width: 8, minWidth: 8, sortable: true,
-            name: "PPA", toolTip: "PPA: Indicate whether the allele is a Possible Polypoidy Allele (PPA) or not",
+            name: "PPA", toolTip: "PPA: Indicate the allele is a Possible Polypoidy Allele (PPA) which is called as absent in diploid genotype.",
         });
     }
     

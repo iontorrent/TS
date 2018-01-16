@@ -10,20 +10,23 @@
 </p>
 
 {% else %}
-<form id="login-form" class="form" action="{% url 'login_ajax' %}" method="POST">
+    <div style="min-height: 56px">
+        {% if form.errors %}
+            <p class="alert alert-error" style="margin-bottom: 0px">Your username and password didn't match. Please try
+                again.</p>
+        {% endif %}
+    </div>
+<form id="login-form" class="form" action="{% url 'login_ajax' %}" method="POST" style="margin-top: 10px">
     {% csrf_token %}
     <input type="text" id="id_username" name="username" placeholder="User name" class="span3" tabindex="1">
     <input type="password" id="id_password" name="password" placeholder="Password" class="span3" tabindex="2">
-    <div>
+    <div style="width: 256px">
         <button type="submit" class="btn btn-primary" tabindex="4">Sign In</button>
+        <label for="id_remember_me" class="checkbox pull-right" style="margin-top: 4px">Remember Me<input id="id_remember_me" type="checkbox" name="remember_me" class="checkbox" checked="checked" tabindex="3"></label>
     </div>
-    <label for="id_remember_me" class="checkbox">Remember Me<input id="id_remember_me" type="checkbox" name="remember_me" class="checkbox" checked="checked" tabindex="3"></label>
     <div class="help-block" style="margin-top: 100px;"><a href="{% url 'signup' %}" class="btn btn-small">Register</a> for a new account</div>
     <input type="hidden" id="next" name="next"
         value="{% filter force_escape %}{% firstof next request.GET.next request.META.REDIRECT_URL request.META.HTTP_REFERER %}{% endfilter %}">
-    {% if form.errors %}
-        <p class="alert alert-error" style="margin-top: 18px;">Your username and password didn't match. Please try again.</p>
-    {% endif %}
 </form>
 {% endif %}
 <script type="text/javascript">

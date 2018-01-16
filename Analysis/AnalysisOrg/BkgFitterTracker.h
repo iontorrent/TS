@@ -68,8 +68,6 @@ public:
   BkgFitterTracker ();
   BkgFitterTracker ( int numRegions );
 
-  void InitGlobalDefaults(CommandLineOpts &inception_state, OptArgs &opts, Json::Value& json_params);
-
   void SetNumRegions(int numRegions);
 
   void AllocateRegionData(std::size_t numRegions, const CommandLineOpts * inception_state);

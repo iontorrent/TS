@@ -3,9 +3,9 @@
 import os
 import traceback
 import json
+from django.utils.text import slugify
 from ion.utils.explogparser import getparameter, getparameter_minimal
 from ion.plugin.constants import RunLevel
-
 from iondb.rundb.models import Chip, Results, RunType
 
 def get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId):
@@ -120,7 +120,8 @@ def get_chefSummary(ion_params, report_dir):
 
     return chefSummary
 
-def get_expmeta(ion_params, report_dir):
+
+def get_expmeta(ion_params, report_dir, report_pk):
     from datetime import datetime
     exp_json = ion_params.get('exp_json',{})
     
@@ -128,30 +129,35 @@ def get_expmeta(ion_params, report_dir):
     if not exp_json:        
         expmeta_file = os.path.join(report_dir,'expMeta.dat')
         try:
-          with open(expmeta_file, 'r') as f:
-              expmeta = dict(line.replace(' ','').strip().split('=') for line in f)
-              exp_json['expName'] = expmeta['RunName']
-              exp_json['date'] = expmeta['RunDate']
-              exp_json['flows'] = expmeta['RunFlows']
-              exp_json['sample'] = expmeta['Sample']
-              exp_json['instrument'] = expmeta['PGM']
-              exp_json['chipType'] = expmeta['ChipType']
-              exp_json['notes'] = expmeta['Notes']
+            with open(expmeta_file, 'r') as f:
+                expmeta = dict(line.replace(' ','').strip().split('=') for line in f)
+                exp_json['expName'] = expmeta['RunName']
+                exp_json['date'] = expmeta['RunDate']
+                exp_json['flows'] = expmeta['RunFlows']
+                exp_json['sample'] = expmeta['Sample']
+                exp_json['instrument'] = expmeta['PGM']
+                exp_json['chipType'] = expmeta['ChipType']
+                exp_json['notes'] = expmeta['Notes']
         except:
-          pass
+            pass
 
     ion_params_path = os.path.join(report_dir,'ion_params_00.json')
     
     chipBarcode = exp_json.get('chipBarcode')
     if not chipBarcode:
         # try to get from log
-        log = exp_json.get('log',{})
-        if log and not isinstance(log, dict): log = json.loads(log)
+        log = exp_json.get('log', {})
+        if log and not isinstance(log, dict):
+            log = json.loads(log)
         chipBarcode = log.get('chip_efuse')
 
     runType = ion_params['plan']['runType']
-    
-    d = {
+
+    results_name = ion_params.get('resultsName')
+    reanalysis_indicator = "Auto_" if results_name.startswith("Auto_") else ""
+    plan = ion_params.get('plan', {})
+    server_name = slugify(ion_params.get('site_name').decode('utf-8'))
+    return {
         "run_name": exp_json.get('expName'),
         "run_date": exp_json.get('date'),
         "run_flows": exp_json.get('flows'),
@@ -163,12 +169,12 @@ def get_expmeta(ion_params, report_dir):
         "results_name": ion_params.get('resultsName'),
         "flowOrder": ion_params.get('flowOrder'),
         "project": ion_params.get('project'),
-        "runid": ion_params.get('runID',''),
+        "runid": ion_params.get('runID', ''),
         "sample": ion_params.get('sample'),
-        "output_file_name_stem": exp_json.get('expName') + "_" + ion_params.get('resultsName'),
+        "output_file_name_stem": reanalysis_indicator + "_".join([plan.get('planName')[:80], server_name[:30], str(report_pk)]),
         "analysis_date": str(datetime.date(datetime.fromtimestamp(os.path.getmtime(ion_params_path)))),
     }
-    return d
+
 
 def get_pluginconfig(plugin, instance_pluginconfig):
     # Return first non-empty configuration in the following order:
@@ -186,6 +192,7 @@ def get_pluginconfig(plugin, instance_pluginconfig):
     if not pluginconfig:
         pluginconfig = {}
     return pluginconfig
+
 
 def get_globalconfig():
     dict={
@@ -210,6 +217,7 @@ def get_plan(ion_params):
     eas = ion_params.get('experimentAnalysisSettings', {})
     d = {
         "barcodeId": eas.get('barcodeKitName',''),
+        "endBarcodeKitName":  eas.get("endBarcodeKitName", ""),
         "barcodedSamples": eas.get('barcodedSamples',''),
         "bedfile": eas.get('targetRegionBedFile',''),
         "librarykitname": eas.get('libraryKitName',''),
@@ -242,6 +250,7 @@ def get_plan(ion_params):
     
     return d
 
+
 def get_datamanagement(pk, result=None):
     if not result:
         result = Results.objects.get(pk=pk)
@@ -263,14 +272,14 @@ def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_locati
         ion_params = getparameter_minimal(os.path.join(report_dir,'ion_params_00.json'))
 
     json_obj={
-        "runinfo":get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId),
-        "runplugin":get_runplugin(ion_params, runlevel, blockId, block_dirs),
-        "expmeta": get_expmeta(ion_params, report_dir),
+        "runinfo": get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId),
+        "runplugin": get_runplugin(ion_params, runlevel, blockId, block_dirs),
+        "expmeta": get_expmeta(ion_params, report_dir, primary_key),
         "chefSummary": get_chefSummary(ion_params, report_dir),
-        "pluginconfig":get_pluginconfig(plugin, instance_config),
-        "globalconfig":get_globalconfig(),
-        "plan":get_plan(ion_params),
-        "sampleinfo": ion_params.get("sampleInfo",{}),
+        "pluginconfig": get_pluginconfig(plugin, instance_config),
+        "globalconfig": get_globalconfig(),
+        "plan": get_plan(ion_params),
+        "sampleinfo": ion_params.get("sampleInfo", {}),
         "datamanagement": get_datamanagement(primary_key),
     }
     # IonReporterUploader_V1_0 compatibility shim

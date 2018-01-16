@@ -341,6 +341,9 @@ $(function () {
     strandMinY : 0,
     strandMaxY : 0,
     tooltipZero : 0,
+    covDepth_T1 : 0,
+    covDepth_T2 : 0,
+    covDepth_T3 : 0,
     chrList : ""
   };
 
@@ -385,9 +388,9 @@ $(function () {
     bin_size : 1,
     bin_length : 2,
     sum_gcbias : 4,
-    cov_20x : 12,
-    cov_100x : 13,
-    cov_500x : 14
+    covDepth_T1 : 12,
+    covDepth_T2 : 13,
+    covDepth_T3 : 14
   };
 
   var LegendLabels = {
@@ -407,9 +410,9 @@ $(function () {
     fwdBaseReads_u3p : "% Target length uncovered at 3'",
     revBaseReads_u5p : "% Target length uncovered at 5'",
     covDepth_1x : "% Base Coverage at <20x",
-    covDepth_20x : "% Base Coverage at 20x",
-    covDepth_100x : "% Base Coverage at 100x",
-    covDepth_500x : "% Base Coverage at 500x",
+    covDepth_T1 : "% Base Coverage at 20x",
+    covDepth_T2 : "% Base Coverage at 100x",
+    covDepth_T3 : "% Base Coverage at 500x",
     allReads_pss : "% Passing Reads",
     fwdReads_pss: "Forward % Passing Reads",
     revReads_pss : "Reverse % Passing Reads",
@@ -431,9 +434,9 @@ $(function () {
     fwdReads_shd: "rgb(160,32,32)",
     revReads_shd : "rgb(32,160,32)",
     covDepth_1x : "rgb(255,220,96)",
-    covDepth_20x : "rgb(237,194,64)",
-    covDepth_100x : "rgb(180,143,32)",
-    covDepth_500x : "rgb(129,105,0)",
+    covDepth_T1 : "rgb(237,194,64)",
+    covDepth_T2 : "rgb(180,143,32)",
+    covDepth_T3 : "rgb(129,105,0)",
     allReads_pss : "% Passing Reads",
     percentGC : "rgb(200,62,128)",
     targLen : "rgb(64,126,200)",
@@ -981,9 +984,9 @@ $(function () {
       if( baseCoverage ) {
         msg += "Target base coverage at 1x: "+sigfig(pcCov)+"%"+br;
       }
-      msg += "Target base coverage at 20x: "+sigfig(100*dataTable[bin][DataField.cov_20x]/targLen)+'%'+br;
-      msg += "Target base coverage at 100x: "+sigfig(100*dataTable[bin][DataField.cov_100x]/targLen)+'%'+br;
-      msg += "Target base coverage at 500x: "+sigfig(100*dataTable[bin][DataField.cov_500x]/targLen)+'%'+br;
+      msg += "Target base coverage at "+plotStats.covDepth_T1+"x: "+sigfig(100*dataTable[bin][DataField.covDepth_T1]/targLen)+'%'+br;
+      msg += "Target base coverage at "+plotStats.covDepth_T2+"x: "+sigfig(100*dataTable[bin][DataField.covDepth_T2]/targLen)+'%'+br;
+      msg += "Target base coverage at "+plotStats.covDepth_T3+"x: "+sigfig(100*dataTable[bin][DataField.covDepth_T3]/targLen)+'%'+br;
     }
     // show tooltip controls if appropriate
     if( barData && !binBar(bin) ) {
@@ -1403,6 +1406,17 @@ $(function () {
     // enable Read Depth plot if the extra fields are available
     enableReadDepthPlot = (plotStats.numFields > 12);
     customizePlotOptions();
+
+    // extract coverage tier labels assuming last 3 fields are covNx (left at NaN if unparsed)
+    if( fieldIds.length >= DataField.covDepth_T1+1 ) {
+      plotStats.covDepth_T1 = parseInt(fieldIds[DataField.covDepth_T1].substr(3));
+      plotStats.covDepth_T2 = parseInt(fieldIds[DataField.covDepth_T2].substr(3));
+      plotStats.covDepth_T3 = parseInt(fieldIds[DataField.covDepth_T3].substr(3));
+      LegendLabels.covDepth_1x = "% Base Coverage at <"+plotStats.covDepth_T1+"x";
+      LegendLabels.covDepth_T1 = "% Base Coverage at "+plotStats.covDepth_T1+"x";
+      LegendLabels.covDepth_T2 = "% Base Coverage at "+plotStats.covDepth_T2+"x";
+      LegendLabels.covDepth_T3 = "% Base Coverage at "+plotStats.covDepth_T3+"x";
+    }
   }
 
   function roundAxis( maxVal ) {
@@ -1462,9 +1476,9 @@ $(function () {
     var uncov5p  = DataField.uncov_5p; // or fwd_e2e
     var fwdReads = DataField.reads_fwd; // base reads or assigned reads
     var revReads = DataField.reads_rev; // base reads or assigned reads
-    var cov20x  = DataField.cov_20x;
-    var cov100x = DataField.cov_100x;
-    var cov500x = DataField.cov_500x;
+    var cov20x  = DataField.covDepth_T1;
+    var cov100x = DataField.covDepth_T2;
+    var cov500x = DataField.covDepth_T3;
     var logAxis = plotParams.logAxis;
     var barScale;
     for( var i = 0; i < plotStats.numPoints; ++i ) {
@@ -1586,9 +1600,9 @@ $(function () {
       }
     } else {
       plotData.push( { label: LegendLabels.covDepth_1x, color: ColorSet.covDepth_1x, data: d1 } );
-      plotData.push( { label: LegendLabels.covDepth_20x, color: ColorSet.covDepth_20x, data: d2 } );
-      plotData.push( { label: LegendLabels.covDepth_100x, color: ColorSet.covDepth_100x, data: d3 } );
-      plotData.push( { label: LegendLabels.covDepth_500x, color: ColorSet.covDepth_500x, data: d4 } );
+      plotData.push( { label: LegendLabels.covDepth_T1, color: ColorSet.covDepth_T1, data: d2 } );
+      plotData.push( { label: LegendLabels.covDepth_T2, color: ColorSet.covDepth_T2, data: d3 } );
+      plotData.push( { label: LegendLabels.covDepth_T3, color: ColorSet.covDepth_T3, data: d4 } );
     }
     var ytitle = LegendLabels.rcovType;
     // account for limits on log axis and round

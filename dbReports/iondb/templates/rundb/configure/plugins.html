@@ -398,18 +398,12 @@ $(document).ready(function(){
                     $( "#modal_confirm_plugin_version_to_install" ).data('source', source);
                     $( "#modal_confirm_plugin_version_to_install" ).modal("show");
                     return false;
-                }).done(function(data) {
-                    console.log("success:",  url);
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
-                .always(function(data) {
-                    $('#grid').data('kendoGrid').dataSource.read();
-                    $('#grid').data('kendoGrid').refresh();
-                });
             });
 
             $(source + " .upgrade-plugin").click(function (e) {
@@ -422,8 +416,6 @@ $(document).ready(function(){
                     $( "#modal_confirm_plugin_upgrade" ).data('source', source);
                     $( "#modal_confirm_plugin_upgrade" ).modal("show");
                     return false;
-                }).done(function(data) {
-                    console.log("success:",  url);
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
@@ -442,8 +434,6 @@ $(document).ready(function(){
                     $( "#modal_confirm_plugin_uninstall" ).data('source', source);
                     $( "#modal_confirm_plugin_uninstall" ).modal("show");
                     return false;
-                }).done(function(data) {
-                    console.log("success:",  url);
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
@@ -461,8 +451,6 @@ $(document).ready(function(){
                     $( "#modal_confirm_plugin_refresh" ).data('source', source);
                     $( "#modal_confirm_plugin_refresh" ).modal("show");
                     return false;
-                }).done(function(data) {
-                    console.log("success:",  url);
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();

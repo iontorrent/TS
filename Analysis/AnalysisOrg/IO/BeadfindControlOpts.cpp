@@ -88,8 +88,8 @@ void BeadfindControlOpts::PrintHelp()
 	printf ("     --beadfind-zero-flows   STRING            beadfind double tap flows []\n");
 	printf ("     --beadfind-num-threads  INT               beadfind number of threads [-1]\n");
 	printf ("     --beadfind-mesh-step    VECTOR_INT        beadfind mesh steps for differntial separator [100,100]\n");
-    printf ("     --beadfind-acq-threshold    VECTOR_INT    beadfind threshold for hinge model for acquisition flow [-10,12,5,500]\n");
-    printf ("     --beadfind-bf-threshold    VECTOR_INT     beadfind threshold for hinge model for beadfind flow [-5,300,-20000,-10]\n");
+    printf ("     --beadfind-acq-threshold    VECTOR_FLOAT    beadfind threshold for hinge model for acquisition flow [-10,12,5,500]\n");
+    printf ("     --beadfind-bf-threshold    VECTOR_FLOAT     beadfind threshold for hinge model for beadfind flow [-5,300,-20000,-10]\n");
     printf ("     --exclusion-mask          FILE            exclusion mask file name []\n");
 	printf ("     --bfold                 BOOL              BF_ADVANCED [true]\n");
 	printf ("     --noduds                BOOL              noduds [false]\n");

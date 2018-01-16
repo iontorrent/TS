@@ -332,7 +332,7 @@ def get_zip_logs(request):
 
     zipPath = '/tmp/logs.zip'
     zipfile = zipfile.ZipFile(zipPath, mode='w', allowZip64=True)
-    for afile in ['tsconfig_gui.log', 'django.log', 'celery_w1.log', 'tsconfig_debug.log']:
+    for afile in ['tsconfig_gui.log', 'django.log', 'celery_w1.log', 'tsconfig_debug.log', 'product_integration.log']:
         fullpath = os.path.join('/var/log/ion', afile)
         if os.path.exists(fullpath):
             zipfile.write(fullpath, arcname=afile, compress_type=compression)
@@ -903,10 +903,11 @@ class SamplePrepDataAdmin(admin.ModelAdmin):
 
 
 class ApplProductAdmin(admin.ModelAdmin):
-    list_display = ('productName', 'applicationGroup', 'applType', 'isDefault', 'instrumentType', 'defaultChipType', 
-                    'isDefaultForInstrumentType', 'defaultLibraryKit', 'defaultTemplateKit', 'defaultIonChefPrepKit',
+    list_display = ('productName', 'applicationGroup', 'applType', 'isDefault', 'isVisible', 'isDefaultForInstrumentType', 
+                    'instrumentType', 'defaultChipType', 
+                    'defaultLibraryKit', 'defaultTemplateKit', 'defaultIonChefPrepKit',
                     'defaultSequencingKit', 'defaultIonChefSequencingKit', 'defaultFlowCount', 
-                    'isActive', 'isVisible', 'productCode')
+                    'isActive', 'productCode')
     ordering = ("productName", "applicationGroup", "applType", "instrumentType", "defaultChipType",)
     list_filter = ('applType',)
 
@@ -919,6 +920,9 @@ class ApplicationGroupAdmin(admin.ModelAdmin):
 class IonMeshNodeAdmin(admin.ModelAdmin):
     list_display = ('name', 'hostname', 'active', 'system_id', )
 
+class FileMonitorAdmin(admin.ModelAdmin):
+    list_display = ('__unicode__', 'name', 'url', 'tags', 'status', )
+    list_filter = ('status', 'tags', )
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
@@ -970,7 +974,7 @@ admin.site.register(DMFileSet, DMFileSetAdmin)
 admin.site.register(DMFileStat, DMFileStatAdmin)
 admin.site.register(EventLog, EventLogAdmin)
 admin.site.register(RemoteAccount)
-admin.site.register(FileMonitor)
+admin.site.register(FileMonitor, FileMonitorAdmin)
 admin.site.register(SupportUpload)
 admin.site.register(NewsPost)
 admin.site.register(AnalysisArgs, AnalysisArgsAdmin)

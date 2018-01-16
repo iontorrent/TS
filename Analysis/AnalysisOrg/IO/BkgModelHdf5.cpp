@@ -56,6 +56,15 @@ void MatchedCube::InitBasicCube ( H5File &h5_local_ref, int col, int row, int ma
   h5_local_ref.CreateAttribute ( h5_set->getDataSetId(),"paramNames",str.c_str() );
 }
 
+// set up a basic data cube without matching to h5 set
+void MatchedCube::InitBasicCube2 ( int col, int row, int maxflows )
+{
+  printf ( "creating a cube for error %d, %d, %d\n",col, row, maxflows );
+  source.Init ( col, row, maxflows );
+  source.SetRange ( 0,col, 0, row, 0, maxflows );
+  source.AllocateBuffer();
+}
+
 
 // set up a basic data cube + matched h5 set
 //@TODO: use templates to avoid "INT" duplication
@@ -570,6 +579,23 @@ void BkgParamH5::Init ( const char *results_folder, const SpatialContext &loc_co
   }
 }
 
+void BkgParamH5::AllocBeadRes ( const SpatialContext &loc_context,
+                        const ImageSpecClass &my_image_spec,
+                        int numFlows,
+                        int _max_frames,
+                        int _flow_block_size,
+                        int num_flow_blocks
+                        ){
+	flow_block_size = _flow_block_size;
+	datacube_numflows = numFlows;
+	nFlowBlks = num_flow_blocks;
+	bead_col = loc_context.cols;
+	bead_row = loc_context.rows;
+	region_total = loc_context.numRegions;
+	residual_error.InitBasicCube2 ( bead_col, bead_row, datacube_numflows );
+	ptrs.mResError1 = residual_error.Ptr();
+}
+
 
 void BkgParamH5::Init2 (int write_params_flag, int nBeads_live, const Region *region, int nRegions,int nSamples)
 {
@@ -694,6 +720,7 @@ void BkgParamH5::IncrementalWriteBeads ( int flow, int iBlk )
 {
   // every parameter checks itself to see if writing is useful or safe
   // every time we write, we write these
+	printf("+++ IncrementalWriteBeads %d", flow);
   IncrementalWriteParam ( bead_dc.source,bead_dc.h5_set,flow );
   IncrementalWriteParam ( Amplitude.source,Amplitude.h5_set,flow );
   IncrementalWriteParam ( krate_multiplier.source,krate_multiplier.h5_set,flow );
@@ -965,7 +992,8 @@ void BkgParamH5::saveBeadPointers()
   ptrs.mBeadInitParam = bead_base_parameter.Ptr();
   ptrs.mBeadDC = bead_dc.Ptr();
   ptrs.mKMult = krate_multiplier.Ptr();
-  ptrs.mResError = residual_error.Ptr();
+  //ptrs.mResError = residual_error.Ptr();
+  ptrs.mResError1 = residual_error.Ptr();
   ptrs.mBeadFblk_avgErr= average_error_flow_block.Ptr();
   ptrs.mBeadFblk_clonal= bead_clonal_compute_block.Ptr();
   ptrs.mBeadFblk_corrupt= bead_corrupt_compute_block.Ptr();

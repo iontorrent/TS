@@ -117,6 +117,12 @@
 								<td><b>Barcode Set:</b></td>
 								<td>{{ eas.barcodeKitName }}</td>
 							</tr>
+							{% if eas.barcodeKitName and eas.endBarcodeKitName %}
+							<tr>
+								<td><b>End Barcode Set:</b></td>
+								<td>{{ eas.endBarcodeKitName }}</td>
+							</tr>
+							{% endif %}
 							<tr>
 								<td><b>Mark as PCR Duplicates:</b></td>
 								<td>{{ eas.isDuplicateReads }}</td>
@@ -168,16 +174,16 @@
 								<td><b>Hotspot Regions:</b></td>
 								<td class="word-break-all">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
 							</tr>
-							{% if runType.0.runType == "AMPS_DNA_RNA" %}
+							{% if runType.0.runType == "AMPS_DNA_RNA" or runType.0.runType == "MIXED" %}
 							<tr>
-								<td><b>Fusions Reference Library:</b></td>
+								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}Fusions{% else %}RNA{% endif%} Reference Library:</b></td>
 								<td>{{ eas.mixedTypeRNA_reference }}</td>
 							</tr>
 							<tr>
-								<td><b>Fusions Target Regions:</b></td>
+								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}Fusions{% else %}RNA{% endif%} Target Regions:</b></td>
 								<td class="word-break-all">{{ eas.mixedTypeRNA_targetRegionBedFile|default:''|basename }}</td>
 							</tr>
-							{% endif %}
+							{% endif %}					
 						</table>
 					</div>
 				</div>
@@ -340,14 +346,14 @@
 							</tr>
 							{% for barcode in barcodes %}
 								<tr>
-									<td>{{ barcode.id_str }} ({{barcode.sequence}})</td>
-									<td>{{ barcodedSamples|bracket:barcode.id_str|bracket:'sample'|default:'' }}</td>
+									<td>{{ barcode }}</td->
+									<td>{{ barcodedSamples|bracket:barcode|bracket:'sample'|default:'' }}</td>
 									{% for key in bcsamples_columns %}
-										<td>{{ barcodedSamples|bracket:barcode.id_str|bracket:key|default:'' }}</td>
+										<td>{{ barcodedSamples|bracket:barcode|bracket:key|default:'' }}</td>
 									{% endfor %}
 									{% if iru_config %}
 										{% for key in iru_columns %}
-											<td>{{iru_config|bracket:barcode.id_str|bracket:key|default:''}}</td>
+											<td>{{iru_config|bracket:barcode|bracket:key|default:''}}</td>
 										{% endfor %}
 									{% endif %}
 								</tr>

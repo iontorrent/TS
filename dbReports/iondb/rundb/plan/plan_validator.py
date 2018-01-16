@@ -2,7 +2,7 @@
 
 from iondb.rundb.models import Chip, LibraryKey, RunType, KitInfo, common_CV, ApplicationGroup, \
     SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct, PlannedExperiment, \
-    SampleAnnotation_CV, FlowOrder, Content
+    SampleAnnotation_CV, FlowOrder, Content, Plugin
 from iondb.utils import validation
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 import os
@@ -210,13 +210,17 @@ def validate_chip_type(value, displayedName='Chip Type', isNewPlan=None):
 
         chip = Chip.objects.filter(*query_args)
 
-        if not chip:
-            errors.append('Chip %s not found' % value)
-        elif chip and not chip[0].isActive:
-            if isNewPlan:
-                errors.append('Chip %s not active' % value)
+        if chip:
+            if not chip[0].isActive:
+                if isNewPlan:
+                    errors.append('Chip %s not active' % value)
+                else:
+                    warnings.append("Found inactive %s %s" % (displayedName, value))
             else:
-                warnings.append("Found inactive %s %s" % (displayedName, value))
+                if chip[0].getChipWarning:
+                    warnings.append(chip[0].getChipWarning)
+        else:
+            errors.append('Chip %s not found' % value)
 
     return errors, warnings
 
@@ -521,7 +525,7 @@ def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit):
     return errors
 
 
-def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleotideType=None, applicationGroupName=None, displayedName="Target Regions BED File"):
+def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleotideType=None, applicationGroupName=None, displayedName="Target Regions BED File", isPrimaryTargetRegion = True):
     """
     validate targetRegionBedFile based on the selected reference and the plan's runType
     """
@@ -529,6 +533,10 @@ def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleoti
     value = value.strip() if value else ""
 
     logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() value=%s; runType=%s; reference=%s; nucleotideType=%s; applicationGroupName=%s" % (value, runType, reference, nucleotideType, applicationGroupName))
+
+    if not isPrimaryTargetRegion:
+        logger.debug("plan_validator.validate_targetRegionBedFile_for_run() SKIPS validation due to no validation rules for non-primary targetRegion. value=%s" %(value))
+        return errors
 
     if reference:
         if runType:
@@ -772,13 +780,37 @@ def validate_kit_chip_combination(bundle):
                             if runType:
                                 selectedKit_applicationType = selectedKit.applicationType
                                 if selectedKit_applicationType:
-                                    if "AMPS_ANY" in selectedKit_applicationType:
-                                        selectedKit_applicationType = ['AMPS', 'AMPS_DNA_RNA', 'AMPS_EXOME', 'AMPS_RNA']
-                                    if runType not in selectedKit_applicationType:
+                                    selectedKit_applicationType_list = get_kit_application_list(selectedKit_applicationType)
+                                    if runType not in selectedKit_applicationType_list:
                                         errorMsg = "specified Kit (%s) is not supported for %s (runType=%s)" % (selectedKit.name, selectedKit.get_applicationType_display(), runType)
                                         return errorMsg
-    except Exception, Err:
+    except Exception as Err:
         logger.debug("Error during plan creation %s" % str(Err))
         errorMsg = str(Err)
 
     return errorMsg
+
+
+def validate_plugin_configurations(selected_plugins):
+    """this will validate all of the plugins as part of the plan.  It returns a list of all of the validation error messages"""
+    validation_messages = list()
+    for name, plugin_parameters in selected_plugins.items():
+        try:
+            configuration = plugin_parameters.get('userInput', {}) or {}
+            plugin_model = Plugin.objects.get(name=plugin_parameters['name'], active=True)
+            validation_messages += Plugin.validate(plugin_model.id, configuration, 'pipeline')
+        except Exception as exc:
+            validation_messages += [str(exc)]
+    return validation_messages
+
+
+def get_kit_application_list(kit_applicationTypes):
+    """
+    translates any application shortcut keywords and returns all applications compatible with the kit as a list
+    """
+    all_applications = kit_applicationTypes
+    if "AMPS_ANY" in kit_applicationTypes.upper():
+        all_applications = kit_applicationTypes.replace("AMPS_ANY", "AMPS;AMPS_DNA_RNA;AMPS_EXOME;AMPS_RNA")
+
+    application_list = all_applications.split(";")
+    return [value.encode('UTF8') for value in application_list]

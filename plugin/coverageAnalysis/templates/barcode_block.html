@@ -22,6 +22,7 @@
 <style type="text/css">
    body {background:white}
   .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+  td {word-break:break-all}
 </style>
 
 <title>Torrent Coverage Analysis Report</title>
@@ -45,7 +46,7 @@
 
 <script type="text/javascript">
   function numberWithCommas(x) {
-    if( !x ) return "NA";
+    if( x == null || isNaN(x) ) return "NA";
     var parts = x.toString().split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
@@ -91,8 +92,8 @@ $(document).ready(function() {
         pageSize: 20
       },
       columns: [
-        {field:"barcode_name"},
-        {field:"sample"},
+        {field:"barcode_name",width:"15%"},
+        {field:"sample",width:"30%"},
         {field:"mapped_reads"},
 {% if trg_stats %}
         {field:"on_target"},

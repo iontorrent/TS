@@ -63,10 +63,10 @@ function version_test()
 	echo -n $FUNCNAME:>&1
     pkgs=(
         ion-analysis
-        ion-pipeline
         ion-gpu
+        ion-pipeline
         ion-torrentr
-        ion-rsmts
+        ion-torrentpy
     )
     first=true
     for pkg in ${pkgs[@]}; do

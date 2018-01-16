@@ -22,13 +22,15 @@ class MatchedCube
 
     // build a basic matched cube
     void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, const char *set_name, const char *set_description, const char *param_root );
+    void InitBasicCube2 ( int col, int row, int maxflows);
+
     void Close();
     DataCube<float> *Ptr()
     {
-      if ( h5_set!=NULL )
+      //if ( h5_set!=NULL )
         return ( &source );
-      else
-        return ( NULL );
+      //else
+        //return ( NULL );
     };
     void SafeWrite();
     MatchedCube();
@@ -96,6 +98,13 @@ class BkgParamH5
         int num_flow_blocks   // Total number of flow blocks. (used to be ceil( numFlows/flow_max).
       );
 
+    void AllocBeadRes ( const SpatialContext &loc_context,
+                              const ImageSpecClass &my_image_spec,
+                              int numFlows,
+                              int _max_frames,
+                              int _flow_block_size,
+                              int num_flow_blocks
+                              );
     void IncrementalWriteParam ( DataCube<float> &cube, H5DataSet *set, int flow );
     void IncrementalWriteParam ( DataCube<int> &cube, H5DataSet *set, int flow );
     void WriteOneBlock ( DataCube<float> &cube, H5DataSet *set, int iBlk );

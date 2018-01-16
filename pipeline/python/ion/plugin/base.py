@@ -4,6 +4,7 @@ import sys
 import logging
 import json
 
+from django.utils.functional import cached_property
 from ion.plugin.loader import cache
 from ion.plugin.constants import *
 import ion.plugin.utils
@@ -11,7 +12,6 @@ import ion.plugin.utils
 from ion.plugin.runtime import IonPluginRuntime
 
 LOG = logging.getLogger(__name__)
-
 
 def lazyprop(fn, name=None):
     if not name:
@@ -155,7 +155,6 @@ class IonPluginBase(object):
 
 
 class IonPlugin(IonPluginBase, IonPluginRuntime):
-
     """ Base class for all Plugin Components """
 
     # Class attributes
@@ -170,6 +169,9 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
     output = {}
     results = {}
 
+    # this will indicate that the plugin require a non-empty configuration before execution.
+    requires_configuration = False
+
     def __init__(self, *args, **kwargs):
         self.context = {}
         self.blockcount = 0
@@ -182,14 +184,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
 
         self.data = {}
 
-        return super(IonPlugin, self).__init__(*args, **kwargs)
-
-    # def __getattribute__(self, name):
-    #    attr = super(IonPlugin, self).__getattribute__(name)
-    #    if callable(attr):
-    #        return attr()
-    #    else:
-    #        return attr
+        super(IonPlugin, self).__init__()
 
     # Introspection methods - FIXME - wrap functions instead
     def _get_runtypes(self):
@@ -306,3 +301,36 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
         #   globalconfig - plugin global configuration (config.html), if any
         return data
 
+    @cached_property
+    def startplugin(self):
+        """This will read and cache the startplugin.json file into a dictionary"""
+        with open('startplugin.json', 'r') as handle:
+            return json.load(handle)
+
+    @cached_property
+    def runinfo(self):
+        """This will all easy access to the run info dictionary"""
+        return self.startplugin['runinfo']
+
+    @cached_property
+    def plugin_parameters(self):
+        """This will return the plugin section of the runinfo dictionary"""
+        return self.runinfo['plugin']
+
+    @cached_property
+    def configuration(self):
+        """This will return a dictionary for the runtime configuration"""
+        return self.plugin_parameters['pluginconfig']
+
+    def validate(self, configuration, run_mode):
+        """This method will be called to validate the configuration of the plugin. Do not override."""
+        errors = list()
+
+        if self.requires_configuration and len(configuration) == 0:
+            errors.append(self.name + ' requires configuration before execution.')
+
+        return errors + self.custom_validation(configuration, run_mode)
+
+    def custom_validation(self, configuration, run_mode):
+        """This method should be overridden in the plugin implementation for custome validation messages"""
+        return list()

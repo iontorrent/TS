@@ -28,11 +28,11 @@ from django.core.urlresolvers import reverse
 from django.forms.models import model_to_dict
 import ion.utils.TSversion
 from iondb.rundb.forms import EmailAddress as EmailAddressForm, UserProfileForm
-from iondb.rundb.forms import AmpliseqLogin
 from iondb.rundb import tasks, publishers
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
+from iondb.product_integration.models import ThermoFisherCloudAccount
 from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, PluginResultJob, GlobalConfig, Chip, AnalysisArgs, \
                                EmailAddress, Publisher, Results, Template, UserProfile, model_to_csv, IonMeshNode, \
                                FileMonitor, ContentType, Cruncher, RunType, RUNNING_STATES, ReferenceGenome
@@ -55,6 +55,7 @@ from iondb.bin.IonMeshDiscoveryManager import IonMeshDiscoveryManager
 from iondb.rundb.configure import updateProducts
 from iondb.utils.nexenta_nms import this_is_nexenta, get_all_torrentnas_data, has_nexenta_cred
 from iondb.rundb.configure import ampliseq_design_parser
+from iondb.product_integration.models import ThermoFisherCloudAccount
 logger = logging.getLogger(__name__)
 
 from json import encoder
@@ -79,6 +80,7 @@ def configure_about(request):
     reload(ion.utils.TSversion)
     versions, meta = ion.utils.TSversion.findVersions()
     osversion = ion.utils.TSversion.findOSversion()
+    versions.update(ion.utils.TSversion.offcycleVersions())
     ctxd = {"versions": versions, "meta": meta, "osversion": osversion}
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/about.html", context_instance=ctx)
@@ -330,7 +332,7 @@ def configure_plugins_plugin_upgrade(request, pk):
     plugin = get_object_or_404(Plugin, pk=pk)
     action = reverse('api_dispatch_upgrade', kwargs={'api_name': 'v1', 'resource_name': 'plugin', 'pk': pk})
     ctx = RequestContext(request, {
-        "id": pk, "method": "POST", 'methodDescription': 'Upgrade', "readonly": False, 'UpgradeTo': plugin.availableVersions[-1], 'action': action, 'plugin': plugin
+        "id": pk, "method": "POST", 'methodDescription': 'Upgrade', "readonly": False, 'UpgradeTo': plugin.availableVersions[0], 'action': action, 'plugin': plugin
     })
     return render_to_response("rundb/configure/modal_confirm_plugin_upgrade.html", context_instance=ctx)
 
@@ -354,7 +356,7 @@ def configure_plugins_plugin_configure(request, action, pk):
 
     # Used in javascript, must serialize to json
     plugin = get_object_or_404(Plugin, pk=pk)
-    #make json to send to the template
+    # make json to send to the template
     plugin_json = json.dumps({'pk': pk, 'model': str(plugin._meta), 'fields': model_to_dict(plugin)}, cls=DjangoJSONEncoder)
 
     # If you set more than one of these,
@@ -368,10 +370,7 @@ def configure_plugins_plugin_configure(request, action, pk):
 
     fname = os.path.join(plugin.path, dispatch_table[action])
 
-    content = openfile(fname)
-    if not content:
-        raise Http404()
-
+    content = openfile(fname) or ''
     index_version = settings.TMAP_VERSION
 
     report = request.GET.get('report', False)
@@ -379,7 +378,7 @@ def configure_plugins_plugin_configure(request, action, pk):
     if report:
         # Used in javascript, must serialize to json
         results_obj = get_object_or_404(Results, pk=report)
-        #make json to send to the template
+        # make json to send to the template
         results_json = json.dumps({'pk': report, 'model': str(results_obj._meta), 'fields': model_to_dict(results_obj)}, cls=DjangoJSONEncoder)
 
     applicationGroup = request.GET.get('applicationGroup', "")
@@ -391,18 +390,22 @@ def configure_plugins_plugin_configure(request, action, pk):
         runType = runType_obj.runType
     plan_json = json.dumps({'applicationGroup' : applicationGroup, 'runType' : runType}, cls=DjangoJSONEncoder)
 
-    ctxd = {"plugin": plugin_json, "file": content, "report": report, "tmap": str(index_version),
-            "results": results_json, "plan" : plan_json, "action": action}
+    ctxd = {
+        "plugin": plugin_json,
+        "file": content,
+        "report": report,
+        "tmap": str(index_version),
+        "results": results_json,
+        "plan": plan_json,
+        "action": action
+    }
 
     context = RequestContext(request, ctxd)
 
-    # modal_configure_plugins_plugin_configure.html will be removed in a newer release as it places a script outside the
-    # html tag.
+    # modal_configure_plugins_plugin_configure.html will be removed in a newer release as it places a script outside the html tag.
     # Add in the js vars just before the closing head tag.
-    plugin_js_script = get_template("rundb/configure/plugins/plugin_configure_js.html").render(context).replace("\n",
-                                                                                                                "")
+    plugin_js_script = get_template("rundb/configure/plugins/plugin_configure_js.html").render(context).replace("\n", "")
     context["file"] = context["file"].replace("</head>", plugin_js_script + "</head>", 1)
-
 
     return render_to_response("rundb/configure/modal_configure_plugins_plugin_configure.html", context_instance=context)
 
@@ -588,7 +591,7 @@ def link_mesh_node(request):
     Add or update mesh node
     """
     name = request.POST.get('name')
-    hostname = socket.getfqdn(request.POST.get('hostname'))
+    hostname = request.POST.get('hostname')
     username = request.POST.get('userid')
     password = request.POST.get('pswrd')
     api_url = 'http://%s/rundb/api/v1/' % hostname
@@ -617,32 +620,61 @@ def link_mesh_node(request):
         logger.error(traceback.format_exc())
     else:
         remote_system_id = r.json()['system_id']
-        node, created = IonMeshNode.create(system_id=remote_system_id)
-        if not created and node.hostname != hostname:
-            error = "This system has already been setup in the mesh as '" + node.name + "'."
+        if remote_system_id == settings.SYSTEM_UUID:
+            error = "Adding your own local host into mesh is not allowed. Please check your hostname/address"
         else:
-            try:
-                # set up mesh node on remote server
-                local_info = {
-                    "system_id": settings.SYSTEM_UUID,
-                    "hostname": ionMeshDiscoveryManager.getLocalComputer(),
-                    "apikey":  node.apikey_local
-                }
-                r = s.post(api_url + 'ionmeshnode/exchange_keys/', data=local_info)
-                r.raise_for_status()
-            except:
-                error = "Unable to set up Mesh link. Ensure remote server has the same version of Torrent Suite as this server."
-                logger.error(traceback.format_exc())
-                if not node.hostname:
-                    node.delete()
+            node, created = IonMeshNode.create(system_id=remote_system_id)
+            if not created and node.hostname != hostname:
+                error = "This system has already been setup in the mesh as '" + node.name + "'."
             else:
-                # set up mesh node on this server
-                node.name = name
-                node.hostname = hostname
-                node.apikey_remote = r.json()['apikey']
-                node.save()
+                try:
+                    # set up mesh node on remote server
+                    local_info = {
+                        "system_id": settings.SYSTEM_UUID,
+                        "hostname": ionMeshDiscoveryManager.getLocalComputer(),
+                        "apikey":  node.apikey_local
+                    }
+                    r = s.post(api_url + 'ionmeshnode/exchange_keys/', data=local_info)
+                    r.raise_for_status()
+                except:
+                    error = "Unable to set up Mesh link. Ensure remote server has the same version of Torrent Suite as this server."
+                    logger.error(traceback.format_exc())
+                    if not node.hostname:
+                        node.delete()
+                else:
+                    # set up mesh node on this server
+                    node.name = name
+                    node.hostname = hostname
+                    node.apikey_remote = r.json()['apikey']
+                    # handle edge case: host was entered previously via SharedServer migration
+                    duplicate = IonMeshNode.objects.filter(hostname = node.hostname).exclude(pk=node.pk)
+                    duplicate.delete()
+                    try:
+                        node.save()
+                    except Exception as exc:
+                        error = str(exc)
+                        logger.error(traceback.format_exc())
 
     return HttpResponse(json.dumps({'error': error}), mimetype="application/json")
+
+
+@login_required
+@permission_required('user.is_staff', raise_exception=True)
+def delete_mesh_node(request, pk):
+    error = ""
+    node = get_object_or_404(IonMeshNode, pk=pk)
+    url = 'http://%s/rundb/api/v1/ionmeshnode/' % node.hostname
+    headers = {"Authorization": "system_id "  + settings.SYSTEM_UUID + ":" + node.apikey_remote}
+    try:
+        # remove local entry
+        node.delete()
+        # remove remote entry
+        r = requests.delete(url + '?system_id='+ settings.SYSTEM_UUID, headers=headers)
+        r.raise_for_status()
+    except Exception as exc:
+        return HttpResponseServerError(str(exc))
+
+    return HttpResponse()
 
 
 @login_required
@@ -735,9 +767,7 @@ def current_jobs():
     """
     jobs = []
     try:
-        host = "127.0.0.1"
-        conn = client.connect(host, settings.JOBSERVER_PORT)
-        running = conn.running()
+        running = client.get_running_jobs(settings.JOBSERVER_HOST, settings.JOBSERVER_PORT)
         runs = dict((r[2], r) for r in running)
 
         results = Results.objects.filter(pk__in=runs.keys()).order_by('pk')
@@ -807,11 +837,11 @@ def process_set():
         logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
         return "start/running" in stdout
 
-    def complicated_status(filename, parse):
+    def complicated_status(filename):
         try:
             if os.path.exists(filename):
                 data = open(filename).read()
-                pid = parse(data)
+                pid = int(data)
                 proc = subprocess.Popen("ps %d" % pid, shell=True)
                 proc.communicate()
                 return proc.returncode == 0
@@ -837,13 +867,19 @@ def process_set():
     proc_set['dhcp'] = simple_status('isc-dhcp-server')
 
     # get the tomcat service status
-    proc_set["tomcat"] = complicated_status("/var/run/tomcat7.pid", int)
+    proc_set["tomcat"] = complicated_status("/var/run/tomcat7.pid")
 
     # pids should contain something like '[{rabbit@TSVMware,18442}].'
-    proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid", int)
+    proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid")
+
+    # SGE - exec
+    proc_set["gridengine-exec"] = complicated_status("/var/run/gridengine/execd.pid")
+
+    # SGE - master
+    proc_set["gridengine-master"] = complicated_status("/var/run/gridengine/qmaster.pid")
 
     for node in ['celerybeat', 'celery_w1', 'celery_plugins', 'celery_periodic', 'celery_slowlane', 'celery_transfer', 'celery_diskutil']:
-        proc_set[node] = complicated_status("/var/run/celery/%s.pid" % node, int)
+        proc_set[node] = complicated_status("/var/run/celery/%s.pid" % node)
     return sorted(proc_set.items())
 
 
@@ -1506,17 +1542,25 @@ def configure_account(request):
     else:
         approve = None
 
-    context = RequestContext(request, {'form': form, 'approve': approve, 'updated': updated})
-    return render_to_response("rundb/configure/account.html",
-                              context_instance=context)
+    try:
+        tfc_account = ThermoFisherCloudAccount.objects.get(user_account_id=request.user.id)
+    except:
+        tfc_account = None
+
+    context = RequestContext(request, {
+        'form': form,
+        'approve': approve,
+        'updated': updated,
+        'tfc_account': tfc_account,
+    })
+    return render_to_response("rundb/configure/account.html", context_instance=context)
 
 
 @login_required
 def system_support_archive(request):
     try:
         path, name = makeSSA.makeSSA()
-        response = HttpResponse(FileWrapper(open(path)),
-                                    mimetype='application/zip')
+        response = HttpResponse(FileWrapper(open(path)), mimetype='application/zip')
         response['Content-Disposition'] = 'attachment; filename=%s' % name
         return response
     except:
@@ -1532,30 +1576,30 @@ def configure_ampliseq_logout(request):
         del request.session["ampliseq_password"]
     return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
 
+
 @login_required
 def configure_ampliseq(request, pipeline=None):
-    ctx = {'designs': None}
-    form = AmpliseqLogin()
+    """View for ampliseq.com importing stuff"""
 
-    if request.method == 'POST':
-        form = AmpliseqLogin(request.POST)
-        if form.is_valid():
-            request.session['ampliseq_username'] = form.cleaned_data['username']
-            request.session['ampliseq_password'] = form.cleaned_data['password']
-            if pipeline:
-                return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq", args=[pipeline]))
-            else:
-                return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
+    # get the thermo fisher cloud account model
+    tfc_account = None
+    try:
+        tfc_account = ThermoFisherCloudAccount.objects.get(user_account_id=request.user.id)
+    except ThermoFisherCloudAccount.DoesNotExist:
+        tfc_account = None
 
-    if 'ampliseq_username' in request.session:
+    ctx = {
+        'designs': None,
+        'tfc_account_setup': tfc_account is None
+    }
+
+    if tfc_account:
         # Get the list of ampliseq designs panels both custom and fixed for display
-        username = request.session['ampliseq_username']
-        password = request.session['ampliseq_password']
+        username = tfc_account.username
+        password = tfc_account.get_ampliseq_password()
         try:
             response, ctx = ampliseq_design_parser.get_ampliseq_designs(username, password, pipeline, ctx)
             if response['status'].startswith("40"):
-                request.session.pop('ampliseq_username')
-                request.session.pop('ampliseq_password')
                 ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to ' \
                                     '<a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                 fixed = None
@@ -1567,24 +1611,28 @@ def configure_ampliseq(request, pipeline=None):
             logger.error("There was a connection error when contacting ampliseq: %s" % err)
             ctx['http_error'] = "Could not connect to AmpliSeq.com"
             fixed = None
-        if fixed:
-            form = None
 
-    ctx['form'] = form
     ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
     ctx['ampliseq_url'] = settings.AMPLISEQ_URL
 
-    s5_chips = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540"], instrumentType= "S5").values_list('name', flat=True).order_by('name')
+    s5_chips = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540", "550"], instrumentType="S5").values_list('name', flat=True).order_by('name')
     ctx['s5_chips'] = s5_chips
     
-    return render_to_response("rundb/configure/ampliseq.html", ctx,
-        context_instance=RequestContext(request))
+    return render_to_response("rundb/configure/ampliseq.html", ctx, context_instance=RequestContext(request))
 
 @login_required
 def configure_ampliseq_download(request):
-    if 'ampliseq_username' in request.session:
-        username = request.session['ampliseq_username']
-        password = request.session['ampliseq_password']
+    # get the thermo fisher cloud account model
+    tfc_account = None
+    try:
+        tfc_account = ThermoFisherCloudAccount.objects.get(user_account_id=request.user.id)
+    except ThermoFisherCloudAccount.DoesNotExist:
+        tfc_account = None
+
+    if tfc_account:
+        # Get the list of ampliseq designs panels both custom and fixed for display
+        username = tfc_account.username
+        password = tfc_account.get_ampliseq_password()
         solutions = request.POST.getlist("solutions")
         fixed_solutions = request.POST.getlist("fixed_solutions")
         for ids in solutions:
@@ -1596,19 +1644,17 @@ def configure_ampliseq_download(request):
             meta = '{"reference":"%s", "choice": "%s"}' % (reference.lower(), request.POST.get(design_id + "_instrument_choice", "None"))
             start_ampliseq_fixed_solution_download(design_id, meta, (username, password))
 
-    if request.method == "POST":
-        if solutions or fixed_solutions:
-            return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq_download"))
-        else:
-            return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
+        if request.method == "POST":
+            if solutions or fixed_solutions:
+                return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq_download"))
+            else:
+                return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
 
     downloads = FileMonitor.objects.filter(tags__contains="ampliseq_template").order_by('-created')
     ctx = {
         'downloads': downloads
     }
-    return render_to_response("rundb/configure/ampliseq_download.html", ctx,
-        context_instance=RequestContext(request))
-
+    return render_to_response("rundb/configure/ampliseq_download.html", ctx, context_instance=RequestContext(request))
 
 def start_ampliseq_solution_download(design_id, solution_id, meta, auth):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/{0}/solutions/{1}/download/results".format(design_id, solution_id))

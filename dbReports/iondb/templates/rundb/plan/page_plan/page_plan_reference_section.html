@@ -113,7 +113,7 @@
                         <tbody>
                         <tr>                
                         <td>
-                        <b>Fusions Reference Library:</b>
+                        <b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Reference Library:</b>
                         </td>
                         <td>
                             <select id="mixedTypeRNA_reference" name="mixedTypeRNA_reference" class="select-group"  style="width: 300px;">
@@ -443,7 +443,6 @@
             
             if (isPlan == "True") {
                 //console.log("page_plan_reference_section.html - handle_default_targetBedFile_change INSIDE TRUE isPlan=", isPlan);
-            
                 updateSamplesForTargetRegion(selectedBedFile);
             }
         }

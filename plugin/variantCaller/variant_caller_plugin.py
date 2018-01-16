@@ -58,72 +58,47 @@ class ConfigureOptionsManager:
             self.get_options(configuration)
     def serve_option(self, option_key, barcode = None):
         '''
-        This function serves the option actually being used. 
+        This function serves the option actually being used.
+        Rule: check the barcode-specific option first then go to meta. 
         '''
-        # I must know what barcode I am providing!
-        if (barcode not in [None, NONBARCODED]) and (barcode not in self.__barcodes_options):
+        # First check the barcode is valid
+        if not (barcode is None or barcode in self.__barcodes_options):
             raise ValueError('Unknown barcode %s in the configuration %s' %(barcode, self.configuration_name))
             return None
-                
-        if not self.is_use_barcode_specific_options():
-            # Every barcode uses the same option
-            return self.__options[option_key]
-        
+
         if barcode is None:
-            # I don't input barcode
-            if option_key in self.__barcode_options_keys:
-                # The option_key is barcode specific, so I really need to provide the barcode name.
-                raise ValueError('The option %s is barcode specific but no barcode is provided.'%option_key)
-            else:
-                # The option_key is not barcode specific, so I will get the option from meta.             
-                return self.__options[option_key]
+            return self.__options[option_key]
         else:
-            # I do provide a valid barcode in the configuration
-            # return self.__barcodes_options[barcode][option_key] is option_key is a barcode specific option, else return self.__options[option_key]
             try:
                 return self.__barcodes_options[barcode][option_key]
             except KeyError:
-                return self.__options[option_key]
+                try:
+                    return self.__options[option_key]
+                except KeyError:
+                    pass
+        raise KeyError('Unknown option key %s%s.' %(option_key, '' if barcode is None else ' for the barcode %s'%barcode))
         return None
-    
+
     def add_option(self, option_key, option_value, barcode = None):
-        if (barcode not in [None, NONBARCODED]) and (barcode not in self.__barcodes_options):
+        if not (barcode is None or barcode in self.__barcodes_options):
             raise ValueError('Unknown barcode %s in the configuration %s' %self.configuration_name)
 
-        if not self.is_use_barcode_specific_options():
-            self.__options[option_key] = option_value
-            return
-
         if barcode is None:
-            # I don't input barcode
             if option_key in self.__barcode_options_keys:
-                # The option_key is barcode specific, so I really need to provide the barcode name.
-                raise ValueError('The option %s is barcode specific but no barcode is provided.')
+                # I can't add the "global" key that exists locally.
+                raise KeyError('The option %s is barcode specific but no barcode is provided.')
             else:
-                # The option_key is not barcode specific, so I will get the option from meta.             
                 self.__options[option_key] = option_value
         else:
             self.__barcodes_options[barcode][option_key] = option_value
-            self.__barcode_options_keys.add(option_key)
-        self.serve_option(option_key, barcode)
-    
-    def serve_option_from_plan(self, option_key):
-        '''
-        This function serves the option from plan. 
-        Note that it may not be the one actually being used!
-        '''        
-        return self.__options[option_key]
+            self.__barcode_options_keys.update([option_key, ])
+        # Sanity check
+        assert(option_value == self.serve_option(option_key, barcode))
     
     def get_consensus_option_across_barcodes(self, option_key, skip_error_barcode = False):
         '''
         return is_barcodes_reach_consensus, consensus_option
         '''
-        if not self.is_use_barcode_specific_options():
-            return True, self.serve_option(option_key)
-        
-        if option_key not in self.__barcode_options_keys:
-            return True, self.serve_option(option_key)
-               
         value_list = [self.serve_option(option_key, barcode) for barcode in self.__barcodes_options if ((not skip_error_barcode) or len(self.serve_option('error', barcode)) == 0) ]
         if value_list == []:
             return None, None
@@ -136,7 +111,7 @@ class ConfigureOptionsManager:
         self.__is_configured_run = configuration['configured_run']
         self.__is_multisample = configuration['multisample']
         self.__start_mode = configuration['start_mode']
-        self.__options = {'error': [], 'warning': []} # options from the plugin config
+        self.__options = {} # options from the plugin config
         self.__barcodes_options = {},  # barcode specific options for barcoded run in auto start mode. won't initialize for a non-barcded run.
         self.__barcode_options_keys = set() # set of all keys in barcodes_options[barcode]
         json_in = configuration['json']
@@ -222,7 +197,6 @@ class ConfigureOptionsManager:
         self.__options['plugin_name']               = json_in['runinfo'].get('plugin_name','')
         self.__options['pluginresult']              = json_in['runinfo'].get('pluginresult','')
         self.__options['run_name']                  = json_in['expmeta'].get('run_name','Current run')
-        self.__options['trim_reads']                = json_in['pluginconfig']['meta'].get('trimreads',True)
 
         # The default error motifs
         if 'error_motifs' in self.__options['parameters'].get('torrent_variant_caller', {}):
@@ -241,20 +215,19 @@ class ConfigureOptionsManager:
         # Note that the files in self.__options come from meta. They may be differ from what are actually being used.
         if self.__start_mode.lower() == 'manual start':
             self.__is_auto_start                     = False            
-            self.__options['library_type']             = json_in['pluginconfig']['meta']['librarytype']
-            self.__options['reference_genome_name']    = json_in['pluginconfig']['meta']['reference']
-            self.__options['targets_bed_unmerged']     = json_in['pluginconfig']['meta']['targetregions']
-            self.__options['hotspots_bed_unmerged']    = json_in['pluginconfig']['meta']['targetloci']    
+            self.__options['library_type']             = json_in['pluginconfig']['meta']['librarytype']    
         else:
             self.__is_auto_start                     = True            
             self.__options['library_type']             = json_in.get('plan',{}).get('runType', None)
-            self.__options['reference_genome_name']    = json_in['runinfo'].get('library','')
-            self.__options['targets_bed_unmerged']     = json_in.get('plan',{}).get('bedfile','')
-            self.__options['hotspots_bed_unmerged']    = json_in.get('plan',{}).get('regionfile','')
+    
+        # The default reference/targets/hotspots files 
+        self.__options['reference_genome_name']    = json_in['pluginconfig']['meta'].get('reference', '')
+        self.__options['targets_bed_unmerged']     = json_in['pluginconfig']['meta'].get('targetregions', '')
+        self.__options['hotspots_bed_unmerged']    = json_in['pluginconfig']['meta'].get('targetloci', '')
     
         # In TS-5.4 and earlier, library type is not barcode specific.
         # Need to clean up library type before load_barcode_info because barcodes will take library_type and trim_reads from meta.
-        cleanup_library_type(self.__options)
+        self.__cleanup_library_type(configuration['error'])
         
         # Deal with barcode stuffs
         self.__load_barcode_info(configuration)
@@ -272,22 +245,33 @@ class ConfigureOptionsManager:
             except KeyError:
                 configuration['error'].append('Missing barcode information for %s' %barcode)
                 continue
-            self.__barcodes_options[barcode] = {'error': [], 'warning': []}
-            self.__barcodes_options[barcode]['reference_genome_name'] = barcode_dict.get('reference', '')
-            self.__barcodes_options[barcode]['reference_genome_fasta']= barcode_dict.get('reference_fullpath', '')
-            self.__barcodes_options[barcode]['targets_bed_unmerged']  = barcode_dict.get('target_region_filepath', '')
-            self.__barcodes_options[barcode]['sse_bed']               = barcode_dict.get('sse_filepath', '')
-            self.__barcodes_options[barcode]['hotspots_bed_unmerged'] = barcode_dict.get('hotspot_filepath', '')
-            self.__barcodes_options[barcode]['nuc_type']              = barcode_dict.get('nucleotide_type', 'DNA').upper()
-            self.__barcodes_options[barcode]['trim_reads']            = self.__options['trim_reads']
-            self.__barcodes_options[barcode]['library_type']          = self.__options['library_type']
-            self.__barcode_options_keys |= set(self.__barcodes_options[barcode].keys())
-    # Use barcode specific files (i.e., target regions, hotspots, reference genome) if and only if it's a barcoded run in the Auto Start mode.
-    def is_use_barcode_specific_options(self):
-        # return self.__is_auto_start and self.__is_barcoded_run
-        # I always use barcodes.json to get options in auto start mode
-        return self.__is_auto_start
-    
+            # Error and warning are per-barcode.
+            my_barcode_option = {'error': [], 'warning': []}
+
+            # Initialize from the meta. May be overwritten later.
+            my_barcode_option['reference_genome_name']    = self.__options['reference_genome_name'] 
+            my_barcode_option['targets_bed_unmerged']     = self.__options['targets_bed_unmerged']
+            my_barcode_option['hotspots_bed_unmerged']    = self.__options['hotspots_bed_unmerged'] 
+            my_barcode_option['sse_bed']                  = ''
+              
+            # I used "\\BARCODESJSON" in a few unreleased versions. Later I found that jquery sometimes can not get "\\BARCODESJSON" correctly.
+            # Now it is ".BARCODESJSON". I still keep '\\BARCODESJSON' in case some internal configuration has it.
+            # Handle reference
+            if self.is_auto_start() or my_barcode_option['reference_genome_name'] in ['.BARCODESJSON', '\\BARCODESJSON']:
+                my_barcode_option['reference_genome_name'] = barcode_dict.get('reference', '')
+                my_barcode_option['reference_genome_fasta']= barcode_dict.get('reference_fullpath', '')                
+            # Handle target regions
+            if self.is_auto_start() or my_barcode_option['targets_bed_unmerged'] in ['.BARCODESJSON', '\\BARCODESJSON']:
+                my_barcode_option['targets_bed_unmerged']  = barcode_dict.get('target_region_filepath', '')
+                my_barcode_option['sse_bed']               = barcode_dict.get('sse_filepath', '')
+            # Handle HS
+            if self.is_auto_start() or my_barcode_option['hotspots_bed_unmerged'] in ['.BARCODESJSON', '\\BARCODESJSON']:
+                my_barcode_option['hotspots_bed_unmerged'] = barcode_dict.get('hotspot_filepath', '')
+
+            my_barcode_option['nuc_type']              = barcode_dict.get('nucleotide_type', 'DNA').upper()
+            self.__barcode_options_keys.update(my_barcode_option.keys())
+            self.__barcodes_options[barcode] = my_barcode_option
+
     def is_auto_start(self):
         return self.__is_auto_start
     
@@ -298,135 +282,122 @@ class ConfigureOptionsManager:
         return self.__is_multisample
     
     def get_option_dict(self, barcode):
-        option_dict = copy.deepcopy(self.__options)
-        if not self.is_use_barcode_specific_options():
-            return option_dict
-
-        # Let the barcode options overwrite the meta options
-        for key, value in self.__barcodes_options[barcode].iteritems():
-            option_dict[key] = copy.deepcopy(value)
+        '''
+        Get options of the barcode, including meta and barcode-specific.
+        '''
+        all_keys = self.__barcode_options_keys.union(self.__options.keys()) 
+        option_dict = dict([(key, self.serve_option(key, barcode)) for key in all_keys])
         return option_dict
 
     def __cleanup_options(self):
-        check_options(self.__options)
-        if self.is_use_barcode_specific_options():
             # check the files for barcodes
-            for barcode_option in self.__barcodes_options.itervalues():
-                # cleanup the options for each barcode
-                check_options(barcode_option)
-                # Note that I may add more keys in check_options. So I MUST update self.__barcode_options_keys
-                self.__barcode_options_keys |= set(barcode_option.keys())
+        for barcode in self.__barcodes_options:
+            # cleanup the options for each barcode
+            self.__check_options(barcode)
         
         # These keys are not part of the parameter set
-        if 'librarytype' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['librarytype']
-        if 'targetregions_id' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['targetregions_id']
-        if 'targetregions' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['targetregions']
-        if 'targetregions_merge' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['targetregions_merge']
-        if 'targetloci_id' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['targetloci_id']
-        if 'targetloci' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['targetloci']
-        if 'targetloci_merge' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['targetloci_merge']
-        if 'user_selections' in self.__options['parameters']['meta']:
-            del self.__options['parameters']['meta']['user_selections']    
+        for key in ['librarytype', 'targetregions_id', 'targetregions', 'targetregions_merge', 'targetloci_id', 'targetloci', 'targetloci_merge', 'user_selections']:
+            self.__options['parameters']['meta'].pop(key, None)
+
+
+    def __check_options(self, barcode):
+        '''
+        Check option for the barcode
+        '''
+        options = self.__barcodes_options[barcode]
+        options['reference_genome_fai'] = ""
+        options['targets_name']         = ""
+        options['targets_bed_merged']   = ""
+        options['has_targets']          = False
+        options['hotspots_name']        = ""
+        options['hotspots_bed_merged']  = ""
+        options['has_hotspots']         = False
+        options['has_sse_bed']          = False
+        options['trim_reads']           = self.__options['library_type'] == 'AmpliSeq'
+        # check referemce genome
+        if not options['reference_genome_name']:
+            options['error'].append('Reference genome unspecified.')
+        else:
+            if not options.get('reference_genome_fasta', ''): 
+                options['reference_genome_fasta'] = os.path.join(os.path.join('/results/referenceLibrary/tmap-f3/', options['reference_genome_name']), options['reference_genome_name'] + '.fasta') 
+            options['reference_genome_fai'] = '%s.fai' %options['reference_genome_fasta']
+    
+        # Check target region bed files
+        if not options['targets_bed_unmerged'] or options['targets_bed_unmerged'].lower() == "none":
+            options['targets_bed_unmerged']     = ""
+            options['targets_bed_merged']       = ""
+            options['targets_name']             = ""
+            options['trim_reads']               = False
+        else:
+            options['targets_bed_merged']       = options['targets_bed_unmerged'].replace('/unmerged/detail/', '/merged/plain/')
+            if options['targets_bed_unmerged'].lower().endswith('.bed'):
+                options['targets_name']             = os.path.basename(options['targets_bed_unmerged'])[:-4]
+            else:
+                options['targets_name']             = os.path.basename(options['targets_bed_unmerged'])
+                options['error'].append('Target bed file does not ends with .bed')
+        options['has_targets'] = options['targets_bed_unmerged']  != ""
+        if options['has_targets'] and '/%s/' %options['reference_genome_name'] not in options['targets_bed_unmerged']:
+            # Assumption: the target file is in /results/BED/{xx}/{ref}/unmerged/detail/...
+            options['error'].append('The target bed file %s is not for the reference genome %s.' %(options['targets_bed_unmerged'], options['reference_genome_name']))    
+    
+        # Check hotspots bed files
+        if (not options['hotspots_bed_unmerged']) or options['hotspots_bed_unmerged'].lower() == "none":
+            options['hotspots_bed_unmerged']    = ""
+            options['hotspots_bed_merged']      = ""
+            options['hotspots_name']            = ""  
+        else:
+            options['hotspots_bed_merged']      = options['hotspots_bed_unmerged'].replace('/unmerged/detail/', '/merged/plain/')
+            if options['hotspots_bed_merged'].lower().endswith('.bed'):
+                options['hotspots_name']            = os.path.basename(options['hotspots_bed_unmerged'])[:-4]
+            else:
+                options['hotspots_name']            = os.path.basename(options['hotspots_bed_unmerged'])
+                options['error'].append('Hotspot bed file does not ends with .bed')
+        options['has_hotspots'] = options['hotspots_bed_unmerged'] != ""
+        if options['has_hotspots'] and '/%s/' %options['reference_genome_name'] not in options['hotspots_bed_unmerged']:
+            # Assumption: the target file is in /results/BED/{xx}/{ref}/unmerged/detail/...
+            options['error'].append('The Hotspots bed file %s is not for the reference genome %s.' %(options['targets_bed_unmerged'], options['hotspots_bed_unmerged']))          
+    
+        # Check SSE bed file
+        if (options['sse_bed'] == '') and options['has_targets']:
+            # Assumption: if exists, the SSE bed file locates at the same dir as the unmerged target bed file does. The basename of the SSE bed follows the naming convention that panel.date.type.bed where type = mask.
+            split_targets_basename = os.path.basename(options['targets_bed_unmerged']).split('.')
+            split_targets_basename[-2] = 'mask'
+            try_sse_bed_path = os.path.join(os.path.dirname(options['targets_bed_unmerged']), '.'.join(split_targets_basename))
+            if os.path.exists(try_sse_bed_path):
+                options['sse_bed'] = try_sse_bed_path
+        options['has_sse_bed'] = options['sse_bed'] != ''
+        if options['has_sse_bed'] and (not options['has_targets']): 
+            options['error'].append('SSE bed file must have a valid target bed file.')
+
+        # Check existance of the files    
+        for key in ['reference_genome_fasta', 'reference_genome_fai', 'targets_bed_unmerged', 'targets_bed_merged', 'hotspots_bed_unmerged', 'hotspots_bed_merged', 'sse_bed']:
+            if options[key] != '' and (not os.path.exists(options[key])):
+                options['error'].append('Can not find the %s file: %s' %(key.replace('_', ' '), options[key]))
+    
+        if self.__options['library_type'] in ["AmpliSeq", 'tagseq'] and not options['has_targets']:
+            options['error'].append('A %s run must have target regions specified' %self.__options['library_type'])
+            
+        # Note that I may add more keys in check_options. So I MUST update self.__barcode_options_keys
+        self.__barcode_options_keys.update(options.keys())
+    
+    def __cleanup_library_type(self, error_msg_list):
+        # In TS-5.4 and earlier, library_type is not barcode specific.
+        my_lib_type = self.__options['library_type'].lower()
+        if my_lib_type in [v.lower() for v in ["wholegenome",'WGNM','GENS']]:
+            self.__options['library_type'] = "Whole Genome"
+        elif my_lib_type in [v.lower() for v in ["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA']]:
+            self.__options['library_type'] = "AmpliSeq"
+        elif my_lib_type in [v.lower() for v in ["targetseq",'TARS']]:
+            self.__options['library_type'] = "TargetSeq"
+        elif my_lib_type in [v.lower() for v in ["tagseq", 'tag_sequencing', 'TAG_SEQUENCING']]:
+            self.__options['library_type'] = "tagseq"
+        elif not my_lib_type:
+            error_msg_list.append('Empty library type from the plan')
+        else:
+            error_msg_list.append('Unknown library type: %s' %self.__options['library_type'])
 
 # End of class ConfigureOptionsManager
 # =======================================================================
-
-
-def cleanup_library_type(options):
-    # In TS-5.4 and earlier, library_type is not barcode specific.
-    if options['library_type'] in ["wholegenome",'WGNM','GENS']:
-        options['library_type'] = "Whole Genome"
-        options['trim_reads']   = False
-    elif options['library_type'] in ["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA']:
-        options['library_type'] = "AmpliSeq"
-    elif options['library_type'] in ["targetseq",'TARS']:
-        options['library_type'] = "TargetSeq"
-        options['trim_reads']   = False
-    elif options['library_type'] in ["tagseq", 'tag_sequencing', 'TAG_SEQUENCING']:
-        options['library_type'] = "tagseq"
-        options['trim_reads']   = False
-    elif not options['library_type']:
-        options['error'].append('Empty library type from the plan')
-    else:
-        options['error'].append('Unknown library type: %s' %options['library_type'])
-
-def check_options(options):
-    options['reference_genome_fai'] = ""
-    options['targets_name']         = ""
-    options['targets_bed_merged']   = ""
-    options['has_targets']          = False
-    options['hotspots_name']        = ""
-    options['hotspots_bed_merged']  = ""
-    options['has_hotspots']         = False
-    options['has_sse_bed']          = False  
-    if 'sse_bed' not in options:
-        options['sse_bed'] = ''
-    
-    # check referemce genome
-    if not options['reference_genome_name']:
-        options['error'].append('Reference genome unspecified.')
-    else:
-        if not options.get('reference_genome_fasta', ''): 
-            options['reference_genome_fasta'] = os.path.join(os.path.join('/results/referenceLibrary/tmap-f3/', options['reference_genome_name']), options['reference_genome_name'] + '.fasta') 
-        options['reference_genome_fai'] = options['reference_genome_fasta'] + '.fai'
-
-    # Check target region bed files
-    if not options['targets_bed_unmerged'] or options['targets_bed_unmerged'].lower() == "none":
-        options['targets_bed_unmerged']     = ""
-        options['targets_bed_merged']       = ""
-        options['targets_name']             = ""
-        options['trim_reads']               = False
-    else:
-        options['targets_bed_merged']       = options['targets_bed_unmerged'].replace('/unmerged/detail/', '/merged/plain/')
-        if options['targets_bed_unmerged'].lower().endswith('.bed'):
-            options['targets_name']             = os.path.basename(options['targets_bed_unmerged'])[:-4]
-        else:
-            options['targets_name']             = os.path.basename(options['targets_bed_unmerged'])
-            options['error'].append('Target bed file does not ends with .bed')
-    options['has_targets'] = options['targets_bed_unmerged']  != ""
-
-    # Check hotspots bed files
-    if not options['hotspots_bed_unmerged'] or options['hotspots_bed_unmerged'].lower() == "none":
-        options['hotspots_bed_unmerged']    = ""
-        options['hotspots_bed_merged']      = ""
-        options['hotspots_name']            = ""
-    else:
-        options['hotspots_bed_merged']      = options['hotspots_bed_unmerged'].replace('/unmerged/detail/', '/merged/plain/')
-        if options['hotspots_bed_merged'].lower().endswith('.bed'):
-            options['hotspots_name']            = os.path.basename(options['hotspots_bed_unmerged'])[:-4]
-        else:
-            options['hotspots_name']            = os.path.basename(options['hotspots_bed_unmerged'])
-            options['error'].append('Hotspot bed file does not ends with .bed')
-    options['has_hotspots'] = options['hotspots_bed_unmerged'] != ""
-
-    # Check SSE bed file
-    if (options['sse_bed'] == '') and options['has_targets']:
-        # Assumption: if exists, the SSE bed file locates at the same dir as the unmerged target bed file does. The basename of the SSE bed follows the naming convention that panel.date.type.bed where type = mask.
-        split_targets_basename = os.path.basename(options['targets_bed_unmerged']).split('.')
-        split_targets_basename[-2] = 'mask'
-        try_sse_bed_path = os.path.join(os.path.dirname(options['targets_bed_unmerged']), '.'.join(split_targets_basename))
-        if os.path.exists(try_sse_bed_path):
-            options['sse_bed'] = try_sse_bed_path
-    options['has_sse_bed'] = options['sse_bed'] != ''
-    if options['has_sse_bed'] and (not options['has_targets']): 
-        options['error'].append('SSE bed file must have a valid target bed file.')
-
-    # Check existance of the files    
-    for key in ['reference_genome_fasta', 'reference_genome_fai', 'targets_bed_unmerged', 'targets_bed_merged', 'hotspots_bed_unmerged', 'hotspots_bed_merged', 'sse_bed']:
-        if options[key] != '' and (not os.path.exists(options[key])):
-            options['error'].append('Can not find the %s file: %s' %(key.replace('_', ' '), options[key]))
-        
-    if options['library_type'] in ["AmpliSeq", 'tagseq'] and not options['has_targets']:
-        options['error'].append('%s runs must have target regions specified' %options['library_type'])                    
-
-
     
 def printtime(message, *args):
     if args:
@@ -468,10 +439,13 @@ def generate_incomplete_report_page(output_html_filename, message, run_name, aut
         out.write(render_to_string('report_incomplete.html', render_context))
 
 
-def generate_incomplete_report_block_page(output_html_filename, message):
+def generate_incomplete_report_block_page(output_html_filename, error_message, warning_message = ''):
     output_dir = os.path.basename(TSP_FILEPATH_PLUGIN_DIR.rstrip('/'))
-    render_context = { 'output_dir' : output_dir, 
-                       'message' : message}
+    render_context = { 'output_dir' : output_dir,
+                       'error_msg' : error_message,
+                       'warning_msg': warning_message,
+                       'startplugin_json': STARTPLUGIN_JSON,
+                    }
 
     with open(output_html_filename,'w') as out:
         out.write(render_to_string('report_incomplete_block.html', render_context))    
@@ -546,7 +520,12 @@ def prepare_target_regions(options, queued_bams):
     barcode = queued_bams[0]['name']
     if not options.serve_option('has_targets', barcode):
         return
+
     source_target_path = options.serve_option('targets_bed_unmerged', barcode)
+    # Make sure that the target region file is for the reference genome.
+    # Assumption: path of unmerged target region is under /(reference name)/unmerged/detail/
+    if '/%s/unmerged/detail/'%options.serve_option('reference_genome_name', barcode) not in source_target_path:
+        raise ValueError('The bed file %s is not for the reference genome %s'%(source_target_path, options.serve_option('reference_genome_name', barcode)))
     local_target_path = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(source_target_path))
     # make a copy of Target Bed to the plugin dir
     if not os.path.exists(local_target_path):
@@ -565,10 +544,14 @@ def prepare_sse_mask(options, queued_bams):
             options.add_option('sse_vcf', '', bam['name'])      
         return
     elif not options.serve_option('has_targets', barcode):
-        raise ValueError('SSE bed file must come with a target bed file.')
-    
+        raise ValueError('SSE bed file must come with a target bed file.')    
+
     sse_bed_path = options.serve_option('sse_bed', barcode)
-    assert(sse_bed_path.endswith('.bed'))    
+    assert(sse_bed_path.endswith('.bed'))
+    
+    if '/%s/'%options.serve_option('reference_genome_name', barcode) not in sse_bed_path:
+        raise ValueError('The bed file %s is not for the reference genome %s'%(sse_bed_path, options.serve_option('reference_genome_name', barcode)))
+    
     validated_sse_bed = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(sse_bed_path))
     validated_sse_bed = validated_sse_bed[:-4] + '.validated.bed'
     sse_vcf = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(sse_bed_path))
@@ -613,23 +596,30 @@ def prepare_sse_mask(options, queued_bams):
         for bam in queued_bams:
             options.add_option('sse_vcf', '', bam['name'])
             bam['warning'].append('The SSE bed file %s has no valid alleles. Disable the use of SSE file in tvc.' %options.serve_option('sse_bed', bam['name']))
-    
-
  
 def prepare_hotspots(options, queued_bams):
     # The case of more than one bam files must be multisample where all barcodes use the same HS file.
     barcode = queued_bams[0]['name']
+    hotspots_bed_unmerged_path = options.serve_option('hotspots_bed_unmerged', barcode)
+    for bam in queued_bams:
+        assert(options.serve_option('hotspots_bed_unmerged', bam['name']) == hotspots_bed_unmerged_path)
+    
     if not options.serve_option('has_hotspots', barcode):
         for bam in queued_bams:
             options.add_option('hotspots_bed_unmerged_leftalign', '', bam['name'])
             options.add_option('hotspots_vcf', '', bam['name'])
             options.add_option('hotspots_bed_unmerged_local', '', bam['name'])        
         return
-    
+        
+    # Make sure that the HS file is for the reference genome.
+    # Assumption: path of unmerged HS is under /(reference name)/unmerged/detail/
+    if '/%s/'%options.serve_option('reference_genome_name', barcode) not in hotspots_bed_unmerged_path:
+        raise ValueError('The bed file %s is not for %s'%(options.serve_option('reference_genome_name', barcode) , hotspots_bed_unmerged_path))
+        
     # create 3 files in TSP_FILEPATH_PLUGIN_DIR and re-evaluate 'has_hotspots' and 'hotspots_vcf'
     # raise an error if fail to open the hotspots files
     try:
-        with open(options.serve_option('hotspots_bed_unmerged', barcode), 'r') as f_hs:
+        with open(hotspots_bed_unmerged_path, 'r') as f_hs:
             pass
         
         with open(options.serve_option('hotspots_bed_merged', barcode), 'r') as f_hs:
@@ -638,14 +628,14 @@ def prepare_hotspots(options, queued_bams):
         traceback.print_exc()
         raise IOError
         
-    hotspots_bed_unmerged_local     = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(options.serve_option('hotspots_bed_unmerged', barcode)))
+    hotspots_bed_unmerged_local     = os.path.join(TSP_FILEPATH_PLUGIN_DIR, os.path.basename(hotspots_bed_unmerged_path))
     hotspots_bed_unmerged_leftalign = os.path.join(TSP_FILEPATH_PLUGIN_DIR, options.serve_option('hotspots_name', barcode) + '.left.bed')
     hotspots_vcf                    = os.path.join(TSP_FILEPATH_PLUGIN_DIR, options.serve_option('hotspots_name', barcode) + '.hotspot.vcf')
 
     if not os.path.exists(hotspots_bed_unmerged_local):
-        shutil.copy(options.serve_option('hotspots_bed_unmerged', barcode), hotspots_bed_unmerged_local)
+        shutil.copy(hotspots_bed_unmerged_path, hotspots_bed_unmerged_local)
         prepare_hotspots_command  = '%s prepare_hotspots' %TVCUTILS
-        prepare_hotspots_command += '  --input-bed "%s"' % options.serve_option('hotspots_bed_unmerged', barcode)
+        prepare_hotspots_command += '  --input-bed "%s"' % hotspots_bed_unmerged_path
         prepare_hotspots_command += '  --reference "%s"' % options.serve_option('reference_genome_fasta', barcode)
         prepare_hotspots_command += '  --left-alignment on'
         prepare_hotspots_command += '  --allow-block-substitutions on'
@@ -661,14 +651,14 @@ def prepare_hotspots(options, queued_bams):
         else:
             #run_command('bgzip -c %s/hotspot.vcf > %s/hotspot.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,TSP_FILEPATH_PLUGIN_DIR), 'Generate compressed hotspot vcf')
             #run_command('tabix -p vcf %s/hotspot.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR), 'Generate index for compressed hotspot vcf')
-            add_output_file('hotspots_bed', os.path.basename(options.serve_option('hotspots_bed_unmerged', barcode)))
+            add_output_file('hotspots_bed', os.path.basename(hotspots_bed_unmerged_path))
 
     for bam in queued_bams:
         options.add_option('hotspots_bed_unmerged_leftalign', hotspots_bed_unmerged_leftalign, bam['name'])
         options.add_option('hotspots_vcf', hotspots_vcf, bam['name'])
         options.add_option('hotspots_bed_unmerged_local', hotspots_bed_unmerged_local, bam['name'])
         if not hotspots_vcf:
-            bam['warning'].append('The hotspot file %s has no valid hotspot alleles. Disable the use of hotspots file in tvc.' %options.serve_option('hotspots_bed_unmerged', bam['name']))
+            bam['warning'].append('The hotspot file %s has no valid hotspot alleles. Disable the use of hotspots file in tvc.' %hotspots_bed_unmerged_path)
         else:
             # link the HS vcf to local dir.
             hs_vcf_local = os.path.join(bam['vc_pipeline_directory'], os.path.basename(hotspots_vcf))
@@ -902,13 +892,8 @@ def print_options(vc_options, bam):
     printtime('  Plugin start mode          : %s' %('Auto start' if vc_options.is_auto_start() else 'Manual start'))
     printtime('  Variant Caller version     : %s' %vc_options.serve_option('tvc_version'))
     printtime('  Run is barcoded            : %s' %str(vc_options.is_barcoded_run()))
-    genome_from_plan = vc_options.serve_option_from_plan('reference_genome_name')
-    printtime('  Genome                     : %s' %(genome_from_plan if genome_from_plan != '' else 'Unspecified'))
-    printtime('  Library Type               : %s' %vc_options.serve_option_from_plan('library_type'))
-    printtime('  Target Regions             : %s' %(vc_options.serve_option_from_plan('targets_name') if vc_options.serve_option_from_plan('has_targets') else 'Not using'))
-    printtime('  Hotspots                   : %s' %(vc_options.serve_option_from_plan('hotspots_name') if vc_options.serve_option_from_plan('has_hotspots') else 'Not using'))       
+    printtime('  Library Type               : %s' %vc_options.serve_option('library_type', barcode))
     try:  
-        #original_parameters = vc_options.serve_option_from_plan('original_parameters')
         printtime('  Requested Parameters       : %s' %vc_options.serve_option("original_config_line1"))
         printtime('                               %s' %vc_options.serve_option("original_config_line2"))
         printtime('  Auto-Updated Parameters    : %s' %vc_options.serve_option("config_line1"))
@@ -937,7 +922,7 @@ def print_options(vc_options, bam):
     if error_list != []:
         return
     
-    printtime('%s: options actually applied:' %print_name)
+    printtime('%s: options applied:' %print_name)
     printtime('  Rawlib bam file            : %s' %bam['file'])    
     printtime('  Reference Genome           : %s' %vc_options.serve_option('reference_genome_fasta', barcode))
     printtime('  Parameters file            : %s' %vc_options.serve_option('parameters_file', barcode))
@@ -1692,7 +1677,10 @@ def process_results(configuration, bam):
     generate_variant_tables(configuration, bam)
     transfer_variants_to_sqlite(bam['results_directory'])
     setup_webpage_support(bam['results_directory'])
-
+    # The url to the metal of the barcode
+    barcode_metal_url = "../../../../../report/%s/metal/plugin_out/%s" %(STARTPLUGIN_JSON['runinfo']['pk'], os.path.basename(STARTPLUGIN_JSON['runinfo']['results_dir']))
+    if bam['name'] != NONBARCODED:
+        barcode_metal_url = '../%s/%s' %(barcode_metal_url, bam['name'])        
     render_context = {
         'options'               : configuration['options'].get_option_dict(bam['name']),
         'configuration_link'    : configuration['options'].serve_option('parameters_file'),
@@ -1708,7 +1696,8 @@ def process_results(configuration, bam):
         'hotspots_xls_link'     : basename_hotspots_xls,
         'variant_cov_xls_link'  : basename_variant_cov_xls,
         'results_url'           : TSP_URLPATH_PLUGIN_DIR,
-        'startplugin_json'      : STARTPLUGIN_JSON
+        'startplugin_json'      : STARTPLUGIN_JSON,
+        'barcode_metal_url'    : barcode_metal_url,
     }
     render_context['has_processed_bam'] = bam.get('post_processed_bam', None) is not None
     if render_context['has_processed_bam']:
@@ -1840,8 +1829,9 @@ def get_status_dict(process_status):
 def generate_status_report(process_status, bams_in_progress):
     output_dir = os.path.basename(TSP_FILEPATH_PLUGIN_DIR.rstrip('/'))
     render_context = {'barcode_data': process_status['bams_processed'] + bams_in_progress,
-                      'output_dir': output_dir,
+                      'output_dir': output_dir  ,
                       'status': get_status_dict(process_status),
+                      'runinfo_pk': STARTPLUGIN_JSON['runinfo']['pk'],
                       }
     
     with open(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), 'w') as out:
@@ -1967,6 +1957,11 @@ def process_configuration(configuration, results_json, process_status):
             bams_processed.append(bam)
 
 def get_consensus(value_list):
+    '''
+    is_consensus, consensus_value = get_consensus(value_list)
+    is_consensus = True if all entries in value_list are the same, False otherwise.
+    consensus_value = the consensus value. None if not is_consensus.
+    '''
     if len(value_list) == 0:
         raise ValueError('The length of the input can not be zero.')    
     if len(value_list) == 1:
@@ -2040,8 +2035,8 @@ def generate_report_htmls(configurations, process_status):
     if len(error_barcodes) == len(bams_processed):
         barcode_text = 'all barcodes' if len(bams_processed) > 0 else 'the bam file'
         generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_RESULTS), 'ERROR: The plugin fails to process %s. Please check Log File for details.' %barcode_text, global_options['run_name'])
-        generate_incomplete_report_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), 'ERROR: The plugin fails to process %s. Please check Log File for details.' %barcode_text)        
-    
+        generate_incomplete_report_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), 'The plugin fails to process %s. Please check Log File for details.' %barcode_text)    
+        return
     if not PLUGIN_DEV_SKIP_VARIANT_CALLING:
         generate_download_files(global_options['run_name'], bams_processed)        
     error_msg = ''
@@ -2123,11 +2118,10 @@ def plugin_main():
     try:
         with open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,'startplugin.json'), 'r') as json_file:
             STARTPLUGIN_JSON = json.load(json_file,parse_float=str)
-        my_pluginconfig = STARTPLUGIN_JSON['pluginconfig']
     except:
         printtime('ERROR: Failed to load and parse startplugin.json')
         return 1
-    if STARTPLUGIN_JSON['pluginconfig'] == {}:
+    if STARTPLUGIN_JSON.get('pluginconfig', {}) == {}:
         printtime('ERROR: The plugin is not configured. Perhaps select the plugin in the plan w/o configuring it?')
         return 1
     
@@ -2161,7 +2155,7 @@ def plugin_main():
     # No bam file actually being processed.
     if process_status['bams_processed'] == []:
         generate_incomplete_report_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_RESULTS), 'WARNING: No bam file was processed by the plugin - please check Log File for details.', STARTPLUGIN_JSON['expmeta'].get('run_name','Current run'))
-        generate_incomplete_report_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), 'WARNING: No bam file was processed by the plugin - please check Log File for details.')                
+        generate_incomplete_report_block_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), '' , 'No bam file was processed by the plugin - please check Log File for details.')                
         printtime('WARNING: No bam file was processed by the plugin!')
     else:
         generate_report_htmls(configurations, process_status)

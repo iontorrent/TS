@@ -18,11 +18,7 @@
                     <a id="pickfile" name="pickfile" class="btn">Select File</a><br />
                     <span id="filelist">------</span>
                     <div id="upload-help" class="help-block" >
-                        In order to provide a better uploading experience either Microsoft Silverlight
-                        plugin or an HTML5 compatible browser are required for file uploading.
-                        <ul>
-                            <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/"> microsoft.com </a></li>
-                        </ul>
+                        In order to provide a better uploading experience an HTML5 compatible browser are required for file uploading.
                         You may need to contact your local system administrator for assistance.
                     </div>
                     <div id="msg" class="alert hide"></div>
@@ -142,8 +138,7 @@ $(function(){
 
                          if (file_name.indexOf(".deb") >= 0){
                              $.unblockUI();
-                             $('#manualOffcycle').append('<p>Installation successfully completed for ' + uploader.files[0].name + '.This page will now reload</p>').show();
-                             window.location.reload(true);
+                             $('#manualOffcycle').append('<p>Installation successfully completed for ' + uploader.files[0].name + '.<a href="{% url "offcycle_updates" %}" class="btn"><i class="icon-check"></i>Acknowledge</a></p>').show();
                          } else {
                              $('#manualOffcycle').html('<p>Product upload successfull. Update in progress...</p>').delay(6000).show(0);
                              setTimeout(install_products_manual, 6000);

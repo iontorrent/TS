@@ -1126,7 +1126,8 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
                                      list<PositionInProgress>::iterator& consensus_position_ticket,
 									 list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket,
 									 TargetsManager* targets_manager,
-									 bool skip_consensus)
+									 bool skip_consensus,
+									 bool use_mol_tag)
 {
 	// my_molecular_families_multisample is usually the famly pileup that cover one target.
 	// Typcally, a read just covers one target.
@@ -1138,22 +1139,45 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 		for (vector< vector< MolecularFamily> >::iterator strand_it = sample_it->begin(); strand_it != sample_it->end(); ++strand_it) {
 			for (vector< MolecularFamily>::iterator fam_it = strand_it->begin(); fam_it !=  strand_it->end(); ++fam_it) {
 				// Is *fam_it functional?
-				if (fam_it->SetFuncFromAll((unsigned int) min_family_size)) {
-					unsigned int consensus_fam_size = 0;
-					if (skip_consensus){
-						consensus_fam_size = fam_it->GetFamSize();
-					}else{
-						// Generate consensus reads
-						consensus_fam_size = flow_space_consensus_master.FlowSpaceConsensusOneFamily(fam_it->all_family_members, consensus_position_ticket, aln_needed_consensus_position_ticket);
-					}
-					// Count the coverage of the target.
-					if (consensus_fam_size >= min_family_size and (not fam_it->all_family_members.empty())){
+				if (not fam_it->SetFuncFromAll((unsigned int) min_family_size)) {
+					continue;
+				}
+				unsigned int consensus_fam_size = 0;
+				if (skip_consensus){
+					// Note that if you want to reuse the container, you must call fam_it->CountFamSizeFromAll() before you call fam_it->GetFamSize().
+					consensus_fam_size = fam_it->GetFamSize();
+				}else{
+					// Generate consensus reads
+					consensus_fam_size = flow_space_consensus_master.FlowSpaceConsensusOneFamily(fam_it->all_family_members, consensus_position_ticket, aln_needed_consensus_position_ticket);
+				}
+				// Count the coverage of the target.
+				if (consensus_fam_size >= min_family_size and (not fam_it->all_family_members.empty())){
+					if (use_mol_tag){
 						// Important Assumption: is_split_families_by_region_ = true in MolecularFamilyGenerator.
+						// Count the family based coverage: One family or read can cover multiple targets
 						for (vector<int>::iterator target_it = fam_it->all_family_members[0]->target_coverage_indices.begin(); target_it != fam_it->all_family_members[0]->target_coverage_indices.end(); ++target_it){
 							TargetStat& my_stat = stat_of_targets[*target_it];
 							my_stat.read_coverage += consensus_fam_size;
 							++(my_stat.family_coverage);
 							++(my_stat.fam_size_hist[consensus_fam_size]);
+						}
+					}
+
+					for (vector <Alignment*>::iterator read_it = fam_it->all_family_members.begin(); read_it != fam_it->all_family_members.end(); ++read_it) {
+						// Count the best target assignment coverage
+						// One read can cover only one target.
+						int best_target_idx = (*read_it)->best_coverage_target_idx;
+						if (best_target_idx > -1) {
+							TargetStat& my_stat = stat_of_targets[best_target_idx];
+							++my_stat.read_coverage_by_best_target;
+						}
+						// If not use_mol_tag, the assumption where all reads in a family have the same target_coverage_indices does not hold.
+						// Need to iterate over all reads and the target_coverage_indices of one read.
+						if (not use_mol_tag){
+							for (vector<int>::iterator target_it = (*read_it)->target_coverage_indices.begin(); target_it != (*read_it)->target_coverage_indices.end(); ++target_it){
+								TargetStat& my_stat = stat_of_targets[*target_it];
+								++my_stat.read_coverage;
+							}
 						}
 					}
 				}

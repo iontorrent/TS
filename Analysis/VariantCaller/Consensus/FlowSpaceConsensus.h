@@ -133,6 +133,7 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
                                      list<PositionInProgress>::iterator& consensus_position_ticket,
                                      list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket,
 									 TargetsManager* targets_manager,
-									 bool skip_consensus);
+									 bool skip_consensus,
+									 bool use_mol_tag);
 
 #endif /* FLOWSPACECONSENSUS_H */

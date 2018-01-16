@@ -119,7 +119,7 @@
                     <span class="headvc">Barcode</span>
                 </div>
                 <div class="span4 movedown5">
-                    {{barcode}}
+                  	 <a href="{{barcode_metal_url}}">{{barcode}}</a>
                 </div>
             </div>
             {% endif %}
@@ -129,7 +129,11 @@
                     <span class="headvc">Sample Name</span>
                 </div>
                 <div class="span4 movedown5">
-                    {{summary.sample_name}}
+                	{% if barcode %}
+                		{{summary.sample_name}}
+                	{% else %}
+						<a href="{{barcode_metal_url}}">{{summary.sample_name}}</a>
+                    {% endif %}
                 </div>
             </div>
 
@@ -687,7 +691,7 @@ $(function () {
     		var error_text = '<div class="alert alert-danger" role="alert"> <i class="icon-info-sign"></i> <span class="sr-only"> <strong> Error: </strong> </span>' +  results['Error'] + '</div>';
             $("#rerun_message").html(error_text);
         }else{
-        	var success_text = '<div class="alert alert-success"> <strong>Success!</strong> Adjusted parameters have been save to Configuration "' + $("#new_config_name").val() + '".</div>';
+        	var success_text = '<div class="alert alert-success"> <strong>Success!</strong> Adjusted parameters have been saved to Configuration "' + $("#new_config_name").val() + '".</div>';
         	$("#rerun_message").html(success_text);
         }
         $("#postbutton").removeAttr('disabled');
@@ -703,7 +707,7 @@ $(function () {
 		return;
 	}
 	if (existing_config_names.indexOf(new_config_name) >= 0){
-    	bootbox.confirm('The configuration "' + new_config_name + '" existis. Do you want to overwrite it?', function(result){
+    	bootbox.confirm('Configuration "' + new_config_name + '" exists. Do you wish to overwrite it?', function(result){
         	if (result){
     			save_to_config();
     		}

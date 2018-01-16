@@ -16,6 +16,8 @@ q_norm <- as.numeric(ifelse(is.na(args[3]),"0.1",args[3]))
 
 rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, sep="\t", comment.char="", quote="")
 rep <- rcov$total_reads
+if( is.null(rep) ) rep <- rcov$ave_basereads
+
 
 tlen <- rcov$contig_end - rcov$contig_srt + 1
 pcgc <- 100 * rcov$gc / tlen
@@ -30,7 +32,7 @@ if( remove0s ) {
 ndata <- length(rep)
 if( ndata < 2 )
 {
-  write(sprintf("ERROR: No coverage property field found in data file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: gcbias.R: No coverage property field found in data file %s\n",nFileIn),stderr())
   q(status=1)
 }
 if( ndata < 4 )

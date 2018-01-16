@@ -92,43 +92,34 @@ void SampleManager::Initialize (const SamHeader& bam_header, const string& prima
     multisample = false;
 
   // Search for specified primary sample or select a default primary (first available)
-
-  bool default_sample = false;
-  if (primary_sample_name_.empty()) {
-    primary_sample_name_ = sample_names_[0];
-    default_sample = true;
+  bool default_sample = primary_sample_name_.empty();
+  if (default_sample) {
+	primary_sample_ = 0;
+    primary_sample_name_ = sample_names_[primary_sample_];
+  }else{
+	bool primary_sample_found = false;
+	for (int i = 0; i < num_samples_; ++i) {
+	  if (sample_names_[i] == primary_sample_name_) {
+	    primary_sample_ = i;
+	    primary_sample_found = true;
+	    break;
+	  }
+	}
+	if (not primary_sample_found) {
+	  cerr << "ERROR: Sample " << primary_sample_name << " provided using \"--sample-name\" option "
+	       << "is not associated with any read groups in BAM file(s)" << endl;
+	  exit(EXIT_FAILURE);
+	}
   }
 
-  bool primary_sample_found = false;
-  for (int i = 0; i < num_samples_; ++i) {
-    if (sample_names_[i] == primary_sample_name_) {
-      primary_sample_ = i;
-      primary_sample_found = true;
-    }
-    // AWalt added this because of IR-19679?
-    // TODO investigate why this is actually necessary?
-    else {
-      string test = primary_sample_name_ + ".";
-      if (strncmp(sample_names_[i].c_str(), test.c_str(), test.length()) == 0) {
-        primary_sample_ = i;
-        primary_sample_found = true;
-        primary_sample_name_ = sample_names_[primary_sample_];
-      }
-    }
-  }
-
-  if (!primary_sample_found) {
-    cerr << "ERROR: Sample " << primary_sample_name << " provided using \"--sample-name\" option "
-         << "is not associated with any read groups in BAM file(s)" << endl;
-    exit(EXIT_FAILURE);
-  }
 
   //now find the read group ID associated with this sample name
   int num_primary_read_groups = 0;
-  for (map<string, int>::const_iterator p = read_group_to_sample_idx_.begin(); p != read_group_to_sample_idx_.end(); ++p)
-    if (primary_sample_ == p->second)
+  for (map<string, int>::const_iterator p = read_group_to_sample_idx_.begin(); p != read_group_to_sample_idx_.end(); ++p){
+    if (primary_sample_ == p->second){
       num_primary_read_groups++;
-
+    }
+  }
   if (multisample)
     cout << "SampleManager: Multi-sample analysis enabled." << endl;
   if (!force_sample_name.empty())

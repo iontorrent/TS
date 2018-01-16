@@ -18,6 +18,7 @@ class BkgDataPointers {
       mBeadDC_bg = NULL;
       mKMult = NULL;
       mResError = NULL;
+      mResError1 = NULL;
       mBeadInitParam = NULL;
       mBeadFblk_avgErr = NULL;
       mBeadFblk_clonal = NULL;
@@ -126,6 +127,7 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *mBeadDC;
   DataCube<float> *mKMult;
   DataCube<float> *mResError;
+  DataCube<float> *mResError1;
   DataCube<float> *mBeadInitParam;
   DataCube<float> *mBeadFblk_avgErr;
   DataCube<int> *mBeadFblk_clonal;

@@ -12,6 +12,7 @@
 						AMPS_EXOME : 'appl_ampliSeqExome',
 						TARS_16S : 'appl_metagenomics',
 						Pharmacogenomics : 'appl_pgx',
+						MUTATION_LOAD : "appl_mutationLoad",
 						HID : 'appl_hid' }; 
 
 	var applicationGroupName = data.applicationGroupDisplayedName;
@@ -25,6 +26,8 @@
       <img src="{% static "resources/img/appl_hid.png"%}" width="24px" height="24px" />
      # } else if (applicationGroupName == "Immune Repertoire") { #
       <img src="{% static "resources/img/appl_immuneRepertoire.png"%}" width="24px" height="24px" />
+     # } else if (applicationGroupName == "Mutation Load") { #
+      <img src="{% static "resources/img/appl_mutationLoad.png"%}" width="24px" height="24px" />      
 	# } else if (runType == "AMPS") { #
 	  <img src="{% static "resources/img/appl_ampliSeq.png"%}" width="24px" height="24px" />
 	# } else if (runType == "GENS") { #

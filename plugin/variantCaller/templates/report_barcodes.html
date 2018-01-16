@@ -40,26 +40,27 @@
 <h1><center>Variant Caller Report</center></h1>
 <h3><center>{{options.run_name}}<center></h3>
 <h2><center>Barcode Summary</center></h2>
-	<table>
-	  {% if error_msg != '' %}
-	    <tr><td><strong>ERROR:</strong></td>          <td><strong>{{error_msg}}</strong></td></tr>
-	  {% endif %}
-	  {% if warning_msg != '' %}
-	    <tr><td><strong>WARNING:</strong></td>          <td><strong>{{warning_msg}}</strong></td></tr>
-	  {% endif %}		  
-      <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
-      <tr><td>Reference genome:</td>      <td>{{options.reference_genome_name}}</td></tr>
-      <tr><td>Targeted regions:</td>      <td>{{options.targets_name}}</td></tr>
-      <tr><td>Hotspot regions:</td>       <td>{{options.hotspots_name}}</td></tr>
-      <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
-      <tr><td>Output directory:</td>         <td>{{output_dir}}</td></tr>
+	{% if error_msg != '' %}
+	<div class="alert alert-error"> <strong>Error:</strong> {{error_msg}} </div>
+	{% endif %}
+	
+	{% if warning_msg != '' %}
+	<div class="alert alert-warning"> <strong>Warning:</strong> {{warning_msg}} </div>
+	{% endif %}	
+	<table>	  
+      <tr><td><strong>Library type:</strong></td>          <td>{{options.library_type}}</td></tr>
+      <tr><td><strong>Reference genome:</strong></td>      <td>{{options.reference_genome_name}}</td></tr>
+      <tr><td><strong>Targeted regions:</strong></td>      <td>{{options.targets_name}}</td></tr>
+      <tr><td><strong>Hotspot regions:</strong></td>       <td>{{options.hotspots_name}}</td></tr>
+      <tr><td><strong>Configuration:</strong></td>         <td>{{options.config_line1}}</td></tr>
+      <tr><td><strong>Output directory:</strong></td>         <td>{{output_dir}}</td></tr>
       {% if options.barcoded_run %}
-        <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
+        <tr><td><strong>Download all barcodes:</strong></td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
                                                 <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
                                                 <a class="btn" href="{{options.run_name}}.xls">XLS</a>
                                                 <a class="btn" href="{{options.run_name}}.cov.xls">COV</a></td></tr>
       {% endif %}                                
-      <tr><td>Please note:</td>           <td>Variant calling was carried out for all barcodes with reference genome as specified above</td></tr>
+      <tr><td><strong>Please note:</strong></td>           <td>Variant calling was carried out for all barcodes with reference genome as specified above</td></tr>
 	</table>
 	
 <script type="text/javascript">

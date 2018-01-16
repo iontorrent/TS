@@ -5,6 +5,8 @@
     <li class="active"><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock tab-configure-accounts %}
 {% block extra_head_js %}
+{% load staticfiles %}
+    <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script>
 $(document).ready(function() {
     $(".approve-user").click(function (e) {
@@ -43,7 +45,6 @@ $(document).ready(function() {
         $('#modal_confirm_reject .btn-danger').click(function(e){
             e.preventDefault();
             $('#modal_confirm_reject .modal-body #modal-error-messages').hide().empty();
-            console.log('clicked Yes, Reject!');
             $.ajax({
                 type: "POST",
                 beforeSend: function () {
@@ -59,9 +60,32 @@ $(document).ready(function() {
             });
         });
     });
+    $("#associate").click(function (e) {
+        e.preventDefault();
+        var url = $(this).attr('href');
+        $.get(url, function(data) {
+            $('body').append(data);
+            $('#modal_tfc_configure').modal('show');
+        }).fail(function(data) {
+            console.log("error:", data);
+        });
+    });
+    $("#tfc_delete").click(function (e) {
+        e.preventDefault();
+        if(!confirm("Are you sure you want to unlink?")){
+            return;
+        }
+        var url = $(this).attr('href');
+        $.get(url, function(data) {
+            location.reload();
+        }).fail(function(data) {
+            console.log("error:", data);
+        });
+    });
 });
 </script>
 {% endblock extra_head_js %}
+
 
 
 {% block content %}
@@ -155,14 +179,21 @@ $(document).ready(function() {
             </div>
             <div>
                 <div class="form-actions">
-                    <input type="reset" class="btn" id="reset_button" value="Reset"/>
-                    <input type="submit" class="btn btn-primary" id="submit_button" value="Submit"/>
+                    <input type="reset" class="btn" id="reset_button" value="Reset" />
+                    <input type="submit" class="btn btn-primary" id="submit_button" value="Submit" />
                 </div>
             </div>
         </fieldset>
     </form>
 </div>
-
+     <div class="content clearfix">
+        <h1>Connection to AmpliSeq</h1>
+        {%  if tfc_account %}
+            <a href="{% url "tfc_delete" pk=tfc_account.id %}" class="btn btn-danger" id="tfc_delete" >Unlink {{ tfc_account.username }}</a>
+        {%  else %}
+            <a href="{% url "tfc_configure" %}" class="btn" id="associate" >Link to AmpliSeq</a>
+        {%  endif %}
+    </div>
 
 {% if user.is_superuser %}
 <div class="content clearfix">

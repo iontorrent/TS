@@ -8,7 +8,7 @@ import logging
 import iondb.bin.dj_config
 from django.conf import settings
 from django.utils.functional import cached_property
-from iondb.rundb.models import Results, dnaBarcode, ReferenceGenome
+from iondb.rundb.models import Results, dnaBarcode, ReferenceGenome, Experiment
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,18 @@ GENOME_URL = 'genome_urlpath'
 SAMPLE_NUCLEOTIDE_TYPE = 'nucleotideType'
 SAMPLE_CONTROL_SEQEUENCE_TYPE = 'controlSequenceType'
 NTC_CONTROL = 'control_type'
+
+END_BARCODE_KIT_NAME = 'end_barcode_kit_name'
+END_BARCODE_NAME = 'end_barcode_name'
+END_BARCODE_INDEX = 'end_barcode_index'
+END_BARCODE_ADAPTER = 'end_barcode_adapter'
+END_BARCODE_ANNOTATION = 'end_barcode_annotation'
+END_BARCODE_SEQUENCE = 'end_barcode_sequence'
+END_BARCODE_TYPE = 'end_barcode_type'
+DUAL_BARCODE_NAME = "dual_barcode_name"
+
+END_BARCODE = 'endBarcode'
+
 
 # TODO: for later release
 #ANALYSIS_PARAMETERS = 'analysis_parameters'
@@ -154,7 +166,7 @@ class BarcodeSampleInfo(object):
             for sample in EASbarcodedSamples.keys():
                 barcodeSampleTop = EASbarcodedSamples[sample]
                 if barcodeName in barcodeSampleTop['barcodes']:
-                    return sample, barcodeSampleTop['barcodeSampleInfo'][barcodeName]
+                    return sample, barcodeSampleTop['barcodeSampleInfo'][barcodeName], barcodeSampleTop.get('dualBarcodes', [])
             raise Exception('Cannot find the barcode data from EAS barcodeSamples json structure.')
 
         data = dict()
@@ -218,10 +230,20 @@ class BarcodeSampleInfo(object):
             barcodeEntry[CONTROL_SEQUENCE_TYPE] = ''
             barcodeEntry[BARCODE_DESCRIPTION] = ''
             barcodeEntry[NTC_CONTROL] = ''
+
+            barcodeEntry[END_BARCODE_NAME] = ''
+            barcodeEntry[END_BARCODE_INDEX] = ''
+            barcodeEntry[END_BARCODE_ADAPTER] = ''
+            barcodeEntry[END_BARCODE_ANNOTATION] = ''
+            barcodeEntry[END_BARCODE_SEQUENCE] = ''
+            barcodeEntry[END_BARCODE_TYPE] = ''
+            barcodeEntry[DUAL_BARCODE_NAME] = ''
+            barcodeEntry[END_BARCODE_KIT_NAME] = self.eas.endBarcodeKitName
+
             if len(EASbarcodedSamples) > 0:
                 # attempt to find the barcode in the EAS BarcodeSample mapping
                 try:
-                    sample, barcodedSample = getBarcodeSampleFromEAS(EASbarcodedSamples, barcodeName)
+                    sample, barcodedSample, dualBarcodes = getBarcodeSampleFromEAS(EASbarcodedSamples, barcodeName)
                     barcodeEntry[SAMPLE] = sample
                     barcodeEntry[NUCLEOTIDE_TYPE] = barcodedSample.get(SAMPLE_NUCLEOTIDE_TYPE, barcodeEntry[NUCLEOTIDE_TYPE])
                     barcodeEntry[CONTROL_SEQUENCE_TYPE] = barcodedSample.get(SAMPLE_CONTROL_SEQEUENCE_TYPE, barcodeEntry[CONTROL_SEQUENCE_TYPE])
@@ -234,6 +256,24 @@ class BarcodeSampleInfo(object):
                         barcodeEntry[SSE_BED_FILEPATH] = barcodedSample[SSE_BED]
                     elif barcodeEntry[TARGET_REGION_FILEPATH] != self.eas.targetRegionBedFile:
                         barcodeEntry[SSE_BED_FILEPATH] = ''
+
+                    if self.eas.endBarcodeKitName:
+                        sampleEndBarcode = barcodedSample.get(END_BARCODE, barcodeEntry[END_BARCODE_NAME])
+                        barcodeEntry[END_BARCODE_NAME] = sampleEndBarcode
+                        if sampleEndBarcode:
+                            endBarcodeObj = dnaBarcode.objects.get(name=self.eas.endBarcodeKitName, id_str=sampleEndBarcode)
+                            if endBarcodeObj:
+                                barcodeEntry[END_BARCODE_ADAPTER] = endBarcodeObj.adapter
+                                barcodeEntry[END_BARCODE_ANNOTATION] = endBarcodeObj.annotation
+                                barcodeEntry[END_BARCODE_INDEX] = endBarcodeObj.index
+                                barcodeEntry[END_BARCODE_SEQUENCE] = endBarcodeObj.sequence
+                                barcodeEntry[END_BARCODE_TYPE] = endBarcodeObj.type
+                                dualBarcodes_str = [str(x) for x in dualBarcodes]
+                                matchingDualBarcodes = filter(lambda dualBarcode : dualBarcode.startswith(barcodeName), dualBarcodes_str)
+                                if len(matchingDualBarcodes) > 0:
+                                    barcodeEntry[DUAL_BARCODE_NAME] = matchingDualBarcodes[0]
+                        else:
+                            barcodeEntry[DUAL_BARCODE_NAME] = barcodeEntry[BARCODE_NAME]
                 except:
                     # intentionally do nothing....
                     pass

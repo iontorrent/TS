@@ -36,25 +36,43 @@
       });
     });
 
-    function setOptionDefaults(runType) {
-      //alert(runType+" -> "+runTypes[runType]);
-      $("#libtypetxt").html(runTypes[runType]);
-
-      var showchecks = 'NYYY';
-      if( runType == "AMPS_RNA" ) {
-        showchecks = 'YNNN';
-      } else if( runType.substr(0,4) == "AMPS" ) {
-        showchecks = 'YNYN';
-      } else if( runType == "TARS_16S" || runType == "RNA" ) {
-        showchecks = 'NNNN';
-      } else if( runType == "") {
-        showchecks = 'YYYY';
+    $('#show_advanced').click(function() {
+      var state = $(this).text();
+      if( state == "Show advanced options" ) {
+        state = "Hide advanced options";
+        $('.advanced').show();
+        // set show/hide based on application selected
+        setOptionDefaults(TB_plan_json.runType,true);
+      } else {
+        state = "Show advanced options";
+        $('.advanced').hide();
       }
+      $(this).text(state);
+      return false; // cancels redirection
+    });
 
-      $(".sampid").toggle(showchecks[0]=='Y');
-      $(".tpadding").toggle(showchecks[1]=='Y');
-      $(".uniquereads").toggle(showchecks[2]=='Y');
-      $(".nondups").toggle(showchecks[3]=='Y');
+    function setOptionDefaults(runType,forceUpdate) {
+      forceUpdate = forceUpdate || false;
+      $("#libtypetxt").html(runTypes[runType]);
+      var showchecks = 'NYYYY';
+      if( runType == "AMPS_RNA" ) {
+        showchecks = 'YNNNY';
+      } else if( runType == "MIXED" || runType.substr(0,4) == "AMPS" ) {
+        showchecks = 'YNYNY';
+      } else if( runType == "TAG_SEQUENCING" ) {
+        showchecks = 'YNYNY';
+      } else if( runType == "TARS_16S" || runType == "RNA" ) {
+        showchecks = 'NNNNN';
+      }
+      $("#sampid").toggle(showchecks[0]=='Y');
+      // do not update for hidden advanced option - unless forced
+      if( !forceUpdate && $('#show_advanced').text() == "Show advanced options" ) return;
+      $("#tpadding").toggle(showchecks[1]=='Y');
+      $("#uniquereads").toggle(showchecks[2]=='Y');
+      $("#nondups").toggle(showchecks[3]=='Y');
+      $("#cov_depth1").toggle(showchecks[4]=='Y');
+      $("#cov_depth2").toggle(showchecks[4]=='Y');
+      $("#cov_depth3").toggle(showchecks[4]=='Y');
     }
 
     // populate settings avaialble to the current Run Plan application type
@@ -74,37 +92,56 @@
     <tr>
      <td><span class="help" title="The application (aka library, run or enrichment) type currently selected in the run. Available plugin options are dependent on the application.">Library Type:</span></td>
      <td><span id="libtypetxt">As Planned</span></tr>
-    <tr class="sampid" style="display:none">
+    <tr id="sampid" style="display:none">
      <td><span class="help"
        title="Check if this AmpliSeq library employed sampleID tracking amplicons.">
        Sample Tracking:</span></td>
      <td><input type="checkbox" id="sampleid" name="sampleid" value="Yes"/></td> </tr>
-    <tr class="tpadding" style="display:none">
+   </table>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td colspan=2 style="text-align:center"><a id="show_advanced" href="">Show advanced options</a></td>
+    </tr>
+    <tr id="tpadding" class="advanced" style="display:none">
      <td><span class="help"
-       title="Specifiy the number of bases for option target padding. See Description and Notes below.">
+       title="Specifiy the number of bases to expand each target at both 3' and 5' ends. This option is intended for use only with the TargetSeq Library Type but may also be specified for the Generic Sequencing application type.">
        Target Padding:</span></td>
-     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></td> </tr>
-    <tr class="uniquereads">
+     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td> </tr>
+    <tr id="uniquereads" class="advanced" style="display:none">
      <td><span class="help"
-       title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
-       Use Only Uniquely Mapped Reads:</span></td>
+       title="Check to analyze only reads mapped to a unique location in the reference. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations and are typically mapped randomly to one.">
+       Uniquely Mapped Reads:</span></td>
      <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes"/></td> </tr>
-    <tr class="nondups" style="display:none">
+    <tr id="nondups" class="advanced" style="display:none">
      <td><span class="help"
-       title="Check to analyze only reads that are not demarked as duplicate reads. See Description and Usage Notes below.">
-       Use Only Non-duplicate Reads:</span></td>
-     <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/>
-     &nbsp;(Requires alignments with Mark Duplicates applied.)</td> </tr>
-    <tr id="alignlen">
+       title="Check to analyze only reads that are not demarked as duplicate reads. This only applies to reads aligned with the Mark Duplicates option checked, which is not typcial for reads aligned by the Ion Torrent analysis pipeline.">
+       Non-duplicate Reads:</span></td>
+     <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/></td> </tr>
+    <tr id="alignlen" class="advanced" style="display:none">
      <td><span class="help"
        title="Specifiy the minimum aligned length a that read must have to be included in analysis.">
        Minimum Aligned Length:</span></td>
      <td><input type="text" size=6 id="minalignlen" name="minalignlen" value=0></select></td> </tr>
-    <tr id="mapq">
+    <tr id="mapq" class="advanced" style="display:none">
      <td><span class="help"
-       title="Specifiy the minimum mapping quality (MAPQ) that a read must have to be included in analysis. Using value of 1 (or higher) is equivalent to checking the 'Use Only Uniquely Mapped Reads' option.">
+       title="Specifiy the minimum mapping quality (MAPQ) that a read must have to be included in analysis. Using value of 1 (or higher) is equivalent to checking the 'Uniquely Mapped Reads' option.">
        Minimum Mapping Quality:</span></td>
      <td><input type="text" size=6 id="minmapqual" name="minmapqual" value=0></select></td> </tr>
+    <tr id="cov_depth1" class="advanced" style="display:none">
+     <td><span class="help"
+       title="Specify the first tier coverage depth at which percentage of target coverage is reported. This value must be at least 2 since coverage at 1x read depth will always be output. The default value of 20 means that the percentage of targets, total target bases and/or individual target bases with at least 20 reads is reported.">
+       Tier 1 Coverage Depth:</span></td>
+     <td><input type="text" size=6 id="covdepth1" name="covdepth1" value=20></select></td> </tr>
+    <tr id="cov_depth2" class="advanced" style="display:none">
+     <td><span class="help"
+       title="Specify the second tier coverage depth at which percentage of target coverage is reported. This value must be greater than the value used for first tier coverage. The default value of 100 means that the percentage of targets, total target bases and/or individual target bases with at least 100 reads is reported.">
+       Tier 2 Coverage Depth:</span></td>
+     <td><input type="text" size=6 id="covdepth2" name="covdepth2" value=100></select></td> </tr>
+    <tr id="cov_depth3" class="advanced" style="display:none">
+     <td><span class="help"
+       title="Specify the third tier coverage depth at which percentage of target coverage is reported. This value must be greater than the value used for second tier coverage. The default value of 500 means that the percentage of targets, total target bases and/or individual target bases with at least 500 reads is reported.">
+       Tier 3 Coverage Depth:</span></td>
+     <td><input type="text" size=6 id="covdepth3" name="covdepth3" value=500></select></td> </tr>
    </table>
    <input type="hidden" id="launch_mode" name="launch_mode" value="Autostart with plan plugin configuration"/>
    <br/>
@@ -112,30 +149,20 @@
     <h3>Description and Usage Notes</h3>
     <p>
 This plugin generates statistics, downloadable data files and interactive visualization of coverage over
-targeted regions of the reference genome.</p>
-    <p class="sampid">
-The Sample Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
-This will inform the analysis to produce an extra statistic for reads mapped to these targets so that
-the true level of 'off-target' reads is accurately represented. This option is only effective for reads aligned
-to the human hg19 reference.</p>
-    <p class="tpadding">
-The Target Padding value is only available for the library types reporting with respect to targetted base coverage.
-This specifies a number of bases to expand each individual target by at both 3' and 5' ends and is
-applied to the selected target regions before coverage analysis is performed. A setting more than 0 is
-not recommended for standard coverage analysis but a value of 100 or 150 may be useful for determining
-the degree of near-target base reads.</p>
-    <p class="uniquereads">
-Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
-in the whole genome and are typically mapped randomly to one of these locations. Such reads are typically
-no use for unambiguously locating variants and may result in a lower estimation of coverage for enriched libraries.
-For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.</p>
-    <p class="nondups">
-Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option
-to use only these reads is only effective if duplicate reads were so marked during the alignment process. This option is not
-available for Ion AmpliSeq since (PCR) duplicate reads are anticipated and a necessary requirement for coverage.</p>
+targeted regions of the reference genome.
+The reports produced by this plugin reflects the application selected in the plan and will also depend on library type
+for specific barcodes where the application has mixed sample sources (DNA and RNA).
+Reports mostly differ with respect to whether coverage is targeted and
+includes base reads.</p>
     <p>
-The 'Minimum Aligned Length' and 'Minimum Mapping Quality' options may be used with any library type to filter out
-reads that do not meet the specified alignment or quality values.</p>
+The SampleID Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
+This will inform the analysis to produce an extra statistic for reads mapped to these targets so that
+the true level of 'off-target' reads is accurately represented. This option is only available for AmpliSeq applications
+and typically only effective for reads aligned to the human hg19 or GRCh38 genome reference.</p>
+    <p>
+Advanced options are available upon clicking on the Show advanced options link. Some options will only be available
+depending on the application selected in the plan wizard. Refer to the tooltip help by hovering the mouse over the option text to
+see a detailed description of an individual option.</p>
    </div>
  </form>
 </body>

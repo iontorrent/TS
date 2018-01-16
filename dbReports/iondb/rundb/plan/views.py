@@ -96,7 +96,7 @@ def plan_templates(request):
     """
     plan template home page
     """
-    s5_chips_plan_json_upload = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540"], instrumentType= "S5").values_list('name', flat=True).order_by('name')
+    s5_chips_plan_json_upload = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540", "550"], instrumentType= "S5").values_list('name', flat=True).order_by('name')
     usernames =  PlannedExperiment.objects.filter(isReusable=True, username__isnull=False).values_list('username', flat=True)
 
     ctxd = {
@@ -150,6 +150,8 @@ def page_plan_new_template(request, code=None):
             step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, applicationGroupName="HID")
         elif (code == "12"):
             step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("5").pk, applicationGroupName="immune_repertoire")
+        elif (code == "13"):
+            step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, applicationGroupName="mutation_load")
         else:
             step_helper = StepHelperDbLoader().getStepHelperForRunType(_get_runtype_from_code(code).pk)
     else:
@@ -222,6 +224,8 @@ def page_plan_new_plan_from_code(request, code):
         step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="HID")
     elif (code == "12"):
         step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("5").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="immune_repertoire")
+    elif (code == "13"):
+        step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="mutation_load")
     else:
         runType = _get_runtype_from_code(code)
         step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
@@ -481,7 +485,7 @@ def handle_step_request(request, next_step_name, step_helper=None):
         step_helper = StepHelper()
         ctxd = {
             'step': step_helper.steps.get(current_step_name) or step_helper.steps.values()[0],
-            'session_error': 'Error: Unable to retrieve Planning session'
+            'session_error': 'Error: Unable to retrieve planning session'
         }
         return RequestContext(request, ctxd)
 
@@ -758,12 +762,18 @@ class PlanDetailView(DetailView):
                 ('DNA/Fusions' if applicationGroup == 'DNA + RNA' else 'DNA/RNA', 'nucleotideType'),
                 ('Reference', 'reference'),
                 ('Target Regions', 'targetRegionBedFile'),
-                ('Hotspot Regions', 'hotSpotRegionBedFile'),
+                ('Hotspot Regions', 'hotSpotRegionBedFile')
             )
+
+            barcodes = []
             for sample, info in eas.barcodedSamples.items():
                 for bcId in info.get('barcodes', []):
-                    barcodedSamples[bcId] = {}
-                    barcodedSamples[bcId]['sample'] = sample
+                    barcodeKey = self._get_barcode_sample_barcode_key(plan, info, bcId)
+                    bcId2 = barcodeKey
+                    barcodes.append(barcodeKey)
+
+                    barcodedSamples[bcId2] = {}
+                    barcodedSamples[bcId2]['sample'] = sample
 
                     barcodeSampleInfo = info.get('barcodeSampleInfo', {}).get(bcId, {})
                     for column, key in bcsamples_display_keys:
@@ -777,11 +787,12 @@ class PlanDetailView(DetailView):
                             elif key == "nucleotideType" and value == "RNA" and applicationGroup == 'DNA + RNA':
                                 value = "Fusions"
 
-                            barcodedSamples[bcId][column] = value
+                            barcodedSamples[bcId2][column] = value
 
             context['bcsamples_columns'] = [v[0] for v in bcsamples_display_keys if v[0] in columns]
             context['barcodedSamples'] = barcodedSamples
-            context['barcodes'] = dnaBarcode.objects.filter(name=eas.barcodeKitName, id_str__in=barcodedSamples.keys()).order_by('id_str')
+            barcodes.sort()
+            context["barcodes"] = barcodes
 
         # LIMS data
         if plan.metaData:
@@ -811,6 +822,35 @@ class PlanDetailView(DetailView):
         context['event_log'] = history
 
         return context
+
+
+    def _get_barcode_sample_barcode_key(self, plan, barcodedSampleItemInfo, startBarcode):
+        """
+        If plan is a dualBarcoded plan, return the dualBarcode as the key. Otherwise, return the input barcodeId as the key.
+        startBarcode has to be unique among all the startBarcodes used within a plan.
+        
+        barcodedSampleItemInfo - the barcodeSampleInfo JSON definition for a sample in experimentAnalysisSettings.barcodedSamples
+        startBarcode - one start barcode specified in the the barcodes list for a sample in experimentAnalysisSettings.barcodedSamples
+        """
+        if not plan.get_endBarcodeKitName():
+            return startBarcode
+        dualBarcodes =  barcodedSampleItemInfo.get("dualBarcodes", [])
+        return self._getDualBarcode_for_matching_startBarcode(dualBarcodes, startBarcode) if dualBarcodes else startBarcode
+
+
+    def _getDualBarcode_for_matching_startBarcode(self, dualBarcodes, startBarcode):
+        """
+        return the entry with matching startBarcode in a list of barcode pairs
+        dualBarcodes is a list of dualBarcodes in the form of startBarcode--endBarcode
+        e.g., IonXpress_015--IonSet1_15
+        """
+        if not startBarcode or not dualBarcodes:
+            return startBarcode
+        for dualBarcode in dualBarcodes:
+            dualBarcodeTokens = dualBarcode.split(PlannedExperiment.get_dualBarcodes_delimiter())
+            if dualBarcodeTokens and dualBarcodeTokens[0] == startBarcode:
+                return dualBarcode
+        return startBarcode
 
 
 @login_required
@@ -1006,9 +1046,10 @@ def save_uploaded_plans_for_template(request):
     samples = {}
     input_plan_count = 0
     isRowBased = False
+    csv_version = StrictVersion(str(float(csv_version_row[1])))
 
     if single_file:
-        if StrictVersion(str(float(csv_version_row[1]))) >= "2.0":
+        if csv_version >= "2.0":
             # Column based CSV version : 2.0
             columnBasedReader = csv.reader(files.values()[0])
             reader = _get_reader_for_v2(columnBasedReader)
@@ -1020,7 +1061,7 @@ def save_uploaded_plans_for_template(request):
     else:
         reader = None
         for filename, csvfile in files.items():
-            if StrictVersion(str(float(csv_version_row[1]))) >= "2.0":
+            if csv_version >= "2.0":
                 # Column based CSV version : 2.0
                 test = csv.DictReader(csvfile)
                 fieldnames = test.fieldnames
@@ -1052,6 +1093,7 @@ def save_uploaded_plans_for_template(request):
     plans = []
     rawPlanDataList = []
     username = request.user.username if request.user else ""
+    row_or_column = "Column" if csv_version >= "2.0" else "Row"
 
     # process and validate Plans
     for index, row in enumerate(reader, start=2):
@@ -1067,9 +1109,6 @@ def save_uploaded_plans_for_template(request):
 
         logger.info("views.save_uploaded_plans_for_template() index=%d; errorMsg=%s; planDict=%s" % (index, errorMsg, rawPlanDict))
         if errorMsg:
-            row_or_column = "Row"
-            if StrictVersion(str(float(csv_version_row[1]))) >= "2.0":
-                row_or_column = "Column" # currently supporting backward compatabilty
             failed['%s%d' % (row_or_column, index)] = errorMsg
             continue
         elif isToSkipRow:
@@ -1207,10 +1246,14 @@ def save_uploaded_plans_for_template(request):
         r = {"status": "Error saving plans to database. ", "failed": failed}
         return HttpResponse(json.dumps(r), mimetype="text/html")
     else:
-        # logger.info("views.save_uploaded_plans_for_template going to transaction.COMMIT")
-
         transaction.commit()
-        r = {"status": "Plans Uploaded! The plans will be listed on the planned run page.", "failed": failed}
+
+        warnings = {}
+        for i, planDict in enumerate(rawPlanDataList):
+            if planDict.get('warnings'):
+                warnings['%s%d' % (row_or_column, i+2)] = planDict['warnings']
+
+        r = {"status": "Plans Uploaded! The plans will be listed on the planned run page.", "failed": failed, "warnings": warnings}
         return HttpResponse(json.dumps(r), mimetype="text/html")
 
 

@@ -251,6 +251,7 @@ def launch_analysis_job(result, params, doThumbnail):
                  "Chip Data = %s" % experiment.rawdatastyle,
                  "Notes = %s" % experiment.notes,
                  "Barcode Set = %s" % result.eas.barcodeKitName,
+                 "End Barcode Set = %s" % result.eas.endBarcodeKitName,
                  "Analysis Name = %s" % result.resultsName,
                  "Analysis Date = %s" % date.today(),
                  "Analysis Flows = %s" % result.processedflows,
@@ -289,6 +290,11 @@ def launch_analysis_job(result, params, doThumbnail):
     barcodeKitName = result.eas.barcodeKitName
     if barcodeKitName:
         files.append(create_bc_conf(barcodeKitName, "barcodeList.txt"))
+
+    # endBarcodeList.txt
+    endBarcodeKitName = result.eas.endBarcodeKitName
+    if endBarcodeKitName:
+        files.append(create_bc_conf(endBarcodeKitName, "endBarcodeList.txt"))
 
     try:
         chips = models.Chip.objects.all()
@@ -438,6 +444,7 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
         'tfKey': eas.tfKey,
         'reverse_primer_dict': adapter_primer_dict,
         'barcodeId': eas.barcodeKitName if eas.barcodeKitName else '',
+        "endBarcodeKitName": eas.endBarcodeKitName if eas.endBarcodeKitName else "",
         "barcodeSamples_referenceNames": barcodedSamples_reference_names,
         'barcodeInfo': make_barcodeInfo(eas, exp, doBaseRecal),
         'sampleInfo': sampleInfo,
@@ -472,6 +479,7 @@ def make_barcodeInfo(eas, exp, doBaseRecal):
     # Generate a table of per-barcode info for pipeline use
     barcodeInfo = {}
     barcodeId = eas.barcodeKitName if eas.barcodeKitName else ''
+    endBarcodeKitName = eas.endBarcodeKitName if eas.endBarcodeKitName else ""
     no_bc_sample = exp.get_sample() if not barcodeId else 'none'
 
     barcodeInfo['no_barcode'] = {
@@ -505,6 +513,21 @@ def make_barcodeInfo(eas, exp, doBaseRecal):
 
                         # get the controlType from the barcode.json
                         barcodeInfo[bcId]['controlType'] = info[bcId].get('controlType', '')
+                        
+                        sampleEndBarcode = info[bcId].get('endBarcode', '')
+                        barcodeInfo[bcId]['endBarcode'] = {}
+                        barcodeInfo[bcId]['dualBarcode'] = ""
+                        if endBarcodeKitName and sampleEndBarcode:
+                            endBarcodeObjs = models.dnaBarcode.objects.filter(name=endBarcodeKitName, id_str=sampleEndBarcode).values('index', 'id_str', 'sequence', 'adapter')
+
+                            if endBarcodeObjs.count() > 0:
+                                barcodeInfo[bcId]['endBarcode'] = endBarcodeObjs[0]
+                                
+                                dualBarcodeInfo = value.get('dualBarcodes', {})
+                                dualBarcodes_str = [str(x) for x in dualBarcodeInfo]
+                                matchingDualBarcodes = filter(lambda dualBarcode : dualBarcode.startswith(bcId), dualBarcodes_str)
+                                if len(matchingDualBarcodes) > 0:
+                                    barcodeInfo[bcId]['dualBarcode'] = matchingDualBarcodes[0]
                 except:
                     pass
 

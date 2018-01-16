@@ -31,7 +31,7 @@ function getIonReporterFields(){
         ircellNum:     { type: "string", defaultValue: ""},
         ircoupleID:     { type: "string", defaultValue: ""},
         irembryoID:     { type: "string", defaultValue: ""},
-            // IR Workflow
+        // IR Workflow
         irWorkflow:     { type: "string", defaultValue: USERINPUT.workflow,
             editable:function(){return USERINPUT.is_ir_connected}
         },
@@ -447,51 +447,59 @@ function get_workflow_url() {
         isFilterSet = true;
     }
 
-    if (applicationGroupName == "DNA + RNA") {
-        /*for mixed single & paired type support    
-        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
-            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-            myURL += "DNA_RNA";
-            isFilterSet = true;
-        }
-        */
-        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+	if (runType_nucleotideType.toLowerCase() == "dna_rna" && applicationGroupName.toLowerCase() == "immune_repertoire") {
+        myURL += "&filterKey=tag_IMMUNE_REPERTOIRE_SHORT_ASSAY&filterValue=";
+        myURL += "true";
 
-        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
-//            if (!isFilterSet) {
-//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";  
-//            }
-            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";     
-        }
-        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
-            if (!isFilterSet) {
-                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
-            }
-            else {
-                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-            }
-        }
-    }
-    else {
-        if (runType_name.toLowerCase() != "amps") {
-            if (!isFilterSet) {
-                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
-            }
-			if (applicationGroupName == "onco_liquidBiopsy") {
-				myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-			}
-			else {
-            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
-            }
-        }
-        else {
-            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
-                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-            }
-            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
-                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-            }          
-        }
+        isFilterSet = true;
+	}
+	else {	
+	    if (applicationGroupName == "DNA + RNA") {
+	        /*for mixed single & paired type support
+	        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
+	            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+	            myURL += "DNA_RNA";
+	            isFilterSet = true;
+	        }
+	        */
+	        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+	
+	        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
+	//            if (!isFilterSet) {
+	//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
+	//            }
+	            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+	        }
+	        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
+	            if (!isFilterSet) {
+	                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
+	            }
+	            else {
+	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
+	            }
+	        }
+	    }
+	    else {
+	        if (runType_name.toLowerCase() != "amps") {
+	            if (!isFilterSet) {
+	                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
+	            }
+				if (applicationGroupName == "onco_liquidBiopsy") {
+					myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+				}
+				else {
+	            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
+	            }
+	        }
+	        else {
+	            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
+	                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+	            }
+	            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
+	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
+	            }
+	        }
+	    }
     }
     return myURL;
 }
@@ -605,6 +613,14 @@ function populate_userinput_from_response(data){
         var reference = (irReference == "GRCh38") ? "GRCh38.p2.mask1" : irReference
         var relationshipType = cm["RelationshipType"];
         var nucleotideType = cm["DNA_RNA_Workflow"] || "";
+
+        var tagImmuneRepertoire = cm["tag_IMMUNE_REPERTOIRE_SHORT_ASSAY"] || "";
+        var tagDNA = cm["tag_DNA"] || "";
+        var tagRNA = cm["tag_RNA"] || "";
+        
+        var DNA_RNA = (tagImmuneRepertoire.toLowerCase() == "true" && tagDNA.toLowerCase() == "true") ? "DNA" : nucleotideType;
+        DNA_RNA = (tagImmuneRepertoire.toLowerCase() == "true" && tagRNA.toLowerCase() == "true") ? "RNA" : DNA_RNA;
+        nucleotideType = DNA_RNA;
 
         USERINPUT.workflows.push({
             "Workflow": workflow != "Upload Only" ? workflow : "",

@@ -111,7 +111,8 @@ def get_search_parameters():
         report_params[key] = list(Results.objects.values_list(key, flat=True).distinct(key).order_by(key))
     combined_params = {
         'flows': sorted(set(experiment_params['flows'] + report_params['processedflows'])),
-        'projects': Project.objects.values_list('name', flat=True).distinct('name').order_by('name')
+        'projects': Project.objects.values_list('name', flat=True).distinct('name').order_by('name'),
+        'plugins': Plugin.objects.values_list('name', flat=True).distinct('name').order_by('name')
     }
     mesh_params = {
         'nodes': IonMeshNode.objects.all()
@@ -137,7 +138,8 @@ def rundb_redirect(request):
 
 def get_serialized_exps(request, pageSize):
     resource = CompositeExperimentResource()
-    objects = resource.get_object_list(request)
+    objects = resource.get_object_list(request).exclude(status="planned").exclude(expDir="").order_by('-resultDate')
+
     paginator = resource._meta.paginator_class(
         request.GET,
         objects,

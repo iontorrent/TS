@@ -14,6 +14,7 @@
 #include "RawWellsV1.h"
 #define WELLS "wells"
 #define RANKS "ranks"
+#define RESERROR "reserrors"
 #define INFO_KEYS "info_keys"
 #define INFO_VALUES "info_values"
 #define FLOW_ORDER "FLOW_ORDER"
@@ -76,9 +77,9 @@ int RawWellsWriter::WriteWellsData(RWH5DataSet &dataSet, WellChunk &chunk, float
   herr_t status = 0;
   status = H5Sselect_hyperslab ( dataSet.mDataspace, H5S_SELECT_SET, offset, NULL, count, NULL );
   if ( status < 0 ) {
-    ION_WARN ( "Couldn't read wells dataspace for: " + ToStr ( chunk.rowStart ) + "," + ToStr ( chunk.colStart ) + "," +
+	  ION_WARN ( "Couldn't read wells dataspace for: " + dataSet.mName + ToStr ( chunk.rowStart ) + "," + ToStr ( chunk.colStart ) + "," +
                 ToStr ( chunk.rowHeight ) + "," + ToStr ( chunk.colWidth ) + " x " + ToStr ( chunk.flowDepth ) );
-    return 1;
+	  return 1;
   }
   hid_t memspace;
   /* Define the memory dataspace.  */
@@ -314,6 +315,7 @@ RawWells::~RawWells()
 void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int rows, int cols, int flows )
 {
   mSaveCopies = false;
+  mSaveRes = false;
   mConvertWithCopies = true;
   mIsLegacy = false;
   WELL_NOT_LOADED = -1;
@@ -345,7 +347,6 @@ void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int 
   //  mWriteOnClose = false;
   mHFile = RWH5DataSet::EMPTY;
   mInfo.SetValue ( RAWWELLS_VERSION_KEY, RAWWELLS_VERSION_VALUE );
-
 }
 
 void RawWells::CreateEmpty ( int numFlows, const char *flowOrder, int rows, int cols )
@@ -382,6 +383,7 @@ void RawWells::OpenForWrite()
     ION_ABORT ( "Couldn't create file: " + mFilePath );
   }
   OpenWellsForWrite();
+  //OpenResForWrite();
 }
 
 void RawWells::WriteFlowgram ( size_t flow, size_t x, size_t y, float val )
@@ -402,6 +404,28 @@ void RawWells::WriteFlowgram(size_t flow, size_t x, size_t y, float val, float c
       mWellsCopies[idx] = copies;
     }
   }
+}
+
+void RawWells::WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float resError)
+{
+  uint64_t idx = ToIndex ( x,y );
+  Set ( idx, flow, val );
+  SetRes ( idx, flow, resError );
+
+  if(mSaveCopies && mWellsCopies.size() > 0 && idx < mWellsCopies.size())
+  {
+    if(mWellsCopies[idx] < 0)
+    {
+      mWellsCopies[idx] = copies;
+    }
+  }
+}
+
+void RawWells::WriteFlowgramWithRes ( size_t flow, size_t x, size_t y, float val, float resError )
+{
+  uint64_t idx = ToIndex ( x,y );
+  Set ( idx, flow, val );
+  SetRes ( idx, flow, resError );
 }
 
 bool RawWells::OpenForReadLegacy()
@@ -593,111 +617,16 @@ void RawWells::WriteToHdf5 ( const std::string &file )
   {
     ION_ABORT ( "Couldn't create file: " + mFilePath );
   }
+
   OpenWellsForWrite();
   WriteWells();
+  //OpenResForWrite();
+  //WriteRes();
   WriteRanks();
   WriteInfo();
   CleanupHdf5();
 }
 
-
-// void RawWells::WriteWells()
-// {
-//   mInputBuffer.resize ( mStepSize*mStepSize*mChunk.flowDepth );
-//   fill ( mInputBuffer.begin(), mInputBuffer.end(), 0 );
-//   uint32_t currentRowStart = mChunk.rowStart, currentRowEnd = mChunk.rowStart + min ( mChunk.rowHeight, mStepSize );
-//   uint32_t currentColStart = mChunk.colStart, currentColEnd = mChunk.colStart + min ( mChunk.colWidth, mStepSize );
-//   hsize_t count[3];       /* size of the hyperslab in the file */
-//   hsize_t offset[3];      /* hyperslab offset in the file */
-//   hsize_t count_out[3];   /* size of the hyperslab in memory */
-//   hsize_t offset_out[3];  /* hyperslab offset in memory */
-//   hsize_t dimsm[3];       /* memory space dimensions */
-
-//   /* For each chunk of data pad out the non-live (non subset) wells with
-//      zeros before writing to disk. */
-//   for ( currentRowStart = 0, currentRowEnd = mStepSize;
-//         currentRowStart < mChunk.rowStart + mChunk.rowHeight;
-//         currentRowStart = currentRowEnd, currentRowEnd += mStepSize )
-//     {
-//       currentRowEnd = min ( ( uint32_t ) ( mChunk.rowStart + mChunk.rowHeight ), currentRowEnd );
-//       for ( currentColStart = 0, currentColEnd = mStepSize;
-//          currentColStart < mChunk.colStart + mChunk.colWidth;
-//          currentColStart = currentColEnd, currentColEnd += mStepSize )
-//      {
-//        currentColEnd = min ( ( uint32_t ) ( mChunk.colStart + mChunk.colWidth ), currentColEnd );
-
-//        /* file offsets. */
-//        offset[0] = currentRowStart;
-//        offset[1] = currentColStart;
-//        offset[2] = mChunk.flowStart;
-//        count[0] = currentRowEnd - currentRowStart;
-//        count[1] = currentColEnd - currentColStart;
-//        count[2] = mChunk.flowDepth;
-//        herr_t status = 0;
-//        status = H5Sselect_hyperslab ( mWells.mDataspace, H5S_SELECT_SET, offset, NULL, count, NULL );
-//        if ( status < 0 )
-//          {
-//            ION_ABORT ( "Couldn't read wells dataspace for: " + ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
-//                        ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " + ToStr ( mChunk.flowDepth ) );
-//          }
-
-//        hid_t       memspace;
-//        /*
-//         * Define the memory dataspace.
-//         */
-//        dimsm[0] = count[0];
-//        dimsm[1] = count[1];
-//        dimsm[2] = count[2];
-//        memspace = H5Screate_simple ( 3,dimsm,NULL );
-
-//        offset_out[0] = 0;
-//        offset_out[1] = 0;
-//        offset_out[2] = 0;
-//        count_out[0] = currentRowEnd - currentRowStart;
-//        count_out[1] = currentColEnd - currentColStart;
-//        count_out[2] = mChunk.flowDepth;
-//        // ClockTimer timer;
-//        // timer.StartTimer();
-//        status = H5Sselect_hyperslab ( memspace, H5S_SELECT_SET, offset_out, NULL,
-//                                       count_out, NULL );
-//        if ( status < 0 )
-//          {
-//            ION_ABORT ( "Couldn't read wells hyperslab for: " +
-//                        ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
-//                        ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " +
-//                        ToStr ( mChunk.flowDepth ) );
-//          }
-
-//        mInputBuffer.resize ( ( uint64_t ) ( currentRowEnd - currentRowStart ) *
-//                              ( uint64_t ) ( currentColEnd - currentColStart ) *
-//                              ( uint64_t ) mChunk.flowDepth );
-//        int idxCount = 0;
-//        for ( size_t row = currentRowStart; row < currentRowEnd; row++ )
-//          {
-//            for ( size_t col = currentColStart; col < currentColEnd; col++ )
-//              {
-//                int idx = ToIndex ( col, row );
-//                for ( size_t fIx = mChunk.flowStart; fIx < mChunk.flowStart + mChunk.flowDepth; fIx++ )
-//                  {
-//                    uint64_t ii = idxCount * mChunk.flowDepth + fIx - mChunk.flowStart;
-//                    assert ( ii < mInputBuffer.size() );
-//                    mInputBuffer[ii] = At ( idx, fIx );
-//                  }
-//                idxCount++;
-//              }
-//          }
-//        status = H5Dwrite ( mWells.mDataset, H5T_NATIVE_FLOAT, memspace, mWells.mDataspace,
-//                            H5P_DEFAULT, &mInputBuffer[0] );
-//        if ( status < 0 )
-//          {
-//            ION_ABORT ( "ERROR - Unsuccessful write to file: " +
-//                        ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
-//                        ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " +
-//                        ToStr ( mChunk.flowStart ) + "," + ToStr ( mChunk.flowDepth ) + "\t" + mFilePath );
-//          }
-//      }
-//     }
-// }
 
 void RawWells::WriteWells()
 {
@@ -747,10 +676,76 @@ void RawWells::WriteWells()
           idxCount++;
         }
       }
+      // printf("before writer.WriteWellsData mInputBuffer.size() - %d  \n",mInputBuffer.size() );
+      // cout << mWells.mName <<endl;
       int error = writer.WriteWellsData(mWells, chunk, &mInputBuffer[0]);
       if ( error < 0 )
       {
         ION_ABORT ( "ERROR - Unsuccessful write to file: " +
+                    ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
+                    ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " +
+                    ToStr ( mChunk.flowStart ) + "," + ToStr ( mChunk.flowDepth ) + "\t" + 
+                    mFilePath );
+      }
+    }
+  }
+  writeTimer.EndInterval();
+}
+
+void RawWells::WriteRes()
+{
+  writeTimer.StartInterval();
+  mInputBuffer1.resize ( mStepSize*mStepSize*mChunk.flowDepth );
+  fill ( mInputBuffer1.begin(), mInputBuffer1.end(), 0 );
+  WellChunk chunk;
+  uint32_t currentRowStart = mChunk.rowStart, 
+           currentRowEnd = mChunk.rowStart + min ( mChunk.rowHeight, mStepSize );
+  uint32_t currentColStart = mChunk.colStart, 
+           currentColEnd = mChunk.colStart + min ( mChunk.colWidth, mStepSize );
+  RawWellsWriter writer;
+  /* For each chunk of data pad out the non-live (non subset) wells with
+     zeros before writing to disk. */
+  for ( currentRowStart = 0, currentRowEnd = mStepSize;
+        currentRowStart < mChunk.rowStart + mChunk.rowHeight;
+        currentRowStart = currentRowEnd, currentRowEnd += mStepSize )
+  {
+    currentRowEnd = min ( ( uint32_t ) ( mChunk.rowStart + mChunk.rowHeight ), currentRowEnd );
+    for ( currentColStart = 0, currentColEnd = mStepSize;
+          currentColStart < mChunk.colStart + mChunk.colWidth;
+          currentColStart = currentColEnd, currentColEnd += mStepSize )
+    {
+      currentColEnd = min ( ( uint32_t ) ( mChunk.colStart + mChunk.colWidth ), currentColEnd );
+      chunk.rowStart = currentRowStart;
+      chunk.rowHeight = currentRowEnd - currentRowStart;
+      chunk.colStart = currentColStart;
+      chunk.colWidth = currentColEnd - currentColStart;
+      chunk.flowStart = mChunk.flowStart;
+      chunk.flowDepth = mChunk.flowDepth;
+      
+      mInputBuffer1.resize ( ( uint64_t ) ( currentRowEnd - currentRowStart ) *
+                            ( uint64_t ) ( currentColEnd - currentColStart ) *
+                            ( uint64_t ) mChunk.flowDepth );
+      int idxCount = 0;
+      for ( size_t row = currentRowStart; row < currentRowEnd; row++ )
+      {
+        for ( size_t col = currentColStart; col < currentColEnd; col++ )
+        {
+          int idx = ToIndex ( col, row );
+          for ( size_t fIx = mChunk.flowStart; fIx < mChunk.flowStart + mChunk.flowDepth; fIx++ )
+          {
+            uint64_t ii = idxCount * mChunk.flowDepth + fIx - mChunk.flowStart;
+            assert ( ii < mInputBuffer1.size() );
+            mInputBuffer1[ii] =  ResAtWithoutChecking( idx, fIx );
+          }
+          idxCount++;
+        }
+      }
+      // printf("before writer.WriteWellsData mInputBuffer1.size() - %d  \n",mInputBuffer1.size() );
+      // cout << mResErr.mName <<endl;
+      int error = writer.WriteWellsData(mResErr, chunk, &mInputBuffer1[0]);
+      if ( error < 0 )
+      {
+        ION_ABORT ( "ERROR - Unsuccessful write residuals to file: " +
                     ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
                     ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " +
                     ToStr ( mChunk.flowStart ) + "," + ToStr ( mChunk.flowDepth ) + "\t" + 
@@ -772,6 +767,8 @@ void RawWells::OpenWellsForWrite()
   dimsf[2] = mFlows;
   mWells.mDataspace = H5Screate_simple ( 3, dimsf, NULL );
   mWells.mDatatype = H5Tcopy ( H5T_NATIVE_FLOAT );
+
+  // create 
 
   // Setup the chunking values, this is important for performance
   hsize_t cdims[3];
@@ -813,6 +810,41 @@ void RawWells::OpenWellsForWrite()
     mWells.mDataset = H5Dcreate2 ( mHFile, mWells.mName.c_str(), H5T_NATIVE_FLOAT, mWells.mDataspace,
                                  H5P_DEFAULT, plist, dapl );
   }
+}
+
+void RawWells::OpenResForWrite()
+{
+  MemUsage ("OpenResForWrite");
+  mResErr.mName = RESERROR;
+  // Create residual data space
+  hsize_t dimsf[3];
+  dimsf[0] = mRows;
+  dimsf[1] = mCols;
+  dimsf[2] = mFlows;
+  mResErr.mDataspace = H5Screate_simple ( 3, dimsf, NULL );
+  mResErr.mDatatype = H5Tcopy ( H5T_NATIVE_FLOAT );
+  // create 
+  // Setup the chunking values, this is important for performance
+  hsize_t cdims[3];
+  cdims[0] = std::min ( mWellChunkSizeRow, mRows );
+  cdims[1] = std::min ( mWellChunkSizeCol, mCols );
+  cdims[2] = std::min ( mWellChunkSizeFlow, mFlows );
+  hid_t plist;
+  plist = H5Pcreate ( H5P_DATASET_CREATE );
+  assert ( ( cdims[0]>0 ) && ( cdims[1] >0 ) && ( cdims[2]>0 ) );
+  H5Pset_chunk ( plist, 3, cdims );
+  if ( mCompression > 0 )
+  {
+    H5Pset_deflate ( plist, mCompression );
+  }
+  hid_t dapl;
+  dapl = H5Pcreate ( H5P_DATASET_ACCESS );
+
+
+  // have to add msaveUshort
+  mResErr.mDatatype = H5Tcopy ( H5T_NATIVE_FLOAT );
+  mResErr.mDataset = H5Dcreate2 ( mHFile, mResErr.mName.c_str(), H5T_NATIVE_FLOAT, mResErr.mDataspace,
+                                 H5P_DEFAULT, plist, dapl );
 }
 
 void RawWells::WriteRanks()
@@ -1174,6 +1206,7 @@ bool RawWells::OpenForRead ( bool memmap_dummy )
     mCurrentWell = 0;
     OpenWellsToRead();
     ReadWells();
+    //ReadRes();
     ReadRanks();
     ReadInfo();
   }
@@ -1206,7 +1239,9 @@ bool RawWells::OpenForReadWrite()
     mIsLegacy = false;
     mCurrentWell = 0;
     OpenWellsToRead();
+    //OpenResToRead();
     ReadWells();
+    //ReadRes();
     ReadRanks();
     ReadInfo();
   }
@@ -1416,6 +1451,137 @@ void RawWells::OpenWellsToRead()
   InitIndexes();
 }
 
+void RawWells::OpenResToRead()
+{
+  mResErr.Close();
+  mResErr.mName = RESERROR;
+  mResErr.mDataset = H5Dopen2 ( mHFile, mResErr.mName.c_str(), H5P_DEFAULT );
+  if ( mResErr.mDataset < 0 )
+  {
+    ION_ABORT ( "Could not open data set: " + mResErr.mName +
+                " in file: " + mFilePath );
+  }
+
+  hsize_t dims_out[3];           /* dataset dimensions */
+  mResErr.mDatatype  = H5Dget_type ( mResErr.mDataset );  /* datatype handle */
+
+  //mSaveAsUShort = false;
+  if(H5Aexists( mResErr.mDataset, "convert_low" ) > 0)
+  {
+    hid_t attrLower = H5Aopen( mResErr.mDataset, "convert_low", H5T_NATIVE_FLOAT );
+    H5Aread( attrLower, H5T_NATIVE_FLOAT, &mLower );
+    mResErr.mLower = mLower;
+    //mSaveAsUShort = true;
+    //mResErr.mSaveAsUShort = mSaveAsUShort;
+  }
+  if(H5Aexists( mResErr.mDataset, "convert_high" ) > 0)
+  {
+    hid_t attrUpper = H5Aopen( mResErr.mDataset, "convert_high", H5T_NATIVE_FLOAT );
+    H5Aread( attrUpper, H5T_NATIVE_FLOAT, &mUpper );
+    mResErr.mUpper = mUpper;
+    //mSaveAsUShort = true;
+    //mResErr.mSaveAsUShort = mSaveAsUShort;
+  }
+
+  //size_t size  = H5Tget_size ( mWells.mDatatype );
+  mResErr.mDataspace = H5Dget_space ( mResErr.mDataset ); /* dataspace handle */
+  int rank = H5Sget_simple_extent_ndims ( mResErr.mDataspace );
+  if ( rank!=3 )
+  {
+    ION_ABORT ( "Internal Error: rank wrong for H5Sget_simple_extent_ndims in OpenResToRead" );
+  }
+  int status_n = H5Sget_simple_extent_dims ( mResErr.mDataspace, dims_out, NULL );
+  if ( status_n<0 )
+  {
+    ION_ABORT ( "Internal Error: H5Sget_simple_extent_dims in OpenResToRead" );
+  }
+
+  // Read the chunk size from the wells file creation property list
+  hid_t create_plist = H5Dget_create_plist( mResErr.mDataset );
+  hsize_t cdims[3]; // We checked above that the rank is 3.
+  int rval = H5Pget_chunk ( create_plist, 3, cdims );
+  if (rval < 0) {
+    ION_WARN ( "RawWells::OpenResToRead: Unable to read wells file chunk size." );
+  } else {
+    mWellChunkSizeRow  = cdims[0];
+    mWellChunkSizeCol  = cdims[1];
+    mWellChunkSizeFlow = cdims[2];
+  }
+  H5Pclose( create_plist );
+
+//  mWellsCopies2.resize(mRows * mCols, 1.0);
+//  if(mSaveAsUShort && mConvertWithCopies)
+//  {
+//    char name[10];
+//    string sName;
+//	H5G_info_t group_info;
+//    group_info.nlinks = 0;
+//	if(H5Gget_info(mHFile, &group_info) < 0)
+//	{
+//		cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Gget_info" << endl;
+//	}
+//	else
+//	{
+//		for(unsigned int i = 0; i < group_info.nlinks; ++i)
+//		{
+//		  int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+//		  if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) < 0)
+//		  {
+//			cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies saved." << endl;
+//		  }
+//		  else
+//		  {
+//			sName = name;
+//			if(sName == "wells_copies")
+//			{
+//			  break;
+//			}
+//		  }
+//		}
+//
+//		if(sName == "wells_copies")
+//		{
+//		  hid_t ds = H5Dopen2(mHFile, "wells_copies", H5P_DEFAULT);
+//		  if(ds < 0)
+//		  {
+//			cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies." << endl;
+//		  }
+//		  else
+//		  {
+//			hid_t dataSpace = H5Dget_space(ds);
+//			if(dataSpace < 0)
+//			{
+//			  H5Dclose(ds);
+//			  cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Dget_space for dataset wells_copies." << endl;
+//			}
+//			else
+//			{
+//			  hssize_t dsSize = H5Sget_simple_extent_npoints(dataSpace);
+//			  H5Sclose(dataSpace);
+//			  if(dsSize != (hssize_t)(mRows * mCols))
+//			  {
+//				H5Dclose(ds);
+//				cerr << "RawWells::OpenWellsToRead() WARNING: dataset wells_copies size is " << dsSize << ", it is different from mRows * mCols = " << mRows * mCols << endl;
+//			  }
+//			  else
+//			  {
+//				  herr_t ret = H5Dread(ds, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mWellsCopies2[0]);
+//				  H5Dclose(ds);
+//				  if(ret < 0)
+//				  {
+//					mWellsCopies2.resize(mRows * mCols, 1.0);
+//					cerr << "RawWells::OpenWellsToRead() WARNING: failto load dataset wells_copies." << endl;
+//				  }
+//			   }
+//			}
+//		  }
+//		}
+//	}
+// }
+
+  InitIndexes();
+}
+
 void RawWells::OpenForIncrementalRead()
 {
   //  mWriteOnClose = false;
@@ -1445,6 +1611,7 @@ void RawWells::OpenForIncrementalRead()
     mIsLegacy = false;
     mCurrentWell = 0;
     OpenWellsToRead();
+    //OpenResToRead();
     ReadRanks();
     ReadInfo();
   }
@@ -1611,6 +1778,131 @@ void RawWells::ReadWells()
   }
 }
 
+void RawWells::ReadRes()
+{
+  if ( mIsLegacy )
+  {
+    return;
+  }
+  vector<float> inputBuffer1; // 100x100
+  uint64_t stepSize = (uint64_t)mWellChunkSizeRow*(uint64_t)mWellChunkSizeCol;
+  inputBuffer1.resize ( stepSize*mChunk.flowDepth,0.0f );
+  // Assume whole chip if region if region isn't set
+  //  int currentWellStart = 0, currentWellEnd = min(stepSize,NumWells());
+  uint32_t currentRowStart = 0, currentRowEnd = min ( mWellChunkSizeRow, mRows );
+  uint32_t currentColStart = 0, currentColEnd = min ( mWellChunkSizeCol, mCols );
+
+  size_t wellsInSubset = 0;
+  for ( size_t i = 0; i < mIndexes.size(); i++ )
+  {
+    if ( mIndexes[i] >= 0 )
+    {
+      wellsInSubset++;
+    }
+  }
+
+  mResData.resize ( ( uint64_t ) wellsInSubset * mChunk.flowDepth );
+  fill ( mResData.begin(), mResData.end(), -1.0f );
+  for ( currentRowStart = mChunk.rowStart, currentRowEnd = mChunk.rowStart + min ( mWellChunkSizeRow, mChunk.rowHeight );
+        currentRowStart < mRows && currentRowStart < mChunk.rowStart + mChunk.rowHeight;
+        currentRowStart = currentRowEnd, currentRowEnd += mWellChunkSizeRow )
+  {
+    currentRowEnd = min ( ( uint32_t ) mRows, currentRowEnd );
+    for ( currentColStart = mChunk.colStart, currentColEnd = mChunk.colStart + min ( mWellChunkSizeCol, mChunk.colWidth );
+          currentColStart < mCols && currentColStart < mChunk.colStart + mChunk.colWidth;
+          currentColStart = currentColEnd, currentColEnd += mWellChunkSizeCol )
+    {
+      currentColEnd = min ( ( uint32_t ) mCols, currentColEnd );
+      // Don't go to disk unless we actually have a well to load.
+      if ( WellsInSubset ( currentRowStart, currentRowEnd, currentColStart, currentColEnd ) )
+      {
+
+        hsize_t count[3];       /* size of the hyperslab in the file */
+        hsize_t offset[3];      /* hyperslab offset in the file */
+        hsize_t count_out[3];   /* size of the hyperslab in memory */
+        hsize_t offset_out[3];  /* hyperslab offset in memory */
+        offset[0] = currentRowStart;
+        offset[1] = currentColStart;
+        offset[2] = 0;
+        count[0] = currentRowEnd - currentRowStart;
+        count[1] = currentColEnd - currentColStart;
+        count[2] = mChunk.flowDepth;
+        herr_t status = 0;
+        status = H5Sselect_hyperslab ( mResErr.mDataspace, H5S_SELECT_SET, offset, NULL,
+                                       count, NULL );
+        if ( status < 0 )
+        {
+          ION_ABORT ( "Couldn't read wells dataspace for: " +
+                      ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
+                      ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " +
+                      ToStr ( mChunk.flowDepth ) );
+        }
+
+        hsize_t     dimsm[3];              /* memory space dimensions */
+        hid_t       memspace;
+        /*
+         * Define the memory dataspace.
+         */
+        dimsm[0] = count[0];
+        dimsm[1] = count[1];
+        dimsm[2] = count[2];
+        memspace = H5Screate_simple ( 3,dimsm,NULL );
+
+        offset_out[0] = 0;
+        offset_out[1] = 0;
+        offset_out[2] = 0;
+        count_out[0] = currentRowEnd - currentRowStart;
+        count_out[1] = currentColEnd - currentColStart;
+        count_out[2] = mChunk.flowDepth;
+        // ClockTimer timer;
+        // timer.StartTimer();
+        status = H5Sselect_hyperslab ( memspace, H5S_SELECT_SET, offset_out, NULL,
+                                       count_out, NULL );
+        if ( status < 0 )
+        {
+          ION_ABORT ( "Couldn't read residual  hyperslab for: " +
+                      ToStr ( mChunk.rowStart ) + "," + ToStr ( mChunk.colStart ) + "," +
+                      ToStr ( mChunk.rowHeight ) + "," + ToStr ( mChunk.colWidth ) + " x " +
+                      ToStr ( mChunk.flowDepth ) );
+        }
+
+        inputBuffer1.resize ( ( uint64_t ) ( currentRowEnd - currentRowStart ) * ( currentColEnd - currentColStart ) * mFlows );
+        status = -1;
+        status = H5Dread ( mResErr.mDataset, H5T_NATIVE_FLOAT, memspace, mResErr.mDataspace,
+                           H5P_DEFAULT, &inputBuffer1[0] );
+
+        if ( status < 0 )
+        {
+          ION_ABORT ( "Couldn't read wells dataset for file: "  + mFilePath + " dims: " + ToStr ( mChunk.rowStart ) + "," +
+                      ToStr ( mChunk.colStart ) + "," + ToStr ( mChunk.rowHeight ) + "," +
+                      ToStr ( mChunk.colWidth ) + " x " + ToStr ( mChunk.flowDepth ) );
+        }
+        // std::cout << "Just read: " << currentRowStart  << "," << currentRowEnd << "," <<
+        //   currentColStart << "," << currentColEnd << " x " <<
+        //   mChunk.flowDepth << " in: " << timer.GetMicroSec() << "um seconds" << endl;
+
+        uint64_t localCount = 0;
+        for ( size_t row = currentRowStart; row < currentRowEnd; row++ )
+        {
+          for ( size_t col = currentColStart; col < currentColEnd; col++ )
+          {
+            int idx = ToIndex ( col, row );
+            if ( mIndexes[idx] >= 0 )
+            {
+              for ( size_t flow = mChunk.flowStart; flow < mChunk.flowStart + mChunk.flowDepth; flow++ )
+              {
+				float val = inputBuffer1[localCount * mChunk.flowDepth + flow];
+                SetRes ( row, col, flow, val );
+              }
+            }
+            localCount++;
+          }
+        }
+      }
+    }
+  }
+}
+
 bool RawWells::WellsInSubset ( uint32_t currentRowStart, uint32_t currentRowEnd,
                                uint32_t currentColStart, uint32_t currentColEnd )
 {
@@ -1658,6 +1950,11 @@ float RawWells::At ( size_t well, size_t flow ) const
   return 0;
 }
 
+float RawWells::ResAtWithoutChecking ( size_t row, size_t col, size_t flow ) const
+{
+  return ResAtWithoutChecking ( ToIndex ( col,row ), flow );
+}
+
 float RawWells::AtWithoutChecking ( size_t row, size_t col, size_t flow ) const
 {
   return AtWithoutChecking ( ToIndex ( col,row ), flow );
@@ -1667,6 +1964,12 @@ float RawWells::AtWithoutChecking ( size_t well, size_t flow ) const
 {
   uint64_t ii = ( uint64_t ) mIndexes[well] * mChunk.flowDepth + flow - mChunk.flowStart;
   return mFlowData[ii];
+}
+
+float RawWells::ResAtWithoutChecking ( size_t well, size_t flow ) const
+{
+  uint64_t ii = ( uint64_t ) mIndexes[well] * mChunk.flowDepth + flow - mChunk.flowStart;
+  return mResData[ii];
 }
 
 void RawWells::ReadRanks()
@@ -1788,6 +2091,7 @@ void RawWells::CloseWithoutCleanupHdf5()
   mChunk.flowStart = 0;
   mChunk.flowDepth = 0;
   mFlowData.resize ( 0 );
+  mResData.resize ( 0 );
   mIndexes.resize ( 0 );
   mWriteSubset.resize ( 0 );
 }
@@ -1855,6 +2159,18 @@ void RawWells::Set ( size_t idx, size_t flow, float val )
   ION_ABORT ( "Don't recognize index: " + ToStr ( mIndexes[idx] ) );
 }
 
+void RawWells::SetRes ( size_t idx, size_t flow, float val )
+{
+  if ( mIndexes[idx] >= 0 )
+  {
+    uint64_t ii = ( uint64_t ) mIndexes[idx] * mChunk.flowDepth + flow - mChunk.flowStart;
+    if (! ( ii < mResData.size())) printf(" %zu mIndexes[%zu], ii:%" PRIu64 " =  %d * %zu + %zu - %zu\n",  mResData.size(), idx, ii, mIndexes[idx], mChunk.flowDepth, flow, mChunk.flowStart );
+    assert ( ii < mResData.size() );
+    mResData[ii] = val;
+  return;
+  }
+}
+
 void RawWells::SetSubsetToLoad ( const std::vector<int32_t> &xSubset, const std::vector<int32_t> &ySubset )
 {
   mWriteSubset.resize ( xSubset.size() );
@@ -1916,6 +2232,9 @@ void RawWells::InitIndexes()
   }
   mFlowData.resize ( count * mChunk.flowDepth );
   fill ( mFlowData.begin(), mFlowData.end(), -1.0f );
+  //Chao- need to find another default value for res data
+  //mResData.resize ( count * mChunk.flowDepth );
+  //fill ( mResData.begin(), mResData.end(), -100000.0f );
 }
 
 void RawWells::SetChunk ( size_t rowStart, size_t rowHeight,
@@ -2004,6 +2323,7 @@ void ChunkyWells::MarkFlowComplete( int flow )
 
   // It's the end of the current chunk, so write it out.
   WriteWells();
+  //WriteRes();
   Close();
 
   // If we're not going to do another flow, return now.
@@ -2032,6 +2352,7 @@ void ChunkyWells::DoneUpThroughFlow( int flow )
   cout << "Writing wells file up to flow " << nextFlow << " from thread " << pthread_self() << endl;
 
   WriteWells();
+  //WriteRes();
 
   Close();
 
@@ -2068,12 +2389,12 @@ void ChunkyWells::DoneUpThroughFlow( int flow )
 
 	if(k >= 0)
 	{
-		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val, localCopies[k] );
+		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val, localCopies[k], fg.res);
 		++k;
 	}
 	else
 	{
-		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val );
+		WriteFlowgramWithRes( fg.flow, fg.x, fg.y, fg.val, fg.res);
 	}
   }
 }
@@ -2101,6 +2422,7 @@ void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue & packQueue, SemQueue & 
   chunkData->wellChunk = mChunk;
 
   copy(mFlowData.begin(), mFlowData.end(), chunkData->flowData);
+  //copy(mResData.begin(), mResData.end(), chunkData->resData);
   copy(mIndexes.begin(), mIndexes.end(), chunkData->indexes);
 
   writeQueue.enQueue(chunkData);
@@ -2138,12 +2460,12 @@ void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue & packQueue, SemQueue & 
 
 	if(k >= 0)
 	{
-		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val, localCopies[k] );
+		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val, localCopies[k], fg.res );
 		++k;
 	}
 	else
 	{
-		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val );
+		WriteFlowgramWithRes( fg.flow, fg.x, fg.y, fg.val, fg.res );
 	}
   }
 }
@@ -2186,5 +2508,50 @@ void ChunkyWells::WriteFlowgram( size_t flow, size_t x, size_t y, float val, flo
   pthread_mutex_lock(&mMutex4Pending);
   pendingFlowgrams.push_back( fg );
   pendingCopies.push_back( copies );
+  pthread_mutex_unlock(&mMutex4Pending);
+}
+
+//with residual, with copies
+void ChunkyWells::WriteFlowgram( size_t flow, size_t x, size_t y, float val, float copies, float resError )
+{
+  if ( flow < mChunk.flowStart + mChunk.flowDepth )
+  {
+    RawWells::WriteFlowgram( flow, x, y, val, copies, resError );
+    return;
+  }
+
+  // Save it.
+  FlowGram fg;
+  fg.flow = flow;
+  fg.x = x;
+  fg.y = y;
+  fg.val = val;
+  fg.res = resError;
+
+  pthread_mutex_lock(&mMutex4Pending);
+  pendingFlowgrams.push_back( fg );
+  pendingCopies.push_back( copies );
+  pthread_mutex_unlock(&mMutex4Pending);
+}
+
+// with residual, without copies
+void ChunkyWells::WriteFlowgramWithRes(size_t flow, size_t x, size_t y, float val, float resError)
+{
+  if ( flow < mChunk.flowStart + mChunk.flowDepth )
+  {
+    RawWells::WriteFlowgramWithRes( flow, x, y, val, resError );
+    return;
+  }
+
+  // Save it.
+  FlowGram fg;
+  fg.flow = flow;
+  fg.x = x;
+  fg.y = y;
+  fg.val = val;
+  fg.res = resError;
+
+  pthread_mutex_lock(&mMutex4Pending);
+  pendingFlowgrams.push_back( fg );
   pthread_mutex_unlock(&mMutex4Pending);
 }

@@ -82,6 +82,7 @@
 
 {%endblock%}
 {% block prevnext-buttons %}
+    <div id="chipTypeWarning" class="alert alert-error hide"></div>
     <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">&larr; Previous</a>
     <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}">
         {% if helper.isTemplateBySample %}Save Template{% else %}Save and Finish{% endif %}
@@ -130,6 +131,10 @@
 
         {% endfor %}
 
+        var chipTypeWarning = chipNameToWarning['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}'];
+        if (chipTypeWarning){
+            $("#chipTypeWarning").html(chipTypeWarning).show();
+        }
 	});
 </script>
 {%endblock%}

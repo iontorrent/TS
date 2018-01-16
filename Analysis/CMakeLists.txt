@@ -509,6 +509,7 @@ set(BaseCallerSRCS
     BaseCaller/OrderedDatasetWriter.cpp
     BaseCaller/PhaseEstimator.cpp
     BaseCaller/PerBaseQual.cpp
+    BaseCaller/NNModel.cpp
     BaseCaller/WellsNormalization.cpp
     Calibration/HistogramCalibration.cpp
     Calibration/LinearCalibrationModel.cpp
@@ -1135,6 +1136,11 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541.h5" DESTINATION ${ION
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.550.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.550.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.530.flow.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.540.flow.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.530.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.540.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.550.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_314_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_314_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)

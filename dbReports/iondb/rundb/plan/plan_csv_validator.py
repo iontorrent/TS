@@ -11,7 +11,7 @@ from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_IR_accounts_by_u
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_flows, \
     validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info, \
     validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType, validate_chipBarcode, \
-    validate_reference, validate_sampleControlType
+    validate_reference, validate_sampleControlType, get_kit_application_list
 from iondb.rundb.plan.plan_csv_iru_validator import validate_iruConfig_process_userInputInfo, call_iru_validation_api
 from traceback import format_exc
 
@@ -115,7 +115,9 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
     logger.debug("ENTER plan_csv_validator.validate_csv_plan() csvPlanDict=%s; " % (csvPlanDict))
 
     failed = []
-    rawPlanDict = {}
+    rawPlanDict = {
+        'warnings': [],
+    }
     planObj = None
 
     planDict = {}
@@ -197,7 +199,9 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
     # check if deprecated header exists for chiptype
     chipType_header = PlanCSVcolumns.COLUMN_CHIP_TYPE if PlanCSVcolumns.COLUMN_CHIP_TYPE in csvPlanDict else PlanCSVcolumns.COLUMN_CHIP_TYPE_V1
 
-    errorMsg = _validate_chip_type(csvPlanDict.get(chipType_header, None), selectedTemplate, planObj, selectedExperiment)
+    errorMsg, chipWarning = _validate_chip_type(csvPlanDict.get(chipType_header, None), selectedTemplate, planObj, selectedExperiment)
+    if chipWarning:
+        rawPlanDict['warnings'].append(chipWarning)
 
     if errorMsg:
         failed.append((PlanCSVcolumns.COLUMN_CHIP_TYPE, errorMsg))
@@ -458,9 +462,8 @@ def _validate_kit_chip_combination(planObj, selectedTemplate, selectedKit):
     template_runType = selectedTemplate.runType
     selectedKit_applicationType = selectedKit.applicationType
     if selectedKit_applicationType:
-        if "AMPS_ANY" in selectedKit_applicationType:
-            selectedKit_applicationType = ['AMPS', 'AMPS_DNA_RNA', 'AMPS_EXOME', 'AMPS_RNA']
-        if template_runType not in selectedKit_applicationType:
+        selectedKit_applicationType_list = get_kit_application_list(selectedKit_applicationType)
+        if template_runType not in selectedKit_applicationType_list:
             errorMsg = "specified Kit (%s) is not supported for the template (%s)" % (selectedKit.name, selectedTemplate.planDisplayedName)
             return errorMsg
 
@@ -621,39 +624,35 @@ def _validate_chip_type(input, selectedTemplate, planObj, selectedExperiment):
     validate chip type case-insensitively and ignore leading/trailing blanks in the input
     """
     errorMsg = None
+    chipWarning = ''
     if input:
         try:
             selectedChips = Chip.objects.filter(description__iexact=input.strip(), isActive=True).order_by('-id')
-
-            # if selected chipType is ambiguous, try to go with the template's. If that doesn't help, settle with the 1st one
-            if len(selectedChips) == 1:
-                planObj.get_expObj().chipType = selectedChips[0].name
-            elif len(selectedChips) > 1:
-                # template_chipType = selectedTemplate.get_chipType()
-                template_chipType = selectedExperiment.chipType
-
-                if template_chipType:
-                    template_chipType_objs = Chip.objects.filter(name=template_chipType)
-
-                    if template_chipType_objs:
-                        template_chipType_obj = template_chipType_objs[0]
-                        if template_chipType_obj.description == input.strip():
-                            planObj.get_expObj().chipType = template_chipType_obj.name
-                        else:
-                            planObj.get_expObj().chipType = selectedChips[0].name
-                else:
-                    planObj.get_expObj().chipType = selectedChips[0].name
-
-            else:
+            if not selectedChips:
                 errorMsg = input + " not found."
+            else:
+                # if selected chipType is ambiguous, try to go with the template's. If that doesn't help, settle with the 1st one
+                chipObj = selectedChips[0]
+
+                if len(selectedChips) > 1 and selectedExperiment.chipType:
+                    template_chipType_objs = Chip.objects.filter(name=selectedExperiment.chipType, description=input.strip())
+                    if template_chipType_objs:
+                        chipObj = template_chipType_objs[0]
+    
+                planObj.get_expObj().chipType = chipObj.name
+
+                chipWarning = chipObj.getChipWarning
+                if chipWarning:
+                    planObj.get_planObj().metaData = planObj.get_planObj().metaData or {}
+                    planObj.get_planObj().metaData['warnings'] = chipWarning
         except:
-            logger.exception(format_exc())
+            logger.error(format_exc())
             errorMsg = input + " not found."
     else:
         # error due to chip field is required
         errorMsg = "Required column is empty."
 
-    return errorMsg
+    return errorMsg, chipWarning
 
 
 def _validate_templatingSize(input, selectedTemplate, planObj):

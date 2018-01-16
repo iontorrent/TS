@@ -2,8 +2,6 @@ var IONREPORTER = IONREPORTER || {};
 
 //this is the REST API url for looking up all workflows for a given IR Account
 IONREPORTER.workflow_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/workflows/";
-//IONREPORTER.workflow_url1 = "/rundb/api/v1/plugin/IonReporterUploader/extend/workflowsWithoutOncomine/";
-//IONREPORTER.workflow_url2 = "/rundb/api/v1/plugin/IonReporterUploader/extend/workflowsWithOncomine/";
 //this the REST API url for retrieving all IR Accounts and their configuration
 IONREPORTER.ion_accounts_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/configs/";
 
@@ -94,53 +92,61 @@ function get_workflow_url() {
 
         isFilterSet = true;
     }
+ 
+	if (runType_nucleotideType.toLowerCase() == "dna_rna" && applicationGroupName.toLowerCase() == "immune_repertoire") {
+        myURL += "&filterKey=tag_IMMUNE_REPERTOIRE_SHORT_ASSAY&filterValue=";
+        myURL += "true";
 
-    if (applicationGroupName == "DNA + RNA") {
-        /*for mixed single & paired type support  
-        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
-            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-            myURL += "DNA_RNA";
-
-            isFilterSet = true;
-        }
-        */
-        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-        
-        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
-//            if (!isFilterSet) {
-//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";  
-//            }
-            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";     
-        }
-        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {            
-            if (!isFilterSet) {
-                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
-            }
-            else {
-                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";  
-            }
-        }
-    }
-    else {
-    	if (runType_name.toLowerCase() != "amps") {
-            if (!isFilterSet) {
-                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
-            }
-			if (applicationGroupName == "onco_liquidBiopsy") {
-				myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-			}
-			else {
-            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
-           	}
-        }
-        else {
-            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
-                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-            }
-            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
-                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-            }
-        }
+        isFilterSet = true;
+	}
+	else {	
+	    if (applicationGroupName == "DNA + RNA") {
+	        /*for mixed single & paired type support  
+	        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
+	            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
+	            myURL += "DNA_RNA";
+	
+	            isFilterSet = true;
+	        }
+	        */
+	        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+	        
+	        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
+	//            if (!isFilterSet) {
+	//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";  
+	//            }
+	            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";     
+	        }
+	        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {            
+	            if (!isFilterSet) {
+	                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
+	            }
+	            else {
+	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";  
+	            }
+	        }
+	    }
+	    else {
+	    	if (runType_name.toLowerCase() != "amps") {
+	            if (!isFilterSet) {
+	                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
+	            }
+				if (applicationGroupName == "onco_liquidBiopsy") {
+					myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+				}
+				else {
+	            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
+	           	}
+	        }
+	        else {
+	            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
+	                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+	            }
+	            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
+	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
+	            }
+	        }
+	    }
     }
     return myURL;
 }

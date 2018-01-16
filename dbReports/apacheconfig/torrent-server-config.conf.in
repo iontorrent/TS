@@ -18,9 +18,11 @@ WSGIDaemonProcess iontorrent threads=6 processes=16 maximum-requests=500 shutdow
 #WSGIScriptAlias / @ION_INSTALL_PREFIX@/iondb/wsgi.py
 #WSGIScriptAliasMatch "^/(data|configure|rundb|plan|monitor|report|logout|login|output)" @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /data @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /dashboard @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /configure @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /rundb @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /security @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /product_integration @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /plan @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /sample @ION_INSTALL_PREFIX@/iondb/wsgi.py
 WSGIScriptAlias /monitor @ION_INSTALL_PREFIX@/iondb/wsgi.py

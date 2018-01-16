@@ -195,7 +195,7 @@ def SGEPluginJob(start_json, hold=False):
         if isCompat:
             launchScript = launcher.createPluginWrapper(launch, start_json)
         else:
-            start_json.update({'command': ["python %s -vv" % launch]})
+            start_json.update({'command': ["python -u %s -vv" % launch]})
             launchScript = launcher.createPluginWrapper(None, start_json)
         launchWrapper = launcher.writePluginLauncher(plugin_output, plugin['name'], launchScript)
         # Returns filename of startpluginjson file, passed to script below
@@ -383,7 +383,8 @@ class PluginServer(object):
                                                   params.get('blockId', ''), params.get('block_dirs', ["."]), plugin_params.get('instance_config', {}))
 
                     # Pass on run_mode (launch source - manual/instance, pipeline)
-                    start_json['runplugin']['run_mode'] = params.get('run_mode', '')
+                    run_mode = params.get('run_mode', '')
+                    start_json['runplugin']['run_mode'] = run_mode
 
                     # add dependency info to startplugin json
                     if p.get('depends') and isinstance(p['depends'], list):
@@ -400,7 +401,15 @@ class PluginServer(object):
 
                     # prepare for launch: updates config, sets pluginresults status, generates api key
                     pr.prepare()
+
+                    # perform the validation of the plugin configuration here
+                    pr.validation_errors = {
+                        'validation_errors': Plugin.validate(p['id'], start_json['pluginconfig'], run_mode)
+                    }
                     pr.save()
+                    if pr.validation_errors.get('validation_errors', list()):
+                        continue
+
                     # update startplugin json with pluginresult info
                     start_json['runinfo']['pluginresult'] = pr.pk
                     start_json['runinfo']['api_key'] = pr.apikey
@@ -416,8 +425,8 @@ class PluginServer(object):
                             plugin_result=pr,
                             run_level=runlevel,
                             grid_engine_jobid=jid,
-                            state = 'Queued',
-                            config = start_json['pluginconfig'],
+                            state='Queued',
+                            config=start_json['pluginconfig'],
                         )
                         prj.save()
 
@@ -431,7 +440,7 @@ class PluginServer(object):
                     else:
                         p.setdefault('block_jid', []).append(jid)
 
-                except:
+                except Exception as exc:
                     logger.error(traceback.format_exc())
                     msg += 'ERROR: Plugin %s failed to launch.\n' % p['name']
                     pr = PluginResult.objects.get(pk=pr.pk)

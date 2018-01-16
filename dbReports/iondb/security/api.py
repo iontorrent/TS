@@ -10,6 +10,7 @@ from tastypie.authorization import DjangoAuthorization
 # create a logger
 logger = logging.getLogger(__name__)
 
+
 class SecureStringResource(ModelResource):
     """Resource for distributing the secure password."""
     decrypted = fields.CharField(readonly=True, attribute='decrypted')

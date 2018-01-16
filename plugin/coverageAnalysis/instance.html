@@ -39,6 +39,21 @@
       return o;
     };
 
+    $('#show_advanced').click(function() {
+      var state = $(this).text();
+      if( state == "Show advanced options" ) {
+        state = "Hide advanced options";
+        $('.advanced').show();
+        // set show/hide based on application selected
+        setOptionDefaults($("#librarytype").val(),true);
+      } else {
+        state = "Show advanced options";
+        $('.advanced').hide();
+      }
+      $(this).text(state);
+      return false; // cancels redirection
+    });
+
     function populateLibType(selectorID) {
       if( selectorID == '' ) return;
       $('#'+selectorID).empty();
@@ -126,22 +141,28 @@
         $('#'+selectorID+' option')[0].selected = true;
     }
 
-    function setOptionDefaults(libType) {
+    function setOptionDefaults(libType,forceUpdate) {
+      forceUpdate = forceUpdate || false;
       $("#librarytype").val(libType);
-      var showchecks = 'NYYY';
+      var showchecks = 'NYYYY';
       if( libType == "AMPS_RNA" ) {
-        showchecks = 'YNNN';
-      } else if( libType.substr(0,4) == "AMPS" ) {
-        showchecks = 'YNYN';
+        showchecks = 'YNNNY';
+      } else if( libType == "MIXED" || libType.substr(0,4) == "AMPS" ) {
+        showchecks = 'YNYNY';
       } else if( libType == "TAG_SEQUENCING" ) {
-        showchecks = 'YNYN';
+        showchecks = 'YNYNY';
       } else if( libType == "TARS_16S" || libType == "RNA" ) {
-        showchecks = 'NNNN';
+        showchecks = 'NNNNN';
       }
       $("#sampid").toggle(showchecks[0]=='Y');
+      // do not update for hidden advanced option - unless forced
+      if( !forceUpdate && $('#show_advanced').text() == "Show advanced options" ) return;
       $("#tpadding").toggle(showchecks[1]=='Y');
       $("#uniquereads").toggle(showchecks[2]=='Y');
       $("#nondups").toggle(showchecks[3]=='Y');
+      $("#cov_depth1").toggle(showchecks[4]=='Y');
+      $("#cov_depth2").toggle(showchecks[4]=='Y');
+      $("#cov_depth3").toggle(showchecks[4]=='Y');
     }
 
     // Check (user) NPVs are correctly formated and available and
@@ -434,6 +455,8 @@
           return false;
         }
       }
+      // check coverage depth requirements if required
+      
       // force invisible options to be unchecked
       if( libType == "WGNM" ) {
         $('#sampleid').attr("checked",false);
@@ -478,11 +501,25 @@
         alert("Minimum align quality value must be a non-negative integer (>=0).");
         return false;
       }
+      var covdt1 = $("#covdepth1").val();
+      if( !regex.test(covdt1) || parseInt(covdt1) <= 1 ) {
+        alert("Tier 1 Coverage Depth value must be an integer value > 1.");
+        return false;
+      }
+      var covdt2 = $("#covdepth2").val();
+      if( !regex.test(covdt2) || parseInt(covdt2) <= parseInt(covdt1) ) {
+        alert("Tier 2 Coverage Depth value must be an integer value > Tier 1 Coverage Depth value.");
+        return false;
+      }
+      var covdt3 = $("#covdepth3").val();
+      if( !regex.test(covdt3) || parseInt(covdt3) <= parseInt(covdt2) ) {
+        alert("Tier 3 Coverage Depth value must be an integer value > Tier 2 Coverage Depth value.");
+        return false;
+      }
       // pass user selections to variables exported (via name attribute)
       $('#librarytype_id').val(libName);
       $('#targetregions_id').val( $('#targetregions option:selected').text() );
       $('#barcodetargetregions').val(bcTargetList);
-
       obj = $('#coverageAnalysis').serializeObject();
       pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
       pluginAPIJSON = JSON.stringify(pluginAPIJSON);
@@ -548,32 +585,51 @@
        title="Check if this AmpliSeq library employed sampleID tracking amplicons.">
        Sample Tracking:</span></td>
      <td><input type="checkbox" id="sampleid" name="sampleid" value="Yes"/></td> </tr>
-    <tr id="tpadding" style="display:none">
+   </table>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td colspan=2 style="text-align:center"><a id="show_advanced" href="">Show advanced options</a></td>
+    </tr>
+    <tr id="tpadding" class="advanced" style="display:none">
      <td><span class="help"
-       title="Specifiy the number of bases for option target padding. See Description and Notes below.">
+       title="Specifiy the number of bases to expand each target at both 3' and 5' ends. This option is intended for use only with the TargetSeq Library Type but may also be specified for the Generic Sequencing application type.">
        Target Padding:</span></td>
      <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td> </tr>
-    <tr id="uniquereads">
+    <tr id="uniquereads" class="advanced" style="display:none">
      <td><span class="help"
-       title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
-       Use Only Uniquely Mapped Reads:</span></td>
+       title="Check to analyze only reads mapped to a unique location in the reference. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations and are typically mapped randomly to one.">
+       Uniquely Mapped Reads:</span></td>
      <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes"/></td> </tr>
-    <tr id="nondups" style="display:none">
+    <tr id="nondups" class="advanced" style="display:none">
      <td><span class="help"
-       title="Check to analyze only reads that are not demarked as duplicate reads. See Description and Usage Notes below.">
-       Use Only Non-duplicate Reads:</span></td>
-     <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/>
-     &nbsp;(Requires alignments with Mark Duplicates applied.)</td> </tr>
-    <tr id="alignlen">
+       title="Check to analyze only reads that are not demarked as duplicate reads. This only applies to reads aligned with the Mark Duplicates option checked, which is not typcial for reads aligned by the Ion Torrent analysis pipeline.">
+       Non-duplicate Reads:</span></td>
+     <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/></td> </tr>
+    <tr id="alignlen" class="advanced" style="display:none">
      <td><span class="help"
        title="Specifiy the minimum aligned length a that read must have to be included in analysis.">
        Minimum Aligned Length:</span></td>
      <td><input type="text" size=6 id="minalignlen" name="minalignlen" value=0></select></td> </tr>
-    <tr id="mapq">
+    <tr id="mapq" class="advanced" style="display:none">
      <td><span class="help"
-       title="Specifiy the minimum mapping quality (MAPQ) that a read must have to be included in analysis. Using value of 1 (or higher) is equivalent to checking the 'Use Only Uniquely Mapped Reads' option.">
+       title="Specifiy the minimum mapping quality (MAPQ) that a read must have to be included in analysis. Using value of 1 (or higher) is equivalent to checking the 'Uniquely Mapped Reads' option.">
        Minimum Mapping Quality:</span></td>
      <td><input type="text" size=6 id="minmapqual" name="minmapqual" value=0></select></td> </tr>
+    <tr id="cov_depth1" class="advanced" style="display:none">
+     <td><span class="help"
+       title="Specify the first tier coverage depth at which percentage of target coverage is reported. This value must be at least 2 since coverage at 1x read depth will always be output. The default value of 20 means that the percentage of targets, total target bases and/or individual target bases with at least 20 reads is reported.">
+       Tier 1 Coverage Depth:</span></td>
+     <td><input type="text" size=6 id="covdepth1" name="covdepth1" value=20></select></td> </tr>
+    <tr id="cov_depth2" class="advanced" style="display:none">
+     <td><span class="help"
+       title="Specify the second tier coverage depth at which percentage of target coverage is reported. This value must be greater than the value used for first tier coverage. The default value of 100 means that the percentage of targets, total target bases and/or individual target bases with at least 100 reads is reported.">
+       Tier 2 Coverage Depth:</span></td>
+     <td><input type="text" size=6 id="covdepth2" name="covdepth2" value=100></select></td> </tr>
+    <tr id="cov_depth3" class="advanced" style="display:none">
+     <td><span class="help"
+       title="Specify the third tier coverage depth at which percentage of target coverage is reported. This value must be greater than the value used for second tier coverage. The default value of 500 means that the percentage of targets, total target bases and/or individual target bases with at least 500 reads is reported.">
+       Tier 3 Coverage Depth:</span></td>
+     <td><input type="text" size=6 id="covdepth3" name="covdepth3" value=500></select></td> </tr>
    </table>
    <br/>
    <div align="center" id="json_result">
@@ -591,50 +647,33 @@
 This plugin generates statistics, downloadable data files and interactive visualization of coverage over
 targeted regions of the reference genome.</p>
     <p>
-The Library Type should be set to the type of enriched fragment library used for the run (aka 'Run Type')
-and the Targeted Regions selected should correspond to the enriched regions of the reference (if any).
-Some options are only presented as available for the Library Type selected, and coverage will only be
-reported over the specified target regions. Typically a Targeted Regions selection is required
-for enriched library types and set to 'None' for Whole Genome runs.
-Note: The default selections will match those defined by the Run Plan for this report but will be overriden
-by whatever is specified here.</p>
+The Library Type selected will default to the application (aka 'Run Type') specified in the Plan and typically
+reflects the type of enriched fragment library used for the run. It primarily specifies the type of report
+produced, although this will also depend on the library type for specific barcodes where the application
+has mixed sample sources (DNA and RNA). Reports mostly differ with respect to whether coverage is targeted and
+includes base reads.</p>
     <p>
-If the option for Barcode-specific Targets is presented you may check this option to specify and employ different target
-regions for particular barcodes. Individual barcode reports will depend on the type of reference (DNA/RNA) and whether
-a specific target region is employed. A barcode-specific target explicitly set to 'None' will be excluded from analysis
-if the default target, Target Regions, is specified. If Target Regions is set to 'None' barcode-specific explicitly set
-to 'None' or left unspecified will either be excluded from analysis or assumes whole contig targets depending on whether
-whether the library type requires targets or not.</p>
+The Targeted Regions option specifies the default regions that coverage analysis will be performed on if they
+are not more specifically defined for individual barcodes. This value will default to that specified in the Plan
+but may be respecified for coverage analysis to any target region currently availiable for the Reference Genome.
+Setting the value to 'None' for a targeted resequencing application will indicate that all barcodes that do have
+a specifically defined target regions will be excluded from analysis.</p>
     <p>
-The barcode/target matrix produced depends on the library type selected. For Whole Genome analysis this will report the
-reads per chromosome for all barcodes, even if barcode-specific targets are specified. For Generic Sequencing analysis
-this will report mean base read depth per target, even if the targets default to whole contigs. This is the same data
-as produced by TargetSeq analysis except that barcodes without target regions are totally excluded from the analysis.
-For other library types the barcode/target matrix will report reads per target, which are either whole contigs or
-assumed to be produced by PCR amplification.</p>
+The Barcode-specific Targets option is presented for any run that employed barcodes. Checking this option will allow
+the targets for individual barcodes to be changed from those defined in the Plan, or the barcode to be excluded from
+analysis entirely by setting its target to None. The input is a text box defining a barcode and target regions pair
+on each line (separated by space) and may be edited directly or populated using the Add button for the selected barcode
+and target region. Barcodes not explicited listed will assume the targets specified by the Target
+Regions option. Note that target regions may only be specified for the specific reference associated with the barcode.</p>
     <p>
 The SampleID Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
 This will inform the analysis to produce an extra statistic for reads mapped to these targets so that
-the true level of 'off-target' reads is accurately represented. This option is only effective for reads aligned
-to the human hg19 reference.</p>
+the true level of 'off-target' reads is accurately represented. This option is only available for AmpliSeq applications
+and typically only effective for reads aligned to the human hg19 or GRCh38 genome reference.</p>
     <p>
-The Target Padding value is only available for the library types reporting with respect to targetted base coverage.
-This specifies a number of bases to expand each individual target by at both 3' and 5' ends and is 
-applied to the selected target regions before coverage analysis is performed. A setting more than 0 is
-not recommended for standard coverage analysis but a value of 100 or 150 may be useful for determining
-the degree of near-target base reads.</p>
-    <p>
-The 'Uniquely Mapped Reads' and 'Non-duplicate Reads' options are used to specify coverage analysis on a filtered
-subset of reads. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
-in the whole genome and are typically mapped randomly to one of these locations. Such reads are typically
-no use for unambiguously locating variants and may result in a lower estimation of coverage for enriched libraries.
-For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.
-Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option
-to use these is only effective if duplicate reads were so marked during the alignment process. This option is not
-available for Ion AmpliSeq since (PCR) duplicate reads are anticipated and a necessary requirement for coverage.</p>
-    <p>
-The 'Minimum Aligned Length' and 'Minimum Mapping Quality' options may be used with any library type to filter out
-reads that do not meet the specified alignment or quality values.</p>
+Advanced options are available upon clicking on the Show advanced options link. Some options will only be available
+depending on the Library Type selected. Refer to the tooltip help by hovering the mouse over the option text to
+see a detailed description of an individual option.</p>
    </div>
  </form>
 </body>

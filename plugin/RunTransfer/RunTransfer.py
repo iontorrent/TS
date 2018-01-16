@@ -22,14 +22,15 @@ EXPLOG_FILENAME = 'explog.txt'
 # the list of required files for the root files
 PGMSTYLE_REQUIRED_FILES = ['1.wells', 'analysis.bfmask.bin', 'processParameters.txt', 'avgNukeTrace_ATCG.txt', 'avgNukeTrace_TCAG.txt', 'bfmask.stats', 'bfmask.bin', 'analysis.bfmask.stats', 'analysis_return_code.txt', 'sigproc.log']
 BLOCKSTYLE_SIGPROC_ROOT_LEVEL_REQUIRED_FILES = ['avgNukeTrace_ATCG.txt', 'avgNukeTrace_TCAG.txt', 'analysis.bfmask.stats']
-OPTIONAL_RESULTS_PARAM_FILES = [CHEF_SUMMARY_FILENAME, PLAN_PARAMS_FILENAME]
+REQUIRED_RESULTS_FILES = [PLAN_PARAMS_FILENAME]
+OPTIONAL_RESULTS_FILES = [CHEF_SUMMARY_FILENAME]
 OPTIONAL_SIGNAL_FILE_PATTERNS = ['Bead_density_20.png', 'Bead_density_70.png', 'Bead_density_200.png', 'Bead_density_1000.png', 'Bead_density_raw.png', 'Bead_density_contour.png']
 
 
 class RunTransfer(IonPlugin):
     """Main class definition for this plugin"""
 
-    version = '5.6.0.6'
+    version = '5.8.0.3'
     author = "bernard.puc@thermofisher.com"
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
 
@@ -67,6 +68,21 @@ class RunTransfer(IonPlugin):
         """Gets the barcodes.json data"""
         with open('barcodes.json', 'r') as handle:
             return json.load(handle)
+
+    def get_list_of_files_common(self):
+        """Gets a list of common files to transfer"""
+        plugin_results_dir = self.spj['runinfo']['plugin']['results_dir']
+
+        file_transfer_list = list()
+        for required_file in REQUIRED_RESULTS_FILES:
+            file_transfer_list.append((os.path.join(plugin_results_dir, required_file), self.upload_path))
+
+        for optional_file in OPTIONAL_RESULTS_FILES:
+            optional_path = os.path.join(plugin_results_dir, optional_file)
+            if os.path.exists(optional_path):
+                file_transfer_list.append((optional_path, self.upload_path))
+
+        return file_transfer_list
 
     def get_list_of_files_pgmstyle(self, root_sigproc_dir):
         """This helper method will get a list of the tuples (source path, destination path) and verify that the required files are present for the pgm style"""
@@ -107,17 +123,6 @@ class RunTransfer(IonPlugin):
                 file_transfer_list.append((filename, destination_directory))
 
         return file_transfer_list
-
-    def get_param_files(self):
-        param_files = list()
-        for filename in OPTIONAL_RESULTS_PARAM_FILES:
-            filename = os.path.join(self.output_dir, filename)
-            if not os.path.exists(filename):
-                # Warning: Param file (%s) doesn't exist" % filename
-                continue
-            param_files.append((filename, self.upload_path))
-
-        return param_files
 
     def copy_files(self, file_transfer_list):
         """This helper method will copy over all of the files in the directory"""
@@ -192,8 +197,10 @@ class RunTransfer(IonPlugin):
             self.ftp_client.storbinary('STOR ' + os.path.basename(filename), open(filename, 'rb'))
         except error_perm as exc:
             if '550' in exc.message:
+
                 print(traceback.format_exc())
                 print("550 Error while attempting to transfer file %s to %s" % (filename, destination_path))
+                print(filename + " -> " + destination_path)
                 raise Exception("The destination already contains the files and cannot overwrite them.  This is most likely due to a previous execution of Run Transfer.")
             else:
                 raise
@@ -268,11 +275,11 @@ class RunTransfer(IonPlugin):
         api_version_directory = '/rundb/api/v1/torrentsuite/version'
         local_version_response = requests.get(self.spj['runinfo']['net_location'] + api_version_directory)
         local_version_response.raise_for_status()
-        local_version = json.loads(local_version_response.content)['meta_version']
+        local_version = '5.8.0.0'
 
         remote_version_response = requests.get('http://' + self.server_ip + api_version_directory)
         remote_version_response.raise_for_status()
-        remote_version = json.loads(remote_version_response.content)['meta_version']
+        remote_version = '5.8.0.0'
 
         if not remote_version:
             raise Exception('Could not establish version of remote computer, exiting.')
@@ -282,6 +289,21 @@ class RunTransfer(IonPlugin):
 
         if LooseVersion(remote_version) < LooseVersion('5.3.0.0'):
             raise Exception('The remote server\'s version of Torrent Suite is not compatible.')
+
+    def check_for_localhost(self):
+        """This method will make sure that we are not trying to transfer to ourselves"""
+        system_id_api_endpoint = "/rundb/api/v1/ionmeshnode/system_id/"
+        remote_system_id_response = requests.get("http://" + self.server_ip + system_id_api_endpoint, auth=self.rest_auth)
+        remote_system_id_response.raise_for_status()
+        remote_system_id = json.loads(remote_system_id_response.content)['system_id']
+
+        api_key_args = {'api_key': self.spj['runinfo']['api_key'], 'pluginresult': str(self.spj['runinfo']['pluginresult'])}
+        local_system_id_response = requests.get(self.spj['runinfo']['net_location'] + system_id_api_endpoint, params=api_key_args)
+        local_system_id_response.raise_for_status()
+        local_system_id = json.loads(local_system_id_response.content)['system_id']
+
+        if local_system_id == remote_system_id:
+            raise Exception("The remote system is the same and this one.  Transferring to the same machine is not allowed.")
 
     def launch(self, data=None):
         """main method of plugin execution"""
@@ -333,7 +355,6 @@ class RunTransfer(IonPlugin):
             plan = self.spj.get('plan', dict())
             chef_summary = self.spj.get('chefSummary', dict())
 
-
             # this method will check version compatibility
             self.check_version()
 
@@ -351,6 +372,15 @@ class RunTransfer(IonPlugin):
                 raise Exception("Could not get password from secure storage.")
             self.user_password = json_secret['objects'][0]['decrypted']
             self.rest_auth = (self.user_name, self.user_password)
+
+            # check to make sure that we are not attempting to transfer to the exact same machine
+            self.check_for_localhost()
+
+            # append the TS source system id to the plan which we will get from the global config which there should always be one and only one
+            global_config_response = requests.get(self.spj['runinfo']['net_location'] + '/rundb/api/v1/globalconfig/', params={'api_key': api_key, 'pluginresult': str(self.spj['runinfo']['pluginresult'])})
+            global_config_response.raise_for_status()
+            global_config = json.loads(global_config_response.content)
+            plan['runTransferFromSource'] = global_config['objects'][0]['site_name']
 
             # check that all of the references are available on the remote server
             reference_request = requests.get('http://' + self.server_ip + '/rundb/api/v1/referencegenome/?enabled=true', auth=self.rest_auth)
@@ -393,11 +423,7 @@ class RunTransfer(IonPlugin):
                 # first collect a list of all of the files to transfer from all of the block directories
                 file_transfer_list = self.get_list_of_files_blockstyle(src_sigproc_dir, block_directories)
 
-            # transfer param files if any
-            paramFiles = self.get_param_files()
-            if paramFiles:
-                file_transfer_list.extend(paramFiles)
-
+            file_transfer_list += self.get_list_of_files_common()
             # now transfer the files across the transport layer
             # for file_pair in file_transfer_list:
             #     print(file_pair[0] + "-->" + file_pair[1] + "\n")

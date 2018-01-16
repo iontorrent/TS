@@ -50,7 +50,7 @@ if( is.null(yprop) ) {
 ndata <- length(yprop)
 if( ndata < 1 )
 {
-  write(sprintf("ERROR: No coverage property field found in data file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: plot_gc.R: No coverage property field found in data file %s\n",nFileIn),stderr())
   q(status=1)
 }
 if( ndata < 2 )

@@ -569,10 +569,18 @@ def download_genome(request):
 
                 ref['bedfiles'] = bedfiles
 
+        # set up page to refresh
+        _in_progress_status = ["Queued", "Starting", "Downloading", "Preprocessing", "Indexing"]
+        _in_progress_status += [s.lower() for s in _in_progress_status]
+        downloading = downloads.filter(status__in=_in_progress_status) | downloads_annot.filter(status__in=_in_progress_status)
+        id_hashes = [r['meta']['identity_hash'] for r in references if r['meta']['identity_hash']]
+        processing = ReferenceGenome.objects.filter(identity_hash__in=id_hashes, status__in=_in_progress_status)
+
         ctx = {
             'downloads': downloads,
             'downloads_annot': downloads_annot,
-            'references': references
+            'references': references,
+            'refresh_progress': downloading.count() > 0 or processing.count() > 0
         }
         return render_to_response("rundb/configure/reference_download.html", ctx, context_instance=RequestContext(request))
 

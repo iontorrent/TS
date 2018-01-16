@@ -361,12 +361,13 @@ def transfer_plan(plan, serialized, server_name, username):
 
     # copy Plan/Experiment/EAS through plannedexperiment API
     r = session.post(session.api_url + 'plannedexperiment/', data=serialized)
+    response = r.json()
     # handle unsuccessful POST
     if not r.ok:
         try:
             status.update(error='Unable to transfer plan %s to Torrent Server %s.' % (plan.planDisplayedName, server_name))
             # parse validation errors
-            errjson = json.loads(r.json()['error'][3:-2])
+            errjson = json.loads(response['error'][3:-2])
             for k, v in errjson.items():
                 status.update(error='Error: %s' % (json.dumps(v)))
             return status.to_dict()
@@ -374,6 +375,10 @@ def transfer_plan(plan, serialized, server_name, username):
             r.raise_for_status()
 
     new_plan_url = r.headers['location']
+
+    if 'Warnings' in response:
+        warning = sum(response['Warnings'].values(),[])
+        status.update(error= ' '.join(warning))
 
     if debug:
         logger.debug('%f s: Plan Transfer POST %s/plannedexperiment/' % (time.time()-starttime, session.api_url))

@@ -14,6 +14,9 @@ from django.utils.daemonize import become_daemon
 from iondb.ftpserver.authorizers import FTPAccountAuthorizer
 from iondb.ftpserver import utils
 
+import logging
+logger = logging.getLogger("pyftpdlib")
+logger.setLevel(logging.WARNING)
 
 class Command(BaseCommand):
     help = "Start FTP server"

@@ -25,64 +25,6 @@
     </script>
     <script type="text/javascript">
 
-        function remove_local_node(local_pk, callback) {
-            $.ajax({
-                type: 'DELETE',
-                url: "/rundb/api/v1/ionmeshnode/" + String(local_pk) + "/",
-                dataType: 'json',
-                contentType: 'application/json',
-                success: function (data, textStatus, jqXHR) {
-                    return callback(false);
-                }, error: function (jqXHR, textStatus, errorThrown) {
-                    console.log(errorThrown ? errorThrown : "An unknown error occurred.");
-                    return callback(true);
-                }
-
-            });
-        }
-
-        function remove_remote_node(remote_host, remote_api_key, callback) {
-            var auth_headers = {
-                "Authorization": "system_id " + window.system_id + ":" + remote_api_key
-            };
-            // Find the id of the remote node we need to remove
-            $.ajax({
-                type: 'GET',
-                url: "http://" + remote_host + "/rundb/api/v1/ionmeshnode/",
-                headers: auth_headers,
-                dataType: 'json',
-                contentType: 'application/json',
-                data: {system_id: window.system_id},
-                success: function (data, textStatus, jqXHR) {
-                    if (data.objects.length > 0) {
-                        var remote_pk = data.objects[0].id;
-                        // Delete the remote node now that we have the id
-                        $.ajax({
-                            type: 'DELETE',
-                            url: "http://" + remote_host + "/rundb/api/v1/ionmeshnode/" + String(remote_pk) + "/",
-                            headers: auth_headers,
-                            dataType: 'json',
-                            contentType: 'application/json',
-                            success: function (data, textStatus, jqXHR) {
-                                callback(false);
-                            },
-                            error: function (jqXHR, textStatus, errorThrown) {
-                                console.log(errorThrown ? errorThrown : "An unknown error occurred.");
-                                return callback(true);
-                            }
-                        });
-                    } else {
-                        return callback(true);
-                    }
-                }, error: function (jqXHR, textStatus, errorThrown) {
-                    console.log(errorThrown ? errorThrown : "An unknown error occurred.");
-                    return callback(true);
-                }
-
-            });
-
-        }
-
         function clearModalSetupComputer(){
             $('#input-hostname').val("");
             $('#input-name').val("");
@@ -247,11 +189,12 @@
                     $.blockUI();
                     var grid = $("#mesh-table").data("kendoGrid");
                     var dataItem = grid.dataItem($(e.target).closest("tr"));
-                    remove_remote_node(dataItem.hostname, dataItem.apikey_remote, function () {
-                        remove_local_node(dataItem.id, function () {
-                            grid.dataSource.read();
-                            $.unblockUI();
-                        });
+                    $.post('delete/' + dataItem.id + '/', function(data){
+                        grid.dataSource.read();
+                    }).fail(function(jqXHR){
+                        alert(jqXHR.statusText +': '+ jqXHR.responseText);
+                    }).always(function(){
+                        $.unblockUI();
                     });
                 }
             });

@@ -58,6 +58,7 @@ class StepHelperDbSaver():
         plugins_step_data = step_helper.steps[StepNames.PLUGINS]
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
         analysisParams_step_data = step_helper.steps[StepNames.ANALYSIS_PARAMS]
+        save_plan_step_data = step_helper.steps.get(StepNames.SAVE_PLAN, "")
 
         isFavorite = False
 
@@ -111,8 +112,14 @@ class StepHelperDbSaver():
             libraryReadLength = kits_step_data.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH]
         templatingSize = kits_step_data.savedFields[KitsFieldNames.TEMPLATING_SIZE]
         samplePrepProtocol = kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOL]
+        isCustom_kitSettings = kits_step_data.savedFields[KitsFieldNames.ADVANCED_SETTINGS_CHOICE] == "custom"
         
         x_barcodeId = kits_step_data.savedFields[KitsFieldNames.BARCODE_ID]
+        if save_plan_step_data and x_barcodeId:
+            x_endBarcodeKitName = save_plan_step_data.savedFields[SavePlanFieldNames.END_BARCODE_SET]
+        else:
+            x_endBarcodeKitName = ""
+
         x_chipType = kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE]
         if not x_chipType:
             x_chipType = ''
@@ -203,10 +210,12 @@ class StepHelperDbSaver():
             'samplePrepProtocol': samplePrepProtocol,
             'planStatus': planStatus,
             'categories': categories,
+            'isCustom_kitSettings': isCustom_kitSettings,
 
             'x_usePreBeadfind': True,
             'x_autoAnalyze': True,
             'x_barcodeId': x_barcodeId,
+            'x_endBarcodeKitName': x_endBarcodeKitName,
             'x_bedfile': x_bedfile,
             'x_chipType': x_chipType,
             'x_flows': x_flows,
@@ -271,6 +280,11 @@ class StepHelperDbSaver():
             sampleTubeLabel = barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL]
             chipBarcode = barcoding_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL]
 
+            if barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET]:
+                x_endBarcodeKitName = barcoding_step.savedFields[SavePlanFieldNames.END_BARCODE_SET]
+            else:
+                x_endBarcodeKitName = ""
+        
         retval = {'planDisplayedName': planDisplayedName,
                   'planName': "_".join(planDisplayedName.split()),
                   'sampleTubeLabel': sampleTubeLabel.strip() if sampleTubeLabel else "",
@@ -278,6 +292,7 @@ class StepHelperDbSaver():
                   'metaData': self.__update_metaData_for_LIMS(existing_meta, LIMS_meta),
                   'isReusable': isReusable,
                   'sampleSet': sampleset,
+                  'x_endBarcodeKitName' : x_endBarcodeKitName,
                   'x_barcodedSamples': barcodedSamples,
                   # 'x_numberOfChips' : barcoding_step.savedFields[BarcodeBySampleFieldNames.NUMBER_OF_CHIPS],
                   'x_selectedPlugins': selectedPluginsValue,

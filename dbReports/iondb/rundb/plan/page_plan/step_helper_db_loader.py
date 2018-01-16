@@ -100,6 +100,8 @@ class StepHelperDbLoader():
             if applProduct:
                 kits_step_data.updateFieldsFromDefaults(applProduct)
 
+        kits_step_data.prepopulatedFields[KitsFieldNames.ADVANCED_SETTINGS] = json.dumps(self.get_kit_advanced_settings(step_helper))
+
     def _updateSaveStepData(self, runTypeObj, step_helper, save_plan_step_data):
         num_samples = 1
         if step_helper.isDualNucleotideTypeBySample():
@@ -166,7 +168,8 @@ class StepHelperDbLoader():
                 barcodeSet = item.dnabarcode.name
                 break
         kits_step_data.savedFields[KitsFieldNames.BARCODE_ID] = barcodeSet
-
+        #20170928-TODO-WIP
+        
         if sampleset.libraryPrepInstrument == 'chef':
             kits_step_data.savedFields[KitsFieldNames.TEMPLATE_KIT_TYPE] = KitsFieldNames.ION_CHEF
 
@@ -251,14 +254,17 @@ class StepHelperDbLoader():
         barcodeSet = planned_experiment.get_barcodeId()
         save_plan_step_data.savedFields[SavePlanFieldNames.BARCODE_SET] = barcodeSet
         if barcodeSet:
-            # make sure barcodeSet is included in selection even if it's inactive
-            if barcodeSet not in save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS]:
-                available_dnaBarcodes = dnaBarcode.objects.filter(Q(active=True) | Q(name=barcodeSet))
-                save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = list(available_dnaBarcodes.values_list('name', flat=True).distinct().order_by('name'))
-                all_barcodes = {}
-                for bc in available_dnaBarcodes.order_by('name', 'index').values('name', 'id_str', 'sequence'):
-                    all_barcodes.setdefault(bc['name'], []).append(bc)
-                save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
+            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(barcodeSet)
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
+
+
+        endBarcodeSet = planned_experiment.get_endBarcodeKitName()
+        save_plan_step_data.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
+        if endBarcodeSet:
+            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(endBarcodeSet)
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeSets
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = planned_experiment.get_library()
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = planned_experiment.get_bedfile()
@@ -393,6 +399,8 @@ class StepHelperDbLoader():
 
         logger.debug("QCs ARE: %s" % str(step_helper.steps[target_step].savedFields))
 
+        self._updateUniversalStep_dualBarcoding_for_edit(step_helper, planned_experiment, appl_product, application_step_data, step_helper.steps[target_step])
+
         step_helper.steps[StepNames.OUTPUT].savedFields[OutputFieldNames.PROJECTS] = []
         projects = planned_experiment.projects.all()
         for project in projects:
@@ -517,6 +525,9 @@ class StepHelperDbLoader():
         
         kits_step_data.prepopulatedFields[KitsFieldNames.PLAN_CATEGORIES] = planned_experiment.categories or ''
         kits_step_data.prepopulatedFields[KitsFieldNames.IS_BARCODE_KIT_SELECTION_REQUIRED] = appl_product.isBarcodeKitSelectionRequired
+
+        kits_step_data.savedFields[KitsFieldNames.ADVANCED_SETTINGS_CHOICE] = "custom" if planned_experiment.isCustom_kitSettings else "default"
+        kits_step_data.prepopulatedFields[KitsFieldNames.ADVANCED_SETTINGS] = json.dumps(self.get_kit_advanced_settings(step_helper, planned_experiment))
 
     def _updateUniversalStep_kitData_for_edit(self, step_helper, planned_experiment, appl_product, application_step_data, kits_step_data):
         application_step_data.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = appl_product
@@ -667,6 +678,23 @@ class StepHelperDbLoader():
             reference_step_data.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = appl_product.isTargetRegionBEDFileSelectionRequiredForRefSelection
 
         reference_step_data.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] = planned_experiment.planStatus
+
+
+    def _updateUniversalStep_dualBarcoding_for_edit(self, step_helper, planned_experiment, appl_product, application_step_data, save_plan_step_data):
+        barcodeSet = planned_experiment.get_barcodeId()
+        save_plan_step_data.savedFields[SavePlanFieldNames.BARCODE_SET] = barcodeSet
+        if barcodeSet:
+            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(barcodeSet)
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES]  = json.dumps(all_barcodes)
+
+        endBarcodeSet = planned_experiment.get_endBarcodeKitName()
+        save_plan_step_data.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
+        if endBarcodeSet:
+            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(endBarcodeSet)
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeSets
+            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES]   = json.dumps(all_barcodes)
+
 
     def _updateUniversalStep_analysisParamsData(self, step_helper, planned_experiment, appl_product,  application_step_data, kits_step_data, analysisParams_step_data):
         self. _updateUniversalStep_analysisParamsData_basic(step_helper, planned_experiment, appl_product,  application_step_data, kits_step_data, analysisParams_step_data)
@@ -943,23 +971,35 @@ class StepHelperDbLoader():
         #   1. Edit/Copy - get from plan
         #   2. Create - get from sampleSetItems or, if none, the barcode set selected in the plan template
         barcodeSet = planned_experiment.get_barcodeId()
+        endBarcodeSet = planned_experiment.get_endBarcodeKitName()
+
         if not existing_plan:
             for item in sorted_sampleSetItems:
                 if item.dnabarcode:
                     barcodeSet = item.dnabarcode.name
                     break
+                if item.endDnabarcode:
+                    endBarcodeSet = item.endDnabarcode.name
+                    break
+                
         barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET] = step_helper.steps[StepNames.KITS].savedFields[KitsFieldNames.BARCODE_ID] = barcodeSet
+        save_plan_step.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
+        save_plan_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS]
 
+        barcoding_step.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
+        barcoding_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS]
+        
         if barcodeSet:
-            # make sure barcodeSet is included in selection even if it's inactive
-            if barcodeSet not in barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS]:
-                available_dnaBarcodes = dnaBarcode.objects.filter(Q(active=True) | Q(name=barcodeSet))
-                barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = list(available_dnaBarcodes.values_list('name', flat=True).distinct().order_by('name'))
-                all_barcodes = {}
-                for bc in available_dnaBarcodes.order_by('name', 'index').values('name', 'id_str', 'sequence'):
-                    all_barcodes.setdefault(bc['name'], []).append(bc)
-                barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
+            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(barcodeSet)
+            barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
+            barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
+        if endBarcodeSet:
+            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(endBarcodeSet)
+            save_plan_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS]  = barcodeSets
+            save_plan_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
+                
+                
         # IonReporter parameters
         irInfo = self._getIRinfo(planned_experiment)
         if irInfo:
@@ -1001,6 +1041,7 @@ class StepHelperDbLoader():
             for item in sorted_sampleSetItems:
                 sampleDict = {
                     "barcodeId": item.dnabarcode.id_str if item.dnabarcode else '',
+                    "endBarcodeId": item.endDnabarcode.id_str if item.endDnabarcode else '',
                     "sampleName": item.sample.displayedName,
                     "sampleExternalId": item.sample.externalId,
                     "sampleDescription": item.description,
@@ -1045,6 +1086,20 @@ class StepHelperDbLoader():
         barcoding_step.prepopulatedFields[SavePlanFieldNames.NUM_SAMPLES] = num_samples
 
 
+    def _get_all_barcodeSets_n_barcodes_for_selection(self, barcodeSet):
+        """
+        retrieve all active barcode items and items for the input barcodeSet, regardless it is active or not
+        return a list of barcodeSet names, a list of barcodes with basic info
+        """
+        
+        available_dnaBarcodes = dnaBarcode.objects.filter(Q(active=True) | Q(name=barcodeSet))
+        barcodeSets = list(available_dnaBarcodes.values_list('name', flat=True).distinct().order_by('name'))
+        all_barcodes = {}
+        for bc in available_dnaBarcodes.order_by('name', 'index').values('name', 'id_str', 'sequence'):
+            all_barcodes.setdefault(bc['name'], []).append(bc)
+        return barcodeSets, all_barcodes
+
+
     def _get_combinedLibraryTubeLabelInfo(self, sampleSets):
         '''
         returns all the combined library tube label values found in the sample sets, separated by a space
@@ -1087,6 +1142,24 @@ class StepHelperDbLoader():
                 return irInfo
         return None
 
+
+    def _getEndBarcode_for_matching_startBarcode(self, dualBarcodes, startBarcode):
+        """
+        return the endBarcode with matching startBarcode in a list of barcode pairs
+        dualBarcodes is a list of dualBarcode in the form of startBarcode--endBarcode
+        e.g., IonXpress_015--IonSet1_15
+        """
+        if not startBarcode or not dualBarcodes:
+            return ""
+        for dualBarcode in dualBarcodes:
+            dualBarcodeTokens = dualBarcode.split(PlannedExperiment.get_dualBarcodes_delimiter())
+            if len(dualBarcodeTokens) == 2:
+                # startBarcode
+                if dualBarcodeTokens[0] == startBarcode:
+                    return dualBarcodeTokens[1]
+        return ""
+
+
     def _getSamplesTable_from_plan(self, planned_experiment, step_helper, irInfo=None):
         # logger.debug("ENTER step_helper_db_loader._getSamplesTable_from_plan() with step_helper.")
 
@@ -1095,13 +1168,13 @@ class StepHelperDbLoader():
         planNucleotideType = planned_experiment.get_default_nucleotideType()
         runType = planned_experiment.runType
 
-        logger.debug("step_helper_db_loader._getSamplesTable_from_plan() planNucleotideType=%s; runType=%s" % (planNucleotideType, runType))
-
         if step_helper.isBarcoded():
             # build samples table from barcodedSamples
             sample_to_barcode = planned_experiment.get_barcodedSamples()
             barcodeSet = planned_experiment.get_barcodeId()
             barcode_order = list(dnaBarcode.objects.filter(name=barcodeSet).order_by('index').values_list('id_str', flat=True))
+            endBarcodeSet = planned_experiment.get_endBarcodeKitName()
+
             multibarcode_samples = False
 
             # WORKAROUND FOR HUB: plan from HUB can have barcodeKit selected but with empty barcodedSamples JSON blob
@@ -1118,11 +1191,12 @@ class StepHelperDbLoader():
                     sampleInfo = experiment.samples.values()[0]
 
                 sampleDict = {"barcodeId": "",
+                              "endBarcodeId": "",
                               "sampleName": sampleInfo['displayedName'] if sampleInfo else "",
-                              "sampleExternalId": sampleInfo['externalId'] if sampleInfo else "",
-                              "sampleDescription": sampleInfo['description'] if sampleInfo else "",
+                              "sampleExternalId": sampleInfo[SavePlanFieldNames.EXTERNAL_ID] if sampleInfo else "",
+                              "sampleDescription": sampleInfo[SavePlanFieldNames.SAMPLE_DESCRIPTION] if sampleInfo else "",
                               "nucleotideType": planNucleotideType,
-                              "controlSequenceType": sampleInfo.get('controlSequenceType', "") if sampleInfo else None,
+                              "controlSequenceType": sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, "") if sampleInfo else None,
                               "reference": planned_experiment.get_library() if planned_experiment.get_library() else "",
                               "hotSpotRegionBedFile": planned_experiment.get_regionfile() if planned_experiment.get_regionfile() else "",
                               "targetRegionBedFile": planned_experiment.get_bedfile() if planned_experiment.get_bedfile() else "",
@@ -1134,13 +1208,17 @@ class StepHelperDbLoader():
 
             else:
                 for sample, value in sample_to_barcode.items():
+                    dualBarcodes = []
+                    if "dualBarcodes" in value:
+                        dualBarcodes = value[SavePlanFieldNames.DUAL_BARCODES_DB_KEY]
+
                     if 'barcodeSampleInfo' in value:
                         multibarcode_samples = len(value['barcodeSampleInfo']) > 1
 
                         for barcode, sampleInfo in value['barcodeSampleInfo'].items():
-                            sampleReference = sampleInfo.get("reference", "")
-                            sampleHotSpotRegionBedFile = sampleInfo.get("hotSpotRegionBedFile", "")
-                            sampleTargetRegionBedFile = sampleInfo.get("targetRegionBedFile", "")
+                            sampleReference = sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, "")
+                            sampleHotSpotRegionBedFile = sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, "")
+                            sampleTargetRegionBedFile = sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, "")
 
                             if runType != "AMPS_DNA_RNA":
                                 if not sampleReference and not step_helper.isReferenceBySample():
@@ -1159,18 +1237,21 @@ class StepHelperDbLoader():
                                     # else:
                                     #    logger.debug("step_helper_db_loader._getSamplesTable_from_plan() SKIP SETTING sampleTargetRegionBedFile")
 
+                            endBarcode = self._getEndBarcode_for_matching_startBarcode(dualBarcodes, barcode)
+
                             order_counter = barcode_order.index(barcode)+1 if barcode in barcode_order else 0
                             sampleDict = {
                                 "barcodeId": barcode,
+                                "endBarcodeId" : endBarcode, 
                                 "sampleName": sample,
-                                "sampleExternalId": sampleInfo.get('externalId', ''),
-                                "sampleDescription": sampleInfo.get('description', ''),
-                                "nucleotideType": sampleInfo.get("nucleotideType", planNucleotideType),
-                                "controlSequenceType": sampleInfo.get("controlSequenceType", ""),
+                                "sampleExternalId": sampleInfo.get(SavePlanFieldNames.EXTERNAL_ID, ''),
+                                "sampleDescription": sampleInfo.get(SavePlanFieldNames.SAMPLE_DESCRIPTION, ''),
+                                "nucleotideType": sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, planNucleotideType),
+                                "controlSequenceType": sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
                                 "reference": sampleReference,
                                 "hotSpotRegionBedFile": sampleHotSpotRegionBedFile,
                                 "targetRegionBedFile": sampleTargetRegionBedFile,
-                                "controlType": sampleInfo.get('controlType', ''),
+                                "controlType": sampleInfo.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_TYPE, ''),
                                 "orderKey": format(order_counter, "05d")
                             }
                             samplesTable.append(sampleDict)
@@ -1181,7 +1262,10 @@ class StepHelperDbLoader():
 
                         for barcode in value.get('barcodes', []):
                             order_counter = barcode_order.index(barcode)+1 if barcode in barcode_order else 0
+                            endBarcode = self._getEndBarcode_for_matching_startBarcode(dualBarcodes, barcode)
+
                             sampleDict = {"barcodeId": barcode,
+                                          "endBarcodeId": endBarcode,
                                           "sampleName": sample,
                                           "sampleExternalId": None,
                                           "sampleDescription": None,
@@ -1218,7 +1302,7 @@ class StepHelperDbLoader():
             samplesTable.sort(key=lambda item: item['orderKey'])
             # if same sample for dual nuc type want to order by the DNA/RNA sample pair
             if runType == "AMPS_DNA_RNA" and multibarcode_samples:
-                samplesTable.sort(key=lambda item: (item['sampleName'], item['nucleotideType']) )
+                samplesTable.sort(key=lambda item: (item['sampleName'], item[SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE]) )
 
         else:
             # when we load a non-barcoded run for editing/copying we know it will only have a single sample.
@@ -1324,7 +1408,7 @@ class StepHelperDbLoader():
         elif step_helper.isPlan():
             self.updatePlanSpecificStepHelper(step_helper, planned_experiment)
         else:
-            raise ValueError("Can not create templates from plans.")
+            raise ValueError("Cannot prepare data for planning in the plan wizard.")
 
         self.generate_warnings(step_helper)
 
@@ -1367,6 +1451,19 @@ class StepHelperDbLoader():
             else:
                 kits_step_data.warnings.append(msg_not_found % ('Barcode Set', barcodeKit))
 
+        #20170928-TODO-WIP
+        # end barcode set
+        '''
+        barcodeKit = kits_step_data.savedFields[KitsFieldNames.END_BARCODE_ID]
+        if barcodeKit:
+            qs = dnaBarcode.objects.filter(name=barcodeKit)
+            if qs:
+                if not qs.filter(active=True):
+                    kits_step_data.warnings.append(msg_inactive % ('Ending Barcode Set', barcodeKit))
+            else:
+                kits_step_data.warnings.append(msg_not_found % ('Ending Barcode Set', barcodeKit))
+        '''
+                
         # chip
         chip = kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE]
         if chip:
@@ -1376,3 +1473,51 @@ class StepHelperDbLoader():
                     kits_step_data.warnings.append(msg_inactive % ('Chip Type', chip))
             else:
                 kits_step_data.warnings.append(msg_not_found % ('Chip Type', chip))
+
+
+    def get_kit_advanced_settings(self, step_helper, planned_experiment=None):
+        '''
+        Attempt to get "recommended" parameters for Kits Chevron
+        1) if starting from System Template: use the System Template
+        2) if creating from runType: use step_helper parameters (this would've come from relevant applProduct)
+        3) if a plan/template previously created from System Template: use the System Template if application haven't changed
+        4) if a plan/template previously created NOT from System Template: don't have "recommended" parameters
+        '''
+        advanced_settings = {}
+        system_template = None
+
+        if planned_experiment:
+            # starting from existing Plan or Template
+            if planned_experiment.isSystem and planned_experiment.isReusable:
+                system_template = planned_experiment
+            elif planned_experiment.metaData and planned_experiment.metaData.get('fromTemplateSource') == 'ION':
+                try:
+                    system_template = PlannedExperiment.objects.get(planName=planned_experiment.metaData.get('fromTemplate'))
+                    if system_template.runType != planned_experiment.runType or \
+                        system_template.experiment.getPlatform != planned_experiment.experiment.getPlatform:
+                            system_template = None
+                except:
+                    pass
+
+            if system_template:
+                advanced_settings = {
+                    KitsFieldNames.BASE_RECALIBRATE: system_template.get_base_recalibration_mode(),
+                    KitsFieldNames.FLOW_ORDER: system_template.experiment.flowsInOrder,
+                    KitsFieldNames.FORWARD_3_PRIME_ADAPTER: system_template.get_forward3primeadapter(),
+                    KitsFieldNames.LIBRARY_KEY: system_template.get_libraryKey(),
+                    KitsFieldNames.SAMPLE_PREP_PROTOCOL:  system_template.samplePrepProtocol,
+                    KitsFieldNames.TF_KEY: system_template.get_tfKey(),
+                }
+        else:
+            kits_step_data = step_helper.steps[StepNames.KITS]
+            advanced_settings = {
+                KitsFieldNames.BASE_RECALIBRATE: kits_step_data.savedFields[KitsFieldNames.BASE_RECALIBRATE],
+                KitsFieldNames.FLOW_ORDER: kits_step_data.savedFields[KitsFieldNames.FLOW_ORDER],
+                KitsFieldNames.FORWARD_3_PRIME_ADAPTER: kits_step_data.savedFields[KitsFieldNames.FORWARD_3_PRIME_ADAPTER],
+                KitsFieldNames.LIBRARY_KEY: kits_step_data.savedFields[KitsFieldNames.LIBRARY_KEY],
+                KitsFieldNames.SAMPLE_PREP_PROTOCOL:  kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOL],
+                KitsFieldNames.TF_KEY: kits_step_data.savedFields[KitsFieldNames.TF_KEY],
+            }
+
+        return advanced_settings
+

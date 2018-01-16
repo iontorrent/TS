@@ -102,10 +102,14 @@ void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_pre
 {
   if (! bkg.global_state.hasPointers())
     return;
+
   // if necessary, send the errors to HDF5
   // this sends bead error vector to bead_param.h5
-  bkg.global_state.SendErrorVectorToHDF5 (p,err_t, bkg.region_data->region,
-                                          *bkg.region_data_extras.my_flow, flow_block_start );
+
+  //bkg.global_state.SendErrorVectorToHDF5 (p,err_t, bkg.region_data->region,
+  //                                        *bkg.region_data_extras.my_flow, flow_block_start );
+  bkg.global_state.SendErrorVectorToWells (p,err_t, bkg.region_data->region,
+                                            *bkg.region_data_extras.my_flow, flow_block_start );
 
   // sends debug-beads to region_param.h5, 1 per region
   CrazyDumpDebugBeads(p,ibd,block_signal_predicted, block_signal_corrected,  block_signal_original, block_signal_sbg, err_t, flow_block_start );
@@ -240,7 +244,6 @@ void RefineFit::CrazyDumpRegionSamples(BeadParams *p, int ibd, float * block_sig
 // only the amplitude term is fit
 void RefineFit::FitAmplitudePerFlow ( int flow_block_size, int flow_block_start )
 {
-
   bkg.region_data->my_regions.cache_step.CalculateNucRiseFineStep (&bkg.region_data->my_regions.rp,bkg.region_data->time_c,
                                                                    *bkg.region_data_extras.my_flow); // the same for the whole region because time-shift happens per well
   bkg.region_data->my_regions.cache_step.CalculateNucRiseCoarseStep (&bkg.region_data->my_regions.rp,bkg.region_data->time_c,*bkg.region_data_extras.my_flow); // use for xtalk
@@ -254,6 +257,8 @@ void RefineFit::FitAmplitudePerFlow ( int flow_block_size, int flow_block_start 
   
   my_single_fit.SetUpEmphasisForLevMarOptimizer(&(bkg.region_data->emphasis_data));
 
+  // allocate mResError
+  //bkg.global_state.AllocDataCubeResErr(*bkg.region_data);
   for (int ibd = 0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
   {
     if (bkg.region_data->my_beads.params_nn[ibd].FitBeadLogic () or bkg.region_data->isRegionSample(ibd) or bkg.region_data->isBestRegion or ibd==bkg.region_data->my_beads.DEBUG_BEAD) // make sure debugging beads are preserved

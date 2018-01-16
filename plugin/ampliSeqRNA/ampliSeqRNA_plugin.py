@@ -420,8 +420,8 @@ def run_meta_plugin():
       raise Exception("Failed to create log2(rpm+1) files for %s." % rpmbcmatrix)
     else:
       chp_dir = "convert2chp"
-      if os.system('python %s -A "%s" -P %s -V "%s" -m %s -i %s -o %s' % ( chp_con, fileName(pluginParams['config']['targetregions_id']),
-	pluginParams['plugin_name'], pluginParams['cmdOptions'].version,
+      if os.system('python %s -A "%s" -n "%s" -P %s -V "%s" -m %s -i %s -o %s' % ( chp_con, fileName(pluginParams['config']['targetregions_id']),
+	pluginParams['prefix']+"_", pluginParams['plugin_name'], pluginParams['cmdOptions'].version,
         'RPM-normalized', os.path.join(output_dir,log2rpm), os.path.join(output_dir,chp_dir)) ):
         raise Exception("Failed to create CHP files for %s."%log2rpm)
       else:
@@ -610,6 +610,15 @@ def barcodeSpecifics(barcode=""):
   if not barcode in barcodeInput:
     return { "filtered" : True }
 
+  # check to see if the barcode was excluded using the frame work barcodes configuration table
+  selected = True
+  fwbctable = pluginParams['config'].get('barcodetable',None)
+  if fwbctable:
+    for bc in fwbctable:
+      if bc.get('barcode_name',"") == barcode:
+        selected = bc.get('selected',True)
+        break
+
   barcodeData = barcodeInput[barcode]
   sample = barcodeData.get('sample','')
   if sample == 'none': sample = ''
@@ -636,6 +645,7 @@ def barcodeSpecifics(barcode=""):
   else:
     bedfile = barcodeData['target_region_filepath']
   return {
+    "selected" : selected,
     "filtered" : filtered,
     "sample" : sample,
     "reference" : reference,
@@ -650,6 +660,8 @@ def checkBarcode(barcode,relBamSize=0):
   barcodeData = barcodeSpecifics(barcode)
   if barcodeData['filtered']:
     return "Filtered (not enough reads)"
+  if not barcodeData['selected']:
+    return "Excluded from analysis"
   if not barcodeData['reference']:
     return "Analysis requires alignment to a reference"
   if not os.path.exists(barcodeData['bamfile']):
@@ -906,6 +918,7 @@ def loadPluginParams():
     for barcode in barcodeInput:
       if barcode == NOMATCH: continue
       barcodeData = barcodeSpecifics(barcode)
+      if not barcodeData['selected']: continue
       if target_id == '.':
         target_id = barcodeData['bedfile']
       elif target_id != barcodeData['bedfile']:

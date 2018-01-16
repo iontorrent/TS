@@ -35,6 +35,21 @@ dns_nameserver: 192.168.122.1
 dns_search:
 
 #----------------------------------------------------------------------------
+# TAP Static IP Configuration for S5 TSVM
+# Set tap static ip information here, do not manually edit /etc/network/interfaces
+# Set TAP_STATIC_IP value to True, ip address (tap_static_ip), network mask
+# (tap_static_nm) and gateway (tap_static_gw) are required field
+# NOTE: default static settings are empty
+# NOTE: entries in dns_nameserver need to be space delimited.
+#----------------------------------------------------------------------------
+TAP_STATIC_IP: False
+tap_static_ip:
+tap_static_nm:
+tap_static_gw:
+tap_dns_nameserver:
+tap_dns_search:
+
+#----------------------------------------------------------------------------
 # Enable /etc/network/interfaces file generation from template
 #----------------------------------------------------------------------------
 edit_interfaces: True
@@ -43,6 +58,11 @@ edit_interfaces: True
 # Enable setting firewall
 #----------------------------------------------------------------------------
 config_firewall: True
+
+#----------------------------------------------------------------------------
+# Enable S5 TSVM tap interface on boot (auto eth2)
+#----------------------------------------------------------------------------
+enable_tap_interface: False
 
 #----------------------------------------------------------------------------
 # Install and configure dhcp on the instrument subnets

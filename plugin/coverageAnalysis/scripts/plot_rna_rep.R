@@ -25,7 +25,7 @@ a <- rcov$total_reads
 ndata <- length(a)
 if( ndata < 2 )
 {
-  write(sprintf("ERROR: No coverage property field found in data file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: plot_rna_rep.R: No coverage property field found in data file %s\n",nFileIn),stderr())
   q(status=1)
 }
 bars = c( length(a[a<10]), length(a[10<=a & a<100]), length(a[100<=a & a<1000]), length(a[1000<=a & a<10000]), length(a[10000<=a & a<100000]), length(a[a>=100000]) )

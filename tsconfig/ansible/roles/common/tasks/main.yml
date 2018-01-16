@@ -8,10 +8,23 @@
 # Replace official ubuntu repo with Ion-sourced ubuntu repo
 #-----------------------------------------------------------------------------
 - name: Disable /etc/apt/sources.list
-  command: "mv /etc/apt/sources.list{{ FUNKYEXT|default('') }} /etc/apt/sources.list.orig removes=/etc/apt/sources.list{{ FUNKYEXT|default('') }}"
+  template: src=templates/sources.list.j2
+            dest=/etc/apt/sources.list{{ FUNKYEXT|default('') }}
+            owner=root group=root mode=644
+  when: "ansible_hostname == groups.headnode[0]"
+
 - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
   template: src=templates/iontorrent-ubuntu.j2
             dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
+            owner=root group=root mode=644
+  when: "ansible_hostname == groups.headnode[0]"
+
+#-----------------------------------------------------------------------------
+# Adding offcycle plugin and instrument update repository
+#-----------------------------------------------------------------------------
+- name: Add /etc/apt/sources.list.d/iontorrent-offcycle.list
+  template: src=templates/iontorrent-offcycle.j2
+            dest=/etc/apt/sources.list.d/iontorrent-offcycle.list{{ FUNKYEXT|default('') }}
             owner=root group=root mode=644
   when: "ansible_hostname == groups.headnode[0]"
 
@@ -22,6 +35,8 @@
   template: src=templates/ionreporter-plugin.j2
             dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{ FUNKYEXT|default('') }}
             owner=root group=root mode=644
+  when: "ansible_hostname == groups.headnode[0]"
+
 
 #-----------------------------------------------------------------------------
 # On each compute node, we need to replicate the Ion Repository configured

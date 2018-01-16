@@ -215,7 +215,7 @@ int ConsensusMain(int argc, char* argv[]) {
 	bam_walker.Close();
 
 	// write the target coverage txt
-	vc.targets_manager->WriteTargetsCoverage(parameters.outputDir + "/targets_depth.txt" , *vc.ref_reader);
+	vc.targets_manager->WriteTargetsCoverage(parameters.outputDir + "/targets_depth.txt" , *vc.ref_reader, parameters.read_count_by_best_target, vc.mol_tag_manager->tag_trimmer->HaveTags());
 
 	pthread_mutex_destroy(&mutexbam);
 
@@ -510,6 +510,12 @@ void * FlowSpaceConsensusWorker(void *input) {
 				// Label all the reads being processed here as filtered, so they won't be use again.
 				rai->filtered = true;
 			}
+			// Count the family size here since I reuse the container.
+			for (int sample_index = 0; sample_index < sample_num; ++sample_index) {
+				for (int strand = 0; strand < 2; ++strand){
+					my_molecular_families_multisample[sample_index][strand][0].CountFamSizeFromAll();
+				}
+			}
 		}
 		pthread_mutex_unlock(&vc.read_filter_mutex);
 
@@ -520,7 +526,8 @@ void * FlowSpaceConsensusWorker(void *input) {
 				consensus_position_ticket,
 				aln_needed_consensus_position_ticket,
 				vc.targets_manager,
-				vc.consensus_parameters->skip_consensus);
+				vc.consensus_parameters->skip_consensus,
+				use_molecular_tag);
 
 		if (not vc.consensus_parameters->skip_consensus){
 			// Save consensus_position_ticket and aln_needed_consensus_position_ticket to the bam files

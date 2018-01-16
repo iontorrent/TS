@@ -1,8 +1,10 @@
+# Copyright (C) 2017 Ion Torrent Systems, Inc. All Rights Reserved
 from django.test import TestCase
 from iondb.security.models import SecureString
 
 MY_STRING = 'nothing to see here, move along'
-NAME='test'
+NAME = 'test'
+
 
 class SecureStringTestCase(TestCase):
     """Test case for password"""
@@ -13,7 +15,7 @@ class SecureStringTestCase(TestCase):
             SecureString(unencrypted=MY_STRING, name=NAME)
 
         # unfortunately we cannot assure ourselves of manually assigned encryptions
-        #with self.assertRaises(Exception):
+        # with self.assertRaises(Exception):
         #    SecureString(encrypted_string=MY_PASSWORD, name=NAME)
 
     def test_save(self):
@@ -21,7 +23,7 @@ class SecureStringTestCase(TestCase):
         SecureString.create(MY_STRING, NAME).save()
 
         with self.assertRaises(Exception):
-            SecureString.create(name=NAME).save()
+            SecureString.create(unencrypted="", name=NAME).save()
 
         with self.assertRaises(Exception):
             SecureString(encrypted_string='something', name=NAME).save()

@@ -111,7 +111,6 @@ void DoMultiFlowRegionalFit (WorkerInfoQueueItem &item) {
 
 void DoInitialBlockOfFlowsAllBeadFit(WorkerInfoQueueItem &item)
 {
-  //printf("=====> All bead fit job on CPU\n");
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   FlowBlockSequence::const_iterator flowBlock =
     info->inception_state->bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( info->flow );
@@ -123,7 +122,7 @@ void DoInitialBlockOfFlowsAllBeadFit(WorkerInfoQueueItem &item)
 
 void DoInitialBlockOfFlowsRemainingRegionalFit(WorkerInfoQueueItem &item)
 {
-  //printf("=====> Remaining fit steps job on CPU\n");
+  // printf("=====> Remaining fit steps job on CPU\n");
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   FlowBlockSequence::const_iterator flowBlock =
     info->inception_state->bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( info->flow );
@@ -137,7 +136,7 @@ void DoInitialBlockOfFlowsRemainingRegionalFit(WorkerInfoQueueItem &item)
 }
 
 void DoPostFitProcessing(WorkerInfoQueueItem &item) {
-  //printf("=====> Post Processing job on CPU\n");
+  // printf("=====> Post Processing job on CPU\n");
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   FlowBlockSequence::const_iterator flowBlock =
     info->inception_state->bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( info->flow );
@@ -150,12 +149,12 @@ void DoPostFitProcessing(WorkerInfoQueueItem &item) {
 }
 
 void DoSingleFlowFitAndPostProcessing(WorkerInfoQueueItem &item) {
-  //printf("=====> CPU Single flow fit and post Processing job\n");
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   FlowBlockSequence::const_iterator flowBlock =
     info->inception_state->bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( info->flow );
   bool ewscale_correct = info->img->isEmptyWellAmplitudeAvailable();
   int flow_block_id = info->inception_state->bkg_control.signal_chunks.flow_block_sequence.FlowBlockIndex( info->flow );
+  // info->bkgObj->AllocResDataCube(info->inception_state->loc_context.regionXSize, info->inception_state->loc_context.regionYSize, flowBlock->size());
   info->bkgObj->FitEmbarassinglyParallelRefineFit( flowBlock->size(), flowBlock->begin() );
   info->bkgObj->PreWellCorrectionFactors( ewscale_correct, flowBlock->size(), flowBlock->begin() ); // correct data for anything needed
   

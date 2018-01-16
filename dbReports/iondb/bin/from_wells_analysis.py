@@ -173,14 +173,13 @@ def newExperiment(_explog_path, _plan_json=''):
             if chefLog_parsed:
                 update_chefSummary(_newExp, chefLog_parsed)
             _newExp.save()
-            if _plan_json:
-                planObj = _newExp.plan
-                easObj = _newExp.get_EAS()
-                update_plan_info(_plan_json, planObj, easObj)
         except:
             print("DEBUG: There was an error adding the experiment")
             _newExp = None
             print(traceback.format_exc())
+
+    if _plan_json:
+        update_plan_info(_plan_json, _newExp.plan, _newExp.get_EAS())
 
     return _newExp
 
@@ -222,6 +221,7 @@ def update_plan_info(_plan_json, planObj, easObj):
                     setattr(planObj, "planDisplayedName", _plan_json[key])
 
         planObj.applicationGroup = models.ApplicationGroup.objects.get(id=_plan_json['applicationGroup_id'])
+        planObj.metaData['runTransferFromSource'] = _plan_json.get('runTransferFromSource', '')
         easObj.save()
         planObj.save()
     except:

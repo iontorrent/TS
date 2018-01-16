@@ -55,7 +55,7 @@ class ApplicationStepData(AbstractStepData):
         self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
         self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
-        self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.filter(isActive=True).order_by('nucleotideType', 'runType'))
+        self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.filter(isActive=True).order_by('description'))
 
         self.prepopulatedFields[ApplicationFieldNames.CATEGORIES] = ''
 

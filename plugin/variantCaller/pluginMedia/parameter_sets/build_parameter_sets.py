@@ -5,7 +5,7 @@ import sys
 import json
 import subprocess
 import xml.etree.ElementTree as ET
-
+from test_format import check_one_parameter_file
 
 index_filename = 'builtin_parameter_sets.json'
 with open(index_filename,'r') as f:
@@ -21,6 +21,9 @@ if len(sys.argv) > 1:
 for set_info in input_files:
     entry_filename = set_info["file"]
     print "Processing " + entry_filename
+    error_list = check_one_parameter_file(entry_filename)
+    if error_list:
+        raise ValueError('The parameter file "%s" did not pass the format check. Please fix.' %entry_filename)
     with open(entry_filename,'r') as f:
         entry_content = json.load(f)
 

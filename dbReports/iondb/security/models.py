@@ -10,9 +10,6 @@ import gnupg
 
 HOME = '/tmp'
 
-# read the super secret key from the file system
-with open('/var/spool/ion/key') as key_fp:
-    SUPER_SECRET_KEY = key_fp.read().strip()
 
 class SecureString(models.Model):
     """Used for storing information securely"""
@@ -28,9 +25,16 @@ class SecureString(models.Model):
     name = models.CharField(max_length=128, unique=True, null=False)
 
     @classmethod
+    def get_secure_key(cls):
+        # read the super secret key from the file system
+        with open('/var/spool/ion/key') as key_fp:
+            key = key_fp.read().strip()
+            return key
+
+    @classmethod
     def create(cls, unencrypted, name):
         gpg = gnupg.GPG(gnupghome=HOME)
-        ep = gpg.encrypt(data=str(unencrypted), recipients=None, symmetric='AES256', passphrase=SUPER_SECRET_KEY)
+        ep = gpg.encrypt(data=str(unencrypted), recipients=None, symmetric='AES256', passphrase=cls.get_secure_key())
         if not ep:
             raise Exception("Failed to encrypt the data.")
 
@@ -57,7 +61,7 @@ class SecureString(models.Model):
     def encrypt(self, unencrypted):
         """Used to update the encrypted string"""
         gpg = gnupg.GPG(gnupghome=HOME)
-        ep = gpg.encrypt(data=str(unencrypted), recipients=None, symmetric='AES256', passphrase=SUPER_SECRET_KEY)
+        ep = gpg.encrypt(data=str(unencrypted), recipients=None, symmetric='AES256', passphrase=self.get_secure_key())
         if not ep:
             raise Exception("Failed to encrypt the data.")
         self.encrypted_string = ep.data.strip()
@@ -65,4 +69,4 @@ class SecureString(models.Model):
     @cached_property
     def decrypted(self):
         """This will decrypt a encrypted message and make sure the unencrypted string never hits the disk"""
-        return str(gnupg.GPG(gnupghome=HOME).decrypt(self.encrypted_string, passphrase=SUPER_SECRET_KEY))
+        return str(gnupg.GPG(gnupghome=HOME).decrypt(self.encrypted_string, passphrase=self.get_secure_key()))

@@ -60,6 +60,7 @@ app.conf.update(
         "iondb.rundb.tsvm",
         "iondb.rundb.data.data_export",
         "iondb.rundb.configure.cluster_info",
+        "iondb.product_integration.tasks"
     ),
 
     CELERYBEAT_SCHEDULE = {

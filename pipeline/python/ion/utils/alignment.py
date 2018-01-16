@@ -222,8 +222,7 @@ def align(
 
         if do_sorting:
             if do_mark_duplicates:
-                # TODO: implement alternative, maybe with named pipes
-                cmd += " | samtools sort -m 1000M -l1 -@12 -o - -"
+                cmd += " | samtools sort -m 1000M -l1 -@12 -T tmp_%s -O bam -o - -" % bamBase
                 json_name = 'BamDuplicates.%s.json' % bamBase if bamBase != 'rawlib' else 'BamDuplicates.json'
                 cmd = "BamDuplicates -i <(%s) -o %s -j %s" % (cmd, bamFile, json_name)
             else:
@@ -409,15 +408,14 @@ def process_datasets(
         barcodeInfo):
 
     parallel_datasets = 1
-    if not do_mark_duplicates: # temporary fix for TS-15304
-        try:
-            memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
-            if memTotalGb > 140:
-                parallel_datasets = 4
-            elif memTotalGb > 70:
-                parallel_datasets = 2
-        except:
-            pass
+    try:
+        memTotalGb = os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')/(1024*1024*1024)
+        if memTotalGb > 140:
+            parallel_datasets = 4
+        elif memTotalGb >= 70:
+            parallel_datasets = 2
+    except:
+        pass
 
     align_threads = multiprocessing.cpu_count() / parallel_datasets
     printtime("Attempt to align")

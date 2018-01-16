@@ -9,6 +9,9 @@ PORT = 10000
 def connect(host, port):
     return xmlrpclib.ServerProxy("http://%s:%d" % (host, port), allow_none=True)
 
+def get_running_jobs(host, port):
+    conn = connect(host, port)
+    return conn.running()
 
 def load(fname):
     infile = open(fname)

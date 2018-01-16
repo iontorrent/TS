@@ -3386,6 +3386,11 @@ void DifferentialSeparator::OutputStats(DifSepOpt &opts, Mask &bfMask) {
     string outMask = opts.outData + ".mask.bin";
     bfMask.WriteRaw (outMask.c_str());
   }
+
+  // if there are no live wells its better to stop analyzing at beadfind stage
+  if((libCount + tfCount) == 0) {
+    ION_ABORT_CODE ("No wells found with library or test fragment beads", DIFFSEP_ERROR);
+  }
 }
 
 void SetBeadfindType(DifSepOpt &opts, std::string &bfFile) {
