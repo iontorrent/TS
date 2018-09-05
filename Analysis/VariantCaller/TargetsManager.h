@@ -61,9 +61,13 @@ public:
   void AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets);
   void WriteTargetsCoverage(const string& file_path, const ReferenceReader& ref_reader, bool use_best_target, bool use_mol_tags) const;
   int  ReportHotspotsOnly(const MergedTarget &merged, int chr, long pos);
-
+  bool IsCoveredByMerged(int merged_idx, int chr, long pos) const;
+  bool IsFullyCoveredByMerged(int merged_idx, int chr, long pos_start, long pos_end) const;
+  bool IsBreakingIntervalInMerged(int merged_idx, int chr, long pos_start, long pos_end) const;
+  int FindMergedTargetIndex(int chr, long pos) const;
   vector<UnmergedTarget>  unmerged;
   vector<MergedTarget>    merged;
+  vector<int>             chr_to_merged_idx;
   bool  trim_ampliseq_primers;
 
   // The following variables are just for bool FilterReadByRegion(Alignment* rai, int recent_target) use only.

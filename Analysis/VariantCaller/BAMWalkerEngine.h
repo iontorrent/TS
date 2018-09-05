@@ -54,6 +54,7 @@ struct Alignment {
     next = NULL;
     read_number = 0;
     original_position = 0;
+    original_end_position = 0;
     processed = false;
     processing_prev = NULL;
     processing_next = NULL;
@@ -98,7 +99,7 @@ struct Alignment {
   Alignment*            next;               //! Singly-linked list for durable alignments iterator
   int                   read_number;        //! Sequential number of this read
   int                   original_position;  //! Alignment position, before primer trimming
-
+  int                   original_end_position; //! Alignment end position, before primer trimming
   // Processing state
   bool                  processed;          //! Is candidate generator's pre-processing finished?
   Alignment*            processing_prev;    //! Previous in a list of alignments being processed

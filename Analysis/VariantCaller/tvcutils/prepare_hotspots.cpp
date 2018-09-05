@@ -214,7 +214,7 @@ class junction {
 	    if (junc_.size() == 0) return true;
 	    if (id < 0) return false;
             if (id >= (int) junc_.size()) return false;
-	    return junc_[id].contained_in_ampl(pos, pos+len-1);
+	    return junc_[id].contained_in_ampl(pos, pos+len);
         }
 	void add(int id, int beg, int end) {
 	    if (id  >= (int) junc_.size()) return;

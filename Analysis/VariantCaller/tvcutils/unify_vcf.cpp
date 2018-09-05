@@ -762,11 +762,12 @@ void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf
 	for (it = variant_list.rbegin(); it != variant_list.rend(); it++ ) {
 	    if (too_far(&(*it), hotspot)) continue; // not assume well ordered.
 	    int padding = hotspot->position-it->position;
-	    if (padding > (int) it->ref.length()) continue; // not contain
+	    if (padding < 0) continue;
+	    //if (padding > (int) it->ref.length()) continue; // not contain
 	    long record_ref_ext = 0; // new 
 	    string annotation_ref_ext; // new
 	    string x = it->ref.substr(0,padding)+*omapalt;
-	    unsigned int rlen = padding + hotspot->ref.length();
+	    unsigned long rlen = padding + hotspot->ref.length();
 	    string hotspot_ref = it->ref.substr(0,padding)+hotspot->ref;
  	    if (rlen > it->ref.length()) {
       		record_ref_ext = rlen - it->ref.length();
@@ -848,6 +849,13 @@ void VcfOrderedMerger::flush_vcf(vcf::Variant* latest)
 
     if (too_far(current, latest)) {
       if (is_within_target_region(current)) {
+ 	unsigned int i;
+        bool has_oid = false;
+        for (i =0; i < current->info["OID"].size(); i++) {
+              if (current->info["OID"][i] != ".") {has_oid = true; break;}
+        }
+        if (has_oid) current->infoFlags["HS"] = true;
+
         if (filter_VCF_record(current))
           ++num_filtered_records;
         else { // Write out record if not filtered
@@ -996,12 +1004,14 @@ void VcfOrderedMerger::process_annotation(vcf::Variant* current) {
   if (hotspot_queue.has_value())
     do {
       cmp = variant_cmp(current, hotspot_queue.current());
-      if (cmp == 1) { /*hotspots_.push_back(*hotspot_queue.current());*/ return;}
+      if (cmp == 1 or cmp == 0) { /*hotspots_.push_back(*hotspot_queue.current());*/ return;}
+      /*
       if (cmp == 0) {
         merge_annotation_into_vcf(current, hotspot_queue.current());
         hotspot_queue.next();
         return;
       }
+      */
       merge_annotation_into_vcf(hotspot_queue.current()) ;
       //blacklist_check(hotspot_queue.current()); // does not need, it is checked in above
       hotspot_queue.next();

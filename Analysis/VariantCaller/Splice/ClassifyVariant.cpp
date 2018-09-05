@@ -477,7 +477,7 @@ bool AlleleIdentity::getVariantType(
 
   bool is_ok = reference_context.context_detected;
   // check position does not beyond the chromosome
-  is_ok *=  not ((reference_context.position0 + (long) altAllele.length()) > ref_reader.chr_size(reference_context.chr_idx));
+  is_ok *=  not ((reference_context.position0 + (long) ref_length) > ref_reader.chr_size(reference_context.chr_idx));
 
   // check alternative allele contains TACG only
   is_ok *= CheckValidAltAllele(reference_context);

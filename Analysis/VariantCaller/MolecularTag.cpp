@@ -520,6 +520,7 @@ void Consensus::PartiallyCopyAlignmentFromAnother_(Alignment& alignment, Alignme
 	alignment = Alignment();
 	alignment.alignment = template_alignment->alignment;
 	alignment.original_position = template_alignment->original_position;
+	alignment.original_end_position = template_alignment->original_end_position;
 	alignment.start = template_alignment->start;
 	alignment.end = template_alignment->end;
 	alignment.sample_index = template_alignment->sample_index;

@@ -316,6 +316,7 @@ private:
   void FillInHotSpotVariant(deque<VariantCandidate>& variant_candidates, vector<HotspotAllele>& hotspot);
   bool FillVariantFlowDisCheck(VariantCandidate &v, string &refstring, list<PositionInProgress>::iterator& position_ticket, bool hotspot_present, int haplotype_length);
   void MakeVariant(deque<VariantCandidate>& variant_candidates, list<PositionInProgress>::iterator& position_ticket, int n, list<int> *alist);
+  void set_subset(VariantCandidate &v1, VariantCandidate &v, list<int> &co);
   void BlacklistAlleleIfNeeded(AlleleDetails& allele);
   void flushblackpos(int idx, size_t pos); 
   int nextblackpos(int i) {

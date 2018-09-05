@@ -273,7 +273,7 @@ def fix_records(vcf_file, bed_file, out_vcf_file):
             # Assume that if and only if all de-novo alleles then ID = '.'
             if vcf_record['ID'] == '.' and 'HS' in vcf_record['INFO']:
                 # no hotspots here, get rid of the HS
-                vcf_record['INFO'].remove('HS')
+                vcf_record['INFO'].pop('HS', None)
                 hs_error_found = True
             elif vcf_record['ID'] != '.' and 'HS' not in vcf_record['INFO']:
                 # must be hotspots, add HS if it is not there

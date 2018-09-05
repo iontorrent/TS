@@ -14,7 +14,7 @@ from django.utils.datastructures import SortedDict
 
 
 class variantCaller(IonPlugin):
-    version = '5.8.0.19'
+    version = '5.8.0.21'
     envDict = dict(os.environ)
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     requires_configuration = True # The user can not run the plugin w/o clicking the configuration button.

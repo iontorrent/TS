@@ -119,6 +119,7 @@ bool AlleleParser::BasicFilters(Alignment& ra) const
     exit(1);
   }
   ra.original_position = ra.alignment.Position;
+  ra.original_end_position = ra.alignment.GetEndPosition();
   ra.end = ra.alignment.GetEndPosition();
 
   // Basic read filters
@@ -1055,6 +1056,34 @@ long AlleleParser::ComputeRepeatBoundary(const string& seq, int chr, long positi
   return position;
 }
 
+void AlleleParser::set_subset(VariantCandidate &v1, VariantCandidate &v, list<int> &co)
+{
+    co.sort();
+    v1.variant.sequenceName = v.variant.sequenceName;
+    v1.variant.position =  v.variant.position;
+    v1.variant.isHotSpot = v.variant.isHotSpot;
+    v1.variant.ref = v.variant.ref;
+    list<int>::iterator it = co.begin();
+    int ind = *it;
+    int i = 0;
+    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); I++) {
+        if (I->second.filtered) continue;
+        if (i < ind) {
+            I->second.filtered = true;
+            i++; continue;
+        }
+        v1.variant.isAltHotspot.push_back(v.variant.isAltHotspot[ind]);
+        v1.variant.isAltFakeHotspot.push_back(v.variant.isAltFakeHotspot[ind]);
+        v1.variant_specific_params.push_back(v.variant_specific_params[ind]);
+        v1.variant.alt.push_back(v.variant.alt[ind]);
+        v1.variant.alt_orig_padding.push_back(v.variant.alt_orig_padding[ind]);
+        it++;
+        i++;
+        if (it == co.end()) ind = 10000000;
+        else ind = *it;
+    }
+}
+
 // -------------------------------------------------------------------------
 
 void AlleleParser::GenerateCandidates(deque<VariantCandidate>& variant_candidates,
@@ -1330,10 +1359,25 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		      for (list<list<int> >::iterator it= allele_groups_ready_to_go.begin(); it != allele_groups_ready_to_go.end(); it++) {
 			MakeVariant(variant_candidates, position_ticket, new_prefix, &(*it));
 		      }
-		    if (current_look_up_window == max_length) {
+		    if (current_look_up_window == max_length or alleles_on_hold.size() == 0) {
   			list<int> co;
 			for (unsigned int i = 0; i < alleles_on_hold.size(); i++) co.push_back(alleles_on_hold[i]);
-			if (co.size() > 0) MakeVariant(variant_candidates, position_ticket, new_prefix, &co);
+			if (co.size() > 0) {
+                            if (co.size() < 20)
+                                //cerr << "place 6" << endl;
+                                MakeVariant(variant_candidates, position_ticket, new_prefix, &co);
+                            else {
+                                VariantCandidate v1(vcf_writer_->VariantInitializer());
+                                set_subset(v1, v, co);
+                                //bool exist_allele = FillVariantFlowDisCheck(v, refstring, position_ticket, hotspot_present, current_look_up_window, co);
+                                my_examiner_->SetupVariantCandidate(v1);
+                                list<list<int> > allele_groups;
+                                my_examiner_->SplitCandidateVariant(allele_groups);
+                                for (list<list<int> >::iterator it = allele_groups.begin(); it != allele_groups.end(); it++) {
+                                    MakeVariant(variant_candidates, position_ticket, new_prefix, &(*it));
+                                }
+                            }
+			}
 			return;
 		    }
 		    if (look_ahead_sliding_win_start-position_ticket->pos > current_look_up_window)  {

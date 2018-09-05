@@ -9,7 +9,7 @@ set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 message(STATUS "Searching for an ION_UPDATE_SERVER...")
 foreach ( SERVER updates updates.itw updates.iontorrent.com )
     # See if we can look up the server in question.
-    execute_process( COMMAND host -W 2 -t A ${SERVER}
+    execute_process( COMMAND host -W 2 ${SERVER}
        RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
 
     # If we can find it, great! We're done!
@@ -35,7 +35,7 @@ if(LSB_RELEASE_COMMAND)
         OUTPUT_STRIP_TRAILING_WHITESPACE)
     string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
     message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
-endif(LSB_RELEASE_COMMAND)
+endif(LSB_RELEASE_COMMAND) 
 
 # If defined while running cmake look for mkl
 # e.g. -DMKL_INSTALL_PATH=/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl
@@ -43,7 +43,7 @@ if (DEFINED MKL_INSTALL_PATH)
   message("Setting mkl root to ${MKL_INSTALL_PATH}")
   include_directories(${MKL_INSTALL_PATH}/include)
   set(MKL_LINK_LIBS "-Wl,--start-group  ${MKL_INSTALL_PATH}/lib/intel64/libmkl_intel_lp64.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_core.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_sequential.a -Wl,--end-group")
-else()
+else() 
   message("Not setting mkl root ${MKL_INSTALL_PATH}")
 endif()
 
@@ -337,7 +337,7 @@ if (NOT ION_USE_SYSTEM_PICARD)
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/picard-tools-1.130.tar.gz"
-    #URL_MD5
+    #URL_MD5 
     # in source build
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR "${PROJECT_BINARY_DIR}/../${proj_name_version}"
@@ -374,3 +374,7 @@ else()
     set(ION_BAMTOOLS_LIBS libbamtools.a)
     include_directories("/usr/include/bamtools")
 endif()
+
+
+
+

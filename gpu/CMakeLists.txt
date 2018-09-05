@@ -16,7 +16,7 @@ set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 message(STATUS "Searching for an ION_UPDATE_SERVER...")
 foreach ( SERVER updates updates.itw updates.iontorrent.com )
     # See if we can look up the server in question.
-    execute_process( COMMAND host -W 2 -t A ${SERVER}
+    execute_process( COMMAND host -W 2 ${SERVER}
        RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
 
     # If we can find it, great! We're done!
