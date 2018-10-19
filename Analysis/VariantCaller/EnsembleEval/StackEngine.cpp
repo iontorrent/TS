@@ -1921,7 +1921,8 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 		vector<int>& alleles_on_hold,
 		int& sliding_window_start_0,
 		int& sliding_window_end_0,
-		int max_group_size_allowed){
+		int max_group_size_allowed,
+		const TargetsManager * const targets_manager){
 	const int num_alt_alleles = (int) allele_identity_vector.size();
 	int splicing_lower_bound_at_current_candidate_gen_window_end_0 = -1;
 	LocalReferenceContext current_candidate_gen_window_context;
@@ -1936,8 +1937,12 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 	// I look ahead just 1bp every time.
 	sliding_window_end_0 = min(current_candidate_gen_window_end_0 + 1, (int) ref_reader.chr_size(seq_context.chr_idx));
 
-	// (Step 1.b): The trivial (and perhaps the most common) case:
-	// If every allele and its end of the variant window hits the lookahead window end, then every allele is on hold.
+	// (Step 1.b): The trivial (and perhaps the most common) cases:
+	// (1.b.1) Every allele is ready to go if the look ahead window can't be fully covered by any unmerged region.
+	int current_merged_target_idx = targets_manager->FindMergedTargetIndex(seq_context.chr_idx, seq_context.position0);
+	bool is_breaking_point = (current_merged_target_idx >= 0)? targets_manager->IsBreakingIntervalInMerged(current_merged_target_idx, seq_context.chr_idx, seq_context.position0, max(seq_context.position0, (long) sliding_window_end_0)) : false;
+
+	// (1.b.2) If every allele and its end of the variant window hits the lookahead window end, then every allele is on hold.
 	bool is_trivial_all_on_hold = true;
 	for (int i_alt = 0; i_alt < num_alt_alleles; ++i_alt){
 		if (allele_identity_vector[i_alt].end_variant_window < current_candidate_gen_window_end_0){
@@ -1946,7 +1951,7 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 		}
 	}
 
-	if (is_trivial_all_on_hold){
+	if (is_trivial_all_on_hold and (not is_breaking_point)){
 		for (int i_alt = 0; i_alt < num_alt_alleles; ++i_alt){
 			alleles_on_hold.push_back(i_alt);
 			// Sort alleles_on_hold
@@ -1973,14 +1978,18 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 	// I don't do final splitting.
 	SplitAlleleIdentityVector(padding_removed_allele_identity_vector, allele_groups_ready_to_go, ref_reader, num_alt_alleles, true, 0);
 
-	// (Step 2.b): Trivial case: No need to look ahead => all alleles are ready to go.
-	if (current_candidate_gen_window_end_0 == sliding_window_end_0 or sliding_window_end_0 == (int) ref_reader.chr_size(seq_context.chr_idx)){
+	// (Step 2.b): Trivial cases: No need to look ahead => all alleles are ready to go.
+	// Case 1: hit the end of the chromosome
+	// Case 2: breaking point in the merged region
+	if (current_candidate_gen_window_end_0 == sliding_window_end_0
+			or sliding_window_end_0 == (int) ref_reader.chr_size(seq_context.chr_idx)
+			or is_breaking_point){
 		sliding_window_start_0 = sliding_window_end_0;
 		if (DEBUG){
 			cout << "+ Calculating the look ahead \"sliding\" window for (" << PrintVariant(*variant) <<"): "<< endl
 				 << "  - Current candidate window end = " << current_candidate_gen_window_end_0 << endl
 				 << "  - Current variant window = [" << seq_context.position0 << ", " << (int) seq_context.position0 + (int) seq_context.reference_allele.size() << ")" << endl
-			     << "  - All alleles are ready to go and no need to look ahead. "  << endl;
+			     << "  - All alleles are ready to go and no need to look ahead " << (is_breaking_point? "because it hits a breaking point in the merged region)." : ".") << endl;
 		}
 	    FinalSplitReadyToGoAlleles(allele_groups_ready_to_go, ref_reader, max_group_size_allowed);
 		return;
@@ -2269,14 +2278,16 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
     if (rai->sample_index != sample_index)
       continue;
 
-    if (rai->alignment.Position > multiallele_window_start)
+    // TS-17069: The primer-trimmed read must fully cover the variant
+    if (rai->alignment.Position > seq_context.position0 or rai->alignment.GetEndPosition() < (int) seq_context.position0 + (int) seq_context.reference_allele.size())
       continue;
 
     if (rai->filtered)
       continue;
 
-    if (rai->alignment.GetEndPosition() < multiallele_window_end)
-      continue;
+    // TS-17069: The original read must fully cover the splicing window. (rai->original_positinon has been checked)
+    if (rai->original_end_position < multiallele_window_end)
+    	continue;
 
     // Reservoir Sampling
     if (read_stack.size() < (unsigned int)parameters.my_controls.downSampleCoverage) {
@@ -2870,6 +2881,10 @@ void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, v
 				if ((*member_it)->sample_index != sample_index) {
                   continue;
 			    }
+
+				// Notes for TS-17069:
+				// However, TS-17069 doesn't affect the UMT runs in 5.10 since trim-ampliseq-primers is turned off.
+				// So the logic for the fix of TS-17069 is not applied in TS 5.10.1 for UMT (though I should, and also handle the consensus alignment)
 
 			    // Check global conditions to stop reading in more alignments
 				if ((*member_it)->original_position > multiallele_window_start

@@ -205,6 +205,9 @@ public:
   int variant_cmp_secplus(const T* v1, const vcf::Variant* v2) const;
 
   template <typename T>
+  int variant_cmp_secplus_more(const T* v1, const vcf::Variant* v2) const;
+
+  template <typename T>
   bool is_within_target_region(T *variant);
 
   void SetVCFrecordFilters(bool filt_by_target, bool hotspot_pos_only, bool hotspot_var_only);
@@ -246,6 +249,7 @@ private:
 
   void span_ref_and_alts();
   bool too_far(vcf::Variant*, vcf::Variant*);
+  bool too_far_far(vcf::Variant*, vcf::Variant*);
   bool find_and_merge_assembly();
 
   void generate_novel_annotations(vcf::Variant* variant);

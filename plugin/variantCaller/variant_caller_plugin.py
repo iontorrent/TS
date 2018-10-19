@@ -356,7 +356,7 @@ class ConfigureOptionsManager:
         options['hotspots_bed_merged']  = ""
         options['has_hotspots']         = False
         options['has_sse_bed']          = False
-        options['trim_reads']           = self.__options['library_type'] in ['AmpliSeq', 'ampliseq_hd']
+        options['trim_reads']           = self.__options['library_type'] in ['AmpliSeq']
         # check referemce genome
         if not options['reference_genome_name']:
             options['error'].append('Reference genome unspecified.')
@@ -1543,8 +1543,8 @@ def load_render_context(render_context, bam, options):
 
     if options.serve_option('has_umt', bam['name']):
         df = pd.read_csv(os.path.join(bam['results_directory'],'consensus_metrics.txt'), sep = ':', names=['metric','value'], index_col='metric')
-        render_context['summary']['median_depth'] =  int(df.get_value('Median read coverage','value'))
-        render_context['summary']['median_num_fam3'] = int(df.get_value('Median molecular coverage','value'))
+        render_context['summary']['median_depth'] =  int(float(df.get_value('Median read coverage','value')))
+        render_context['summary']['median_num_fam3'] = int(float(df.get_value('Median molecular coverage','value')))
         render_context['summary']['fm3_pass80'] =  ("%s - %s" % (df.get_value('Median LOD percent','value'), df.get_value('80th percentile LOD percent','value')))
     else:
         render_context['summary']['median_depth'] = "NA"

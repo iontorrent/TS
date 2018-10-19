@@ -22,7 +22,8 @@ OPTIONS="OPTIONS:
   -M <int> Minimum number of reads for ERCC target to be considered in dose/response analysis. Default: 10
   -O <name> Output file name for text data (per analysis). Default: '' => <file stem>.stats.txt (see -F)
   -R <file> Remapping reference file. Default: '' => error produced if BAM not already mapped to ERCC transcripts
-  -T <float> Threshold for alerts based on dose/response R-squaed correlation value. Defaul: 0.9
+  -T <float> Threshold for alerts based on dose/response R-squaed correlation value. Default: 0.9
+  -a Use only the AmpliSeq ERCC subset (10) for reference and correlation plot. Default: use all detected 92 ERCCs.
   -f Use Forward strand reads only for analysis. Default: Use both forward and reverse reads.
   -l Log progress to STDERR. (A few primary progress messages will always be output.)
   -h --help Report full description, usage and options."
@@ -44,8 +45,9 @@ R2THRESH=0.9
 STATSTEM=""
 RESHTML="report.html"
 FWD_READS="N"
+AMPLICONS=0
 
-while getopts "hlfB:D:F:H:M:N:O:R:T:" opt
+while getopts "hlafB:D:F:H:M:N:O:R:T:" opt
 do
   case $opt in
     B) BARCODE=$OPTARG;;
@@ -57,6 +59,7 @@ do
     O) STATSTEM=$OPTARG;;
     R) REFERENCE=$OPTARG;;
     T) R2THRESH=$OPTARG;;
+    a) AMPLICONS=1;;
     l) SHOWLOG=1;;
     f) FWD_READS="Y";;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
@@ -180,8 +183,13 @@ fi
 echo "(`date`) Analyzing ERCC coverage and generating report..." >&2
 
 # Args 2 and 3 (ANALYSIS_DIR and URL_ROOT) appear to be unused, arg 9 is always 'Y' since this indicates no error thus far (not if fastq created!)
+if [ $AMPLICONS -eq 0 ]; then
+  ERCCREF="ercc.genome"
+else
+  ERCCREF="ampliseq.ercc.genome"
+fi
 REPORT="$WORKDIR/$RESHTML"
-REPCMD="python $PLGDIR/run_ERCC_analysis.py '$WORKDIR' . . $PLGNAME '$R2THRESH' $PLGDIR '$MINREADS' '$ERCC_POOL' 'Y' '$BARCODE' '$FWD_READS' > '$REPORT' 2> '$WORKDIR/ERCC_analysis.log'"
+REPCMD="python $PLGDIR/run_ERCC_analysis.py '$WORKDIR' . . $PLGNAME '$R2THRESH' $PLGDIR '$MINREADS' '$ERCC_POOL' 'Y' '$BARCODE' '$FWD_READS' $ERCCREF > '$REPORT' 2> '$WORKDIR/ERCC_analysis.log'"
 eval "$REPCMD" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: run_ERCC_analysis.py failed. See ERCC_analysis.log for details." >&2

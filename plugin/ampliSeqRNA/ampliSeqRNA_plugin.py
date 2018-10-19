@@ -57,6 +57,7 @@ pluginReport = {}
 barcodeSummary = []
 barcodeReport = {}
 help_dictionary = {}
+warningMessage = ""
 
 #
 # -------------------- customize code for this plugin here ----------------
@@ -98,7 +99,7 @@ def furbishPluginParams():
   # For example, HTML form posts do not add unchecked option values
   config = pluginParams['config']
   config['barcodebeds'] = 'Yes' if config.get('barcodebeds',False) else 'No'
-  config['sfilterbarcodes'] = 'Yes' if config.get('filterbarcodes',False) else 'No'
+  config['filterbarcodes'] = 'Yes' if config.get('filterbarcodes',False) else 'No'
   config['ercc'] = 'Yes' if config.get('ercc',False) else 'No'
   config['uniquemaps'] = 'Yes' if config.get('uniquemaps',False) else 'No'
 
@@ -281,6 +282,7 @@ def countFileLines(fpath):
 
 def run_meta_plugin():
   '''Create barcode x target reads matrix files and derived files and plots.'''
+  global warningMessage
   if pluginParams['cmdOptions'].cmdline: return
   printlog("")
   printtime("Creating barcodes summary report...")
@@ -352,6 +354,22 @@ def run_meta_plugin():
       if runcmd.poll():
         raise Exception("Failed to create barcode x %s RPM matrix."%typestr)
     
+    # convert normalized RPM to CHP format for TAC software
+    rpm2log = os.path.join(plugin_dir,"scripts","log2rpm.pl");
+    log2rpm = pluginParams['prefix']+".log2rpm.xls";
+    chp_con = os.path.join(plugin_dir,"tac","convert2chp.py");
+    chp_zip = pluginParams['prefix']+".log2rpm.zip";
+    if os.system('%s %d "%s" > "%s"' % (rpm2log, numReports, os.path.join(output_dir,rpmbcmatrix), os.path.join(output_dir,log2rpm))):
+      raiseWarning("Failed to create log2(rpm+1) files for %s." % rpmbcmatrix)
+    else:
+      chp_dir = "convert2chp"
+      if os.system('python %s -A "%s" -n "%s" -P %s -V "%s" -m %s -i %s -o %s' % ( chp_con, fileName(pluginParams['config']['targetregions_id']),
+	pluginParams['prefix']+"_", pluginParams['plugin_name'], pluginParams['cmdOptions'].version,
+        'RPM-normalized', os.path.join(output_dir,log2rpm), os.path.join(output_dir,chp_dir)) ):
+        raiseWarning("Failed to create CHP files for %s."%log2rpm)
+      else:
+        os.system('zip -r %s %s'%(chp_zip,chp_dir))
+
     deSummary = ""
     derTable = ""
     if create_DE_matrix:
@@ -374,6 +392,20 @@ def run_meta_plugin():
             deSummary = "%d targets (%.2f%%) showed differential expression at %s-fold or greater." % (nde,100*float(nde)/(nline-1),difexp_thresh)
             pluginResult['Differentially expressed targets'] = str(nde)
 
+    # create barchart of mapped reads - works with 1 barcode
+    alignmentPlot = pluginParams['prefix']+".mapreads.png"
+    if os.system( '%s "%s" "%s" "Reads Alignment Summary" "Million Reads" 0.000001 < %s' % ( runR,
+        os.path.join(output_dir,readsfile), os.path.join(output_dir,alignmentPlot),
+        os.path.join(plugin_dir,'scripts','plot_reads_hbar.R') ) ):
+      raiseWarning("Failed to create barcode read alignment plot using plot_reads_hbar.R")
+
+    # create overlaid gene log10 distribution frequency curve (w/o genes with 0 reads)
+    genepdfPlot = pluginParams['prefix']+".genepdf.png"
+    if os.system( '%s "%s" "%s" %d "Distribution of Gene Reads" < %s' % ( runR,
+        os.path.join(output_dir,bcmatrix), os.path.join(output_dir,genepdfPlot), numReports,
+        os.path.join(plugin_dir,'scripts','plot_multi_pdf.R') ) ):
+      raiseWarning("Failed to create gene read pdf plot using plot_multi_pdf.R")
+
     # create correlation matrix plots from RPM reads matrix: generates the r-value matrix required for heatmap
     cpairsPlot = pluginParams['prefix']+".corpairs.png"
     cpairsTitle = "log2 RPM pair correlation plots" if numReports > 1 else "log2 RPM density plot"
@@ -381,51 +413,25 @@ def run_meta_plugin():
     if os.system( '%s "%s" "%s" %d "%s" "%s" < %s' % ( runR,
         rpmbcmatrix, cpairsPlot, numReports, cpairsTitle, os.path.join(output_dir,rvalueMatrix),
         os.path.join(plugin_dir,'scripts','plot_cormatrix.R') ) ):
-      raise Exception("Failed to create barcode RPM paired correlation plots using plot_cormatrix.R")
+      raiseWarning("Failed to create barcode RPM paired correlation plots using plot_cormatrix.R")
 
     # create heatmap plot from r-value matrix
     rvalueHeatmap = pluginParams['prefix']+".corbc.hm.png"
-    if os.system( '%s "%s" "%s" "Correlation Heatmap" "r-value" 0.4 < %s' % ( runR,
+    if numReports > 1 and os.system( '%s "%s" "%s" "Correlation Heatmap" "r-value" 0.4 < %s' % ( runR,
         os.path.join(output_dir,rvalueMatrix), os.path.join(output_dir,rvalueHeatmap),
         os.path.join(plugin_dir,'scripts','plot_corbc_heatmap.R') ) ):
-      raise Exception("Failed to create barcode heatmap plots using plot_corbc_heatmap.R")
+      raiseWarning("Failed to create barcode heatmap plots using plot_corbc_heatmap.R")
 
     # create heatmaplot of top 250 variant genes vs. barcode
     genevarHeatmap = pluginParams['prefix']+".genebc.hm.png"
-    if os.system( '%s "%s" "%s" "Gene Representation Heatmap" "Representation: log10(RPM+1)" 250 10000 100 %d < %s' % ( runR,
+    if numReports > 1 and os.system( '%s "%s" "%s" "Gene Representation Heatmap" "Representation: log10(RPM+1)" 250 10000 100 %d < %s' % ( runR,
         os.path.join(output_dir,bcmatrix), os.path.join(output_dir,genevarHeatmap), numReports,
         os.path.join(plugin_dir,'scripts','plot_genebc_heatmap.R') ) ):
-      raise Exception("Failed to create barcode heatmap plots using plot_genebc_heatmap.R")
+      raiseWarning("Failed to create barcode heatmap plots using plot_genebc_heatmap.R")
 
-    # create overlaid gene log10 distribution frequency curve (w/o genes with 0 reads)
-    genepdfPlot = pluginParams['prefix']+".genepdf.png"
-    if os.system( '%s "%s" "%s" %d "Distribution of Gene Reads" < %s' % ( runR,
-        os.path.join(output_dir,bcmatrix), os.path.join(output_dir,genepdfPlot), numReports,
-        os.path.join(plugin_dir,'scripts','plot_multi_pdf.R') ) ):
-      raise Exception("Failed to create gene read pdf plot using plot_multi_pdf.R")
-
-    # create barchart of mapped reads
-    alignmentPlot = pluginParams['prefix']+".mapreads.png"
-    if os.system( '%s "%s" "%s" "Reads Alignment Summary" "Million Reads" 0.000001 < %s' % ( runR,
-        os.path.join(output_dir,readsfile), os.path.join(output_dir,alignmentPlot),
-        os.path.join(plugin_dir,'scripts','plot_reads_hbar.R') ) ):
-      raise Exception("Failed to create barcode read alignment plot using plot_reads_hbar.R")
-
-    # convert normalized RPM to CHP format for TAC software
-    rpm2log = os.path.join(plugin_dir,"scripts","log2rpm.pl");
-    log2rpm = pluginParams['prefix']+".log2rpm.xls";
-    chp_con = os.path.join(plugin_dir,"tac","convert2chp.py");
-    chp_zip = pluginParams['prefix']+".log2rpm.zip";
-    if os.system('%s %d "%s" > "%s"' % (rpm2log, numReports, os.path.join(output_dir,rpmbcmatrix), os.path.join(output_dir,log2rpm))):
-      raise Exception("Failed to create log2(rpm+1) files for %s." % rpmbcmatrix)
-    else:
-      chp_dir = "convert2chp"
-      if os.system('python %s -A "%s" -n "%s" -P %s -V "%s" -m %s -i %s -o %s' % ( chp_con, fileName(pluginParams['config']['targetregions_id']),
-	pluginParams['prefix']+"_", pluginParams['plugin_name'], pluginParams['cmdOptions'].version,
-        'RPM-normalized', os.path.join(output_dir,log2rpm), os.path.join(output_dir,chp_dir)) ):
-        raise Exception("Failed to create CHP files for %s."%log2rpm)
-      else:
-        os.system('zip -r %s %s'%(chp_zip,chp_dir))
+    # give warning about missing plots if not one already
+    if warningMessage == "" and numReports < 2:
+      warningMessage = "Some plots unavailable without multiple barcodes."
 
     # record output files for use in barcode summary report
     # (p_bcmatrix used for passing to php script for interactive utilities)
@@ -445,6 +451,12 @@ def run_meta_plugin():
       "genebcplot" : genevarHeatmap,
       "cpairsplot" : cpairsPlot
     })
+
+def raiseWarning(msg):
+  global warningMessage
+  #raise Exception(msg)
+  printlog("WARNING: "+msg)
+  warningMessage = "Run completed with warnings. Refer to Plugin Log.";
 
 
 def updateBarcodeSummaryReport(barcode,autoRefresh=False):
@@ -512,6 +524,8 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
   # extra report items, e.g. file links from barcodes summary page
   if barcodeReport:
     render_context.update(barcodeReport)
+    if warningMessage != "":
+      render_context.update({"WarningMsg":warningMessage})
   createReport( os.path.join(pluginParams['results_dir'],pluginParams['report_name']), 'barcode_summary.html', render_context )
 
 

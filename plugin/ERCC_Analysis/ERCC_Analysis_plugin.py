@@ -82,6 +82,7 @@ def configReport():
   config = pluginParams['config']
   return {
     "Launch Mode" : config['launch_mode'],
+    "Read Type"   : pluginParams['readType'],
     "Reference Genome" : pluginParams['genome_id'],
     "Passing R-square" : config['minrsquared'],
     "Min. Read Counts" : config['mincounts'],
@@ -98,6 +99,7 @@ def printStartupMessage():
   config = pluginParams['config']
   printlog('Run configuration:')
   printlog('  Plugin version:   %s' % pluginParams['cmdOptions'].version)
+  printlog('  Read type:        %s' % pluginParams['readType'])
   printlog('  Launch mode:      %s' % config['launch_mode'])
   printlog('  Parameters:       %s' % pluginParams['jsonInput'])
   printlog('  Barcodes:         %s' % pluginParams['barcodeInput'])
@@ -141,8 +143,9 @@ def run_plugin(skiprun=False,barcode=""):
     printlog("Skipped analysis - generating report on in-situ data")
   else:
     # option for cmd-line detailed HTML report generation
-    runcmd = '%s %s %s -D "%s" -H "%s" -B "%s" -F "%s" -N "%s" -R "%s" -M "%s" -T "%s" "%s" %s' % (
-        os.path.join(plugin_dir,'run_erccanalysis.sh'), pluginParams['logopt'], fwd_reads, output_dir, pluginParams['report_name'],
+    ampliSeqRef = "-a" if pluginParams['readType'] == "amplicons" else ""
+    runcmd = '%s %s %s %s -D "%s" -H "%s" -B "%s" -F "%s" -N "%s" -R "%s" -M "%s" -T "%s" "%s" %s' % (
+        os.path.join(plugin_dir,'run_erccanalysis.sh'), pluginParams['logopt'], fwd_reads, ampliSeqRef, output_dir, pluginParams['report_name'],
         barcode, output_prefix, sample, reference, config['mincounts'], config['minrsquared'], bamfile, config['erccpool'] )
     if logopt: printlog('\n$ %s\n'%runcmd)
     if( os.system(runcmd) ):
@@ -503,6 +506,15 @@ def loadPluginParams():
     config['launch_mode'] = 'Autostart with default configuration'
     addAutorunParams()
 
+    if 'runType' in plan and plan['runType'] == "RNA":
+      config['fwdonlyreads'] = 'Yes'
+
+  pluginParams['readType'] = "fragments"
+  if 'plan' in jsonParams and 'runType' in jsonParams['plan']:
+    runtype = jsonParams['plan']['runType']
+    if runtype.startswith("AMPS") or runtype == "MIXED":
+      pluginParams['readType'] = "amplicons"
+    
   # plugin configuration becomes basis of results.json file
   global pluginResult, pluginReport
   pluginResult = configReport()

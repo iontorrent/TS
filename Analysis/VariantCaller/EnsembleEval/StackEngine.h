@@ -171,7 +171,7 @@ public:
     //! @brief Split the current variant into as many callable smaller variants as possible (primarily for candidate generator))
     void SplitMyAlleleIdentityVector(list<list<int> >& allele_group, const ReferenceReader &ref_reader, int max_group_size_allowed);
     //! @brief The "one-window" approach
-    void LookAheadSlidingWindow(int current_candidate_gen_window_end_0, const ReferenceReader &ref_reader, list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int max_group_size_allowed);
+    void LookAheadSlidingWindow(int current_candidate_gen_window_end_0, const ReferenceReader &ref_reader, list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int max_group_size_allowed, const TargetsManager * const targets_manager);
     void FinalSplitReadyToGoAlleles(list<list<int> >& allele_groups_ready_to_go, const ReferenceReader &ref_reader, int max_group_size_allowed);
 
     //------------------------------------------------------------------

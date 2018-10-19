@@ -405,12 +405,12 @@ void CandidateExaminer::SplitCandidateVariant(list<list<int> >& allele_groups){
 // !!! Important !!! If sliding_window_start_0 == sliding_window_end_0 == current_look_ahead_window_end_0, then all alleles are ready to go. No need to look ahead.
 // !!! Important !!! It shall guarantee both conditions as follows: a) All on-hold alleles will be generated in the new sliding window. b) No ready-to-go alleles will be generated in the new sliding window.
 void CandidateExaminer::LookAheadSlidingWindow0(list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int current_candidate_gen_window_end_0){
-    my_ensemble_->LookAheadSlidingWindow(current_candidate_gen_window_end_0, *(vc_->ref_reader), allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0, max_group_size_allowed_);
+    my_ensemble_->LookAheadSlidingWindow(current_candidate_gen_window_end_0, *(vc_->ref_reader), allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_0, sliding_window_end_0, max_group_size_allowed_, vc_->targets_manager);
 }
 
 // The 1-based coordinate version of LookAheadSlidingWindow0.
 void CandidateExaminer::LookAheadSlidingWindow1(list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_1, int& sliding_window_end_1, int current_candidate_gen_window_end_1){
-	my_ensemble_->LookAheadSlidingWindow(--current_candidate_gen_window_end_1, *(vc_->ref_reader), allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_1, sliding_window_end_1, max_group_size_allowed_);
+	my_ensemble_->LookAheadSlidingWindow(--current_candidate_gen_window_end_1, *(vc_->ref_reader), allele_groups_ready_to_go, alleles_on_hold, sliding_window_start_1, sliding_window_end_1, max_group_size_allowed_,vc_->targets_manager);
 	++sliding_window_start_1;
 	++sliding_window_end_1;
 }

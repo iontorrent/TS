@@ -169,10 +169,27 @@
 - name: install ntp server package
   apt: name=ntp state=present
 
-- name: Edit ntp.conf
-  lineinfile: dest=/etc/ntp.conf
-                regexp="^restrict {{ b_subnet }}.*"
-                line="restrict {{ b_subnet }}.0.0 mask 255.255.0.0 nomodify notrap"
+- name: Edit ntp.conf to add localhost as fallback server
+  lineinfile:
+    dest: /etc/ntp.conf
+    line: "server 127.127.1.0"
+    state: present
+  notify: restart ntp
+
+- name: Edit ntp.conf to lower stratum setting for localhost
+  lineinfile:
+    dest: /etc/ntp.conf
+    line: "fudge 127.127.1.0 stratum 10"
+    state: present
+    insertafter: "server 127.127.1.0"
+  notify: restart ntp
+
+- name: Edit ntp.conf to apply access control for machines in instrument subnets
+  lineinfile:
+    dest: /etc/ntp.conf
+    regexp: "^restrict {{ b_subnet }}.*"
+    line: "restrict {{ b_subnet }}.0.0 mask 255.255.0.0 nomodify notrap"
+    state: present
   notify: restart ntp
 
 

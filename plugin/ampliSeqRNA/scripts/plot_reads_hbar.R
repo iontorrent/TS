@@ -21,8 +21,8 @@ if( ncols < 2 ) {
   q(status=1)
 }
 nrows <- nrow(data)
-if( nrows < 2 ) {
-  write(sprintf("ERROR: Expected at least 2 rows of data (plus header line) in data file %s\n",nFileIn),stderr())
+if( nrows < 1 ) {
+  write(sprintf("ERROR: Expected at least 1 row of data (after header line) in data file %s\n",nFileIn),stderr())
   q(status=1)
 }
 
@@ -58,8 +58,11 @@ nrows <- nrow(data)
 ncols <- ncol(data)
 
 # finally swap order of rows for barplot
-data <- data[,ncol(data):1]
-pnames <- pnames[ncol(data):1]
+# note: converts table back to vector when only 1 column!!!
+if( ncols > 1 ) {
+  data <- data[,ncols:1]
+  pnames <- pnames[ncols:1]
+}
 
 # default colors plus rainbow if more than typical 5
 colors <- c("#F1B556","#FFCFEF","#636767","#81A8C9","#A476A4")

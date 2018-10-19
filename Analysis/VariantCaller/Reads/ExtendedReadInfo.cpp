@@ -53,13 +53,15 @@ void GetPrefixFlow(Alignment *rai, const string & prefix_bases, const ion::FlowO
 // Sets the member variables ref_aln, seq_aln, pretty_aln, startSC, endSC
 void UnpackAlignmentInfo(Alignment *rai)
 {
+  // TS-17069 Use the original CIGAR for splicing
+  const vector<CigarOp>& cigar_for_unpack = rai->old_cigar;
   rai->left_sc = 0;
   rai->right_sc = 0;
 
   unsigned int num_query_bases = 0;
   bool match_found = false;
 
-  for (vector<CigarOp>::const_iterator cigar = rai->alignment.CigarData.begin(); cigar != rai->alignment.CigarData.end(); ++cigar) {
+  for (vector<CigarOp>::const_iterator cigar = cigar_for_unpack.begin(); cigar != cigar_for_unpack.end(); ++cigar) {
     switch (cigar->Type) {
       case 'M':
       case '=':
@@ -96,7 +98,7 @@ void UnpackAlignmentInfo(Alignment *rai)
   // Basic alignment sanity check
   if (num_query_bases != rai->alignment.QueryBases.length()) {
     cerr << "WARNING in ExtendedReadInfo::UnpackAlignmentInfo: Invalid Cigar String in Read " << rai->alignment.Name << " Cigar: ";
-    for (vector<CigarOp>::const_iterator cigar = rai->alignment.CigarData.begin(); cigar != rai->alignment.CigarData.end(); ++cigar)
+    for (vector<CigarOp>::const_iterator cigar = cigar_for_unpack.begin(); cigar != cigar_for_unpack.end(); ++cigar)
       cerr << cigar->Length << cigar->Type;
     cerr << " Length of query string: " << rai->alignment.QueryBases.length() << endl;
     assert(num_query_bases == rai->alignment.QueryBases.length());

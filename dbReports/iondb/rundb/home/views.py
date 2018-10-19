@@ -32,7 +32,7 @@ def is_live(ip):
         socket.gethostbyaddr(ip)
     except:
         # try ping
-        ping = ['timeout', '0.25', 'ping', '-c 2', ip]
+        ping = ['ping', '-c 2', '-W 1', ip]
         try:
             subprocess.check_call(ping)
         except:

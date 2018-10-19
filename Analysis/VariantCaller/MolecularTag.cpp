@@ -601,6 +601,7 @@ void ConsensusAlignmentManager::PartiallyCopyAlignmentFromAnother_(Alignment& al
 	alignment.alignment = template_alignment.alignment;
 	// Copy all the member variables determined in AlleleParser::UnpackReadAllele
 	alignment.original_position = template_alignment.original_position;
+	alignment.original_end_position = template_alignment.original_end_position;
 	alignment.start = template_alignment.start;
 	alignment.end = template_alignment.end;
 	alignment.snp_count = template_alignment.snp_count;

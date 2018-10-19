@@ -15,7 +15,7 @@ def parse_transcript_line(line,fwd_only=False):
     else:
         return parsed_line[2], int(parsed_line[4])
 
-def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,fwd_only=False):
+def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,transcript_names,fwd_only=False):
     result_counts = {}
     all_ercc_counts = 0
     total_counts = 0
@@ -29,7 +29,9 @@ def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,fwd_only=Fal
             # if transcript_name == '*':
             if transcript_name == '@':
                 filtered_sam_file.write(line)
-            elif re.search('^ERCC-\d+$',transcript_name) == None:
+            # GDM: changed so only ERCCs in the provided list are counted
+            #elif re.search('^ERCC-\d+$',transcript_name) == None:
+            elif not transcript_name in transcript_names:
                 total_counts += 1
             elif transcript_name in result_counts:
                 result_counts[transcript_name] += 1
@@ -48,7 +50,7 @@ def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,fwd_only=Fal
     return result_counts, all_ercc_counts, total_counts, mean_mapqs
 
 def write_output_counts_file(path_to_raw_sam_file,path_to_filtered_sam_file,path_to_output_counts_file,transcript_names,fwd_only=False):
-    result_counts, all_ercc_counts, total_counts, mean_mapqs = process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,fwd_only)
+    result_counts, all_ercc_counts, total_counts, mean_mapqs = process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,transcript_names,fwd_only)
     #todo: check that result_counts is a valid result
     #todo: check that the path_to_output_counts_file is valid
     with open(path_to_output_counts_file,'w') as fout:

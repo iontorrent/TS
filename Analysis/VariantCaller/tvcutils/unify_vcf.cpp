@@ -362,6 +362,12 @@ int VcfOrderedMerger::variant_cmp_secplus(const T* v1, const vcf::Variant* v2) c
   return compare(idx_v1, v1->position, idx_v2, (long) (v2->position+50+v2->ref.length()));
 }
 
+template <typename T>
+int VcfOrderedMerger::variant_cmp_secplus_more(const T* v1, const vcf::Variant* v2) const {
+  int idx_v1 = reference_reader.chr_idx(v1->sequenceName.c_str());
+  int idx_v2 = reference_reader.chr_idx(v2->sequenceName.c_str());
+  return compare(idx_v1, v1->position, idx_v2, (long) (v2->position+250));
+}
 
 
 // -----------------------------------------------------------------------------------
@@ -380,6 +386,12 @@ bool VcfOrderedMerger::too_far(vcf::Variant* v1, vcf::Variant* v2) {
     v2->position += far; // return to the original position
     return (com == 1);
     */
+}
+
+bool VcfOrderedMerger::too_far_far(vcf::Variant* v1, vcf::Variant* v2) {
+    if (v2 == NULL) return true;
+    int com = variant_cmp_secplus_more(v2, v1);
+    return (com == -1);
 }
 
 // -----------------------------------------------------------------------------------
@@ -1129,7 +1141,7 @@ void VcfOrderedMerger::flush_vcf(vcf::Variant* latest)
   while (not variant_list.empty()) {
     vcf::Variant* current = &(*variant_list.begin());
 
-    if (too_far(current, latest)) {
+    if (too_far_far(current, latest)) {
       if (is_within_target_region(current)) { 
 	unsigned int i;
         bool has_oid = false;

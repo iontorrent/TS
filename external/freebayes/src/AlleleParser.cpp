@@ -119,6 +119,7 @@ bool AlleleParser::BasicFilters(Alignment& ra) const
     exit(1);
   }
   ra.original_position = ra.alignment.Position;
+  ra.original_end_position = ra.alignment.GetEndPosition();
   ra.end = ra.alignment.GetEndPosition();
 
   // Basic read filters
@@ -1376,7 +1377,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		      }
 		    }
 		    if (alleles_on_hold.size() == 0) return;
-		    if (current_look_up_window == max_length) {
+		    if (current_look_up_window == max_length or alleles_on_hold.size() == 0) {
 			list<int> co;
 			for (unsigned int i = 0; i < alleles_on_hold.size(); i++) co.push_back(alleles_on_hold[i]);
 			if (co.size() > 0) { 
@@ -1410,7 +1411,8 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		    return;
 		}
 		lkbase = look_ahead_sliding_win_end - position_ticket->pos-haplotype_length;
-		if (lkbase < 1) lkbase = 1; // advance at least one base
+		//if (lkbase < 1) lkbase = 1; // advance at least one base
+		if (lkbase < 0) lkbase = 0;
 		current_look_up_window = min(max_length, haplotype_length+lkbase);
 		scan_length = current_look_up_window;
 		PileUpAlleles(allowed_allele_types_, current_look_up_window, true, position_ticket, new_prefix);

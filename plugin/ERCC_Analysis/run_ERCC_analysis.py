@@ -22,7 +22,7 @@ FILTERED_SAM_FILE = sys.argv[1] + '/filtered.sam'
 OUTPUT_DIR = sys.argv[1] + '/'
 COUNTS_FILE = OUTPUT_DIR + 'ercc.counts'
 COUNTS_URL = 'ercc.counts'
-GENOME   = DATA + '/ercc.genome'
+GENOME = DATA + '/' + sys.argv[12]
 ERCC_CONC = DATA + '/ERCCconcentration.txt'
 ERCC_CONC_COLS = {'ERCC ID': str, 'Pool1': float, 'Pool2': float, 'log2pool1': float, 'log2pool2': float}
 try:
@@ -50,7 +50,8 @@ try:
 except:
   ONLY_FWD_READS = False
 
-  
+print >> sys.stderr, "ERCC genome subset: "+GENOME
+
 data_to_display = True
 msg_to_user = ""  
   

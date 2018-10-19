@@ -207,6 +207,10 @@ $(document).ready(function() {
 <div style="text-align:center">Click here to refresh</div></a>
 {% endif %}
 
+{% if WarningMsg %}
+<br/><h3 style="text-align:center;color:orange">{{WarningMsg}}</h3>
+{% endif %}
+
 {% if bctable %}
 <li><a href="{{bctable}}" title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a></li>
 {% endif %}

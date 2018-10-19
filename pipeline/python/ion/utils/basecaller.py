@@ -310,7 +310,7 @@ def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
         for read_group in combined_datasets_json['IonControl']['read_groups'].iterkeys():
             initalize_combined_readgroup(combined_datasets_json['IonControl']['read_groups'][read_group])
             for current_datasets_json in block_datasets_json:
-                combine_read_groups(combined_datasets_json['IonControl']['read_groups'][read_group], current_datasets_json['IonControl']['read_groups'], read_group)
+                combine_read_groups(combined_datasets_json['IonControl']['read_groups'][read_group], current_datasets_json['IonControl']['read_groups'].get(read_group, {}))
             compute_read_group_averages(combined_datasets_json['IonControl']['read_groups'][read_group])
 
     # Barcode filters -------------------------------------------------------
