@@ -30,9 +30,9 @@ OPTIONAL_SIGNAL_FILE_PATTERNS = ['Bead_density_20.png', 'Bead_density_70.png', '
 class RunTransfer(IonPlugin):
     """Main class definition for this plugin"""
 
-    version = '5.8.0.3'
+    version = '5.10.0.1'
     author = "bernard.puc@thermofisher.com"
-    runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
+    runtypes = [RunType.FULLCHIP, RunType.COMPOSITE]
 
     results_dir = None
     raw_data_dir = None
@@ -46,13 +46,11 @@ class RunTransfer(IonPlugin):
     user_name = None
     user_password = None
     upload_path = None
-    thumbnail_only = None
     is_proton = False
     total_blocks = None
     transferred_blocks = None
     json_head = {'Content-Type': 'application/json'}
     rest_auth = None
-    is_thumbnail = False
     spj = dict()
 
     @cached_property
@@ -208,7 +206,7 @@ class RunTransfer(IonPlugin):
     def start_reanalysis(self):
         """Set the status for a reanalysis"""
         self.show_standard_status("<p><h2>Status:</h2><small>Launching Analysis</small><img src=\"/site_media/jquery/colorbox/images/loading.gif\" alt=\"Running Plugin\" style=\"float:center\"></img></p>\n")
-        analysis_params = {'directory': self.upload_path, 'is_thumbnail': self.is_thumbnail}
+        analysis_params = {'directory': self.upload_path, 'is_thumbnail': False}
         response = requests.post('http://' + self.server_ip + '/rundb/api/v1/experiment/from_wells_analysis/', data=json.dumps(analysis_params), headers=self.json_head, auth=self.rest_auth)
         response.raise_for_status()
         return response.content
@@ -275,11 +273,11 @@ class RunTransfer(IonPlugin):
         api_version_directory = '/rundb/api/v1/torrentsuite/version'
         local_version_response = requests.get(self.spj['runinfo']['net_location'] + api_version_directory)
         local_version_response.raise_for_status()
-        local_version = '5.8.0.0'
+        local_version = '5.10.0.0'
 
         remote_version_response = requests.get('http://' + self.server_ip + api_version_directory)
         remote_version_response.raise_for_status()
-        remote_version = '5.8.0.0'
+        remote_version = '5.10.0.0'
 
         if not remote_version:
             raise Exception('Could not establish version of remote computer, exiting.')
@@ -343,13 +341,11 @@ class RunTransfer(IonPlugin):
                 return True
 
             self.upload_path = os.path.join(self.spj['pluginconfig']['upload_path'], self.results_dir_base + '_foreign')
-            self.thumbnail_only = self.spj['pluginconfig'].get('thumbnailonly', 'off').lower() in ['true', 'on']
             # Determine Dataset Type
             self.is_proton = self.spj['runinfo']['platform'].lower() in ['proton', 's5']
-            self.is_thumbnail = self.spj['runplugin']['run_type'].lower() == 'thumbnail'
 
-            if self.thumbnail_only and not self.is_thumbnail and not self.is_proton:
-                self.show_standard_status("The plugin is set to only transfer PGM or thumbnail data sets, exiting without effect.")
+            if self.spj['runplugin']['run_type'].lower() == 'thumbnail':
+                self.show_standard_status("The plugin is set to only transfer non-thumbnail data.")
                 return True
 
             plan = self.spj.get('plan', dict())
@@ -406,22 +402,18 @@ class RunTransfer(IonPlugin):
                 with open(os.path.join(self.output_dir, CHEF_SUMMARY_FILENAME), 'w') as chef_file_handle:
                     json.dump(chef_summary, chef_file_handle)
 
-            # if this is a thumbnail run, then we will have to update the upload folder to be the thumbnail directory
-            if self.is_thumbnail and self.is_proton:
-                self.upload_path = os.path.join(self.upload_path, 'thumbnail')
-
             # get a list of all of the files which will be transferred
             file_transfer_list = list()
             src_sigproc_dir = os.path.join(self.results_dir, 'sigproc_results')
-            if not self.is_proton or self.is_thumbnail:
-                # first collect a list of all of the files to transfer from all of the block directories
-                file_transfer_list = self.get_list_of_files_pgmstyle(src_sigproc_dir)
-            else:
+            if self.is_proton:
                 # generate a list of all of the block directories
                 block_directories = [os.path.join(src_sigproc_dir, block_dir) for block_dir in os.listdir(src_sigproc_dir) if os.path.isdir(os.path.join(src_sigproc_dir, block_dir)) and 'thumbnail' not in block_dir]
 
                 # first collect a list of all of the files to transfer from all of the block directories
                 file_transfer_list = self.get_list_of_files_blockstyle(src_sigproc_dir, block_directories)
+            else:
+                # first collect a list of all of the files to transfer from all of the block directories
+                file_transfer_list = self.get_list_of_files_pgmstyle(src_sigproc_dir)
 
             file_transfer_list += self.get_list_of_files_common()
             # now transfer the files across the transport layer

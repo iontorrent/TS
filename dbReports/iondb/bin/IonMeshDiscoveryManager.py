@@ -68,7 +68,7 @@ class IonMeshDiscoveryManager(threading.Thread):
 
     def getMeshComputers(self):
         """
-        This will create a copy of the list of the comupters in the mesh by hostname
+        This will create a copy of the list of the computers in the mesh by hostname
         :return: List of hostnames converted to fully qualified domain names
         """
         self.__threadLock.acquire()

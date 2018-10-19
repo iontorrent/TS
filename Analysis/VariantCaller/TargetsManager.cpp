@@ -54,7 +54,6 @@ bool CompareTargets(TargetsManager::UnmergedTarget *i, TargetsManager::UnmergedT
 void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string& _targets, float min_cov_frac, bool _trim_ampliseq_primers /*const ExtendParameters& parameters*/)
 {
   min_coverage_fraction = min_cov_frac;
-  chr_to_merged_idx.assign(ref_reader.chr_count(), -1);
   //
   // Step 1. Retrieve raw target definitions
   //
@@ -115,11 +114,8 @@ void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string&
       merged.back().begin = unmerged[idx].begin;
       merged.back().end = unmerged[idx].end;
       merged.back().first_unmerged = idx;
-      if (chr_to_merged_idx[unmerged[idx].chr] < 0){
-    	  chr_to_merged_idx[unmerged[idx].chr] = (int) merged.size() - 1;
-      }
     }
-    unmerged[idx].merged = (int) merged.size() - 1;
+    unmerged[idx].merged = merged.size();
   }
 
   if (_targets.empty()) {
@@ -306,7 +302,7 @@ void TargetsManager::GetBestTargetIndex(Alignment *rai, int unmerged_target_hint
 
   // Step 2: Iterate over potential target regions, evaluate fit, pick the best fit
   best_target_idx = -1;
-  best_fit_penalty = 100;
+  best_fit_penalty = 500;
   best_overlap = 0;
 
   while (target_idx < (int)unmerged.size() and rai->alignment.RefID == unmerged[target_idx].chr and rai->end >= unmerged[target_idx].begin) {
@@ -321,19 +317,24 @@ void TargetsManager::GetBestTargetIndex(Alignment *rai, int unmerged_target_hint
     float overlap_ratio = (float) overlap / (float) (unmerged[target_idx].end - unmerged[target_idx].begin);
     if (overlap_ratio > min_coverage_fraction)
       rai->target_coverage_indices.push_back(target_idx);
-
+    /*else{
+      // Quick fix for TS-16996
+      ++target_idx;
+      continue;
+    }
+    */
     if (not rai->alignment.IsReverseStrand()) {
       if (read_prefix_size > 0)
         fit_penalty = min(read_prefix_size,50) + max(0,50-overlap);
       else
         fit_penalty = min(-3*read_prefix_size,50) + max(0,50-overlap);
-      if (read_postfix_size > 30) fit_penalty += read_postfix_size-10;
+      if (read_postfix_size > 30) fit_penalty += min(read_postfix_size/2, 25);
     } else {
       if (read_postfix_size > 0)
         fit_penalty = min(read_postfix_size,50) + max(0,50-overlap);
       else
         fit_penalty = min(-3*read_postfix_size,50) + max(0,50-overlap);
-      if (read_prefix_size > 30) fit_penalty += read_prefix_size-10;
+      if (read_prefix_size > 30) fit_penalty += min(read_prefix_size/2, 25);
     }
     if (read_prefix_size > 0 and read_postfix_size > 0)
       fit_penalty -= 10;
@@ -412,7 +413,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
     }
 
     unsigned int gap = begin - ref_pos;
-    if (gap == 0)
+    if (gap == 0 and old_op->Type != 'D')
       break;
 
     if (old_op->Type == 'M' or old_op->Type == 'N') {
@@ -482,7 +483,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
     }
 
     if (old_op->Type == 'D') {
-      if (old_op->Length > gap) {
+      if (old_op->Length >= gap) {
 	// last D op, remove this one
         ref_pos += old_op->Length;
 	++old_op; 
@@ -593,90 +594,4 @@ void TargetsManager::AddCoverageToRegions(const map<int, TargetStat>& stat_of_ta
 		unmerged[target_idx].my_stat.read_coverage_by_best_target += stat_it->second.read_coverage_by_best_target;
 	}
 	pthread_mutex_unlock(&coverage_counter_mutex_);
-}
-
-
-bool TargetsManager::IsCoveredByMerged(int merged_idx, int chr, long pos) const{
-	// Skip the check of chromosone if chr < 0.
-	if (chr >= 0 and merged[merged_idx].chr != chr){
-		return false;
-	}
-
-	// Note that the regions are left-close and right-open.
-	return (pos >= merged[merged_idx].begin) and (pos < merged[merged_idx].end);
-
-}
-
-// Is the (0-based) interval [pos_start, pos_end) fully covered by merged[merged_idx]?
-bool TargetsManager::IsFullyCoveredByMerged(int merged_idx, int chr, long pos_start, long pos_end) const{
-	// Skip the check of chromosone if chr < 0.
-	if (chr >= 0 and merged[merged_idx].chr != chr){
-		return false;
-	}
-	assert(pos_start <= pos_end);
-	// Note that the regions are left-close and right-open.
-	return (pos_start >= merged[merged_idx].begin) and (pos_end < merged[merged_idx].end);
-
-}
-
-// Definition [Breaking Interval]
-// An interval [pos_start, pos_end) is a breaking interval of the merged target if there is NO unmerged target (in the merged target) that fully cover [pos_start, pos_end).
-bool TargetsManager::IsBreakingIntervalInMerged(int merged_idx, int chr, long pos_start, long pos_end) const{
-	assert(pos_start <= pos_end);
-	// Note that chr < 1 skips the check of chromosome.
-	if (not IsFullyCoveredByMerged(merged_idx, chr, pos_start, pos_end)){
-		// By definition, a position that is not in the merged target is not its breaking point.
-		return false;
-	}
-	for (int unmerged_idx = merged[merged_idx].first_unmerged; unmerged_idx < (int) unmerged.size(); ++unmerged_idx){
-		if (unmerged[unmerged_idx].merged != merged_idx){
-			break;
-		}
-		if (pos_start >= unmerged[unmerged_idx].begin and pos_end <= unmerged[unmerged_idx].end){
-			// Not a breaking point if I find a unmerged region that covers [pos_start, pos_end)
-			return false;
-		}
-	}
-	// No such unmerged region is found. Must be a breaking point.
-	return true;
-}
-
-int TargetsManager::FindMergedTargetIndex(int chr, long pos) const{
-	// merged_idx_start is the first index of merged of the chromosome
-	int merged_idx_start = chr_to_merged_idx[chr];
-	// merged_idx_end is the last index of merged of the chromosome
-	int merged_idx_end = (int) merged.size() - 1;
-	// return -1 if no region of the chromosome
-	if (merged_idx_start < 0){
-		return -1;
-	}
-	if (IsCoveredByMerged(merged_idx_start, chr, pos)){
-		return merged_idx_start;
-	}
-
-	// Search for merged_idx_end
-	for (int chr_idx = chr + 1; chr_idx < (int) chr_to_merged_idx.size(); ++chr_idx){
-		if (chr_to_merged_idx[chr_idx] > 0){
-			merged_idx_end = chr_to_merged_idx[chr_idx] - 1;
-			break;
-		}
-	}
-	if (IsCoveredByMerged(merged_idx_end, chr, pos)){
-		return merged_idx_end;
-	}
-
-	// Binary search
-	int probe_idx = merged_idx_start + (merged_idx_end - merged_idx_start) / 2;
-	while (probe_idx != merged_idx_start and probe_idx != merged_idx_end){
-		if (IsCoveredByMerged(probe_idx, chr, pos)){
-			return probe_idx;
-		}
-		if (merged[probe_idx].begin > pos){
-			merged_idx_end = probe_idx;
-		}else{
-			merged_idx_start = probe_idx;
-		}
-		probe_idx = merged_idx_start + (merged_idx_end - merged_idx_start) / 2;
-	}
-	return -1;
 }

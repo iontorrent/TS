@@ -49,30 +49,41 @@ tmap_refseq_get_version_format(const char *v)
 static inline int32_t
 tmap_refseq_supported(tmap_refseq_t *refseq)
 {
-  int32_t i, j;
+  int32_t i, j, sent;
   char *refseq_v = refseq->package_version->s;
   char *tmap_v = PACKAGE_VERSION;
 
   // sanity check on version names
-  for(i=j=0;i<(int32_t)strlen(refseq_v);i++) {
-      if('.' == refseq_v[i]) j++;
+  // DK: we should deprecate the check below or make it more robust. Now it just checks for a number of dots in version string, which is misleading.
+  for (i = 0, j = 0, sent = (int32_t) strlen (refseq_v); i < sent; ++i) 
+  {
+      if ('.' == refseq_v [i]) 
+	  j++;
   }
-  if(2 != j) {
-      tmap_error("did not find three version numbers", Exit, OutOfRange);
+  if (j < 2) 
+  {
+      fprintf (stderr, "malformed reference file version: %s", refseq_v);
+      tmap_error("reference version should conain at least 3 dot-separated components", Exit, OutOfRange);
   }
-  for(i=j=0;i<(int32_t)strlen(tmap_v);i++) {
-      if('.' == tmap_v[i]) j++;
+  for (i=0, j=0, sent = (int32_t)strlen(tmap_v); i < sent; ++i) 
+  {
+      if ('.' == tmap_v[i]) 
+	  j++;
   }
-  if(2 != j) {
-      tmap_error("did not find three version numbers", Exit, OutOfRange);
+  if(j < 2) 
+  {
+      fprintf (stderr, "malformed TMAP version: %s", tmap_v);
+      tmap_error("Version should contain at least 3 dot-separated components", Exit, OutOfRange);
   }
 
-  if(tmap_compare_versions(tmap_v, refseq_v) < 0) {
+  if (tmap_compare_versions (tmap_v, refseq_v) < 0) 
+  {
       return 0;
   }
   
-  // get the format ids
-  if(0 == strcmp(tmap_refseq_get_version_format(refseq_v), tmap_refseq_get_version_format(tmap_v))) {
+  // make sure format ids match
+  if(0 == strcmp (tmap_refseq_get_version_format (refseq_v), tmap_refseq_get_version_format (tmap_v))) 
+  {
       return 1;
   }
   return 0;

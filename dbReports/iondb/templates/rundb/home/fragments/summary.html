@@ -1,0 +1,105 @@
+{% load static from staticfiles %}
+{% load pagetools %}
+<div class="row-fluid server-status">
+    <div class="span3 server-stat">
+        <p class="server-status-header">SOFTWARE</p>
+        <ul class="unstyled">
+            <li><a href="{% url "configure_about" %}">Torrent Suite {{ summary.ts_version }}</a></li>
+            {% if summary.update_status.lower == "available" or "ready" in summary.update_status.lower %}
+                <li><a id="live_button" class="btn btn-success" href="/admin/update">Update available</a></li>
+            {% elif "fail" in summary.update_status.lower %}
+                <li><i class="fa fa-exclamation-circle text-error"></i>{{ summary.update_status }}</li>
+            {% elif "configure server" in summary.update_status.lower %}
+                <li><i class="fa fa-exclamation-circle text-success"></i>Configure server successful</li>
+            {% elif "finished" in summary.update_status.lower %}
+                <li><i class="fa fa-check-circle text-success"></i>Software update successful</li>
+            {% endif %}
+        </ul>
+    </div>
+    <div class="span3 server-stat">
+        <p class="server-status-header">INSTRUMENTS</p>
+        <ul class="unstyled">
+            {% if summary.instruments.connected > 0 %}
+                <li><i class="fa fa-check-circle text-success"></i>
+                    <span>{{ summary.instruments.connected }}</span> connected
+                </li>
+            {% endif %}
+            {% if summary.instruments.offline > 0 %}
+                <li><i class="fa fa-exclamation-triangle text-warning"></i>
+                    <span>{{ summary.instruments.offline }}</span> offline
+                </li>
+            {% endif %}
+            {% if summary.instruments.alerts > 0 %}
+                <li><i class="fa fa-exclamation-circle text-error"></i>
+                    <span>{{ summary.instruments.alerts }}</span> alert{{ summary.instruments.alerts|pluralize }}
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+
+    <div class="span3 server-stat">
+        <p class="server-status-header">SERVICES</p>
+        <ul class="unstyled">
+            {% if summary.services.number_services_down == 0 %}
+                <li><i class="fa fa-check-circle text-success"></i> <a href="{{ summary.services.url }}">All services
+                    running</a></li>
+            {% else %}
+                <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{ summary.services.url }}"><span
+                >{{ summary.services.number_services_down }}</span>
+                    service{{ summary.services.number_services_down|pluralize }} down</a></li>
+            {% endif %}
+            {% if summary.services.show_cluster %}
+                {% if summary.services.number_nodes_down == 0 %}
+                    <li><i class="fa fa-check-circle text-success"></i>
+                        <a href="{{ summary.services.url }}">Cluster normal</a></li>
+                {% else %}
+                    <li><i class="fa fa-exclamation-circle text-error"></i>
+                        <a href="{{ summary.services.url }}">{{ summary.services.number_nodes_down }} cluster
+                            node{{ summary.services.number_nodes_down|pluralize }} down</a></li>
+                {% endif %}
+            {% endif %}
+            {% if summary.services.show_nas %}
+                {% if summary.services.nas_status == "good" %}
+                    <li><i class="fa fa-check-circle text-success"></i> <a href="{{ summary.services.url }}">Torrent NAS normal</a></li>
+                {% elif summary.services.nas_status == "warning" %}
+                    <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{ summary.services.url }}">Torrent NAS warning</a></li>
+                {% elif summary.services.nas_status == "error" %}
+                    <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{ summary.services.url }}">Torrent NAS error</a></li>
+                {% endif  %}
+            {% endif %}
+            {% if summary.services.show_raid %}
+                {% if summary.services.raid_status == "good" %}
+                    <li><i class="fa fa-check-circle text-success"></i> <a href="{{ summary.services.url }}">RAID storage normal</a></li>
+                {% elif summary.services.raid_status == "warning" %}
+                    <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{ summary.services.url }}">RAID storage warning</a></li>
+                {% elif summary.services.raid_status == "error" %}
+                    <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{ summary.services.url }}">RAID storage error</a></li>
+                {% endif  %}
+            {% endif %}
+        </ul>
+    </div>
+
+    <div class="span3 server-stat">
+        <p class="server-status-header">DATA MANAGEMENT</p>
+        <ul class="unstyled">
+            {% for path, disk_usage in summary.data_management.disk_usage %}
+                <li>
+                    {% if disk_usage < 70 %}<i class="fa fa-check-circle text-success"></i>
+                    {% elif disk_usage >= 70 and disk_usage < 90 %}
+                        <i class="fa fa-exclamation-triangle text-warning"></i>
+                    {% else %}<i class="fa fa-exclamation-circle text-error"></i>
+                    {% endif %}
+                    <a href="{{ summary.data_management.url }}">Disk usage {{ disk_usage|floatformat:1 }}%
+                        {% if summary.data_management.show_path %}- {{ path }}{% endif %}
+                    </a>
+                </li>
+            {% endfor %}
+            {% for job, num  in summary.data_management.dm_jobs %}
+                {% if num > 0 %}
+                    <li><i class="fa fa-cogs"></i> <a href="{{ summary.data_management.url }}">{{ num }}
+                        data {{ job }}</a></li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+</div>

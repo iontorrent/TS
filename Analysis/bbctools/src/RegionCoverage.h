@@ -132,6 +132,9 @@ class RegionCoverage
         TargetRegion        *m_rcovRegion;
         TargetRegion        *m_lastRegionAssigned;
 
+        // v1.3 read assignment options
+        int32_t m_targetPadding;
+
         // common optional depth at coverage stats
         size_t      m_numAuxFields;
         size_t      m_ncovDepths;
@@ -207,6 +210,12 @@ class RegionCoverage
         // The position within or at the start of first region beyond is also saved (=> subregion start)
         // Returns false if locus is out of bounds or there is no region beyond the locus passed.
         bool SetCursorOnRegion( uint32_t contigIdx, uint32_t position );
+
+        // Sets an adjustment of target ends to capture (or exclude) reads proximal to target ends for assignment
+       	// padding=0 is pre-1.3 behavior. 1 allows read capture if aligned abutting target. -ve is allowed.
+        void SetRegionPadding( int32_t padding ) {
+         	m_targetPadding = padding;
+        }
 
         // Set up targets as whole reference contigs.
         // Alternative to Load() method (when no targets file)

@@ -49,12 +49,14 @@ struct Allele {
 // structure to encapsulate registered reads and alleles
 struct Alignment {
 
-  Alignment() { Reset(); read_count = 1;}
+  Alignment() {
+	  Reset();
+	  read_count = 1;
+  }
   void Reset() {
     next = NULL;
     read_number = 0;
     original_position = 0;
-    original_end_position = 0;
     processed = false;
     processing_prev = NULL;
     processing_next = NULL;
@@ -64,6 +66,7 @@ struct Alignment {
     sample_index = 0;
     primary_sample = false;
     snp_count = 0;
+    is_read_allele_unpacked = false;
     refmap_start.clear();
     refmap_code.clear();
     refmap_has_allele.clear();
@@ -92,14 +95,13 @@ struct Alignment {
     prefix_bases.clear();
     suffix_bases.clear();
     tag_info.Clear();
-//	read_count = 1;
   }
 
   BamAlignment          alignment;          //! Raw BamTools alignment
   Alignment*            next;               //! Singly-linked list for durable alignments iterator
   int                   read_number;        //! Sequential number of this read
   int                   original_position;  //! Alignment position, before primer trimming
-  int                   original_end_position; //! Alignment end position, before primer trimming
+
   // Processing state
   bool                  processed;          //! Is candidate generator's pre-processing finished?
   Alignment*            processing_prev;    //! Previous in a list of alignments being processed
@@ -115,11 +117,12 @@ struct Alignment {
   int                   sample_index;       //! Sample associated with this read
   bool                  primary_sample;     //! This sample is being called by evaluator
   int                   snp_count;
+  bool                  is_read_allele_unpacked;  //! The flag that indicates the reads alleles is unpacked by AlleleParser::UnpackReadAlleles or not.
   vector<const char*>   refmap_start;
   vector<char>          refmap_code;
   vector<char>          refmap_has_allele;
   vector<Allele>        refmap_allele;
-  vector<int>           target_coverage_indices;
+  vector<int>           target_coverage_indices;  //! The sorted vector of the indices of the "unmerged" regions covered by the read
   int                   best_coverage_target_idx;
 
   // Candidate evaluator information
@@ -289,7 +292,7 @@ private:
     bool                    write_consensus_bam_ = true;
 public:
     ConsensusBAMWalkerEngine() : BAMWalkerEngine(){};
-	void SaveConsensusAlignments(Alignment* const & read_list, Alignment* const & aln_needed_read_list);
+	void SaveConsensusAlignments(const list<PositionInProgress>::iterator& consensus_position_ticket, const list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket);
 	void Initialize(const ReferenceReader& ref_reader, TargetsManager& targets_manager,
 	        const vector<string>& bam_filenames, const string& postprocessed_bam, int px, const string& consensus_bam);
 	void Close();

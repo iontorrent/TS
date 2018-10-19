@@ -162,7 +162,7 @@ if __name__ == "__main__":
         except Exception as err:
             printtime("Bead Density Plot generation failure: %s" % err)
             traceback.print_exc()
-    
+
     def get_block_offset():
         try:
             [(x, y)] = re.findall('block_X(.*)_Y(.*)', os.getcwd())
@@ -178,9 +178,9 @@ if __name__ == "__main__":
             block_col_offset = 0
             block_row_offset = 0
         return (block_col_offset,block_row_offset)
-    
+
     my_block_offset = get_block_offset()
-    
+
     if args.do_sigproc:
 
         set_result_status('Beadfind')
@@ -349,7 +349,7 @@ if __name__ == "__main__":
                     env['site_name'],
                     env['platform'],
                     env['instrumentName'],
-                    env['chipType'])
+                    env['chipInfo'])
 
                 # Reuse phase estimates in main base calling task
                 additional_basecallerArgs += " --phase-estimation-file " + \
@@ -476,7 +476,7 @@ if __name__ == "__main__":
                 env['site_name'],
                 env['platform'],
                 env['instrumentName'],
-                env['chipType'],
+                env['chipInfo'],
             )
             add_status("Basecaller", 0)
         except:

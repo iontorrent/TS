@@ -60,32 +60,11 @@
 
   <div class="modal-footer">    
     <div class="row-fluid">
-      <button class="btn btn-primary pull-right" id="submit_{{upload.content_id}}">Save Changes</button>
-      <input class="btn btn-primary pull-right" style="display:none;" type="submit" value="Save Changes" name="submit" form="content_edit_{{upload.content_id}}"/>
+      <button class="btn btn-primary pull-right save_changes" id="submit_{{upload.content_id}}" href="/configure/references/#{{upload.content_type_hash}}">Save Changes</button>
       <a class="btn pull-left" href="/configure/references/#{{upload.content_type_hash}}">Back to {{upload.content_type}}</a>
-      <a class='btn pull-left' style="display:none;" href='/rundb/content/{{upload.content_id}}'>Details</a>
     </div>
   </div>
 </div>
-
-<script type="text/javascript">
-  $(document).ready(function () {
-    $("#submit_{{upload.content_id}}").click(function () {
-      $.ajax({
-        type: "POST",
-        url: "/rundb/content/{{upload.content_id}}/",
-        async: false,
-        data: {
-          description: $('#description_{{upload.content_id}}').val(),
-          notes: $('#notes_{{upload.content_id}}').val(),
-          enabled: $('#enabled_{{upload.content_id}}').prop('checked')
-        }
-      });
-      window.location.href = '/configure/references/#{{upload.content_type_hash}}';
-      return false;
-    });
-  });
-</script>
 {% endfor %}
 
 <div class="content">
@@ -139,17 +118,18 @@
   <div class="modal-footer">    
     <div class="row-fluid">
       <a id="back_to_history" class="btn pull-left" href="/rundb/published/">Back</a>
-      <!-- TS-11394 #Need to be Implemented in next phase -->
-      {% if contentupload.publisher.name != "refAnnot" %}
-      	   <button class="btn btn-danger pull-right" id="delete">Delete</button>
-      {% endif %}
+        <button class="btn btn-danger pull-right" id="delete">Delete</button>
     </div>
     <div id="ask_delete" style="display: none; margin-top:12px;">
       <div class="row-fluid">
         <p style="text-align:left">
-            {% if contentupload.publisher.name == "BED" %}
-              Deleting {{upload_name}} will delete all of the contained uploaded and processed files. This will cause missing BED file issue for plans and templates that use the BED file contained in {{upload_name}}.        
-            {% endif %}
+              Deleting {{upload_name}} will delete all of the contained uploaded and processed files. This will cause missing
+                {% if contentupload.publisher.name == "BED" %}
+                    BED file issue for plans and templates that use the BED file
+                {% elif contentupload.publisher.name == "refAnnot" %}
+                    Annotation file issue for any plugins that use the Annotation file
+                {% endif %}
+              contained in {{upload_name}}.
             Are you sure you want to delete {{upload_name}}?
         </p>
       </div>
@@ -163,7 +143,6 @@
   </div>
 </div>
 
-  
 <div class="content">
   <div class="modal-header">
     <h1>Processing Log</h1>
@@ -181,6 +160,27 @@
 <script type="text/javascript">
   $(document).ready(function () {
     
+    $(".save_changes").click(function () {
+      var content_id = $(this).attr('id').split('_')[1];
+      var redirect = $(this).attr('href');
+      var data = {
+        description: $('#description_' + content_id).val(),
+        notes: $('#notes_' + content_id).val(),
+        enabled: $('#enabled_' + content_id).prop('checked')
+      }
+
+      $.ajax({
+        url: "/rundb/api/v1/content/" + content_id + "/",
+        type: "PATCH",
+        data: JSON.stringify(data),
+        contentType: "application/json; charset=utf-8",
+        success: function() {
+          window.location.href = redirect;
+        }
+      });
+      return false;
+    });
+
     var prev = document.referrer;
     if (prev){
         if (prev.indexOf('references') > -1) prev = "/configure/references/#uploads"
@@ -205,10 +205,23 @@
         url: "/rundb/api/v1/contentupload/{{contentupload.id}}/",
         async: false,
         success: function (msg) {
-          $("#status_delete").html("<p>Upload deleted</p>");
-          setTimeout(function(){window.location = prev;}, 1000);
+            var monitor = "{{filemonitor}}";
+            if (monitor !== 'None' && monitor !== null && typeof monitor !== 'undefined') {
+                $.ajax({
+                    type: "DELETE",
+                    url: "/rundb/api/v1/filemonitor/{{filemonitor.id}}/",
+                    async: false,
+                    success: function (msg) {
+                        $("#status_delete").html("<p>Upload deleted</p>");
+                    }
+                });
+            }
+            $("#status_delete").html("<p>Upload deleted</p>");
+            setTimeout(function () {
+                window.location = prev;
+            }, 1000);
         }
-      });
+        });
       return false;
     });
     

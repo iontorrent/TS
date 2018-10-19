@@ -92,6 +92,7 @@ public:
   void AddCalledLength(unsigned int len)               { called_histogram_.Add(len); };
   void AddAlignedLength(unsigned int len)              { aligned_histogram_.Add(len); };
   void AddAqLength(unsigned int len, unsigned int i)   { aq_histogram_[i].Add(len); };
+  void AddAqLength(unsigned int region_idx, unsigned int len, unsigned int i)   {regional_summary_[region_idx].AddAqLength(len,i); };
   void AddInsertLength(unsigned int len)               { total_insert_histo_.Add(len); };
   void AddQ17Length(unsigned int len)                  { total_Q17_histo_.Add(len); };
   void AddQ20Length(unsigned int len)                  { total_Q20_histo_.Add(len); };

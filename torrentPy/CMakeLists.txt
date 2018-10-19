@@ -11,7 +11,6 @@ find_package(PythonLibs REQUIRED)
 
 #find_package for HDF5 libraries should be run before the dependencies, otherwise we get static libraries
 set(HDF5_USE_STATIC_LIBRARIES False)
-find_package(HDF5 REQUIRED)
 
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)

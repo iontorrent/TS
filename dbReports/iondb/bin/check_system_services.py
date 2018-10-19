@@ -20,7 +20,6 @@ import traceback
 import argparse
 from iondb.rundb.models import Message
 from iondb.rundb.tasks import notify_services_error
-
 import logging
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ def process_status():
     def simple_status(name):
         proc = subprocess.Popen("service %s status" % name, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
-        #logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
+        # logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
         return proc.returncode == 0
 
     def complicated_status(filename):
@@ -57,12 +56,12 @@ def process_status():
         "ionCrawler",
         "ionPlugin",
         "apache2",
-        "postgresql"
+        "postgresql",
+        "tomcat7"
     ]
 
     for name in processes:
         proc_set[name] = simple_status(name)
-
 
     # get the DjangoFTP status
     proc_set['DjangoFTP'] = upstart_status("DjangoFTP")
@@ -76,7 +75,7 @@ def process_status():
 
     alerts = []
     for process, active in sorted(proc_set.items(), key=lambda s: s[0].lower()):
-        print 'ok' if active else 'DOWN', process
+        print('ok' if active else 'DOWN', process)
         if not active:
             alerts.append(process)
 
@@ -85,11 +84,11 @@ def process_status():
 
 def start_service(name):
     cmd = "service %s restart" % name
-    print cmd
+    print(cmd)
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
     if proc.returncode:
-        print 'Error: %s returned %d, %s, %s' % (cmd, proc.returncode, stdout, stderr)
+        print('Error: %s returned %d, %s, %s' % (cmd, proc.returncode, stdout, stderr))
     return proc.returncode == 0
 
 
@@ -106,7 +105,7 @@ def update_banner(alerts):
             new = True
     else:
         message.delete()
-    print '...updated message banner'
+    print('...updated message banner')
     return new
 
 
@@ -116,8 +115,7 @@ def send_alert(alerts):
     for service in alerts:
         msg += service + '\n'
     notify_services_error('Torrent Server Alert', msg, msg.replace('\n','<br>'))
-    print '...notified IT list'
-
+    print('...notified IT list')
 
 
 if __name__ == '__main__':
@@ -130,13 +128,20 @@ if __name__ == '__main__':
         if os.geteuid() != 0:
             sys.exit('Run this script with root permissions to start services')
 
-        start_order = ['postgresql',
-                       'apache2',
-                       'gridengine-master', 'gridengine-exec',
-                       'rabbitmq-server', 'celeryd', 'celerybeat',
-                       'ionJobServer', 'ionCrawler', 'ionPlugin',
-                       'DjangoFTP'
-                       ]
+        start_order = [
+            'postgresql',
+            'apache2',
+            'gridengine-master',
+            'gridengine-exec',
+            'rabbitmq-server',
+            'celeryd',
+            'celerybeat',
+            'ionJobServer',
+            'ionCrawler',
+            'ionPlugin',
+            'DjangoFTP',
+            'tomcat7'
+        ]
         for name in start_order:
             start_service(name)
 
@@ -148,14 +153,14 @@ if __name__ == '__main__':
         
         try:
             new = update_banner(alerts)   
-        except:
+        except Exception:
             logger.error('check_system_services: unable to update Message banner')
-            print traceback.format_exc()
+            print(traceback.format_exc())
         else:
             # send an email to IT contact
             if alerts and new:
                 try:
                     send_alert(alerts)
-                except:
+                except Exception:
                     logger.error('check_system_services: unable to send email alert')
-                    print traceback.format_exc()
+                    print(traceback.format_exc())

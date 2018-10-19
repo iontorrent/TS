@@ -62,16 +62,6 @@
                         else if(key == "upload_path"){
                             document.getElementById("upload_path").value = val;
                         }
-
-                        //set the value of thumbnailonly
-                        else if(key == "thumbnailonly"){
-                            if(val === "true") {
-                                $("input[name=thumbnailonly][value=true]").prop('checked', true);
-                            }
-                            else{
-                                $("input[name=thumbnailonly][value=false]").prop('checked', true);
-                            }
-                        }
                     });
                 }
             });
@@ -202,14 +192,6 @@
                     <tr>
                         <td>Upload Path (default /results/uploads/): </td>
                         <td><input id="upload_path" name="upload_path" value="" size="50" title="The upload path."/></td>
-                    </tr>
-                    <tr>
-                        <td>Data Set Type:</td>
-                        <td>
-                            <!-- we are required to maintain the "thumbnailonly" name so when it's communicated to the plugin it has the same name -->
-                            <input name="thumbnailonly" type="radio" value="true">Thumbnails/PGM</input><br />
-                            <input name="thumbnailonly" type="radio" value="false">Thumbnails/PGM and Full Chip</input>
-                        </td>
                     </tr>
                 </table>
             </div>

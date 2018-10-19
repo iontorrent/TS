@@ -87,12 +87,7 @@ void CalculateHypPredictions(
               }
               i_base++;
             }
-            // TS-17279
-            if (i_flow < flow_upper_bound){
-				if (flow_order.nuc_at(i_flow) == Hypotheses[i_hyp].back()){
-					++i_flow;
-				}
-            }
+
             // Find last main incorporating flow of all hypotheses
             max_last_flow = max(max_last_flow, i_flow);
             min_last_flow = min(min_last_flow, i_flow);

@@ -35,7 +35,7 @@ void AlignmentSummary::Initialize(map< string, int > & read_groups, IonstatsAlig
     unsigned int n_subregions = opt.NSubregions();
     regional_summary_.resize(n_subregions);
     for(unsigned int i=0; i < n_subregions; ++i)
-      regional_summary_[i].Initialize(opt.MaxSubregionHp(),opt.NFlow(),opt.RegionSpecificOrigin(i),opt.RegionSpecificDim(i));
+      regional_summary_[i].Initialize(opt.MaxSubregionHp(),opt.NFlow(),opt.RegionSpecificOrigin(i),opt.RegionSpecificDim(i),opt.NErrorRates(),opt.HistogramLength());
   }
 
   // Initialize per-read-group structures for any new read groups

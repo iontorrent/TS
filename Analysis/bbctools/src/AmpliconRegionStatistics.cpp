@@ -90,7 +90,10 @@ void AmpliconRegionStatistics::TrackReadsOnRegion( const BamTools::BamAlignment 
 	// check/set first region read overlaps
 	uint32_t readSrt = aread.Position + 1;
 	uint32_t readEnd = endPos ? endPos : aread.GetEndPosition();
-	uint32_t covType = ReadOnRegion( aread.RefID, readSrt, readEnd );
+    // can be an issue here because of using unsigned
+	uint32_t readSrtPad = (int32_t)readSrt >  m_targetPadding ? readSrt - m_targetPadding : 0;
+	uint32_t readEndPad = (int32_t)readEnd > -m_targetPadding ? readEnd + m_targetPadding : 0;
+	uint32_t covType = ReadOnRegion( aread.RefID, readSrtPad, readEndPad );
 	// maintain base method of tracking total reads
 	TargetContig *contig = m_contigList[m_rcovContigIdx];
 	bool isRev = aread.IsReverseStrand();
@@ -102,32 +105,45 @@ void AmpliconRegionStatistics::TrackReadsOnRegion( const BamTools::BamAlignment 
 	// Tracking of reads on target
 	if( covType & 1 ) {
 		// iterate over all regions overlapping read...
-		int32_t bestEndDist = -m_maxUpstreamPrimerStart;
-		int32_t bestOverlap = 0;
+		int32_t maxPrimerEnd = -m_maxUpstreamPrimerStart;
+		int32_t bestEndDist5p = -m_maxUpstreamPrimerStart;
+		int32_t bestOverlap = -m_targetPadding;
 		uint32_t numBestRegions = 0;
-		bool haveBestEnd = false;
+		// starts vs. primer locations are scored first by highest category:
+		// 0 => best inner overlap, 1 => start before and 3p over prm, 2 => over 5p prm, 3 => over 5p and 3p
+		uint32_t bestOverCat = 0;
 		for( TargetRegion *cur = m_rcovRegion; cur; cur = cur->next ) {
-			if( readEnd < cur->trgSrt ) break;
-			if( readSrt > m_rcovRegion->trgEnd ) continue;
-			// save stats for all overlapped reads
-			++(GetStats(cur)->overlaps);
+			if( readEndPad < cur->trgSrt ) break;
+			if( readSrtPad > m_rcovRegion->trgEnd ) continue;
+			// save stats for all overlapped reads - captured proximal reads don't count
+			if( readEnd >= cur->trgSrt && readSrt <= m_rcovRegion->trgEnd ) {
+				++(GetStats(cur)->overlaps);
+			}
 			// find most likely AmpliSeq primed region of those overlapped
 			// NOTE: can still be wrong for regions starting very close together, given 5' digestion uncertainty,
 			// coupled with read length and digestion uncertainty at 3'
 			int32_t dSrt = readSrt - cur->trgSrt;
 			int32_t dEnd = cur->trgEnd - readEnd;
-			int32_t endDist5p = isRev ? dEnd : dSrt;
 			// for non-amplicon reads, ends are ignored and only maximum overlap is employed to distinguish target region
 			if( m_ampliconReads ) {
-				// always select region that is closest start before 5p primer
-				if( endDist5p < 0 && endDist5p > bestEndDist ) {
-					haveBestEnd = true;
-					bestEndDist = endDist5p;
-					bestOverlap = 0; // force record best below
-				} else if( haveBestEnd && endDist5p != bestEndDist ) {
-					// region is not closer primed or same distance from false priming site
+				int32_t endDist5p = isRev ? dEnd : dSrt;
+				int32_t endDist3p = isRev ? dSrt : dEnd;
+				uint32_t overCat = endDist3p < 0 && endDist3p > maxPrimerEnd ? 1 : 0;
+				if( endDist5p < 0 && endDist5p > maxPrimerEnd ) overCat += 2;
+				if( overCat > bestOverCat ) {
+					// always prefer the better match
+					bestOverCat = overCat;
+					bestEndDist5p = endDist5p;
+					bestOverlap = -m_targetPadding; // force record best below
+				} else if( overCat < bestOverCat ) {
+					// never accept an assignment to lower matching category
 					continue;
+				} else if( endDist5p < 0 && endDist5p > bestEndDist5p ) {
+					// if category tie and read starts before 5p end, keep amplicon closer 5' start
+					bestEndDist5p = endDist5p;
+					bestOverlap = -m_targetPadding; // force record best below
 				}
+				// fall through is best overlap => read is over insert and not ending over 3p primer
 			}
 			// save region based on max overlap for equivalent regions
 			if( dSrt < 0 ) dSrt = 0;

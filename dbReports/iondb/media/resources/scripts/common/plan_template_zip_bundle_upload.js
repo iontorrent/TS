@@ -22,6 +22,7 @@ $(function() {
     uploader.settings.multipart_params.meta = JSON.stringify({
       hotspot: false,
       reference: null,
+      upload_type: "ampliseq",
       choice: $('input:radio[name=instrument_choice]:checked').val()
     });
     uploader.start();

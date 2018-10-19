@@ -39,7 +39,6 @@ class TemplateParams:
         self.templatingKitName = ""
         self.controlSequencekitname = None
         self.samplePrepKitName = None
-        self.templatingSize = None
         self.libraryReadLength = 0
         self.samplePrepProtocol = ""
         self.irworkflow = ""
@@ -64,8 +63,8 @@ class TemplateParams:
         if instrument == PGM:
             self.instrumentType = "PGM"
             self.libraryKitName = "Ion Xpress Plus Fragment Library Kit"
-            self.templatingKitName = "Ion PGM Template OT2 200 Kit"
-            self.sequencekitname = "IonPGM200Kit-v2"
+            self.templatingKitName = "Ion PGM Hi-Q View OT2 Kit - 200"
+            self.sequencekitname = "IonPGMHiQView"
             self.threePrimeAdapter = DEFAULT_3_PRIME_ADAPTER_SEQUENCE
             self.flows = 500
 
@@ -398,6 +397,14 @@ def _get_plugin_dict(pluginName, userInput={}):
 
     return pluginDict
 
+def get_tvc_plugin_dict(configuration):
+    userInput = {
+        "meta": {
+            "configuration": configuration
+        }
+    }
+    return _get_plugin_dict('variantCaller', userInput)
+
 
 def simple_compare_dict(dict1, dict2):
     ''' accepts multi-level dictionaries
@@ -464,7 +471,6 @@ def add_or_update_sys_template(templateParams, isSystemDefault=False):
             "applicationGroup": applicationGroup_obj,
             "sampleGrouping": sampleGrouping_obj,
             "categories": templateParams.categories,
-            "templatingSize": templateParams.templatingSize,
             "libraryReadLength": templateParams.libraryReadLength,
             "samplePrepProtocol" : templateParams.samplePrepProtocol,
             "irworkflow" : templateParams.irworkflow
@@ -476,12 +482,6 @@ def add_or_update_sys_template(templateParams, isSystemDefault=False):
             (sysTemplate.id, sysTemplate.planDisplayedName, str(isSystemDefault))
     else:
         hasChanges = False
-        if (sysTemplate.templatingSize != templateParams.templatingSize):
-            print ">>> DIFF: orig sysTemplate.templatingSize=%s, new templatingSize=%s for system template.id=%d; name=%s" % \
-                (sysTemplate.templatingSize, templateParams.templatingSize, sysTemplate.id, sysTemplate.planName)
-
-            sysTemplate.templatingSize = templateParams.templatingSize
-            hasChanges = True
 
         if (sysTemplate.libraryReadLength != templateParams.libraryReadLength):
             print ">>> DIFF: orig sysTemplate.libraryReadLength=%s for system template.id=%d; name=%s" % \
@@ -672,6 +672,7 @@ def add_or_update_ampliseq_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams)
 
     # 9
+    '''
     templateParams = TemplateParams("Ion AmpliSeq Inherited Disease Panel", PGM, "AMPS")
     templateParams.update({
         "chipType": "318",
@@ -683,6 +684,7 @@ def add_or_update_ampliseq_system_templates():
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
+    '''
 
 
 def add_or_update_ampliseq_rna_system_templates():
@@ -724,8 +726,8 @@ def add_or_update_genericseq_system_templates():
     templateParams.update({
         "chipType": "314",
         "flows": 850,
-        "templatingKitName": "Ion PGM Template OT2 400 Kit",
-        "sequencekitname": "IonPGM400Kit",
+        "templatingKitName": "Ion PGM Hi-Q View OT2 Kit - 400",
+        "sequencekitname": "IonPGMHiQView",
         "reference": "e_coli_dh10b"
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -864,9 +866,9 @@ def add_or_update_metagenomics_system_templates():
         "applicationGroup": "Metagenomics",
         "chipType": "316v2",
         "flows": 850,
-        "templatingKitName": "Ion PGM Template OT2 400 Kit",
+        "templatingKitName": "Ion PGM Hi-Q View OT2 Kit - 400",
         "sampleGrouping": "Self",
-        "sequencekitname": "IonPGM400Kit",
+        "sequencekitname": "IonPGMHiQView",
         "libraryKitName": "IonPlusFragmentLibKit",
         "categories": "16s"
     })
@@ -1095,7 +1097,7 @@ def add_or_update_reproseq_system_templates():
         "flows": 250,
         "templatingKitName": "Ion PGM Template IA Tech Access Kit",
         "sampleGrouping": "Self",
-        "sequencekitname": "IonPGMHiQ",
+        "sequencekitname": "IonPGMHiQView",
         "libraryKitName": LIBRARY_KIT,
         "barcodeKitName": BARCODE_KIT_PGM,
         "reference": REFERENCE,        
@@ -1182,7 +1184,7 @@ def add_or_update_tagseq_system_template(templateName, targetRegionBedFile = "",
     # Tag Sequencing
     TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
     TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
-    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
+    TAG_SEQ_CATEGORIES = "Oncomine;onco_liquidBiopsy;barcodes_8"
     TAG_SEQ_CHIP_NAME = "530"
     TAG_SEQ_FLOWS = 500
     TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
@@ -1191,7 +1193,7 @@ def add_or_update_tagseq_system_template(templateName, targetRegionBedFile = "",
     TAG_SEQ_RUN_TYPE = "TAG_SEQUENCING"
     TAG_SEQ_SAMPLE_GROUPING = "Self"    
     TAG_SEQ_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
-    TAG_SEQ_TEMPLATE_KIT_NAME = "Ion Chef S530 V1"
+    TAG_SEQ_TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
 
     templateParams = TemplateParams(templateName, S5, TAG_SEQ_RUN_TYPE)
     templateParams.update({
@@ -1326,7 +1328,6 @@ def add_or_update_oncomine_ocav3_system_templates():
     OCAV3_REFERENCE = "hg19"
     OCAV3_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     OCAV3_TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    OCAV3_TEMPLATING_SIZE = 200
     OCAV3_STATUS = "planned"
         
     # pre-select plugins
@@ -1347,7 +1348,6 @@ def add_or_update_oncomine_ocav3_system_templates():
         "sampleGrouping": "Self",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
-        "templatingSize": OCAV3_TEMPLATING_SIZE,
         "planStatus" : OCAV3_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1367,7 +1367,6 @@ def add_or_update_oncomine_ocav3_system_templates():
         "sampleGrouping": "DNA and Fusions",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
-        "templatingSize": OCAV3_TEMPLATING_SIZE,
         "planStatus" : OCAV3_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1387,7 +1386,6 @@ def add_or_update_oncomine_ocav3_system_templates():
         "sampleGrouping": "Single Fusions",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
-        "templatingSize": OCAV3_TEMPLATING_SIZE,
         "planStatus" : OCAV3_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1407,7 +1405,7 @@ def add_or_update_oncomine_childhood_cancer_system_templates():
     REFERENCE = "hg19"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
        
     # pre-select plugins
     plugins = {}
@@ -1481,12 +1479,11 @@ def add_or_update_oncomine_BRCA_system_templates():
     LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     LIBRARY_READ_LENGTH = 200
     REFERENCE = "hg19"
-    SEQ_KIT_NAME_PGM = "IonPGMHiQ"
+    SEQ_KIT_NAME_PGM = "IonPGMHiQView"
     SEQ_KIT_NAME_S5 = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME_PGM = "Ion PGM Hi-Q View Chef Kit"
-    TEMPLATE_KIT_NAME_S5 = "Ion Chef S530 V1"
-    TEMPLATING_SIZE_PGM = 200
-
+    TEMPLATE_KIT_NAME_S5 = "Ion Chef S530 V2"
+    SAMPLE_PREP_PROTOCOL = "pcr200bp"
     # 49 Oncomine BRCA for PGM
     templateParams = TemplateParams("Oncomine BRCA Research for PGM", PGM, "AMPS")
     templateParams.update({
@@ -1501,7 +1498,7 @@ def add_or_update_oncomine_BRCA_system_templates():
         "sampleGrouping": "Self",
         "sequencekitname": SEQ_KIT_NAME_PGM,
         "templatingKitName": TEMPLATE_KIT_NAME_PGM,
-        "templatingSize": TEMPLATING_SIZE_PGM
+        "samplePrepProtocol": SAMPLE_PREP_PROTOCOL
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1546,7 +1543,7 @@ def add_or_update_immune_response_system_templates():
         "targetRegionBedFile": BEDFILE,
         "sampleGrouping": "Self",
         "sequencekitname": "Ion S5 Sequencing Kit",
-        "templatingKitName": "Ion Chef S530 V1",
+        "templatingKitName": "Ion Chef S530 V2",
         "planStatus" : PLAN_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1583,7 +1580,7 @@ def add_or_update_S5_ocp_focus_system_templates():
     OCP_S5_FOCUS_CHIP = "520"
     OCP_S5_FOCUS_FLOWS = 400
     OCP_S5_FOCUS_LIBRARY_KIT_NAME = "Ion AmpliSeq 2.0 Library Kit"
-    OCP_S5_FOCUS_TEMPLATE_KIT_NAME = "Ion Chef S530 V1"
+    OCP_S5_FOCUS_TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
     OCP_S5_FOCUS_BARCODE_KIT_NAME = "IonXpress"
 
     # 53
@@ -1638,8 +1635,7 @@ def add_or_update_hid_system_templates():
     # HID
     default_flowOrderList = models.FlowOrder.objects.filter(name="Ion samba")
     flowOrderList = models.FlowOrder.objects.filter(name="Ion samba.gafieira")
-    samplePrepProtocolList = models.common_CV.objects.filter(cv_type = "samplePrepProtocol", uid="CV0001")
-        
+
     BARCODE_KIT_NAME = ""
     CATEGORIES = ""
     CHIP_NAME_PGM = "318"
@@ -1652,18 +1648,18 @@ def add_or_update_hid_system_templates():
     LIBRARY_READ_LENGTH = 200
     REFERENCE = "hg19"
     REFERENCE_mtDNA = "PrecisionID_mtDNA_rCRS"
-    SAMPLE_PREP_PROTOCOL_STR = samplePrepProtocolList[0].value if samplePrepProtocolList else ""
-    SAMPLE_PREP_PROTOCOL = ""
-    SEQ_KIT_NAME_PGM = "IonPGMHiQ"
+    SAMPLE_PREP_PROTOCOL_STR = "anneal62no10xab"
+    SAMPLE_PREP_PROTOCOL_SNP = "hid_snp_510_200bp"
+    SAMPLE_PREP_PROTOCOL = "pcr200bp"
+    SEQ_KIT_NAME_PGM = "IonPGMHiQView"
     SEQ_KIT_NAME_HID_S5 = "precisionIDS5Kit"
-    TEMPLATE_KIT_NAME_PGM = "Ion PGM Hi-Q Chef Kit"
+    TEMPLATE_KIT_NAME_PGM = "Ion PGM Hi-Q View Chef Kit"
     TEMPLATE_KIT_NAME_HID_S5 = "Ion Chef HID S530 V2"
-    TEMPLATING_SIZE_PGM = "200"
-    TEMPLATING_SIZE_S5 = None
     
     # 56 HID STR
     templateParams = TemplateParams("Precision ID GlobalFiler NGS STR Panel - PGM", PGM, "AMPS")
     templateParams.update({
+        "planStatus": "inactive",
         "applicationGroup" : "HID",
         "barcodeKitName": BARCODE_KIT_NAME,
         "categories": CATEGORIES,           
@@ -1676,8 +1672,7 @@ def add_or_update_hid_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL_STR,
         "sequencekitname": SEQ_KIT_NAME_PGM,
-        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
-        "templatingSize": TEMPLATING_SIZE_PGM
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1697,8 +1692,7 @@ def add_or_update_hid_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME_PGM,
-        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
-        "templatingSize": TEMPLATING_SIZE_PGM
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1716,10 +1710,9 @@ def add_or_update_hid_system_templates():
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE,
         "sampleGrouping": "Self",
-        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL_SNP,
         "sequencekitname": SEQ_KIT_NAME_HID_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
-        "templatingSize": TEMPLATING_SIZE_S5
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1740,8 +1733,7 @@ def add_or_update_hid_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME_PGM,
-        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
-        "templatingSize": TEMPLATING_SIZE_PGM
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1759,10 +1751,9 @@ def add_or_update_hid_system_templates():
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE,
         "sampleGrouping": "Self",
-        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL_SNP,
         "sequencekitname": SEQ_KIT_NAME_HID_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
-        "templatingSize": TEMPLATING_SIZE_S5
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1783,8 +1774,7 @@ def add_or_update_hid_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME_PGM,
-        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
-        "templatingSize": TEMPLATING_SIZE_PGM
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1802,10 +1792,9 @@ def add_or_update_hid_system_templates():
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE_mtDNA,
         "sampleGrouping": "Self",
-        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL_SNP,
         "sequencekitname": SEQ_KIT_NAME_HID_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
-        "templatingSize": TEMPLATING_SIZE_S5
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1826,8 +1815,7 @@ def add_or_update_hid_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME_PGM,
-        "templatingKitName": TEMPLATE_KIT_NAME_PGM,
-        "templatingSize": TEMPLATING_SIZE_PGM
+        "templatingKitName": TEMPLATE_KIT_NAME_PGM
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1845,10 +1833,9 @@ def add_or_update_hid_system_templates():
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE_mtDNA,
         "sampleGrouping": "Self",
-        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
+        "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL_SNP,
         "sequencekitname": SEQ_KIT_NAME_HID_S5,
-        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5,
-        "templatingSize": TEMPLATING_SIZE_S5
+        "templatingKitName": TEMPLATE_KIT_NAME_HID_S5
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1869,7 +1856,6 @@ def add_or_update_hid_dexter_system_templates():
     SAMPLE_PREP_PROTOCOL = ""
     SEQ_KIT_NAME = "precisionIDS5Kit"
     TEMPLATE_KIT_NAME = "Ion Chef HID S530 V2"
-    TEMPLATING_SIZE = None
     
     # 65 HID STR
     templateParams = TemplateParams("Precision ID GlobalFiler Mixture ID Panel - S5", S5, "AMPS")
@@ -1886,8 +1872,7 @@ def add_or_update_hid_dexter_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME,
-        "templatingKitName": TEMPLATE_KIT_NAME,
-        "templatingSize": TEMPLATING_SIZE
+        "templatingKitName": TEMPLATE_KIT_NAME
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1907,8 +1892,7 @@ def add_or_update_hid_dexter_system_templates():
         "sampleGrouping": "Self",
         "samplePrepProtocol" : SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME,
-        "templatingKitName": TEMPLATE_KIT_NAME,
-        "templatingSize": TEMPLATING_SIZE
+        "templatingKitName": TEMPLATE_KIT_NAME
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1924,11 +1908,9 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
     LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     LIBRARY_READ_LENGTH = 400
     REFERENCE = "hg19"
-    SAMPLE_GROUPING = "Self"
-    SAMPLE_PREP_PROTOCOL = ""
+    SAMPLE_PREP_PROTOCOL = "pcr400bp"
     SEQ_KIT_NAME = "IonPGMHiQView"
     TEMPLATE_KIT_NAME = "Ion PGM Hi-Q View Chef Kit"
-    ##TEMPLATING_SIZE = "400"
         
     # pre-select plugins
     plugins = {}
@@ -1945,7 +1927,8 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
         "libraryKitName": LIB_KIT_NAME,        
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE,
-        "sampleGrouping": SAMPLE_GROUPING,
+        "sampleGrouping": "Self",
+        "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME
     })
@@ -1964,6 +1947,7 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": "",
         "sampleGrouping": "Single Fusions",
+        "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME
     })
@@ -1982,6 +1966,7 @@ def add_or_update_ocp_myeloid_pgm_system_templates():
         "libraryReadLength" : LIBRARY_READ_LENGTH,
         "reference": REFERENCE,
         "sampleGrouping": "DNA and Fusions",
+        "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME
     })
@@ -2003,7 +1988,6 @@ def add_or_update_ocp_myeloid_s5_system_templates():
     SAMPLE_PREP_PROTOCOL = "denature30_cycles45_20"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
-    ##TEMPLATING_SIZE = "400"
     
     # pre-select plugins
     plugins = {}
@@ -2204,7 +2188,6 @@ def add_or_update_mutation_load_s5_system_templates():
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    TEMPLATING_SIZE = 200
     PLAN_STATUS = "planned"
         
     # pre-select plugins
@@ -2225,7 +2208,6 @@ def add_or_update_mutation_load_s5_system_templates():
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
-        "templatingSize": TEMPLATING_SIZE,
         "planStatus": PLAN_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2248,7 +2230,7 @@ def add_or_update_tagseq_cfdna_s5_530_chef_system_template(templateName):
     # Tag Sequencing
     TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
     TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
-    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
+    TAG_SEQ_CATEGORIES = "Oncomine;onco_liquidBiopsy;barcodes_8"
     TAG_SEQ_CHIP_NAME = "530"
     TAG_SEQ_FLOWS = 500
     TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
@@ -2257,7 +2239,7 @@ def add_or_update_tagseq_cfdna_s5_530_chef_system_template(templateName):
     TAG_SEQ_RUN_TYPE = "TAG_SEQUENCING"
     TAG_SEQ_SAMPLE_GROUPING = "Self"    
     TAG_SEQ_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
-    TAG_SEQ_TEMPLATE_KIT_NAME = "Ion Chef S530 V1"
+    TAG_SEQ_TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
     PLAN_STATUS = "planned"
     
     templateParams = TemplateParams(templateName, S5, TAG_SEQ_RUN_TYPE)
@@ -2295,7 +2277,7 @@ def add_or_update_tagseq_cfdna_s5_540_chef_system_template(templateName):
     # Tag Sequencing
     TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
     TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
-    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
+    TAG_SEQ_CATEGORIES = "Oncomine;onco_liquidBiopsy;barcodes_8"
     TAG_SEQ_CHIP_NAME = "540"
     TAG_SEQ_FLOWS = 500
     TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
@@ -2338,10 +2320,9 @@ def add_or_update_immune_repertoire_s5_system_templates():
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
-    TEMPLATING_SIZE = 400
     PLAN_STATUS = "planned"
+    SAMPLE_PREP_PROTOCOL = "pcr400bp"
 
-    # 82
     templateParams = TemplateParams("Ion AmpliSeq Immune Repertoire Assay Plus - TCRB for S5", S5, "AMPS_RNA")
     templateParams.update({
         "applicationGroup": APPLICATION_GROUP,
@@ -2355,7 +2336,24 @@ def add_or_update_immune_repertoire_s5_system_templates():
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
-        "templatingSize": TEMPLATING_SIZE,
+        "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+        "planStatus": PLAN_STATUS
+    })
+
+    templateParams = TemplateParams("Oncomine TCR Beta-LR for S5", S5, "AMPS_RNA")
+    templateParams.update({
+        "applicationGroup": APPLICATION_GROUP,
+        "barcodeKitName": BARCODE_KIT_NAME,
+        "categories": CATEGORIES,
+        "chipType": CHIP,
+        "flows": FLOWS,
+        "libraryKitName": LIBRARY_KIT_NAME,
+        "libraryReadLength": LIBRARY_READ_LENGTH,
+        "reference": REFERENCE,
+        "sampleGrouping": SAMPLE_GROUPING,
+        "sequencekitname": SEQ_KIT_NAME,
+        "templatingKitName": TEMPLATE_KIT_NAME,
+        "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
         "planStatus": PLAN_STATUS
     })
     
@@ -2374,7 +2372,7 @@ def add_or_update_immune_repertoire_pgm_system_templates():
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "IonPGMHiQView"
     TEMPLATE_KIT_NAME = "Ion PGM Hi-Q View Chef Kit"
-    PLAN_STATUS = "planned"
+    PLAN_STATUS = "inactive"
 
     # 83
     templateParams = TemplateParams("Ion AmpliSeq Immune Repertoire Assay Plus - TCRB for PGM", PGM, "AMPS_RNA")
@@ -2413,7 +2411,7 @@ def add_or_update_tagseq_cfdna_550_system_templates():
 def add_or_update_tagseq_cfdna_s5_550_chef_system_template(templateName):
     TAG_SEQ_APPLICATION_GROUP = "onco_liquidBiopsy"
     TAG_SEQ_BARCODE_KIT_NAME = "TagSequencing"
-    TAG_SEQ_CATEGORIES = "Oncomine;barcodes_8"
+    TAG_SEQ_CATEGORIES = "Oncomine;onco_liquidBiopsy;barcodes_8"
     TAG_SEQ_CHIP_NAME = "550"
     TAG_SEQ_FLOWS = 500
     TAG_SEQ_LIB_KIT_NAME = "Oncomine cfDNA Assay"    
@@ -2446,7 +2444,7 @@ def add_or_update_tagseq_cfdna_s5_550_chef_system_template(templateName):
 
 def add_or_update_immune_repertoire_short_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
-    BARCODE_KIT_NAME = "IonXpress"    
+    BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
     CATEGORIES = "onco_immune;immunology"
     CHIP = "540"
     END_BARCODE_KIT_NAME = ""  #TODO: replace with the real barcode kit
@@ -2457,11 +2455,10 @@ def add_or_update_immune_repertoire_short_s5_system_templates():
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    TEMPLATING_SIZE = 200
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
 
     # 86
-    templateParams = TemplateParams("Ion AmpliSeq Immune Repertoire Assay - TCRB for S5", S5, "MIXED")
+    templateParams = TemplateParams("Oncomine TCR Beta-SR for S5", S5, "MIXED")
     templateParams.update({
         "applicationGroup": APPLICATION_GROUP,
         "barcodeKitName": BARCODE_KIT_NAME,
@@ -2475,7 +2472,6 @@ def add_or_update_immune_repertoire_short_s5_system_templates():
         "sampleGrouping": SAMPLE_GROUPING,
         "sequencekitname": SEQ_KIT_NAME,
         "templatingKitName": TEMPLATE_KIT_NAME,
-        "templatingSize": TEMPLATING_SIZE,
         "planStatus": PLAN_STATUS
     })
     
@@ -2523,7 +2519,7 @@ def add_or_update_oncomine_ocav3_550_system_templates():
     # OCAv3 550
     OCAV3_BARCODE_KIT_NAME = "IonXpress"    
     OCAV3_CATEGORIES = "Oncomine;onco_solidTumor"
-    OCAV3_CATEGORIES_2 = "Oncomine;barcodes_16;onco_solidTumor"    
+    OCAV3_CATEGORIES_2 = "Oncomine;barcodes_16;onco_solidTumor"
     OCAV3_CHIP_NAME = "550"
     OCAV3_FLOWS = 400
     OCAV3_FUSION_LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -2532,9 +2528,8 @@ def add_or_update_oncomine_ocav3_550_system_templates():
     OCAV3_REFERENCE = "hg19"
     OCAV3_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     OCAV3_TEMPLATE_KIT_NAME = "Ion Chef S550 V1"
-    OCAV3_TEMPLATING_SIZE = 200
     OCAV3_STATUS = "planned"
-        
+
     # pre-select plugins
     plugins = {}
     plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
@@ -2553,7 +2548,6 @@ def add_or_update_oncomine_ocav3_550_system_templates():
         "sampleGrouping": "Self",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
-        "templatingSize": OCAV3_TEMPLATING_SIZE,
         "planStatus" : OCAV3_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2573,7 +2567,6 @@ def add_or_update_oncomine_ocav3_550_system_templates():
         "sampleGrouping": "DNA and Fusions",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
-        "templatingSize": OCAV3_TEMPLATING_SIZE,
         "planStatus" : OCAV3_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2593,11 +2586,193 @@ def add_or_update_oncomine_ocav3_550_system_templates():
         "sampleGrouping": "Single Fusions",
         "sequencekitname": OCAV3_SEQ_KIT_NAME,
         "templatingKitName": OCAV3_TEMPLATE_KIT_NAME,
-        "templatingSize": OCAV3_TEMPLATING_SIZE,
         "planStatus" : OCAV3_STATUS
     })
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+
+
+def add_or_update_ampliseq_hd_system_templates():
+    # AmpliSeq HD for Liquid Biopsy and Somatic Oncology
+    AMPS_HD_BARCODE_KIT_NAME = "Ion AmpliSeq HD Dual Barcode Kit 1-24"
+    AMPS_HD_CATEGORIES_LIQUID = "onco_liquidBiopsy;"
+    AMPS_HD_CATEGORIES_SOLID = "onco_solidTumor;onco_heme;"
+    AMPS_HD_CHIP = "540"
+    AMPS_HD_FLOWS = 500
+    AMPS_HD_LIB_KIT_NAME = "Ion AmpliSeq HD Library Kit"
+    AMPS_HD_LIBRARY_READ_LENGTH = 200
+    AMPS_HD_REFERENCE = "hg19"
+    AMPS_HD_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
+    AMPS_HD_TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
+    AMPS_HD_STATUS = "planned"
+
+    # plugins
+    coverageAnalysis = _get_plugin_dict("coverageAnalysis")
+    
+    plugins_hd_fusions = {
+        "coverageAnalysis": coverageAnalysis
+    }
+    plugins_hd_liquidbiopsy = {
+        "coverageAnalysis": coverageAnalysis,
+        "variantCaller": get_tvc_plugin_dict("ampliseq_hd_cfdna")
+    }
+    plugins_hd_tumor = {
+        "coverageAnalysis": coverageAnalysis,
+        "variantCaller": get_tvc_plugin_dict("ampliseq_hd_ffpe")
+    }
+
+    # 1) Ion AmpliSeq HD for Liquid Biopsy - DNA
+    templateParams = TemplateParams("Ion AmpliSeq HD for Liquid Biopsy - DNA", S5, "AMPS_HD_DNA")
+    templateParams.update({
+        "applicationGroup" : "DNA",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_LIQUID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": AMPS_HD_REFERENCE,
+        "sampleGrouping": "Self",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_liquidbiopsy)
+
+    # 2) Ion AmpliSeq HD for Liquid Biopsy - Fusions
+    templateParams = TemplateParams("Ion AmpliSeq HD for Liquid Biopsy - Fusions", S5, "AMPS_HD_RNA")
+    templateParams.update({
+        "applicationGroup" : "Fusions",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_LIQUID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": "",
+        "sampleGrouping": "Single Fusions",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_fusions)
+
+    # 3) Ion AmpliSeq HD for Liquid Biopsy - DNA and Fusions (Single Library)
+    templateParams = TemplateParams("Ion AmpliSeq HD for Liquid Biopsy - DNA and Fusions - Single Library", S5, "AMPS_HD_DNA_RNA_1")
+    templateParams.update({
+        "applicationGroup" : "DNA + RNA 1",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_LIQUID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": AMPS_HD_REFERENCE,
+        "sampleGrouping": "Self",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_liquidbiopsy)
+
+    # 4) Ion AmpliSeq HD for Liquid Biopsy - DNA and Fusions (Separate Libraries)
+    templateParams = TemplateParams("Ion AmpliSeq HD for Liquid Biopsy - DNA and Fusions - Separate Libraries", S5, "AMPS_HD_DNA_RNA")
+    templateParams.update({
+        "applicationGroup" : "DNA + RNA",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_LIQUID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": AMPS_HD_REFERENCE,
+        "sampleGrouping": "DNA and Fusions",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_liquidbiopsy)
+
+
+    # 5) Ion AmpliSeq HD for Tumor - DNA
+    templateParams = TemplateParams("Ion AmpliSeq HD for Tumor - DNA", S5, "AMPS_HD_DNA")
+    templateParams.update({
+        "applicationGroup" : "DNA",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_SOLID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": AMPS_HD_REFERENCE,
+        "sampleGrouping": "Self",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_tumor)
+
+    # 6) Ion AmpliSeq HD for Tumor - Fusions
+    templateParams = TemplateParams("Ion AmpliSeq HD for Tumor - Fusions", S5, "AMPS_HD_RNA")
+    templateParams.update({
+        "applicationGroup" : "Fusions",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_SOLID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": "",
+        "sampleGrouping": "Single Fusions",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_fusions)
+
+    # 7) Ion AmpliSeq HD for Tumor - DNA and Fusions (Single Library)
+    templateParams = TemplateParams("Ion AmpliSeq HD for Tumor - DNA and Fusions - Single Library", S5, "AMPS_HD_DNA_RNA_1")
+    templateParams.update({
+        "applicationGroup" : "DNA + RNA 1",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_SOLID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": AMPS_HD_REFERENCE,
+        "sampleGrouping": "Self",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_tumor)
+
+    # 8) Ion AmpliSeq HD for Tumor - DNA and Fusions (Separate Libraries)
+    templateParams = TemplateParams("Ion AmpliSeq HD for Tumor - DNA and Fusions - Separate Libraries", S5, "AMPS_HD_DNA_RNA")
+    templateParams.update({
+        "applicationGroup" : "DNA + RNA",
+        "barcodeKitName": AMPS_HD_BARCODE_KIT_NAME,
+        "categories": AMPS_HD_CATEGORIES_SOLID,
+        "chipType": AMPS_HD_CHIP,
+        "flows": AMPS_HD_FLOWS,
+        "libraryKitName": AMPS_HD_LIB_KIT_NAME,
+        "libraryReadLength" : AMPS_HD_LIBRARY_READ_LENGTH,
+        "reference": AMPS_HD_REFERENCE,
+        "sampleGrouping": "DNA and Fusions",
+        "sequencekitname": AMPS_HD_SEQ_KIT_NAME,
+        "templatingKitName": AMPS_HD_TEMPLATE_KIT_NAME,
+        "planStatus" : AMPS_HD_STATUS
+    })
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_hd_tumor)
 
 
 @transaction.commit_manually()
@@ -2640,6 +2815,7 @@ def add_or_update_all_system_templates():
         add_or_update_immune_repertoire_short_s5_system_templates()
         add_or_update_immune_repertoire_short_pgm_system_templates()
         add_or_update_oncomine_ocav3_550_system_templates()
+        add_or_update_ampliseq_hd_system_templates()
     except:
         print format_exc()
         transaction.rollback()
@@ -2715,7 +2891,8 @@ def clean_up_obsolete_templates():
             "AmpliSeq Myeloid Research Fusions for S5",
             "AmpliSeq Myeloid Research DNA and Fusions for S5",
             "Oncomine Mutation Load",
-            "Ion AmpliSeq Inherited Disease Panel"
+            "Ion AmpliSeq Inherited Disease Panel",
+            "Ion AmpliSeq Immune Repertoire Assay - TCRB for S5",
             ]
 
         templates = models.PlannedExperiment.objects.filter(

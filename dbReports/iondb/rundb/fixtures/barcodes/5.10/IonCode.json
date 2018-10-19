@@ -1,0 +1,6914 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "IonCode",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0101",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "IonCode",
+			"sequence": "AAGAGGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0103",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "IonCode",
+			"sequence": "TACCAAGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0104",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "IonCode",
+			"sequence": "CTGCAAGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0106",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "IonCode",
+			"sequence": "TTCGTGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0107",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "IonCode",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0109",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "IonCode",
+			"sequence": "CTGACCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0110",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "IonCode",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0112",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "IonCode",
+			"sequence": "TCTAACGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0113",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "IonCode",
+			"sequence": "TCTAGAGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0115",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "IonCode",
+			"sequence": "TCTGGATGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0116",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 18,
+			"name": "IonCode",
+			"sequence": "AGGCAATTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0118",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 19,
+			"name": "IonCode",
+			"sequence": "TTAGTCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0119",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 51,
+			"name": "IonCode",
+			"sequence": "CTGGCAATCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0151",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 52,
+			"name": "IonCode",
+			"sequence": "TCCACCTCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0152",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 55,
+			"name": "IonCode",
+			"sequence": "TCTAGCTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0155",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 56,
+			"name": "IonCode",
+			"sequence": "TCACTCGGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0156",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 58,
+			"name": "IonCode",
+			"sequence": "CCTTAGAGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0158",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 59,
+			"name": "IonCode",
+			"sequence": "CTGAGTTCCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0159",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "IonCode",
+			"sequence": "TAAGGAGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0102",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "IonCode",
+			"sequence": "CAGAAGGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0105",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "IonCode",
+			"sequence": "TTCCGATAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0108",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "IonCode",
+			"sequence": "TCCTCGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0111",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "IonCode",
+			"sequence": "TTGGAGTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0114",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 17,
+			"name": "IonCode",
+			"sequence": "TCTATTCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0117",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 20,
+			"name": "IonCode",
+			"sequence": "CAGATCCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0120",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 53,
+			"name": "IonCode",
+			"sequence": "CAGCATTAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0153",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 57,
+			"name": "IonCode",
+			"sequence": "TTCCTGCTTCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0157",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 76,
+			"name": "IonCode",
+			"sequence": "CTAGGACATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0176",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 77,
+			"name": "IonCode",
+			"sequence": "CTTCCATAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0177",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 79,
+			"name": "IonCode",
+			"sequence": "CTTGGTTATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0179",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 80,
+			"name": "IonCode",
+			"sequence": "TTGGCTGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0180",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 81,
+			"name": "IonCode",
+			"sequence": "CCGAACACTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0181",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 82,
+			"name": "IonCode",
+			"sequence": "TCCTGAATCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0182",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 83,
+			"name": "IonCode",
+			"sequence": "CTAACCACGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0183",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 84,
+			"name": "IonCode",
+			"sequence": "CGGAAGGATGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0184",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 85,
+			"name": "IonCode",
+			"sequence": "CTTGTCCAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0185",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 86,
+			"name": "IonCode",
+			"sequence": "TCCGACAAGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0186",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 87,
+			"name": "IonCode",
+			"sequence": "CGGACAGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0187",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 88,
+			"name": "IonCode",
+			"sequence": "CCTTGAGGCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0188",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 89,
+			"name": "IonCode",
+			"sequence": "TTCTTCCTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0189",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 90,
+			"name": "IonCode",
+			"sequence": "TTCTTCAAGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0190",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 91,
+			"name": "IonCode",
+			"sequence": "CTTGGAACTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0191",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 92,
+			"name": "IonCode",
+			"sequence": "TCGGCCGGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0192",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 94,
+			"name": "IonCode",
+			"sequence": "TGAATTCCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0194",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 95,
+			"name": "IonCode",
+			"sequence": "CTTGCCACCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0195",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 126,
+			"name": "IonCode",
+			"sequence": "CCAAGGCGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0230",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 127,
+			"name": "IonCode",
+			"sequence": "CTTAGATCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0231",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 128,
+			"name": "IonCode",
+			"sequence": "CCGGTCCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0232",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 129,
+			"name": "IonCode",
+			"sequence": "TTGGAGCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0233",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 130,
+			"name": "IonCode",
+			"sequence": "CTTGTTCCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0234",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 131,
+			"name": "IonCode",
+			"sequence": "TCCGGCAAGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0235",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 132,
+			"name": "IonCode",
+			"sequence": "TTCCTATCCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0236",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 133,
+			"name": "IonCode",
+			"sequence": "CTAATTGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0237",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 134,
+			"name": "IonCode",
+			"sequence": "TTCGACACCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0238",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 135,
+			"name": "IonCode",
+			"sequence": "TCCGCCATGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0239",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 137,
+			"name": "IonCode",
+			"sequence": "TAACAATAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0241",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 138,
+			"name": "IonCode",
+			"sequence": "TGCCTGGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0242",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 23,
+			"name": "IonCode",
+			"sequence": "TGCCACGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0123",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 24,
+			"name": "IonCode",
+			"sequence": "AACCTCATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0124",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 25,
+			"name": "IonCode",
+			"sequence": "CCTGAGATAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0125",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 26,
+			"name": "IonCode",
+			"sequence": "TTACAACCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0126",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 27,
+			"name": "IonCode",
+			"sequence": "AACCATCCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0127",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 28,
+			"name": "IonCode",
+			"sequence": "ATCCGGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0128",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 29,
+			"name": "IonCode",
+			"sequence": "CGAGGTTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0129",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 30,
+			"name": "IonCode",
+			"sequence": "TCCAAGCTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0130",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 31,
+			"name": "IonCode",
+			"sequence": "TCTTACACAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0131",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 32,
+			"name": "IonCode",
+			"sequence": "TTCTCATTGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0132",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 33,
+			"name": "IonCode",
+			"sequence": "TCGCATCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0133",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 34,
+			"name": "IonCode",
+			"sequence": "TAAGCCATTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0134",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 35,
+			"name": "IonCode",
+			"sequence": "AAGGAATCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0135",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 36,
+			"name": "IonCode",
+			"sequence": "CTTGAGAATGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0136",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 37,
+			"name": "IonCode",
+			"sequence": "TGGAGGACGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0137",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 38,
+			"name": "IonCode",
+			"sequence": "TAACAATCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0138",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 40,
+			"name": "IonCode",
+			"sequence": "TTCCACTTCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0140",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 42,
+			"name": "IonCode",
+			"sequence": "TTGGAGGCCAGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0142",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 43,
+			"name": "IonCode",
+			"sequence": "TGGAGCTTCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0143",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 44,
+			"name": "IonCode",
+			"sequence": "TCAGTCCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0144",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 45,
+			"name": "IonCode",
+			"sequence": "TAAGGCAACCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0145",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 46,
+			"name": "IonCode",
+			"sequence": "TTCTAAGAGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0146",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 47,
+			"name": "IonCode",
+			"sequence": "TCCTAACATAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0147",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 48,
+			"name": "IonCode",
+			"sequence": "CGGACAATGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0148",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 49,
+			"name": "IonCode",
+			"sequence": "TTGAGCCTATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0149",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 50,
+			"name": "IonCode",
+			"sequence": "CCGCATGGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0150",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 60,
+			"name": "IonCode",
+			"sequence": "TCCTGGCACATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0160",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 67,
+			"name": "IonCode",
+			"sequence": "CGAAGGCCACAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0167",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 68,
+			"name": "IonCode",
+			"sequence": "TCTGCCTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0168",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 69,
+			"name": "IonCode",
+			"sequence": "CGATCGGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0169",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 70,
+			"name": "IonCode",
+			"sequence": "TCAGGAATAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0170",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 71,
+			"name": "IonCode",
+			"sequence": "CGGAAGAACCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0171",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 72,
+			"name": "IonCode",
+			"sequence": "CGAAGCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0172",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 73,
+			"name": "IonCode",
+			"sequence": "CAGCCAATTCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0173",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 74,
+			"name": "IonCode",
+			"sequence": "TCGAAGGCAGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0174",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 75,
+			"name": "IonCode",
+			"sequence": "CCTGCCATTCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0175",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 150,
+			"name": "IonCode",
+			"sequence": "CCTCATCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0254",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 151,
+			"name": "IonCode",
+			"sequence": "TGCAACCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0255",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 152,
+			"name": "IonCode",
+			"sequence": "CGGAATCCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0256",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 153,
+			"name": "IonCode",
+			"sequence": "TCTTGAGGAAGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0257",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 154,
+			"name": "IonCode",
+			"sequence": "CCGCCACCAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0258",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 155,
+			"name": "IonCode",
+			"sequence": "AAGGTTATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0259",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 156,
+			"name": "IonCode",
+			"sequence": "TGGAGATTGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0260",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 158,
+			"name": "IonCode",
+			"sequence": "TGGAGCCAACAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0262",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 159,
+			"name": "IonCode",
+			"sequence": "TCTAATCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0263",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 160,
+			"name": "IonCode",
+			"sequence": "CCACCAATAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0264",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 161,
+			"name": "IonCode",
+			"sequence": "CTTGGATTCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0265",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 162,
+			"name": "IonCode",
+			"sequence": "TTCTGGATTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0266",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 163,
+			"name": "IonCode",
+			"sequence": "TTCTTCTGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0267",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 164,
+			"name": "IonCode",
+			"sequence": "TCCTGAGACTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0268",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 165,
+			"name": "IonCode",
+			"sequence": "CTGGAACAAGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0269",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 166,
+			"name": "IonCode",
+			"sequence": "TCTTGCTTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0270",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 167,
+			"name": "IonCode",
+			"sequence": "CTCCAATTGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0271",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 169,
+			"name": "IonCode",
+			"sequence": "TGAAGGCACCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0273",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 170,
+			"name": "IonCode",
+			"sequence": "ACAATCCGGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0274",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 201,
+			"name": "IonCode",
+			"sequence": "TCCTCCTCCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0309",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 202,
+			"name": "IonCode",
+			"sequence": "TCTCATTCATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0310",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 203,
+			"name": "IonCode",
+			"sequence": "TTCGGAACGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0311",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 204,
+			"name": "IonCode",
+			"sequence": "TTAAGATTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0312",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 205,
+			"name": "IonCode",
+			"sequence": "CCTTATGGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0313",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 206,
+			"name": "IonCode",
+			"sequence": "CTTGAACAGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0314",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 207,
+			"name": "IonCode",
+			"sequence": "CCGAACCTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0315",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 208,
+			"name": "IonCode",
+			"sequence": "CCAGGACGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0316",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 209,
+			"name": "IonCode",
+			"sequence": "CCTTGTCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0317",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 210,
+			"name": "IonCode",
+			"sequence": "CTAGCCAATGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0318",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 211,
+			"name": "IonCode",
+			"sequence": "CCTGGCTCAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0319",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 212,
+			"name": "IonCode",
+			"sequence": "CTGAGGCTTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0320",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 213,
+			"name": "IonCode",
+			"sequence": "CAAGAATAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0321",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 214,
+			"name": "IonCode",
+			"sequence": "CCGAACCAACGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0322",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 217,
+			"name": "IonCode",
+			"sequence": "AGGCCATTGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0325",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 218,
+			"name": "IonCode",
+			"sequence": "TCGAGAATCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0326",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 98,
+			"name": "IonCode",
+			"sequence": "TTCCGCACGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0202",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 99,
+			"name": "IonCode",
+			"sequence": "TTGGCCAATTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0203",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 100,
+			"name": "IonCode",
+			"sequence": "TCTAGTTCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0204",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 101,
+			"name": "IonCode",
+			"sequence": "TGAGAAGAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0205",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 102,
+			"name": "IonCode",
+			"sequence": "CCTCAACCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0206",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 103,
+			"name": "IonCode",
+			"sequence": "CCTGCTGGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0207",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 104,
+			"name": "IonCode",
+			"sequence": "TGGCAGGAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0208",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 105,
+			"name": "IonCode",
+			"sequence": "CGCTTCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0209",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 106,
+			"name": "IonCode",
+			"sequence": "TTCCAGATTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0210",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 107,
+			"name": "IonCode",
+			"sequence": "TCCGGAGTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0211",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 108,
+			"name": "IonCode",
+			"sequence": "TACATCCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0212",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 109,
+			"name": "IonCode",
+			"sequence": "GCAACACGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0213",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 110,
+			"name": "IonCode",
+			"sequence": "TAAGCAATTCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0214",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 111,
+			"name": "IonCode",
+			"sequence": "CTGATCCATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0215",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 112,
+			"name": "IonCode",
+			"sequence": "TAGGAACAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0216",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 122,
+			"name": "IonCode",
+			"sequence": "TAGGATTCCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0226",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 123,
+			"name": "IonCode",
+			"sequence": "TTGAAGCTCCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0227",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 124,
+			"name": "IonCode",
+			"sequence": "TTCAACTTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0228",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 125,
+			"name": "IonCode",
+			"sequence": "TTAGGCTCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0229",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 139,
+			"name": "IonCode",
+			"sequence": "CTGAAGTCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0243",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 140,
+			"name": "IonCode",
+			"sequence": "AAGGAATGGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0244",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 142,
+			"name": "IonCode",
+			"sequence": "TTCACCAGGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0246",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 143,
+			"name": "IonCode",
+			"sequence": "CTACAACTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0247",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 144,
+			"name": "IonCode",
+			"sequence": "CTGAGGCATCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0248",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 145,
+			"name": "IonCode",
+			"sequence": "CCAGCATCATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0249",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 146,
+			"name": "IonCode",
+			"sequence": "CCGGCTTGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0250",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 147,
+			"name": "IonCode",
+			"sequence": "TCAGGCAGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0251",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 148,
+			"name": "IonCode",
+			"sequence": "TTCTGCACGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0252",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 149,
+			"name": "IonCode",
+			"sequence": "TCCGAAGATAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0253",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 232,
+			"name": "IonCode",
+			"sequence": "AAGGCCTCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0340",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 233,
+			"name": "IonCode",
+			"sequence": "TTCCTTCAACAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0341",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 234,
+			"name": "IonCode",
+			"sequence": "TGGTTGGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0342",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 235,
+			"name": "IonCode",
+			"sequence": "CGGCAACATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0343",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 237,
+			"name": "IonCode",
+			"sequence": "CGGAAGCATCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0345",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 238,
+			"name": "IonCode",
+			"sequence": "CTTGGAGTCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0346",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 239,
+			"name": "IonCode",
+			"sequence": "CGGACCACGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0347",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 240,
+			"name": "IonCode",
+			"sequence": "TTGCCAACCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0348",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 241,
+			"name": "IonCode",
+			"sequence": "CTGTTCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0349",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 242,
+			"name": "IonCode",
+			"sequence": "CCGAGTGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0350",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 244,
+			"name": "IonCode",
+			"sequence": "TCTTCATGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0352",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 245,
+			"name": "IonCode",
+			"sequence": "TTGACATTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0353",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 276,
+			"name": "IonCode",
+			"sequence": "GAAGATCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0384",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 280,
+			"name": "IonCode",
+			"sequence": "TGGAGGCCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0388",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 281,
+			"name": "IonCode",
+			"sequence": "TAGCATCCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0389",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 282,
+			"name": "IonCode",
+			"sequence": "TAAGTCGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0390",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 283,
+			"name": "IonCode",
+			"sequence": "TCGGCCATAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0391",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 284,
+			"name": "IonCode",
+			"sequence": "TTCCAATCCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0392",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 285,
+			"name": "IonCode",
+			"sequence": "CTTGAAGACGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0393",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 286,
+			"name": "IonCode",
+			"sequence": "TAGAATTCCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0394",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 287,
+			"name": "IonCode",
+			"sequence": "CGAGATGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0395",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 288,
+			"name": "IonCode",
+			"sequence": "TTCTACAATATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0396",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 289,
+			"name": "IonCode",
+			"sequence": "CCTGGTTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0401",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 290,
+			"name": "IonCode",
+			"sequence": "TTCTGAGCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0402",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 292,
+			"name": "IonCode",
+			"sequence": "CCAAGCAACGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0404",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 293,
+			"name": "IonCode",
+			"sequence": "TTCTTAAGTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0405",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 294,
+			"name": "IonCode",
+			"sequence": "TTCGACTCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0406",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 296,
+			"name": "IonCode",
+			"sequence": "CGGCCTCAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0408",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 297,
+			"name": "IonCode",
+			"sequence": "CAGCCTCCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0409",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 173,
+			"name": "IonCode",
+			"sequence": "CTTGAAGCCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0277",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 174,
+			"name": "IonCode",
+			"sequence": "TTGAGATCAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0278",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 175,
+			"name": "IonCode",
+			"sequence": "CAGCAATTCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0279",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 176,
+			"name": "IonCode",
+			"sequence": "CGAAGCTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0280",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 177,
+			"name": "IonCode",
+			"sequence": "CTTAAGGCTGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0281",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 178,
+			"name": "IonCode",
+			"sequence": "CTGGAGAACCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0282",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 179,
+			"name": "IonCode",
+			"sequence": "TACTTGGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0283",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 180,
+			"name": "IonCode",
+			"sequence": "CTAGGCCTCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0284",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 181,
+			"name": "IonCode",
+			"sequence": "CCGAGAACAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0285",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 182,
+			"name": "IonCode",
+			"sequence": "TTAAGACGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0286",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 183,
+			"name": "IonCode",
+			"sequence": "CTAAGATCCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0287",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 184,
+			"name": "IonCode",
+			"sequence": "TGGCTTCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0288",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 185,
+			"name": "IonCode",
+			"sequence": "CGAACAATTGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0289",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 186,
+			"name": "IonCode",
+			"sequence": "TTCAAGGTGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0290",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 187,
+			"name": "IonCode",
+			"sequence": "CTTAACCACCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0291",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 188,
+			"name": "IonCode",
+			"sequence": "TCCGGACCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0292",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 190,
+			"name": "IonCode",
+			"sequence": "TCTTAGATATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0294",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 192,
+			"name": "IonCode",
+			"sequence": "AAGCCAACCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0296",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 193,
+			"name": "IonCode",
+			"sequence": "TCTGGCAACGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0301",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 194,
+			"name": "IonCode",
+			"sequence": "CTAGGAACCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0302",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 195,
+			"name": "IonCode",
+			"sequence": "TTAAGCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0303",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 196,
+			"name": "IonCode",
+			"sequence": "TTGGCATCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0304",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 197,
+			"name": "IonCode",
+			"sequence": "TTGGTTCCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0305",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 198,
+			"name": "IonCode",
+			"sequence": "TTAGGCTGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0306",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 199,
+			"name": "IonCode",
+			"sequence": "TGGAACCACGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0307",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 200,
+			"name": "IonCode",
+			"sequence": "AGGCAACGGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0308",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 219,
+			"name": "IonCode",
+			"sequence": "TTCTGCCACTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0327",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 220,
+			"name": "IonCode",
+			"sequence": "CTAAGCCATCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0328",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 221,
+			"name": "IonCode",
+			"sequence": "CCTTAGCTCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0329",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 222,
+			"name": "IonCode",
+			"sequence": "TCTTAGGACGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0330",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 223,
+			"name": "IonCode",
+			"sequence": "CTTGCAATGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0331",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 224,
+			"name": "IonCode",
+			"sequence": "TCTAATGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0332",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 225,
+			"name": "IonCode",
+			"sequence": "CCTCCACGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0333",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 226,
+			"name": "IonCode",
+			"sequence": "CCTAAGGCAGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0334",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 227,
+			"name": "IonCode",
+			"sequence": "TCTGGAAGTCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0335",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 228,
+			"name": "IonCode",
+			"sequence": "TCTTAGGTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0336",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 229,
+			"name": "IonCode",
+			"sequence": "TCCAGGCTTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0337",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 230,
+			"name": "IonCode",
+			"sequence": "TGAATTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0338",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 231,
+			"name": "IonCode",
+			"sequence": "CTTGAGAATTAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0339",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 308,
+			"name": "IonCode",
+			"sequence": "CCTGAAGGCTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0420",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 309,
+			"name": "IonCode",
+			"sequence": "CTTGAAGGTCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0421",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 310,
+			"name": "IonCode",
+			"sequence": "CTCTCCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0422",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 311,
+			"name": "IonCode",
+			"sequence": "CTTAACATCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0423",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 312,
+			"name": "IonCode",
+			"sequence": "TTGAATGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0424",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 313,
+			"name": "IonCode",
+			"sequence": "TGAGGAATTCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0425",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 314,
+			"name": "IonCode",
+			"sequence": "TGGAAGCAAGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0426",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 316,
+			"name": "IonCode",
+			"sequence": "TCCAGCCATATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0428",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 317,
+			"name": "IonCode",
+			"sequence": "CCTTACTCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0429",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 319,
+			"name": "IonCode",
+			"sequence": "TGAACCATTGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0431",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 320,
+			"name": "IonCode",
+			"sequence": "TTAGGATCATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0432",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 351,
+			"name": "IonCode",
+			"sequence": "CCAGACCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0463",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 352,
+			"name": "IonCode",
+			"sequence": "TCTAGCCATCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0464",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 354,
+			"name": "IonCode",
+			"sequence": "TGAGGCATGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0466",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 355,
+			"name": "IonCode",
+			"sequence": "CGAGATTCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0467",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 356,
+			"name": "IonCode",
+			"sequence": "TCAACCTGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0468",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 357,
+			"name": "IonCode",
+			"sequence": "TCCTGAGGTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0469",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 358,
+			"name": "IonCode",
+			"sequence": "AAGATGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0470",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 359,
+			"name": "IonCode",
+			"sequence": "CCTGGAAGACGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0471",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 360,
+			"name": "IonCode",
+			"sequence": "TTGCACCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0472",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 361,
+			"name": "IonCode",
+			"sequence": "TCTAAGACTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0473",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 362,
+			"name": "IonCode",
+			"sequence": "CGAACATATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0474",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 363,
+			"name": "IonCode",
+			"sequence": "TTGGACTTATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0475",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 364,
+			"name": "IonCode",
+			"sequence": "CGAGGCAATGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0476",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 365,
+			"name": "IonCode",
+			"sequence": "TCGAGATTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0477",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 366,
+			"name": "IonCode",
+			"sequence": "TTCGCCAACAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0478",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 367,
+			"name": "IonCode",
+			"sequence": "TCGGCACGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0479",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 368,
+			"name": "IonCode",
+			"sequence": "TCCGTTCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0480",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 369,
+			"name": "IonCode",
+			"sequence": "CCTTAGGATGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0481",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 370,
+			"name": "IonCode",
+			"sequence": "CACCACCAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0482",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 371,
+			"name": "IonCode",
+			"sequence": "TTGAAGCCAGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0483",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 372,
+			"name": "IonCode",
+			"sequence": "CCTCCAATCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0484",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 373,
+			"name": "IonCode",
+			"sequence": "TTACAATGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0485",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 378,
+			"name": "IonCode",
+			"sequence": "TCTTGGCAATGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0490",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 379,
+			"name": "IonCode",
+			"sequence": "AAGGCATCCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0491",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 248,
+			"name": "IonCode",
+			"sequence": "TGGAAGGTCCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0356",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 249,
+			"name": "IonCode",
+			"sequence": "TTAGCAACATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0357",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 250,
+			"name": "IonCode",
+			"sequence": "TCTTAGCGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0358",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 251,
+			"name": "IonCode",
+			"sequence": "AAGCAATCCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0359",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 252,
+			"name": "IonCode",
+			"sequence": "CCAAGTTGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0360",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 253,
+			"name": "IonCode",
+			"sequence": "TGGACTCAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0361",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 254,
+			"name": "IonCode",
+			"sequence": "TCTGTAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0362",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 255,
+			"name": "IonCode",
+			"sequence": "TTGAAGGATCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0363",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 256,
+			"name": "IonCode",
+			"sequence": "TTCTACCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0364",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 257,
+			"name": "IonCode",
+			"sequence": "TGGAAGAAGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0365",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 258,
+			"name": "IonCode",
+			"sequence": "CACCATCCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0366",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 259,
+			"name": "IonCode",
+			"sequence": "CCTGCCGGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0367",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 260,
+			"name": "IonCode",
+			"sequence": "CGGCCTTCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0368",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 261,
+			"name": "IonCode",
+			"sequence": "CCTTGGCCTGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0369",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 262,
+			"name": "IonCode",
+			"sequence": "CTAGTCGAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0370",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 263,
+			"name": "IonCode",
+			"sequence": "TAGACGGAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0371",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 265,
+			"name": "IonCode",
+			"sequence": "CCTAAGCTAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0373",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 267,
+			"name": "IonCode",
+			"sequence": "CCACATCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0375",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 268,
+			"name": "IonCode",
+			"sequence": "TCTTCCTTCCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0376",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 269,
+			"name": "IonCode",
+			"sequence": "TGGACAATTGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0377",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 270,
+			"name": "IonCode",
+			"sequence": "TTAGCCTTAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0378",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 271,
+			"name": "IonCode",
+			"sequence": "TCACCTCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0379",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 272,
+			"name": "IonCode",
+			"sequence": "TCTGACATTCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0380",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 273,
+			"name": "IonCode",
+			"sequence": "TCCGCTCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0381",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 274,
+			"name": "IonCode",
+			"sequence": "TTCTTGATCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0382",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 275,
+			"name": "IonCode",
+			"sequence": "CTGACTCCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0383",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 298,
+			"name": "IonCode",
+			"sequence": "TCTGACGGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0410",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 299,
+			"name": "IonCode",
+			"sequence": "TCCTTATTGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0411",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 300,
+			"name": "IonCode",
+			"sequence": "TTCTCCATTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0412",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 301,
+			"name": "IonCode",
+			"sequence": "AACTTCCGGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0413",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 302,
+			"name": "IonCode",
+			"sequence": "TCCACAATTAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0414",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 303,
+			"name": "IonCode",
+			"sequence": "AAGGCTCGGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0415",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 304,
+			"name": "IonCode",
+			"sequence": "CCGAGTCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0416",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 305,
+			"name": "IonCode",
+			"sequence": "TTCTTCACCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0417",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 306,
+			"name": "IonCode",
+			"sequence": "CGGAACCTTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0418",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 307,
+			"name": "IonCode",
+			"sequence": "CTAGGCCAGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0419",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 383,
+			"name": "IonCode",
+			"sequence": "CTTGACCTGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0495",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 96,
+			"name": "IonCode",
+			"sequence": "CTAACAATTCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0196",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 246,
+			"name": "IonCode",
+			"sequence": "TCAGGCCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0354",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 323,
+			"name": "IonCode",
+			"sequence": "TTCTGTCCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0435",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 328,
+			"name": "IonCode",
+			"sequence": "AGGCCTAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0440",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 333,
+			"name": "IonCode",
+			"sequence": "AACAATTCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0445",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 337,
+			"name": "IonCode",
+			"sequence": "CTAAGGTTCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0449",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 341,
+			"name": "IonCode",
+			"sequence": "TTCCTCTAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0453",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 345,
+			"name": "IonCode",
+			"sequence": "TGAAGCCATCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0457",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 349,
+			"name": "IonCode",
+			"sequence": "CCTAGGTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0461",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 376,
+			"name": "IonCode",
+			"sequence": "TGACAACTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0488",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 264,
+			"name": "IonCode",
+			"sequence": "TCCTCCAAGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0372",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 291,
+			"name": "IonCode",
+			"sequence": "TCCAAGGACAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0403",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 322,
+			"name": "IonCode",
+			"sequence": "TTCTGGTTCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0434",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 324,
+			"name": "IonCode",
+			"sequence": "TCCGAAGAGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0436",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 325,
+			"name": "IonCode",
+			"sequence": "TTACACGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0437",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 327,
+			"name": "IonCode",
+			"sequence": "TAAGATTCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0439",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 329,
+			"name": "IonCode",
+			"sequence": "TCTTCAGGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0441",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 330,
+			"name": "IonCode",
+			"sequence": "TTCCTTGGTCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0442",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 332,
+			"name": "IonCode",
+			"sequence": "CTTAGGCAAGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0444",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 334,
+			"name": "IonCode",
+			"sequence": "CGAGGATCCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0446",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 335,
+			"name": "IonCode",
+			"sequence": "TCCTCTTCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0447",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 336,
+			"name": "IonCode",
+			"sequence": "TCGAAGCTTCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0448",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 338,
+			"name": "IonCode",
+			"sequence": "TTAGGAATCCGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0450",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 339,
+			"name": "IonCode",
+			"sequence": "TGGCCAATCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0451",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 340,
+			"name": "IonCode",
+			"sequence": "CTTAAGCATTAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0452",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 342,
+			"name": "IonCode",
+			"sequence": "CTTCCATTCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0454",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 343,
+			"name": "IonCode",
+			"sequence": "CCTACAAGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0455",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 344,
+			"name": "IonCode",
+			"sequence": "TCTTGAAGATGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0456",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 346,
+			"name": "IonCode",
+			"sequence": "CTAAGCTTGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0458",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 347,
+			"name": "IonCode",
+			"sequence": "CTTGGATAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0459",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 348,
+			"name": "IonCode",
+			"sequence": "CAAGCCACCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0460",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 350,
+			"name": "IonCode",
+			"sequence": "TTGACTTCCGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0462",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 380,
+			"name": "IonCode",
+			"sequence": "CCGACCGGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0492",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 381,
+			"name": "IonCode",
+			"sequence": "TTCATTCCGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0493",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 382,
+			"name": "IonCode",
+			"sequence": "CTGGCATCGGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0494",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 93,
+			"name": "IonCode",
+			"sequence": "TGGAGATAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0193",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 114,
+			"name": "IonCode",
+			"sequence": "CCGGAGGTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0218",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 141,
+			"name": "IonCode",
+			"sequence": "TTCCGAACCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0245",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 243,
+			"name": "IonCode",
+			"sequence": "CAAGGCTTCCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0351",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 374,
+			"name": "IonCode",
+			"sequence": "TCCTGCATGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0486",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 375,
+			"name": "IonCode",
+			"sequence": "CGCTTCCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0487",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 22,
+			"name": "IonCode",
+			"sequence": "TTCGAGACGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0122",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 78,
+			"name": "IonCode",
+			"sequence": "CCAGCCTCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0178",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 97,
+			"name": "IonCode",
+			"sequence": "TTCGCAATGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0201",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 116,
+			"name": "IonCode",
+			"sequence": "TCTAACCAATGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0220",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 157,
+			"name": "IonCode",
+			"sequence": "TCTCCATCAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0261",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 172,
+			"name": "IonCode",
+			"sequence": "TGAATCGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0276",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 189,
+			"name": "IonCode",
+			"sequence": "CCTTGAGCATGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0293",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 191,
+			"name": "IonCode",
+			"sequence": "CCTGAATTAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0295",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 215,
+			"name": "IonCode",
+			"sequence": "CCTAGATTAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0323",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 216,
+			"name": "IonCode",
+			"sequence": "TCAACCACAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0324",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 247,
+			"name": "IonCode",
+			"sequence": "TTCCGCATTGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0355",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 266,
+			"name": "IonCode",
+			"sequence": "CTAACCGATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0374",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 295,
+			"name": "IonCode",
+			"sequence": "TCCGGAACTAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0407",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 315,
+			"name": "IonCode",
+			"sequence": "CTGAGCAATCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0427",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 321,
+			"name": "IonCode",
+			"sequence": "TTCCAATTCCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0433",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 326,
+			"name": "IonCode",
+			"sequence": "TAAGTCCAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0438",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 21,
+			"name": "IonCode",
+			"sequence": "TCGCAATTAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0121",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 39,
+			"name": "IonCode",
+			"sequence": "CTGACATAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0139",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 41,
+			"name": "IonCode",
+			"sequence": "AGCACGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0141",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 54,
+			"name": "IonCode",
+			"sequence": "TCCTTGATGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0154",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 66,
+			"name": "IonCode",
+			"sequence": "TGAGGCTCCGAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0166",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 136,
+			"name": "IonCode",
+			"sequence": "CCAGTTCCTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0240",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 168,
+			"name": "IonCode",
+			"sequence": "CTAAGGAAGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0272",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 171,
+			"name": "IonCode",
+			"sequence": "TCCTTACAGAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0275",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 318,
+			"name": "IonCode",
+			"sequence": "TCCTTCCACTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0430",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 331,
+			"name": "IonCode",
+			"sequence": "TTCCTTGCCGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0443",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 353,
+			"name": "IonCode",
+			"sequence": "CGCCAAGAATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0465",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 377,
+			"name": "IonCode",
+			"sequence": "CTTGGCCAACTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0489",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 384,
+			"name": "IonCode",
+			"sequence": "TTCTACCTCAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0496",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 236,
+			"name": "IonCode",
+			"sequence": "TGCATTCCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0344",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 61,
+			"name": "IonCode",
+			"sequence": "CCGCAATCATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0161",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 62,
+			"name": "IonCode",
+			"sequence": "CCAACATTATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0162",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 63,
+			"name": "IonCode",
+			"sequence": "TCAAGAAGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0163",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 64,
+			"name": "IonCode",
+			"sequence": "TTCAATTGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0164",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 65,
+			"name": "IonCode",
+			"sequence": "CCTACTGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonCode_0165",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 277,
+			"name": "IonCode",
+			"sequence": "TTCCGAAGTCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0385",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 278,
+			"name": "IonCode",
+			"sequence": "TCCTGGAGTAAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0386",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 279,
+			"name": "IonCode",
+			"sequence": "TGACCAATCCAC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0387",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 115,
+			"name": "IonCode",
+			"sequence": "TTCAGGACCTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0219",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 118,
+			"name": "IonCode",
+			"sequence": "TTACCATGTTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0222",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 120,
+			"name": "IonCode",
+			"sequence": "TCGAGGCCTGGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0224",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 121,
+			"name": "IonCode",
+			"sequence": "TGGAAGGTTGC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0225",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 119,
+			"name": "IonCode",
+			"sequence": "CTCATTCCGGTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0223",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 113,
+			"name": "IonCode",
+			"sequence": "AACCGGAATTC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonCode_0217",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 117,
+			"name": "IonCode",
+			"sequence": "TCCGAGCTGATC",
+			"adapter": "GGTGAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonCode_0221",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

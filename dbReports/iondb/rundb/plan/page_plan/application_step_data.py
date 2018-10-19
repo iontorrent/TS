@@ -33,6 +33,7 @@ class ApplicationFieldNames():
     PLAN_STATUS = "planStatus"
     UPDATE_KITS_DEFAULTS = 'updateKitsDefaults'
     CATEGORIES = "categories"
+    INSTRUMENT_TYPE = 'instrumentType'
 
 
 class ApplicationStepData(AbstractStepData):
@@ -54,6 +55,7 @@ class ApplicationStepData(AbstractStepData):
         self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
         self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
         self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
+        self.prepopulatedFields[ApplicationFieldNames.INSTRUMENT_TYPE] = None
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
         self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.filter(isActive=True).order_by('description'))
 
@@ -78,21 +80,20 @@ class ApplicationStepData(AbstractStepData):
     def updateSavedObjectsFromSavedFields(self):
         # logger.debug("ENTER application_step_data.updateSavedObjectsFromSavedFields() self.savedFields=%s" %(self.savedFields))
         previous_run_type = self.savedObjects[ApplicationFieldNames.RUN_TYPE]
+        previous_appl_product = self.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
 
         if self.savedFields[ApplicationFieldNames.RUN_TYPE]:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = RunType.objects.get(pk=self.savedFields[ApplicationFieldNames.RUN_TYPE])
+            self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.get_default_for_runType(self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                            applicationGroupName=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME],
+                            instrumentType = self.prepopulatedFields[ApplicationFieldNames.INSTRUMENT_TYPE])
+
+            self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
+                            applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
+                            applicationGroup = None)
+
 
             if self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]:
-                # for applicationGroup-specific applProduct, only one should be visible
-                applProducts = ApplProduct.objects.filter(isActive=True, isVisible=True,
-                                                          applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
-                                                          applicationGroup__name=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
-                if applProducts:
-                    self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = applProducts[0]
-                else:
-                    self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
-                                                                                                    applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
-
                 moreApplProducts = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
                                                           applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
                                                           applicationGroup__name=self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])
@@ -101,10 +102,6 @@ class ApplicationStepData(AbstractStepData):
                 # client code applProductToInstrumentType assumes there is only applProduct entry for a given runType + applicationGroup + instrumentType
                 if moreApplProducts:
                     self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = moreApplProducts
-                else:
-                    self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
-                                                                                                    applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
-                                                                                                    applicationGroup = None)
 
                 # an applProduct entry can be categorized for certain specific business requirements
                 # client code reads the first the 1st entry of applProductToCategories matching a given runType + applicationGroup + categories
@@ -119,19 +116,13 @@ class ApplicationStepData(AbstractStepData):
                 else:
                     self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
                                                                                                    
-            else:
-                self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
-                                                                                                applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType)
-                self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
-                                                                                                applType__runType=self.savedObjects[ApplicationFieldNames.RUN_TYPE].runType,
-                                                                                                applicationGroup = None)
         else:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
             self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
             self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = None
             self.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS_CATEGORIZED] = None
 
-        self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = previous_run_type != self.savedObjects[ApplicationFieldNames.RUN_TYPE]
+        self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = (previous_run_type != self.savedObjects[ApplicationFieldNames.RUN_TYPE]) or (previous_appl_product != self.savedObjects[ApplicationFieldNames.APPL_PRODUCT])
 
     def updateFromStep(self, step_depended_on):
         pass

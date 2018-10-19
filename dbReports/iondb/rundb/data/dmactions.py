@@ -324,7 +324,8 @@ def _create_archival_files(dmfilestat):
         raise
 
     try:
-        makeCSA.makeCSA(dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir)
+        if dmfilestat.result.isThumbnail:
+            makeCSA.makeCSA(dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir)
     except:
         logger.error("Could not create CSA", extra=logid)
         raise
@@ -346,11 +347,11 @@ def _create_destination(dmfilestat, action, filesettype, backup_directory=None):
         else:
             src_dir = dmfilestat.result.get_report_dir()
             dest_dir = os.path.basename(src_dir)
-            if action == ARCHIVE:
+            if action == ARCHIVE and dest_dir not in backup_directory:
                 dmfilestat.archivepath = os.path.join(backup_directory,
                                                       'archivedReports',
                                                       dest_dir)
-            elif action == EXPORT:
+            elif action == EXPORT and dest_dir not in backup_directory:
                 dmfilestat.archivepath = os.path.join(backup_directory,
                                                       'exportedReports',
                                                       dest_dir)
@@ -947,6 +948,8 @@ def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_
     if related is not None:
         related.update(archivepath=dmfilestat.archivepath)
         if dmfilestat.dmfileset.type == dmactions_types.SIG:
+            related.update(diskspace=dmfilestat.diskspace)
+        elif dmfilestat.dmfileset.type == dmactions_types.BASE and action == ARCHIVE:
             related.update(diskspace=dmfilestat.diskspace)
 
     # add log entry

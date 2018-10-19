@@ -84,7 +84,7 @@ $(document).ready(function () {
             $('#raid_loading').addClass('hidden');
         });
     });
-    
+
     $('#refresh_cluster_info').click(function(e){
         e.preventDefault();
         $('#cluster_msg').html('<h4>Refreshing cluster info, please wait</h4>');
@@ -98,7 +98,7 @@ $(document).ready(function () {
             $('#cluster_loading').addClass('hidden');
         });
     });
-    
+
     $('.cluster_info_log').click(function(e){
         var url = $(this).attr('href');
         $('body #modal_event_log').remove();
@@ -108,7 +108,7 @@ $(document).ready(function () {
         });
         return false;
     });
-    
+
     $('.jobs').click(function(e){
         $(this).addClass('active').siblings().removeClass('active');
         $('#jobs_table').show().parent().find('#nojobs').remove();
@@ -141,7 +141,7 @@ $(document).ready(function () {
             $('#cluster_loading').addClass('hidden');
         });
     });
-    
+
     $('#refresh_nas_info').click(function(e){
         e.preventDefault();
         showNasInfo();
@@ -150,7 +150,7 @@ $(document).ready(function () {
 </script>
 
     <div class="content clearfix">
-        <h1>Services</h1>
+        <h1>System Services</h1>
         <table class="data-table">
             <thead>
                 <tr>
@@ -184,6 +184,7 @@ $(document).ready(function () {
             {% endspaceless %}{% endfor %}
             </tbody>
         </table>
+        <br>
         <table class="data-table">
             <thead>
                 <tr>
@@ -192,7 +193,7 @@ $(document).ready(function () {
                 </tr>
             </thead>
             <tbody>
-            {% for name, status in processes %}
+            {% for name, status in system_services %}
                 <tr class="{% cycle 'row1' 'row2' %}">
                     <td>{{name}}</td>
                     <td>
@@ -207,6 +208,51 @@ $(document).ready(function () {
             </tbody>
         </table>
     </div>
+    {% comment %}
+    <div class="content clearfix">
+        <h1>Telemetry Services <small>{% if telemetry_enabled %} Enabled {% else %} Disabled {% endif %}</small></h1>
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Service Name</th>
+                <th>Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for name, status in telemetry_services %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>{{ name }}</td>
+                    <td>
+                        {% if status %}
+                            Running
+                        {% else %}
+                            <b>Down</b>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <br>
+        <div class="row">
+            <div class="span10">
+                <p>These services provide connectivity to Thermo Fisher Cloud and allow Thermo Fisher Scientific staff to perform
+                    remote troubleshooting on request. They also report anonymous usage statistics to Thermo Fisher Scientific. Disabling them
+                    will stop all Thermo Fisher Cloud integration and may make remote support more difficult.
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore
+                    et dolore
+                    magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex
+                    ea
+                    commodo consequat.</p></div>
+            <div class="span2" style="text-align: center">
+                <form action="{% url 'configure_telemetry_services_toggle' %}" method="POST">
+                    <input class="btn btn-default" type="submit"
+                           value="{% if telemetry_enabled %} Disable Telemetry{% else %} Enable Telemetry{% endif %}">
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endcomment %}
     <div class="content clearfix">
         <h1>Active Jobs</h1>
         <h4><a href="/configure/services/queueStat/" class="queueStat"> Queue Status </a></h4>
@@ -325,7 +371,7 @@ $(document).ready(function () {
                         {% include "rundb/configure/raid_info.html" with array_status=entry.drives cols=entry.cols|default:4 %}
                     </td>
                 </tr>
-                
+
                 {% for item in entry.logical_drives %}
                 <tr>
                     <td colspan=2 style="border:none;">
@@ -337,7 +383,7 @@ $(document).ready(function () {
                     </td>
                 </tr>
                 {% endfor %}
-                
+
                 {% endfor %}
             </table>
         {% else %}

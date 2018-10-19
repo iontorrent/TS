@@ -21,9 +21,14 @@
 			</thead>
 			<tbody>
             # var sampleInfo = Object.keys(barcodedSamples).map(function(key) {
+                var barcodes_list = barcodedSamples[key].barcodes;
+                if (barcodedSamples[key].dualBarcodes && barcodedSamples[key].dualBarcodes.length > 0){
+                    // this is used if dynamic dual barcoding
+                    barcodes_list = barcodedSamples[key].dualBarcodes;
+                }
                 return {
                     sampleName: key,
-                    barcode: barcodedSamples[key].barcodes.join(' ')
+                    barcode: barcodes_list.join(' ')
                 }
             }); #
             # sampleInfo.sort(function(a,b){

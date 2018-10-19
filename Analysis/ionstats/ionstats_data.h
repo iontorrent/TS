@@ -151,12 +151,13 @@ public:
 
   RegionalSummary() : origin_(0,0), dim_(0,0), max_hp_(0), n_flow_(0), n_err_(0), n_aligned_(0) {}
 
-  void Initialize(unsigned int max_hp, unsigned int n_flow, vector<unsigned int> &o, vector<unsigned int> &d);
+  void Initialize(unsigned int max_hp, unsigned int n_flow, vector<unsigned int> &o, vector<unsigned int> &d,unsigned int NErrorRates,unsigned int HistogramLength);
   void Add(ReadAlignmentErrors &e);
   void Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, bool ignore_terminal_hp=true);
   void Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, bool ignore_terminal_hp=true);
+  void AddAqLength(unsigned int len, unsigned int i)   { aq_histogram_[i].Add(len); };
   int MergeFrom(RegionalSummary &other);
-
+  void SummarizeToJson(Json::Value& json_value);
   void writeH5(hid_t &file_id, string group_name);
   int readH5(hid_t group_id);
 
@@ -176,6 +177,9 @@ public:
   uint64_t                           nAligned() { return n_aligned_; }
   const vector< vector<uint64_t> > & HpCount()  { return hp_count_; }
   const vector< vector<uint64_t> > & HpErr()    { return hp_err_; }
+  unsigned int                       Origx()    { return origin_.first;}
+  unsigned int                       Origy()    { return origin_.second;}
+  vector< ReadLengthHistogram > aq_histogram_;
 
 private:
   int LoadDataBuffer(unsigned int n_col, unsigned int n_row, vector<uint64_t> &buf, const vector< vector<uint64_t> > & data);
@@ -189,6 +193,7 @@ private:
   uint64_t n_aligned_;
   vector< vector<uint64_t> > hp_count_;
   vector< vector<uint64_t> > hp_err_;
+  
 };
 
 
@@ -207,6 +212,7 @@ public:
   void FlushToH5Forced();
   bool BufferFull()  { return(n_read_ == read_buffer_size_); };
   bool BufferEmpty() { return(n_read_ == 0); };
+
 
   string                 h5_out_file()      { return h5_out_file_; }
   unsigned int           read_buffer_size() { return read_buffer_size_; }

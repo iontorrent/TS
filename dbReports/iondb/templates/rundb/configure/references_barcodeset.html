@@ -13,220 +13,183 @@
 		<div class="content clearfix">
 			<div class="clearfix">
 				<h1 class="pull-left">Barcodes in {{name}}</h1>
+                {% if not system %}
 				<div class="pull-right">
-					<a href="{% url "references_barcode_add" barCodeSetId %}" class="btn btn-primary add_barcode">Add Barcode</a>
 					<a href="{% url "references_barcodeset_delete" barCodeSetId %}" class="btn delete_barcodeset" >Delete Barcode Set</a>
 				</div>
+                {% endif %}
 			</div>
 			<div id="barcodes"></div>
 		</div>	
-<script id="ActionColumnTemplate" type="text/x-kendo-template">
-<div class="btn-group">
-	# var _id = id;# 
-	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
-	<ul class="dropdown-menu pull-right">
-		<li>
-			<a href="#= '{% url "references_barcode_edit" barCodeSetId '99999' %}'.replace('99999',_id)#" class="edit_barcode">Edit</a>
-		</li>
-		<li>
-			<a href="#= '{% url "references_barcode_delete" barCodeSetId '99999' %}'.replace('99999',_id)#" class="delete_barcode">Delete</a>
-		</li>
-	</ul>
-</div>	
-</script>		
 <script id="barcodeNameCellTemplate" type="text/x-kendo-template">
 	# var _id = id;# 
 	<a href="#= '{% url "references_barcode_edit" barCodeSetId '99999' %}'.replace('99999', _id)#" class="edit_barcode">#= id_str#</a>
 </script>		
 <script type="text/javascript">
-$(document).ready(function(){
-	var barcodes = $("#barcodes").kendoGrid({
-        dataSource: {
-        	type: "json"
-			, transport: {
-                read: {
-                	url: "/rundb/api/v1/dnabarcode/?name={{name}}"
-                	, contentType: 'application/json; charset=utf-8'
-				    , type: 'GET'
-				    , dataType: 'json'
-                }
-				, parameterMap: function(options) {
-					return buildParameterMap(options)
-				}
-            }
-            , schema: {
-            	data: "objects"
-            	, total: "meta.total_count"
-                , model: {
-                    fields: {
-                        id: { type: "number" }
-                        , index: { type: "number" }
-                        , id_str: { type: "string" }
-                        , name: { type: "string" }
-                        , adapter: { type: "string" }
-                        , floworder: { type: "string" }
-                        , sequence: { type: "string" }
-                        , type: { type: "string" }
+    $(document).ready(function(){
+        var barcodes = $("#barcodes").kendoGrid({
+            dataSource: {
+                type: "json"
+                , transport: {
+                    read: {
+                        url: "/rundb/api/v1/dnabarcode/?name={{name}}"
+                        , contentType: 'application/json; charset=utf-8'
+                        , type: 'GET'
+                        , dataType: 'json'
+                    }
+                    , parameterMap: function(options) {
+                        return buildParameterMap(options)
                     }
                 }
+                , schema: {
+                    data: "objects"
+                    , total: "meta.total_count"
+                    , model: {
+                        fields: {
+                            id: { type: "number" }
+                            , index: { type: "number" }
+                            , id_str: { type: "string" }
+                            , name: { type: "string" }
+                            , adapter: { type: "string" }
+                            , end_adapter: { type: "string" }
+                            , sequence: { type: "string" }
+                            , end_sequence: { type: "string" }
+                            , type: { type: "string" }
+                        }
+                    }
+                }
+                , serverSorting: true
+                , sort: { field: "index", dir: "asc" }
+                , serverPaging: true
+                , pageSize: 16
             }
-            , serverSorting: true
-            , sort: { field: "index", dir: "asc" }
-            , serverPaging: true                        	
-        	, pageSize: 16
-        }
-        , height: 'auto'
-        , groupable: false
-        , scrollable: false
-        , selectable: false
-        , sortable: true
-        , pageable: true
-		, columns: [
-            {
-                field: "index",
-                title: "Index",
-                width: 70
-            },{
-                field: "id_str"
-                , title: "ID"
-                , template: kendo.template($("#barcodeNameCellTemplate").html())
-            } 
-			, {
-                field: "sequence"
-                , title: "Sequence"
-            } 
-			, {
-                field: "adapter"
-                , title: "Adapter"
-            } 
-			, {
-                field: "floworder"
-                , title: "Flow Order"
-            } 
-			, {
-                field: "annotation"
-                , title: "Annotation"
+            , height: 'auto'
+            , groupable: false
+            , scrollable: false
+            , selectable: false
+            , sortable: true
+            , pageable: true
+            , columns: [
+                {
+                    field: "index",
+                    title: "Index",
+                    width: 70
+                },{
+                    field: "id_str"
+                    , title: "ID"
+                    , template: kendo.template($("#barcodeNameCellTemplate").html())
+                }
+                , {
+                    field: "sequence"
+                    , title: "Sequence"
+                }
+                , {
+                    field: "adapter"
+                    , title: "Adapter"
+                }
+                , {
+                    field: "end_sequence"
+                    , title: "End Sequence"
+                }
+                , {
+                    field: "end_adapter"
+                    , title: "End Adapter"
+                }
+                , {
+                    field: "annotation"
+                    , title: "Annotation"
+                }
+                , {
+                    field: "type",
+                    title: "Type",
+                    template: "<span style='text-transform: uppercase;'>${type}</span>"
+                }
+            ]
+            , dataBound: function(dbE){
+                $('.edit_barcode').click(function (e) {
+                    var source = '#barcodes';
+                    e.preventDefault();
+                    $('#error-messages').hide().empty();
+
+                    var url = $(this).attr('href');
+                    // alert(url);
+                    $.get(url, function(data) {
+                        return false;
+                    }).done(function(data) {
+                        console.log("success:",  url);
+                        $('body').append(data);
+                        $('#modal_references_addedit_barcode').data('source', source);
+                        $('#modal_references_addedit_barcode').modal("show");
+                    })
+                    .fail(function(data) {
+                        $('#error-messages').empty().show();
+                        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                        console.log("error:", data);
+                    })
+                    .always(function(data) { /*console.log("complete:", data);*/ });;
+
+                });
+                $(".delete_barcode").click(function(e){
+                    e.preventDefault();
+                    $('#error-messages').hide().empty();
+                    var source = '#barcodes';
+                    var url = $(this).attr('href');
+                    $.get(url, function(data) {
+                        return false;
+                    }).done(function(data) {
+                        $('body').append(data);
+                        $( "#modal_confirm_delete" ).data('source', source);
+                        $( "#modal_confirm_delete" ).data('customevents', jQuery.makeArray(['delete_barcode_done']));
+                        $( "#modal_confirm_delete" ).modal("show");
+                        console.log("success:",  url);
+                    })
+                    .fail(function(data) {
+                        $('#error-messages').empty().show();
+                        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                        console.log("error:", data);
+                    })
+                    .always(function(data) { /*console.log("complete:", data);*/ });
+                });
+                $(document).bind('delete_barcode_done', function(e){
+                    if($('#barcodes').data("kendoGrid").dataSource.total() == 1) {
+                        window.location = '{% url "configure_references" %}';
+                    } else {
+                        window.location = '{% url "references_barcodeset" barCodeSetId %}';
+                    }
+                });
             }
-			, {
-                field: "type",
-                title: "Type",
-                template: "<span style='text-transform: uppercase;'>${type}</span>"
-            }  
-            , {
-                title: "Action",
-                sortable: false,
-                width: 100,
-                template: kendo.template($("#ActionColumnTemplate").html())
-            }
-        ]
-        , dataBound: function(dbE){
-		    $('.edit_barcode').click(function (e) {
-		    	var source = '#barcodes';
-				e.preventDefault();
-                $('#error-messages').hide().empty();
-				
-				var url = $(this).attr('href');
-				// alert(url);
-				$.get(url, function(data) {
-				    return false;
-				}).done(function(data) { 
-			    	console.log("success:",  url);
-			    	$('body').append(data);
-			    	$('#modal_references_addedit_barcode').data('source', source);
-			    	$('#modal_references_addedit_barcode').modal("show");
-		    	})
-			    .fail(function(data) {
-			    	$('#error-messages').empty().show();
-			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-			    	console.log("error:", data);
-			    })
-			    .always(function(data) { /*console.log("complete:", data);*/ });; 
-				
-			});
-			$(".delete_barcode").click(function(e){
-				e.preventDefault();
-                $('#error-messages').hide().empty();
-		    	var source = '#barcodes';
-				var url = $(this).attr('href');
-				$.get(url, function(data) {
-				    return false;
-				}).done(function(data) { 
-				  	$('body').append(data);
-				  	$( "#modal_confirm_delete" ).data('source', source);
-					$( "#modal_confirm_delete" ).data('customevents', jQuery.makeArray(['delete_barcode_done']));
-				    $( "#modal_confirm_delete" ).modal("show");
-			    	console.log("success:",  url);
-				})
-			    .fail(function(data) {
-			    	$('#error-messages').empty().show();
-			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-			    	console.log("error:", data);
-			    })
-			    .always(function(data) { /*console.log("complete:", data);*/ });			
-			});
-			$(document).bind('delete_barcode_done', function(e){
-				if($('#barcodes').data("kendoGrid").dataSource.total() == 1) {
-					window.location = '{% url "configure_references" %}';
-				} else {
-					window.location = '{% url "references_barcodeset" barCodeSetId %}';
-				}
-			});
-        }
+        });
+        $('.delete_barcodeset').click(function (e) {
+            var source = '#barcodes';
+            e.preventDefault();
+            $('#error-messages').hide().empty();
+
+            var url = $(this).attr('href');
+            console.log(url);
+            $.get(url, function(data) {
+                $('body').append(data);
+                $( "#modal_confirm_delete" ).data('source', source);
+                $( "#modal_confirm_delete" ).data('customevents', jQuery.makeArray(['delete_barcodeset_done']));
+                $( "#modal_confirm_delete" ).modal("show");
+                return false;
+            }).done(function(data) {
+                console.log("success:",  url);
+            })
+            .fail(function(data) {
+                $('#error-messages').empty().show();
+                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                console.log("error:", data);
+            })
+            .always(function(data) { /*console.log("complete:", data);*/ });
+
+        });
+        $(document).bind('delete_barcodeset_done', function(e){
+            window.location = '{% url "configure_references" %}#DNABarcodes'
+        });
+        $(document).bind('modal_references_addedit_barcode_done', function(e) {
+            console.log(e.target, e.relatedTarget);
+            refreshKendoGrid($(e.target).data('source'));
+        });
     });
-    $('.add_barcode').click(function (e) {
-    	var source = '#barcodes';
-		e.preventDefault();
-        $('#error-messages').hide().empty();
-		
-		var url = $(this).attr('href');
-		console.log(url);
-		$.get(url, function(data) {
-	    	$('body').append(data);
-	    	$('#modal_references_addedit_barcode').data('source', source);
-	    	$('#modal_references_addedit_barcode').modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-    	})
-	    .fail(function(data) {
-	    	$('#error-messages').empty().show();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });
-		
-	});
-    $('.delete_barcodeset').click(function (e) {
-    	var source = '#barcodes';
-		e.preventDefault();
-        $('#error-messages').hide().empty();
-		
-		var url = $(this).attr('href');
-		console.log(url);
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		  	$( "#modal_confirm_delete" ).data('source', source);
-		  	$( "#modal_confirm_delete" ).data('customevents', jQuery.makeArray(['delete_barcodeset_done']));
-		    $( "#modal_confirm_delete" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-    	})
-	    .fail(function(data) {
-	    	$('#error-messages').empty().show();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });
-		
-	});
-	$(document).bind('delete_barcodeset_done', function(e){
-		window.location = '{% url "configure_references" %}#DNABarcodes'
-	});
-	$(document).bind('modal_references_addedit_barcode_done', function(e) {
-    	console.log(e.target, e.relatedTarget);
-    	refreshKendoGrid($(e.target).data('source'));
-    });		
-});
-</script>
+    </script>
 {% endblock content %}	

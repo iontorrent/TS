@@ -357,7 +357,7 @@ void ShortStack::InitializeMyEvalFamilies(unsigned int num_hyp){
 			}
 		}
 		fam_it->CountFamSizeFromValid();
-		if (fam_it->SetFuncFromValid(effective_min_family_size)){
+		if (fam_it->SetFuncFromValid(effective_min_family_size, effective_min_fam_per_strand_cov)){
 			++num_func_families_;
 			num_valid_read_counts_ += fam_it->GetValidFamSize();
 		}
@@ -367,6 +367,8 @@ void ShortStack::InitializeMyEvalFamilies(unsigned int num_hyp){
 				my_hypotheses[*read_it].success = false;
 			}
 		}
+		// Filling in FD matrix for family
+		// fam_it->FillInFlowDisruptivenessMatrix(my_hypotheses);
 	}
 
 	// Some of the reads may be set to not success. Need to update valid_index.
@@ -376,7 +378,7 @@ void ShortStack::InitializeMyEvalFamilies(unsigned int num_hyp){
 int ShortStack::OutlierCountsByFlowDisruptiveness(){
 	int ol_counts = 0;
 	for (unsigned int i_read = 0;  i_read < my_hypotheses.size(); ++i_read){
-		ol_counts += my_hypotheses[i_read].OutlierByFlowDisruptiveness();
+		ol_counts += my_hypotheses[i_read].OutlierByFlowDisruptiveness(4);
 	}
 	if (DEBUG > 0){
 		cout << endl << "+ Counting outlier reads using flow-disruptiveness:" <<endl
@@ -386,13 +388,29 @@ int ShortStack::OutlierCountsByFlowDisruptiveness(){
 	return ol_counts;
 }
 
-void ShortStack::FlowDisruptiveOutlierFiltering(bool update_valid_index){
+void ShortStack::FlowDisruptiveOutlierFiltering(unsigned int filtering_stringency, bool update_valid_index){
+	if (filtering_stringency == 0){
+		return;
+	}
+	int num_success_reads_before = 0;
+	int num_success_reads_after = 0;
+
 	for (vector<CrossHypotheses>::iterator read_it = my_hypotheses.begin(); read_it != my_hypotheses.end(); ++read_it){
 		if (read_it->success){
-			read_it->success = not (read_it->OutlierByFlowDisruptiveness());
+			++num_success_reads_before;
+			read_it->success = not (read_it->OutlierByFlowDisruptiveness(filtering_stringency));
+			num_success_reads_after += read_it->success;
 		}
 	}
+
 	if (update_valid_index){
 		FindValidIndexes();
+	}
+	if (DEBUG > 0){
+		cout << endl << "+ Outlier filtering using flow-disruptiveness:" <<endl
+			 << "  - filtering_stringency = " <<  filtering_stringency << endl
+			 << "  - Read stack size = " << my_hypotheses.size() << endl
+			 << "  - Number of success reads before outlier filtering = " << num_success_reads_before << endl
+			 << "  - Number of success reads after outlier filtering = " << num_success_reads_after << endl;
 	}
 }

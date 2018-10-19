@@ -191,7 +191,7 @@ public:
   int   MostResponsible() const;
 
   void  FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_order, const Alignment &my_alignment);
-  bool  OutlierByFlowDisruptiveness() const;
+  bool  OutlierByFlowDisruptiveness(unsigned int stringency_level) const;
 };
 
 

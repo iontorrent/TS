@@ -43,6 +43,7 @@ void PrepareHotspotsHelp()
   printf ("  -a,--left-alignment            on/off     perform left-alignment of indels [off]\n");
   printf ("  -s,--allow-block-substitutions on/off     do not filter out block substitution hotspots [on]\n");
   printf ("  -u,--unmerged-bed              FILE       input a target bed file to filter out hotspots that contain a junction of 2 amplicons (optional)\n");
+  printf ("  -S,--strict-check              on/off     exit with 1 if lines are filtered (on)\n");
   printf ("\n");
 }
 
@@ -214,7 +215,7 @@ class junction {
 	    if (junc_.size() == 0) return true;
 	    if (id < 0) return false;
             if (id >= (int) junc_.size()) return false;
-	    return junc_[id].contained_in_ampl(pos, pos+len);
+	    return junc_[id].contained_in_ampl(pos, pos+len-1);
         }
 	void add(int id, int beg, int end) {
 	    if (id  >= (int) junc_.size()) return;
@@ -351,6 +352,7 @@ int PrepareHotspots(int argc, const char *argv[])
   bool left_alignment             = opts.GetFirstBoolean('a', "left-alignment", false);
   bool filter_bypass              = opts.GetFirstBoolean('f', "filter-bypass", false);
   bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", true);
+  bool strict_check               = opts.GetFirstBoolean('S', "strict-check", true);
   opts.CheckNoLeftovers();
 
   if((input_bed_filename.empty() == (input_vcf_filename.empty() and input_real_vcf_filename.empty())) or
@@ -1267,6 +1269,7 @@ int PrepareHotspots(int argc, const char *argv[])
 
   munmap(ref, ref_stat.st_size);
   close(ref_handle);
+  if (lines_ignored > 0 and strict_check) return 1;
 
   return 0;
 }

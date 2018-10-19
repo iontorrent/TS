@@ -46,6 +46,7 @@ typedef struct ProcessAlignmentContext {
   pthread_mutex_t  *read_mutex;
   pthread_mutex_t  *write_mutex;
   pthread_mutex_t  *results_mutex;
+  
 } ProcessAlignmentContext;
 
 typedef struct hp_data_merge_t {
@@ -105,6 +106,7 @@ int writeIonstatsAlignmentJson(
   const vector<double> &aq_error_rate,
   bool bc_adjust,
   bool evaluate_flow,
+  uint Num_regions,
   AlignmentSummary alignment_summary
 );
 void writeIonstatsH5(string h5_filename, bool append_h5_file, const vector<string> & region_name, AlignmentSummary & alignment_summary);
@@ -482,9 +484,11 @@ int IonstatsAlignment(OptArgs &opts, const string &program_str)
   pthread_mutex_t read_mutex;
   pthread_mutex_t write_mutex;
   pthread_mutex_t results_mutex;
+  pthread_mutex_t region_mutex;
   pthread_mutex_init(&read_mutex, NULL);
   pthread_mutex_init(&write_mutex, NULL);
   pthread_mutex_init(&results_mutex, NULL);
+  pthread_mutex_init(&region_mutex, NULL);
   for(unsigned int i=0; i<opt.NThreads(); ++i) {
     pac[i].input_bam = & input_bam;
     if(opt.ThreadsShareMemory())
@@ -513,6 +517,7 @@ int IonstatsAlignment(OptArgs &opts, const string &program_str)
   pthread_mutex_destroy(&read_mutex);
   pthread_mutex_destroy(&write_mutex);
   pthread_mutex_destroy(&results_mutex);
+  pthread_mutex_destroy(&region_mutex);
 
   if(!opt.ThreadsShareMemory())
     for(unsigned int i=1; i<opt.NThreads(); ++i)
@@ -527,7 +532,7 @@ int IonstatsAlignment(OptArgs &opts, const string &program_str)
   alignment_summary[0].FillBasePositionDepths();
 
   // Processing complete, write summary data
-  writeIonstatsAlignmentJson(opt.OutputJsonFilename(), opt.AqErrorRate(), opt.BcAdjust(), opt.EvaluateFlow(), alignment_summary[0]);
+  writeIonstatsAlignmentJson(opt.OutputJsonFilename(), opt.AqErrorRate(), opt.BcAdjust(), opt.EvaluateFlow(), opt.NSubregions(), alignment_summary[0]);
   if(opt.OutputH5Filename() != "") {
     bool append_h5_file = opt.EvaluatePerReadPerFlow();
     writeIonstatsH5(opt.OutputH5Filename(), append_h5_file, opt.RegionName(), alignment_summary[0]);
@@ -541,6 +546,7 @@ int writeIonstatsAlignmentJson(
   const vector<double> &aq_error_rate,
   bool bc_adjust,
   bool evaluate_flow,
+  uint Num_regions,
   AlignmentSummary alignment_summary
 ) {
 
@@ -549,7 +555,7 @@ int writeIonstatsAlignmentJson(
   //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
   output_json["meta"]["format_name"] = "ionstats_alignment";
   output_json["meta"]["format_version"] = "1.0";
-
+  
   // Called & aligned lengths
   alignment_summary.SystemSnr().SaveToJson(output_json);
   alignment_summary.QvHistogram().SaveToJson(output_json);
@@ -564,6 +570,20 @@ int writeIonstatsAlignmentJson(
     string phred_string = static_cast<ostringstream*>( &(ostringstream() << phred_int) )->str();
     aq_histogram[i].SaveToJson(output_json["AQ" + phred_string]);
   }
+  //regional aqs
+  for (unsigned int k=0; k< Num_regions;k++){
+      string x_string = static_cast<ostringstream*>( &(ostringstream() << alignment_summary.GetRegionalSummary()[k].Origx()) )->str();
+      string y_string = static_cast<ostringstream*>( &(ostringstream() << alignment_summary.GetRegionalSummary()[k].Origy()) )->str();
+      
+   for(unsigned int i=0; i<aq_error_rate.size(); ++i) {
+    int phred_int = toPhred(aq_error_rate[i]);
+    string phred_string = static_cast<ostringstream*>( &(ostringstream() << phred_int) )->str();
+    alignment_summary.GetRegionalSummary()[k].aq_histogram_[i].SummarizeToJson(output_json["Regional"]["(" + x_string + "," + y_string + ")"]["AQ" + phred_string]);
+  }   
+      
+      
+  }
+  
 
   // Called & aligned lengths including barcodes
   if(bc_adjust) {
@@ -2598,6 +2618,7 @@ void * processAlignments(void *in) {
       debug_alignment(pac->opt, alignment, base_space_errors, flow_space_errors, ref_hp_flow);
 
     // Compute the infamous AQ lengths
+
     computeAQ(aq_length,pac->opt->AqErrorRate(),base_space_errors);
 
     if(pac->opt->ThreadsShareMemory())
@@ -2607,7 +2628,7 @@ void * processAlignments(void *in) {
     for(unsigned int i=0; i < pac->opt->NErrorRates(); ++i) {
       if(aq_length[i] >= pac->opt->MinAqLength())
         pac->alignment_summary->AddAqLength(aq_length[i],i);
-    }
+      }
     // Accumulate per-base error positions
     pac->alignment_summary->AddBasePositionErrorCount(base_space_errors.err(), base_space_errors.err_len());
     // Accumulate NoFlowDataCount
@@ -2642,10 +2663,20 @@ void * processAlignments(void *in) {
     // Accumulate regional performance
     if(pac->opt->SpatialStratify() && have_region) {
       pac->alignment_summary->AddRegionalSummaryBasePosition(region_idx, base_space_errors);
+    
+     //DO aq length per region
+       
+       
+        for(unsigned int i=0; i < pac->opt->NErrorRates(); ++i) {
+             if(aq_length[i] >= pac->opt->MinAqLength())
+                   pac->alignment_summary->AddAqLength(region_idx,aq_length[i],i);
+        }
+        
+
       if(pac->opt->EvaluateFlow() && pac->opt->EvaluateHp() && !invalid_ref_bases && (ref_hp_len.size() > 0) && (ref_hp_flow.size() > 0)) {
         if(pac->opt->EvaluateFlow())
           pac->alignment_summary->AddRegionalSummaryPerHp(region_idx, ref_hp_len, ref_hp_err, ref_hp_flow, zeromer_insertion_flow, pac->opt->IgnoreTerminalHp());
-        else
+        else 
           pac->alignment_summary->AddRegionalSummaryPerHp(region_idx, ref_hp_len, ref_hp_err, ref_hp_flow, pac->opt->IgnoreTerminalHp());
       }
     }
@@ -2676,7 +2707,7 @@ void * processAlignments(void *in) {
       if(pac->opt->ThreadsShareMemory())
         pthread_mutex_unlock(pac->results_mutex);
     }
-  }
+  }//while on all reads
 
   // Finish write of debug info
   if(pac->opt->EvaluatePerReadPerFlow() && !pac->alignment_summary->PerReadFlowBufferEmpty()) {

@@ -13,13 +13,14 @@
 import sys
 import json
 import os
+import copy
 
-required_parameters = dict([(key, []) for key in ['torrent_variant_caller', 'long_indel_assembler', 'freebayes']]) 
-required_parameters["torrent_variant_caller"] = [
+standard_parameters = dict([(key, set()) for key in ['torrent_variant_caller', 'long_indel_assembler', 'freebayes']]) 
+standard_parameters["torrent_variant_caller"].update([
                                     # allele classification parameters
                                     "use_fd_param",
                                     "min_ratio_for_fd",                                        
-                                    "indel_as_hpindel",                                     
+#                                    "indel_as_hpindel",                                     
                                     # Allele specific parameters
                                     ## indel parameters
                                     "indel_min_allele_freq",
@@ -50,15 +51,15 @@ required_parameters["torrent_variant_caller"] = [
                                     "hotspot_strand_bias", 
                                     "hotspot_strand_bias_pval",
                                     # SNP/MNP realignment parameters 
-                                    "do_snp_realignment",
-                                    "do_mnp_realignment",
-                                    "realignment_threshold",                                       
+#                                    "do_snp_realignment",
+#                                    "do_mnp_realignment",
+#                                    "realignment_threshold",                                       
                                     # Flow evaluation parameters
                                     "downsample_to_coverage",
                                     "heavy_tailed",
                                     "outlier_probability",
                                     "prediction_precision",
-                                    "min_detail_level_for_fast_scan",
+#                                    "min_detail_level_for_fast_scan",
                                     "max_flows_to_test",                                    
                                     "suppress_recalibration",
                                     # HP length filters
@@ -81,8 +82,8 @@ required_parameters["torrent_variant_caller"] = [
                                     "sse_prob_threshold",
                                     # Others
                                     "report_ppa",
-                                    ]
-required_parameters["long_indel_assembler"]=["kmer_len",
+                                    ])
+standard_parameters["long_indel_assembler"].update(["kmer_len",
                                   "min_var_freq",                                  
                                   "min_var_count",
                                   "short_suffix_match",
@@ -90,37 +91,49 @@ required_parameters["long_indel_assembler"]=["kmer_len",
                                   "max_hp_length",
                                   "relative_strand_bias",
                                   "output_mnv",
-                                  ]
-required_parameters["freebayes"]=["allow_indels",
-                       "allow_snps",
-                       "allow_mnps",
-                       "allow_complex",
-                       "gen_min_alt_allele_freq",                       
-                       "gen_min_indel_alt_allele_freq",
-                       "gen_min_coverage",
-                       "min_mapping_qv",
-                       "read_snp_limit",
-                       "read_max_mismatch_fraction",                       
-                       ]
+                                  ])
+standard_parameters["freebayes"].update(["allow_indels",
+                                         "allow_snps",
+                                         "allow_mnps",
+                                         "allow_complex",
+                                         "gen_min_alt_allele_freq",                       
+                                         "gen_min_indel_alt_allele_freq",
+                                         "gen_min_coverage",
+                                         "min_mapping_qv",
+                                         "read_snp_limit",
+                                         "read_max_mismatch_fraction",                       
+                                         ])
 
-def tagseq_param(my_required_parameters):
-    my_required_parameters['long_indel_assembler'] = []
-    my_required_parameters["torrent_variant_caller"] += ['min_tag_fam_size',
-                                                        'indel_func_size_offset',
-                                                        'tag_trim_method',
-                                                        'snp_min_var_coverage',
-                                                        'indel_min_var_coverage',
-                                                        'mnp_min_var_coverage',
-                                                        'hotspot_min_var_coverage',
-                                                        'fd_nonsnp_min_var_cov',
-                                                        'tag_sim_max_cov',
-                                                        'use_lod_filter',
-                                                        'lod_multiplier',
-                                                        'try_few_restart_freq',
-                                                        ]
-    my_required_parameters['freebayes'] += ['read_mismatch_limit',
-                                            'min_cov_fraction',
-                                            ]
+def get_required_parameters(lib_type = None):
+    my_required_parameters = copy.deepcopy(standard_parameters)
+    if lib_type not in ['tagseq', 'ampliseq_hd']:
+        return my_required_parameters
+    
+    # TagSeq
+    my_required_parameters['long_indel_assembler'].clear()
+    my_required_parameters["torrent_variant_caller"].update(['min_tag_fam_size',
+                                                             'indel_func_size_offset',
+                                                             'tag_trim_method',
+                                                             'snp_min_var_coverage',
+                                                             'indel_min_var_coverage',
+                                                             'mnp_min_var_coverage',
+                                                             'hotspot_min_var_coverage',
+                                                             'fd_nonsnp_min_var_cov',
+                                                             'tag_sim_max_cov',
+#                                                             'use_lod_filter',
+#                                                             'lod_multiplier',
+                                                             'try_few_restart_freq',
+                                                             ])
+    my_required_parameters['freebayes'].update(['read_mismatch_limit',
+                                                'min_cov_fraction',
+                                                ])
+    if lib_type == 'tagseq':
+        return my_required_parameters
+    
+    # AmpliSeq HD
+    my_required_parameters["torrent_variant_caller"].add('min_fam_per_strand_cov')
+    return my_required_parameters
+
 
 def convert_to_type(my_value, my_type):
     if my_type == 'Integer':
@@ -228,11 +241,18 @@ def check_one_parameter_file(param_json_path, description_json_path = None):
     with open(param_json_path, 'rb') as f_json:
         param_json = json.load(f_json)
 
-    # Is it a tagseq parameter file?
+    # Is it a tagseq/amplisseq_hd parameter file?
+    lib_type = None
     library_list = [lib.lower().replace(' ', '_') for lib in param_json.get('meta', {}).get('compatibility', {}).get('library', [])]
     if 'tagseq' in library_list or 'tag_sequencing' in library_list or 'tag_seq' in library_list:
          print('  - The parameter file %s is for Tagseq.' %param_json_path)
-         tagseq_param(required_parameters)    
+         lib_type = 'tagseq'
+
+    if 'ampliseq_hd' in library_list:
+         print('  - The parameter file %s is for AmpliSeq HD.' %param_json_path)
+         lib_type = 'ampliseq_hd'
+    
+    required_parameters = get_required_parameters(lib_type)
 
     error_list = []
     # First check the parameter file has all parameters required.
@@ -242,7 +262,7 @@ def check_one_parameter_file(param_json_path, description_json_path = None):
             continue
         for param_key in section_value:
             if param_key not in param_json[section_key]:
-                error_list.append('The parameter "%s.%s" is required but not specified in' %(section_key, param_key, param_json_path))
+                error_list.append('The parameter "%s.%s" is required but not specified in %s' %(section_key, param_key, param_json_path))
 
     # Then check the parameters in the parameter file
     for section_key in required_parameters.keys():

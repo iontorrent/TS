@@ -157,7 +157,7 @@
                     {% endfor %}
                 {% endfor %}
             </select>
-            
+            <div id="templatingProtocolAlert"></div>
         </div>
     </div>
     <div class="span6">
@@ -166,25 +166,6 @@
     </div>
 </div>
 
-
-<div class="templating_size_info row-fluid hide" style="display: block;">
-    <div class="span6">
-        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Templating Size:
-        <span class="option-group">
-            <small style="font-weight: normal; font-size: 100%;">
-                {% for size in step.getPrePopulatedFieldDict.templatingSizeChoices %}
-                    <label style="display: inline;">
-                        <input type="radio" id="templatingSize_{{size}}" name="templatingSize" value="{{size}}" {% if helper.isEditRun %} readonly {% endif %}
-                            {% ifequal size step.getCurrentSavedFieldDict.templatingSize %} checked="checked" {% endifequal %}\>{{size}}
-                    </label>
-                {% endfor %}
-            </small>
-        </span>
-        </p>
-    </div>
-    <div class="span6">
-    </div>
-</div>        
 
 <div class="library_read_length_info row-fluid hide" style="display: block;">
     <div class="span6">
@@ -280,7 +261,7 @@
                     <!-- Templating Protocol -->
                     <div class="span6">
                         <label class="form-label">Templating Protocol</label>
-                        <select id="samplePrepProtocol" name="samplePrepProtocol" value="" class="advanced" disabled="disabled"
+                        <select id="samplePrepProtocol" name="samplePrepProtocol" class="advanced"
                             {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %} >
                             <option value="">Use Instrument Default</option>
                             {% for protocol in step.getPrePopulatedFieldDict.samplePrepProtocols %}
@@ -401,7 +382,7 @@
 <script type="text/javascript">
     // Populate info needed for smart filtering
     function applicationType_to_values(applicationType){
-        applicationTypeValues  = "";
+        var applicationTypeValues  = "";
         if (applicationType.indexOf("AMPS_ANY") >= 0)
         	applicationTypeValues += "AMPS;AMPS_DNA_RNA;AMPS_EXOME;AMPS_RNA;";
         if (applicationType.indexOf("MIXED") >= 0)
@@ -411,11 +392,9 @@
     }
  
     function samplePrep_instrumentType_to_values(samplePrep_instrumentType){
-        if (samplePrep_instrumentType == "OT_IC")
-        	return "OT;IC";
-        return samplePrep_instrumentType;
+        return samplePrep_instrumentType.replace(/_/g,';');
     }
-    
+
     var sequencingKits = {};
     var categories_to_seq_kits_map = {};
     {% for kit in step.getPrePopulatedFieldDict.seqKits %}
@@ -449,7 +428,6 @@
             "seq_instruments":  "{{kit.instrumentType}}",
             "samplePrep_instruments":  samplePrep_instrumentType_to_values("{{kit.samplePrep_instrumentType}}"),
             "libraryReadLength":"{{kit.libraryReadLength}}",
-            "templatingSize":   "{{kit.templatingSize}}",
             "defaultThreePrimeAdapter": "{{kit.defaultThreePrimeAdapter.sequence}}" || ""
         };
     {% endfor %}
@@ -487,7 +465,8 @@
             "value":       "{{protocol.value}}",
             "display": "{{protocol.displayedValue}}",
             "toolTip":       "{{protocol.description}}" || "",
-            "categories":  "{{protocol.categories}}" || ""
+            "categories":  "{{protocol.categories}}" || "",
+            "seq_instruments":  "{{protocol.sequencing_instrumentType}}"
         };
     {% endfor %}
 

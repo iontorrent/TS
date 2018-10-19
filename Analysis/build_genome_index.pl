@@ -22,12 +22,14 @@ my $opt = {
   "readSampleSize"    => 0,
   "readExcludeLength" => 0,
   "help"              => 0,
+  "backwardCompat"    => 0,
 };
 
 GetOptions(
   "a|auto-fix"              => \$opt->{"autoFix"},
   "f|fasta=s"               => \$opt->{"fastaFile"},
-  "m|reference-mask=s"             => \$opt->{"bedfileName"},
+  "m|reference-mask=s"      => \$opt->{"bedfileName"},
+  "b|backward-compat"       => \$opt->{"backwardCompat"},
   "s|genome-name-short=s"   => \$opt->{"genomeNameShort"},
   "l|genome-name-long=s"    => \$opt->{"genomeNameLong"},
   "v|genome-version=s"      => \$opt->{"genomeVersion"},
@@ -87,6 +89,7 @@ usage: $0
     --read-exclude-length 20           : Alignments of this length or less will
                                          be ignored in summary statistics.
                                          Default value is 20.
+    -b,--backward-compat               : Provide better backward compatibility
     -h,--help                          : This help message
 EOF
 }
@@ -233,7 +236,10 @@ sub makeIndex {
   chdir $outDir || die "$0: unable to chdir to output dir $outDir\n";
   print STDOUT "Making tmap index...\n";
   my $tmapLogFile = "tmap.log";
-  my $command = "$opt->{'tmapDir'}/tmap index -f $fastaFileCopy -v 2>> $tmapLogFile";
+  my $backwardCompat = '';
+  $backwardCompat = '-p' if ($opt-> {'backwardCompat'} ne 0);
+
+  my $command = "$opt->{'tmapDir'}/tmap index -f $fastaFileCopy -v $backwardCompat 2>> $tmapLogFile";
   die "$0: Problem encountered making tmap index, check tmap log file $outDir/$tmapLogFile for details.\n" if(&executeSystemCall($command));
   print STDOUT "  ...tmap index complete\n";
 

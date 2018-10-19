@@ -109,10 +109,11 @@ class PluginManager(object):
         return (pluginscript, islaunch)
 
     @staticmethod
-    def get_plugininfo(pluginname, pluginscript, context=None, use_cache=False):
+    def get_plugininfo(pluginname, pluginscript, existing_pk, context=None, use_cache=False):
         """
         :parameter pluginname: The simple name of the plugin
         :parameter pluginscript: The path to the script
+        :parameter existing_pk: The pk for an existing primary key
         :parameter context: An optional pre-existing context to pull from
         :parameter  use_cache: An optional flag to use the context instead of re-probing the file system
         Query plugin script for a block of json info.
@@ -122,7 +123,7 @@ class PluginManager(object):
             logger.debug("Using cached plugindata: %s %s", pluginname, context['plugin'].version)
             return context['plugin'].info()
 
-        return iondb.plugins.tasks.scan_plugin((pluginname, pluginscript, context), False)
+        return iondb.plugins.tasks.scan_plugin(pluginname, pluginscript, existing_pk, False)
 
     def get_plugininfo_list(self, updatelist):
         info = {}
@@ -242,7 +243,7 @@ class PluginManager(object):
         if not os.path.exists(full_path):
             logger.error("Path specified for install does not exist '%s'", full_path)
 
-        ## Check Plugin Blacklist:
+        # Check Plugin Blacklist:
         if pname in ('scratch', 'implementations'):
             logger.error("Scratch and Implementations are reserved folders, and cannot be installed.")
             return None, False
@@ -254,12 +255,12 @@ class PluginManager(object):
         if not info:
             # Worst case, should have been pre-fetched above
             logger.error("Need to rescan plugin info..")
-            info = PluginManager.get_plugininfo(pname, launch_script, use_cache=False)
+            info = PluginManager.get_plugininfo(pname, launch_script, existing_pk=None, use_cache=False)
             logger.debug("Plugin Rescan Info: %s", info)
         if info is None:
-            raise ValueError("No plugininfo for '%s' in '%s'" % (pname,launch_script))
+            raise ValueError("No plugininfo for '%s' in '%s'" % (pname, launch_script))
 
-        version = info.get('version',"0")
+        version = info.get('version', "0")
         majorBlock = info.get('major_block', False)
 
         # Only used if new plugin record is created

@@ -16,10 +16,10 @@
         "file"          : "ampliseq_germline_lowstringency_530_parameters.json",
         "name"          : "Generic - S5/S5XL (510/520/530) - Germ Line - Low Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries",
-        "configuration" : "germline_low_stringency_520_530",
-        "replaces"      : ["germline_low_stringency_520_530", "germline_low_stringency"],
+        "configuration" : "germline_low_stringency_510_520_530",
+        "replaces"      : ["germline_low_stringency_510_520_530","germline_low_stringency_520_530","germline_low_stringency"],
         "compatibility" : {
-          "chip"        : ["510", "520", "530"],
+          "chip"        : ["510","520","530"],
           "library"     : ["wholegenome","ampliseq","targetseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]
@@ -81,8 +81,8 @@
         "file"          : "ampliseq_somatic_lowstringency_530_parameters.json",
         "name"          : "Generic - S5/S5XL (510/520/530) - Somatic - Low Stringency",
         "tooltip"       : "Optimized for allele frequencies >2.5% and high sensitivity",
-        "configuration" : "somatic_low_stringency_520_530",
-        "replaces"      : ["somatic_low_stringency_520_530", "somatic_low_stringency"],
+        "configuration" : "somatic_low_stringency_510_520_530",
+        "replaces"      : ["somatic_low_stringency_510_520_530", "somatic_low_stringency_520_530", "somatic_low_stringency"],
         "compatibility" : {
           "chip"        : ["510","520","530"],
           "library"     : ["wholegenome","ampliseq","targetseq"],
@@ -91,18 +91,31 @@
         }
     },
     {
-        "file"          : "ampliseq_somatic_lowstringency_p1-540_parameters.json",
-        "name"          : "Generic - P1 or S5/S5XL (540) - Somatic - Low Stringency",
+        "file"          : "ampliseq_somatic_lowstringency_p1_parameters.json",
+        "name"          : "Generic - Proton P1 - Somatic - Low Stringency",
 	    "tooltip"       : "Parameter settings optimized for low frequency variants and minimum false negatives",
-        "configuration" : "somatic_low_stringency_p1_540",
-        "replaces"      : ["somatic_low_stringency_p1_540", "somatic_low_stringency_proton"],
+        "configuration" : "somatic_low_stringency_p1",
+        "replaces"      : ["somatic_low_stringency_p1", "somatic_low_stringency_p1_540", "somatic_low_stringency_proton"],
         "compatibility" : {
-          "chip"        : ["540", "proton_p1"],
+          "chip"        : ["proton_p1"],
           "library"     : ["wholegenome","ampliseq","targetseq"],
           "frequency"   : ["somatic"],
           "stringency"  : ["low"]
         }
     },
+    {
+        "file"          : "ampliseq_somatic_lowstringency_540_parameters.json",
+        "name"          : "Generic - S5/S5XL (540) - Somatic - Low Stringency",
+	    "tooltip"       : "Parameter settings optimized for low frequency variants and minimum false negatives",
+        "configuration" : "somatic_low_stringency_540",
+        "replaces"      : ["somatic_low_stringency_540","somatic_low_stringency_p1_540"],
+        "compatibility" : {
+          "chip"        : ["540"],
+          "library"     : ["wholegenome","ampliseq","targetseq"],
+          "frequency"   : ["somatic"],
+          "stringency"  : ["low"]
+        }
+    },    
     {
         "file"          : "ampliseq_somatic_lowstringency_550_parameters.json",
         "name"          : "Generic - S5/S5XL (550) - Somatic - Low Stringency",
@@ -154,8 +167,31 @@
           "frequency"   : ["rare_somatic"],
           "stringency"  : ["low"]
         }
-    }
+    },
+    {
+        "file"          : "ampliseq_hd_liquidbiopsy_parameters.json",
+        "name"          : "AmpliSeq HD for Oncomine Liquid Biopsy DNA - GeneStudio S5",
+        "tooltip"       : "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA",
+        "configuration" : "ampliseq_hd_cfdna",
+        "replaces"      : ["ampliseq_hd_cfdna"],
+        "compatibility" : {
+          "chip"        : ["510","520","530","540","550","pgm","proton_p1"],
+          "library"     : ["ampliseq_hd"],
+          "frequency"   : ["rare_somatic"],
+          "stringency"  : ["low"]
+        }
+    },
+    {
+        "file"          : "ampliseq_hd_tumor_parameters.json",
+        "name"          : "AmpliSeq HD for Oncomine Tumor DNA - GeneStudio S5",
+        "tooltip"       : "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.",
+        "configuration" : "ampliseq_hd_ffpe",
+        "replaces"      : ["ampliseq_hd_ffpe"],
+        "compatibility" : {
+          "chip"        : ["510","520","530","540","550","pgm","proton_p1"],
+          "library"     : ["ampliseq_hd"],
+          "frequency"   : ["rare_somatic"],
+          "stringency"  : ["low"]
+        }
+    }    
 ]
-
-
-

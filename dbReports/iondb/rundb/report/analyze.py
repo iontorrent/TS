@@ -72,7 +72,11 @@ def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
 
     # error out if cmdline args are missing
     if not eas.have_args(thumbnail=doThumbnail):
-        raise Exception("Analysis cannot start because of missing Command Line Args.")
+        # check if chip type is the cause
+        if models.AnalysisArgs.objects.filter(chipType=exp.chipType).count() == 0:
+            raise Exception("Missing or unsupported chip type: %s" % exp.chipType)
+        else:
+            raise Exception("Missing Command Line Args")
 
     # Always use the default ReportStorage object
     storage = models.ReportStorage.objects.filter(default=True)[0]
@@ -208,7 +212,7 @@ def launch_analysis_job(result, params, doThumbnail):
         db_barcodes = models.dnaBarcode.objects.filter(name=barcodeId).order_by("index")
         lines = []
         for db_barcode in db_barcodes:
-            lines.append('barcode %d,%s,%s,%s,%s,%s,%d,%s' % (db_barcode.index, db_barcode.id_str, db_barcode.sequence, db_barcode.adapter, db_barcode.annotation, db_barcode.type, db_barcode.length, db_barcode.floworder))
+            lines.append('barcode %d,%s,%s,%s,%s,%s,%d' % (db_barcode.index, db_barcode.id_str, db_barcode.sequence, db_barcode.adapter, db_barcode.annotation, db_barcode.type, db_barcode.length))
         if db_barcodes:
             lines.insert(0, "file_id %s" % db_barcodes[0].name)
             lines.insert(1, "score_mode %s" % str(db_barcodes[0].score_mode))
@@ -489,12 +493,32 @@ def make_barcodeInfo(eas, exp, doBaseRecal):
     }
 
     if barcodeId:
-        for barcode in models.dnaBarcode.objects.filter(name=barcodeId).values('index', 'id_str', 'sequence', 'adapter'):
-            barcodeInfo[barcode['id_str']] = barcode
-            barcodeInfo[barcode['id_str']]['sample'] = 'none'
-            barcodeInfo[barcode['id_str']]['referenceName'] = eas.reference
-            barcodeInfo[barcode['id_str']]['calibrate'] = doBaseRecal
-            barcodeInfo[barcode['id_str']]['controlType'] = ''
+        for barcodeObj in models.dnaBarcode.objects.filter(name=barcodeId).order_by('id_str'):
+            id_str = barcodeObj.id_str
+            barcode = {
+                'adapter': barcodeObj.adapter,
+                'id_str': id_str,
+                'index': barcodeObj.index,
+                'sequence': barcodeObj.sequence
+            }
+            barcodeInfo[id_str] = barcode
+            barcodeInfo[id_str]['sample'] = 'none'
+            barcodeInfo[id_str]['referenceName'] = eas.reference
+            barcodeInfo[id_str]['calibrate'] = doBaseRecal
+            barcodeInfo[id_str]['controlType'] = ''
+
+            # dual barcoding fields
+            barcodeInfo[id_str]['endBarcode'] = {}
+            barcodeInfo[id_str]['dualBarcode'] = ""
+            if barcodeObj.end_sequence:
+                endBarcode = {
+                    'adapter': barcodeObj.end_adapter,
+                    'id_str': barcodeObj.id_str,
+                    'index': barcodeObj.index,
+                    'sequence': barcodeObj.end_sequence
+                }
+                barcodeInfo[id_str]['endBarcode'] = endBarcode
+                barcodeInfo[id_str]['dualBarcode'] = id_str
 
         if eas.barcodedSamples:
             for sample, value in eas.barcodedSamples.items():
@@ -514,9 +538,8 @@ def make_barcodeInfo(eas, exp, doBaseRecal):
                         # get the controlType from the barcode.json
                         barcodeInfo[bcId]['controlType'] = info[bcId].get('controlType', '')
                         
+                        # dynamic dual barcoding
                         sampleEndBarcode = info[bcId].get('endBarcode', '')
-                        barcodeInfo[bcId]['endBarcode'] = {}
-                        barcodeInfo[bcId]['dualBarcode'] = ""
                         if endBarcodeKitName and sampleEndBarcode:
                             endBarcodeObjs = models.dnaBarcode.objects.filter(name=endBarcodeKitName, id_str=sampleEndBarcode).values('index', 'id_str', 'sequence', 'adapter')
 

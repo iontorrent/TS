@@ -26,13 +26,6 @@
       background-color: #90ee90;
       padding: 8px;
     }
-    #version_info {
-      float: left;
-      padding-right: 40px;
-    }
-    #update_control {
-      min-width: 580px;
-    }
     #release_memo {
       margin-top: 20px;
     }
@@ -54,14 +47,15 @@
   </style>
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
 
-  <div id="content-main">
-    <h1>Update Torrent Suite</h1>
-        <div id="version_info">
+<div id="content-main">
+  <h1>Update Torrent Suite</h1>
+  <div class="row-fluid">  
+    <div class="span4">
       <h3>Software Versions</h3>
       <div class="bounded_container clear">
-        <table>
+        <table class="table table-condensed table-striped">
           <thead>
-          <tr class="row1">
+          <tr>
             <th>
               <strong>Torrent Suite</strong>
             </th>
@@ -71,7 +65,7 @@
           </thead>
           <tbody>
           {% for label, version in about.items %}
-          <tr class="{% cycle 'row2' 'row1' %}" id="">
+          <tr>
             <td>
               {{ label }}
             </td>
@@ -85,115 +79,119 @@
         </table>
       </div>
     </div>
-    <div id="update_control">
-      <div id="interface">
-        <h2 id="update_status">Checking status</h2>
-        <div id="update_actions" class="actions">
-          <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
-        <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
-          <button id="check_update">Check</button>
-          <button id="confirm_update" disabled="disabled">Update Server</button>
-            {% if not allow_update %}
-              <p><strong>Update is disabled until more disk space is available on root partition</strong></p>
-            {% endif %}
-        </div>
-        <div id="update_confirmation" class="modal modal-800 fade" data-backdrop="static" data-keyboard="false" role="dialog">
-          <div class="modal-dialog">
-            <div class="modal-content">
-               {% if not eula_error %}
-                  <div class="modal-header bg-info">
-                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                    <h4 class="modal-title">End User License Agreement (EULA)</h4>
-                  </div>
-                  <div class="modal-body">
-                    <div id="agreement">
-                        {{eula_content|safe}}
-                     </div>
-                  </div>
-                  <div class="modal-footer bg-info">
-                    <span id="warning_msg" class="pull-left">System will be unavailable during the update.<br>Make sure ongoing analyses are completed before starting the update process.</span>
-                    <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                    <button id="start_update" type="button" class="btn btn-primary" disabled>Agree and Update now</button>
-                  </div>
-                  {% else %}
-                    <div class="alert alert-danger" role="alert">
-                      <p><i class="icon-wrench"></i><strong>Error: cannot proceed with the upgrade process...</strong></p>
-                      <p>{{eula_error}}. Please consult your Torrent Suite administrator to fix this issue.</p>
-                      <input type="hidden" id="eula_error" value="{{eula_error}}">
-                     </div>
-                     <div class="modal-footer bg-info">
-                      <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                   </div>
+    <div class="span8">
+      <div id="update_control">
+        <div id="interface">
+          <h2 id="update_status">Checking status</h2>
+          <div id="update_actions" class="actions">
+            <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
+          <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
+            <button id="check_update">Check</button>
+            <button id="confirm_update" disabled="disabled">Update Server</button>
+              {% if not allow_update %}
+                <p><strong>Update is disabled until more disk space is available on root partition</strong></p>
               {% endif %}
+          </div>
+          <div id="update_confirmation" class="modal modal-800 fade" data-backdrop="static" data-keyboard="false" role="dialog">
+            <div class="modal-dialog">
+              <div class="modal-content">
+                 {% if not eula_error %}
+                    <div class="modal-header bg-info">
+                      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                      <h4 class="modal-title">End User License Agreement (EULA)</h4>
+                    </div>
+                    <div class="modal-body">
+                      <div id="agreement">
+                          {{eula_content|safe}}
+                       </div>
+                    </div>
+                    <div class="modal-footer bg-info">
+                      <span id="warning_msg" class="pull-left">System will be unavailable during the update.<br>Make sure ongoing analyses are completed before starting the update process.</span>
+                      <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                      <button id="start_update" type="button" class="btn btn-primary" disabled>Agree and Update now</button>
+                    </div>
+                    {% else %}
+                      <div class="alert alert-danger" role="alert">
+                        <p><i class="icon-wrench"></i><strong>Error: cannot proceed with the upgrade process...</strong></p>
+                        <p>{{eula_error}}. Please consult your Torrent Suite administrator to fix this issue.</p>
+                        <input type="hidden" id="eula_error" value="{{eula_error}}">
+                       </div>
+                       <div class="modal-footer bg-info">
+                        <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                     </div>
+                {% endif %}
+              </div>
+             </div>
+          </div>
+          <div id="status_texts">
+            <div id="update_checking" style="display: none;">
+              <p>Your system is checking Ion Torrent for updates.
+                This may take a minute.</p>
             </div>
-           </div>
-        </div>
-        <div id="status_texts">
-          <div id="update_checking" style="display: none;">
-            <p>Your system is checking Ion Torrent for updates.
-              This may take a minute.</p>
-          </div>
-          <div id="ready_install" style="display: none;">
-            <p>Your system has successfully downloaded the files necessary for a new update and is ready to install them.  Click Update Server to install the update.</p>
-          </div>
-          <div id="update_running" style="display: none;">
-            <p>Your system is now upgrading, please wait a few minutes.</p>
-          </div>
-          <div id="download_running" style="display: none;">
-            <p>Your system is now downloading updates, please wait a few minutes.</p>
-          </div>
-          <div id="update_finished" style="display: none;">
-            <p>The upgrade completed successfully.  Please refresh the page.</p>
-          </div>
-          <div id="update_failure" style="display: none;">
-            <p>There was a problem checking for updates.
-              Try again or check you network settings.</p>
-              <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
-              <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
-          </div>
-          <div id="download_failure" style="display: none;">
-            <p>The upgrade did not download completely.
-              Click Update Server to try again or check your network settings.</p>
-              <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
-              <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
-          </div>
-          <div id="install_failure" style="display: none;">
-            <p>There were errors during installation.
-              You may click Update Server to try again: contact support,
-              if this does not work.</p>
-              <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
-              <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
-          </div>
-          <div id="disk_root_full" style="display: none;">
-            <p><strong>Low free disk space on the root partition.
-            Software update is disabled until space is freed up.</strong></p>
-          </div>
-          <div id="unknown" style="display: none;">
-            <p>The status of your system is unknown at this time.
-              Check this page again in a few minutes or contact support.</p>
+            <div id="ready_install" style="display: none;">
+              <p>Your system has successfully downloaded the files necessary for a new update and is ready to install them.  Click Update Server to install the update.</p>
+            </div>
+            <div id="update_running" style="display: none;">
+              <p>Your system is now upgrading, please wait a few minutes.</p>
+            </div>
+            <div id="download_running" style="display: none;">
+              <p>Your system is now downloading updates, please wait a few minutes.</p>
+            </div>
+            <div id="update_finished" style="display: none;">
+              <p>The upgrade completed successfully.  Please refresh the page.</p>
+            </div>
+            <div id="update_failure" style="display: none;">
+              <p>There was a problem checking for updates.
+                Try again or check you network settings.</p>
+                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+            </div>
+            <div id="download_failure" style="display: none;">
+              <p>The upgrade did not download completely.
+                Click Update Server to try again or check your network settings.</p>
+                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+            </div>
+            <div id="install_failure" style="display: none;">
+              <p>There were errors during installation.
+                You may click Update Server to try again: contact support,
+                if this does not work.</p>
+                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+            </div>
+            <div id="disk_root_full" style="display: none;">
+              <p><strong>Low free disk space on the root partition.
+              Software update is disabled until space is freed up.</strong></p>
+            </div>
+            <div id="unknown" style="display: none;">
+              <p>The status of your system is unknown at this time.
+                Check this page again in a few minutes or contact support.</p>
+            </div>
           </div>
         </div>
-      </div>
-      <div id=software_version title="Check box to disable all software updates. (Default is unchecked.)">
-        <h3>Disable software updates</h3>
-        <div><input type="checkbox" id="version_lock" /> Lock current TS software version.</div>
-      </div>
-      <div id="release_memo">
-        <h3>Torrent Suite Release Notes</h3>
-        <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
-      </div>
-    </div>  <!--END update_control-->
-    </br>
-    <div id="maintenance_div" class="actions">
-      <h3>Website Maintenance</h3>
-      <div>
-        <button id="maintenance_enable_btn" class="maintenance">Activate</button>
-        <button id="maintenance_disable_btn" class="maintenance">Cancel</button>
-        </br>
-        <p>When Maintenance is activated all webpages other than this one will be disabled and display Maintenance mode message</p>
+        <div id=software_version title="Check box to disable all software updates. (Default is unchecked.)">
+          <h3>Disable software updates</h3>
+          <div><input type="checkbox" id="version_lock" /> Lock current TS software version.</div>
+        </div>
+        <div id="release_memo">
+          <h3>Torrent Suite Release Notes</h3>
+          <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
+        </div>
+      </div>  <!--END update_control-->
+      </br>
+      <div id="maintenance_div" class="actions">
+        <h3>Website Maintenance</h3>
+        <div>
+          <button id="maintenance_enable_btn" class="maintenance">Activate</button>
+          <button id="maintenance_disable_btn" class="maintenance">Cancel</button>
+          </br>
+          <p>When Maintenance is activated all webpages other than this one will be disabled and display Maintenance mode message</p>
+        </div>
       </div>
     </div>
   </div>
+</div>
+
   <script>
     var global_config_initial = {{ global_config_json|safe }};
     $(function(){

@@ -65,92 +65,6 @@ function create_none_ir_account() {
     return $div;
 }
 
-/**
- * Filter IR workflows based on runType and application group
- */
-function get_workflow_url() {
-    var applicationGroupName = $('input[name=applicationGroupName]').val();
-    var runType_name = $('input[name=runType_name]').val();
-    var runType_nucleotideType = $('input[name=runType_nucleotideType]').val();
-    var planCategories = $('input[name="planCategories"]').val();
-    console.log("ionreporter.get_workflow_url() applicationGroupName=", applicationGroupName, "; runType_name=", runType_name, "; runType_nucleotideType=", runType_nucleotideType, "; planCategories=", planCategories);
-
-    var myURL = IONREPORTER.workflow_url;
-
-    myURL += "?format=json";
-    var isFilterSet = false;
-
-    if (runType_nucleotideType.toLowerCase() == "dna" ||  (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
-        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-        myURL += "DNA";
-
-        isFilterSet = true;
-    }
-    else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
-        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-        myURL += "RNA";
-
-        isFilterSet = true;
-    }
- 
-	if (runType_nucleotideType.toLowerCase() == "dna_rna" && applicationGroupName.toLowerCase() == "immune_repertoire") {
-        myURL += "&filterKey=tag_IMMUNE_REPERTOIRE_SHORT_ASSAY&filterValue=";
-        myURL += "true";
-
-        isFilterSet = true;
-	}
-	else {	
-	    if (applicationGroupName == "DNA + RNA") {
-	        /*for mixed single & paired type support  
-	        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
-	            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-	            myURL += "DNA_RNA";
-	
-	            isFilterSet = true;
-	        }
-	        */
-	        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-	        
-	        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
-	//            if (!isFilterSet) {
-	//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";  
-	//            }
-	            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";     
-	        }
-	        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {            
-	            if (!isFilterSet) {
-	                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
-	            }
-	            else {
-	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";  
-	            }
-	        }
-	    }
-	    else {
-	    	if (runType_name.toLowerCase() != "amps") {
-	            if (!isFilterSet) {
-	                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
-	            }
-				if (applicationGroupName == "onco_liquidBiopsy") {
-					myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-				}
-				else {
-	            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
-	           	}
-	        }
-	        else {
-	            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
-	                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-	            }
-	            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
-	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-	            }
-	        }
-	    }
-    }
-    return myURL;
-}
-
 function getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow){
     // find workflow by matching workflow name + tag_isFactoryProvidedWorkflow
     // if no match found then find by matching just the workflow name
@@ -171,7 +85,7 @@ function getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow){
 */
 function get_workflow_and_meta_data(id, fullName) {
     $.blockUI();
-    var myURL = get_workflow_url();
+    var myURL = get_workflow_url(IONREPORTER.workflow_url, id);
     var found_workflow = null;
     $('input[name="irAccountId"]').val(id);
     $('input[name="irAccountName"]').val(fullName);
@@ -180,7 +94,7 @@ function get_workflow_and_meta_data(id, fullName) {
 
     //First we call the API to retrieve all workflows
     $.when($.ajax({
-                url : myURL+"&id="+id,
+                url : myURL,
                 timeout: 6000, //in milliseconds
                 error: function(jqXHR, textStatus, errorThrown){
                     if(textStatus==="timeout") {

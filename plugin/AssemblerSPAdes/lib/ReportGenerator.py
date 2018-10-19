@@ -215,7 +215,7 @@ def _linksToDownloads(sample, assembler):
                                     index = 0
                                     downloads = sample.downloads(assembler)
                                     for descr, url in downloads.items():
-                                        rurl = os.path.relpath(url, DIRNAME)
+                                        rurl = os.path.relpath(url)
                                         index += 1
                                         if index % 5 != 1:
                                             h.UNESCAPED(("&nbsp;&nbsp;|"

@@ -192,7 +192,9 @@
    "ThumbnailControl" : {
       "mask-datacollect-exclude-regions" : false,
       "region-size" : [ 100, 100 ],
-      "total-timeout" : 36000
+      "total-timeout" : 36000,
+      "bkg-debug-files" : true,
+      "bkg-debug-param" : 3
    },
    "TraceControl" : {
       "bkg-empty-well-normalization" : false,

@@ -382,9 +382,9 @@
                   {% for refAnnot in refAnnotFiles %}
                     <li>
                       {{ refAnnot.path }}
-                      <!--<input class="btn deleteBed" type="button"
+                      <input class="btn deleteBed" type="button"
                              data-contentupload="{{refAnnot.pk}}"
-                             value="delete"/>-->
+                             value="delete"/>
                       <p>
                         <a href="/rundb/uploadstatus/{{refAnnot.pk}}/">Details
                         </a>
@@ -407,6 +407,8 @@
   function delete_bed() {
     deleteURL = "/rundb/api/v1/contentupload/" + $(this).data("contentupload") + "/";
     bedLine = $(this).parent("li");
+    var filemonitorURL = "/rundb/api/v1/filemonitor/";
+    var filemonitorObj = filemonitorURL + "?url=" + $(this).data("source");
     apprise('Are you sure you would like to remove this BED file?', {'verify': true}, function (r) {
       if (r) {
         //delete using the API
@@ -415,6 +417,26 @@
           url: deleteURL,
           async: false,
           success: function (msg) {
+            $.ajax({
+                type: "GET",
+                dataType: "jsonp",
+                url : filemonitorObj,
+                async: false,
+                success: function (fmdata) {
+                    $.each(fmdata.objects, function(i,obj){
+                        id = obj.id;
+                        filemonitorObj = filemonitorURL + id + "/";
+                        $.ajax({
+                           type: "DELETE",
+                            url: filemonitorObj,
+                            async: false,
+                            success: function () {
+                               console.log("FileMonitor Obj deleted", id);
+                            }
+                        });
+                    });
+                }
+            });
             bedLine.fadeOut(function () {
               bedLine.remove();
               showOrHideProcessing();
@@ -436,9 +458,9 @@
   function add_upload(data) {
     var name = data.file_path.split("/").pop();
     var li = $('<li>' + name + '</li>');
-    
-    if (data.meta.publisher != "refAnnot") {
-    	var button = $('<button class="btn btn-small deleteBed" data-contentupload="' + data.id + '">Delete</button>');
+
+    if ((data.pub == "refAnnot") || (data.pub == "BED")) {
+    	var button = $('<button class="btn btn-small deleteBed" data-contentupload="' + data.id + '" data-source="' + data.source + '">Delete</button>');
         button.click(delete_bed);
 	    button.hover(
 	            function () {
@@ -451,7 +473,7 @@
 	    li.append(button);
     }
     if (data.status == "Successfully Completed") {
-      if (data.meta.publisher == "refAnnot") {
+      if (data.pub == "refAnnot") {
          li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a></p>');
          $("#availableRefAnnotFileList").append(li);
       } else {
@@ -482,7 +504,7 @@
     return in_progress;
   }
   function update_uploads(data) {
-    $("#availableBedFileList, #processingBedFileList").empty();
+    $("#availableBedFileList, #processingBedFileList, #availableRefAnnotFileList").empty();
     if (add_filtered_uploads(data)) {
       global_upload_refresh_timer = window.setTimeout(refresh_uploads, refresh_timer_wait);
       if (refresh_timer_wait < 2000) {
@@ -502,7 +524,7 @@
       clearTimeout(global_upload_refresh_timer);
       global_upload_refresh_timer = null;
     }
-    $.getJSON("/rundb/api/v1/contentupload/?limit=0&pub=BED", update_uploads);
+    $.getJSON("/rundb/api/v1/contentupload/?limit=0&pub__in=BED,refAnnot", update_uploads);
   }
   function jailbreak_callback(upload_id) {
     refresh_uploads();

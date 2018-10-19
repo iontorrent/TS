@@ -199,14 +199,15 @@ void AlleleIdentity::SubCategorizeMNP(const LocalReferenceContext &reference_con
       status.isPotentiallyCorrelated = true;
 }*/
 
-void AlleleIdentity::IdentifyClearlyNonFD(const LocalReferenceContext &reference_context){
+void AlleleIdentity::IdentifyClearlyNonFD(const LocalReferenceContext &reference_context,  const ReferenceReader &ref_reader){
 	if (status.isHPIndel){
 		status.isClearlyNonFD = true;
 		return;
 	}
-
-	string padding_ref = string(1, reference_context.ref_left_hp_base) + reference_context.reference_allele + string(1, reference_context.ref_right_hp_base);
-	string padding_alt = string(1, reference_context.ref_left_hp_base) + altAllele + string(1, reference_context.ref_right_hp_base);
+	string left_anchor = position0 > 0? string(1, ref_reader.base(chr_idx, position0 - 1)): "";
+	string right_anchor = position0 + ref_length < ref_reader.chr_size(chr_idx) ? string(1, ref_reader.base(chr_idx, position0 + ref_length)) : "";
+	string padding_ref = left_anchor + reference_context.reference_allele + right_anchor;
+	string padding_alt = left_anchor + altAllele + right_anchor;
 	string hp_removed_ref;
 	string hp_removed_alt;
 	RemoveHp(padding_ref, hp_removed_ref);
@@ -217,22 +218,26 @@ void AlleleIdentity::IdentifyClearlyNonFD(const LocalReferenceContext &reference
 
 
 // Test whether this is an HP-InDel
-void AlleleIdentity::IdentifyHPdeletion(const LocalReferenceContext& reference_context) {
-
+void AlleleIdentity::IdentifyHPdeletion(const LocalReferenceContext& reference_context, const ReferenceReader &ref_reader) {
+  /* The logic is not clear and might be buggy.
   if (left_anchor+right_anchor != (int) altAllele.length()){
     // If the anchors do not add up to the length of the shorter allele,
     // a more complex substitution happened and we don't classify as HP-InDel
     status.isHPIndel = false;
   }
   else {
-    //status.isHPIndel = (left_anchor+right_anchor) == (int) altAllele.length();
-    //for (int i_base=left_anchor+1; (status.isHPIndel and i_base<(int)reference_context.reference_allele.length()-right_anchor); i_base++){
-	//    status.isHPIndel = status.isHPIndel and (reference_context.my_hp_length[left_anchor] > 1);
-    //}
-	  string padding_ref = string(1, reference_context.ref_left_hp_base) + reference_context.reference_allele + string(1, reference_context.ref_right_hp_base);
-	  string padding_alt = string(1, reference_context.ref_left_hp_base) + altAllele + string(1, reference_context.ref_right_hp_base);
-	  status.isHPIndel = IsHpIndel(padding_ref, padding_alt);
+    status.isHPIndel = (left_anchor+right_anchor) == (int) altAllele.length();
+    for (int i_base=left_anchor+1; (status.isHPIndel and i_base<(int)reference_context.reference_allele.length()-right_anchor); i_base++){
+	    status.isHPIndel = status.isHPIndel and (reference_context.my_hp_length[left_anchor] > 1);
+    }
   }
+  */
+  // Use the most straightforward way to determine HP-INDEL.
+  string left_anchor = position0 > 0? string(1, ref_reader.base(chr_idx, position0 - 1)): "";
+  string right_anchor = position0 + ref_length < ref_reader.chr_size(chr_idx) ? string(1, ref_reader.base(chr_idx, position0 + ref_length)) : "";
+  string padding_ref = left_anchor + reference_context.reference_allele + right_anchor;
+  string padding_alt = left_anchor + altAllele + right_anchor;
+  status.isHPIndel = IsHpIndel(padding_ref, padding_alt);
   inDelLength = abs((int) reference_context.reference_allele.length() - (int) altAllele.length());
 }
 
@@ -273,6 +278,12 @@ void AlleleIdentity::IdentifyHPinsertion(const LocalReferenceContext& reference_
     status.isHPIndel = IdentifyDyslexicMotive(altAllele[left_anchor], reference_context.position0+left_anchor,
         ref_reader, reference_context.chr_idx);
   }
+  // The above logic for identifying HP-INDEL is not correct. Use the most straightforward way to determine HP-INDEL.
+  string left_anchor = position0 > 0? string(1, ref_reader.base(chr_idx, position0 - 1)): "";
+  string right_anchor = position0 + ref_length < ref_reader.chr_size(chr_idx) ? string(1, ref_reader.base(chr_idx, position0 + ref_length)) : "";
+  string padding_ref = left_anchor + reference_context.reference_allele + right_anchor;
+  string padding_alt = left_anchor + altAllele + right_anchor;
+  status.isHPIndel = IsHpIndel(padding_ref, padding_alt);
 }
 
 // Identify some special motives
@@ -333,7 +344,7 @@ bool AlleleIdentity::SubCategorizeInDel(const LocalReferenceContext& reference_c
   status.isInsertion = (reference_context.reference_allele.length() < altAllele.length());
 
   if (status.isDeletion) {
-	IdentifyHPdeletion(reference_context);
+	IdentifyHPdeletion(reference_context, ref_reader);
 	ref_hp_length = reference_context.my_hp_length[left_anchor];
   }
   else { // Insertion
@@ -431,7 +442,7 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
       cout << " is an MNP." << endl;
   }
 
-  IdentifyClearlyNonFD(reference_context); // Must be done after identifying HP-INDEL.
+  IdentifyClearlyNonFD(reference_context, ref_reader); // Must be done after identifying HP-INDEL.
   return (is_ok);
 }
 

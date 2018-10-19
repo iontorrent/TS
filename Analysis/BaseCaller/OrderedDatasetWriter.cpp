@@ -8,7 +8,7 @@
 
 #include <stddef.h>
 #include <algorithm>
-#include <sstream>
+#include <fstream>
 #include <stdio.h>
 
 #include "BarcodeDatasets.h"
@@ -29,6 +29,7 @@ OrderedDatasetWriter::OrderedDatasetWriter()
   num_datasets_          = 0;
   save_filtered_reads_   = false;
   compress_bam_          = true;
+  have_handles_          = false;
   num_bamwriter_threads_ = 0;
   pthread_mutex_init(&dropbox_mutex_, NULL);
   pthread_mutex_init(&write_mutex_, NULL);
@@ -47,7 +48,8 @@ OrderedDatasetWriter::~OrderedDatasetWriter()
 void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
      int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
      int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments,
-     MolecularTagTrimmer& tag_trimmer, bool trim_barcodes, bool compress_bam)
+     MolecularTagTrimmer& tag_trimmer, bool trim_barcodes, bool compress_bam, int num_end_barcodes,
+     Json::Value read_structure)
 {
   num_regions_ = num_regions;
   num_regions_written_ = 0;
@@ -77,15 +79,44 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   read_group_num_Q20_bases_.assign(num_read_groups_,0);
   read_group_barcode_filt_zero_err_.assign(num_read_groups_, 0);
   read_group_barcode_adapter_rejected_.assign(num_read_groups_, 0);
+  read_group_no_bead_adapter_.assign(num_read_groups_, 0);
   read_group_num_barcode_errors_.resize(num_read_groups_);
   read_group_barcode_distance_hist_.resize(num_read_groups_);
   read_group_barcode_bias_.resize(num_read_groups_);
+  read_group_end_barcode_rejected_.assign(num_read_groups_, 0);
+  read_group_end_adapter_rejected_.assign(num_read_groups_, 0);
+  read_group_end_barcode_errors_.resize(num_read_groups_);
+  if (num_end_barcodes > 0)
+    read_group_end_barcode_counts_.resize(num_read_groups_);
+
+  // Initialize handle accounting
+  if (datasets.barcode_filters().isMember("handles")){
+    have_handles_ = true;
+  }
+  read_group_num_handle_errors_.resize(num_read_groups_);
+  read_group_handle_dist_.resize(num_read_groups_);
+  read_group_handle_rejected_.assign(num_read_groups_, 0);
+  read_group_num_end_handle_errors_.resize(num_read_groups_);
+  read_group_end_handle_dist_.resize(num_read_groups_);
+  read_group_end_handle_rejected_.assign(num_read_groups_, 0);
 
   for (int rg = 0; rg < num_read_groups_; ++rg) {
-    read_group_name_[rg] = datasets.read_group_name(rg);
-    read_group_num_barcode_errors_[rg].assign(3,0);
-    read_group_barcode_bias_[rg].assign(datasets.GetBCmaxFlows(),0.0);
-    read_group_barcode_distance_hist_[rg].assign(5,0);
+    read_group_name_.at(rg) = datasets.read_group_name(rg);
+    read_group_num_barcode_errors_.at(rg).assign(3,0);
+    read_group_barcode_bias_.at(rg).assign(datasets.GetBCmaxFlows(),0.0);
+    read_group_barcode_distance_hist_.at(rg).assign(5,0);
+    read_group_end_barcode_errors_.at(rg).assign(4,0);
+    if (num_end_barcodes > 0)
+      read_group_end_barcode_counts_.at(rg).assign(num_end_barcodes, 0);
+
+    if (have_handles_) {
+      int n_handles = datasets.barcode_filters()["handles"].asInt();
+      int cutoff = datasets.barcode_filters()["handle_cutoff"].asInt();
+      read_group_num_handle_errors_.at(rg).assign(cutoff+1, 0);
+      read_group_handle_dist_.at(rg).assign(n_handles, 0);
+      read_group_num_end_handle_errors_.at(rg).assign(cutoff+1, 0);
+      read_group_end_handle_dist_.at(rg).assign(n_handles, 0);
+    }
 
   }
 
@@ -126,9 +157,26 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
       read_group.FlowOrder            = flow_order.full_nucs();
       read_group.KeySequence          = key;
-      if (trim_barcodes){ // We only add the barcode info to the key sequence if we hard clipped it
-        read_group.KeySequence          += read_group_json.get("barcode_sequence","").asString();
-        read_group.KeySequence          += read_group_json.get("barcode_adapter","").asString();
+      // We only add the barcode info to the key sequence if we hard clipped it
+      if (trim_barcodes){
+        if (read_group_json.isMember("barcode_sequence")) {
+          read_group.KeySequence          += read_group_json.get("barcode_sequence","").asString();
+          read_group.KeySequence          += read_group_json.get("barcode_adapter","").asString();
+        }
+        else if (read_group_json.isMember("barcode")) {
+          read_group.KeySequence          += read_group_json["barcode"].get("barcode_sequence","").asString();
+          read_group.KeySequence          += read_group_json["barcode"].get("barcode_adapter","").asString();
+        }
+        if (read_group_json.isMember("end_barcode")) {
+              string full_end_barcode;
+              full_end_barcode  = read_group_json["end_barcode"].get("barcode_adapter","").asString();
+              full_end_barcode += read_group_json["end_barcode"].get("barcode_sequence","").asString();
+              AddCustomReadGroupTag(read_group, "sk", full_end_barcode);
+        }
+        if (read_structure.isMember("handle")){
+          AddCustomReadGroupTag(read_group, "fh", read_structure["handle"].get("FH","").asString());
+          AddCustomReadGroupTag(read_group, "rh", read_structure["handle"].get("RH","").asString());
+        }
       }
 
       read_group.ProductionDate       = basecaller_json["BaseCaller"]["start_time"].asString();
@@ -139,7 +187,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       read_group.SequencingCenter     = datasets.json().get("sequencing_center","").asString();
       read_group.SequencingTechnology = "IONTORRENT";
 
-      // Add custom tags: Structure of tags per read group XXX
+      // Add custom tags: Structure of tags per read group
       if (datasets.IsLibraryDataset()) {
         MolTag my_tags = tag_trimmer.GetReadGroupTags(read_group_name);
         AddCustomReadGroupTag(read_group, "zt", my_tags.prefix_mol_tag);
@@ -172,7 +220,10 @@ void  OrderedDatasetWriter::AddCustomReadGroupTag (SamReadGroup & read_group, co
 
 // ----------------------------------------------------------------------------
 
-void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& dataset_nickname)
+void OrderedDatasetWriter::Close(BarcodeDatasets& datasets,
+                                 const vector<string>& end_barcode_names,
+                                 const string& output_directory,
+                                 const string& dataset_nickname)
 {
 
   for (;num_regions_written_ < num_regions_; num_regions_written_++) {
@@ -202,27 +253,99 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
       read_group_json["Q20_bases"]   = (Json::UInt64)read_group_num_Q20_bases_[rg_index];
 
       // Log barcode statistics only for barcode read groups
-      if (read_group_json.isMember("barcode_sequence")) {
-        read_group_json["barcode_match_filtered"] = (Json::UInt64)read_group_barcode_filt_zero_err_[rg_index];
-        read_group_json["barcode_adapter_filtered"] = (Json::UInt64)read_group_barcode_adapter_rejected_[rg_index];
+      bool have_barcode = read_group_json.isMember("barcode_sequence") or
+          (read_group_json.isMember("barcode") and read_group_json["barcode"].isMember("barcode_sequence"));
+
+      if (have_barcode) {
+        read_group_json["barcode"]["barcode_match_filtered"] = (Json::UInt64)read_group_barcode_filt_zero_err_[rg_index];
+        read_group_json["barcode"]["barcode_adapter_filtered"] = (Json::UInt64)read_group_barcode_adapter_rejected_[rg_index];
 
         for (unsigned int iflow=0; iflow < read_group_barcode_bias_[rg_index].size(); iflow++) {
           Json::Value av_bias_json(read_group_barcode_bias_[rg_index].at(iflow) / max(read_group_stats_.at(rg_index).num_reads_final_,(int64_t)1));
-    	  read_group_json["barcode_bias"][iflow] = av_bias_json;
+    	  read_group_json["barcode"]["barcode_bias"][iflow] = av_bias_json;
         }
         for (unsigned int ibin=0; ibin < read_group_barcode_distance_hist_[rg_index].size(); ibin++)
-          read_group_json["barcode_distance_hist"][ibin] = (Json::UInt64)read_group_barcode_distance_hist_[rg_index].at(ibin);
+          read_group_json["barcode"]["barcode_distance_hist"][ibin] = (Json::UInt64)read_group_barcode_distance_hist_[rg_index].at(ibin);
         for (unsigned int ierr=0; ierr < read_group_num_barcode_errors_[rg_index].size(); ierr++)
-          read_group_json["barcode_errors_hist"][ierr] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][ierr];
-      }
+          read_group_json["barcode"]["barcode_errors_hist"][ierr] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][ierr];
+
+        // Add handle information to json
+        // TODO Do we want all this accounting information in the production code?
+        if (have_handles_){
+          read_group_json["handle"]["bc_handle_filtered"] = (Json::UInt64)read_group_handle_rejected_[rg_index];
+          for (unsigned int ibin=0; ibin < read_group_num_handle_errors_[rg_index].size(); ++ibin)
+            read_group_json["handle"]["bc_handle_errors_hist"][ibin] = (Json::UInt64)read_group_num_handle_errors_[rg_index].at(ibin);
+          for (unsigned int ibin=0; ibin < read_group_handle_dist_[rg_index].size(); ++ibin)
+            read_group_json["handle"]["bc_handle_distribution"][ibin] = (Json::UInt64)read_group_handle_dist_[rg_index].at(ibin);
+
+          read_group_json["handle"]["end_handle_filtered"] = (Json::UInt64)read_group_end_handle_rejected_.at(rg_index);
+          for (unsigned int ibin=0; ibin < read_group_num_handle_errors_[rg_index].size(); ++ibin)
+            read_group_json["handle"]["end_handle_errors_hist"][ibin] = (Json::UInt64)read_group_num_end_handle_errors_[rg_index].at(ibin);
+          for (unsigned int ibin=0; ibin < read_group_handle_dist_[rg_index].size(); ++ibin)
+            read_group_json["handle"]["end_handle_distribution"][ibin] = (Json::UInt64)read_group_end_handle_dist_[rg_index].at(ibin);
+        }
+
+        // End Barcode Accounting
+        if (read_group_json.isMember("end_barcode")){
+          read_group_json["end_barcode"]["barcode_filtered"] = (Json::UInt64)read_group_end_barcode_rejected_[rg_index];
+          read_group_json["end_barcode"]["adapter_filtered"] = (Json::UInt64)read_group_end_adapter_rejected_[rg_index];
+          read_group_json["end_barcode"]["no_bead_adapter"] = (Json::UInt64)read_group_no_bead_adapter_[rg_index];
+
+          for (unsigned int ierr=0; ierr < read_group_end_barcode_errors_[rg_index].size(); ierr++)
+            read_group_json["end_barcode"]["barcode_errors_hist"][ierr] = (Json::UInt64)read_group_end_barcode_errors_[rg_index][ierr];
+        }
+
+      } // end if have barcodes
+
     }
   }
 
+  // Combined filtering statistics
   for (int rg = 0; rg < num_read_groups_; ++rg)
     combined_stats_.MergeFrom(read_group_stats_.at(rg));
   combined_stats_.ComputeAverages();
   if (!dataset_nickname.empty())
     combined_stats_.PrettyPrint(dataset_nickname);
+
+  // Write barcode demultiplex read count csv
+  WriteReadCountCSV(datasets, end_barcode_names, output_directory, dataset_nickname);
+}
+
+// ----------------------------------------------------------------------------
+
+void OrderedDatasetWriter::WriteReadCountCSV(BarcodeDatasets& datasets,
+                                             const vector<string>& end_barcode_names,
+                                             const string& output_directory,
+                                             const string& dataset_nickname)
+{
+  if (dataset_nickname!="Library" or read_group_end_barcode_counts_.size()==0)
+    return;
+
+  ofstream read_count_file;
+  string file_name(output_directory+"/EndBarcodeReadCounts.csv");
+  read_count_file.open(file_name.c_str());
+
+  // Write header line
+  for (unsigned int ebc=0; ebc<end_barcode_names.size(); ++ebc){
+    read_count_file << ',' << end_barcode_names[ebc];
+  }
+  read_count_file << ",NoMatch,NoAdapter" << endl;
+
+  //Write body lines per read group
+  string bc_name;
+  for (int rg=0; rg<num_read_groups_; ++rg){
+    bc_name = datasets.start_barcode_name(rg);
+    if (bc_name == "NoMatch")
+      continue;
+
+    read_count_file << bc_name;
+    for (unsigned int ebc=0; ebc < read_group_end_barcode_counts_.at(rg).size(); ++ebc){
+      read_count_file << ',' << read_group_end_barcode_counts_.at(rg).at(ebc);
+    }
+    read_count_file << ',' << (read_group_end_adapter_rejected_.at(rg)+read_group_end_barcode_rejected_.at(rg))
+                    << ',' << read_group_no_bead_adapter_.at(rg) << endl;
+  }
+  read_count_file.close();
 }
 
 // ----------------------------------------------------------------------------
@@ -262,13 +385,9 @@ void OrderedDatasetWriter::WriteRegion(int region, deque<ProcessedRead> &region_
 
 void OrderedDatasetWriter::PhysicalWriteRegion(int region)
 {
-	/*printf("current_region - %d \n",region);
-	printf("region_dropbox_ size - %lu \n", region_dropbox_[region].size());*/
-
   for (deque<ProcessedRead>::iterator entry = region_dropbox_[region].begin(); entry != region_dropbox_[region].end(); ++entry) {
 
     // Step 1: Read filtering and trimming accounting
-
     read_group_stats_.at(entry->read_group_index).AddRead(entry->filter);
 
     // Step 2: Should this read be saved?
@@ -291,6 +410,8 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
       qv_histogram_[min(quality,49)]++;
     }
 
+    // *** Barcode statistics
+
     // Number of barcode base errors
     int n_errors = max(0,min(2,entry->barcode_n_errors));
     read_group_num_barcode_errors_[entry->read_group_index].at(n_errors)++;
@@ -304,11 +425,47 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
     read_group_barcode_distance_hist_.at(entry->read_group_index).at(n_hist)++;
     // 0-error filtered barcodes
     if (entry->barcode_filt_zero_error >= 0)
-    	read_group_barcode_filt_zero_err_.at(entry->barcode_filt_zero_error)++;
+      read_group_barcode_filt_zero_err_.at(entry->barcode_filt_zero_error)++;
     // Account for filtered reads due to barcode adapter rejection
     if (entry->barcode_adapter_filtered >= 0)
-           read_group_barcode_adapter_rejected_.at(entry->barcode_adapter_filtered)++;
+      read_group_barcode_adapter_rejected_.at(entry->barcode_adapter_filtered)++;
 
+    // *** End barcode
+
+    if (entry->end_barcode_filtered >= 0){
+      if (entry->filter.adapter_type < 0)
+        read_group_no_bead_adapter_.at(entry->end_barcode_filtered)++;
+      else if (entry->end_adapter_filtered)
+        read_group_end_adapter_rejected_.at(entry->end_barcode_filtered)++;
+      else if (entry->end_handle_filtered){
+        read_group_end_handle_rejected_.at(entry->end_barcode_filtered)++;
+      }
+      else
+        read_group_end_barcode_rejected_.at(entry->end_barcode_filtered)++;
+    }
+    else if (entry->end_barcode_index>=0) {
+      n_errors = max(0,min(3,entry->end_bc_n_errors));
+      read_group_end_barcode_errors_[entry->read_group_index].at(n_errors)++;
+      if (read_group_end_barcode_counts_.size() >0 ){
+        ++read_group_end_barcode_counts_[entry->read_group_index][entry->end_barcode_index];
+      }
+    }
+
+    // *** Do the handle accounting
+    if (have_handles_){
+      if (entry->handle_index >= 0){
+        read_group_handle_dist_.at(entry->read_group_index).at(entry->handle_index)++;
+        read_group_num_handle_errors_.at(entry->read_group_index).at(entry->handle_n_errors)++;
+      }
+      else if (entry->barcode_handle_filtered >=0){
+        read_group_handle_rejected_.at(entry->barcode_handle_filtered)++;
+      }
+
+      if (entry->end_handle_index >= 0){
+        read_group_end_handle_dist_.at(entry->read_group_index).at(entry->end_handle_index)++;
+        read_group_num_end_handle_errors_.at(entry->read_group_index).at(entry->end_handle_n_errors)++;
+      }
+    }
 
     // Actually write out the read
 
@@ -330,7 +487,6 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
         exit(EXIT_FAILURE);
       }
     }
-
     if (not bam_writer_[target_file_idx]->SaveAlignment(entry->bam)){
       cerr << "BaseCaller IO error: Failed to write to bam file " << bam_filename_[target_file_idx] << endl;
       exit(EXIT_FAILURE);

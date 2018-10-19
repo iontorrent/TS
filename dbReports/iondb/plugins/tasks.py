@@ -85,46 +85,42 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
              pwd.getpwuid(final_uid)[0],
              grp.getgrgid(final_gid)[0])
 
+
 @task(queue="plugins", soft_time_limit=30)
-def scan_plugin(data, add_to_store=True):
+def scan_plugin(name, path, exiting_pk, add_to_store=True):
     """
     This method will interogate a specific plugin and get it's information
-    :parameter data: A tuple of type (name, path, context) to be interrogated. Note: They do not need to be installed yet. Just name, script pairs, or name, script, context tuples.
+    :parameter name: The name of the plugin in question
+    :parameter path: The path to the execution script of the plugin
+    :parameter exiting_pk: The primary key for the existing plugin database object to update
     :parameter add_to_store: Add the plugins in the list to the store
     :returns: A PluginInfo object type
     """
-
-    if len(data) == 2:
-        (name, path) = data
-        context = None
-    else:
-        (name, path, context) = data
 
     if os.path.isdir(path):
         path = find_pluginscript(path, name)
 
     info = {}
     try:
-        info = get_info_from_script(name, path, context, add_to_store)
+        info = get_info_from_script(name, path, None, add_to_store)
         if info is not None:
             info = info.todict()
-    except:
+    except Exception:
         logger.error(traceback.format_exc())
 
     if not info:
         logger.info("Failed to get plugininfo: '%s' from '%s'", name, path)
 
-    if info and context and 'plugin' in context:
-        ppk = context["plugin"].pk
+    if exiting_pk is not None:
         try:
             from iondb.rundb.models import Plugin
-            p = Plugin.objects.get(pk=ppk)
+            p = Plugin.objects.get(pk=exiting_pk)
             p.updateFromInfo(info)
             p.save()
         except ValueError:
             # plugin version mismatch
             pass
-        except:
+        except Exception:
             logger.exception("Failed to save info to plugin db cache")
 
     return info
@@ -141,7 +137,7 @@ def scan_all_plugins(plugin_list, add_to_store=True):
     plugin_info = dict()
 
     # fire off sub-tasks for each plugin to be scanned and collect results
-    plugin_scan_tasks = [scan_plugin.s(data, add_to_store) for data in plugin_list]
+    plugin_scan_tasks = [scan_plugin.s(data[0], data[1], add_to_store, None) for data in plugin_list]
     try:
         result = group(plugin_scan_tasks).apply_async().join(timeout=300)
     except Exception as exc:
@@ -151,15 +147,17 @@ def scan_all_plugins(plugin_list, add_to_store=True):
             path = data[1]
             plugin_info[path] = result[i]
 
-        logger.info("Rescanned %d plugins", len(plugin_list))
+    logger.info("Rescanned %d plugins", len(plugin_list))
 
     return plugin_info
+
 
 # Helper task to invoke PluginManager rescan, used to rescan after a delay
 @task(queue="plugins", ignore_result=True)
 def add_remove_plugins():
     from iondb.plugins.manager import pluginmanager
     pluginmanager.rescan()
+
 
 @task(ignore_result=True)
 def backfill_pluginresult_diskusage():

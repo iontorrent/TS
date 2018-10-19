@@ -189,11 +189,22 @@
                     $.blockUI();
                     var grid = $("#mesh-table").data("kendoGrid");
                     var dataItem = grid.dataItem($(e.target).closest("tr"));
-                    $.post('delete/' + dataItem.id + '/', function(data){
+                    $.post('delete/' + dataItem.id + '/', function (data) {
                         grid.dataSource.read();
-                    }).fail(function(jqXHR){
-                        alert(jqXHR.statusText +': '+ jqXHR.responseText);
-                    }).always(function(){
+                    }).fail(function (jqXHR) {
+                        console.log("Failed to remove mesh node: ", jqXHR.statusText + ': ' + jqXHR.responseText);
+                        if (confirm("Could not contact " + dataItem.name +
+                                " to unlink. Would you like to unlink on this TS only?\n\n" +
+                                "You will have to repeat this processes on " +
+                                dataItem.name + ".")) {
+                            $.blockUI();
+                            $.post('delete/' + dataItem.id + '/?force=true', function (data) {
+                            }).always(function () {
+                                grid.dataSource.read();
+                                $.unblockUI();
+                            });
+                        }
+                    }).always(function () {
                         $.unblockUI();
                     });
                 }
@@ -251,8 +262,8 @@
 {% block content %}
     <div class="row-fluid">
         <h1>Configure Mesh</h1>
-        <select id="computer-selection" style="margin-bottom: 0px" {% if mesh_computers|length == 0 %} disabled="disabled" {% endif %}>
-            {% for mesh_computer in mesh_computers %}
+        <select id="computer-selection" style="margin-bottom: 0px" {% if mesh_hosts|length == 0 %} disabled="disabled" {% endif %}>
+            {% for mesh_computer in mesh_hosts %}
                 <option value="{{ mesh_computer }}">{{ mesh_computer }}</option>
             {% endfor %}
         </select>

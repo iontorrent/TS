@@ -1,0 +1,27 @@
+<tr>
+    <td colspan="2"><h3>Advanced Settings</h3></td>
+</tr>
+<tr>
+    <td><b>Templating Protocol:</b></td>
+    <td id="selectedSamplePrepProtocol">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.samplePrepProtocol}}</td>
+</tr>
+<tr>
+    <td><b>Base Calibration Mode:</b></td>
+    <td id="selectedBaseCalibrationMode">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.base_recalibrate}}</td>
+</tr>
+<tr>
+	<td><b>Forward Library Key:</b></td>
+	<td id="selectedLibraryKey">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryKey}}</td>
+</tr>
+<tr>
+	<td><b>Forward 3' Adapter:</b></td>
+	<td id="selected3PrimeAdapter" class="word-break-all">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.forward3primeAdapter}}</td>
+</tr>
+<tr>
+    <td><b>Test Fragment Key:</b></td>
+    <td id="selectedTestFragmentKey">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.tfKey}}</td>
+</tr>
+<tr>
+    <td><b>Flow Order:</b></td>
+    <td id="selectedFlowOrder" class="word-break-all">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.flowOrder|default:"Use Instrument Default"}}</td>
+</tr>

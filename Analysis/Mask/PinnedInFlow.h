@@ -4,6 +4,7 @@
 
 #include "Image.h"
 #include <vector>
+#include <iostream>
 #include "Serialization.h"
 
 #define  SETPIN_WITH_MUTEX  //makes setPinned thread safe

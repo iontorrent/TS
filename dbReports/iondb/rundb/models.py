@@ -52,6 +52,7 @@ from iondb.rundb import tasks
 from iondb.rundb.data import dmactions_types
 from iondb.rundb.separatedValuesField import SeparatedValuesField
 from iondb.plugins.manager import pluginmanager
+from iondb.plugins.tasks import get_info_from_script
 try:
     from hashlib import sha1
 except ImportError:
@@ -70,7 +71,7 @@ from django.utils import timezone
 from django.core import urlresolvers
 from django.db import transaction
 from django.db.models import *
-from django.db.models.signals import post_save, pre_delete, post_delete, m2m_changed
+from django.db.models.signals import post_save, pre_delete, post_delete, m2m_changed, pre_save
 from django.dispatch import receiver
 from distutils.version import LooseVersion
 from iondb.celery import app as celery
@@ -81,6 +82,14 @@ from iondb.utils.utils import convert
 import subprocess
 import StringIO
 import csv
+
+
+def dna_letters_only(value):
+    """Validate the barcode end adapter"""
+    for c in value:
+        if c not in ['A', 'T', 'C', 'G']:
+            raise ValidationError('Value failed validation.')
+
 
 def model_to_csv(models, fields=None):
     """generates a csv from a list of model objects and returns a string object"""
@@ -236,6 +245,7 @@ class KitInfo(models.Model):
         ('', 'Any'),
         ('AMPS_ANY', 'Any AmpliSeq application'),
         ('AMPS_ANY;MIXED', 'Any AmpliSeq and mixed sample type applications'),
+        ('AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1', 'Any AmpliSeq HD application'),
         ('RNA', 'RNA'),
         ('AMPS', "AmpliSeq DNA"),
         ('AMPS_RNA', 'AmpliSeq RNA'),
@@ -252,8 +262,8 @@ class KitInfo(models.Model):
 
     # Rules to get default flows for Kit categories, used by Plan GUI
     _category_flowCount_rules = [
-        {"category": "multipleTemplatingSize", "flowCount": 500, "templatingSize": "200"},
-        {"category": "multipleTemplatingSize", "flowCount": 850, "templatingSize": "400"},
+        {"category": "pcr200_400bpSamplePrep", "flowCount": 500, "samplePrepProtocol": "pcr200bp"},
+        {"category": "pcr200_400bpSamplePrep", "flowCount": 850, "samplePrepProtocol": "pcr400bp"},
 
         {"category": "s5v1Kit", "flowCount": 500, "readLength": "200"},
         {"category": "s5v1Kit", "flowCount": 850, "readLength": "400"},
@@ -269,7 +279,7 @@ class KitInfo(models.Model):
         ('bcShowSubset;bcRequired;', 'Mandatory barcode kit selection'),
         #("flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Hi-Q sequencing kit categories"),
         ("flowOverridable;readLengthDerivableFromFlows;", "Hi-Q sequencing kit categories"),
-        ("multipleTemplatingSize;supportLibraryReadLength", "Hi-Q templating kit categories"),
+        ("supportLibraryReadLength", "Hi-Q templating kit categories"),
         #("readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Non-Hi-Q sequencing kit categories"),
         ("readLengthDerivableFromFlows;", "Non-Hi-Q sequencing kit categories"),
         ("s5v1Kit", "S5 v1 kit categories"),
@@ -279,35 +289,30 @@ class KitInfo(models.Model):
         ("s5ExTKit", "S5 ExT kit categories"),
         ("s5541", "S5 541 kit categories"),
         ("s5v1Kit;flowOverridable;multipleReadLength;s5541", "S5 541 v1 templating kit categories"),
-        ("filter_s5HidKit", "S5 HID kit filter"),
-        ("filter_s5HidEA", "S5 HID early access filter"),
+        ("filter_s5HidKit", "HID S5 kit filter"),
+        ("filter_s5HidKit;samplePrepProtocol;s5HidSamplePrep", "HID S5 kit filter with script deviation"),
+        ("filter_s5HidEA", "HID S5 early access filter"),
         ("filter_muSeek", "MuSeek filter"),
-        ('multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep', 'Proton templating size, read length, RNA WT Chef Protocol'),
-        ('multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;hidSamplePrep', 'templating size, read length, HID Chef Protocol'),
+        ('supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep', 'read length, RNA WT Chef Protocol'),
+        ('supportLibraryReadLength;samplePrepProtocol;hidSamplePrep', 'read length, HID Chef Protocol'),
         ('s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5RnaWTSamplePrep', "S5 flow count, read length, RNA WT Protocol"),
         ('samplePrepProtocol;hidSamplePrep', 'Library kit-based HID Sample Prep Protocol'),
         ("s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5MyeloidSamplePrep", "S5 flow count, read length, Myeloid Protocol"),
-        ("s5v1Kit;multipleTemplatingSize;flowOverridable;multipleReadLength;samplePrepProtocol;s5MyeloidSamplePrep", "Templating size, S5 flow count, read length, Myeloid Protocol"),
-        ("s5v1Kit;multipleTemplatingSize;flowOverridable;samplePrepProtocol;s5MyeloidSamplePrep", "Templating size, S5 flow count, Myeloid Protocol"),
+        ("s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5MyeloidSamplePrep", "S5 flow count, read length, Myeloid Protocol"),
+        ("s5v1Kit;flowOverridable;samplePrepProtocol;s5MyeloidSamplePrep", "S5 flow count, Myeloid Protocol"),
     )
     categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
     libraryReadLength = models.PositiveIntegerField(default=0)
 
-    #the first value, if present, is used as the default value
-    ALLOWED_TEMPLATING_SIZE = (
-        ("", 'Unspecified'),
-        ("200", "200"),
-        ("400", "400"),
-        ("200;400", "200 or 400")
-    )
-    templatingSize = models.CharField(max_length=64, choices=ALLOWED_TEMPLATING_SIZE, default='', blank=True, null=True)
-
+    # IMPORTANT: Sequencing Kit types are used in PGM software, do not modify without making corresponding instrument changes
     ALLOWED_SAMPLE_PREP_INSTRUMENT_TYPES = (
         ('', 'Unspecified'),
         ('OT', 'OneTouch'),
+        ('OT_IA', 'OneTouch and IA'),
         ('IC', 'IonChef'),
-        ('IA', 'IsoAmp'),
-        ("OT_IC", "Both OneTouch and IonChef")
+        ('IA', 'IA'),
+        ("OT_IC", "OneTouch and IonChef"),
+        ("OT_IC_IA", "OneTouch, IonChef, and IA")
     )
     #compatible sample prep instrument type
     samplePrep_instrumentType = models.CharField(max_length=64, choices=ALLOWED_SAMPLE_PREP_INSTRUMENT_TYPES, default='', blank=True)
@@ -449,6 +454,7 @@ class common_CV(models.Model):
     ALLOWED_CATEGORIES = (
         ('', 'Unspecified'),
         ('hidSamplePrep', 'HID Sample Prep Protocol'),
+        ('s5hidSamplePrep', 'HID S5 Sample Prep Protocol'),        
         ('protonRnaWTSamplePrep', 'Proton RNA WT Sample Prep Protocol'),
         ('s5RnaWTSamplePrep', 'S5 RNA WT Sample Prep Protocol'),
         ('protonRnaWTSamplePrep;s5RnaWTSamplePrep', 'RNA WT Sample Prep Protocol'),
@@ -605,6 +611,7 @@ class ApplProduct(models.Model):
     ALLOWED_CATEGORIES = (
         ('', 'Unspecified'),
         ('hidSamplePrep', 'HID Sample Prep Protocol'),
+        ('s5hidSamplePrep', 'HID S5 Sample Prep Protocol'),        
         ('protonRnaWTSamplePrep', 'Proton RNA WT Sample Prep Protocol'),
         ('s5RnaWTSamplePrep', 'S5 RNA WT Sample Prep Protocol'),
         ('s5MyeloidSamplePrep', 'S5 Myeloid Sample Prep Protocol')
@@ -617,6 +624,31 @@ class ApplProduct(models.Model):
 
     def natural_key(self):
         return (self.productCode, )    # must return a tuple
+
+    @classmethod
+    def get_default_for_runType(cls, runType, applicationGroupName=None, instrumentType=None):
+        '''
+        returns default application product for given runType and applicationGroup
+        instrumentType is optional:
+            return default for instrumentType if found, otherwise default for runtype/application
+        Note: there must be one and only one default applProduct for a runType+applicationGroup combination
+        '''
+
+        applProducts = ApplProduct.objects.filter(isActive=True, applType__runType=runType)
+
+        if applicationGroupName and applProducts.filter(applicationGroup__name=applicationGroupName).count() > 0:
+            applProducts = applProducts.filter(applicationGroup__name=applicationGroupName)
+        
+        obj = applProducts.get(isDefault=True, isVisible=True)
+
+        if instrumentType:
+            try:
+                obj = applProducts.get(instrumentType=instrumentType, isDefaultForInstrumentType=True)
+            except ObjectDoesNotExist:
+                pass
+
+        return obj
+
 
     @property
     def barcodeKitSelectableTypes_list(self):
@@ -969,18 +1001,13 @@ class PlannedExperiment(models.Model):
         ('barcodes_24;onco_heme;chef_myeloid_protocol', 'S5 Oncomine Myeloid DNA and Fusions'),
         ('repro', 'Reproductive'),
         ('inheritedDisease', 'Inherited Disease'),
-        ('onco_heme', "Hematology")
+        ('onco_heme', "Hematology"),
+        ('onco_liquidBiopsy', 'Liquid Biopsy'),
+        ('onco_solidTumor;onco_heme', 'AmpliSeq HD for Tumor'),
     )
 
     categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True, db_index=True)
     libraryReadLength = models.PositiveIntegerField(default=0)
-
-    ALLOWED_TEMPLATING_SIZE = (
-        ("", 'Unspecified'),
-        ("200", "200"),
-        ("400", "400"),
-    )
-    templatingSize = models.CharField(max_length=64, choices=ALLOWED_TEMPLATING_SIZE, default='', blank=True, null=True)
 
     # this will be set based on plan creation method, e.g. gui, csv, api, etc.
     origin = models.CharField(max_length=64, blank=True, null=True, default="")
@@ -1828,6 +1855,14 @@ class Experiment(models.Model):
     )
     PRETTY_PRINT_RE = re.compile(r'R_(\d{4})_(\d{2})_(\d{2})_(\d{2})'
                                  r'_(\d{2})_(\d{2})_')
+
+    # strings for ftpStatus
+    FTP_STATUS_COMPLETE = "Complete"
+    FTP_STATUS_MISSING = "Missing File(s)"
+    FTP_STATUS_ABORT = "User Aborted"
+    FTP_STATUS_SYS_CRIT = "Lost Chip Connection"
+    FTP_STATUS_DONE_ALL = [FTP_STATUS_COMPLETE, FTP_STATUS_MISSING, FTP_STATUS_ABORT, FTP_STATUS_SYS_CRIT]
+
     # raw data lives here absolute path prefix
     expDir = models.CharField(max_length=512)
     expName = models.CharField(max_length=128, db_index=True)
@@ -1941,12 +1976,12 @@ class Experiment(models.Model):
 
     chefReagentsPart = models.CharField(max_length=64, blank=True, default='')
     chefReagentsLot = models.CharField(max_length=64, blank=True, default='')
-    chefReagentsSerialNum = models.CharField(max_length=64, blank=True, default='')
+    chefReagentsSerialNum = models.CharField(max_length=20, blank=True, default='')
     chefReagentsExpiration = models.CharField(max_length=64, blank=True, default='')
 
     chefSolutionsPart = models.CharField(max_length=64, blank=True, default='')
     chefSolutionsLot = models.CharField(max_length=64, blank=True, default='')
-    chefSolutionsSerialNum = models.CharField(max_length=64, blank=True, default='')
+    chefSolutionsSerialNum = models.CharField(max_length=20, blank=True, default='')
     chefSolutionsExpiration = models.CharField(max_length=64, blank=True, default='')
 
     chefSamplePos = models.CharField(max_length=64, blank=True, default='')
@@ -2267,6 +2302,11 @@ class Experiment(models.Model):
         '''Returns deviceid of the storage of the raw data directory'''
         return os.stat(self.expDir)[2]
 
+    def in_progress(self):
+        return bool(self.ftpStatus and self.ftpStatus.isdigit())
+
+    def in_error(self):
+        return self.ftpStatus in [self.FTP_STATUS_ABORT, self.FTP_STATUS_SYS_CRIT]
 
 
 @receiver(pre_delete, sender=Experiment, dispatch_uid="pre_delete_experiment")
@@ -3606,6 +3646,13 @@ class Rig(models.Model):
 
         return display_state
 
+    def save(self, *args, **kwargs):
+        """Fill in default location if none is specified"""
+        if not self.location_id:
+            self.location = Location.objects.get(defaultlocation=True)
+
+        super(Rig, self).save(*args, **kwargs)
+
 
 class FileServer(models.Model):
     name = models.CharField(max_length=200)
@@ -4111,6 +4158,8 @@ class GlobalConfig(models.Model):
     enable_nightly_email = models.BooleanField("Enable Nightly Email Notifications?", default=True)
     cluster_auto_disable = models.BooleanField("Automatically disable SGE queue on node errors?", default=True)
 
+    telemetry_enabled = models.BooleanField("Enable TFC telemetry services?", default=True)
+
     def set_TS_update_status(self, inputstr):
         self.ts_update_status = inputstr
 
@@ -4133,7 +4182,7 @@ class GlobalConfig(models.Model):
         return o
 
 
-@receiver(post_save, sender=GlobalConfig, dispatch_uid="save_globalconfig")
+@receiver(post_save, sender=GlobalConfig, dispatch_uid="save_globalconfig_sitename")
 def on_save_config_sitename(sender, instance, created, **kwargs):
     """Very sneaky, we open the Default Report base template which the PHP
     file for the report renders itself inside of and find the name, replace it,
@@ -4153,6 +4202,25 @@ def on_save_config_sitename(sender, instance, created, **kwargs):
             name.write(re.sub(target, replacement, text).encode('utf8'))
     except IOError as err:
         logger.warning("Problem with /opt/ion/iondb/templates/rundb/php_base.html: %s" % err)
+
+
+@receiver(post_save, sender=GlobalConfig, dispatch_uid="save_globalconfig_telemetry")
+def on_save_config_telemetry(sender, instance, created, **kwargs):
+    """ When the global conf is saved, we need to change if services are started on boot depending on the value of
+    telemetry_enabled. We also need to start or stop the services.
+    """
+    try:
+        if instance.telemetry_enabled:
+            subprocess.check_output(
+                ["sudo", "/opt/ion/iondb/bin/administrative/set_telemetry_services.py", "--enable"]
+            )
+        else:
+            subprocess.check_output(
+                ["sudo", "/opt/ion/iondb/bin/administrative/set_telemetry_services.py", "--disable"]
+            )
+    except subprocess.CalledProcessError:
+        # we need to catch this exception because this model can be saved when the deep laser service is not installed
+        logger.exception("Got exception toggling telemetry when saving GlobalConfig!")
 
 
 class EmailAddress(models.Model):
@@ -4176,6 +4244,9 @@ class Plugin(models.Model):
 
     # maximum size of a plugin which will be archived
     MAX_ARCHIVE_SIZE = 50 * 1024 * 1024
+
+    # this flag will indicate if the plugin requires configuration prior to launching.
+    requires_configuration = models.BooleanField(default=False)
 
     # this flag will indicate if the plugin will be included by default in new plans (not from template)
     defaultSelected = models.BooleanField(default=False)
@@ -4382,7 +4453,7 @@ class Plugin(models.Model):
             return self.info_from_model()
 
         context = {'plugin': self}
-        info = PluginManager.get_plugininfo(self.name, self.pluginscript, context, use_cache)
+        info = PluginManager.get_plugininfo(self.name, self.pluginscript, self.id, use_cache)
         # Cache is updated in background task.
         if info is not None:
             self.updateFromInfo(info)  # update persistent db cache
@@ -4397,6 +4468,9 @@ class Plugin(models.Model):
         :param info: A dictionary containing key information used regarding the plugin
         :return: True if anything has been changed, false otherwise
         """
+
+        print(info)
+
         version = info.get('version', None)
         if version and version != self.version:
             logger.warn("Queried plugin but got version mismatch. Plugin: %s has been updated from %s to %s", self.name, self.version, version)
@@ -4418,6 +4492,11 @@ class Plugin(models.Model):
         }
         if self.pluginsettings != pluginsettings:
             self.pluginsettings = pluginsettings
+            changed = True
+
+        requires_configuration = info.get('requires_configuration', False)
+        if self.requires_configuration != requires_configuration:
+            self.requires_configuration = requires_configuration
             changed = True
 
         majorBlock = info.get('major_block', False)
@@ -4503,11 +4582,8 @@ class Plugin(models.Model):
             script = pathToPythonScript if os.path.exists(pathToPythonScript) else pathToShellScript
 
             # get information from the script
-            try:
-                from iondb.plugins.manager import PluginManager
-                info = PluginManager.get_plugininfo(pluginName, script)
-            except Exception as exc:
-                raise Exception("The following error occurred while attempting to load the plugin: " + str(exc))
+            from iondb.plugins.manager import PluginManager
+            info = PluginManager.get_plugininfo(pluginName, script, None)
 
             # get the old version of the plugin
             oldPlugin = None
@@ -4522,7 +4598,7 @@ class Plugin(models.Model):
                 pass
 
             oldVersion = oldPlugin.version if oldPlugin else '0.0.0-' + str(datetime.datetime.now())
-            #make sure this version is an upgrade
+            # make sure this version is an upgrade
             if LooseVersion(info['version']) <= LooseVersion(oldVersion):
                 raise Exception("Cannot install this plugin because the it would be a downgrade from version " + oldVersion + " to " + info['version'] + ".")
 
@@ -4580,6 +4656,8 @@ class Plugin(models.Model):
             newPlugin.description = info['docs']
             newPlugin.majorBlock = info['major_block']
             newPlugin.config = oldPlugin.config if oldPlugin else info['config']
+            newPlugin.packageName = ''
+            newPlugin.requires_configuration = info['requires_configuration']
 
             # push the new plugin to the database
             newPlugin.save()
@@ -4592,6 +4670,59 @@ class Plugin(models.Model):
             return newPlugin.pk
         finally:
             shutil.rmtree(pathToExtracted, True)
+
+    @staticmethod
+    def install(path_to_archive):
+        """Entry point for the install method of either zips or debs"""
+        logger.info("Starting install process for plugin at " + path_to_archive)
+
+        # check that the file exists
+        if not os.path.exists(path_to_archive):
+            raise Exception("Attempt to install plugin from zip failed because " + path_to_archive + " does not exist.")
+
+        archive_size = os.path.getsize(path_to_archive)
+        if archive_size == 0:
+            raise Exception("The zip file " + path_to_archive + " is of zero size and has no contents.")
+
+        _, archive_extension = os.path.splitext(path_to_archive)
+        if archive_extension == ".zip":
+            # create a temporary directory to extract the zip file to
+            path_to_extracted = tempfile.mkdtemp()
+
+            try:
+                # extract the zip file
+                tasks.extract_zip(path_to_archive, path_to_extracted, logger=logger)
+
+                # get the plugin name from the top level directory created from the zip file
+                # there is an assumption that only one directory will exists
+                list_of_directories = [name for name in os.listdir(path_to_extracted) if os.path.isdir(os.path.join(path_to_extracted, name))]
+                if len(list_of_directories) != 1:
+                    raise Exception("The zip file contained a number of directories where the specification only calls for one.  This has caused an ambiguous state where the plugin name cannot be divined.")
+                plugin_name = list_of_directories[0].strip()
+
+                # predict where each of the scripts should be
+                path_to_shell_script = os.path.join(path_to_extracted, plugin_name, Plugin.LAUNCH_SHELL)
+                path_to_python_script = os.path.join(path_to_extracted, plugin_name, plugin_name + '.py')
+
+                # detect if neither of these was presented to the installer
+                if not os.path.exists(path_to_shell_script) and not os.path.exists(path_to_python_script):
+                    raise Exception("Neither a shell script or a python script was included in the plugin package in root of the plugin directory.")
+
+                plugin_script = path_to_python_script if os.path.exists(path_to_python_script) else path_to_shell_script
+                get_info_from_script(plugin_name, plugin_script)
+
+                # move the extracted contents into the new position
+                base_plugins_path = os.path.join('/results', 'plugins')
+                plugin_binary_path = os.path.join(base_plugins_path, plugin_name)
+                shutil.move(os.path.join(path_to_extracted, plugin_name), base_plugins_path)
+
+            finally:
+                shutil.rmtree(path_to_extracted, True)
+
+        elif archive_extension == ".deb":
+            pass
+        else:
+            raise Exception("Cannot install archive with file type " + archive_extension)
 
     @staticmethod
     def Uninstall(primaryKey):
@@ -4674,7 +4805,7 @@ class Plugin(models.Model):
             raise Exception("No file at " + pathToDeb)
 
         import subprocess
-        p = subprocess.Popen(["sudo", "/opt/ion/iondb/bin/ion_plugin_install_deb.py", pathToDeb], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(["sudo", "/opt/ion/iondb/bin/ion_package_install_deb.py", pathToDeb], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = p.communicate()
 
         # check to the error
@@ -4688,9 +4819,9 @@ class Plugin(models.Model):
     def validate(pk, configuration, run_mode):
         """This will create an instance of the plugin and run the validation on it"""
         # disablign the validatino for the 5.8 release
-        return list()
-        # instance = Plugin.create_instance(pk)
-        # return instance.validate(configuration, run_mode) if instance is not None else list()
+
+        instance = Plugin.create_instance(pk)
+        return instance.validate(configuration, run_mode) if instance is not None else list()
 
     @staticmethod
     def create_instance(pk):
@@ -4861,8 +4992,9 @@ class PluginResult(models.Model):
         return total_size, inodes
 
     def prepare(self):
-        # Always overwrite key - possibly invalidating existing key from running instance
-        self.apikey = _generate_key()
+        """Prepare the api key here"""
+        if self.apikey is None:
+            self.apikey = _generate_key()
 
     def SetState(self, state, grid_engine_jobid, jobid=None):
         """
@@ -4976,8 +5108,10 @@ def on_pluginresult_delete(sender, instance, **kwargs):
         client = xmlrpclib.ServerProxy(settings.IPLUGIN_STR)
         client.delete_pr_directory(directory)
 
+
 RUNNING_STATES = ['Pending', 'Queued', 'Started']
 COMPLETED_STATES = ['Completed', 'Error', 'Declined', 'Unknown', 'Resource', 'Timed Out', 'Cancelled', 'Archived']
+
 
 class PluginResultJob(models.Model):
     """A job which was run to produce a plugin result"""
@@ -5034,7 +5168,6 @@ class PluginResultJob(models.Model):
         """Send a stop command to the SGE"""
         if self.grid_engine_jobid > 0:
             pluginServer = xmlrpclib.ServerProxy(settings.IPLUGIN_STR)
-            endtime = datetime.datetime.now()
             try:
                 pluginServer.sgeStop(self.grid_engine_jobid)
             except xmlrpclib.Fault as exc:
@@ -5043,33 +5176,102 @@ class PluginResultJob(models.Model):
             self.state = 'Cancelled'
             self.save()
 
+    # this is not needed if small_image is created at set_image
+    def save(self, *args, **kwargs):
+        """override the save method to capture the time for the ending"""
+        old = PluginResultJob.objects.get(pk=self.pk) if self.pk else None
+        if old and old.state != self.state:
+            if self.state == "Started":
+                self.starttime = timezone.now()
+            elif self.state in COMPLETED_STATES:
+                self.endtime = timezone.now()
+                self.plugin_result.api_key = None
+                self.plugin_result.UpdateSizeAndINodeCount()
+
+        super(PluginResultJob, self).save(*args, **kwargs)
+
 
 class dnaBarcode(models.Model):
-
     """Store a dna barcode"""
+
+    ALLOWED_BARCODE_TYPES = (('', 'Unspecified'), ('none', 'None'), ('dna', 'DNA'), ('rna', 'RNA'),)
+
+    system = models.BooleanField(default=False)
     name = models.CharField(max_length=128)     # name of barcode SET
     id_str = models.CharField(max_length=128)   # id of this barcode sequence
     active = models.BooleanField(default=True)
-
-    ALLOWED_BARCODE_TYPES = (
-        ('', 'Unspecified'),
-        ('none', 'None'),
-        ('dna', 'DNA'),
-        ('rna', 'RNA'),
-    )
-
     type = models.CharField(max_length=64, choices=ALLOWED_BARCODE_TYPES, default='', blank=True)
     sequence = models.CharField(max_length=128)
     length = models.IntegerField(default=0, blank=True)
-    floworder = models.CharField(max_length=128, blank=True, default="")
     index = models.IntegerField()
     annotation = models.CharField(max_length=512, blank=True, default="")
     adapter = models.CharField(max_length=128, blank=True, default="")
     score_mode = models.IntegerField(default=0, blank=True)
     score_cutoff = models.FloatField(default=0)
+    end_sequence = models.CharField(max_length=128, blank=True, default="", validators=[dna_letters_only])
+    end_adapter = models.CharField(max_length=128, blank=True, default="", validators=[dna_letters_only])
+    is_end_barcode = models.BooleanField(default=False)
+
+    @staticmethod
+    def validate_barcode(bar_code_dict):
+        """validate the barcode, return what failed"""
+        failed = []
+
+        if "sequence" in bar_code_dict:
+            if not bar_code_dict["sequence"]:
+                failed.append(("sequence", "Required column is empty"))
+        else:
+            failed.append(("sequence", "Required column is missing"))
+
+        for nuc in ["sequence", "floworder", "adapter", "end_sequence", "end_adapter"]:
+            if nuc in bar_code_dict and not set(bar_code_dict[nuc].upper()).issubset("ATCG"):
+                failed.append((nuc, "Must have A, T, C, G only: '%s'" % bar_code_dict[nuc]))
+
+        if 'id_str' in bar_code_dict:
+            barcode = bar_code_dict["id_str"].strip()
+            if not set(barcode).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"):
+                failed.append(("id_str", "str_id must only have letters, numbers, or the characters _ . - "))
+
+        # do not let the index be set to zero. Zero is reserved.
+        if 'index' in bar_code_dict and bar_code_dict["index"] == "0":
+            failed.append(("index", "index must not contain a 0. Indices should start at 1."))
+        return failed
+
+    @staticmethod
+    def from_csv(file_handle, name):
+        failed = dict()
+        bar_codes = list()
+        nucs = ["sequence", "floworder", "adapter", "end_sequence", "end_adapter"]
+
+        reader = csv.DictReader(file_handle.read().splitlines())
+        for index, row in enumerate(reader, start=1):
+            row_errors = dnaBarcode.validate_barcode(row)
+            if row_errors:  # don't make dna object or add it to the list
+                failed[index] = row_errors
+            else:
+                new_barcode = dnaBarcode(name=name, index=index)
+                for key in ["id_str", "type", "sequence", "floworder", "index", "annotation", "adapter", "end_sequence", "end_adapter"]:
+                    value = row.get(key, None)
+                    if value:
+                        value = value.strip()
+                        if key in nucs:  # uppercase if a nuc
+                            value = value.upper()
+                        elif key == "type":
+                            value = value.lower()
+                        setattr(new_barcode, key, value)
+                # make a id_str if one is not provided
+                if not new_barcode.id_str:
+                    new_barcode.id_str = str(name) + "_" + str(index)
+                new_barcode.length = len(new_barcode.sequence)
+                bar_codes.append(new_barcode)
+
+        return bar_codes, failed
 
     def __unicode__(self):
         return self.id_str
+
+    def is_static_pairing(self):
+        return bool(self.sequence and self.adapter and self.end_sequence and self.end_adapter)
 
     class Meta:
         verbose_name_plural = "DNA Barcodes"
@@ -5327,25 +5529,22 @@ class ContentUpload(models.Model):
     # ForeignKey 'contents' from Content
     # ForeignKey 'logs' from UserEventLog
 
+    publisher = models.ForeignKey(Publisher, null=True)
+    
     file_path = models.CharField(max_length=255)
     status = models.CharField(max_length=255, blank=True)
+    
+    upload_date = models.DateTimeField(auto_now_add=True, null=True)
+    upload_type = models.CharField(max_length=128, blank=True)
+    username = models.CharField(max_length=128, blank=True)
+    source = models.CharField(max_length=512, blank=True)
+    
     meta = json_field.JSONField(blank=True)
-    publisher = models.ForeignKey(Publisher, null=True)
+
+    def get_file_name(self):
+        return os.path.basename(self.file_path)
 
     def __unicode__(self): return u'ContentUpload %d' % self.id
-
-    def upload_type(self):
-        # TODO this can go into a separate field
-        upload_type = 'Unknown'
-        meta = self.meta
-        if meta:
-            upload_type = meta.get('upload_type', 'Custom (%s)' % self.publisher.name)
-            if meta.get('is_ampliseq', False):
-                upload_type = 'AmpliSeq ZIP'
-            elif 'hotspot' in meta:
-                upload_type = 'Hotspots' if meta['hotspot'] else 'Target Regions'
-
-        return upload_type
 
 
 @receiver(post_delete, sender=ContentUpload, dispatch_uid="delete_upload")
@@ -5367,8 +5566,20 @@ def on_contentupload_delete(sender, instance, **kwargs):
 class Content(models.Model):
     publisher = models.ForeignKey(Publisher, related_name="contents")
     contentupload = models.ForeignKey(ContentUpload, related_name="contents")
-    file = models.CharField(max_length=255)
-    path = models.CharField(max_length=255)
+
+    file = models.CharField(max_length=255) # file path
+    path = models.CharField(max_length=255) # url path fragment
+
+    enabled = models.BooleanField(default=True)
+    type = models.CharField(max_length=128, blank=True)
+    description = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+
+    # any extra information published file may need for easy access, e.g. reference short_name for BED files
+    extra = models.CharField(max_length=512, blank=True)
+
+    application_tags = models.CharField(max_length=512, blank=True)
+
     meta = json_field.JSONField(blank=True)
 
     def __unicode__(self):

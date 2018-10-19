@@ -145,6 +145,12 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
           	hint_entry.value = hint;
 		hint_entry.rlen = len;
 		hint_entry.alt = alts.at(i);
+		if (bstr[i].size()>2) {
+		    float x, y;
+		    sscanf(bstr[i].c_str()+2, "%f:%f", &x, &y);
+		    fprintf(stderr, "checking %f %f\n", x, y);
+		    hint_entry.afmean = x; hint_entry.afsd = y;		    
+		}
 		hint_vec.push_back(hint_entry);
 	    }
 	  }
@@ -198,6 +204,7 @@ void HotspotReader::FetchNextVariant()
     vector<string>& filter_insertion_predictions = current_hotspot.info["filter_insertion_predictions"];
     vector<string>& filter_deletion_predictions = current_hotspot.info["filter_deletion_predictions"];
     vector<string>& min_tag_fam_size = current_hotspot.info["min_tag_fam_size"];
+    vector<string>& min_fam_per_strand_cov = current_hotspot.info["min_fam_per_strand_cov"];
     vector<string>& sse_prob_threshold = current_hotspot.info["sse_prob_threshold"];
 
     // collect bad-strand info
@@ -295,6 +302,11 @@ void HotspotReader::FetchNextVariant()
       if (alt_idx < min_tag_fam_size.size() and min_tag_fam_size[alt_idx] != ".") {
         hotspot.params.min_tag_fam_size_override = true;
         hotspot.params.min_tag_fam_size = atof(min_tag_fam_size[alt_idx].c_str());
+      }
+
+      if (alt_idx < min_fam_per_strand_cov.size() and min_fam_per_strand_cov[alt_idx] != ".") {
+        hotspot.params.min_fam_per_strand_cov_override = true;
+        hotspot.params.min_fam_per_strand_cov = atof(min_fam_per_strand_cov[alt_idx].c_str());
       }
 
       if (alt_idx < sse_prob_threshold.size() and sse_prob_threshold[alt_idx] != ".") {

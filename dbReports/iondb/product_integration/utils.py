@@ -1,11 +1,15 @@
 # Copyright (C) 2017 Ion Torrent Systems, Inc. All Rights Reserved
 
+import datetime
 import json
 import logging
 import time
 import uuid
 
+import pytz
 import requests
+
+from iondb.rundb.home.runs import get_runs_list
 
 logger = logging.getLogger(__name__)
 
@@ -63,3 +67,37 @@ def send_deep_laser_device_response(request_dict):
                  )
 
     assert deep_laser_response.status_code == 200
+
+
+def get_deep_laser_instrument_status():
+    """ Generates the instrument status object to send to DL on a regular basis """
+    # Reuse the function used by the dashboard
+    raw_runs = get_runs_list(datetime.datetime.now(pytz.UTC) - datetime.timedelta(days=7))
+    # Pull out a list of fields we want to send to TFC
+    # Mostly to reduce the size of the document
+    run_fields = {"runType", "applicationCategoryDisplayedName", "last_updated", "uid", "error_string",
+                  "progress_string", "state", "date", "stage", "name", "instrumentName"}
+    filtered_runs = []
+    for raw_run in raw_runs:
+        filtered_run = {}
+        for key in run_fields:
+            filtered_run[key] = raw_run.get(key)
+            if type(filtered_run[key]) == datetime.datetime:
+                filtered_run[key] = filtered_run[key].strftime('%Y-%m-%dT%H:%M:%S')
+        filtered_runs.append(filtered_run)
+
+    # The object that is the status document
+    instrument_status = {
+        "status": "Idle",
+        "schemaVersion": 1,
+        "runs": filtered_runs
+    }
+    # Compute the global instrument status
+
+    # AWS shadow document size limit is 8kB
+    # Try to reduce the list of runs to fit
+    while len(json.dumps(instrument_status)) >= 8000 and len(instrument_status["runs"]) > 0:
+        logger.debug("DL instrument status is too large, dropping last run row")
+        instrument_status["runs"].pop()
+
+    return json.dumps(instrument_status)

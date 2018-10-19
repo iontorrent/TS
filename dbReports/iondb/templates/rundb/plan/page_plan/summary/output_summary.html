@@ -1,7 +1,8 @@
 {%include "rundb/plan/page_plan/summary/plugins_summary.html"%}
-{%if not helper.isPlanBySample%}
-	<tr>
-    	<td><b>Projects:</b></td>
-    	<td id="selectedProjects"></td>
-	</tr>
-{%endif%}
+<tr>
+	<td><b>Projects:</b></td>
+	<td id="selectedProjects"></td>
+</tr>
+{% if step.getStepName == "Output" %}
+    {%include "rundb/plan/page_plan/summary/advanced_settings_summary.html"%}
+{% endif %}

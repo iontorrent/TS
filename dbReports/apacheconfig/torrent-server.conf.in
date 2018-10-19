@@ -44,6 +44,7 @@
       RewriteCond %{DOCUMENT_ROOT}/maintenance.enable -f
       RewriteCond %{SCRIPT_FILENAME} !maintenance.html
       RewriteCond %{REQUEST_URI} !^/admin/update
+      RewriteCond %{REQUEST_URI} !^/admin/configure_server
       RewriteCond %{REQUEST_URI} !^/rundb/api/v1/globalconfig/1/
       RewriteCond %{REQUEST_URI} !^/site_media/
       RewriteRule ^.*$ /maintenance.html [R=503,L]

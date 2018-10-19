@@ -72,7 +72,8 @@
       	barcode_json['barcode_details'] = "<a target='_parent' href='{{barcode.summary.barcode_details}}' class='help'><span title='Click to view the detailed report for barcode {{barcode.name}}'>{{barcode.name}}</span><a>";	  	  
 	    barcode_json['variants'] = '{{barcode.summary.variants_total.variants}}';
 	    barcode_json['exports'] = '<a class="btn" href="{{barcode.summary.variants_vcf_gz_link}}">VCF.GZ</a> &nbsp <a class="btn" href="{{barcode.summary.variants_tbi_link}}">VCF.GZ.TBI</a> &nbsp';
-        {% if options.library_type != "tagseq" %}
+        {% if has_umt %}
+        {% else %}
 	      barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_vcf_gz_link}}">gVCF.GZ</a> &nbsp';
 	      barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_tbi_link}}">gVCF.GZ.TBI</a> &nbsp';
         {% endif %}

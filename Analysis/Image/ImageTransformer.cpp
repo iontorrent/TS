@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <fstream>
+#include <iostream>
 #include "ChannelXTCorrection.h"
 #include "ChipIdDecoder.h"
 #include "RawImage.h"

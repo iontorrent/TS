@@ -1674,6 +1674,7 @@ tr.new_plan td {
   background-repeat: no-repeat;
   background-size: 100% 100%;
 }
+
 /* =============================================================================
    Ion plugin report
    ========================================================================== */
@@ -2496,31 +2497,13 @@ div.valid {
   background: url(../img/chevrons/subchevron-divider-mid.png) no-repeat 0 0;
 }
 
-.summary-section {
-  padding: 5px 15px;
-  background: none repeat scroll 0 0 #F3F3F3;
-  border-radius: 4px;
-}
-
-.summary-section h2,
-.summary-section h3,
-.summary-section h4 {
-  color: #666;
-}
-
-.summary-section hr {
-  margin: 15px 0;
-  border-top: 0;
-  border-color: #cdcdcd;
-}
-
 /* Overrides for bootstrap-select */
 
 .bootstrap-select li,
 .bootstrap-select .actions-btn,
 .bootstrap-select input,
 .bootstrap-select .filter-option {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .bootstrap-select .actions-btn {
@@ -2533,7 +2516,7 @@ div.valid {
 #search_bar .search-field-run > .btn,
 #search_bar .search-field > input,
 #search_bar .search-field-run > input {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 #search_bar .search-field {

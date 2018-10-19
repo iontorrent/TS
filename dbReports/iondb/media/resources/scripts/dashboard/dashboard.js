@@ -112,13 +112,15 @@ var dashboardApp = {
         });
     },
     refreshRunsTable: function (showLoading) {
+        // Clear any tooltips TS-16648
+        $(".run-type-icon").tooltip('destroy');
         // When refreshing the runs list, don't clear the html first
         if (showLoading) {
             this.elements.runsFragmentContainer.html("<span class='muted'>Loading...</span>")
         }
         // Store the reference to the ajax call to be able to abort it
         this.pendingRefreshRequest = $.ajax({
-            url: "/dashboard/fragments?time_span=" + this.timeSpan
+            url: "/home/fragments?time_span=" + this.timeSpan
         }).done(function (fragments) {
             this.elements.summaryFragmentContainer.html(fragments["summary"]);
             this.elements.runsFragmentContainer.html(fragments["runs"]);
@@ -127,13 +129,14 @@ var dashboardApp = {
             this.setupSummaryFragment();
             this.setupRunsFragment();
             this.setupInstrumentsFragment();
+        }.bind(this)).always(function () {
             // If auto refresh, kick off the next poll
             if (this.autoRefreshEnabled) {
                 this.pendingRefreshTimeout = setTimeout(function () {
                     this.refreshRunsTable();
                 }.bind(this), this.refreshSeconds * 1000);
             }
-        }.bind(this))
+        }.bind(this));
     }
 };
 

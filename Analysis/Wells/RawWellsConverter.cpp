@@ -130,14 +130,14 @@ int main(int argc, const char *argv[])
 	bool saveAsUShort = false;
 	if(H5Aexists(dsWells, "convert_low") > 0)
 	{
-		hid_t attrLower = H5Aopen(dsWells, "convert_low", H5T_NATIVE_FLOAT );
+        hid_t attrLower = H5Aopen(dsWells, "convert_low", H5P_DEFAULT );
 		H5Aread(attrLower, H5T_NATIVE_FLOAT, &lower); 
 		saveAsUShort = true;
 		H5Aclose(attrLower);
 	}
 	if(H5Aexists(dsWells, "convert_high") > 0)
 	{
-		hid_t attrUpper = H5Aopen(dsWells, "convert_high", H5T_NATIVE_FLOAT);
+        hid_t attrUpper = H5Aopen(dsWells, "convert_high", H5P_DEFAULT);
 		H5Aread(attrUpper, H5T_NATIVE_FLOAT, &upper); 
 		saveAsUShort = true;
 		H5Aclose(attrUpper);

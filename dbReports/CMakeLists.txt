@@ -151,27 +151,56 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 set(CPACK_DEBIAN_PACKAGE_PREDEPENDS "debconf")
 
+# pipeline and publisher depedency
+execute_process(COMMAND "grep" "MAJOR" "${PROJECT_SOURCE_DIR}/../pipeline/version"
+                COMMAND "sed" "s/^MAJOR=//"
+                OUTPUT_VARIABLE PIPELINE_MAJOR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "MINOR" "${PROJECT_SOURCE_DIR}/../pipeline/version"
+                COMMAND "sed" "s/^MINOR=//"
+                OUTPUT_VARIABLE PIPELINE_MINOR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "RELEASE" "${PROJECT_SOURCE_DIR}/../pipeline/version"
+                COMMAND "sed" "s/^RELEASE=//"
+                OUTPUT_VARIABLE PIPELINE_RELEASE
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(PIPELINE_VERSION "${PIPELINE_MAJOR}.${PIPELINE_MINOR}.${PIPELINE_RELEASE}")
+
+execute_process(COMMAND "grep" "MAJOR" "${PROJECT_SOURCE_DIR}/../publishers/version"
+                COMMAND "sed" "s/^MAJOR=//"
+                OUTPUT_VARIABLE PUBLISHERS_MAJOR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "MINOR" "${PROJECT_SOURCE_DIR}/../publishers/version"
+                COMMAND "sed" "s/^MINOR=//"
+                OUTPUT_VARIABLE PUBLISHERS_MINOR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "RELEASE" "${PROJECT_SOURCE_DIR}/../publishers/version"
+                COMMAND "sed" "s/^RELEASE=//"
+                OUTPUT_VARIABLE PUBLISHERS_RELEASE
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(PUBLISHERS_VERSION "${PUBLISHERS_MAJOR}.${PUBLISHERS_MINOR}.${PUBLISHERS_RELEASE}")
+
+# ion-analysis needed for tmap version
+# ion-tsconfig is needed for offcycle source list
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    avahi-daemon,
-    ion-pipeline (>= 4.3.1),
+    ion-analysis (>= 3.5.15),
+    ion-tsconfig (>= 5.8.4),
+    ion-pipeline (>= ${PIPELINE_VERSION}),
+    ion-publishers (>= ${PUBLISHERS_VERSION}),
     texlive-latex-base,
     texlive-latex-extra,
     latex-xcolor,
     pdftk,
-    postgresql,
     php5,
-    apache2,
     libapache2-mod-wsgi (>= 3.3),
     libapache2-mod-gnutls,
     apache2-utils,
     ssl-cert,
-    dmidecode,
-    python-avahi,
     python-celery (>= 3.1.6),
     python-django (>= 1.6.1),
     libjs-jquery (>= 1.7.2),
-    python-django-south (>=1.0),
+    python-django-south (>= 1.0),
     python-django-tastypie (>= 0.11.1),
     python-matplotlib,
     python-scipy,
@@ -182,7 +211,7 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-lxml,
     python-docutils,
     python-setuptools,
-    python-httplib2 (>=0.7.2),
+    python-httplib2 (>= 0.7.2),
     python-dateutil,
     python-requests,
     python-argparse,
@@ -190,18 +219,25 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-feedparser,
     python-boto (>=2.20.1),
     python-oauthlib,
-    python-gobject,
-    python-gnupg,
-    python-pyftpdlib,
     memcached,
     python-memcache,
     python-dev,
-    rabbitmq-server (>= 3.2.0),
-    ion-analysis (>=3.5.15),
-    megacli,
-    python-apt,
-    ion-tsconfig,
-    coreutils")
+    rabbitmq-server (>= 3.2.0)")
+
+    # due to an error in our older version of apt we are moving some of the dependencies from the aptitude system into TSconfig
+    # to have the system install more quickly.  Below are the packages moved choosen based on how recently they were added to the
+    # apt dependency list
+    # apache2,
+    # avahi-daemon,
+    # python-gobject,
+    # python-gnupg,
+    # python-pyftpdlib,
+    # megacli,
+    # python-apt,
+    # dmidecode,
+    # python-avahi,
+    # coreutils,
+    # postgresql,
 
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job server and run crawler.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

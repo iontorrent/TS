@@ -319,12 +319,6 @@ ENDOFAPACHEENV
         # THIS HAS TO HAPPEN AFTER THE PHP_BASE.HTML FILE IS PUT INTO PLACE DO NOT MOVE
         /usr/bin/python ./bin/install_script.py
 
-		# Load barcode kits to database if needed
-		echo "Going to add barcode kits if needed..."
-		/usr/bin/python ./bin/add_barcodes.py "Ion SingleSeq Barcode set 1-24"  rundb/fixtures/barcodes/SingleSeq_1-24.csv
-		/usr/bin/python ./bin/add_barcodes.py "Ion SingleSeq Barcode set 1-96"  rundb/fixtures/barcodes/SingleSeq_1-96.csv OVERRIDE
-		/usr/bin/python ./bin/add_barcodes.py "TagSequencing"  rundb/fixtures/barcodes/TagSequencing.csv
-						
         # Loads system templates to database if needed
         echo "Going to add or update system plan templates if needed..."
         /usr/bin/python ./bin/add_or_update_systemPlanTemplates.py
@@ -400,6 +394,10 @@ EOF
 
     # fire off the grooming script
     /opt/ion/iondb/bin/grooming.py
+
+    # force a rescan of the plugins
+    # wget -q -O /dev/null http://localhost/rundb/api/v1/plugin/rescan/ > /dev/null
+
     ;;
 esac
 

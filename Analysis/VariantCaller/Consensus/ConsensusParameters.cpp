@@ -127,6 +127,7 @@ ConsensusParameters::ConsensusParameters(int argc, char** argv)
   }
 
   // Retrieve the parameters that consensus needed
+  // First retrieve the parameters shared with TVC
   program_flow.nThreads                 = RetrieveParameterInt   (opts, tvc_params, 'n', "num-threads", 4);
   program_flow.suppress_recalibration   = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-recalibration", true);
 #ifdef __SSE3__
@@ -138,12 +139,13 @@ ConsensusParameters::ConsensusParameters(int argc, char** argv)
   min_cov_fraction                      = RetrieveParameterDouble(opts, freebayes_params, '-', "min-cov-fraction", 0.0f);
   read_mismatch_limit                   = RetrieveParameterInt   (opts, freebayes_params, '-', "read-mismatch-limit", 0);
   read_snp_limit                        = RetrieveParameterInt   (opts, freebayes_params, 'U', "read-snp-limit", 10);
+  SetMolecularTagTrimmerOpt(tvc_params);
+  // The following parameters are command line only, not supported by parameter json.
   need_3_end_adapter                    = opts.GetFirstBoolean('-', "need-3-end-adapter", false);
   filter_qt_reads                       = opts.GetFirstBoolean('-', "filter-qt-reads", false);
   filter_single_read_consensus          = opts.GetFirstBoolean('-', "filter-single-read-consensus", false);
   skip_consensus                        = opts.GetFirstBoolean('-', "skip-consensus", false);
   read_count_by_best_target             = opts.GetFirstBoolean('-', "read-count-by-best-target", false);
-  SetMolecularTagTrimmerOpt(tvc_params);
 
   cout << endl;
 
@@ -156,6 +158,8 @@ ConsensusParameters::ConsensusParameters(int argc, char** argv)
   CheckParameterLowerBound<int>       ("read-mismatch-limit", read_mismatch_limit,          0);
   CheckParameterLowerUpperBound<int>  ("tag-trim-method",    tag_trimmer_parameters.tag_trim_method, 0, 2);
   CheckParameterLowerBound<int>       ("min-tag-fam-size",   tag_trimmer_parameters.min_family_size, 1);
+  CheckParameterLowerBound<int>       ("min-fam-per-strand-cov",   tag_trimmer_parameters.min_fam_per_strand_cov, 0);
+
   cout << endl;
 
   SetupFileIO(opts);

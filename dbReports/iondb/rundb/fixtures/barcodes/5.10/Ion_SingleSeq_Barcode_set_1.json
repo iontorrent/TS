@@ -1,0 +1,434 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCACTCGGATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_008",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCCTGGCACATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_009",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TTCCTACCAGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_010",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCAAGAAGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_011",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CCTACTGGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_012",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 22,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CTTGTCCAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_022",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 23,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCCGACAAGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_023",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 24,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TTAAGCGGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_024",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCAGGAATAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_013",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CGGAAGAACCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_014",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CAGCCAATTCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_016",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 17,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TTGGCATCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_017",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 18,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CTAGGACATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_018",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 19,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CCAGCCTCAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_019",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 20,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CTTGGTTATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_020",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 21,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CTAGGAACCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_021",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CGAAGCGATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_015",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCGCAATTAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_003",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CTGGCAATCCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_005",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCTATTCGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_002",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TCTAGCTCTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "SingleSeq_007",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "SingleSeq_001",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "TTGAGCCTATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_004",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "Ion SingleSeq Barcode set 1",
+			"sequence": "CCGGAGAATCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "SingleSeq_006",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

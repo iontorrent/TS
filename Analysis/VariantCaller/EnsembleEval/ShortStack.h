@@ -40,11 +40,12 @@ public:
 
     // Flow-Disruptiveness
     int OutlierCountsByFlowDisruptiveness();
-    void FlowDisruptiveOutlierFiltering(bool update_valid_index);
+    void FlowDisruptiveOutlierFiltering(unsigned int filtering_stringency, bool update_valid_index);
 
     // family related variables and functions
     vector<EvalFamily> my_eval_families;
     unsigned int effective_min_family_size = 0;
+    unsigned int effective_min_fam_per_strand_cov = 0;
     unsigned int GetNumFuncFamilies() const { return num_func_families_; };
     void InitializeMyEvalFamilies(unsigned int num_hyp);
     void ResetQualitiesForFamilies();

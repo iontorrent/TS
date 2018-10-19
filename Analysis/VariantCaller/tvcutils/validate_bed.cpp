@@ -52,6 +52,7 @@ void ValidateBedHelp()
   printf ("     --merged-detail-bed         FILE       output an (almost) valid bedDetail merged BED [none]\n");
   printf ("     --merged-plain-bed          FILE       output a valid plain merged BED [none]\n");
   printf ("     --effective-bed             FILE       output a valid effective BED [none]\n");
+  printf ("     --strict-check              on/off     exit 1 when there is error/filtered line [on]\n");
   printf ("\n");
 }
 
@@ -1152,7 +1153,7 @@ bool save_to_bed(const string& output_file, ReferenceReader& reference_reader, B
 }
 
 
-void save_validation_log(string& input_file, ReferenceReader& reference_reader, BedFile& bed, const string& log_filename)
+bool save_validation_log(string& input_file, ReferenceReader& reference_reader, BedFile& bed, const string& log_filename)
 {
   FILE *output = stdout;
   FILE *output_file = 0;
@@ -1160,7 +1161,7 @@ void save_validation_log(string& input_file, ReferenceReader& reference_reader, 
     output_file = fopen(log_filename.c_str(),"w");
     if (!output_file) {
       fprintf(stderr, "ERROR: Cannot open %s\n", log_filename.c_str());
-      return;
+      return false;
     }
     output = output_file;
   }
@@ -1258,6 +1259,8 @@ void save_validation_log(string& input_file, ReferenceReader& reference_reader, 
 
   if (output_file)
     fclose(output_file);
+  if (num_fatals > 0 or num_errors > 0) return false;
+  return true;
 }
 
 
@@ -1283,6 +1286,8 @@ int ValidateBed(int argc, const char *argv[])
   string merged_detail_bed        = opts.GetFirstString ('-', "merged-detail-bed", "");
   string merged_plain_bed         = opts.GetFirstString ('-', "merged-plain-bed", "");
   string effective_bed            = opts.GetFirstString ('-', "effective-bed", "");
+  bool strict_check               = opts.GetFirstBoolean('-', "strict-check", true);
+
   opts.CheckNoLeftovers();
 
   string input_mode;
@@ -1390,8 +1395,7 @@ int ValidateBed(int argc, const char *argv[])
   if (not merged_plain_bed.empty())
     save_to_bed(merged_plain_bed, reference_reader, bed, false);
 
-  save_validation_log(input_file_basename, reference_reader, bed, validation_log);
-
+  bool success = save_validation_log(input_file_basename, reference_reader, bed, validation_log);
 
   if (input_mode == "target_regions") {
     long num_bases = 0;
@@ -1413,7 +1417,7 @@ int ValidateBed(int argc, const char *argv[])
       return 1;
     }
   }
-
+  if (strict_check and (not success)) return 1;
   return 0;
 
 

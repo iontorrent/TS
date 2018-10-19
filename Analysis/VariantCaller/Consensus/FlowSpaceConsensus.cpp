@@ -929,19 +929,9 @@ bool CompareMapQ(const Alignment* const rai_1, const Alignment* const rai_2){
 	return rai_1->alignment.MapQuality > rai_2->alignment.MapQuality;
 }
 
-void AppendPositionTicket(list<PositionInProgress>::iterator& position_ticket, Alignment* const alignment)
-{
-	if (position_ticket->begin == NULL)
-		position_ticket->begin = alignment;
-	if (position_ticket->end != NULL)
-		position_ticket->end->next = alignment;
-	position_ticket->end = alignment;
-	position_ticket->end->next = NULL;
-}
-
 // Input: family_members
 // Output: consensus_position_ticket, aln_needed_consensus_position_ticket
-unsigned int  FlowSpaceConsensusMaster::FlowSpaceConsensusOneFamily(vector<Alignment *>& family_members,
+unsigned int FlowSpaceConsensusMaster::FlowSpaceConsensusOneFamily(vector<Alignment *>& family_members,
 		list<PositionInProgress>::iterator& consensus_position_ticket,
 		list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket)
 {
@@ -1029,7 +1019,7 @@ unsigned int  FlowSpaceConsensusMaster::FlowSpaceConsensusOneFamily(vector<Align
 		// Append a new consensus alignment to consensus_position_ticket
 		Alignment* consensus_alignment = new Alignment;
 		consensus_alignment->alignment = (*read_it)->alignment;
-		AppendPositionTicket(consensus_position_ticket, consensus_alignment);
+		ConsensusPositionTicketManager::AppendConsensusPositionTicket(consensus_position_ticket, consensus_alignment);
 	}
 
 	// (Step 2b): BamAlignment for clusters
@@ -1045,7 +1035,7 @@ unsigned int  FlowSpaceConsensusMaster::FlowSpaceConsensusOneFamily(vector<Align
 			// Append a new consensus alignment to consensus_position_ticket
 			Alignment* consensus_alignment = new Alignment;
 			consensus_alignment->alignment = cluster_it->cluster_members[0]->alignment;
-			AppendPositionTicket(consensus_position_ticket, consensus_alignment);
+			ConsensusPositionTicketManager::AppendConsensusPositionTicket(consensus_position_ticket, consensus_alignment);
 			++add_to_num_single_read_consensus;
 			continue;
 		}
@@ -1090,10 +1080,10 @@ unsigned int  FlowSpaceConsensusMaster::FlowSpaceConsensusOneFamily(vector<Align
 		if (aln_needed){
 			++add_to_num_consensus_reads_need_aln;
 			// Append the new consensus alignment to consensus_position_ticket
-			AppendPositionTicket(aln_needed_consensus_position_ticket, consensus_alignment);
+			ConsensusPositionTicketManager::AppendConsensusPositionTicket(aln_needed_consensus_position_ticket, consensus_alignment);
 		}
 		else{
-			AppendPositionTicket(consensus_position_ticket, consensus_alignment);
+			ConsensusPositionTicketManager::AppendConsensusPositionTicket(consensus_position_ticket, consensus_alignment);
 		}
 	}
 	my_counter.Count(add_to_num_func_fam,
@@ -1123,15 +1113,19 @@ void FlowSpaceConsensusMaster::InitializeConsensusCounter(){
 void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFamily> > >& my_molecular_families_multisample,
                                      FlowSpaceConsensusMaster& flow_space_consensus_master,
 									 unsigned int min_family_size,
+									 unsigned int min_fam_per_strand_cov,
                                      list<PositionInProgress>::iterator& consensus_position_ticket,
 									 list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket,
 									 TargetsManager* targets_manager,
 									 bool skip_consensus,
 									 bool use_mol_tag)
 {
-	// my_molecular_families_multisample is usually the famly pileup that cover one target.
-	// Typcally, a read just covers one target.
-	// map is a better container than vector to store the target stat.
+	// First clear the old tickets
+	ConsensusPositionTicketManager::ClearConsensusPositionTicket(consensus_position_ticket);
+	ConsensusPositionTicketManager::ClearConsensusPositionTicket(aln_needed_consensus_position_ticket);
+	// my_molecular_families_multisample is usually the family pileup that cover one target.
+	// Typically, a read just covers one target.
+	// std::map is a better container than vector to store the target stat.
 	// stat_of_targets[i] is the coverage information for the i-th unmerged region generated here.
 	// TODO: Should I split coverage stat for each sample?
 	map<int, TargetStat> stat_of_targets;
@@ -1139,7 +1133,7 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 		for (vector< vector< MolecularFamily> >::iterator strand_it = sample_it->begin(); strand_it != sample_it->end(); ++strand_it) {
 			for (vector< MolecularFamily>::iterator fam_it = strand_it->begin(); fam_it !=  strand_it->end(); ++fam_it) {
 				// Is *fam_it functional?
-				if (not fam_it->SetFuncFromAll((unsigned int) min_family_size)) {
+				if (not fam_it->SetFuncFromAll(min_family_size, min_fam_per_strand_cov)) {
 					continue;
 				}
 				unsigned int consensus_fam_size = 0;
@@ -1185,5 +1179,8 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 		}
 	}
 	targets_manager->AddCoverageToRegions(stat_of_targets);
+	// Finally close the tickets
+	ConsensusPositionTicketManager::CloseConsensusPositionTicket(consensus_position_ticket);
+	ConsensusPositionTicketManager::CloseConsensusPositionTicket(aln_needed_consensus_position_ticket);
 
 }

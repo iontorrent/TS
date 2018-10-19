@@ -73,7 +73,7 @@ def furbishPluginParams():
   '''Complete/rename/validate user parameters.'''
   config = pluginParams['config']
   if config['barcode'] == "All": config['barcode'] = ''
-  if not 'fwdonlyreads' in config: config['fwdonlyreads'] = 'No'
+  config['fwdonlyreads'] = 'Yes' if config.get('fwdonlyreads',False) else 'No'
 
 
 def configReport():

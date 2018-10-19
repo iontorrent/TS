@@ -25,6 +25,14 @@ struct MolTag
 {
   string    prefix_mol_tag;
   string    suffix_mol_tag;
+  unsigned long long tag_hash;     //! Hash a family to an 64 bits unsigned long long integer
+  bool      is_uniquely_hashable;  //! Is the family uniquely hashable by an unsigned long long
+  bool      is_bi_directional_tag; //! Is bi-directional molecular tagging being used?
+  bool      is_strict_tag;         //! Does the tag exactly match the tag structure?
+  bool      is_strict_prefix_tag;  //! Does the prefix tag exactly match the prefix tag structure?
+  bool      is_strict_suffix_tag;  //! Does the suffix tag exactly match the suffix tag structure?
+
+  string    readable_fam_info;     //! Information for family identification
   //bool      tags_are_trimmed;
 
   //MolTag() : tags_are_trimmed(false) {};
@@ -33,6 +41,13 @@ struct MolTag
   {
     prefix_mol_tag.clear();
     suffix_mol_tag.clear();
+    tag_hash = 0;
+    is_uniquely_hashable = false;
+    is_bi_directional_tag = false;
+    is_strict_tag = false;
+    is_strict_prefix_tag = false;
+    is_strict_suffix_tag = false;
+    readable_fam_info.clear();
   }
 
   bool HasTags()
@@ -48,11 +63,12 @@ struct MolTag
 struct TagTrimmerParameters
 {
   bool    suppress_mol_tags;    //! Ignore mol tag familiy information
-  bool    command_line_tags;    //! Tas tag structures been specified vis command line?
+  bool    command_line_tags;    //! Has tag structures been specified vis command line?
   int     tag_trim_method;      //! Tag trimming method
   int     tag_filter_method;    //! Tag filtering method
   MolTag  master_tags;          //! Tags provided via command line
   int     min_family_size;      //! Minimum size of a functional familiy
+  int     min_fam_per_strand_cov;  //! Minimum coverage of reads on each strand required f a functional familiy
   string  cl_a_handle;          //! Command line specified a-handle
   int     handle_cutoff;        //! Cutoff to match an a-handle in flow alignment
   bool    heal_tag_hp_indel;    //! Heal the hp indel when doing tag trimming
@@ -135,7 +151,7 @@ public:
 
   static void PrintHelp(bool tvc_call);
 
-  static TagTrimmerParameters    ReadOpts(OptArgs& opts);
+  static TagTrimmerParameters    ReadOpts(OptArgs& opts, const Json::Value& structure);
 
   void    InitializeFromJson (const TagTrimmerParameters params, Json::Value& read_groups_json, bool trim_barcodes);
 

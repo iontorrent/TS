@@ -32,7 +32,7 @@ def write_alleles2_line(options, fid, **kwargs):
                                         if header else allele['is_ppa'])                + '\t')
     fid.write(('Quality'                if header else allele['qual'])                  + '\t')
     fid.write(('Filter'                 if header else allele['qual_filter'])           + '\t')
-    if (options.library_type == "tagseq"):
+    if (options.library_type in ["tagseq", "ampliseq_hd"]):
         fid.write(('LOD'                if header else allele['LOD'])                   + '\t')
 
     # Extra fields displayed only in Allele Search view
@@ -50,8 +50,11 @@ def write_alleles2_line(options, fid, **kwargs):
     
     # Extra fields displayed only in Coverage Filters view
 
-    if (options.library_type == "tagseq"):
+    if (options.library_type in ["tagseq", "ampliseq_hd"]):
         fid.write(('Read Cov'               if header else allele['read_cov'])       + '\t')
+        if options.library_type == "ampliseq_hd":
+            fid.write(('Read Cov+'        if header else allele['read_cov_plus'])       + '\t')
+            fid.write(('Read Cov-'        if header else allele['read_cov_minus'])       + '\t')        
         fid.write(('Allele Read Cov'        if header else allele['allele_read_cov'])       + '\t')
         fid.write(('Allele Read Freq'       if header else allele['allele_read_freq'])       + '\t')
         fid.write(('Mol Coverage'           if header else allele['mol_coverage'])            + '\t')
@@ -425,8 +428,8 @@ def main():
         total_cov = DP
         total_f_cov = FDP # In tvc, MRO = FRO, MAO = FAO
         var_freq = [100.0 * float(v)/float(total_cov) if total_cov > 0 else 0.0 for v in AO]
-        # f_var_freq = [100.0 * float(v)/float(total_f_cov) if total_f_cov > 0 else 0.0 for v in FAO]
-        f_var_freq = [100.0 * f for f in AF] # TS-14592        
+        f_var_freq = [100.0 * float(v)/float(total_f_cov) if total_f_cov > 0 else 0.0 for v in FAO]
+        #f_var_freq = [100.0 * f for f in AF] # TS-14592        
         output_xls.write("%s\t%s\t" % (chr,pos)) # Chrom, Position
         output_xls.write("%s\t%s\t" % (gene_name,region_id)) # Gene Sym, Target ID
         output_xls.write("%s\t%s\t%s\t" % (variant_type,ploidy,genotype_actual)) # Type, Zygosity
@@ -548,9 +551,9 @@ def main():
             if genotype1_int is None or genotype2_int is None:
                 allele['call'] = 'No Call'
                 summary_json['variants_by_call']['no_call'] += 1
-            elif genotype1_int == 0 and genotype2_int == 0:    
+            elif genotype1_int == 0 and genotype2_int == 0:	
                 allele['call'] = 'Absent'
-                summary_json['variants_by_call']['absent'] += 1            
+                summary_json['variants_by_call']['absent'] += 1			
             elif genotype1_int == (idx+1) and genotype2_int == (idx+1):
                 allele['call'] = 'Homozygous'
                 summary_json['variants_by_call']['homozygous'] += 1
@@ -567,8 +570,11 @@ def main():
                 summary_json['variants_by_source']['hotspot'] += 1
 
             # Again note that in tagseq, MDP = FDP, MAO = FAO, MRO = FRO            
-            if (options.library_type == "tagseq"):
+            if options.library_type in ["tagseq", "ampliseq_hd"]:
                 allele['read_cov']                  = '%d'      % (DP)
+                if options.library_type == "ampliseq_hd":
+                    allele['read_cov_plus']  = '%d'      % (SRF + sum(SAF))
+                    allele['read_cov_minus'] = '%d'      % (SRR + sum(SAR))              
                 allele['allele_read_cov']           = '%d'      % (AO[idx])
                 allele['allele_read_freq']          = '%1.3f'   % (100.0 * AO[idx] / DP if (DP) > 0.0 else 0.0)
                 allele['mol_coverage']              = '%d'      % (FDP)
@@ -581,6 +587,7 @@ def main():
                 allele['cov_total']                 = '%d'      % (DP)
                 # Quick fix for TS-15029
                 # If a tvc call and a indel_assembly call are merged in one vcf record, then the indel_assembly allele has FAO='.'
+                # Note: It is redundant in 5.10 because tvcutils no longer merge the tvc and indel assembly records. 
                 if 'FAO' in info:
                     is_called_by_tvc= info['FAO'][idx] != '.'
                 else:
@@ -591,8 +598,8 @@ def main():
                 allele['cov_allele']                = '%d'      % (FAO[idx])
                 allele['cov_allele_plus']           = '%d'      % (FSAF[idx])
                 allele['cov_allele_minus']          = '%d'      % (FSAR[idx])
-                #allele['freq']                      = '%1.1f'   % (100.0 * FAO[idx] / FDP if FDP > 0.0 else 0.0)            
-                allele['freq']                      = '%1.1f'   % (100.0 * AF[idx]) # TS-14592
+                allele['freq']                      = '%1.1f'   % (100.0 * FAO[idx] / FDP if FDP > 0.0 else 0.0)            
+                #allele['freq']                      = '%1.1f'   % (100.0 * AF[idx]) # TS-14592
 
             allele['LOD']                       = '%1.2f'   % (100.0 * float(LOD[idx]))                
             allele['strand_bias']               = '%1.4f'   % (STB[idx])
@@ -655,7 +662,7 @@ def main():
                 allele['sse_plus_filter'] = 'Context error on both strands'
                 allele['sse_minus_filter'] = 'Context error on both strands'
 
-            if (options.library_type == "tagseq"):
+            if (options.library_type in ["tagseq", "ampliseq_hd"]):
                 allele['mol_coverage_filter']      = ('Minimum coverage ('+allele_prefix+')') if 'MINCOV' in fr or 'NODATA' in fr else '-'                
                 if 'VARCOV<' in fr:
                     allele['allele_mol_cov_filter'] = 'Minimum variant mol coverage'

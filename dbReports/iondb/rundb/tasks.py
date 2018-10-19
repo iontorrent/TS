@@ -52,6 +52,7 @@ from iondb.utils import raid as raid_utils
 from iondb.utils import files as file_utils
 from iondb.utils.utils import send_email
 from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest, queue_info, sge_ctrl
+from iondb.rundb import publisher_types
 
 logger = get_task_logger(__name__)
 
@@ -700,6 +701,44 @@ def install_updates():
         raise
 
 
+def _run_configure_server():
+    """This function is expected to be run from a daemonized process"""
+    from iondb.rundb import models
+    try:
+        cmd = ['sudo', '/usr/sbin/TSconfig', '--configure-server']
+        subprocess.check_call(cmd)
+        logger.info('TSconfig --configure-server success!')
+        success = True
+    except Exception:
+        success = False
+        logger.error(traceback.format_exc())
+
+    # update status
+    from django.db import connection
+    connection.close()  # refresh dbase connection
+
+    if success:
+        models.GlobalConfig.objects.update(ts_update_status="Configure server finished")
+        models.Message.success("Configure server completed successfully!")
+    else:
+        models.GlobalConfig.objects.update(ts_update_status="Configure server failed")
+        models.Message.error("Configure server failed.")
+    models.Message.objects.filter(expires="system-update-finished").delete()
+    models.Message.objects.filter(tags__contains="new-upgrade").delete()
+
+
+@app.task
+def configure_server():
+    """Launches TSconfig --configure-server """
+    logging.shutdown()
+    try:
+        run_as_daemon(_run_configure_server)
+    except Exception as err:
+        logger.error("The daemonization of the TSconfig --configure_server failed: %s" % err)
+        from iondb.rundb import models
+        models.GlobalConfig.objects.update(ts_update_status="Install failure")
+        raise
+
 
 # This can get stuck when NFS filesystems are misbehaving so need a timeout
 @app.task(queue="diskutil", soft_time_limit=60)
@@ -932,6 +971,16 @@ def runnightly():
 
     return
 
+def md5Checksum(filePath):
+    import hashlib
+    with open(filePath, 'rb') as fh:
+        m = hashlib.md5()
+        while True:
+            data = fh.read(8192)
+            if not data:
+                break
+            m.update(data)
+        return m.hexdigest()
 
 @app.task
 def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth=None):
@@ -1020,6 +1069,15 @@ def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth
         os.chmod(full_path, 0666)
     except IOError as err:
         monitor.status = "Connection Lost"
+        monitor.save()
+        return None, monitor.id
+
+    downloaded_identity_hash = md5Checksum(full_path)
+    identity_hash = monitor.md5sum
+
+    if identity_hash and downloaded_identity_hash != identity_hash:
+        logger.error("download_something got mismatch identity hash")
+        monitor.status = "Error: identity hash mismatch"
         monitor.save()
         return None, monitor.id
 
@@ -1543,15 +1601,15 @@ def check_gunzip(gunZipFile, logger=None):
 
 
 @app.task
-def new_annotation_download(annot_url, updateVersion, **reference_args):
-    ref_short_Name = reference_args['short_name']
+def new_annotation_download(annot_url, updateVersion, username, **reference_args):
+    ref_short_name = reference_args['short_name']
     from iondb.rundb.models import ReferenceGenome, Publisher
     from django.core.files import File
     from iondb.rundb import publishers
     fileToRegister = None
     isTaskSuccess = False
     try:
-        reference = ReferenceGenome.objects.get(short_name=ref_short_Name)
+        reference = ReferenceGenome.objects.get(short_name=ref_short_name)
     except Exception, err:
         logger.debug("Reference does not exists for  Annotation File {0} with version {1}".format(annot_url, updateVersion))
         return err
@@ -1569,7 +1627,13 @@ def new_annotation_download(annot_url, updateVersion, **reference_args):
         upload.name = file_name
         #Go ahead and register the annotation file via publisher framework
         pub_name = "refAnnot"
-        meta = {"publisher": pub_name, "reference": ref_short_Name, "annotation_url": annot_url, "upload_type": "Annotation"}
+        meta = {
+            "publisher": pub_name,
+            "reference": ref_short_name,
+            "annotation_url": annot_url,
+            "username": username,
+            "upload_type": publisher_types.ANNOTATION
+        }
         try:
             pub = Publisher.objects.get(name=pub_name)
             contentUpload, _ = publishers.edit_upload(pub, upload, json.dumps(meta))
@@ -1578,63 +1642,6 @@ def new_annotation_download(annot_url, updateVersion, **reference_args):
             logger.debug("Publisher does not exists {0}".format(pub_name))
 
     return isTaskSuccess
-
-
-def start_annotation_download(annot_url, reference, callback=None, updateVersion=None, monitor=None):
-    from iondb.rundb.models import FileMonitor
-    import mimetypes
-    tagsInfo = "reference_annotation_{0}".format(float(updateVersion))
-    monitor = FileMonitor(url=annot_url, tags=tagsInfo)
-    monitor.status = "Downloading"
-    monitor.save()
-    fileToRegister = None
-    downloaded_fileTempPath = None
-    #logger.error("File Not Found (404) URL Info: %s" % (annot_url))
-    try:
-        urllib2.urlopen(annot_url)
-    except Exception as err:
-        monitor.status = "System Error" + str(err)
-        monitor.save()
-        logger.error("File Not Found (404) URL Info: %s %s" % (annot_url, str(err)))
-        return (False, fileToRegister, monitor.status)
-    try:
-        download_args = (annot_url, monitor.id, settings.TEMP_PATH)
-        async_result = download_something.apply_async(download_args, refID=reference.id)
-        logger.error(async_result)
-
-        isTaskSuccess = False
-        if async_result.status == 'PENDING':
-            try:
-                async_result.get()
-            except Exception as err:
-                monitor.status = "Download Error"
-                monitor.save()
-                logger.error("Error in Download File '{0}': {1}".format(annot_url, err))
-        if async_result.status == 'SUCCESS':
-            monitor = FileMonitor.objects.get(tags=tagsInfo, url=annot_url)
-            isTaskSuccess = async_result.successful()
-            result = async_result.result
-            downloaded_fileTempPath = result[0]
-        else:
-            monitor.status = "Downloading"
-            monitor.save()
-
-        if isTaskSuccess:
-            fileToRegister = downloaded_fileTempPath
-
-            gztype = mimetypes.guess_type(fileToRegister)
-            if gztype[1] == 'gzip':
-                (isExtractSuccess, fileToRegister) = check_gunzip(fileToRegister)
-                if not isExtractSuccess:
-                    monitor.status = ".gz Annotation file extraction Failed"
-                    monitor.save()
-
-        return (isTaskSuccess, fileToRegister, monitor.status)
-
-    except Exception as err:
-        logger.debug("System Error: Caused Unknown Exception {0}".format(err))
-        monitor.status = "System Error. Please contact TS administrator"
-        monitor.save()
 
 
 @app.task(queue="w1")
@@ -1650,7 +1657,37 @@ def set_timezone(request):
 
 
 @app.task
-def install_BED_files(bedfileList, callback=None):
+def install_refAnnot_files(annotfileList, username, callback=None):
+    '''
+        Launches a set of tasks to download and install multiple Ref Annotation files
+        Optionally adds a callback to run after all install tasks are complete
+    '''
+    from iondb.rundb.models import FileMonitor
+    from iondb.rundb.publishers import publish_file
+
+    logger.info('install_refAnnot_files: received files to process %s' % ', '.join([b['url'] for b in annotfileList]))
+    refAnnotfile_tasks = []
+    for info in annotfileList:
+        monitor = FileMonitor(url=info['url'], tags="annotation")
+        identity_hash = info.get("identity_hash","")
+        monitor.md5sum = identity_hash
+        monitor.save()
+        # update info aka meta
+        info['username'] = username
+        info['upload_type'] = publisher_types.ANNOTATION
+        # set up celery tasks
+        publish_task = publish_file.s('refAnnot', json.dumps(info))
+        refAnnotfile_tasks.append( download_something.subtask((monitor.url, monitor.id), link=publish_task) )
+
+    if callback:
+        async_result = chord( refAnnotfile_tasks )(callback)
+    else:
+        async_result = group( refAnnotfile_tasks )()
+    return async_result
+
+
+@app.task
+def install_BED_files(bedfileList, username, callback=None):
     '''
         Launches a set of tasks to download and install multiple BED files
         Optionally adds a callback to run after all install tasks are complete
@@ -1663,7 +1700,14 @@ def install_BED_files(bedfileList, callback=None):
     for info in bedfileList:
         monitor = FileMonitor(url=info['source'], tags="bedfile")
         monitor.save()
+        # update info aka meta
+        info['username'] = username
+        if 'sse' in info and info['sse']:
+            info['upload_type'] = publisher_types.SSE
+        elif 'hotspot' in info:
+            info['upload_type'] = publisher_types.HOTSPOT if info['hotspot'] else publisher_types.TARGET
 
+        # set up celery tasks
         publish_task = publish_file.s('BED', json.dumps(info))
         bedfile_tasks.append( download_something.subtask((monitor.url, monitor.id), link=publish_task) )
 

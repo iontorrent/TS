@@ -2,6 +2,7 @@
 
 #include <malloc.h>
 #include <stdlib.h>
+#include <math.h>
 #include "ChipReduction.h"
 #include "Utils.h"
 #include "Vecs.h"

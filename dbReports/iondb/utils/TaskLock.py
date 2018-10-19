@@ -1,8 +1,18 @@
 #!/usr/bin/env python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
+import uuid
 from iondb.bin import djangoinit
 from django.core.cache import get_cache
+
+def test_cache(cache):
+    # test to make sure the cache is accessible to store locks
+    key = str(uuid.uuid4())
+    cache.add(key, 'testing')
+    if cache.get(key) is None:
+        raise Exception('Unable to create TaskLock in cache')
+    else:
+        cache.delete(key)
 
 
 class TaskLock(object):
@@ -11,8 +21,10 @@ class TaskLock(object):
         self.lock_id = lock_id
         try:
             self.cache = get_cache('file')
+            test_cache(self.cache)
         except:
             self.cache = get_cache('default')
+            test_cache(self.cache)
 
         if timeout:
             self.timeout = timeout

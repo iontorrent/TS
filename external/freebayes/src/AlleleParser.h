@@ -93,10 +93,10 @@ public:
 
   void add_hotspot(const HotspotAllele& observation, int num_samples, int p, int s) {
     if (not is_hotspot) { // multiple hotspot same allele, present at the left most
-        is_hotspot = true;
-        hotspot_params = &observation;
-        minimized_prefix = p; // special for hotspot
-        minimized_suffix = s; // special for hotspot, will not be unset
+    	is_hotspot = true;
+    	hotspot_params = &observation;
+    	minimized_prefix = p; // special for hotspot
+    	minimized_suffix = s; // special for hotspot, will not be unset
     }
     if (not initialized) {
       chr = observation.chr;
@@ -317,7 +317,7 @@ private:
   bool FillVariantFlowDisCheck(VariantCandidate &v, string &refstring, list<PositionInProgress>::iterator& position_ticket, bool hotspot_present, int haplotype_length);
   void MakeVariant(deque<VariantCandidate>& variant_candidates, list<PositionInProgress>::iterator& position_ticket, int n, list<int> *alist);
   void set_subset(VariantCandidate &v1, VariantCandidate &v, list<int> &co);
-  void BlacklistAlleleIfNeeded(AlleleDetails& allele);
+  void BlacklistAlleleIfNeeded(AlleleDetails& allele, int cov);
   void flushblackpos(int idx, size_t pos); 
   int nextblackpos(int i) {
 	if (i >= MAXBLACK) return -1;

@@ -1,3 +1,56 @@
+function remove_div(text){
+	while (true) {
+	    i_start = text.indexOf('<');
+	    i_end = text.indexOf('>');
+	    if (i_start >= 0 && i_end >=0 && i_end > i_start){
+	        text = text.replace(text.substr(i_start, i_end + 1), "");
+	    }
+	    else{
+	        return text;
+	    }
+	}
+}
+
+function copyTextToClipboard(text) {
+    var textArea = document.createElement("textArea");
+
+    // Place in top-left corner of screen regardless of scroll position.
+    textArea.style.position = 'fixed';
+    textArea.style.top = 0;
+    textArea.style.left = 0;
+
+    // Ensure it has a small width and height. Setting to 1px / 1em
+    // doesn't work as this gives a negative w/h on some browsers.
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+
+    // We don't need padding, reducing the size if it does flash render.
+    textArea.style.padding = 0;
+
+    // Clean up any borders.
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+
+    // Avoid flash of white box if rendered for any reason.
+    textArea.style.background = 'transparent';
+
+    textArea.value = text;
+
+    document.body.appendChild(textArea);
+
+    textArea.select();
+
+    try {
+        var successful = document.execCommand('copy');
+        var msg = successful ? 'successful' : 'unsuccessful';
+        console.log('Copying text command was ' + msg);
+    } catch (e) {
+        console.log('Oops, unable to copy');
+    }
+    document.body.removeChild(textArea);
+}
+
 (function ($) {
     $.QueryString = (function (a) {
         if (a == "") return {};
@@ -494,8 +547,20 @@ $(function () {
     	var has_mol_cov = (db_columns.indexOf('Mol Coverage') >= 0);
     	var has_allele_mol_cov = (db_columns.indexOf('Allele Mol Cov') >= 0);
     	var has_allele_mol_freq = (db_columns.indexOf('Allele Mol Freq') >= 0);
-    	return (has_mol_cov && has_allele_mol_cov && has_allele_mol_freq);
+    	var not_has_read_cov_plus = (db_columns.indexOf('Read Cov+') < 0);
+    	var not_has_read_cov_minus = (db_columns.indexOf('Read Cov-') < 0);
+    	return (has_mol_cov && has_allele_mol_cov && has_allele_mol_freq & not_has_read_cov_plus & not_has_read_cov_minus);
     }
+    
+    function is_ampliseq_hd_db(db_columns) {
+    	var has_mol_cov = (db_columns.indexOf('Mol Coverage') >= 0);
+    	var has_allele_mol_cov = (db_columns.indexOf('Allele Mol Cov') >= 0);
+    	var has_allele_mol_freq = (db_columns.indexOf('Allele Mol Freq') >= 0);
+    	var has_read_cov_plus = (db_columns.indexOf('Read Cov+') >= 0);
+    	var has_read_cov_minus = (db_columns.indexOf('Read Cov-') >= 0);
+    	return (has_mol_cov && has_allele_mol_cov && has_allele_mol_freq && has_read_cov_plus && has_read_cov_minus);
+    }
+    
 
     //add this to the window object so we can grab it everywhere
     window.TVC = {};
@@ -526,7 +591,7 @@ $(function () {
         "vcf_ref": ["VCF Ref", "String"],
         "vcf_alt": ["VCF Variant", "String"],
 
-        // Tagseq only
+        // UMT only
         "read_cov": ["Read Cov", "Number"],
         "allele_read_cov": ["Allele Read Cov", "Number"],
         "allele_read_freq": ["Allele Read Freq", "Number"],
@@ -538,7 +603,11 @@ $(function () {
         "allele_mol_freq_filter": ["Allele Mol Freq Filter", "String"],
         "lod": ["LOD", "Number"],
         
-        // Non-Tagseq only
+        // Ampliseq HD only
+        "read_cov_plus": ["Read Cov+", "Number"],
+        "read_cov_minus": ["Read Cov-", "Number"],
+        
+        // Non-UMT only
         "total_cov": ["Original Coverage", "Number"],
         "downsampled_cov_total": ["Coverage", "Number"],
         "downsampled_cov_total_filter": ["Coverage Filter", "String"],        
@@ -630,6 +699,8 @@ $(function () {
     TVC.total_variants = TVC.variant_summary["variants_total"]["variants"];
     TVC.db_columns = get_db_columns(TVC);
     TVC.is_tagseq = is_tagseq_db(TVC.db_columns);
+    TVC.is_ampliseq_hd = is_ampliseq_hd_db(TVC.db_columns);
+    TVC.has_umt = TVC.is_tagseq || TVC.is_ampliseq_hd;
 
     TVC.column_2_name = [];
     for (var idx = 0; idx < TVC.db_columns.length; idx++){
@@ -639,7 +710,17 @@ $(function () {
     	var column_idx = TVC.db_columns.indexOf(TVC.col_lookup[my_key][0]);
     	// Bad design of the columns named "Filter" in alleles.xls.
     	// Now I have to figure out which Filter it is.
-    	if (column_idx < 0 && my_key.endsWith("_filter")){
+    	
+    	var is_key_endsWith = false;
+    	try{
+    		is_key_endsWith = my_key.endsWith("_filter");
+    	}catch(e){
+    		// IE doesn't support endsWith
+    		if (my_key.length > "_filter".length){
+    			is_key_endsWith = my_key.substr(my_key.length - "_filter".length) == "_filter";
+    		}
+    	}
+    	if (column_idx < 0 && is_key_endsWith){
     		var try_key = my_key.slice(0, my_key.length - "_filter".length);
             if (try_key in TVC.col_lookup){
         	    column_idx = TVC.db_columns.indexOf(TVC.col_lookup[try_key][0]);
@@ -680,7 +761,7 @@ $(function () {
             name: "Variant", toolTip: "Variant: Allele sequence that replaces reference sequence in the variant."
         },
     ];
-    if (TVC.is_tagseq){
+    if (TVC.has_umt){
     	TVC.all.push({
             id: "allele", field: "allele", width: 32, minWidth: 24, sortable: true,
             name: "Allele", toolTip: "Allele: Gene + Allele Name."
@@ -727,7 +808,7 @@ $(function () {
     //the columns shown in allele search view
     TVC.allele = []
     var tagseq_width_adjustment = 0;
-    if (TVC.is_tagseq){
+    if (TVC.has_umt){
         TVC.allele.push({
             id: "allele_call", field: "allele_call", width: 18, minWidth: 18, sortable: true,
             name: "Allele Call", toolTip: "Allele Call: Decision whether the allele is detected (Het and Hom), not detected (Absent), or filtered (No Call). No Call and Absent are for hotspot calls only.",
@@ -765,13 +846,29 @@ $(function () {
         });
  
     //the columns shown in coverage view
-    if (TVC.is_tagseq){
+    if (TVC.has_umt){
         TVC.coverage = [
 	        {
 	            id: "read_cov", field: "read_cov", width: 20, minWidth: 20, sortable: true,
 	            name: "Total Read Cov", toolTip: "Coverage: Total read coverage at this position.",
 	            formatter: ThousandsIntFormat
-	        },
+	        }];
+	    if (TVC.is_ampliseq_hd){
+	    	TVC.coverage.push(
+    	        {
+    	            id: "read_cov_plus", field: "read_cov_plus", width: 20, minWidth: 20, sortable: true,
+    	            name: "Read Cov+", toolTip: "Coverage: Total forward read coverage at this position.",
+    	            formatter: ThousandsIntFormat
+    	        },	
+    	        {
+    	            id: "read_cov_minus", field: "read_cov_minus", width: 20, minWidth: 20, sortable: true,
+    	            name: "Read Cov-", toolTip: "Coverage: Total reverse read coverage at this position.",
+    	            formatter: ThousandsIntFormat
+    	        }
+	    	);
+	    }    
+	    
+	    TVC.coverage.push(
 	        {
 	            id: "allele_read_cov", field: "allele_read_cov", width: 20, minWidth: 20, sortable: true,
 	            name: "Allele Read Cov", toolTip: "Number of reads containing alternative allele",
@@ -797,7 +894,7 @@ $(function () {
 	            name: "Allele Mol Freq", toolTip: "Allele Molecular Frequency: Frequency of molecules containing alternative allele",
 	            formatter: PercentFormatAF, asyncPostRender: MarkFilter
 	        }
-	    ];
+	    );
     }
     else{
         TVC.coverage = [
@@ -887,8 +984,23 @@ $(function () {
     
     TVC.dataView = new Slick.Data.DataView({inlineFilters: true});
     TVC.grid = new Slick.Grid("#AL-grid", TVC.dataView, columns, options);
-    TVC.grid.setSelectionModel(new Slick.RowSelectionModel({selectActiveRow: false}));
-    
+    TVC.grid.registerPlugin(new Slick.AutoTooltips());
+
+//    TVC.grid.setSelectionModel(new Slick.RowSelectionModel({selectActiveRow: false}));
+    TVC.grid.setSelectionModel(new Slick.CellSelectionModel());
+    TVC.grid.getCanvasNode().focus();
+	 var copyManager = new Slick.CellCopyManager();
+    TVC.grid.registerPlugin(copyManager);
+    copyManager.onCopyCells.subscribe(function (e, args) {
+       if (!args.ranges[0].isSingleCell())
+           return;
+var row = args.ranges[0].fromRow;
+var cell = args.ranges[0].fromCell;
+var text = remove_div(String(TVC.grid.getCellNode(row, cell).innerHTML));
+copyTextToClipboard(text);
+    });
+
+
     //TODO: do this in the Django template as well
     $.each(TVC.variant_summary["variants_by_chromosome"], function (i, variant) {
         $("#AL-selectChrom").append('<option value="' + variant["chromosome"] + '">' + variant["chromosome"] + '</select>');
@@ -1002,7 +1114,7 @@ $(function () {
         TVC.pager_toggle();
     });
 
-    if(TVC.is_tagseq){
+    if(TVC.has_umt){
     	TVC.filterSettings = {"Allele Call":["Heterozygous","Homozygous"], "Allele Source": ["Hotspot"]};
         $("#AL-selectAlleleSource").val(["Hotspot"]);
         $("#AL-selectAlleleSource").change()

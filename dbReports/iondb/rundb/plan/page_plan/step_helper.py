@@ -22,12 +22,9 @@ from iondb.rundb.plan.page_plan.save_template_by_sample_step_data import SaveTem
 from iondb.rundb.plan.page_plan.analysis_params_step_data import AnalysisParamsStepData
 
 from iondb.rundb.plan.page_plan.step_names import StepNames
-
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 
 from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
-
-from iondb.rundb.models import ApplicationGroup, PlannedExperiment
 
 from iondb.rundb.plan.views_helper import isOCP_enabled
 
@@ -36,7 +33,7 @@ try:
 except ImportError:
     from ordereddict import OrderedDict
 
-from iondb.rundb.models import KitInfo, Chip
+from iondb.rundb.models import ApplicationGroup, PlannedExperiment, KitInfo, Chip, dnaBarcode
 
 logger = logging.getLogger(__name__)
 
@@ -180,27 +177,32 @@ class StepHelper(object):
         return False
 
 
-    def isDualBarcodingSupported(self):
-        if not self.isBarcoded():
-            return False
-        
+    def isDualBarcodingBySampleSupported(self):
         if self.getApplProduct():
             return self.getApplProduct().isDualBarcodingBySampleSupported
         return False
 
+    def isDynamicDualBarcoding(self):
+        if not self.isBarcoded() or not self.isDualBarcodingBySampleSupported():
+            return False
+
+        barcode = dnaBarcode.objects.filter(name=self.steps[StepNames.KITS].savedFields[KitsFieldNames.BARCODE_ID]).first()
+        if barcode and not barcode.is_static_pairing():
+            return True
+
+        return False
+
 
     def isDualBarcoded(self):
-        if not self.isDualBarcodingSupported():
+        if not self.isDynamicDualBarcoding():
             return False
-        step = self.steps.get(StepNames.SAVE_PLAN, None)
-        if not step:
-            step = self.steps.get(StepNames.BARCODE_BY_SAMPLE, None)
+
+        step = self.steps.get(StepNames.SAVE_PLAN, None) or self.steps.get(StepNames.BARCODE_BY_SAMPLE, None)
         if step and step.savedFields[SavePlanFieldNames.END_BARCODE_SET]:
             return True
-        elif step and step.savedFields[SavePlanFieldNames.END_BARCODE_SET]:
-                return True
+
         return False
-        
+
     
     def isCreate(self):
         return self.sh_type in [StepHelperType.CREATE_NEW_PLAN, StepHelperType.CREATE_NEW_TEMPLATE, StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE]

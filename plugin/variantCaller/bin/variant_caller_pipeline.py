@@ -141,7 +141,8 @@ def consensus_alignment_pipeline(options, parameters, consensus_bam_name, remove
     # 3) Merging the partial BAM files into one
     final_consensus_bam = consensus_bam_name + '.bam'
     command  = 'samtools merge -l1 -@' + options.numthreads + ' -c -p -f "' + final_consensus_bam + '"'
-    command += ' "' +  consensus_bam_name + '.aln_not_needed.sorted.bam" "' +  consensus_bam_name +'.aligned.sorted.bam"'
+    # Note that the order of the two BAM files to be merged matters because I use the "-p" option. The first BAM file must be aligned.sorted.bam
+    command += ' "' +  consensus_bam_name + '.aligned.sorted.bam" "' +  consensus_bam_name + '.aln_not_needed.sorted.bam"'
     RunCommand(command,"Merging aligning partial consensus BAM files.")
     # And finally indexing consensus bam
     RunCommand('samtools index "'+final_consensus_bam+'"','Indexing merged consensus bam')
@@ -159,35 +160,43 @@ def consensus_alignment_pipeline(options, parameters, consensus_bam_name, remove
 # TODO: use json files instead of text files
 
 def create_consensus_metrics(options, parameters):
-    
+    # Import LodManager
+    from lod import LodManager
+    lod_manager = LodManager()
+    # Parameters for LOD
+    param_dict = {'min_var_coverage': 2, 'min_variant_score': 3, 'min_callable_prob': 0.98, 'min_allele_freq': 0.0005}    
+    tvc_param_type_dict = {'min_var_coverage': ('hotspot_min_var_coverage', int), 'min_variant_score': ('hotspot_min_variant_score', float), 'min_callable_prob': ('min_callable_prob', float), 'min_allele_freq': ('hotspot_min_allele_freq', float)}
+    for key, type_tuple in tvc_param_type_dict.iteritems():
+        param_dict[key] = type_tuple[1](parameters.get('torrent_variant_caller', {}).get(type_tuple[0], param_dict[key]))
+    lod_manager.set_parameters(param_dict)
+    # Open targets_depth
     targets_depth_file = os.path.join(options.outdir, 'targets_depth.txt') 
     df = pd.read_csv(targets_depth_file, sep = '\t')
-    consensus_metrics = os.path.join(options.outdir, 'consensus_metrics.txt') 
-    outFileFW = open(consensus_metrics, 'w')
-    outFileFW.write("Median read coverage:%s\n" % df['read_depth'].median())
-    outFileFW.write("Median molecular coverage:%s\n" %df['family_depth'].median())
-    outFileFW.write("20th percentile read coverage:%s\n" % df['read_depth'].quantile(0.2))
-    outFileFW.write("20th percentile molecular coverage:%s\n" % df['family_depth'].quantile(0.2))
-    if 'torrent_variant_caller' in parameters:
-        min_var_coverage = int(parameters['torrent_variant_caller'].get('snp_min_var_coverage', 3))
-        if int(parameters['torrent_variant_caller'].get('use_fd_param', 0)):
-            min_var_coverage = int(parameters['torrent_variant_caller'].get('fd_10', min_var_coverage).get('min_var_coverage', min_var_coverage))
-        min_var_coverage = max(min_var_coverage, 1)
-        try:
-            lod = round(100.0 * (min_var_coverage - 0.5) / df['family_depth'].median(), 4)
-        except ZeroDivisionError:
-            lod = 100.0
-        #CZB: The lod formula is totally heuristic and can not handle some edge cases. I have to fix it manually.
-        lod = min(lod, 100.0)
-        outFileFW.write("Median LOD percent:% 2.4f \n" % lod)
-        try:
-            lod = round(100.0 * (min_var_coverage - 0.5) / df['family_depth'].quantile(0.2), 4)
-        except ZeroDivisionError:
-            lod = 100.0
-        lod = min(lod, 100.0)
-        outFileFW.write("80th percentile LOD percent:% 2.4f \n" % lod)
-    outFileFW.close()
+    # Get stats
+    read_depth_median = df['read_depth'].median()
+    read_depth_20_quantile = df['read_depth'].quantile(0.2)
+    family_depth_median = df['family_depth'].median()
+    family_depth_20_quantile = df['family_depth'].quantile(0.2)
+    lod_median = lod_manager.calculate_lod(family_depth_median)
+    lod_80_quantile = lod_manager.calculate_lod(family_depth_20_quantile)
+    # In case LOD is not monotonic decreasing as mdp increased.
+    if lod_median > lod_80_quantile:
+        lod_median, lod_80_quantile = lod_80_quantile, lod_median
 
+    consensus_metrics = os.path.join(options.outdir, 'consensus_metrics.txt')
+    with open(consensus_metrics, 'w') as outFileFW:
+        outFileFW.write("Median read coverage:%s\n" % read_depth_median)
+        outFileFW.write("Median molecular coverage:%s\n" %family_depth_median)
+        outFileFW.write("20th percentile read coverage:%s\n" %read_depth_20_quantile)
+        outFileFW.write("20th percentile molecular coverage:%s\n" %family_depth_20_quantile)
+        if lod_median is None:
+            outFileFW.write("Median LOD percent: NA \n")
+        else:
+            outFileFW.write("Median LOD percent:% 2.4f \n" % (lod_median * 100.0))
+        if lod_80_quantile is None:
+            outFileFW.write("80th percentile LOD percent: NA \n")
+        else:
+            outFileFW.write("80th percentile LOD percent:% 2.4f \n" %(lod_80_quantile*100.0))
 
 # -------------------------------------------------------------------------
 # Have the pipeline create a samtools depth file in case tvc does not do it
@@ -236,6 +245,8 @@ def run_tvcutils_unify(options, parameters):
             
     RunCommand(unify_command, 'Unify variants and annotations from all sources (tvc,IndelAssembly,hotpots)')
 
+def merge_blacklist(options, merge_py):
+    mb_command = 'python ' + merge_py + ' '
 
 # -------------------------------------------------------------------------
 # Straighten out which executables to use. The order of precedence is 
@@ -513,38 +524,27 @@ def main():
         create_depth_txt(options, options.outdir + '/depth.txt')
 
     run_tvcutils_unify(options, parameters)
-
-    # -----------------------------------------------------------------------------------------
-
-    # run TS-14577 fixup
-    swap_py = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'swap_duplicates.py')
-    tvc_file = os.path.join(options.outdir, 'TSVC_variants.vcf')
-    if options.bedfile and options.hotspot_vcf and os.path.isfile(tvc_file):
-
-        tvc_file_tmp = os.path.join(options.outdir, 'TSVC_variants_tmp.vcf')
-        RunCommand('mv ' + tvc_file + ' ' + tvc_file_tmp, 'Move')
-        RunCommand('python ' + swap_py + ' ' + tvc_file_tmp + ' ' + options.bedfile + ' ' + tvc_file, 'Fix')
-        if os.path.isfile(tvc_file):
-            RunCommand('bgzip -c ' + tvc_file + ' > ' + tvc_file + '.gz', 'gzip')
-            RunCommand('tabix -p vcf ' + tvc_file + '.gz', 'tabix')
-        else:
-            RunCommand('mv ' + tvc_file_tmp + ' ' + tvc_file, 'Move')
-
-    tvc_file = os.path.join(options.outdir, 'TSVC_variants.genome.vcf')
-    if options.bedfile and options.hotspot_vcf and os.path.isfile(tvc_file):
-
-        tvc_file_tmp = os.path.join(options.outdir, 'TSVC_variants_tmp.genome.vcf')
-        RunCommand('mv ' + tvc_file + ' ' + tvc_file_tmp, 'Move')
-        RunCommand('python ' + swap_py + ' ' + tvc_file_tmp + ' ' + options.bedfile + ' ' + tvc_file, 'Fix')
-        if os.path.isfile(tvc_file):
-            RunCommand('bgzip -c '+ tvc_file + ' > ' + tvc_file + '.gz', 'gzip')
-            RunCommand('tabix -p vcf ' + tvc_file + '.gz', 'tabix')
-        else:
-            RunCommand('mv ' + tvc_file_tmp + ' ' + tvc_file, 'Move')
-
-
-
-    # -----------------------------------------------------------------------------------------
+    
+    # Merge small_variants_filtered.vcf and black_listed.vcf if needed
+    from merge_and_sort_vcf import merge_and_sort
+    small_v = os.path.join(options.outdir, 'small_variants_filtered.vcf')
+    black_v = os.path.join(options.outdir, 'black_listed.vcf')
+    # merge black_listed.vcf into small_variants_filtered.vcf
+    if os.path.exists(black_v):
+        # Don't bother to merge the VCF files if there is no blacklisted alleles, e.g. AmplisSeq Exome.
+        has_black_listed_allele = False
+        with open(black_v, 'r') as f_blk:
+            for line in f_blk:
+                if line in ['', '\n'] or line.startswith('#'):
+                    continue
+                has_black_listed_allele = True
+                break
+        if has_black_listed_allele:
+            merge_and_sort([small_v, black_v], '%s.fai' %options.reference, small_v)
+        try:
+            os.remove(black_v)
+        except:
+            print('WARNING: Unable to delete file %s' % black_v)
 
 # =======================================================================================
 

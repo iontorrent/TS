@@ -513,6 +513,7 @@ set(BaseCallerSRCS
     BaseCaller/WellsNormalization.cpp
     Calibration/HistogramCalibration.cpp
     Calibration/LinearCalibrationModel.cpp
+    VariantCaller/Bookkeeping/MiscUtil.cpp
     
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
@@ -1244,6 +1245,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p2.3.1.well.settings.json" DES
 
 # Recalibration Panel
 install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
+
+# Basecalling structure files
+install(FILES "${PROJECT_SOURCE_DIR}/config/StructureMetaInfo.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
    install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6" DESTINATION lib)

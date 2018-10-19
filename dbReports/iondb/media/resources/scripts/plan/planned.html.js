@@ -409,6 +409,13 @@ $(document).ready(function() {
                 data: JSON.stringify({planStatus: "planned"}),
                 contentType: "application/json; charset=utf-8",
                 dataType: "json",
+        	}).fail(function(data) {
+            	$('body').remove('.myBusyDiv');
+
+            	$('#error-messages').empty().show();
+            	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            	console.log("error:", data);
+
             }).always(function () {
                 $('body').remove('.myBusyDiv');
                 refreshKendoGrid('#grid');

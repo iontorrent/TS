@@ -13,6 +13,7 @@
 #include "ReferenceReader.h"
 #include "IndelAssembly/IndelAssembly.h"
 #include "InputStructures.h"
+#include "MolecularTag.h"
 
 
 
@@ -426,6 +427,18 @@ void BAMWalkerEngine::SaveAlignments(Alignment*& removal_list, VariantCallerCont
     	for (vector<string>::const_iterator tag_it = unwanted_tags.begin(); tag_it != unwanted_tags.end(); ++tag_it){
     		if (current_read->alignment.HasTag(*tag_it)){
     			current_read->alignment.RemoveTag(*tag_it);
+    		}
+    	}
+    	if (current_read->tag_info.tag_hash != 0){
+    		// ZH tag is the printable string for family identification.
+    		// i.e., The reads in the pileup that have the same ZH tag belong to the same family.
+    		if (current_read->tag_info.is_uniquely_hashable and current_read->tag_info.is_strict_tag){
+    			// Should be the normal use case.
+        		string zh;
+        		MolecularTagManager::LongLongToPrintableStr(current_read->tag_info.tag_hash, zh);
+        		current_read->alignment.EditTag("ZH", "Z", zh);
+    		}else{
+        		current_read->alignment.EditTag("ZH", "Z", current_read->tag_info.readable_fam_info);
     		}
     	}
         bam_writer_.SaveAlignment(current_read->alignment);
@@ -842,32 +855,31 @@ void ConsensusBAMWalkerEngine::Close()
   pthread_mutex_destroy(&aln_needed_consensus_bam_writer_mutex_);
 }
 
-void ConsensusBAMWalkerEngine::SaveConsensusAlignments(Alignment* const &read_list, Alignment* const &aln_needed_read_list)
-{
-  if (not write_consensus_bam_){
-	  return;
-  }
-  if (read_list != NULL){
-    // Process linked list
+void ConsensusBAMWalkerEngine::SaveConsensusAlignments(const list<PositionInProgress>::iterator& consensus_position_ticket, const list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket){
+	if (not write_consensus_bam_){
+		return;
+	}
+	// You must close the tickets by using ConsensusPositionTicketManager::CloseConsensusPositionTicket
+	assert(consensus_position_ticket->end == NULL);
+	assert(aln_needed_consensus_position_ticket->end == NULL);
+
+	// Save reads in consensus_position_ticket
     pthread_mutex_lock (&aln_no_needed_consensus_bam_writer_mutex_);
-    for (Alignment *current_read = read_list; current_read; current_read = current_read->next) {
-      if (current_read->filtered)
-        continue;
-      aln_no_needed_consensus_bam_writer_.SaveAlignment(current_read->alignment);
-    }
+	for (Alignment const * rai = consensus_position_ticket->begin; rai != consensus_position_ticket->end; rai = rai->next){
+		if (not rai->filtered){
+	        aln_no_needed_consensus_bam_writer_.SaveAlignment(rai->alignment);
+		}
+	}
     pthread_mutex_unlock (&aln_no_needed_consensus_bam_writer_mutex_);
 
-  }
-  if (aln_needed_read_list != NULL){
+	// Save reads in aln_needed_consensus_position_ticket
     pthread_mutex_lock (&aln_needed_consensus_bam_writer_mutex_);
-    // Process linked list
-    for (Alignment *current_read = aln_needed_read_list; current_read; current_read = current_read->next) {
-      if (current_read->filtered)
-        continue;
-      aln_needed_consensus_bam_writer_.SaveAlignment(current_read->alignment);
-    }
+	for (Alignment const * rai = aln_needed_consensus_position_ticket->begin; rai != aln_needed_consensus_position_ticket->end; rai = rai->next){
+		if (not rai->filtered){
+	        aln_needed_consensus_bam_writer_.SaveAlignment(rai->alignment);
+		}
+	}
     pthread_mutex_unlock (&aln_needed_consensus_bam_writer_mutex_);
-  }
 }
 
 // Generate the list of reads that cover the target
@@ -914,9 +926,7 @@ void BAMWalkerEngine::AddReadToPG(Alignment *rai){
 	    cerr << "ERROR: The PG tag is not present in read " << rai->alignment.Name << endl;
 	    exit(1);
 	}
-	pair< map<string, unsigned int>::iterator, bool> pg_finder;
-	pg_finder = read_counts_of_pg_.insert(pair<string, unsigned int>(pg_of_read, 0));
-	++pg_finder.first->second;
+	++read_counts_of_pg_[pg_of_read];
 }
 
 // return true if success, else false.

@@ -141,18 +141,16 @@
         $('#'+selectorID+' option')[0].selected = true;
     }
 
-    function setOptionDefaults(libType,forceUpdate) {
+    function setOptionDefaults(runType,forceUpdate) {
       forceUpdate = forceUpdate || false;
-      $("#librarytype").val(libType);
+      $("#librarytype").val(runType);
       var showchecks = 'NYYYY';
-      if( libType == "AMPS_RNA" ) {
-        showchecks = 'YNNNY';
-      } else if( libType == "MIXED" || libType.substr(0,4) == "AMPS" ) {
+      if( runType.substr(0,4) == "AMPS" || runType == "MIXED") {
         showchecks = 'YNYNY';
-      } else if( libType == "TAG_SEQUENCING" ) {
+      } else if( runType == "TAG_SEQUENCING" ) {
         showchecks = 'YNYNY';
-      } else if( libType == "TARS_16S" || libType == "RNA" ) {
-        showchecks = 'NNNNN';
+      } else if( runType == "TARS_16S" || runType == "RNA" ) {
+        showchecks = 'NNYNN';
       }
       $("#sampid").toggle(showchecks[0]=='Y');
       // do not update for hidden advanced option - unless forced

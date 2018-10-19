@@ -514,7 +514,7 @@ hid_t H5CreateOrOpenGroup(hid_t &file_id, string &group_name) {
   return(group_id);
 }
 
-void RegionalSummary::Initialize(unsigned int max_hp, unsigned int n_flow, vector<unsigned int> &origin, vector<unsigned int> &dim) {
+void RegionalSummary::Initialize(unsigned int max_hp, unsigned int n_flow, vector<unsigned int> &origin, vector<unsigned int> &dim,unsigned int NErrorRates,unsigned int HistogramLength) {
   assert(origin.size()==2);
   assert(dim.size()==2);
   origin_ = make_pair(origin[0],origin[1]);
@@ -527,6 +527,9 @@ void RegionalSummary::Initialize(unsigned int max_hp, unsigned int n_flow, vecto
     hp_count_[i].assign(1+max_hp_,0);
     hp_err_[i].assign(1+max_hp_,0);
   }
+  aq_histogram_.resize(NErrorRates);
+  for(unsigned int i=0; i < NErrorRates; ++i)
+    aq_histogram_[i].Initialize(HistogramLength);
 }
 
 void RegionalSummary::Add(ReadAlignmentErrors &e) {
@@ -594,6 +597,9 @@ int RegionalSummary::MergeFrom(RegionalSummary &other) {
     return(EXIT_FAILURE);
   n_err_ += other.nErr();
   n_aligned_ += other.nAligned();
+  for(unsigned int i=0; i < aq_histogram_.size(); ++i){
+    aq_histogram_[i].MergeFrom(other.aq_histogram_[i]);
+  }
   const vector< vector<uint64_t> > &other_hp_count = other.HpCount();
   const vector< vector<uint64_t> > &other_hp_err   = other.HpErr();
   for(unsigned int iFlow=0; iFlow<n_flow_; ++iFlow) {
@@ -735,7 +741,7 @@ int RegionalSummary::readH5(hid_t group_id) {
   dataset_id = H5Dopen2(group_id,"data_dim",H5P_DEFAULT);
   H5Dread(dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_dim[0]);
   H5Dclose (dataset_id);
-  Initialize(data_dim[1]-1,data_dim[0],region_origin,region_dim);
+  Initialize(data_dim[1]-1,data_dim[0],region_origin,region_dim,0,0);
 
   dataset_id = H5Dopen2(group_id,"n_err",H5P_DEFAULT);
   H5Dread(dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_err_);

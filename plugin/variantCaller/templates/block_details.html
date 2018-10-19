@@ -13,20 +13,20 @@
 <body style="background:white">
 
 <table>
-  <tr><td><strong>Library type:</strong></td>          <td>{{options.library_type}}</td></tr>
-  <tr><td><strong>Reference genome:</strong></td>             <td>{{options.reference_genome_name}}</td></tr>
+  <tr><td><strong><font color="dimgrey">Library type:</font></strong></td>          <td>{{options.library_type}}</td></tr>
+  <tr><td><strong><font color="dimgrey">Reference genome:</font></strong></td>             <td>{{options.reference_genome_name}}</td></tr>
   {% if options.has_targets %}
-    <tr><td><strong>Targeted regions:</strong></td>    <td>{{options.targets_name}}</td></tr>
+    <tr><td><strong><font color="dimgrey">Targeted regions:</font></strong></td>    <td>{{options.targets_name}}</td></tr>
   {% else %}
-    <tr><td><strong>Targeted regions:</strong></td>    <td>None</td></tr>
+    <tr><td><strong><font color="dimgrey">Targeted regions:</font></strong></td>    <td>None</td></tr>
   {% endif %}
   {% if options.has_hotspots %}
-    <tr><td><strong>Hotspot regions:</strong></td>     <td>{{options.hotspots_name}}</td></tr>
+    <tr><td><strong><font color="dimgrey">Hotspot regions:</font></strong></td>     <td>{{options.hotspots_name}}</td></tr>
   {% else %}
-    <tr><td><strong>Hotspot regions:</strong></td>     <td>None</td></tr>
+    <tr><td><strong><font color="dimgrey">Hotspot regions:</font></strong></td>     <td>None</td></tr>
   {% endif %}
-  <tr><td><strong>Configuration:</strong></td>         <td>{{options.config_line1}}</td></tr>
-  <tr><td><strong>Output directory:</strong></td>         <td>{{output_dir}}</td></tr>
+  <tr><td><strong><font color="dimgrey">Configuration:</font></strong></td>         <td>{{options.config_line1}}</td></tr>
+  <tr><td><strong><font color="dimgrey">Output directory:</font></strong></td>         <td>{{output_dir}}</td></tr>
 </table>
 
 <div class="k-widget k-grid">
@@ -35,7 +35,7 @@
           <tr>
             <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
             <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
-            {% if options.library_type == "tagseq" %}
+            {% if options.has_umt %}
 				<th class="k-header"><span class="help" title="Median number of reads covering on target position">Median Read Cov</span></th>
 				<th class="k-header"><span class="help" title="Median number of Molecules per target">Median Mol Cov</span></th>
             	<th class="k-header"><span class="help" title="Limits of Detection (median - high) %">LOD %</span></th>
@@ -49,7 +49,7 @@
         <tbody>
           <tr>
             <td><a href="variantCaller.html">{{summary.sample_name}}</a></td>
-            {% if options.library_type == "tagseq" %}
+            {% if options.has_umt %}
 			<td><a href="variantCaller.html">{{summary.median_depth}}</a></td>
 			<td><a href="variantCaller.html">{{summary.median_num_fam3}}</a></td>
 			<td><a href="variantCaller.html">{{summary.fm3_pass80}}</a></td>
@@ -60,7 +60,8 @@
             {% endif %}
             <td><a class="btn" href="{{variants_vcf_gz_link}}">VCF.GZ</a>
             <a class="btn" href="{{variants_tbi_link}}">VCF.GZ.TBI</a>
-            {% if options.library_type != "tagseq" %}
+            {% if options.has_umt %}
+            {% else %}
             <a class="btn" href="{{genome_vcf_gz_link}}">gVCF.GZ</a>
             <a class="btn" href="{{genome_tbi_link}}">gVCF.GZ.TBI</a>
 			{% endif %}

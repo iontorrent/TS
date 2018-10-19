@@ -92,7 +92,7 @@ class PluginInfo(object):
         except:
             _logger.exception("Failed to query plugin for getUserInput")
 
-        for a in ('runtypes', 'features', 'runlevels', 'depends', 'major_block'):
+        for a in ('runtypes', 'features', 'runlevels', 'depends', 'major_block', 'requires_configuration'):
             v = getattr(plugin, a, None)
             if v is not None:
                 setattr(self, a, v)

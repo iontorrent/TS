@@ -23,12 +23,21 @@
 
 using namespace std;
 
+// ------------------------------------------------------------------------
+
+struct Handle {
+  string base_seq;
+  vector<int> flow_seq;
+};
+
+
+// ------------------------------------------------------------------------
+
 struct Barcode {
   int           mask_index;
   int           read_group_index;
   vector<int>   flow_seq;     // flow-space vector representation for the barcode
   int           num_flows;    // number of flows for the flow-space representation, includes 5' adapter
-  //int           start_flow;   // calculated from the start base & end base, used for scoring/matching
   int           end_flow;     // inclusive end flow (closed interval)
   int           adapter_start_flow;
   string        full_barcode;
@@ -37,16 +46,16 @@ struct Barcode {
 };
 
 
-
 class BarcodeClassifier {
 public:
 
   BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, const ion::FlowOrder& flow_order,
-      const vector<KeySequence>& keys, const string& output_directory, int chip_size_x, int chip_size_y);
+        const vector<KeySequence>& keys, const string& output_directory,
+        int chip_size_x, int chip_size_y, const Json::Value& structure);
 
   ~BarcodeClassifier();
 
-  void BuildPredictedSignals(float cf, float ie, float dr);
+  void BuildPredictedSignals(const ion::FlowOrder& flow_order, float cf, float ie, float dr);
 
   static void PrintHelp();
 
@@ -75,6 +84,7 @@ public:
 
   bool TrimBarcodes() const { return trim_barcodes_; };
 
+  Mask* GetBarcodeMaskPointer() { return &barcode_mask_; };
 
   void Close(BarcodeDatasets& datasets);
 
@@ -86,7 +96,19 @@ protected:
   void ComputeHammingDistance();
 
   // Transfer barcode information from dataset structure to class structure
-  void LoadBarcodesFromDataset(BarcodeDatasets& datasets, const vector<KeySequence>& keys);
+  void LoadBarcodesFromDataset(BarcodeDatasets& datasets, const vector<KeySequence>& keys, const ion::FlowOrder& flow_order);
+
+  void LoadHandlesFromArgs(OptArgs& opts, const ion::FlowOrder& flow_order, const Json::Value& structure);
+
+  void ClassifyAndTrimHandle(int read_index,
+                             int best_barcode,
+                             ProcessedRead &processed_read,
+                             const BasecallerRead& basecaller_read,
+                             const vector<int>& base_to_flow);
+
+  int  HandleBaseSpaceClassification(const BasecallerRead& basecaller_read, const ProcessedRead &processed_read);
+
+  int  HandleFlowAlign(int best_barcode, ProcessedRead &processed_read, const vector<int>& base_to_flow);
 
 
   template <class T>
@@ -131,7 +153,6 @@ protected:
 
   // --- Variables
 
-  ion::FlowOrder            flow_order_;
   Mask                      barcode_mask_;
   int                       num_barcodes_;
 
@@ -139,6 +160,8 @@ protected:
   string                    barcode_mask_filename_;
   int                       barcode_min_start_flow_;     // Minimum start flow over all barcodes
   int                       barcode_max_flows_;          // The maximum number of barcode flows over all barcodes
+  int                       barcode_full_flows_;         // The number of overall barcode flows, if synchronized
+  bool                      end_flow_synch_;             // Are end barcode end flows synchronized?
   int                       barcode_max_hp_;             // The largest homopolymer in the barcodes
   double                    barcode_filter_;             // Barcode frequency cutoff filter
   int                       barcode_filter_minreads_;    // Minimum number of reads per barcode group
@@ -169,8 +192,140 @@ protected:
   bool						barcode_bam_tag_;             // Add the barcode tag to output bam
   bool                      check_limits_;                // Check whether command line arguments are within reasonable bounds
 
-  // Dummy variables for debugging
-  //int num_prints_;
+  // Variables associated with handle identification & trimming
+
+  bool                      have_handles_;
+  vector<string>            handle_sequence_;
+  vector<Handle>            handle_;
+  int                       handle_mode_;
+  int                       handle_cutoff_;
+
+};
+
+// ------------------------------------------------------------------------
+
+class EndBarcodeClassifier {
+
+  struct EndBarcode {
+    bool          end_barcode;
+    string        barcode_name;
+    string        barcode_sequence;
+    string        barcode_adapter;
+    int           bc_start_hp;
+    int           adapter_start_hp;
+
+    EndBarcode();
+  };
+
+  bool                      enable_barcodes_;
+  //bool                      nothing_to_do_;
+  bool                      have_end_barcodes_;
+  bool                      trim_barcodes_;
+  int                       nomatch_read_group_;
+  vector<EndBarcode>        read_group_;
+  vector<EndBarcode>        end_barcodes_;
+  vector<string>            end_barcode_names_;
+  vector<int>               bead_adapter_start_hp;
+
+  unsigned int              num_end_barcodes_;
+  bool                      demux_barcode_list_;
+
+  const ion::FlowOrder*     flow_order_p_;
+  Mask*                     barcode_mask_pointer_;
+
+  int                       score_mode_;
+  int                       score_cutoff_;
+  int                       score_separation_;
+  int                       adapter_cutoff_;
+
+  bool                      have_handles_;
+  vector<string>            handle_sequence_;
+  int                       handle_mode_;
+  int                       handle_cutoff_;
+  bool                      handle_filter_;
+
+public:
+
+  EndBarcodeClassifier(
+           OptArgs&           opts,
+           BarcodeDatasets&   datasets,
+           ion::FlowOrder*    flow_order,
+           Mask*              MaskPointer,
+           const Json::Value& structure);
+
+  static void PrintHelp();
+
+  void AddBarcode(EndBarcode& barcode, const string& bc_sequence, const string& bc_adapter);
+
+  bool LoadBarcodesFromCSV(string filename);
+
+  void LoadHandlesFromArgs(OptArgs& opts, const Json::Value& structure);
+
+  int  GetStartHP(const string& base_str);
+
+  void ClassifyAndTrimBarcode(
+           int read_index,
+           ProcessedRead&        processed_read,
+           const BasecallerRead& basecaller_read,
+           const vector<int>&    base_to_flow);
+
+  void UpdateReadTrimming(
+           ProcessedRead &processed_read,
+           int trim_n_bases,
+           const string& YK_tag);
+
+  void FilterRead(
+           int read_index,
+           ProcessedRead &processed_read);
+
+  int BaseSpaceClassification(
+           ProcessedRead &processed_read,
+           int& n_bases_barcode,
+           int& bc_start_flow,
+           const BasecallerRead& basecaller_read,
+           const vector<int>& base_to_flow);
+
+  int FlowAlignClassification(
+           ProcessedRead &processed_read,
+           int& n_bases_barcode,
+           int& best_bc_start_flow,
+           int  adapter_hp,
+           const BasecallerRead& basecaller_read,
+           const vector<int>& base_to_flow);
+
+  bool TrimHandle(
+           int  adapter_flow,
+           int  adapter_hp,
+           int  temp_end_base,
+           const BasecallerRead& basecaller_read,
+           const vector<int>& base_to_flow,
+           ProcessedRead &processed_read,
+           int& n_bases_handle,
+           int& handle_start_flow);
+
+  bool BaseSpaceMatch(
+           int                   n_bases_prefix,
+           int                   n_bases_filtered,
+           const BasecallerRead& basecaller_read,
+           const string &        query);
+
+  vector<int> BaseToFlow(
+           const string &query,
+           int   flow);
+
+  void ReverseFlowAlignDistance(
+           const vector<int>& base_to_flow,
+           const string& my_query,
+           int   prefix_flow,
+           int   adapter_flow,
+           int   adapter_hp,
+           int&  best_start_flow,
+           int&  best_distance,
+           int&  best_read_bases);
+
+  int NumEndBarcodes() { return (demux_barcode_list_ ? num_end_barcodes_ : 0); };
+
+  const vector<string>& EndBarcodeNames() { return end_barcode_names_; }
 
 };
 

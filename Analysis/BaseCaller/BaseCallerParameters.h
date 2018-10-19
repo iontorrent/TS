@@ -78,6 +78,7 @@ struct BaseCallerFiles
 
     string    lib_datasets_file;      //!< Datasets file containing all the barcodes that are used in the run
     string    calibration_panel_file; //!< Datasets file containing the barcodes that are used for calibration panel
+    Json::Value read_structure;
 
     bool      options_set;            //!< Flag whether options have been read to ensure order
 };
@@ -168,6 +169,7 @@ struct BaseCallerContext {
     BaseCallerMetricSaver     *metric_saver;          //!< Saves requested metrics to an hdf5
     BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
     BarcodeClassifier         *calibration_barcodes;  //!< Barcode detection for calibration set
+    EndBarcodeClassifier      *end_barcodes;          //!< Read end barcode detection and trimming
     HistogramCalibration      *histogram_calibration; //!< Posterior base call and signal adjustment algorithm
     LinearCalibrationModel    *linear_cal_model;      //!< Model estimation of simulated predictions and observed measurements
     MolecularTagTrimmer       *tag_trimmer;           //!< Class for tag accounting within read groups
@@ -217,6 +219,8 @@ public:
     bool JustPhaseEstimation() { return context_vars.just_phase_estimation; };
 
     bool CompressOutputBam() { return compress_output_bam_; };
+
+    Json::Value NormalizeDictStructure(Json::Value structure);
 
 
     const BaseCallerFiles & GetFiles() const {

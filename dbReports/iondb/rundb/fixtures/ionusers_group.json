@@ -316,9 +316,24 @@
           "pluginresult"
         ],
         [
-          "delete_pluginresult",
+          "delete_pluginresultjob",
           "rundb",
-          "pluginresult"
+          "pluginresultjob"
+        ],
+        [
+          "add_pluginresultjob",
+          "rundb",
+          "pluginresultjob"
+        ],
+        [
+          "change_pluginresultjob",
+          "rundb",
+          "pluginresultjob"
+        ],
+        [
+          "delete_pluginresultjob",
+          "rundb",
+          "pluginresultjob"
         ],
         [
           "add_project",

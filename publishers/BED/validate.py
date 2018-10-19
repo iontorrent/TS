@@ -13,22 +13,25 @@ import sys
 import call_api as api
 from iondb.bin.djangoinit import *
 from iondb.rundb.plan import ampliseq
+from iondb.rundb import publisher_types
 
-def register(upload_id, base_path, file, meta):
+def register(upload_id, base_path, file, meta, bed_type):
     full_path = os.path.join(base_path, file)
     reg = "/%s" % file
     pub_uid = "/rundb/api/v1/publisher/BED/"
     upload_uid = "/rundb/api/v1/contentupload/%d/" % upload_id
     api.post("content", publisher=pub_uid, meta=json.dumps(meta),
-             file=full_path, path=reg, contentupload=upload_uid)
+             file=full_path, path=reg, contentupload=upload_uid, type=bed_type, extra=meta['reference'],
+             description=meta.get('description',''), notes=meta.get('notes','')
+            )
 
 
-def register_bed_file(upload_id, base_path, meta, bed_name):
+def register_bed_file(upload_id, base_path, meta, bed_name, bed_type):
     # Register files to Publisher
-    register(upload_id, base_path, meta["reference"]+"/unmerged/plain/"+bed_name, meta)
-    register(upload_id, base_path, meta["reference"]+"/unmerged/detail/"+bed_name, meta)
-    register(upload_id, base_path, meta["reference"]+"/merged/plain/"+bed_name, meta)
-    register(upload_id, base_path, meta["reference"]+"/merged/detail/"+bed_name, meta)
+    register(upload_id, base_path, meta["reference"]+"/unmerged/plain/"+bed_name, meta, bed_type)
+    register(upload_id, base_path, meta["reference"]+"/unmerged/detail/"+bed_name, meta, bed_type)
+    register(upload_id, base_path, meta["reference"]+"/merged/plain/"+bed_name, meta, bed_type)
+    register(upload_id, base_path, meta["reference"]+"/merged/detail/"+bed_name, meta, bed_type)
 
     return os.path.join(base_path, meta["reference"]+"/unmerged/detail/" + bed_name)
 
@@ -43,6 +46,11 @@ def is_BED_encrypted(meta):
 def validate(upload_id, base_path, meta, bed_file, bed_type):
     print("Validating %s file: %s" % (bed_type, bed_file))
     print
+    if meta['is_ampliseq'] and bed_file and not meta["reference"]:
+        print 'ERROR: The Bed file (%s) exists without reference. Please check your ampliseq bundle ' \
+              'or contact Technical Support.' % bed_file
+        sys.exit(1)
+
     path_end = '/'+meta["reference"]+"/unmerged/detail/"+bed_file
     data, response, raw = api.get("content", publisher_name='BED', format='json', path__endswith=path_end)
 
@@ -73,11 +81,11 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
     cmd = '/usr/local/bin/tvcutils validate_bed'
     cmd += '  --reference /results/referenceLibrary/tmap-f3/%s/%s.fasta' % (
         meta['reference'], meta['reference'])
-    if bed_type == 'target regions BED':
+    if bed_type == publisher_types.TARGET:
         cmd += '  --target-regions-bed "%s"' % os.path.join(base_path,        bed_file)
-    elif bed_type == 'hotspots BED':
+    elif bed_type == publisher_types.HOTSPOT:
         cmd += '  --hotspots-bed "%s"' % os.path.join(base_path,        bed_file)
-    elif bed_type == 'SSE BED':
+    elif bed_type == publisher_types.SSE:
         cmd += '  --hotspots-bed "%s"' % os.path.join(base_path,        bed_file)
 
     cmd += '  --unmerged-detail-bed "%s"' % os.path.join(result_UD_dir,    bed_file)
@@ -199,30 +207,33 @@ def main():
         if isBED_Encrypted:
             meta['design']['plan']['designed_bed'] = ''
         else:
-            target_regions_bed_path = validate(args.upload_id, args.path, meta, target_regions_bed, 'target regions BED')
+            bed_type = publisher_types.TARGET
+            target_regions_bed_path = validate(args.upload_id, args.path, meta, target_regions_bed, bed_type)
             if not target_regions_bed_path:
                 meta["hotspot"] = False
-                target_regions_bed_path = register_bed_file(args.upload_id, args.path, meta, target_regions_bed)
+                target_regions_bed_path = register_bed_file(args.upload_id, args.path, meta, target_regions_bed, bed_type)
     
     if hotspots_bed:
         if isBED_Encrypted:
             meta['design']['plan']['hotspot_bed'] = ''
         else:
-            hotspots_bed_path = validate(args.upload_id, args.path, meta, hotspots_bed, 'hotspots BED')
+            bed_type = publisher_types.HOTSPOT
+            hotspots_bed_path = validate(args.upload_id, args.path, meta, hotspots_bed, bed_type)
             if not hotspots_bed_path:
                 meta["hotspot"] = True
-                hotspots_bed_path = register_bed_file(args.upload_id, args.path, meta, hotspots_bed)
+                hotspots_bed_path = register_bed_file(args.upload_id, args.path, meta, hotspots_bed, bed_type)
 
     if sse_bed:
         if isBED_Encrypted:
             meta['design']['plan']['sse_bed'] = ''
         else:
-            sse_bed_path = validate(args.upload_id, args.path, meta, sse_bed, 'SSE BED')
+            bed_type = publisher_types.SSE
+            sse_bed_path = validate(args.upload_id, args.path, meta, sse_bed, bed_type)
             if not sse_bed_path:
                 meta["hotspot"] = False
                 meta["sse"] = True
                 meta["sse_target_region_file"] = target_regions_bed_path
-                sse_bed_path = register_bed_file(args.upload_id, args.path, meta, sse_bed)
+                sse_bed_path = register_bed_file(args.upload_id, args.path, meta, sse_bed, bed_type)
 
     if meta['is_ampliseq']:
         if isBED_Encrypted:
@@ -240,8 +251,8 @@ def main():
                                                             sse_bed_path
                                                         )
         if isUploadFailed:
-            print("ERROR: Could not create plan from this zip: %s." % errMsg)
-            raise
+            print("ERROR: Could not create plan from this zip: %s." % str(errMsg))
+            raise Exception("validation error")
     else:
         api.update_meta(meta, args)
 

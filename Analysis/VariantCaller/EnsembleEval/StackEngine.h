@@ -171,7 +171,7 @@ public:
     //! @brief Split the current variant into as many callable smaller variants as possible (primarily for candidate generator))
     void SplitMyAlleleIdentityVector(list<list<int> >& allele_group, const ReferenceReader &ref_reader, int max_group_size_allowed);
     //! @brief The "one-window" approach
-    void LookAheadSlidingWindow(int current_candidate_gen_window_end_0, const ReferenceReader &ref_reader, list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int max_group_size_allowed, const TargetsManager * const targets_manager);
+    void LookAheadSlidingWindow(int current_candidate_gen_window_end_0, const ReferenceReader &ref_reader, list<list<int> >& allele_groups_ready_to_go, vector<int>& alleles_on_hold, int& sliding_window_start_0, int& sliding_window_end_0, int max_group_size_allowed);
     void FinalSplitReadyToGoAlleles(list<list<int> >& allele_groups_ready_to_go, const ReferenceReader &ref_reader, int max_group_size_allowed);
 
     //------------------------------------------------------------------
@@ -181,7 +181,10 @@ public:
     //! @brief Fill the read stack w/ molecular tagging
     void StackUpOneVariantMolTag(const ExtendParameters &parameters, vector< vector< MolecularFamily> > &my_molecular_families_one_strand, int sample_index);
     //! @brief Strategic downsampling algorithm for molecular tagging
-    void DoDownSamplingMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size, vector< vector< MolecularFamily> > &my_molecular_families,
+    void DoDownSamplingUniDirMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size, vector< vector< MolecularFamily> > &my_molecular_families,
+  		                      unsigned int num_reads_available, unsigned int num_func_fam, int strand_key);
+    //! @brief Strategic downsampling algorithm for Bi-Dir molecular tagging
+    void DoDownSamplingBiDirMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size, unsigned int effective_min_fam_per_strand_cov, vector< vector< MolecularFamily> > &my_molecular_families,
   		                      unsigned int num_reads_available, unsigned int num_func_fam, int strand_key);
     //------------------------------------------------------------------
     // Functions of hard classification of reads/families are defined here
@@ -215,7 +218,7 @@ public:
 private:
     // The following private members are the results of approximate hard classification for reads
     vector<int> read_id_;        // vector of allele ids per read, -1 = outlier, 0 = ref, >0 real allele
-    vector<bool> strand_id_;     // vector of forward (true) or reverse (false) per read
+    vector<int> strand_id_;     // vector of forward (0), reverse (1), bi_dir(-1) per read
     // for each variant, calculate its' position within the soft clipped read distance to left and distance to right
     vector<int> dist_to_left_;   // vector of distances from allele position to left soft clip per read
     vector<int> dist_to_right_;  // vector of distances from allele position to left soft clip per read

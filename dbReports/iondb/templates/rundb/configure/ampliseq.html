@@ -8,7 +8,14 @@
     <tr>
         <td style="padding: 20px;">
             {% if tfc_account_setup %}
-                <h3>Currently your account is not setup to access ampliseq.com.  Please visit the Accounts configuration page to set this up.</h3>
+                {% if http_error %}
+                    <p class="alert alert-error">
+                        {{http_error|safe}}
+                    </p>
+                    <p>Please visit the Accounts configuration page to set this up again</p>
+                {% else %}
+                    <h3>Currently your account is not setup to access ampliseq.com.  Please visit the Accounts configuration page to set this up.</h3>
+                {% endif %}
                 <a href={% url 'configure_account' %}>Configure Account</a>
             {% else %}
                 <form action="{% url "configure_ampliseq_download" %}" method="post">

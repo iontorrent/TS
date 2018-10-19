@@ -19,8 +19,20 @@ logger = logging.getLogger(__name__)
     - construct the UserInputInfo for plan->selectedPlugins
 """
 
-def get_userInfoDict(row,workflowObj, rowCount, setid_suffix):
-    userInput_setid = row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_SET_ID).strip() + '__' + setid_suffix
+def get_userInfoDict(row,workflowObj, rowCount, setid_suffix, other_row_setIds):
+    csv_setid = row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_SET_ID).strip()
+    newSetID = True
+    userInput_setid = None
+    if other_row_setIds:
+        for setID in other_row_setIds:
+            check_setId = csv_setid + '__'
+            if check_setId in setID and workflowObj.get("RelationshipType") == "DNA_RNA":
+                userInput_setid = setID
+                newSetID = False
+                break
+
+    if not other_row_setIds or newSetID:
+        userInput_setid = csv_setid + '__' + setid_suffix
 
     userInputInfoDict = {
         "ApplicationType": workflowObj.get("ApplicationType"),
@@ -37,7 +49,7 @@ def get_userInfoDict(row,workflowObj, rowCount, setid_suffix):
         "coupleID": row.get(PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID),
         "embryoID": row.get(PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID),
         "Workflow": row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW),
-        "NucleotideType": row.get(PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE),
+        "nucleotideType": row.get(PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE),
         "controlType": row.get(PlanCSVcolumns.COLUMN_SAMPLE_CONTROLTYPE),
         "tag_isFactoryProvidedWorkflow" : workflowObj.get("tag_isFactoryProvidedWorkflow"),
         "row": str(rowCount)
@@ -100,7 +112,9 @@ def check_selected_values(planObj, samples_contents, csvPlanDict):
     errorDict = {
         "E001" : "No samples available. Please check your input",
         "E002": "Selected Workflow is not compatible or invalid: %s",
-        "E003" : "Selected Cellularity % is not valid, should be 1 to 100: {0}"
+        "E003" : "Selected Cellularity % is not valid, should be 1 to 100: {0}",
+        "E004": "Selected Gender is not valid, Valid values are {0}",
+        "E005": "Selected Cancer Type is not valid, Valid values are {0}"
     }
 
     #process sample_contents for non barcoded samples
@@ -152,12 +166,29 @@ def check_selected_values(planObj, samples_contents, csvPlanDict):
                 elif int(cellularityPct) not in range(1,101):
                     errors.append(errorDict["E003"].format(cellularityPct))
 
+            # TS-16335 : Validate Gender and Cancer Type
+            gender = row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_GENDER)
+            if gender:
+                validGenders = USERINPUT["Gender"]
+                if gender not in validGenders:
+                    errors.append(errorDict["E004"].format(validGenders))
+
+            cancerType = row.get(PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE)
+            if cancerType:
+                validCancerTypes = USERINPUT["CancerType"]
+                if cancerType not in validCancerTypes:
+                    errors.append(errorDict["E005"].format(validCancerTypes))
+
             # Do not process get_userInfoDict if the workflow is invalid
             if not isSingleCSV and errors:
                 errorMsgDict[rowCount] = errors
 
             if not errorMsgDict:
-                userInput.append(get_userInfoDict(row, workflowObj, rowCount, setid_suffix))
+                # TS-16740 : The setID's UUID is not correctly populated i.e sample UUID for both DNA and RNA.
+                # send the existing setIDs for comparison (relationshipType should be DNA_RNA)
+                other_row_setIds = [userInputDict["setid"] for userInputDict in userInput]
+                userInputInfoDict = get_userInfoDict(row, workflowObj, rowCount, setid_suffix, other_row_setIds)
+                userInput.append(userInputInfoDict)
 
         if errorMsgDict:
             if isSingleCSV:
@@ -199,7 +230,14 @@ def populate_userinput_from_response(planObj, httpHost, ir_account_id):
                 "tag_isFactoryProvidedWorkflow": tag_isFactoryProvidedWorkflow,
                 "ApplicationType": applicationType,
                 "RelationshipType" : relationshipType
-            });
+            })
+
+        columns = sampleRelationshipsTableInfo.get("columns", None)
+        for cm in columns:
+            if cm["Name"] == "Gender":
+                USERINPUT["Gender"] = json.dumps(cm["Values"])
+            if cm["Name"] == "CancerType":
+                USERINPUT["CancerType"] = json.dumps(cm["Values"])
 
     planObj.USERINPUT = USERINPUT
 

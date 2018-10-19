@@ -168,20 +168,15 @@ void DecisionTreeData::FilterByBasicThresholds(int i_alt, MultiBook &m_summary_s
   // Min Strand Coverage filter
   int effective_min_cov_each_strand = variant_specific_params.min_coverage_each_strand_override ?
 		  variant_specific_params.min_coverage_each_strand : basic_filter.min_cov_each_strand;
-  bool pos_cov = m_summary_stats.GetDepth(0, i_alt) < effective_min_cov_each_strand;
-  if (pos_cov){
-    l_summary_info.isFiltered = true;
-    string my_reason = "PosCov<";
-    my_reason += convertToString(effective_min_cov_each_strand);
-    l_summary_info.filterReason.push_back(my_reason);
+  for (int strand_key = 0; strand_key < 2; ++strand_key){
+    bool strand_cov = m_summary_stats.GetDepth(strand_key, i_alt) < effective_min_cov_each_strand;
+    if (strand_cov and (not m_summary_stats.IsBiDirUMT())){
+  	  l_summary_info.isFiltered = true;
+	  string my_reason = (strand_key == 0)? "PosCov<" : "NegCov<";
+	  my_reason += convertToString(effective_min_cov_each_strand);
+	  l_summary_info.filterReason.push_back(my_reason);
+    }
   }
-  bool neg_cov = m_summary_stats.GetDepth(1, i_alt) < effective_min_cov_each_strand;
-  if (neg_cov) {
-    l_summary_info.isFiltered = true;
-    string my_reason = "NegCov<";
-    my_reason +=convertToString(effective_min_cov_each_strand);
-    l_summary_info.filterReason.push_back(my_reason);
-   }
 
   // STB filter
   float effective_strand_bias_thr = variant_specific_params.strand_bias_override ?
@@ -220,55 +215,29 @@ void DecisionTreeData::FilterByBasicThresholds(int i_alt, MultiBook &m_summary_s
 
 }
 
-
-float CalculateLod(int total_count, int min_var_cov){
-	float lod = 1.0f;
-	min_var_cov = max(min_var_cov, 1);
-	if(total_count > 0)
-		lod = ((float) min_var_cov - 0.5f)/((float) total_count);
-	return lod;
-}
-
-// Do some rounding for lod
-float CalculateOutputLod(float lod){
-	float output_lod = 0.0f;
-	if(((int)(lod * 10000.0f)) % 10 >= 5){
-		output_lod = (float)((int)((lod + 0.0005f) * 1000.0f)) * 0.001f;
-	}
-	else{
-		output_lod = (float)(((int)(lod * 1000.0f))* 10 + 5) * 0.0001f;
-	}
-	if(output_lod < 0.0001f){
-		output_lod = 0.0001f;
-	}
-	else if(output_lod > 100.0f){
-		output_lod = 100.0f;
-	}
-	return output_lod;
-}
-
 void DecisionTreeData::AddLodTags(vcf::Variant &candidate_variant, const string &sample_name, const ControlCallAndFilters &my_controls){
 	// Currently don't output LOD if use_lod_filter = false
-	if(not my_controls.use_lod_filter){
+	if(not use_molecular_tag){
 		return;
 	}
-	int total_count = all_summary_stats.TotalCount(-1);
 	candidate_variant.info["LOD"].clear();
 	for (unsigned int i_alt = 0; i_alt < allele_identity_vector->size(); ++i_alt){
-		float output_lod = CalculateOutputLod(all_summary_stats.lod[i_alt]);
-		candidate_variant.info["LOD"].push_back(convertToString(output_lod));
+		if (all_summary_stats.lod[i_alt] < 0.0){
+			candidate_variant.info["LOD"].push_back(".");
+		}else{
+			candidate_variant.info["LOD"].push_back(convertToString(all_summary_stats.lod[i_alt]));
+		}
 	}
 }
 
 void DecisionTreeData::FilterOnLod(int i_alt, MultiBook &m_summary_stats, VariantOutputInfo &l_summary_info, const ControlCallAndFilters &my_filters, const BasicFilters &basic_filter)
 {
-	if (not my_filters.use_lod_filter){
+	if (not use_molecular_tag){
 		return;
 	}
-	int min_var_cov = basic_filter.min_var_cov;
 	int total_count = m_summary_stats.TotalCount(-1);
-    float min_allele_freq = basic_filter.min_allele_freq;
-	float lod = CalculateLod(total_count, min_var_cov);
+	lod_manager.SetParameters(basic_filter.min_var_cov, basic_filter.min_allele_freq, basic_filter.min_quality_score, my_filters.min_callable_prob);
+	float lod = lod_manager.CalculateLod(total_count);
     float af = total_count > 0 ?
     		(float) m_summary_stats.GetAlleleCount(-1, i_alt + 1) / (float)(total_count) : 0.0f;
 
@@ -277,31 +246,21 @@ void DecisionTreeData::FilterOnLod(int i_alt, MultiBook &m_summary_stats, Varian
     }
 	all_summary_stats.lod[i_alt] = lod;
 
-	if (eval_genotype.IsReference())
+	if (eval_genotype.IsReference()){
 		return;
+	}
 
     // The LOD filter first filter out the alt allele if af < min_allele_freq
-    if (af < min_allele_freq){
+    if (af < basic_filter.min_allele_freq){
         string my_reason = "";
     	l_summary_info.isFiltered = true;
     	my_reason += "AF";
     	my_reason += convertToString(af);
     	my_reason += "<";
-    	my_reason += convertToString(min_allele_freq);
+    	my_reason += convertToString(basic_filter.min_allele_freq);
     	l_summary_info.filterReason.push_back(my_reason);
     }
-    // The LOD filter then filter out the alt allele if af < lod_multiplier * lod
-    if (af < my_filters.lod_multiplier * lod){
-        string my_reason = "";
-    	l_summary_info.isFiltered = true;
-    	my_reason += "AF";
-    	my_reason += convertToString(af);
-    	my_reason += "<";
-    	my_reason += convertToString(my_filters.lod_multiplier);
-    	my_reason += "x";
-    	my_reason += convertToString(lod);
-    	l_summary_info.filterReason.push_back(my_reason);
-    }
+    // I don't apply any filter on AF using LOD since 5.10.
 }
 
 
@@ -434,7 +393,7 @@ void DecisionTreeData::CleanupCandidatesIfNeeded(VariantCandidate &candidate_var
 	AccumulateFilteredAlleles();
 	// Note: CleanupCandidates only if PPA is the same as GT.
     if (best_variant_filtered
-    		or (not is_ppa_same_as_gt)
+    		or (has_ppa)
     		or (not isBestAlleleVeryReal)
 			or (not parameters.my_controls.cleanup_unlikely_candidates)
 			or (not eval_genotype.genotype_already_set)){
@@ -457,10 +416,6 @@ void DecisionTreeData::CleanupCandidatesIfNeeded(VariantCandidate &candidate_var
     RemoveFilteredAlleles(candidate_variant.variant, filteredAllelesIndex, sample_name);
     // and therefore will give a nonsense genotype if we do adjust
     // Note: The only possible GT for heal snps is 0/X and X/X where X is the best allele and it is SNP or MNP.
-    if (parameters.my_controls.report_ppa){
-        // Update PPA to be the new GT
-        candidate_variant.variant.info["PPA"] = candidate_variant.variant.samples[sample_name]["GT"];
-    }
     if (not parameters.output_allele_cigar){
         AdjustAlleles(candidate_variant.variant, candidate_variant.position_upper_bound);
     }
@@ -894,51 +849,49 @@ void DecisionTreeData::FilterMyCandidate(vcf::Variant &candidate_variant, const 
 
 // Determine Possible Polyploidy Alleles (PPA)
 // An allele is a PPA if the conditions a) and b) are both satisfied.
-// a) Called in GT or its estimated allele frequency > min-allele-freq
+// a) Estimated allele frequency > min-allele-freq
 // b) Pass all the filters (e.g., STB, RBI, QUAL, etc.)
 // (Note): Must be done before heal SNPs
 // (Note): Report "." if none
+// (Note): In 5.4 - 5.8, an allele can be in both GT and PPA.
+// (Note): In 5.10 and later, all alleles in GT are taken out from PPA.
 void DecisionTreeData::DeterminePossiblePolyploidyAlleles(vcf::Variant &candidate_variant, const ExtendParameters &parameters) {
-	unsigned int num_alleles = allele_identity_vector->size() + 1;
-	if (is_possible_polyploidy_allele.size() != num_alleles){
-		is_possible_polyploidy_allele.assign(num_alleles, false);
-	}
-	// The alleles in GT are PPA
-	is_possible_polyploidy_allele[eval_genotype.genotype_component[0]] = true;
-	is_possible_polyploidy_allele[eval_genotype.genotype_component[1]] = true;
-
+	// Starts with no PPA until I find one.
+	has_ppa = false;
 	if (not parameters.my_controls.report_ppa){
-		is_ppa_same_as_gt = true;
+		candidate_variant.info.erase("PPA");
 		return;
 	}
 
+	candidate_variant.info["PPA"] = {};
+	unsigned int num_alleles = allele_identity_vector->size() + 1;
+	// The trivial case of PPA=.
+	if (is_possible_polyploidy_allele.size() != num_alleles or candidate_variant.isFiltered){
+		candidate_variant.info["PPA"].push_back(".");
+		return;
+	}
 
-	string ppa_string = "";
-	ppa_string.reserve(2 * num_alleles);
-	int num_ppa_alleles = 0; // number of alleles in PPA
+	// Definition of PPA gets changed in 5.10: Only report the PPA that is not in GT.
+	is_possible_polyploidy_allele[eval_genotype.genotype_component[0]] = false;
+	is_possible_polyploidy_allele[eval_genotype.genotype_component[1]] = false;
+
+	string ppa_string;
 	for (unsigned int i_allele = 0; i_allele < num_alleles; ++i_allele){
+		// An PPA allele can not be filtered out.
 		if (i_allele > 0){
 			is_possible_polyploidy_allele[i_allele] = is_possible_polyploidy_allele[i_allele] and (not summary_info_vector[i_allele - 1].isFiltered);
 		}
 		if (is_possible_polyploidy_allele[i_allele]){
 			ppa_string += (to_string(i_allele) + "/");
-			++num_ppa_alleles;
 		}
 	}
-	int num_gt_alleles = (eval_genotype.genotype_component[0] == eval_genotype.genotype_component[1])? 1:2;
-
-    is_ppa_same_as_gt = is_possible_polyploidy_allele[eval_genotype.genotype_component[0]] // Does the first allele of GT get filtered?
-						    and is_possible_polyploidy_allele[eval_genotype.genotype_component[1]] 	// Does the second allele in GT get filtered?
-							and (num_ppa_alleles == num_gt_alleles);  // Does GT and PPA have the same number of alleles?
-
-	if (is_ppa_same_as_gt){
-		ppa_string = eval_genotype.GenotypeAsString();
-	}else if (ppa_string.empty()){
-		ppa_string = ".";
+	if (ppa_string.empty()){
+		candidate_variant.info["PPA"].push_back(".");
 	}else{
-		ppa_string.resize(ppa_string.size() - 1); // remove the last "/"
+		has_ppa = true;
+		ppa_string.resize(ppa_string.size() - 1);  // Remove the last '/'
+		candidate_variant.info["PPA"].push_back(ppa_string);
 	}
-	candidate_variant.info["PPA"] = {ppa_string};
 }
 
 
@@ -951,6 +904,8 @@ void DecisionTreeData::FillInFiltersAtEnd(VariantCandidate &candidate_variant, c
 
   // candidate alleles contribute to possible filtration
   FilterMyCandidate(candidate_variant.variant, parameters, sample_name);
+
+  DeterminePossiblePolyploidyAlleles(candidate_variant.variant, parameters);
 
   CleanupCandidatesIfNeeded(candidate_variant, parameters, sample_name);
 
@@ -1002,7 +957,6 @@ void DecisionTreeData::DecisionTreeOutputToVariant(VariantCandidate &candidate_v
   GenotypeFromEvaluator(candidate_variant.variant, parameters, sample_name);  // step 0
   // add a derived tag from the QUAL field and the depth counts
   SetQualityByDepth(candidate_variant.variant, variant_quality, sample_name);
-  DeterminePossiblePolyploidyAlleles(candidate_variant.variant, parameters);
   // no actual filters should be filled in yet, just all the information needed for filtering
   FillInFiltersAtEnd(candidate_variant, parameters, sample_name);
 

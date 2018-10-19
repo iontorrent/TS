@@ -160,6 +160,7 @@ void BaseCallerParameters::PrintHelp()
     PhaseEstimator::PrintHelp();
     PerBaseQual::PrintHelp();
     BarcodeClassifier::PrintHelp();
+    EndBarcodeClassifier::PrintHelp();
     MolecularTagTrimmer::PrintHelp(false);
     BaseCallerMetricSaver::PrintHelp();
 
@@ -213,6 +214,37 @@ bool BaseCallerParameters::InitializeFilesFromOptArgs(OptArgs& opts)
       ValidateAndCanonicalizePath(bc_files.lib_datasets_file);
     if (not bc_files.calibration_panel_file.empty())
       ValidateAndCanonicalizePath(bc_files.calibration_panel_file);
+
+    string structure_file = opts.GetFirstString ('-', "read-structure-file", "/opt/ion/config/StructureMetaInfo.json");
+    string app_name = opts.GetFirstString ('-', "read-structure", "");
+    Json::Value structure_in;
+
+    if (not app_name.empty()) {
+
+      ifstream in(structure_file.c_str(), ifstream::in);
+      if (!in.good()) {
+        cerr << "ERROR: Opening file " << structure_file << " unsuccessful. Aborting" << endl;
+        exit(EXIT_FAILURE);
+      }
+      in >> structure_in;
+
+      if (not structure_in.isMember(app_name)){
+        cerr << "ERROR: Structure file " << structure_file << " does not contain a member " << app_name << endl;
+        exit(EXIT_FAILURE);
+      }
+      else {
+        if (structure_in[app_name].isMember("adapter")) // XXX Dummy for now
+          bc_files.read_structure["adapter"] = getNormString(structure_in[app_name]["adapter"].asString());
+        if (structure_in[app_name].isMember("handle")){
+          bc_files.read_structure["handle"] = NormalizeDictStructure(structure_in[app_name]["handle"]);
+          cout << "Structure handle : " << structure_in[app_name]["handle"].toStyledString() << endl;
+        }
+        if (structure_in[app_name].isMember("tag")){
+          bc_files.read_structure["tag"] = NormalizeDictStructure(structure_in[app_name]["tag"]);
+          cout << "Structure tag    : " << structure_in[app_name]["tag"].toStyledString() << endl;
+        }
+      }
+    }
 
     bc_files.options_set = true;
     return true;
@@ -354,6 +386,21 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
     bc.debug_normalization_bam              = context_vars.debug_normalization_bam;
     return true;
 };
+
+// ----------------------------------------------------------------------
+// XXX
+
+Json::Value BaseCallerParameters::NormalizeDictStructure(Json::Value structure)
+{
+  vector<string> keys = structure.getMemberNames();
+  for (unsigned int k=0; k<keys.size(); ++k){
+    //cout << keys[k] << structure[keys[k]].asString() << endl; XXX
+    string normStr(getNormString(structure[keys[k]].asString()));
+    structure[keys[k]] = normStr;
+    //cout << keys[k] << structure[keys[k]].asString() << endl;
+  }
+  return structure;
+}
 
 // ----------------------------------------------------------------------
 

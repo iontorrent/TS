@@ -72,6 +72,7 @@ class BarcodeBySampleStepData(AbstractStepData):
             all_barcodes.setdefault(bc['name'], []).append(bc)
         self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
+        self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_STATIC] = dnaBarcode.objects.filter(active=True).exclude(end_sequence='').values_list('name', flat=True).distinct()
         self.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeObjs_list
         self.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
@@ -319,15 +320,22 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.validationErrors.pop(SavePlanFieldNames.BAD_BARCODES, None)
 
         samplesTable = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
-        barcodeSet = self.savedFields[SavePlanFieldNames.BARCODE_SET]
 
+        barcodeSet = self.savedFields[SavePlanFieldNames.BARCODE_SET]
         selectedBarcodes = []
+
+        endBarcodeSet = self.savedFields[SavePlanFieldNames.END_BARCODE_SET]
+        selectedEndBarcodes = []
 
         for row in samplesTable:
             sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME, '').strip()
             if sample_name:
                 if barcodeSet:
                     selectedBarcodes.append(row.get(SavePlanFieldNames.BARCODE_SAMPLE_BARCODE_ID_UI_KEY))
+                    if endBarcodeSet:
+                        endBarcode_id_value = row.get(SavePlanFieldNames.BARCODE_SAMPLE_END_BARCODE_ID_UI_KEY)
+                        if endBarcode_id_value:
+                            selectedEndBarcodes.append(endBarcode_id_value)
 
         if barcodeSet:
             errors = validate_barcode_sample_association(selectedBarcodes, barcodeSet)
@@ -337,6 +345,16 @@ class BarcodeBySampleStepData(AbstractStepData):
                 self.validationErrors[SavePlanFieldNames.NO_BARCODE] = myErrors.get("MISSING_BARCODE", "")
             if myErrors.get("DUPLICATE_BARCODE", ""):
                 self.validationErrors[SavePlanFieldNames.BAD_BARCODES] = myErrors.get("DUPLICATE_BARCODE", "")
+
+        if selectedEndBarcodes:
+            applProduct = self.savedObjects[SavePlanFieldNames.APPL_PRODUCT]
+            if applProduct and applProduct.dualBarcodingRule == "no_reuse":
+                errors = validate_barcode_sample_association(selectedEndBarcodes, endBarcodeSet, isEndBarcodeExists = True)
+
+                myErrors = convert(errors)
+                if myErrors.get("DUPLICATE_BARCODE", ""):
+                    self.validationErrors[SavePlanFieldNames.BAD_BARCODES] = myErrors.get("DUPLICATE_BARCODE", "")
+
 
         self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "0"
 

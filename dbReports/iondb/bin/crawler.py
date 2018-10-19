@@ -59,13 +59,6 @@ except:
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
 
-
-# These strings will be displayed in Runs Page under FTP Status field
-RUN_STATUS_COMPLETE = "Complete"
-RUN_STATUS_MISSING = "Missing File(s)"
-RUN_STATUS_ABORT = "User Aborted"
-RUN_STATUS_SYS_CRIT = "Lost Chip Connection"
-
 DO_THUMBNAIL = True
 
 
@@ -100,14 +93,12 @@ class CrawlLog(object):
             infile.close()
         except IOError:
             fname = self.BASE_LOG_NAME
-        # rothandle = logging.handlers.RotatingFileHandler(fname, 'a', 65535)
         rothandle = logging.handlers.RotatingFileHandler(fname, maxBytes=1024 * 1024 * 10, backupCount=5)
-        cachehandle = logging.handlers.MemoryHandler(1024, logging.ERROR, rothandle)
-        # fmt = logging.Formatter("[%(asctime)s][%(levelname)s][%(lineno)d] ""%(message)s")
+        # cachehandle = logging.handlers.MemoryHandler(1024, logging.ERROR, rothandle)
         fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         rothandle.setFormatter(fmt)
         self.errors.addHandler(rothandle)
-        self.errors.addHandler(cachehandle)
+        # self.errors.addHandler(cachehandle)
 
     def start(self):
         """Register the start of the crawl service, in order to measure
@@ -236,7 +227,7 @@ def construct_crawl_directories(logger):
         '''
         for item in explist:
             if name == item[0]:
-                if item[1] in [RUN_STATUS_COMPLETE, RUN_STATUS_ABORT, RUN_STATUS_MISSING, RUN_STATUS_SYS_CRIT]:
+                if item[1] in models.Experiment.FTP_STATUS_DONE_ALL:
                     return True
         return False
 
@@ -430,12 +421,12 @@ def check_for_critical(exp, filelookup):
     while line:
         if "WARNINGS:" in line:
             if "Critical: Lost Chip Connection" in line:
-                exp.ftpStatus = RUN_STATUS_SYS_CRIT
+                exp.ftpStatus = exp.FTP_STATUS_SYS_CRIT
                 exp.save()
                 f.close()
                 return True
             elif "Critical: Aborted" in line:
-                exp.ftpStatus = RUN_STATUS_ABORT
+                exp.ftpStatus = exp.FTP_STATUS_ABORT
                 exp.save()
                 f.close()
                 return True
@@ -479,7 +470,7 @@ def check_for_completion(exp):
         # check for required files
         for filename in file_list:
             if not check_for_file(expDir, filename):
-                exp.ftpStatus = RUN_STATUS_MISSING
+                exp.ftpStatus = exp.FTP_STATUS_MISSING
                 exp.save()
                 return False
 
@@ -584,10 +575,10 @@ def crawl(folders, logger):
             return
 
         # Set FTP transfer status to complete
-        if _expobj.ftpStatus == RUN_STATUS_ABORT or _expobj.ftpStatus == RUN_STATUS_SYS_CRIT:
-            logger.errors.info("FTP status: Aborted")
+        if _expobj.in_error():
+            logger.errors.info("FTP status: Error")
         else:
-            _expobj.ftpStatus = RUN_STATUS_COMPLETE
+            _expobj.ftpStatus = _expobj.FTP_STATUS_COMPLETE
             logger.errors.info("FTP status: Complete")
 
         # Save experiment object
@@ -597,7 +588,7 @@ def crawl(folders, logger):
 
     def update_expobj_ftptransfer(_expobj):
         '''Update Experiment object with in-transfer ftp status'''
-        if _expobj.ftpStatus != RUN_STATUS_MISSING:
+        if _expobj.ftpStatus != _expobj.FTP_STATUS_MISSING:
             _expobj.ftpStatus = get_filecount(_expobj)
             _expobj.save()
             logger.errors.info("FTP status: Transferring")

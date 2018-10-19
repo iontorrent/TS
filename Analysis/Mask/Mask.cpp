@@ -10,6 +10,7 @@
 #include <istream>
 #include <fstream>
 #include <string>
+#include <iostream>
 
 Mask::Mask ( int _w, int _h )
 {

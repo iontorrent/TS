@@ -347,6 +347,7 @@ void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int 
   //  mWriteOnClose = false;
   mHFile = RWH5DataSet::EMPTY;
   mInfo.SetValue ( RAWWELLS_VERSION_KEY, RAWWELLS_VERSION_VALUE );
+
 }
 
 void RawWells::CreateEmpty ( int numFlows, const char *flowOrder, int rows, int cols )
@@ -630,6 +631,7 @@ void RawWells::WriteToHdf5 ( const std::string &file )
 
 void RawWells::WriteWells()
 {
+	//printf("WriteWells %d  %d %d %d \n", mChunk.flowDepth, mChunk.flowStart, mChunk.rowStart, mChunk.colStart);
   writeTimer.StartInterval();
   mInputBuffer.resize ( mStepSize*mStepSize*mChunk.flowDepth );
   fill ( mInputBuffer.begin(), mInputBuffer.end(), 0 );
@@ -883,72 +885,64 @@ void RawWells::WriteRanks()
 
 void RawWells::SetSaveCopies(bool saveCopies)
 {
-  mSaveCopies = saveCopies;
-  if(mSaveCopies)
-  {
-    bool closeFile = false;
-    if ( mHFile == RWH5DataSet::EMPTY )
+    mSaveCopies = saveCopies;
+    if(mSaveCopies)
     {
-      mHFile = H5Fopen ( mFilePath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT );
-      closeFile = true;
+        bool closeFile = false;
+        if ( mHFile == RWH5DataSet::EMPTY )
+        {
+            mHFile = H5Fopen ( mFilePath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT );
+            closeFile = true;
+        }
+
+        H5G_info_t group_info;
+        group_info.nlinks = 0;
+        if(H5Gget_info(mHFile, &group_info) < 0)
+        {
+            mSaveCopies = false;
+            if(closeFile)
+            {
+                H5Fclose(mHFile);
+                mHFile = RWH5DataSet::EMPTY;
+            }
+
+            cerr << "RawWells::SetSaveCopies() ERROR: fail to H5Gget_info" << endl;
+            return;
+        }
+        else
+        {
+            for(unsigned int i = 0; i < group_info.nlinks; ++i)
+            {
+                size_t size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+                std::unique_ptr<char[]> name( new char[size+1]);
+                if(H5Gget_objname_by_idx(mHFile, i, name.get(), size + 1) >= 0)
+                {
+                    if(strncmp(name.get(), "wells_copies", size+1)==0)
+                    {
+                        mSaveCopies = false;
+                        if(closeFile)
+                        {
+                            H5Fclose(mHFile);
+                            mHFile = RWH5DataSet::EMPTY;
+                        }
+
+                        cout << "RawWells::SetSaveCopies() WARNING: wells_copies already exists, skip writing wells copies." << endl;
+                        return;
+                    }
+                }
+            }
+        }
+        if(closeFile)
+        {
+            H5Fclose(mHFile);
+            mHFile = RWH5DataSet::EMPTY;
+        }
     }
 
-    char name[10];
-    string sName;
-	H5G_info_t group_info;
-    group_info.nlinks = 0;
-	if(H5Gget_info(mHFile, &group_info) < 0)
-	{
-	  mSaveCopies = false;
-	  if(closeFile)
-      {
-        H5Fclose(mHFile);
-        mHFile = RWH5DataSet::EMPTY;
-      }
-
-	  cerr << "RawWells::SetSaveCopies() ERROR: fail to H5Gget_info" << endl;
-	  return;
-	}
-	else
-	{
-	  for(unsigned int i = 0; i < group_info.nlinks; ++i)
-	  {
-	    int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
-	    if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) >= 0)
-	    {
-		  sName = name;
-		  if(sName == "wells_copies")
-		  {
-		    break;
-		  }
-	    }
-	  }
-
-	  if(sName == "wells_copies")
-	  {
-	    mSaveCopies = false;
-		if(closeFile)
-		{
-		  H5Fclose(mHFile);
-		  mHFile = RWH5DataSet::EMPTY;
-		}
-
-	    cout << "RawWells::SetSaveCopies() WARNING: wells_copies already exists, skip writing wells copies." << endl;
-	    return;
-	  }
-    }
-	
-	if(closeFile)
+    if(mSaveCopies)
     {
-      H5Fclose(mHFile);
-      mHFile = RWH5DataSet::EMPTY;
+        mWellsCopies.resize(mRows * mCols, -1);
     }
-  }
-
-  if(mSaveCopies)
-  {
-    mWellsCopies.resize(mRows * mCols, -1);
-  }
 }
 
 void RawWells::SetConvertWithCopies(bool withCopies)
@@ -978,8 +972,6 @@ void RawWells::WriteWellsCopies()
       closeFile = true;
     }
 
-    char name[10];
-    string sName;
 	H5G_info_t group_info;
     group_info.nlinks = 0;
 	if(H5Gget_info(mHFile, &group_info) < 0)
@@ -997,27 +989,22 @@ void RawWells::WriteWellsCopies()
 	{
 	  for(unsigned int i = 0; i < group_info.nlinks; ++i)
 	  {
-	    int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
-	    if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) >= 0)
+        size_t size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+        std::unique_ptr<char[]> name( new char[size+1]);
+        if(H5Gget_objname_by_idx(mHFile, i, name.get(), size + 1) >= 0)
 	    {
-		  sName = name;
-		  if(sName == "wells_copies")
+          if(strncmp(name.get(), "wells_copies", size+1)==0)
 		  {
-		    break;
+              if(closeFile)
+              {
+                H5Fclose(mHFile);
+                mHFile = RWH5DataSet::EMPTY;
+              }
+
+              cout << "RawWells::WriteWellsCopies() WARNING: wells_copies already exists, skip writing wells_copies." << endl;
+              return;
 		  }
 	    }
-	  }
-
-	  if(sName == "wells_copies")
-	  {
-		if(closeFile)
-		{
-		  H5Fclose(mHFile);
-		  mHFile = RWH5DataSet::EMPTY;
-		}
-
-	    cout << "RawWells::WriteWellsCopies() WARNING: wells_copies already exists, skip writing wells_copies." << endl;
-	    return;
 	  }
     }
 
@@ -1318,7 +1305,7 @@ void RawWells::OpenWellsToRead()
   mSaveAsUShort = false;
   if(H5Aexists( mWells.mDataset, "convert_low" ) > 0)
   {
-    hid_t attrLower = H5Aopen( mWells.mDataset, "convert_low", H5T_NATIVE_FLOAT );
+    hid_t attrLower = H5Aopen( mWells.mDataset, "convert_low", H5P_DEFAULT );
     H5Aread( attrLower, H5T_NATIVE_FLOAT, &mLower ); 
     mWells.mLower = mLower;
     mSaveAsUShort = true;
@@ -1326,7 +1313,7 @@ void RawWells::OpenWellsToRead()
   }
   if(H5Aexists( mWells.mDataset, "convert_high" ) > 0)
   {
-    hid_t attrUpper = H5Aopen( mWells.mDataset, "convert_high", H5T_NATIVE_FLOAT );
+    hid_t attrUpper = H5Aopen( mWells.mDataset, "convert_high", H5P_DEFAULT );
     H5Aread( attrUpper, H5T_NATIVE_FLOAT, &mUpper ); 
     mWells.mUpper = mUpper;
     mSaveAsUShort = true;
@@ -1381,73 +1368,66 @@ void RawWells::OpenWellsToRead()
   mWellsCopies2.resize(mRows * mCols, 1.0);
   if(mSaveAsUShort && mConvertWithCopies)
   {
-    char name[10];
-    string sName;
-	H5G_info_t group_info;
-    group_info.nlinks = 0;
-	if(H5Gget_info(mHFile, &group_info) < 0)
-	{
-		cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Gget_info" << endl;
-	}
-	else
-	{
-		for(unsigned int i = 0; i < group_info.nlinks; ++i)
-		{
-		  int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
-		  if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) < 0)
-		  {
-			cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies saved." << endl;
-		  }
-		  else
-		  {
-			sName = name;
-			if(sName == "wells_copies")
-			{
-			  break;
-			}
-		  }
-		}
-
-		if(sName == "wells_copies")
-		{
-		  hid_t ds = H5Dopen2(mHFile, "wells_copies", H5P_DEFAULT);
-		  if(ds < 0)
-		  {
-			cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies." << endl;
-		  }
-		  else
-		  {
-			hid_t dataSpace = H5Dget_space(ds);
-			if(dataSpace < 0)
-			{
-			  H5Dclose(ds);
-			  cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Dget_space for dataset wells_copies." << endl;          
-			}
-			else
-			{
-			  hssize_t dsSize = H5Sget_simple_extent_npoints(dataSpace);
-			  H5Sclose(dataSpace);
-			  if(dsSize != (hssize_t)(mRows * mCols))
-			  {
-				H5Dclose(ds);
-				cerr << "RawWells::OpenWellsToRead() WARNING: dataset wells_copies size is " << dsSize << ", it is different from mRows * mCols = " << mRows * mCols << endl;          
-			  }
-			  else
-			  {
-				  herr_t ret = H5Dread(ds, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mWellsCopies2[0]);
-				  H5Dclose(ds);
-				  if(ret < 0)
-				  {
-					mWellsCopies2.resize(mRows * mCols, 1.0);
-					cerr << "RawWells::OpenWellsToRead() WARNING: failto load dataset wells_copies." << endl;          
-				  }
-			   }
-			}
-		  }
-		}
-	}
+        H5G_info_t group_info;
+        group_info.nlinks = 0;
+        if(H5Gget_info(mHFile, &group_info) < 0)
+        {
+            cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Gget_info" << endl;
+        }
+        else
+        {
+            for(unsigned int i = 0; i < group_info.nlinks; ++i)
+            {
+                size_t size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+                std::unique_ptr<char[]> name( new char[size+1]);
+                if(H5Gget_objname_by_idx(mHFile, i, name.get(), size + 1) < 0)
+                {
+                    cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies saved." << endl;
+                }
+                else
+                {
+                    if(strncmp(name.get(), "wells_copies", size+1) == 0)
+                    {
+                        hid_t ds = H5Dopen2(mHFile, "wells_copies", H5P_DEFAULT);
+                        if(ds < 0)
+                        {
+                            cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies." << endl;
+                        }
+                        else
+                        {
+                            hid_t dataSpace = H5Dget_space(ds);
+                            if(dataSpace < 0)
+                            {
+                                H5Dclose(ds);
+                                cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Dget_space for dataset wells_copies." << endl;
+                            }
+                            else
+                            {
+                                hssize_t dsSize = H5Sget_simple_extent_npoints(dataSpace);
+                                H5Sclose(dataSpace);
+                                if(dsSize != (hssize_t)(mRows * mCols))
+                                {
+                                    H5Dclose(ds);
+                                    cerr << "RawWells::OpenWellsToRead() WARNING: dataset wells_copies size is " << dsSize << ", it is different from mRows * mCols = " << mRows * mCols << endl;
+                                }
+                                else
+                                {
+                                    herr_t ret = H5Dread(ds, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mWellsCopies2[0]);
+                                    H5Dclose(ds);
+                                    if(ret < 0)
+                                    {
+                                        mWellsCopies2.resize(mRows * mCols, 1.0);
+                                        cerr << "RawWells::OpenWellsToRead() WARNING: failto load dataset wells_copies." << endl;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }                  
+                }
+            }
+       }
   }
-
   InitIndexes();
 }
 
@@ -1468,7 +1448,7 @@ void RawWells::OpenResToRead()
   //mSaveAsUShort = false;
   if(H5Aexists( mResErr.mDataset, "convert_low" ) > 0)
   {
-    hid_t attrLower = H5Aopen( mResErr.mDataset, "convert_low", H5T_NATIVE_FLOAT );
+    hid_t attrLower = H5Aopen( mResErr.mDataset, "convert_low", H5P_DEFAULT );
     H5Aread( attrLower, H5T_NATIVE_FLOAT, &mLower );
     mResErr.mLower = mLower;
     //mSaveAsUShort = true;
@@ -1476,7 +1456,7 @@ void RawWells::OpenResToRead()
   }
   if(H5Aexists( mResErr.mDataset, "convert_high" ) > 0)
   {
-    hid_t attrUpper = H5Aopen( mResErr.mDataset, "convert_high", H5T_NATIVE_FLOAT );
+    hid_t attrUpper = H5Aopen( mResErr.mDataset, "convert_high", H5P_DEFAULT );
     H5Aread( attrUpper, H5T_NATIVE_FLOAT, &mUpper );
     mResErr.mUpper = mUpper;
     //mSaveAsUShort = true;

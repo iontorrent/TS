@@ -22,6 +22,15 @@ ionmaster_syspkg_list:
     - watershed
     - megacli
     - dkms
+    - apache2
+    - avahi-daemon
+    - python-gobject
+    - python-gnupg
+    - python-pyftpdlib
+    - python-apt
+    - dmidecode
+    - python-avahi
+    - coreutils
 
 ionmaster_ionpkg_list:
     - ion-dbreports

@@ -1,26 +1,34 @@
 # Copyright (C) 2017 Ion Torrent Systems, Inc. All Rights Reserved
+import json
 from datetime import timedelta
-from random import randint
 
 from celery.task import periodic_task
 from django.core.cache import cache
 
-from iondb.product_integration.utils import send_deep_laser_iot_request
 from iondb.product_integration.models import ThermoFisherCloudAccount
+from iondb.product_integration.utils import send_deep_laser_iot_request, get_deep_laser_instrument_status
+from iondb.rundb.models import GlobalConfig
 
-# disable for 5.8
-# @periodic_task(run_every=timedelta(minutes=1), queue="periodic")
+
+#@periodic_task(run_every=timedelta(minutes=1), queue="periodic")
 def update_instrument_status_deep_laser():
     """ Sends the instrument status to deep laser periodically if it has changed. """
 
-    new_status = "RUNNING " + str(randint(0, 1000))
-    old_status = cache.get("instrument_status_deep_laser", "")
+    # If deeplaser is disabled bail out
+    gc = GlobalConfig.objects.get()
+    if not gc.telemetry_enabled:
+        return
+
+    new_status = get_deep_laser_instrument_status()
+    old_status = cache.get("instrument_status_deep_laser", "{}")
+
     if new_status != old_status:
         send_deep_laser_iot_request({
             "request": "updatedevicestatus",
-            "status": str(new_status)
+            "status": json.loads(new_status)
         })
-    cache.set("instrument_status_deep_laser", new_status)
+
+    cache.set("instrument_status_deep_laser", new_status, None)
 
 
 def handle_deep_laser_device_request(key, parameters, principal_id=None):

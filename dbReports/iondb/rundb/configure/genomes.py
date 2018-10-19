@@ -474,6 +474,11 @@ def get_references():
             ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
             ref["notes"] = ref["meta"].get("notes", '')
             ref["installed"] = installed.get(ref['meta']['identity_hash'], None)
+            if not ref["installed"]:
+                preInstalled = ReferenceGenome.objects.filter(short_name=ref["meta"]['short_name'],
+                                               index_version=settings.TMAP_VERSION, enabled=True)
+                if preInstalled:
+                    ref["preInstalled"] = preInstalled[0]
             ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation", "")))
             ref["reference_mask_encoded"] = ref.get("reference_mask", None)
             ref["bedfiles"] = ref.get("bedfiles", [])
@@ -483,13 +488,13 @@ def get_references():
         return None
 
 
-def download_genome_annotation(annotation_lists, reference_args):
+def download_genome_annotation(annotation_lists, reference_args, username):
     for item in annotation_lists:
         remoteAnnotUrl = item.get("url", None)
         remoteAnnotUpdateVersion = item.get("updateVersion", None)
 
         if remoteAnnotUrl:
-            tasks.new_annotation_download.delay(remoteAnnotUrl, remoteAnnotUpdateVersion, **reference_args)
+            tasks.new_annotation_download.delay(remoteAnnotUrl, remoteAnnotUpdateVersion, username, **reference_args)
 
 
 def get_bedfile_status(bedfile, reference):
@@ -516,50 +521,55 @@ def get_bedfile_status(bedfile, reference):
     return ""
 
 
+def get_annotationfile_status(annotationfile, reference):
+    # Checks the status of Annotation file available for Pre-loaded references
+    url = annotationfile['url']
+
+    # check if file already installed
+    annotfile_path = '/%s/%s' % (reference, os.path.basename(url))
+    found = Content.objects.filter(publisher__name="refAnnot", path=annotfile_path)
+    if found:
+        return "_installed"
+
+    # check if download is in progress
+    monitor = FileMonitor.objects.filter(tags="annotation", url=url).order_by('-pk')
+    if monitor:
+        if monitor[0].status == "Complete":
+            # check if installation is in progress
+            upload = ContentUpload.objects.filter(publisher__name='refAnnot', file_path__contains=os.path.basename(url)).order_by('-pk')
+            if upload:
+                return upload[0].status
+
+        return monitor[0].status
+
+    return ""
+
+
 @login_required
 def download_genome(request):
     # called by "Import Preloaded Ion References"
     if request.method == "POST":
         reference_meta = request.POST.get("reference_meta", None)
-        ref_annot_update = request.POST.get("ref_annot_update", None)
         reference_args = json.loads(base64.b64decode(reference_meta))
-        annotation_meta = request.POST.get("missingAnnotation_meta", None)
         reference_mask_info = request.POST.get("reference_mask", None)
 
-        if annotation_meta:
-            annotation_data = json.loads(base64.b64decode(annotation_meta))
-            annotation_lists = annotation_data
-
-        # Download and register only the Ref Annotation file if Reference Genome is already Imported
-        # If not, download refAnnot file and Reference Genome asynchronously
-        if annotation_data and ref_annot_update:
-            logger.debug("Downloading Annotation File {0} with meta {1}".format(annotation_data, reference_meta))
-            if annotation_lists:
-                download_genome_annotation(annotation_lists, reference_args)
-        else:
-            url = request.POST.get("reference_url", None)
-            logger.debug("Downloading {0} with meta {1}".format(url, reference_meta))
-            if url is not None:
-                if annotation_lists:
-                    download_genome_annotation(annotation_lists, reference_args)
-
-                try:
-                    new_reference_genome(reference_args, url, reference_mask_filename=reference_mask_info)
-                except Exception as e:
-                    return render_to_json({"status": str(e), "error": True})
+        url = request.POST.get("reference_url", None)
+        logger.debug("Downloading {0} with meta {1}".format(url, reference_meta))
+        if url is not None:
+            try:
+                new_reference_genome(reference_args, url, reference_mask_filename=reference_mask_info)
+            except Exception as e:
+                return render_to_json({"status": str(e), "error": True})
 
         return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
 
     elif request.method == "GET":
         references = get_references() or []
-        downloads = FileMonitor.objects.filter(tags__in=["reference","bedfile"]).order_by('-created')
-        downloads_annot = FileMonitor.objects.filter(tags__contains="reference_annotation").order_by('-created')
-
-        (references, downloads_annot) = get_annotation(references, downloads_annot)
+        downloads = FileMonitor.objects.filter(tags__in=["reference","bedfile","annotation"]).order_by('-created')
 
         # update BED files available for pre-loaded references
         for ref in references:
-            if ref['installed']:
+            if ref['installed'] or ref.get('preInstalled'):
                 bedfiles = []
                 for bedfile in ref.get('bedfiles',[]):
                     status = get_bedfile_status(bedfile, ref['meta']['short_name'])
@@ -569,16 +579,26 @@ def download_genome(request):
 
                 ref['bedfiles'] = bedfiles
 
+                annotationfiles = []
+                #if ref['meta']['short_name'] is "hg19":
+                #import pdb;pdb.set_trace()
+                for annotationfile in ref.get('annotation', []):
+                    status = get_annotationfile_status(annotationfile, ref['meta']['short_name'])
+                    if status != "_installed":
+                        annotationfile['status'] = status
+                        annotationfiles.append(annotationfile)
+
+                ref['annotationfiles'] = annotationfiles
+
         # set up page to refresh
         _in_progress_status = ["Queued", "Starting", "Downloading", "Preprocessing", "Indexing"]
         _in_progress_status += [s.lower() for s in _in_progress_status]
-        downloading = downloads.filter(status__in=_in_progress_status) | downloads_annot.filter(status__in=_in_progress_status)
+        downloading = downloads.filter(status__in=_in_progress_status)
         id_hashes = [r['meta']['identity_hash'] for r in references if r['meta']['identity_hash']]
         processing = ReferenceGenome.objects.filter(identity_hash__in=id_hashes, status__in=_in_progress_status)
 
         ctx = {
             'downloads': downloads,
-            'downloads_annot': downloads_annot,
             'references': references,
             'refresh_progress': downloading.count() > 0 or processing.count() > 0
         }
@@ -743,7 +763,22 @@ def start_install_bedfiles(request):
 
     bedfileList = [bed for bed in bedfiles_meta if os.path.basename(bed['source']) in bedfiles]
     try:
-        install_BED_files.delay(bedfileList)
+        install_BED_files.delay(bedfileList, request.user.username)
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return HttpResponseServerError('Error: ' + str(e))
+
+    return HttpResponsePermanentRedirect(urlresolvers.reverse("references_genome_download"))
+
+def start_install_annotationfiles(request):
+    from iondb.rundb.tasks import install_refAnnot_files
+
+    annotationfiles = request.POST.getlist('annotationfiles',[])
+    annotfiles_meta = json.loads(base64.b64decode(request.POST.get('annotationfiles_meta','')))
+
+    annotfileList = [annotFile for annotFile in annotfiles_meta if os.path.basename(annotFile['url']) in annotationfiles]
+    try:
+        install_refAnnot_files.delay(annotfileList, request.user.username)
     except Exception as e:
         logger.error(traceback.format_exc())
         return HttpResponseServerError('Error: ' + str(e))

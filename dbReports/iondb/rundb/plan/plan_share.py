@@ -45,6 +45,18 @@ class Status:
             text = 'Plan Transfer Errors: \n' + self.error.replace('<p>', '').replace('</p>', '\n')
             EventLog.objects.add_entry(plan, text, username)
 
+def parse_to_string(data, output=""):
+    if isinstance(data, dict):
+        for value in data.values():
+            output = parse_to_string(value, output)
+    elif isinstance(data, list):
+        data.sort()
+        for value in data:
+            output = parse_to_string(value, output)
+    elif isinstance(data, basestring) and data not in output:
+        return output + ' ' + data
+
+    return output
 
 ''' Plan share Destination TS functions '''
 
@@ -377,8 +389,15 @@ def transfer_plan(plan, serialized, server_name, username):
     new_plan_url = r.headers['location']
 
     if 'Warnings' in response:
-        warning = sum(response['Warnings'].values(),[])
-        status.update(error= ' '.join(warning))
+        try:
+            parsed = []
+            for key, warning in response['Warnings'].items():
+                parsed.append(key + ':' + parse_to_string(warning))
+        except:
+            logger.error("Unable to parse warnings from API response")
+            logger.error(traceback.format_exc())
+
+        status.update(error= ' '.join(parsed))
 
     if debug:
         logger.debug('%f s: Plan Transfer POST %s/plannedexperiment/' % (time.time()-starttime, session.api_url))

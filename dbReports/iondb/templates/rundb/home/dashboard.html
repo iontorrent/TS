@@ -1,0 +1,25 @@
+{% extends "rundb/home/base.html" %}
+{% load static from staticfiles %}
+{% load url from future %}
+{% block extra_head %}
+    <link href="{% static "resources/styles/dashboard.css" %}" rel="stylesheet"/>
+    <link href="{% static "resources/bootstrap-select/bootstrap-select.css" %}" rel="stylesheet"/>
+{% endblock %}
+{% block sub-nav %}
+    <li class="active"><a href="{% url "dashboard" %}">Dashboard</a></li>
+    <li>
+        <a href="{% url "news" %}">News {% if unread_news %}
+            <span class="label label-warning" style="margin-left: 3px; line-height:14px;">
+                {{ unread_news }} Unread News Item{{ unread_news|pluralize }}
+            </span>{% endif %}
+        </a>
+    </li>
+{% endblock sub-nav %}
+{% block content %}
+    {% include "rundb/home/blocks/summary.html" with initial_html=initial_summary_html %}
+    {% include "rundb/home/blocks/runs.html" with initial_html=initial_runs_html %}
+    {% include "rundb/home/blocks/instruments.html" with initial_html=initial_instruments_html %}
+
+    <script src="{% static "resources/bootstrap-select/bootstrap-select.js" %}"></script>
+    <script src="{% static "resources/scripts/dashboard/dashboard.js" %}"></script>
+{% endblock content %}

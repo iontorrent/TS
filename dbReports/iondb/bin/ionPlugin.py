@@ -499,36 +499,11 @@ class PluginServer(object):
                 logging.debug("jobstatus for %s" % jobid)
                 status = _session.jobStatus(jobid)
                 ret.append(_decodestatus[status])
-            except:
-                logging.error(traceback.format_exc())
+            except Exception as err:
+                logger.error(str(err))
                 ret.append("DRMAA BUG")
 
         return ret if return_list else ret[0]
-
-    def updatePR(self, pk, grid_engine_job_id, state, store, jobid=None):
-        """
-        Because of the Apache security it is hard for crucher nodes to contact the API directly.
-        This method is a simple proxy to update the status of plugins
-        """
-        # update() doesn't trigger special state change behaviors...
-        # return PluginResult.objects.filter(id=pk).update(state=state, store=store)
-        try:
-            # with transaction.atomic():
-
-            # TODO: should do an explicit check for the database object in case it's been deleted
-            pr = PluginResult.objects.get(id=pk)
-            if state is not None:
-                pr.SetState(state, grid_engine_job_id, jobid)
-
-            if store is not None:
-                # Validate JSON?
-                pr.store = store
-                pr.save(update_fields=["store"])
-        except Exception as exc:
-            logger.exception("Failed to update plugin results: " + exc.message)
-            return False
-
-        return True
 
     def delete_pr_directory(self, directory):
         """We need to use the same user to delete the folder as created it"""
@@ -536,6 +511,7 @@ class PluginServer(object):
             logger.error("Failed to delete %s: %s", path, info)
 
         shutil.rmtree(directory, onerror=delete_error)
+
 
 if __name__ == '__main__':
     # Instantiate the xmlrpc server

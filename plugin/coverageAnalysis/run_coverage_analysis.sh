@@ -261,7 +261,7 @@ RNA_CONTIGS=0
 if [ $CONTIGS -ne 0 ];then
   PROPPLOTS=0
   if [ -z "$BEDFILE" ];then
-    # whole genome base coverage and rad coverage now available w/o target file for bbctools
+    # whole genome base coverage and read coverage now available w/o target file for bbctools
     BASECOVERAGE=1
   elif [ $TRGCOVBYBASES -ne 0 ];then
     WGN_CONTIGS=1
@@ -468,6 +468,10 @@ if [ -n "$ANNOBEDOPT" -a $NOTARGETANAL -eq 0 ]; then
     else
       TARGETCOVFILE="${OUTFILEROOT}.amplicon.cov.xls"
       TARGETCOVOPTS="-C '$TARGETCOVFILE' $DEPTH -T AmpliSeq -A '$XTRAFIELDS'"
+      # disable primer-dimer read capture for AmpliSeq RNA
+      if [ $RNABED -eq 1 ]; then
+        TARGETCOVOPTS="-W 0 $TARGETCOVOPTS"
+      fi
     fi
   fi
   DOSORT=1

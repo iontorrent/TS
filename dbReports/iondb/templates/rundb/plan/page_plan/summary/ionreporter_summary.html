@@ -1,0 +1,24 @@
+<tr>
+    <td width="140"><b>Ion Reporter:</b></td>
+    <td id="selectedIR">{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}</td>
+</tr>
+{% if step.getCurrentSavedFieldDict.irAccountName or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName and helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName != "None" %}
+<tr>
+    <td><b>Ion Reporter Workflow:</b></td>
+    <td id="selectedWorkflow">{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow|default:"Upload Only"}}</td>
+</tr>
+<tr>
+    <td width="160"><b>Ion Reporter Upload Options:</b></td>
+    <td id="selectedUploadMode">
+        {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode == 'no_check' %}
+            Automatically upload to Ion Reporter after run completion
+        {% elif helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode == 'manual_check' %}
+            Review results after run completion, then upload to Ion Reporter
+        {% endif %}
+    </td>
+</tr>
+{% endif %}
+<tr>
+    <td><b>Sample Grouping:</b></td>
+    <td id="selectedGroup"></td>
+</tr>

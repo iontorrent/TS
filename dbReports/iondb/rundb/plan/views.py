@@ -226,6 +226,8 @@ def page_plan_new_plan_from_code(request, code):
         step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("5").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="immune_repertoire")
     elif (code == "13"):
         step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("1").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="mutation_load")
+    elif (code == "14"):
+        step_helper = StepHelperDbLoader().getStepHelperForRunType(run_type_id=_get_runtype_from_code("14").pk, step_helper_type=StepHelperType.CREATE_NEW_PLAN, applicationGroupName="DNA")
     else:
         runType = _get_runtype_from_code(code)
         step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
@@ -570,7 +572,8 @@ def _get_runtype_from_code(code):
         #'9': PGx - AMPS_DNA
         '10': "TAG_SEQUENCING",
         '11': "HID",
-        '12': "AMPS_RNA"
+        '12': "AMPS_RNA",
+        '14': "AMPS_HD_DNA",
     }
     product_code = codes.get(code, "GENS")
     return RunType.objects.get(runType=product_code)
@@ -1744,7 +1747,7 @@ def upload_and_install_files(request):
 
                 if bedfileList:
                     # task will install BED files after reference is done
-                    callback = install_BED_files.subtask((bedfileList, unlock_task), immutable=True)
+                    callback = install_BED_files.subtask((bedfileList, request.user.username, unlock_task), immutable=True)
                     logger.debug('upload_and_install_files: new bedfiles install for %s reference: %s' %
                             (reference, ','.join([b['source'] for b in bedfileList])))
 
@@ -1778,7 +1781,7 @@ def upload_and_install_files(request):
                 unlock_task = release_tasklock.subtask((tasklock_id, application), immutable=True)
                 logger.debug('upload_and_install_files: new bedfiles install: %s' % ', '.join([b['source'] for b in bedfileList]))
                 try:
-                    install_BED_files.delay(bedfileList, callback=unlock_task)
+                    install_BED_files.delay(bedfileList, request.user.username, callback=unlock_task)
                 except Exception as e:
                     logger.error(traceback.format_exc())
                     error.append(repr(e))

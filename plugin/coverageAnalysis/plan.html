@@ -55,16 +55,14 @@
       forceUpdate = forceUpdate || false;
       $("#libtypetxt").html(runTypes[runType]);
       var showchecks = 'NYYYY';
-      if( runType == "AMPS_RNA" ) {
-        showchecks = 'YNNNY';
-      } else if( runType == "MIXED" || runType.substr(0,4) == "AMPS" ) {
+      if( runType.substr(0,4) == "AMPS" || runType == "MIXED") {
         showchecks = 'YNYNY';
       } else if( runType == "TAG_SEQUENCING" ) {
         showchecks = 'YNYNY';
       } else if( runType == "TARS_16S" || runType == "RNA" ) {
-        showchecks = 'NNNNN';
+        showchecks = 'NNYNN';
       }
-      $("#sampid").toggle(showchecks[0]=='Y');
+      $("#sampid").toggle(showchecks[0]=='Y' || !runType);
       // do not update for hidden advanced option - unless forced
       if( !forceUpdate && $('#show_advanced').text() == "Show advanced options" ) return;
       $("#tpadding").toggle(showchecks[1]=='Y');

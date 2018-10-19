@@ -21,6 +21,7 @@ RegionCoverage::RegionCoverage( const BamTools::RefVector& references )
 	, m_bcovRegion(NULL)
 	, m_rcovRegion(NULL)
     , m_lastRegionAssigned(NULL)
+	, m_targetPadding(0)
 	, m_numAuxFields(0)
 	, m_ncovDepths(0)
 {
@@ -717,7 +718,7 @@ void RegionCoverage::TrackReadsOnRegion( const BamTools::BamAlignment &aread, ui
 {
 	// track total and on-target reads
 	uint32_t readEnd = endPos ? endPos : aread.GetEndPosition();
-	uint32_t covType = ReadOnRegion( aread.RefID, aread.Position + 1, readEnd );
+	uint32_t covType = ReadOnRegion( aread.RefID, aread.Position+1-m_targetPadding, readEnd+m_targetPadding );
 	TargetContig *contig = m_contigList[m_rcovContigIdx];
 	if( aread.IsReverseStrand() ) {
 		++contig->fwdReads;

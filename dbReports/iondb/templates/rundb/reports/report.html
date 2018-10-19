@@ -94,7 +94,7 @@ report
                     <div class="form-horizontal">
                         <label class="control-label" for="resultList" style="width: auto; color: #777">Reports</label>
                         <div class="controls" style="margin-left: 70px">
-                            <select id="resultList" class="selectpicker" data-width="auto">
+                            <select id="resultList" class="selectpicker" data-width="100%">
                                 <option value="{{ report.pk }}" selected="selected">{{ report }}</option>
                                 {% for otherReport in otherReports %}
                                     <option value="{{ otherReport.pk }}">{{ otherReport }}</option>
@@ -120,8 +120,8 @@ report
                             Plugins <span class="caret"></span>
                         </a>
                         <ul class="dropdown-menu pull-right">
-                            <li><a href="#plugins-section" class="pluginDialogButton">Select Plugins to Run</a></li>
-                            <li><a href="#plugins-section" id="pluginRefresh">Refresh Plugins</a></li>
+                            <li><a href="#" class="pluginDialogButton">Select Plugins to Run</a></li>
+                            <li><a href="#" id="pluginRefresh">Refresh Plugins</a></li>
                         </ul>
                     </span>
                         <span class="btn-group">

@@ -319,61 +319,11 @@
                     </div>
                     
                     {% if barcodesWithSamples %}
-
-                    <div id='barcodedReference_container'>
-                        <div id='unsupported' class="text-error" style="display: none;">
-                            Barcoded References selection is not supported. Please use <a href='{% url "page_plan_edit_run" exp.pk %}'>Edit Run Plan</a> page to assign samples to new barcodes.
-                        </div>
-                        <div id='barcodedReference_div'>
-                            <div class="control-group">
-                                <input id="useDefaultReference" type="checkbox" style="margin-left: 25px;" {% if exp.plan.is_same_refInfo_as_defaults_per_sample %} checked {% endif %}
-                                    ><b> Use Default Reference & BED files for all barcodes</b>
+                        <div id='barcodedReference_container'>
+                            <div id='unsupported' class="text-error" style="display: none;">
+                                Barcoded References selection is not supported. Please use <a href='{% url "page_plan_edit_run" exp.pk %}'>Edit Run Plan</a> page to assign samples to new barcodes.
                             </div>
-
-                            <table class="table table-condensed">
-                            <thead>
-                                <tr>
-                                    <th>Barcode</th>
-                                    <th>Sample Name</th>
-                                    <th>Reference</th>
-                                    <th>Target Regions</th>
-                                    <!-- <th>Hotspot Regions</th>
-                                    <th>DNA/RNA</th> -->
-                                </tr>
-                            </thead>
-                            {% for barcode in barcodesWithSamples %}
-                                <tr>
-                                    <td>{{barcode.barcodeId}}</td>
-                                    <td>{{barcode.sample}}</td>
-                                    <td id="barcodeReference{{forloop.counter}}" class="input-xlarge">{{eas_form.reference}}</td>
-                                        <script type="text/javascript">
-                                            $("#barcodeReference{{forloop.counter}}").children('select').val("{{barcode.reference}}");
-                                            $("#barcodeReference{{forloop.counter}}").children('select').attr('id', "id_reference_bc{{forloop.counter}}");
-                                        </script>
-                                    <td id="barcodeTargetRegion{{forloop.counter}}" class="input-xlarge">{{eas_form.targetRegionBedFile}}</td>
-                                        <script type="text/javascript">
-                                            $("#barcodeTargetRegion{{forloop.counter}}").children('select').val("{{barcode.targetRegionBedFile}}");
-                                            $("#barcodeTargetRegion{{forloop.counter}}").children('select').attr('id', "id_targetRegionBedFile_bc{{forloop.counter}}");
-                                        </script>
-                                    <td id="barcodeHotSpot{{forloop.counter}}" class="input-xlarge hide">{{eas_form.hotSpotRegionBedFile}}</td>
-                                        <script type="text/javascript">
-                                            $("#barcodeHotSpot{{forloop.counter}}").children('select').val("{{barcode.hotSpotRegionBedFile}}");
-                                            $("#barcodeHotSpot{{forloop.counter}}").children('select').attr('id', "id_hotSpotRegionBedFile_bc{{forloop.counter}}");
-                                        </script>
-                                    <!--
-                                    <td>
-                                        <select class="input-small" disabled>
-                                            <option value='DNA' {%if barcode.nucType == 'DNA'%}selected{%endif%}>DNA</option>
-                                            <option value='RNA' {%if barcode.nucType == 'RNA'%}selected{%endif%}>RNA</option>
-                                        </select>
-                                    </td>
-                                    -->
-                                </tr>
-                            {% endfor %}
-                            </table>
                         </div>
-                    </div>
-                    {{ eas_form.barcodedReferences }}
                     {% endif %}
                 </div>
                 <div class="tab-pane" id="plugins">

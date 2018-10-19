@@ -24,7 +24,7 @@ PROJECT_NAME_LENGTH = 64
 MIN_LIBRARY_READ_LENGTH = 0
 MAX_LIBRARY_READ_LENGTH = 1000
 
-VALID_TEMPLATING_SIZES = ["200", "400"]
+#VALID_TEMPLATING_SIZES = ["200", "400"]
 
 
 def validate_plan_name(value, displayedName='Plan Name'):
@@ -279,7 +279,8 @@ def validate_libraryReadLength(value, displayedName='Library Read Length'):
 
     return errors
 
-
+'''
+#templatingSize validation became obsolete, this field has been replaced by samplePrepProtocol
 def validate_templatingSize(value, displayedName='Templating Size'):
     """
     validate templating size case-insensitively with leading/trailing blanks in the input ignored
@@ -294,7 +295,7 @@ def validate_templatingSize(value, displayedName='Templating Size'):
         if not validation.is_valid_keyword(input, valid_values):
             errors.append(validation.invalid_keyword_error(displayedName, valid_values))
     return errors
-
+'''
 
 def validate_QC(value, displayedName):
     errors = []
@@ -341,13 +342,13 @@ def validate_barcode_kit_name(value, displayedName="Barcode Kit"):
     return errors
 
 
-def validate_sequencing_kit_name(value, displayedName="Sequencing Kit", isNewPlan=None):
+def validate_optional_kit_name(value, kitType, displayedName=None, isNewPlan=None):
     errors = []
     warnings = []
     if validation.has_value(value):
         value = value.strip()
+        query_kwargs = {"kitType__in": kitType}
 
-        query_kwargs = {"kitType__in": ["SequencingKit"]}
         query_args = (Q(name__iexact=value) | Q(description__iexact=value),)
 
         kit = KitInfo.objects.filter(*query_args, **query_kwargs)
@@ -498,7 +499,7 @@ def validate_sample_grouping(value, displayedName="Sample Grouping"):
     return errors
 
 
-def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit):
+def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit, isEndBarcodeExists = False):
     errors = {"MISSING_BARCODE": "", "DUPLICATE_BARCODE": ""}
 
     if not selectedBarcodeKit:
@@ -513,6 +514,8 @@ def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit):
             if selectedBarcode in prior_barcodes:
                 # only include unique barcode selection error messages
                 message = "Barcode %s selections have to be unique\n" % selectedBarcode
+                if isEndBarcodeExists:
+                    message = "End " + message
 
                 value = errors["DUPLICATE_BARCODE"]
                 if message not in value:
@@ -531,6 +534,12 @@ def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleoti
     """
     errors = []
     value = value.strip() if value else ""
+    if value:
+        missing_file = check_uploaded_files(bedfilePaths=[value])
+        if missing_file:
+            errors.append("%s : %s not found" % (displayedName, value))
+            logger.debug("plan_validator.validate_targetRegionBedFile_for_run() SKIPS validation due to no targetRegion file exists in db. value=%s" % (value))
+        return errors
 
     logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() value=%s; runType=%s; reference=%s; nucleotideType=%s; applicationGroupName=%s" % (value, runType, reference, nucleotideType, applicationGroupName))
 
@@ -552,9 +561,9 @@ def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleoti
                         isRequired = applProduct.isTargetRegionBEDFileSelectionRequiredForRefSelection
                         if isRequired and not validation.has_value(value):
                             # skip for now
-                            if runType == "AMPS_DNA_RNA" and nucleotideType and nucleotideType.upper() == "RNA":
+                            if runType in ["AMPS_DNA_RNA","AMPS_HD_DNA_RNA"] and nucleotideType and nucleotideType.upper() == "RNA":
                                 logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() ALLOW MISSING targetRegionBed for runType=%s; nucleotideType=%s" % (runType, nucleotideType))
-                            elif runType == "AMPS_RNA" and applicationGroupName and applicationGroupName in ["DNA + RNA", "DNA and Fusions"]:
+                            elif runType in ["AMPS_RNA","AMPS_HD_RNA"]:
                                 logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() ALLOW MISSING targetRegionBed for runType=%s; applicationGroupName=%s" % (runType, applicationGroupName))
                             else:
                                 errors.append("%s is required for this application" % (displayedName))
@@ -730,7 +739,8 @@ def check_uploaded_files(referenceNames=[], bedfilePaths=[]):
     
     content = Content.objects.filter(publisher__name="BED")
     for bedfile in bedfilePaths:
-        bedfile_err = validation.has_value(bedfile) and content.filter(path=bedfile).count() == 0
+        bedfile_err = validation.has_value(bedfile) and (content.filter(path=bedfile).count() == 0
+                                                         and content.filter(file=bedfile).count() == 0)
         if bedfile_err:
             missing_files.setdefault('bedfiles',[]).append(bedfile)
 

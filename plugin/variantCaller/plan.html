@@ -327,10 +327,30 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
         <thead>
         <tr>
             <th>Parameter</th>
-            <th>INDEL</th>
-            <th>SNP</th>
-            <th>MNP</th>
-            <th class="hot hothead">Hotspot</th>
+            <th> 
+            	<span class="help" title="The parameters for INDEL alleles." id="indel_column">
+                    INDEL
+              	</span> 
+            	<div class="row-fluid parameter-subname"> indel </div> 
+            </th>
+            <th>
+            	<span class="help" title="The parameters for SNP alleles." id="snp_column">
+                    SNP
+              	</span>             
+            	<div class="row-fluid parameter-subname"> snp </div> 
+            </th>
+            <th>
+            	<span class="help" title="The parameters for MNP alleles." id="mnp_column">
+                    MNP
+              	</span>             
+            	<div class="row-fluid parameter-subname"> mnp </div> 
+            </th>
+            <th class="hot hothead">
+            	<span class="help" title="The parameters for Hotspot alleles.">
+                    Hotspot
+              	</span>   
+            	<div class="row-fluid parameter-subname"> hotspot </div> 
+            </th>
         </tr>
         </thead>
         <tbody>
@@ -391,7 +411,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_coverage"
                                    id="hotspot_min_coverage" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-        <tr class="zebra tagseq">
+        <tr class="zebra tagseq ampliseq_hd">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -410,7 +430,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_var_coverage"
                                    id="hotspot_min_var_coverage" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-        <tr class="zebra not_tagseq">
+        <tr class="zebra not_umt">
           <td>
               <div class="row-fluid parameter-name">
               <span class="help"
@@ -429,7 +449,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
           <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_cov_each_strand"
                                  id="hotspot_min_cov_each_strand" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-        <tr class="zebra not_tagseq">
+        <tr class="zebra not_umt ampliseq_hd">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -448,12 +468,26 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_strand_bias"
                                    id="hotspot_strand_bias" class="hotsnp plugin_input hotcol input-mini" title="Only custom parameter sets can be edited."/></td>
         </tr>
-        <tr class="zebra tagseq">
+        <tr class="zebra" id="use_fd_row">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Use (1) or not use (0) Flow Disruptiveness for choosing the parameters for an allele. If use FD, then the indel, snp, mnp parameters will be overloaded for non-FD, weak FD, strong FD alleles, respectively.">
+                      Use Flow Disruption (FD) parameters
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">use_fd_param</div>
+            </td>
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="use_fd_param" id="use_fd_param"
+                       class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>        
+        <tr class="zebra tagseq ampliseq_hd">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
                       title="Minimum number of reads with same molecular tag required to form a functional family.">
-                      Minumum tag family size
+                      Minimum tag family size
                 </span>
                 </div>
                 <div class="row-fluid parameter-subname">min_tag_fam_size</div>
@@ -462,7 +496,22 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra not_tagseq">
+        <tr class="zebra ampliseq_hd">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Minimum per-strand coverage of reads that have the same molecular tag required to form a functional family.">
+                      Minimum per-strand coverage in a family
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">min_fam_per_strand_cov</div>
+            </td>
+            <td colspan=3><input data-key="torrent_variant_caller" data-subkey="min_fam_per_strand_cov" id="min_fam_per_strand_cov"
+                       class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>        
+        
+        <tr class="zebra not_umt">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -476,7 +525,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra not_tagseq">
+        <tr class="zebra not_umt ampliseq_hd">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -490,7 +539,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra not_tagseq">
+        <tr class="zebra not_umt">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -504,7 +553,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                        class="snp plugin_input input-mini" style="width:90px;" title="Only custom parameter sets can be edited."/></td>
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
-        <tr class="zebra not_tagseq">
+        <tr class="zebra not_umt">
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
@@ -651,7 +700,7 @@ var default_value = "";
 var advanced_shown = false;
 var plan_run_type = "";
 var plan_page = true;
-var ts_version = "5.8";
+var ts_version = "5.10";
 var custom_set = {};
 var bundle_uri = ""; // If I create a template or plan from an Ampliseq Bundle, plan_bundle is the uri to find it.
 
@@ -674,8 +723,38 @@ var tagseq_top_params = [
 	"hotspot_min_coverage",
 	"hotspot_min_var_coverage",
 	"downsample_to_coverage",
-	"min_tag_fam_size"
+	"min_tag_fam_size",
+	"use_fd_param"
 ];
+
+//The top parameters for ampliseq hd
+var ampliseq_hd_top_params = [ 
+	"indel_min_allele_freq",
+	"indel_min_variant_score",
+	"indel_min_coverage",
+	"indel_min_var_coverage",
+	"indel_strand_bias",
+	"snp_min_allele_freq",
+	"snp_min_variant_score",
+	"snp_min_coverage",
+	"snp_min_var_coverage",
+	"snp_strand_bias",
+	"mnp_min_allele_freq",
+	"mnp_min_variant_score",
+	"mnp_min_coverage",
+	"mnp_min_var_coverage",
+	"mnp_strand_bias",
+	"hotspot_min_allele_freq",
+	"hotspot_min_variant_score",
+	"hotspot_min_coverage",
+	"hotspot_min_var_coverage",
+	"hotspot_strand_bias",
+	"downsample_to_coverage",
+	"min_tag_fam_size",
+	"min_fam_per_strand_cov",
+	"use_fd_param"
+];
+
 // The top parameters for ampliseq
 var ampliseq_top_parameters = [
 	"indel_min_cov_each_strand",
@@ -702,7 +781,8 @@ var ampliseq_top_parameters = [
 	"filter_unusual_predictions",
 	"filter_insertion_predictions",
 	"filter_deletion_predictions",
-	"downsample_to_coverage"
+	"downsample_to_coverage",
+	"use_fd_param"
 ];
 //I will display the parameters in the order of parameter_order
 var parameter_order = {
@@ -893,6 +973,11 @@ function initialize() {
 		plan_run_type = "AMPS";
 		try {plan_run_type = TB_plan_json.runType;} catch(e) {plan_run_type = "AMPS";}
 	}
+	// AmpliSeq HD
+	if (plan_run_type.substring(0, 7) == "AMPS_HD"){
+		plan_run_type = "AMPS_HD";
+	}
+	// TagSeq
 	if (plan_run_type == "TAG_SEQUENCING") {
 		// Disable the configuration for tagseq here.
         document.getElementById("configuration_management").style.display = 'none';
@@ -909,6 +994,9 @@ function initialize() {
         document.getElementById("panel").style.display = 'none';
         document.getElementById("reference").style.display = 'none';
 		document.getElementById("configuration_save_bottom").style.display = 'none';
+		if (plan_run_type == "AMPS_HD"){
+	        document.getElementById("configurable").style.display = 'none';	        
+		}
 	}
 	configurations_load();
 	configuration_select_load();
@@ -1365,7 +1453,9 @@ function initialize() {
 	    if (target) {
 	        var cells = target.getElementsByTagName("td");
 	        configuration_name = cells[0].innerHTML;
-			unserializeForm(configuration_values[configuration_name]);
+			if (!unserializeForm(configuration_values[configuration_name])){
+				return;
+			}
 	        show_config();
 		}
     });
@@ -1380,7 +1470,9 @@ function initialize() {
 	    if (target) {
 	        var cells = target.getElementsByTagName("td");
 	        configuration_name = cells[0].innerHTML;
-			unserializeForm(configuration_values[configuration_name]);
+			if (!unserializeForm(configuration_values[configuration_name])){
+				return;
+			}
 	        show_config();
 		}
 	});
@@ -1495,25 +1587,31 @@ function chip_type_load() {
 function library_type_load() {
     var select = document.getElementById("library_type");
     for (var i = select.options.length - 1; i >= 0; i--) {select.remove(i);}
-	if (plan_run_type == "TAG_SEQUENCING") {
+	// TagSeq
+    if (plan_run_type == "TAG_SEQUENCING") {
 		add_option(select, "Tag Sequencing", "tag_sequencing");
 		$("#library_type").val("tag_sequencing");
+	}
+	// Ampliseq HD
+	else if (plan_run_type == "AMPS_HD"){
+		add_option(select, "AmpliSeq HD", "ampliseq_hd");
+		$("#library_type").val("ampliseq_hd");
 	}
 	else {
 		add_option(select, "Whole Genome", "wholegenome");
 		add_option(select, "AmpliSeq", "ampliseq");
 		add_option(select, "TargetSeq", "targetseq");
+		$("#library_type").val("ampliseq");
 		if (plan_page) {
-			add_option(select, "Tag Sequencing", "tag_sequencing");
-			$("#library_type").val("ampliseq");
-			if (["wholegenome",'WGNM','GENS'].indexOf(plan_run_type) != -1)
+			if (["wholegenome",'WGNM','GENS'].indexOf(plan_run_type) != -1){
 				$("#library_type").val("wholegenome");
-			if (["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA'].indexOf(plan_run_type) != -1)
+			}
+			if (["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA'].indexOf(plan_run_type) != -1){
 				$("#library_type").val("ampliseq");
-			if (["targetseq",'TARS'].indexOf(plan_run_type) != -1)
+			}
+			if (["targetseq",'TARS'].indexOf(plan_run_type) != -1){
 				$("#library_type").val("targetseq");
-			if (["tagseq", 'tag_sequencing', 'TAG_SEQUENCING'].indexOf(plan_run_type) != -1)
-				$("#library_type").val("tag_sequencing");
+			}
 		}
 	}
 }
@@ -1522,7 +1620,7 @@ function variant_frequency_load() {
     var select = document.getElementById("variant_frequency");
     var frequency_selection = $("#variant_frequency option:selected").val();
     for (var i = select.options.length - 1; i >= 0; i--) {select.remove(i);}
-	if ($("#library_type").val() == 'tag_sequencing'){
+	if ($("#library_type").val() == 'tag_sequencing' || $("#library_type").val() == 'ampliseq_hd'){
 		add_option(select, "Rare Somatic", "rare_somatic");
 	}
 	else{
@@ -1682,7 +1780,7 @@ function panel_load(){
 	                	new_config["meta"]["compatibility"] = {};
 	                }
 	                new_config["meta"]["compatibility"]["chip"] = [data_chip, ];
-	                new_config["meta"]["compatibility"]["library"] = [(is_tagseq? "tag_sequencing" : "ampliseq")];
+	                new_config["meta"]["compatibility"]["library"] = [$("#library_type option:selected").val()];
 	                new_config["meta"]["compatibility"]["panel"] = result["resource_uri"];
 	                new_config["meta"]["custom"] = false;
 	                new_config["meta"]["built_in"] = false; // Panel is not built in, i.e., not from VC plugin.
@@ -1704,7 +1802,11 @@ function experiment_load() {
         experiment_details = data;
         experiment_info_loaded = true;
         barcodedness_load();
-		if (plan_run_type == "TAG_SEQUENCING") {experiment_details["runtype"] = "TAG_SEQUENCING";}
+		if (plan_run_type == "TAG_SEQUENCING") {
+			experiment_details["runtype"] = "TAG_SEQUENCING";
+		}else if (plan_run_type == "AMPS_HD"){
+			experiment_details["runtype"] = "AMPS_HD";
+		}
     }).fail(function () {});
 }
 
@@ -1832,7 +1934,11 @@ function set_default_chip_type_and_run_type(){
 	      }
 	      else if (experiment_details["runtype"] == "TAG_SEQUENCING"){
 	          document.getElementById('library_type').value = "tag_sequencing";
-	      }else{
+	      }
+	      else if (experiment_details["runtype"] == "AMPS_HD"){
+	          document.getElementById('library_type').value = "ampliseq_hd";
+	      }
+	      else{
 	    	  default_found = false;
 	      }
 	      if (default_found){
@@ -1966,7 +2072,9 @@ function ApplyParameterFilters () {
 
   var chip_selection = $("#chip_type option:selected").val();
   var library_selection = $("#library_type option:selected").val();
-  if (library_selection == "tag_sequencing") {$("#variant_frequency").val("rare_somatic");}
+  if (library_selection == "tag_sequencing" || library_selection == "ampliseq_hd") {
+	  $("#variant_frequency").val("rare_somatic");
+  }
   var frequency_selection = $("#variant_frequency option:selected").val();
   var my_panel = "#ampliseq_panel";  
   if (library_selection == "tag_sequencing") {
@@ -2058,7 +2166,7 @@ function ApplyParameterFilters () {
     }
   }
   $("#ptrim").hide();
-  if (library_selection == "ampliseq") {
+  if (library_selection == "ampliseq" || library_selection == "ampliseq_hd") {
     $("#ampliseq_panel_row").show();
   } else {
     $("#ampliseq_panel_row").hide();
@@ -2078,8 +2186,7 @@ function ApplyParameterFilters () {
 function UpdateParameterValues() {
   var config = $("#parameter_sets_table input[type='radio']:checked").attr("id");
   var idx = parseInt(config.substr(14), 10);
-  var library_selection = $("#library_type option:selected").val();
-  var topparams = get_top_params(library_selection);
+  var topparams = get_top_params();
 
   var parameters_are_readonly = true;
   if (idx == parameter_sets.length - 1){
@@ -2150,19 +2257,65 @@ function UpdateParameterValues() {
     $(".plugin_input").tooltip({"placement":"right"});
   else
     $(".plugin_input").tooltip("destroy");
-  if (library_selection == "tag_sequencing") {
-	  $(".not_tagseq").hide();
+  if (plan_run_type == "TAG_SEQUENCING") {
+	  $(".not_umt").hide();
+	  $(".ampliseq_hd").hide();
 	  $(".tagseq").show();
   }
-  else {
-	  $(".not_tagseq").show();
+  else if (plan_run_type == "AMPS_HD"){
+	  $(".not_umt").hide();
 	  $(".tagseq").hide();
+	  $(".ampliseq_hd").show();
   }
+  else {
+	  $(".tagseq").hide();
+	  $(".ampliseq_hd").hide();
+	  $(".not_umt").show();
+
+  }
+  HandleFdParam();
+  
 }
+
+$("#use_fd_param").change(function () {
+	HandleFdParam();
+})
+
+
+function HandleFdParam() {
+	var use_fd_param = $("#use_fd_param").val();
+	if (use_fd_param == null || use_fd_param == ""){
+		$("#use_fd_row").hide();
+	}else{
+		$("#use_fd_row").show();
+		if (use_fd_param != "1" && use_fd_param != "0"){
+			alert('The parameter "use_fd_param" must be either 0 or 1. Reset to 0.');
+			$("#use_fd_param").val("0");
+		}
+	}
+	// No use_fd_param specified
+	if (use_fd_param == "1"){
+		document.getElementById("indel_column").innerHTML="Non-FD";
+	    $("#indel_column").attr("data-original-title", "The parameters for non-Flow-Disrupted (FD) alleles (i.e., HP-INDEL). The indel parameters in the parameter files will be overloaded.");
+		document.getElementById("snp_column").innerHTML="Weak FD";
+	    $("#snp_column").attr("data-original-title", "The parameters for Weak Flow-Disrupted (FD) alleles. The snp parameters in the parameter files will be overloaded.");
+		document.getElementById("mnp_column").innerHTML="Strong FD";
+	    $("#mnp_column").attr("data-original-title", "The parameters for Strong Flow-Disrupted (FD) alleles. The mnp parameters in the parameter files will be overloaded.");
+	}else{
+		// The case of use_fd_param == 0 or not specified (default 0) 
+		document.getElementById("indel_column").innerHTML="INDEL";
+	    $("#indel_column").attr("data-original-title", "The parameters for INDEL alleles.");
+		document.getElementById("snp_column").innerHTML="SNP";
+	    $("#snp_column").attr("data-original-title", "The parameters for SNP alleles.");
+		document.getElementById("mnp_column").innerHTML="MNP";
+	    $("#mnp_column").attr("data-original-title", "The parameters for MNP alleles.");		
+	}
+}
+
 
 function UpdateHotspotColumn() {
   if (($("#targetloci").val()) || plan_page)
-    $(".hot, .hothead, .hotcol").show();
+    $(".hot, .hothead, .hotcol").css("display", "block");
   else
     $(".hot, .hothead, .hotcol").hide();
 }
@@ -2217,7 +2370,7 @@ function HandleAmpliseqChange() {
   
   // Hide/show the "None" option in the target region dropdown if it is (amplseq or tagseq)/else, respectively.
   var has_none = $("#targetregions option[value='']").length > 0;
-  if (library_selection == "tag_sequencing" || library_selection == "ampliseq"){
+  if (library_selection == "tag_sequencing" || library_selection == "ampliseq" || library_selection == "ampliseq_hd"){
 	  if (has_none){
 		  // Need to remove None
 		  if ($("#targetregions").val() == "None"){
@@ -2263,7 +2416,7 @@ function HandleReferenceChange() {
     $("#tagseq_panel").empty();
     $("#parameter_sets_table").empty();
     var library_selection = $("#library_type option:selected").val();
-    if  (library_selection != "tag_sequencing" && library_selection != "ampliseq"){
+    if  (library_selection != "tag_sequencing" && library_selection != "ampliseq" && library_selection != "ampliseq_hd"){
         $("#targetregions").append("<option value=''>None</option>");
     }
     $("#targetregions").append("<option value='.BARCODESJSON'>As Specified in the Plan for Each Barcode</option>");
@@ -2344,7 +2497,6 @@ function serializeForm() {
 	// Get the parameters from GUI if it is Custom
 	if (idx == parameter_sets.length - 1) {
 		 // Warn the user if someone wants to submit a tagseq setting to a non-taseq run (and vice versa). 
-		 var selected_library = $("#library_type").val();
 		 var my_library_compatibility = [];
 		 if ("compatibility" in parameter_sets[idx]["meta"]){
 		     if ("library" in parameter_sets[idx]["meta"]["compatibility"]){
@@ -2352,13 +2504,20 @@ function serializeForm() {
 		     }
 		 }
 		
-		if (my_library_compatibility.length > 0 && selected_library == "tag_sequencing" && my_library_compatibility.indexOf("tag_sequencing") < 0){
+		 // Alert 
+		if (my_library_compatibility.length > 0 && plan_run_type == "TAG_SEQUENCING" && my_library_compatibility.indexOf("tag_sequencing") < 0){
 			alert("WARNING: The Custom setting that is based on a non-TagSeq setting will be applied to a TagSeq run!");
 		}
-		if (my_library_compatibility.length > 0 && selected_library != "tag_sequencing" && my_library_compatibility.indexOf("tag_sequencing") >= 0){
+		if (my_library_compatibility.length > 0 && plan_run_type != "TAG_SEQUENCING" && my_library_compatibility.indexOf("tag_sequencing") >= 0){
 			alert("WARNING: The Custom setting that is based on a TagSeq setting will be applied to a non-TagSeq run!");  
 		}	
-
+		if (my_library_compatibility.length > 0 && plan_run_type == "AMPS_HD" && my_library_compatibility.indexOf("ampliseq_hd") < 0){
+			alert("WARNING: The Custom setting that is based on a non-Ampliseq HD setting will be applied to an Ampliseq HD run!");
+		}
+		if (my_library_compatibility.length > 0 && plan_run_type != "AMPS_HD" && my_library_compatibility.indexOf("ampliseq_hd") >= 0){
+			alert("WARNING: The Custom setting that is based on an Ampliseq HD setting will be applied to a non-Ampliseq HD run!");  
+		}
+		
 		base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
 		base_set["meta"]["tmapargs"] = $("#tmapargs").val().replace(/(\r\n|\n|\r)/gm, " ");
 		base_set["meta"]["unifyargs"] = $("#unifyargs").val().replace(/(\r\n|\n|\r)/gm, " ");
@@ -2366,7 +2525,7 @@ function serializeForm() {
 		// In case a top parameter is not in base_set but the user specify it manually.
 		// If I don't do this, the filled top parameter won't be in base_set.
 		// Note that I don't have to worry about the non-top parameters because they are all in base_set.
-		var topparams = get_top_params(selected_library);
+		var topparams = get_top_params();
 		// I assume all top parameters are all in the torrent_variant_caller section.
 	  	$.each(topparams, function (idx, top_key) {
 	  		var top_val = $("#" + top_key).val();
@@ -2436,6 +2595,17 @@ function unserializeForm(json) {
 	}
 	if (json != "Not specified") {
 		obj = JSON.parse(json);
+		if (!plan_page){
+			if (obj["pluginconfig"]["meta"]["librarytype"] != "ampliseq_hd" && plan_run_type == "AMPS_HD"){
+				alert('The selected configuration is not applicable to an AmpliSeq HD run.');
+				return false;
+			}
+			if (obj["pluginconfig"]["meta"]["librarytype"] == "ampliseq_hd" && plan_run_type != "AMPS_HD"){
+				alert('The selected configuration is not applicable to a non-AmpliSeq HD run.');
+				return false;
+			}	
+		}
+		
 
 		document.getElementsByName('configuration_name')[0].value = obj["pluginconfig"]["meta"]["configuration_name"];
 		// Load chip_type, library_type, variant_frequency. Should be there.
@@ -2516,60 +2686,68 @@ function unserializeForm(json) {
 	    delete obj["pluginconfig"]["meta"]["user_selections"];
 	    restoreForm(obj["pluginconfig"]);	    
 	}
+	return true;
 }
                  
-function get_top_params(library_selection) {
-  if (library_selection == "tag_sequencing") {
+function get_top_params() {
+  if (plan_run_type == "TAG_SEQUENCING") {
 	  return tagseq_top_params;
+  }
+  if (plan_run_type == "AMPS_HD") {
+	  return ampliseq_hd_top_params;
   }
   return ampliseq_top_parameters;
 }
 
-function in_tagseq_not_in_ampliseq_top(){
-	var return_array = [];
-	for (var idx = 0; idx < tagseq_top_params.length; ++idx){
-		if (ampliseq_top_parameters.indexOf(tagseq_top_params[idx]) < 0){
-			return_array.push(tagseq_top_params[idx]);
+// return an array that contains the elements of set(x) intersects (not set(y))
+function array_difference(x, y){
+	var x_minus_y = [];
+	$.each(x, function (index, value){
+		if (y.indexOf(value) < 0){
+			x_minus_y.push(value);
 		}
-	}
-	return return_array;
-}
-
-function in_ampliseq_not_in_tagseq_top(){
-	var return_array = [];
-	for (var idx = 0; idx < ampliseq_top_parameters.length; ++idx){
-		if (tagseq_top_params.indexOf(ampliseq_top_parameters[idx]) < 0){
-			return_array.push(ampliseq_top_parameters[idx]);
-		}
-	}
-	return return_array;
+    });
+	return x_minus_y;
 }
 
 function HandleTopParamChange(){
 	// id may be defined twice in the top parameter section and in add_parameter_element. 
 	// Need to change the id in case of conflict.
-	var library_selection = $("#library_type option:selected").val();
-	var id_from_normal_to_temp; 
-	var id_from_temp_to_normal;
-	if (library_selection == 'tag_sequencing'){
-		id_from_normal_to_temp = in_ampliseq_not_in_tagseq_top();
-		id_from_temp_to_normal = in_tagseq_not_in_ampliseq_top();
-	}else{
-		id_from_temp_to_normal = in_ampliseq_not_in_tagseq_top();
-		id_from_normal_to_temp = in_tagseq_not_in_ampliseq_top();
+	var id_from_normal_to_temp = []; 
+	var id_from_temp_to_normal = [];
+	if (plan_run_type == 'TAG_SEQUENCING'){
+		id_from_normal_to_temp = array_difference(ampliseq_top_parameters, tagseq_top_params);
+		id_from_normal_to_temp.concat(array_difference(ampliseq_hd_top_params, tagseq_top_params));
+		id_from_temp_to_normal = array_difference(tagseq_top_params, ampliseq_top_parameters);
+		id_from_temp_to_normal.concat(array_difference(tagseq_top_params, ampliseq_hd_top_params));
+	}else if (plan_run_type == 'AMPS_HD'){
+		id_from_normal_to_temp = array_difference(ampliseq_top_parameters, ampliseq_hd_top_params);
+		id_from_normal_to_temp.concat(array_difference(tagseq_top_params, ampliseq_hd_top_params));
+		id_from_temp_to_normal = array_difference(ampliseq_hd_top_params, ampliseq_top_parameters);
+		id_from_temp_to_normal.concat(array_difference(ampliseq_hd_top_params, tagseq_top_params));
 	}
-	for (var idx = 0; idx < id_from_temp_to_normal.length; idx++){
-		var element = document.getElementById(id_from_temp_to_normal[idx] + "_temp");
+	else{
+		id_from_normal_to_temp = array_difference(tagseq_top_params, ampliseq_top_parameters);
+		id_from_normal_to_temp.concat(array_difference(ampliseq_hd_top_params, ampliseq_top_parameters));
+		id_from_temp_to_normal = array_difference(ampliseq_top_parameters, tagseq_top_params);
+		id_from_temp_to_normal.concat(array_difference(ampliseq_top_parameters, ampliseq_hd_top_params));		
+	}
+	
+	// Chage the id from xxx_temp to xxx. 
+	$.each(id_from_temp_to_normal, function (index, value){
+		var element = document.getElementById(value + "_temp");
 		if (element != null){
-			element.id = id_from_temp_to_normal[idx];
+			element.id = value;
 		}
-	}
-	for (var idx = 0; idx < id_from_normal_to_temp.length; idx++){
-		var element = document.getElementById(id_from_normal_to_temp[idx]);
+	});
+	
+	// Chage the id from xxx to xxx_temp. 
+	$.each(id_from_normal_to_temp, function (index, value){
+		var element = document.getElementById(value);
 		if (element != null){
-			element.id = id_from_normal_to_temp[idx] + "_temp";
+			element.id = value + "_temp";
 		}
-	}
+	});	
 }
 
 
@@ -2643,6 +2821,14 @@ function submitPlugin()  {
 					if (!areParametersValid(my_config_val["pluginconfig"], my_config_name)){
 						return;
 				    }
+					if (my_config_val["pluginconfig"]["meta"]["librarytype"] == "ampliseq_hd" && plan_run_type != "AMPS_HD"){
+						alert('The configuration "' + my_config_name + '" selected for ' + row.cells[0].firstChild.nodeValue + " is not applicable to a non-AmpliSeq HD run.");
+						return;
+					}
+					if (my_config_val["pluginconfig"]["meta"]["librarytype"] != "ampliseq_hd" && plan_run_type == "AMPS_HD"){
+						alert('The configuration "' + my_config_name + '" selected for ' + row.cells[0].firstChild.nodeValue + " is not applicable to an AmpliSeq HD run.");
+						return;
+					}					
 				}
 				barcode_count++;
 			}
@@ -2674,8 +2860,8 @@ function submitPlugin()  {
 		}
 		// Check target files
 	    var library_selection = $("#library_type option:selected").val();
-	    if ((library_selection == "tag_sequencing" || library_selection == "ampliseq") && $("#targetregions option:selected").val() == ""){
-	    	var pretty_lib = library_selection == "tag_sequencing"? "A TagSeq" : "An AmpliSeq";
+	    if ((library_selection == "tag_sequencing" || library_selection == "ampliseq" || library_selection == "ampliseq_hd") && $("#targetregions option:selected").val() == ""){
+	    	var pretty_lib = library_selection == "tag_sequencing"? "A TagSeq" : (library_selection == "ampliseq_hd"? "An AmpliSeq HD" : "An AmpliSeq");
 	    	alert(pretty_lib + " run must have a Targeted Regions file specified.");
 	    	return;
 	    }
@@ -2731,6 +2917,7 @@ function set_defaults() {
 	}
 }
 
+var previous_config = null;
 function change_configuration() {
 	var combo = document.getElementById("config_combo");
     obj = serializeForm();
@@ -2755,8 +2942,15 @@ function change_configuration() {
 		}
 	}
 	if (combo.value in configuration_values) {
-		unserializeForm(configuration_values[combo.value]);
+		if (!unserializeForm(configuration_values[combo.value])){
+		    if (previous_config == null){
+		    	previous_config = guid;
+		    }
+			 $("#config_combo").val(previous_config);
+			return;
+		}
 	}
+		
     document.getElementsByName('configuration_name')[0].value = "";
 	selected_config = combo.value;
     obj = serializeForm();
@@ -2765,12 +2959,13 @@ function change_configuration() {
     pluginAPIJSON = JSON.stringify(pluginAPIJSON);
     pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
     configuration_values[selected_config] = pluginAPIJSON;
+    previous_config = selected_config;
 }
 
 // If I plan a run or create a template from an Ampliseq bundle that has plugin config specified, I will show this Setting only. 
 // This is because TS will not save any changes on plugin config in this case.
 function handleAmpliseqBundleInPlan(base_set){
-	if (!plan_page || !("panel" in base_set["meta"]["compatibility"] || "bundle_uri" in  base_set["meta"])){
+	if (!plan_page || !("panel" in base_set["meta"]["compatibility"] || "bundle_uri" in base_set["meta"])){
 		return;
 	}
 	
@@ -2820,8 +3015,8 @@ function handleAmpliseqBundleInPlan(base_set){
 				panel_setting["meta"]["compatibility"] = {};
 			}
 			panel_setting["meta"]["compatibility"]["panel"] = bundle_uri;
-            panel_setting["meta"]['custom'] = false;
-            panel_setting["meta"]['built_in'] = false;			
+                        panel_setting["meta"]['custom'] = false;
+                        panel_setting["meta"]['built_in'] = false;
 			NewParameterSet(panel_setting);
 		});
 		// Then add the custom
@@ -2837,8 +3032,8 @@ function handleAmpliseqBundleInPlan(base_set){
 		// Plugin Framework gave me a Setting from Bundle
 		// First add bundle
 		base_set["meta"]["compatibility"]["panel"] = bundle_uri;
-        base_set["meta"]['custom'] = false;
-        base_set["meta"]['built_in'] = false;		
+                base_set["meta"]['custom'] = false;
+                base_set["meta"]['built_in'] = false;
 		NewParameterSet(base_set);
 		// Then add custom
 		custom_set["meta"]["bundle_uri"] = bundle_uri;
@@ -2847,7 +3042,14 @@ function handleAmpliseqBundleInPlan(base_set){
 }
 
 function restoreForm(data) {
-  restore_form_data = data;  
+  restore_form_data = data; 
+  var is_default_configuration_from_template = false; //TS-16889. True if TS gives restore_form_data = {"meta": {"configuration": <configuration_name>}}
+  try {
+	  is_default_configuration_from_template = (JSON.stringify(restore_form_data) == JSON.stringify({"meta": {"configuration": restore_form_data["meta"]["configuration"]}}));
+  }catch(e){
+	  is_default_configuration_from_template = false;
+  }
+		    
   if (!builtin_sets_loaded || !panels_loaded || !descriptions_loaded)
     return;
   if ("meta" in restore_form_data && "user_selections" in restore_form_data["meta"]){
@@ -2879,16 +3081,21 @@ function restoreForm(data) {
   // Determine if parameter set is built in: if yes - select, if no - add and select
   var config_restored = false;
   var is_restored_from_custom = false;
-  if (("built_in" in restore_form_data["meta"] && restore_form_data["meta"]["built_in"] == true) ){
+  if (is_default_configuration_from_template || ("built_in" in restore_form_data["meta"] && restore_form_data["meta"]["built_in"] == true) ){
     for (var idx = 0; idx < parameter_sets.length; ++idx) {
-      if (parameter_sets[idx]["meta"]["configuration"] != restore_form_data["meta"]["configuration"])
-        continue;
-      if (parameter_sets[idx]["meta"]["ts_version"] != restore_form_data["meta"]["ts_version"])
-        continue;
-      //if (parameter_sets[idx]["meta"]["repository_id"] != restore_form_data["meta"]["repository_id"])
-      //  continue;
-      if (parameter_sets[idx]["meta"]["compatibility"]["panel"] != restore_form_data["meta"]["compatibility"]["panel"])
-        continue;
+      if (is_default_configuration_from_template){
+    	  if (parameter_sets[idx]["meta"]["configuration"] != restore_form_data["meta"]["configuration"])
+  	        continue;
+      }else{
+	      if (parameter_sets[idx]["meta"]["configuration"] != restore_form_data["meta"]["configuration"])
+	        continue;
+	      if (parameter_sets[idx]["meta"]["ts_version"] != restore_form_data["meta"]["ts_version"])
+	        continue;
+	      //if (parameter_sets[idx]["meta"]["repository_id"] != restore_form_data["meta"]["repository_id"])
+	      //  continue;
+	      if (parameter_sets[idx]["meta"]["compatibility"]["panel"] != restore_form_data["meta"]["compatibility"]["panel"])
+	        continue;
+      }
 
       $("#parameter_set_" + idx).prop("checked",true);
       config_restored = true;
@@ -2917,8 +3124,14 @@ function restoreForm(data) {
 	  is_restored_from_custom = true;
   }
 
-  var is_plan_page_from_bundle = plan_page && (("panel" in restore_form_data["meta"]["compatibility"]) || ("bundle_uri" in restore_form_data["meta"]));
-  
+  var is_plan_page_from_bundle = false;
+  try{
+	  is_plan_page_from_bundle = plan_page && (("panel" in restore_form_data["meta"]["compatibility"]) || ("bundle_uri" in restore_form_data["meta"]));
+  }catch(e){
+	  // In case if is_default_configuration_from_template is true, i.e., restore_form_data = {"meta": {"configuration": <configuration_name>}}
+	  is_plan_page_from_bundle = false;
+  }
+
   if (is_plan_page_from_bundle){
 	  // Special handling of the bundle. Note that restore_form_data could be custom.
 	  handleAmpliseqBundleInPlan(restore_form_data);
@@ -2963,7 +3176,7 @@ function restoreForm(data) {
 	$("#parameter_sets_table [id^=parameter_row]:nth-last-child(2)").find('input[type=radio]').prop('checked',true);
   }
   ApplyParameterFilters();
-  restore_form_data = null;
+  restore_form_data = null;  
 }
 	
 </script>

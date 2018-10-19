@@ -27,7 +27,6 @@ class PlanCSVcolumns():
     COLUMN_LIBRARY_KIT = "Library kit name"
     COLUMN_TEMPLATING_KIT_V1 = "Templating kit name"
     COLUMN_TEMPLATING_KIT = "Templating kit name (required)"
-    COLUMN_TEMPLATING_SIZE = "Templating Size"
     COLUMN_CONTROL_SEQ_KIT = "Control sequence name"
     COLUMN_SEQ_KIT = "Sequence kit name"
     COLUMN_CHIP_TYPE_V1 = "Chip type"
@@ -168,13 +167,6 @@ def _get_library_read_length(template):
     if template:
         readLength = template.libraryReadLength
         return readLength if readLength > 0 else ""
-    return ""
-
-
-def _get_templating_size(template):
-    if template:
-        templatingSize = template.templatingSize
-        return templatingSize if templatingSize else ""
     return ""
 
 
@@ -445,7 +437,6 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
             PlanCSVcolumns.COLUMN_SAMPLE_PREP_KIT,
             PlanCSVcolumns.COLUMN_LIBRARY_KIT,
             PlanCSVcolumns.COLUMN_TEMPLATING_KIT,
-            PlanCSVcolumns.COLUMN_TEMPLATING_SIZE,
             PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT,
             PlanCSVcolumns.COLUMN_SEQ_KIT,
             PlanCSVcolumns.COLUMN_CHIP_TYPE,
@@ -476,7 +467,6 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
             _get_sample_prep_kit_description(template),
             _get_lib_kit_description(template),
             _get_template_kit_description(template),
-            _get_templating_size(template),
             _get_control_seq_kit_description(template),
             _get_seq_kit_description(template),
             _get_chip_type_description(template),
@@ -655,7 +645,6 @@ def export_template_keys(custom_args):
         'sequencekitname':      PlanCSVcolumns.COLUMN_SEQ_KIT,
         'tfKey':                PlanCSVcolumns.TF_KEY,
         'templatingKitName':    PlanCSVcolumns.COLUMN_TEMPLATING_KIT,
-        'templatingSize':       PlanCSVcolumns.COLUMN_TEMPLATING_SIZE,
         'realign':              PlanCSVcolumns.REALIGN,
         'regionfile':           PlanCSVcolumns.COLUMN_HOTSPOT_BED,
         'selectedPlugins':      PlanCSVcolumns.COLUMN_PLUGINS,
@@ -702,7 +691,6 @@ def get_template_data_for_export(templateId):
         ( PlanCSVcolumns.THREEPRIME_ADAPTER, template.get_forward3primeadapter() ),
         ( PlanCSVcolumns.FLOW_ORDER, template.experiment.flowsInOrder or "default" ),
         ( PlanCSVcolumns.COLUMN_TEMPLATING_KIT, _get_template_kit_description(template) ),
-        ( PlanCSVcolumns.COLUMN_TEMPLATING_SIZE, _get_templating_size(template) ),
         ( PlanCSVcolumns.COLUMN_SEQ_KIT, _get_seq_kit_description(template) ),
         ( PlanCSVcolumns.COLUMN_CONTROL_SEQ_KIT, _get_control_seq_kit_description(template) ),
         ( PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH, _get_library_read_length(template) ),

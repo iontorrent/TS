@@ -57,7 +57,8 @@ struct ReadFilteringHistory {
   int     n_bases_after_high_residual;
   int     n_bases_after_quality_filter;
   //int     n_bases_after_beverly_trim;
-  int     n_bases_after_adapter_trim;
+  int     n_bases_after_adapter_trim;           //!< 3' trimming point of bead adapter
+  int     n_bases_after_barcode_trim;           //!< 3' point after end barcode trimming
   int     n_bases_after_tag_trim;               //!< if we found an adapter this marks removal of 3' tag/extra-trim-right
   int     n_bases_after_extra_trim;
   int     n_bases_after_quality_trim;
@@ -112,6 +113,7 @@ public:
   //int64_t     num_reads_removed_beverly_;
   int64_t     num_reads_removed_quality_filt_;            //!< Filtered out by quality filter
   int64_t     num_reads_removed_adapter_trim_;            //!< Too short after adapter trimming
+  int64_t     num_reads_removed_barcode_trim_;            //!< Too short after end barcode trimming
   int64_t     num_reads_removed_tag_trim_;                //!< Too short after tag trimming
   int64_t     num_reads_removed_extra_trim_;              //!< Too short after extra trimming on right side.
   int64_t     num_reads_removed_quality_trim_;            //!< Too short after quality trimming
@@ -134,24 +136,48 @@ public:
 struct ProcessedRead {
   ProcessedRead(int default_read_group) {
     read_group_index        =  default_read_group;       // Needs to be a valid index at startup
+    is_control_barcode      = false;
     barcode_n_errors        =  0;
-	barcode_filt_zero_error = -1;
-	barcode_adapter_filtered= -1;
-	barcode_distance        = 0.0;
-	is_control_barcode      = false;
+    barcode_filt_zero_error = -1;
+    barcode_adapter_filtered= -1;
+    barcode_distance        = 0.0;
+    handle_index            = -1;
+    handle_n_errors         =  0;
+    barcode_handle_filtered = -1;
+    end_barcode_index       = -1;
+    end_barcode_filtered    = -1;
+    end_bc_n_errors         = -1;
+    end_handle_index        = -1;
+    end_handle_n_errors     = -1;
+    end_adapter_filtered    = false;
+    end_handle_filtered     = false;
 	trimmed_tags.Clear();
   }
 
   // Variables storing barcode classification results
   int                   read_group_index;         //!< Read group index, generally based on barcode classification.
+  bool                  is_control_barcode;       //!< Identified the read as having a control barcode
+
   int                   barcode_n_errors;         //!< Number of base mismatches in barcode sequence.
   int                   barcode_filt_zero_error;  //!< Inidcator whether a hard decision match was filtered in signal space.
   int                   barcode_adapter_filtered; //!< Indicator whether barcode adapter was too dissimilar
-  float                 barcode_distance;         //!< Distance to barcode in signal space.
-  vector<float>         barcode_bias;             //!< A bias vector for the barcode found.
-  bool                  is_control_barcode;       //!< Identified the read as having a control barcode
+  float                 barcode_distance;         //!< Distance to assigned barcode in signal space.
+  vector<float>         barcode_bias;             //!< A bias vector for the assigned barcode.
 
-  //
+  // Front handles
+  int                   handle_index;             //!< Index of assigned handle
+  int                   handle_n_errors;          //!< Number of errors in handle assignment
+  int                   barcode_handle_filtered;  //!< Read was filtered for not matching any handle
+
+  // End barcodes
+  int                   end_barcode_index;        //!< In case we demulitplex read groups, the end barcode index.
+  int                   end_barcode_filtered;     //!< Read was filtered for not matching end barcode
+  int                   end_bc_n_errors;          //!< Number of errors in end barcode assignment
+  bool                  end_adapter_filtered;     //!< Indicator whether barcode adapter was too dissimilar
+  int                   end_handle_index;         //!< Index of assigned handle
+  int                   end_handle_n_errors;      //!< Number of errors in handle assignment
+  bool                  end_handle_filtered;      //!< Handle Sequence too dissimilar
+
   MolTag                trimmed_tags;             //!< Stores the trimmed prefix and suffix tags of a read
   ReadFilteringHistory  filter;
   BamAlignment          bam;
@@ -182,7 +208,8 @@ public:
   void Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
        int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
        int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments,
-       MolecularTagTrimmer& tag_trimmer, bool trim_barcodes, bool compress_bam);
+       MolecularTagTrimmer& tag_trimmer, bool trim_barcodes, bool compress_bam, int num_end_barcodes,
+       Json::Value read_structure);
 
   //! @brief  Drop off a region-worth of reads for writing. Write opportunistically.
   //! @param  region          Index of the region being dropped off.
@@ -196,7 +223,10 @@ public:
   void AddCustomReadGroupTag (SamReadGroup & read_group, const string& tag_name, const string& tag_body);
 
   //! Update SFF header and close.
-  void Close(BarcodeDatasets& datasets, const string& dataset_nickname = string(""));
+  void Close(BarcodeDatasets& datasets,
+             const vector<string>& end_barcode_names,
+             const string& output_directory,
+             const string& dataset_nickname);
 
   void PrintStats();
 
@@ -205,6 +235,11 @@ public:
   void SaveFilteringStats(Json::Value &json, const string& class_name,  bool library_report) {
     combined_stats_.SaveToBasecallerJson(json, class_name,  library_report);
   }
+
+  void WriteReadCountCSV(BarcodeDatasets& datasets,
+                         const vector<string>& end_barcode_names,
+                         const string& output_directory,
+                         const string& dataset_nickname);
 
 
 private:
@@ -231,15 +266,31 @@ private:
 
   bool                      save_filtered_reads_;
   bool                      compress_bam_;
+  bool                      have_handles_;
   int                       num_bamwriter_threads_;
 
   vector<uint64_t>          read_group_num_Q20_bases_;         //!< Number of >=Q20 bases written per read group
   vector<uint64_t>          qv_histogram_;
+
   vector<vector<uint64_t> > read_group_num_barcode_errors_;    //!< Number of reads with N base errors in barcode
   vector<vector<uint64_t> > read_group_barcode_distance_hist_; //!< Distance histogram for barcodes
   vector<vector<double> >   read_group_barcode_bias_;          //!< Bias vector for barcodes
   vector<uint64_t>          read_group_barcode_filt_zero_err_; //!< Number of reads filtered that matched a barcode in base space.
   vector<uint64_t>          read_group_barcode_adapter_rejected_; //!< Adapter too dissimilar to what it's supposed to be
+
+  vector<uint64_t>          read_group_no_bead_adapter_;       //!< Number of reads where no bead adapter was found
+  vector<uint64_t>          read_group_end_barcode_rejected_;  //!< Number of reads where no end barcode was assigned
+  vector<vector<uint64_t> > read_group_end_barcode_errors_;    //!< Number of reads with N base errors in end barcode
+  vector<uint64_t>          read_group_end_adapter_rejected_;  //!< Adapter too dissimilar to what it's supposed to be
+  vector<vector<uint64_t> > read_group_end_barcode_counts_;    //!< Read counts for demultiplexing a barcode list
+
+  vector<vector<uint64_t> > read_group_num_handle_errors_;     //!< Number of reads with N base errors in barcode
+  vector<vector<uint64_t> > read_group_handle_dist_;           //!< Number of reads with N base errors in barcode
+  vector<uint64_t>          read_group_handle_rejected_;       //!< Handle too dissimilar to what it's supposed to be
+
+  vector<vector<uint64_t> > read_group_num_end_handle_errors_; //!< Number of reads with N base errors in barcode
+  vector<vector<uint64_t> > read_group_end_handle_dist_;       //!< Number of reads with N base errors in barcode
+  vector<uint64_t>          read_group_end_handle_rejected_;   //!< Handle too dissimilar to what it's supposed to be
 
   vector<BamWriter *>       bam_writer_;
   vector<SamHeader>         sam_header_;

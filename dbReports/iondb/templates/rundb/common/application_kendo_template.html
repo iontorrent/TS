@@ -48,6 +48,8 @@
       <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" width="24px" height="24px" />  
     # } else if (runType == "TAG_SEQUENCING") { #
       <img src="{% static "resources/img/appl_tagSequencing.png"%}" width="24px" height="24px" />
+    # } else if (runType.search("AMPS_HD") >= 0) { #
+      <img src="{% static "resources/img/appl_ampliSeqHD.png"%}" width="24px" height="24px" />
     # } #
 	</span>
 	

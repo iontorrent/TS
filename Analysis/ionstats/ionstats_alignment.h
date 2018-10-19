@@ -24,7 +24,7 @@
 #define DEFAULT_N_FLOW                     0
 #define DEFAULT_MINIMUM_AQ_LENGTH          21
 #define DEFAULT_BC_ADJUST                  "false"
-#define DEFAULT_SEQ_KEY                    "TCAG"
+//#define DEFAULT_SEQ_KEY                  "TCAG" // Now defined in ionstats.h
 #define DEFAULT_EVALUATE_HP                "false"
 #define DEFAULT_IGNORE_TERMINAL_HP         "true"
 #define DEFAULT_EVALUATE_FLOW              "true"

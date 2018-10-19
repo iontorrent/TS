@@ -1,14 +1,14 @@
 @CMAKE_PROJECT_NAME@ -- @PROJECT_DESCRIPTION@
 
-Torrent Suite Software Version 5.8
+Torrent Suite Software Version 5.10
 =====================================================================
-Torrent Suite(tm) Software v5.8: This software provides for the analysis and storage of data received from the Ion Personal Genome Machine(tm) Sequencer,
+Torrent Suite(tm) Software v5.10: This software provides for the analysis and storage of data received from the Ion Personal Genome Machine(tm) Sequencer,
 the Ion Proton(tm) Sequencer, the Ion GeneStudio S5 Sequencer or the Ion GeneStudio S5 XL Sequencer,
 the Ion GeneStudio S5 Prime or the Ion GeneStudio S5 Pro.
 
-November 30, 2017
+May 22, 2018
 
-Copyright (C) 2017 Life Technologies Corporation
+Copyright (C) 2018 Life Technologies Corporation
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it

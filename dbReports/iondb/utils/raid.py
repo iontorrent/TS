@@ -104,7 +104,7 @@ def get_raid_status_json(raidinfojson):
                 return ''    # Expect value to be "N/A" in this case
         elif key == "Slot Status":
             # This keyword exists only when the slot is empty
-            return WARN
+            return GOOD
         elif key == 'lv_status':
             if value == 'Optimal':
                 return GOOD

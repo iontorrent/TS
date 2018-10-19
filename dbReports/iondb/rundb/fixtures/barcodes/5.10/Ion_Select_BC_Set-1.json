@@ -1,0 +1,290 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "Ion Select BC Set-1",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-1",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TTACAACCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-2",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TGGAGGACGGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonSelect-4",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-5",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "Ion Select BC Set-1",
+			"sequence": "CCTTAGAGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonSelect-6",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TCCTCGAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-7",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "Ion Select BC Set-1",
+			"sequence": "AACCTCATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-8",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "Ion Select BC Set-1",
+			"sequence": "CGGACAATGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonSelect-9",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TCCTGAATCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonSelect-10",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TAAGCCATTGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonSelect-11",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "Ion Select BC Set-1",
+			"sequence": "CTGAGTTCCGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonSelect-12",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "Ion Select BC Set-1",
+			"sequence": "CGGAAGAACCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonSelect-13",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TCTTACACAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-14",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "Ion Select BC Set-1",
+			"sequence": "AAGGAATCGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonSelect-15",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "Ion Select BC Set-1",
+			"sequence": "CCTGCCATTCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonSelect-3",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "Ion Select BC Set-1",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonSelect-16",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

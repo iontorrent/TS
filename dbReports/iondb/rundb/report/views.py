@@ -89,17 +89,6 @@ def get_csa(request, pk):
                 except:
                     logger.error(traceback.format_exc())
 
-                # get the coverage analysis results set
-                coverage_analysis_results_set = fullchip_result.pluginresult_set.filter(plugin__name='coverageAnalysis')
-                if coverage_analysis_results_set:
-                    coverage_analysis_result = coverage_analysis_results_set.first()
-                    coverage_analysis_result_path = coverage_analysis_result.path()
-                    coverage_analysis_files = get_coverage_analysis_files(coverage_analysis_result_path)
-                    with zipfile.ZipFile(csa_path, mode='a', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as csa_handle:
-                        for coverage_analysis_file in coverage_analysis_files:
-                            relative_path = coverage_analysis_file.replace(coverage_analysis_result_path + '/', '', 1)
-                            csa_handle.write(coverage_analysis_file, os.path.join('coverageAnalysis', relative_path))
-
         response = http.HttpResponse(FileWrapper(open(csa_path)), mimetype='application/zip')
         response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(csa_path)
     except:
@@ -415,7 +404,7 @@ def InitLog_read(report):
                             'clean' : 'Ion S5 Cleaning Solution',
                             'wash' : 'Ion S5 Wash Solution'}
 
-    existing_consumables = initLogDict.keys()
+    existing_consumables = sorted(initLogDict.keys())
     # get the consumables irrespective of sequencing kits
     existing_consumables_generic = [expected_consumables[key] for key in expected_consumables.keys()
                                     if any(key in xs.lower() for xs in existing_consumables)]
@@ -1473,7 +1462,7 @@ def analyze(request, exp_pk, report_pk):
                 return render_to_response("rundb/reports/analyze.html", context_instance=RequestContext(request, ctxd))
             else:
                 # TODO: could add banner msg to alert user analysis was not able to start
-                logger.exception(traceback.format_exc())
+                logger.error(traceback.format_exc())
                 return HttpResponseServerError(str(e))
     else:
         # render the re-analysis web page

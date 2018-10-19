@@ -161,7 +161,8 @@ class AlleleIdentity {
     //void DetectPotentialCorrelation(const LocalReferenceContext &reference_context);
     bool SubCategorizeInDel(const LocalReferenceContext &reference_context,
                             const ReferenceReader &ref_reader);
-    void IdentifyHPdeletion(const LocalReferenceContext& reference_context);
+    void IdentifyHPdeletion(const LocalReferenceContext& reference_context,
+    	const ReferenceReader &ref_reader);
     void IdentifyHPinsertion(const LocalReferenceContext& reference_context,
         const ReferenceReader &ref_reader);
     bool IdentifyDyslexicMotive(char base, int position,
@@ -182,7 +183,8 @@ class AlleleIdentity {
     bool IdentifyMultiNucRepeatSection(const LocalReferenceContext &seq_context, unsigned int rep_period,
         const ReferenceReader &ref_reader);
 
-    void IdentifyClearlyNonFD(const LocalReferenceContext &reference_context);
+    void IdentifyClearlyNonFD(const LocalReferenceContext &reference_context,
+    	const ReferenceReader &ref_reader);
 
     void CalculateWindowForVariant(const LocalReferenceContext &seq_context,
         const ReferenceReader &ref_reader);

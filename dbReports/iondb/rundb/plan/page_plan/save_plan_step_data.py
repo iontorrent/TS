@@ -57,6 +57,7 @@ class SavePlanFieldNames():
     BARCODE_SETS = 'barcodeSets'
     BARCODE_SETS_BARCODES = 'barcodeSets_barcodes'
 
+    BARCODE_SETS_STATIC = 'barcodeSets_static'
     END_BARCODE_SET = 'endBarcodeSet'    
     END_BARCODE_SETS = 'endBarcodeSets'
     END_BARCODES_SUBSET = 'endBarcodes_subset'  
@@ -227,6 +228,7 @@ class SavePlanStepData(AbstractStepData):
             all_barcodes.setdefault(bc['name'], []).append(bc)
         self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
+        self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_STATIC] = dnaBarcode.objects.filter(active=True).exclude(end_sequence='').values_list('name', flat=True).distinct()
         self.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeObjs_list
         self.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
@@ -333,7 +335,8 @@ class SavePlanStepData(AbstractStepData):
 
                     errors = []
                     # if the plan has been sequenced, do not enforce the target bed file to be selected
-                    if planStatus != "run" and (self.sh_type not in StepHelperType.TEMPLATE_TYPES):
+                    isMainBEDFileValidated = "default_targetBedFile" in self.validationErrors
+                    if not isMainBEDFileValidated and planStatus != "run" and (self.sh_type not in StepHelperType.TEMPLATE_TYPES):
                         errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
 
                     if errors:
@@ -395,7 +398,9 @@ class SavePlanStepData(AbstractStepData):
                 if barcodeSet:
                     selectedBarcodes.append(row.get(SavePlanFieldNames.BARCODE_SAMPLE_BARCODE_ID_UI_KEY))
                     if endBarcodeSet:
-                        selectedEndBarcodes.append(row.get(SavePlanFieldNames.BARCODE_SAMPLE_END_BARCODE_ID_UI_KEY))           
+                        endBarcode_id_value = row.get(SavePlanFieldNames.BARCODE_SAMPLE_END_BARCODE_ID_UI_KEY)
+                        if endBarcode_id_value:
+                            selectedEndBarcodes.append(endBarcode_id_value)
 
         if any_samples:
             self.validationErrors.pop(SavePlanFieldNames.NO_SAMPLES, None)
@@ -428,6 +433,15 @@ class SavePlanStepData(AbstractStepData):
                 self.validationErrors[SavePlanFieldNames.NO_BARCODE] = myErrors.get("MISSING_BARCODE", "")
             if myErrors.get("DUPLICATE_BARCODE", ""):
                 self.validationErrors[SavePlanFieldNames.BAD_BARCODES] = myErrors.get("DUPLICATE_BARCODE", "")
+
+        if selectedEndBarcodes:
+            applProduct = self.savedObjects[SavePlanFieldNames.APPL_PRODUCT]
+            if applProduct and applProduct.dualBarcodingRule == "no_reuse":
+                errors = validate_barcode_sample_association(selectedEndBarcodes, endBarcodeSet, isEndBarcodeExists = True)
+
+                myErrors = convert(errors)
+                if myErrors.get("DUPLICATE_BARCODE", ""):
+                    self.validationErrors[SavePlanFieldNames.BAD_BARCODES] = myErrors.get("DUPLICATE_BARCODE", "")
 
     def validate_field(self, value, bad_samples, validate_leading_chars=True, max_length=MAX_LENGTH_SAMPLE_NAME):
         exists = False
@@ -585,25 +599,9 @@ class SavePlanStepData(AbstractStepData):
                         self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST][i][SavePlanFieldNames.BARCODE_SAMPLE_BARCODE_ID_UI_KEY] = barcodes[i].id_str
 
                     self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
-                # if barcode kit selection changes, re-validate
-                self.validateStep()
-                
-            #20170928-TODO-WIP
-            '''
-            endBarcode_set = updated_step.savedFields[KitsFieldNames.END_BARCODE_ID]
-            if str(endBarcode_set) != str(self.savedFields[SavePlanFieldNames.END_BARCODE_SET]):
-                self.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcode_set
-                if endBarcode_set:
-                    barcodes = list(dnaBarcode.objects.filter(name=barcode_set).order_by('index'))
-                    bc_count = min(len(barcodes), len(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]))
-                    self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST][:bc_count]
-                    for i in range(bc_count):
-                        self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST][i]['endBarcodeId'] = barcodes[i].id_str
 
-                    self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
                 # if barcode kit selection changes, re-validate
                 self.validateStep()
-            '''
 
 
         if updated_step.getStepName() == StepNames.IONREPORTER:

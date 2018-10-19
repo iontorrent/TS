@@ -41,10 +41,14 @@ enum AlleleHint {
 
 class hint_item {
  public:
+  hint_item() {
+     afmean = afsd = 0;
+  }
   int chr_ind;
   long int pos;
   long int value;
   long int rlen;
+  double afmean, afsd;
   string alt;
 }; 
  
@@ -68,6 +72,11 @@ public:
   long int hint_position() const { return hint_vec[hint_cur_].pos; }
   long int hint_value() const { return hint_vec[hint_cur_].value; }
   long int  hint_rlen() const { return hint_vec[hint_cur_].rlen; }
+  bool hint_getAF(double &af, double &sd) const { 
+	if (hint_vec[hint_cur_].afmean == 0) return false;
+	af = hint_vec[hint_cur_].afmean; sd = hint_vec[hint_cur_].afsd;
+	return true;
+  }
   string hint_alt() const { return hint_vec[hint_cur_].alt; }
   bool hint_empty() const { return hint_vec.empty() || hint_header_ >=  hint_vec.size();}
   void hint_pop() { hint_header_++;}

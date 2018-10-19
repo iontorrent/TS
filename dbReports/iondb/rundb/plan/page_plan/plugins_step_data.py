@@ -144,7 +144,8 @@ class PluginsStepData(AbstractStepData):
         self.validationErrors.clear()
 
         for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
-            if values[PluginFieldNames.SELECTED]:
+            plugin_model = Plugin.objects.get(id=plugin_id)
+            if values[PluginFieldNames.SELECTED] and plugin_model.requires_configuration:
                 configuration = dict() if values[PluginFieldNames.CONFIG] is None else json.loads(values[PluginFieldNames.CONFIG])
                 plugin_validation_errors = Plugin.validate(plugin_id, configuration, 'Automatic')
 

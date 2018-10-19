@@ -115,13 +115,15 @@ void DPTreephaser::SetModelParameters(double carry_forward_rate, double incomple
 
 void BasecallerRead::SetData(const vector<float> &measurements, int num_flows) {
 
-  raw_measurements = measurements;
-  raw_measurements.resize(num_flows, 0);
-  for (int iFlow = 0; iFlow < num_flows; iFlow++) {
-    if (isnan(measurements[iFlow])) {
-      std::cerr << "Warning: Basecaller Read: NAN in measurements!"<< std::endl;
-      raw_measurements.at(iFlow) = 0;
-    }
+  //raw_measurements = measurements;
+  raw_measurements.assign(num_flows, 0.0f);
+  for (int iFlow = 0; iFlow < min((int) measurements.size(), num_flows); iFlow++) {
+	if (isnan(measurements[iFlow])) {
+	  std::cerr << "Warning: Basecaller Read: NAN in measurements!"<< std::endl;
+	  raw_measurements.at(iFlow) = 0.0f;
+	}else{
+	  raw_measurements.at(iFlow) = measurements[iFlow];
+	}
   }
 
   key_normalizer = 1.0f;

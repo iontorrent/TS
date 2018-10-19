@@ -165,76 +165,19 @@ ul.stage-list li.error {
 }
 
 ul.stage-list li.active {
-    -webkit-animation: flickerActiveBorder 2s infinite;
-    -moz-animation: flickerActiveBorder 2s infinite;
-    -o-animation: flickerActiveBorder 2s infinite;
-    animation: flickerActiveBorder 2s infinite;
-}
-
-ul.stage-list .active:before {
-    -webkit-animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
-    -moz-animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
-    -o-animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
-    animation: flickerActive 2s infinite, flickerActiveBorder 2s infinite;
+    will-change: opacity;
+    animation: flickerActive 2s infinite;
 }
 
 @keyframes flickerActive {
     0% {
-        background-color: #00548b;
+       opacity: 1;
     }
     50% {
-        background-color: #d9d9d9;
+        opacity: 0.18;
     }
     100% {
-        background-color: #00548b;
-    }
-}
-
-@keyframes flickerActiveBorder {
-    0% {
-        border-color: #00548b;
-    }
-    50% {
-        border-color: #d9d9d9;
-    }
-    100% {
-        border-color: #00548b;
-    }
-}
-
-@-o-keyframes flicker {
-    0% {
-        background-color: #00548b;
-    }
-    50% {
-        background-color: #d9d9d9;
-    }
-    100% {
-        background-color: #00548b;
-    }
-}
-
-@-moz-keyframes flicker {
-    0% {
-        background-color: #00548b;
-    }
-    50% {
-        background-color: #d9d9d9;
-    }
-    100% {
-        background-color: #00548b;
-    }
-}
-
-@-webkit-keyframes flicker {
-    0% {
-        background-color: #00548b;
-    }
-    50% {
-        background-color: #d9d9d9;
-    }
-    100% {
-        background-color: #00548b;
+        opacity: 1;
     }
 }
 
@@ -247,6 +190,11 @@ ul.stage-list .active:before {
 }
 
 #instruments-container > div.row-fluid {
+    margin-bottom: 10px;
+}
+
+.instrument {
+    padding: 10px 4px;
     margin-bottom: 10px;
 }
 

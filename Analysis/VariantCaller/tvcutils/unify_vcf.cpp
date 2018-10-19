@@ -235,6 +235,7 @@ void PriorityQueue::trim_variant(vcf::Variant* variant) {
 }
 
 void PriorityQueue::left_align_variant(vcf::Variant* variant) {
+  return;
   if (!left_align_enabled || variant->alt.empty() || variant->alt.size() > 1) return;
 
   string alt = variant->alt[0];
@@ -354,19 +355,31 @@ int VcfOrderedMerger::variant_cmp(const T* v1, const vcf::Variant* v2) const {
   return compare(idx_v1, v1->position, idx_v2, v2->position);
 }
 
+template <typename T>
+int VcfOrderedMerger::variant_cmp_secplus(const T* v1, const vcf::Variant* v2) const {
+  int idx_v1 = reference_reader.chr_idx(v1->sequenceName.c_str());
+  int idx_v2 = reference_reader.chr_idx(v2->sequenceName.c_str());
+  return compare(idx_v1, v1->position, idx_v2, (long) (v2->position+50+v2->ref.length()));
+}
+
+
 
 // -----------------------------------------------------------------------------------
 
 bool VcfOrderedMerger::too_far(vcf::Variant* v1, vcf::Variant* v2) {
     if (v2 == NULL) return true;
+    int com = variant_cmp_secplus(v2, v1);
+    return (com == -1);
+    /*
     int far = 250; 
-    far = v1->ref.length(); // now remove the need of constant. The flip side is that too_far is no longer transitive for list ordered by position
+    far = v1->ref.length()+50; // now remove the need of constant. The flip side is that too_far is no longer transitive for list ordered by position
 			    // If a->position < b->position and too_far(b, v)=true no longer lead to too_far(a,v)=true. 
 			    // The above used to hold true when we use a constant. So this cannot be used as stop condition elsewhere in the code.
     v2->position -= far;
     int com = variant_cmp(v1, v2);
     v2->position += far; // return to the original position
     return (com == 1);
+    */
 }
 
 // -----------------------------------------------------------------------------------
@@ -403,8 +416,15 @@ void VcfOrderedMerger::perform() {
     vcf::Variant* current;
     int cmp = variant_cmp(novel_queue.current(), assembly_queue.current());
     current = cmp == -1 ? assembly_queue.current() : novel_queue.current();
-    if (!cmp) {
-        current = merge_overlapping_variants();
+    if (cmp < 0) {
+	if (find_and_merge_assembly()) {assembly_queue.next(); continue;}
+    } else if (cmp == 0) {
+	process_and_write_vcf_entry(current); // novel
+	if (not find_and_merge_assembly()) {
+	    current = merge_overlapping_variants();
+	}
+	novel_queue.next(); assembly_queue.next();
+	continue;
     }
     process_and_write_vcf_entry(current);
     if (cmp >= 0) novel_queue.next();
@@ -417,7 +437,7 @@ void VcfOrderedMerger::perform() {
     novel_queue.next();
   }
   while (assembly_queue.has_value()) {
-    process_and_write_vcf_entry(assembly_queue.current());
+    if (not find_and_merge_assembly()) process_and_write_vcf_entry(assembly_queue.current());
     assembly_queue.next();
   }
   while (hotspot_queue.has_value()) {
@@ -433,6 +453,75 @@ void VcfOrderedMerger::perform() {
   cout << "VcfOrderedMerger: Wrote " << num_records << " vcf records, num_filtered_records= "
        << num_filtered_records << " , num_off_target=" << num_off_target << endl;
   allele_subset.print_stats();
+}
+
+static bool in_gt(vcf::Variant *v, int i, bool &alt_called)
+{
+	alt_called = false;
+         string gt_field;
+            stringstream gt(v->samples[v->sampleNames[0]]["GT"][0]);
+            while (getline(gt, gt_field, '/')){
+                if (gt_field!="."){
+                    int called_allele = std::stoi(gt_field);
+                    if (called_allele != 0) alt_called = true;
+                    if (called_allele == i) {return true;} 
+                }
+            }
+	return false;
+}
+
+static bool is_nonrefcall(vcf::Variant *v)
+{
+    bool alt_called = false;
+    bool x = in_gt(v, 1, alt_called);
+    if (x) return true;
+    return alt_called;
+}
+
+
+static bool allele_in_gt(vcf::Variant *v, int pos, int rlen, string a, int &idx) 
+{
+    if (v->position > pos) return false;
+    if ((int) (v->position+v->ref.length()) < pos+rlen) return false;
+    string left, right;
+    if (pos> v->position) left = v->ref.substr(0, pos-v->position);
+    if (pos+rlen < (int) (v->position+v->ref.length())) {
+	int len = v->position+v->ref.length()-(pos+rlen);
+	right = v->ref.substr(v->ref.length()-len);
+    }
+    unsigned int i;
+    for (i = 0; i < v->alt.size(); i++) {
+	if (left+a+right == v->alt[i]) break;
+    }
+    if (i == v->alt.size()) return false;
+    idx = i+1;
+    return true;
+}    
+
+
+bool VcfOrderedMerger::find_and_merge_assembly()
+{
+    list<vcf::Variant>::reverse_iterator it;
+    int pos = assembly_queue.current()->position, reflen = assembly_queue.current()->ref.length();
+    string alt = assembly_queue.current()->alt[0];
+    //cerr << alt << pos << " "  << reflen << endl;
+    for (it = variant_list.rbegin(); it != variant_list.rend(); it++) {
+	//cerr << "Z " << it->position << it->ref << endl;
+	if (too_far(&(*it), assembly_queue.current())) break;
+	//cerr << "Not too far " << endl;
+	int idx = 0;
+	if (allele_in_gt(&(*it), pos, reflen, alt, idx)) {
+	    bool alt_called = false;
+	    if (in_gt(&(*it), idx, alt_called)) return true;
+	    continue; // just not replacing for now.
+	    /*
+	    if (alt_called) continue;
+	    // replace
+	    return true;
+	    */
+	}
+    }
+    return false;
 }
 
 // -----------------------------------------------------------------------------------
@@ -497,17 +586,53 @@ vcf::Variant* VcfOrderedMerger::merge_overlapping_variants() {
   vcf::Variant& assembly_v = *assembly_queue.current();
 
   string gt = novel_queue.current()->samples[novel_queue.current()->sampleNames[0]]["GT"][0];
-  if (gt == "./." || gt == "0/0") {
+  if (false /*(gt == "./." || gt == "0/0"*/) {
     // Logging novel and indel merge
     cout << UNIFY_VARIANTS " Advanced merge of IndelAssembly variant " << assembly_queue.current()->sequenceName
          << ":" << assembly_queue.current()->position << endl;
   } else {
-    // Logging skipping event
-    cout << UNIFY_VARIANTS " Skipping IndelAssembly variant " << assembly_queue.current()->sequenceName
-         << ":" << assembly_queue.current()->position << endl;
+    //intentanl, always try to put the assembly at a different position with padding/
+    list<vcf::Variant>::iterator it;
+    int bpback = 1;
+    bool at_head = true;
+    assembly_queue.current()->position -= 1;
+    if (not variant_list.empty()) {
+      for (it = variant_list.end(), it--; true; it-- ) {
+	if (variant_cmp(&(*it), assembly_queue.current()) != 0) { // found a place;
+	    at_head = false;
+	    break;
+	}
+        bpback++; assembly_queue.current()->position -= 1;
+     	if (it == variant_list.begin()) break;
+      }
+    }
+    if (assembly_queue.current()->position > 0) {
+                //padding
+                int chr = reference_reader.chr_idx(assembly_queue.current()->sequenceName.c_str());
+                string pad = reference_reader.substr(chr, assembly_queue.current()->position , bpback);
+                assembly_queue.current()->ref = pad + assembly_queue.current()->ref;
+                assembly_queue.current()->alt[0] = pad +  assembly_queue.current()->alt[0];
+                // put the assembly at an empty position
+		if (at_head) {
+		  generate_novel_annotations(assembly_queue.current());
+		  variant_list.push_front(*assembly_queue.current()); 
+		} else {
+                  it++;
+                  generate_novel_annotations(assembly_queue.current());
+                  variant_list.insert(it, *assembly_queue.current());
+		}
+     } else {
+                // no empty position
+                cout  << UNIFY_VARIANTS " Skipping IndelAssembly variant " << assembly_queue.current()->sequenceName
+                 << ":" << assembly_queue.current()->position+bpback << endl;
+     }
+ 
+
+    //cout << UNIFY_VARIANTS " Skipping IndelAssembly variant " << assembly_queue.current()->sequenceName
+    //     << ":" << assembly_queue.current()->position << endl;
     return novel_queue.current();
   }
-
+  // for now will not reach this part of code anymore ZZ 1/17/18
   span_ref_and_alts();
 
   // combine alt sequences
@@ -536,6 +661,97 @@ vcf::Variant* VcfOrderedMerger::merge_overlapping_variants() {
 }
 
 // -----------------------------------------------------------------------------------
+
+bool VcfOrderedMerger::find_match_new(vcf::Variant* merged_entry, vcf::Variant* hotspot, string *omapalt, int &gt_v, int &allele_reads_count, string &adj_omp, long &idx)
+{
+    // adjust
+    string left, right, ll, rr;
+    string mid_ref;
+    mid_ref.clear();
+    int pos = merged_entry->position;
+    if (merged_entry->position > hotspot->position) pos = hotspot->position;
+    long end_m = merged_entry->position+merged_entry->ref.length(), end_h = hotspot->position+hotspot->ref.length();
+
+    int length = max(end_m, end_h)-pos;
+    if (length > (int) (merged_entry->ref.length()+hotspot->ref.length())) { // not overlaping
+    	int chr = reference_reader.chr_idx(hotspot->sequenceName.c_str());
+	mid_ref = reference_reader.substr(chr, min(end_m, end_h), length-merged_entry->ref.length()-hotspot->ref.length());
+    }
+    if ( merged_entry->position > hotspot->position) {
+	ll.clear(); left =hotspot->ref.substr(0, merged_entry->position-hotspot->position)+mid_ref;
+    } else {
+	left.clear(); ll = merged_entry->ref.substr(0, hotspot->position-merged_entry->position)+mid_ref;
+    }
+    if (end_m > end_h) {
+	right.clear(); 
+	if (mid_ref.size() > 0) rr = mid_ref+merged_entry->ref;
+	else rr = merged_entry->ref.substr(end_h-merged_entry->position);
+    } else {
+	rr.clear(); 
+	if (mid_ref.size() > 0) right = mid_ref+hotspot->ref;
+	else right = hotspot->ref.substr(end_m-hotspot->position);
+    }
+    //if (pos == 7578381 and hotspot->position == 7578383) 
+	//cerr << pos << merged_entry->ref << hotspot->position << hotspot->ref << "ll=" << ll << "rr=" << rr << " left=" << left << "right=" << right << "mid=" << mid_ref << endl;
+    for (vector<string>::iterator omapalti = merged_entry->info["OMAPALT"].begin(); omapalti != merged_entry->info["OMAPALT"].end(); omapalti++) {
+	//if (pos == 7578381 and hotspot->position == 7578383) {
+	  //  cerr << *omapalti << " " << *omapalt << endl; 
+	//}
+	if (left+*omapalti+right == ll+*omapalt+rr) {
+	    idx = omapalti-merged_entry->info["OMAPALT"].begin()+1;
+  	    string gt_field;
+  	    stringstream gt(merged_entry->samples[merged_entry->sampleNames[0]]["GT"][0]);
+	    gt_v = 4;
+  	    while (getline(gt, gt_field, '/')){
+		//if (pos == 7578381 and hotspot->position == 7578383) cerr << "gt_field=" << gt_field << endl;
+    	    	if (gt_field!="."){
+      		    int called_allele = std::stoi(gt_field); // Zero based index for vector access
+		    if (called_allele == idx) {gt_v = 1;break;} // 0/A, A/A, A/B
+		    else if (called_allele == 0) gt_v = 2; // 0/0
+		    else gt_v = 3; // 0/B
+		}
+	    }
+	    //if (pos == 7578381 and hotspot->position == 7578383)  cerr << "gt_v=" <<  gt_v << " " << idx << endl;
+	    allele_reads_count = 0;
+	    adj_omp = *omapalti;
+	    return true;
+	}
+    }
+    return false;
+}
+
+void set_annotate(vcf::Variant* merged_entry,vector<string>::iterator oid, vector<string>::iterator opos, vector<string>::iterator oref, vector<string>::iterator oalt, string &adj_omp, long idx)
+{
+    if (oref->length() >= 1 && oalt->length() >= 1 && (*oref)[0] == (*oalt)[0]) {
+      *oref = oref->substr(1);
+      *oalt = oalt->substr(1);
+      long p = atol(opos->c_str());
+      stringstream ss;
+      ss<<++p;
+      *opos = ss.str();
+    }
+    if (oref->empty()) {
+      *oref = "-";
+    }
+    if(oalt->empty()) {
+      *oalt = "-";
+    }
+    if (merged_entry->info["OID"][idx] == ".") {
+      merged_entry->info["OID"][idx] = *oid;
+      merged_entry->info["OPOS"][idx] = *opos;
+      merged_entry->info["OREF"][idx] = *oref;
+      merged_entry->info["OALT"][idx] = *oalt;
+      merged_entry->info["OMAPALT"][idx] = /**omapalt*/ adj_omp;
+    } else {
+      merged_entry->info["OID"].push_back(*oid);
+      merged_entry->info["OPOS"].push_back(*opos);
+      merged_entry->info["OREF"].push_back(*oref);
+      merged_entry->info["OALT"].push_back(*oalt);
+      merged_entry->info["OMAPALT"].push_back(adj_omp /**omapalt*/);
+    }
+    if (merged_entry->id.size() == 0 or merged_entry->id == ".") merged_entry->id = *oid;
+    else merged_entry->id += ";"+ *oid;
+}
 
 bool VcfOrderedMerger::find_match(vcf::Variant* merged_entry, string &hotspot_ref,vector<string>::iterator oid, vector<string>::iterator opos, vector<string>::iterator oref, vector<string>::iterator oalt, string *omapalt, int record_ref_extension, string &annotation_ref_extension) {
 
@@ -651,6 +867,7 @@ void VcfOrderedMerger::generate_novel_annotations(vcf::Variant* variant) {
     stringstream ss;
     ss<<opos;
 
+    push_value_to_vector(variant->info["UFR"], i , ".");
     push_value_to_vector(variant->info["OID"], i, ".");
     push_value_to_vector(variant->info["OPOS"], i, ss.str());
     push_value_to_vector(variant->info["OREF"], i, oref);
@@ -721,6 +938,71 @@ void VcfOrderedMerger::annotate_subset(vcf::Variant* variant) {
 
 // -----------------------------------------------------------------------------------
 
+static bool better(int g, int c, int g1, int c1)
+{
+    if (g < g1) return false;
+    if (g > g1) return true;
+    return (c< c1);
+}
+
+void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* hotspot)
+{
+  string annotation_ref_extension;
+  long record_ref_extension = 0;
+
+  map<string, string> blacklist;
+  map<string, vector<string> >::iterator bstr = hotspot->info.find("BSTRAND");
+  if (bstr != hotspot->info.end())
+    for (vector<string>::iterator key = hotspot->alt.begin(), v = bstr->second.begin();
+         key != hotspot->alt.end() && v != bstr->second.end(); key++, v++) {
+      blacklist[*key] = *v;
+    }
+  for (vector<string>::iterator oid = hotspot->info["OID"].begin(),
+           opos = hotspot->info["OPOS"].begin(),
+           oref = hotspot->info["OREF"].begin(), oalt = hotspot->info["OALT"].begin(),
+           omapalt = hotspot->info["OMAPALT"].begin();
+       oid != hotspot->info["OID"].end() && opos != hotspot->info["OPOS"].end() &&
+       oref != hotspot->info["OREF"].end() && oalt != hotspot->info["OALT"].end() &&
+       omapalt != hotspot->info["OMAPALT"].end();
+       oid++, opos++, oref++, oalt++, omapalt++) {
+        if (!blacklist.empty() && blacklist[*omapalt] != ".")
+          continue;
+        bool found = false;
+	int gt_v, allele_reads_count;
+	int s_gt, s_ac=0;
+	long idx, sidx=0;
+	string omp, adj_omp; 
+        list<vcf::Variant>::reverse_iterator it;
+	vcf::Variant *sv = NULL;
+        for (it = variant_list.rbegin(); it != variant_list.rend(); it++ ) {
+            if (too_far(&(*it), hotspot)) continue; // not assume well ordered.
+            if (find_match_new(&(*it), hotspot, &(*omapalt), gt_v, allele_reads_count, adj_omp, idx)) {
+		if (not found or (better(s_gt, s_ac, gt_v, allele_reads_count))) {
+		    if (found) {
+			if (sv->infoFlags.find("HS") != sv->infoFlags.end()) {
+			    sv->info["UFR"][sidx-1] = "unknown";
+			}
+		    }
+		    found = true; s_gt = gt_v; sidx = idx, omp = adj_omp; s_ac = allele_reads_count; sv = &(*it);
+		} else if (it->infoFlags.find("HS") != sv->infoFlags.end()) {
+		    it->info["UFR"][idx-1] = "unknown";
+		} 
+	    }
+        }
+        if (not found){
+            cout << UNIFY_VARIANTS << " Hotspot annotation " << hotspot->sequenceName
+            << ":" << hotspot->position << ", allele " << *omapalt << " not found in merged variant file.\n";
+        } else {
+	    if (sv->infoFlags.find("HS") == sv->infoFlags.end()) {
+		sv->info["UFR"][sidx-1] = "hs";
+	    }
+	    set_annotate(sv, oid, opos, oref, oalt, omp, sidx-1);
+	}
+  }
+}
+
+
+
 void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf::Variant* hotspot) {
   string annotation_ref_extension;
   long record_ref_extension = 0;
@@ -762,12 +1044,12 @@ void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf
 	for (it = variant_list.rbegin(); it != variant_list.rend(); it++ ) {
 	    if (too_far(&(*it), hotspot)) continue; // not assume well ordered.
 	    int padding = hotspot->position-it->position;
-	    if (padding < 0) continue;
-	    //if (padding > (int) it->ref.length()) continue; // not contain
+	    if (padding < 0) break;
+	    if (padding > (int) it->ref.length()) continue; // not contain
 	    long record_ref_ext = 0; // new 
 	    string annotation_ref_ext; // new
 	    string x = it->ref.substr(0,padding)+*omapalt;
-	    unsigned long rlen = padding + hotspot->ref.length();
+	    unsigned int rlen = padding + hotspot->ref.length();
 	    string hotspot_ref = it->ref.substr(0,padding)+hotspot->ref;
  	    if (rlen > it->ref.length()) {
       		record_ref_ext = rlen - it->ref.length();
@@ -848,17 +1130,39 @@ void VcfOrderedMerger::flush_vcf(vcf::Variant* latest)
     vcf::Variant* current = &(*variant_list.begin());
 
     if (too_far(current, latest)) {
-      if (is_within_target_region(current)) {
- 	unsigned int i;
+      if (is_within_target_region(current)) { 
+	unsigned int i;
         bool has_oid = false;
         for (i =0; i < current->info["OID"].size(); i++) {
               if (current->info["OID"][i] != ".") {has_oid = true; break;}
         }
-        if (has_oid) current->infoFlags["HS"] = true;
+	bool novel_refnocall = false;
+        if (current->infoFlags.find("HS") != current->infoFlags.end()) {
+                if (not has_oid) {
+		    current->infoFlags.erase("HS");  // remove HS flag if all OID's are dot.
+		    if (not is_nonrefcall(current))novel_refnocall = true; // when HS is removed, check if it is no call
+		}
+        } else {
+                if (has_oid) current->infoFlags["HS"] = true;
+        }
 
-        if (filter_VCF_record(current))
+        if (novel_refnocall or filter_VCF_record(current))
           ++num_filtered_records;
         else { // Write out record if not filtered
+	  /*
+	  if (not has_oid) {
+	      current->info["OID"].clear();
+      	      current->info["OPOS"].clear();
+              current->info["OREF"].clear();
+              current->info["OALT"].clear();
+              current->info["OMAPALT"].clear();
+	  }
+	  */
+
+	  bool has_ufr = false;
+	  for (i =0; i < current->info["UFR"].size(); i++) 
+		if (current->info["UFR"][i] != ".") {has_ufr = true; break;}
+	  if (not has_ufr) current->info["UFR"].clear();
     	  gvcf_process(current->sequenceName.c_str(), current->position);
     	  gvcf_out_variant(current);
     	  bgz_out  << *current << "\n";
@@ -1003,8 +1307,8 @@ void VcfOrderedMerger::process_annotation(vcf::Variant* current) {
   int cmp;
   if (hotspot_queue.has_value())
     do {
-      cmp = variant_cmp(current, hotspot_queue.current());
-      if (cmp == 1 or cmp == 0) { /*hotspots_.push_back(*hotspot_queue.current());*/ return;}
+      cmp = variant_cmp_secplus(current, hotspot_queue.current());
+      if (cmp == 1) { /*hotspots_.push_back(*hotspot_queue.current());*/ return;}
       /*
       if (cmp == 0) {
         merge_annotation_into_vcf(current, hotspot_queue.current());
@@ -1089,6 +1393,7 @@ void extend_header(vcf::VariantCallFile &vcf, bool add_subset, bool filter_by_ta
   vcf.addHeaderLine("##INFO=<ID=OALT,Number=.,Type=String,Description=\"List of original variant bases\">");
   vcf.addHeaderLine("##INFO=<ID=OMAPALT,Number=.,Type=String,Description="
                         "\"Maps OID,OPOS,OREF,OALT entries to specific ALT alleles\">");
+  vcf.addHeaderLine("##INFO=<ID=UFR,Number=.,Type=String,Description=\"List of ALT alleles with Unexpected Filter thresholds\">");
   if (add_subset)
     vcf.addHeaderLine("##INFO=<ID=SUBSET,Number=A,Type=String,Description="
                         "\"1-based index in ALT list of genotyped allele(s) that are a strict superset\">");

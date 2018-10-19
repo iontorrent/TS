@@ -143,6 +143,21 @@ def getparameter(parameterfile=None):
     env['chipType'] = EXTERNAL_PARAMS.get('chiptype')
     env['barcodeId'] = EXTERNAL_PARAMS.get('barcodeId', '')
     env['barcodeInfo'] = EXTERNAL_PARAMS.get('barcodeInfo')
+    
+    # More sophisticated chip info
+    env['chipInfo'] = {}
+    env['chipInfo']['chipType'] = EXTERNAL_PARAMS.get('chiptype')
+    env['chipInfo']['chipBarcode'] = exp_log_json.get('chipbarcode')
+    env['chipInfo']['chipLotNumber'] = ''
+    env['chipInfo']['chipWaferNumber'] = ''
+    
+    efuse = exp_log_json.get('chip_efuse','')
+    for elem in efuse.split(','):
+        my_item = elem.split(':')
+        if my_item[0] == 'L':
+            env['chipInfo']['chipLotNumber'] = my_item[1]
+        elif my_item[0] == 'W':
+            env['chipInfo']['chipWaferNumber'] = my_item[1]
 
     env['reverse_primer_dict'] = EXTERNAL_PARAMS.get('reverse_primer_dict')
     env['rawdatastyle'] = EXTERNAL_PARAMS.get('rawdatastyle', 'single')
@@ -154,7 +169,7 @@ def getparameter(parameterfile=None):
     env['realign'] = EXTERNAL_PARAMS.get('realign')
 
     # get the name of the site
-    env['site_name'] = EXTERNAL_PARAMS.get('site_name')
+    env['site_name'] = EXTERNAL_PARAMS.get('site_name','')
 
     env['runID'] = EXTERNAL_PARAMS.get('runid', 'ABCDE')
 

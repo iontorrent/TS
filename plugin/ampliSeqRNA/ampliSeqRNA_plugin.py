@@ -97,10 +97,10 @@ def furbishPluginParams():
   '''Complete/rename/validate user parameters.'''
   # For example, HTML form posts do not add unchecked option values
   config = pluginParams['config']
-  if config.get('barcodebeds','') == '': config['barcodebeds'] = 'No'
-  if config.get('filterbarcodes','') == '': config['filterbarcodes'] = 'No'
-  if config.get('ercc','') == '': config['ercc'] = 'No'
-  if config.get('uniquemaps','') == '': config['uniquemaps'] = 'No'
+  config['barcodebeds'] = 'Yes' if config.get('barcodebeds',False) else 'No'
+  config['sfilterbarcodes'] = 'Yes' if config.get('filterbarcodes',False) else 'No'
+  config['ercc'] = 'Yes' if config.get('ercc',False) else 'No'
+  config['uniquemaps'] = 'Yes' if config.get('uniquemaps',False) else 'No'
 
 
 def configReport():

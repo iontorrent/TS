@@ -153,8 +153,10 @@ void ImageToWells::DoThreadedSignalProcessing()
   //ToDo: still too much redundant code between those two functions. some more cleanup should be performed.
   if( GlobalFitter.GpuQueueControl.useFlowByFlowExecution())
   {
+	  // printf("before ExecuteFlowByFlowSignalProcessing");
     ExecuteFlowByFlowSignalProcessing(); //flow by flow execution after first 20
   }else{
+	  //printf("before ExecuteFlowBlockSignalProcessing");
     ExecuteFlowBlockSignalProcessing(); //current pipeline with block of 20 flow execution for whole experiment
   }
 }
@@ -494,7 +496,7 @@ void ImageToWells::InitFlowDataWriter()
     saveQueueSize = (unsigned int) inception_state.sys_context.wells_save_queue_size;
 
   if(saveQueueSize > 0) {
-	  //printf("before WriteFlowDataClass \n");
+	  printf("before WriteFlowDataClass \n");
     ptrWriteFlowData = new WriteFlowDataClass(saveQueueSize,inception_state, my_image_spec,*ptrRawWells);
     ptrWriteFlowData->start();
     //todo: error handling
@@ -613,7 +615,6 @@ void ImageToWells::ExecuteFlowBlockSignalProcessing(){
     DoClonalFilter(flow);
 
     if (inception_state.bkg_control.pest_control.bkg_debug_files) {
-    	printf("+++ dumping debug files flow - %d  \n ", flow);
       GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),
           flow, last_flow, flow_block );
       GlobalFitter.DumpBkgModelBeadInfo( inception_state.sys_context.GetResultsFolder(),
@@ -635,11 +636,10 @@ void ImageToWells::ExecuteFlowBlockSignalProcessing(){
     if ( (flow == flow_block->end() - 1 ) || last_flow) {
       // Make sure that we've written everything.
       if(useFlowDataWriter()) {
-      	printf(" ExecuteFlowBlockSignalProcessing - before DoneUpThroughFlow flow - %d useFlowDataWriter \n", flow);
         ptrRawWells->DoneUpThroughFlow( flow, ptrWriteFlowData->GetPackQueue(), ptrWriteFlowData->GetWriteQueue());
       }
       else {
-      	printf("ExecuteFlowBlockSignalProcessing - before DoneUpThroughFlow flow - %d \n", flow);
+    	  // printf("ptrRawWells->DoneUpThroughFlow( flow )");
         ptrRawWells->DoneUpThroughFlow( flow );
       }
 
@@ -703,7 +703,7 @@ void ImageToWells::ExecuteFlowByFlowSignalProcessing()
     // isolate this object so it can carry out actions in any order it chooses.
     if(GlobalFitter.GpuQueueControl.isCurrentFlowExecutedAsFlowByFlow(flow))
     {// flow by flow execution after first block of 20
-    	printf("+++ isCurrentFlowExecutedAsFlowByFlow flow - %d \n ",flow );
+
       GlobalFitter.checkAndInitGPUPipelineSwitch(inception_state,
           my_image_spec,
           &(ptrWriteFlowData->GetPackQueue()),
@@ -799,9 +799,11 @@ void ImageToWells::ExecuteFlowByFlowSignalProcessing()
       if ( (flow == flow_block->end() - 1 ) || last_flow) {
         // Make sure that we've written everything.
         if(useFlowDataWriter()) {
+        	// printf("before DoneUpThroughFlow flow - %d useFlowDataWriter \n", flow);
           ptrRawWells->DoneUpThroughFlow( flow, ptrWriteFlowData->GetPackQueue(), ptrWriteFlowData->GetWriteQueue());
         }
         else {
+        	// printf("before DoneUpThroughFlow flow - %d \n", flow);
           ptrRawWells->DoneUpThroughFlow( flow );
         }
 

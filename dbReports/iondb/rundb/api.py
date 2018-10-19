@@ -6,6 +6,7 @@ from django.core.cache import cache
 from tastypie.api import Api
 import StringIO
 import csv
+from iondb.utils.makePDF import write_report_pdf, REPORT_PDF
 import uuid
 import json
 from tastypie.utils.formatting import format_datetime
@@ -62,7 +63,6 @@ from iondb.rundb.sample import sample_validator
 from iondb.rundb.plan.plan_share import prepare_for_copy, transfer_plan, update_transferred_plan
 from iondb.rundb.configure.genomes import get_references
 
-from ion.utils.TSversion import findVersions
 # from iondb.plugins import runner
 from ion.plugin import remote, Feature
 from ion.plugin.constants import RunLevel, RunType, runLevelsList
@@ -482,7 +482,7 @@ class ProjectResultsResource(ModelResource):
 class ResultsResource(BaseMetadataResource):
 
     def prepend_urls(self):
-        urls = [
+        return [
             url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/plugin%s$" % (self._meta.resource_name, trailing_slash()),
                self.wrap_view('dispatch_plugin'), name="api_dispatch_plugin"),
             url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/pluginresults%s$" % (self._meta.resource_name, trailing_slash()),
@@ -500,10 +500,28 @@ class ResultsResource(BaseMetadataResource):
             url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/representative%s$" % (self._meta.resource_name, trailing_slash()),
                self.wrap_view('post_representative'), name="api_post_representative"),
             url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/scan_for_orphaned_plugin_results%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_scan_for_orphaned_plugin_results'), name='api_scan_for_orphaned_plugin_results')
+                self.wrap_view('dispatch_scan_for_orphaned_plugin_results'), name='api_scan_for_orphaned_plugin_results'),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/report%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('dispatch_report'), name='api_result_report'),
         ]
 
-        return urls
+    def dispatch_report(self, request, **kwargs):
+        """Wrapper for all report methods"""
+        return self.dispatch('report', request, **kwargs)
+
+    def get_report(self, request, **kwargs):
+        """get a report pdf"""
+        bundle = self.build_bundle(request=request)
+        result = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
+        pdf_path = os.path.join(result.get_report_dir(), REPORT_PDF)
+        if not os.path.exists(pdf_path):
+            write_report_pdf(result.pk)
+
+        response = HttpResponse(content_type='application/pdf')
+        with open(pdf_path, 'rb') as pdf_handle:
+            response.write(pdf_handle.read())
+
+        return response
 
     def dispatch_scan_for_orphaned_plugin_results(self, request, **kwargs):
         return self.dispatch('scan_for_orphaned_plugin_results', request, **kwargs)
@@ -1103,6 +1121,7 @@ class ResultsResource(BaseMetadataResource):
         barcodesampleinfo_allowed_methods = ['get']
         metadata_allowed_methods = ['get', 'post']
         scan_for_orphaned_plugin_results_allowed_methods = ['get']
+        report_allowed_methods = ['get']
 
 
 class ExperimentValidation(Validation):
@@ -1135,7 +1154,15 @@ class ExperimentValidation(Validation):
 
         if not is_endTime_after_startTime(startTime, endTime):
             errors[key_timeEnd] = "Attribute " + key_timeEnd + " cannot be earlier than the start time"
-            
+
+        cfw_validator = ChefFlexibleWorkflowValidator()
+        keys = ["chefReagentsSerialNum", "chefSolutionsSerialNum"]
+        for key in keys:
+            value = bundle.data.get(key, "")
+            errMsg = cfw_validator.validate_GS1_standards(value)
+            if errMsg:
+                errors[key] = errMsg
+
         if errors:
             logger.error("Experiment has validation errors. Errors=%s" % (errors))
             raise ValidationError(json.dumps(errors))
@@ -1878,6 +1905,8 @@ class EmailAddressResource(ModelResource):
 
 class RigResource(ModelResource):
 
+    location = fields.ToOneField(LocationResource, 'location', full=True, null=True, blank=True)
+
     def prepend_urls(self):
         urls = [url(
             r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/status%s$" % (
@@ -1945,7 +1974,6 @@ class RigResource(ModelResource):
 
         return self.create_response(request, config)
 
-    location = fields.ToOneField(LocationResource, 'location', full=True)
 
     class Meta:
         queryset = models.Rig.objects.all()
@@ -2033,8 +2061,9 @@ class PluginResource(ModelResource):
         if file_extension != '.py':
             return HttpApplicationError('Cannot validate a plugin without a plugin class.')
 
+        data = request.POST.dict()
         # do the execution
-        issues = Plugin.validate(kwargs['pk'], kwargs.get('configuration', dict()), kwargs.get('run_mode', 'Manual'))
+        issues = Plugin.validate(kwargs['pk'], data.get('configuration', dict()), data.get('run_mode', 'Manual'))
 
         # return a list of all of the information
         return self.create_response(request, {'issues': issues})
@@ -2343,7 +2372,7 @@ class PluginResource(ModelResource):
                     continue
 
                 pluginDict['CurrentVersion'] = 'None'
-                pluginDict['date'] = 'NA'
+                pluginDict['date'] = None
 
             pluginDict['isSupported'] = templatePlugin.isSupported
             pluginDict['availableVersions'] = templatePlugin.availableVersions
@@ -2632,7 +2661,7 @@ class PlannedExperimentValidation(Validation):
         barcodedSampleValue = bundle.data.get("barcodedSamples")
 
         msg = "sample(for non barcoded plan) or barcodedSamples(for barcoded plan) must be provided"
-        if not sampleValue and not barcodedSampleValue and not isTemplate:
+        if not sampleValue and not barcodedSampleValue and not isTemplate and isNewPlan:
             errors["sample"] = "Missing sample input data. Either %s" % msg
         if sampleValue and barcodedSampleValue:
             errors["sample"] = "Barcoded sample data exists. Only %s but not both" % msg
@@ -2830,7 +2859,15 @@ class PlannedExperimentValidation(Validation):
             if key == "barcodeId":
                 err = plan_validator.validate_barcode_kit_name(value)
             if key == "sequencekitname":
-                err, key_specific_warning = plan_validator.validate_sequencing_kit_name(value, isNewPlan=isNewPlan)
+                err, key_specific_warning = plan_validator.validate_optional_kit_name(value,
+                                                                                      kitType = ["SequencingKit"],
+                                                                                      displayedName="Sequencing Kit",
+                                                                                      isNewPlan=isNewPlan)
+            if key == "librarykitname":
+                err, key_specific_warning = plan_validator.validate_optional_kit_name(value,
+                                                                                      kitType = ["LibraryKit", "LibraryPrepKit"],
+                                                                                      displayedName="Library Kit",
+                                                                                      isNewPlan=isNewPlan)
             if key == "runType":
                 err = plan_validator.validate_runType(value)
             if key == "applicationGroupDisplayedName":
@@ -2839,8 +2876,8 @@ class PlannedExperimentValidation(Validation):
                 err = plan_validator.validate_sample_grouping(value)
             if key == "libraryReadLength":
                 err = plan_validator.validate_libraryReadLength(value)
-            if key == "templatingSize":
-                err = plan_validator.validate_templatingSize(value)
+            if key == "templatingSize" and value:
+                key_specific_warning = "This field is deprecated, use samplePrepProtocol (pcr200bp, pcr400bp) instead."
             if key == "samplePrepProtocol":
                 err = bundle.data.get("errorInSamplePrepProtocol","")
             if key == "bedfile":
@@ -2881,8 +2918,6 @@ class PlannedExperimentValidation(Validation):
                 errors[key] = err
             if key_specific_warning:
                 planExp_warnings[key] = key_specific_warning
-
-
 
         if errors:
             planName = bundle.data.get("planName", '')
@@ -3843,7 +3878,6 @@ class AvailableIonChefPlannedExperimentResource(ModelResource):
                                      "parentPlan",
                                      "libraryTubeBarCode",
                                      "sampleTubeLabel",
-                                     "templatingSize",
                                      "templatingKitName",
                                      "samplePrepProtocol",
                                      "chipType"
@@ -3852,6 +3886,14 @@ class AvailableIonChefPlannedExperimentResource(ModelResource):
         for key,value in bundle.data.iteritems():
             if key in required_chef_fields_list:
                 chef_bundle[key] = value
+                if key == "samplePrepProtocol":
+                    chef_bundle["samplePrepProtocolName"] = ""
+                    if value:
+                        try:
+                            cvObj = models.common_CV.objects.get(cv_type="samplePrepProtocol",value=value)
+                            chef_bundle["samplePrepProtocolName"] = cvObj.displayedValue
+                        except Exception as Err:
+                            logger.error(Err)
 
         return chef_bundle
 
@@ -3896,7 +3938,6 @@ class AvailableIonChefPlannedExperimentSummaryResource(ModelResource):
                                      "parentPlan",
                                      "libraryTubeBarCode",
                                      "sampleTubeLabel",
-                                     "templatingSize",
                                      "templatingKitName",
                                      "samplePrepProtocol"
                                      ]
@@ -4348,9 +4389,11 @@ class TorrentSuite(ModelResource):
         return self.dispatch('sgejobs', request, **kwargs)
 
     def get_update(self, request, **kwargs):
+        from ion.utils.TSversion import findVersions, offcycleVersions
 
         updateStatus = {}
         versions, meta_version = findVersions()
+        versions.update(offcycleVersions())
         updateStatus["versions"] = versions
         updateStatus["meta_version"] = meta_version
 
@@ -4503,15 +4546,7 @@ class PublisherResource(ModelResource):
 
 class ContentUploadResource(ModelResource):
     pub = fields.CharField(readonly=True, attribute='publisher__name')
-
-    def dehydrate(self, bundle):
-        bundle.data['name'] = os.path.basename(bundle.obj.file_path)
-        bundle.data['upload_type'] = bundle.obj.upload_type()
-        meta = bundle.data.get('meta')
-        if meta:
-            bundle.data['upload_date'] = meta.get('upload_date')
-
-        return bundle
+    name = fields.CharField(readonly=True, attribute='get_file_name')
 
     class Meta:
         max_limit = 0
@@ -4530,6 +4565,9 @@ class ContentUploadResource(ModelResource):
 class ContentResource(ModelResource):
     publisher = ToOneField(PublisherResource, 'publisher')
     contentupload = ToOneField(ContentUploadResource, 'contentupload')
+    upload_id = fields.CharField(readonly=True, attribute='contentupload_id')
+    upload_date = fields.DateTimeField(readonly=True, attribute='contentupload__upload_date')
+    name = fields.CharField(readonly=True, attribute='get_file_name')
 
     def prepend_urls(self):
         return [
@@ -4558,7 +4596,12 @@ class ContentResource(ModelResource):
                 'publisher': upload.publisher,
                 'meta': upload.meta,
                 'file': file_path,
-                'path': data.get('path') or os.path.basename(file_path)
+                'path': data.get('path') or os.path.basename(file_path),
+                'type': data.get('type') or upload.upload_type,
+                'extra': data.get('extra', ''),
+                'description': data.get('description', ''),
+                'notes': data.get('notes', ''),
+                'application_tags': data.get('application_tags', ''),
             }
             content_kwargs['meta'].update(data.get('meta', {}))
 
@@ -4572,23 +4615,47 @@ class ContentResource(ModelResource):
 
     def apply_filters(self, request, filters):
         base_object_list = super(ContentResource, self).apply_filters(request, filters)
+
+        all_text = request.GET.get('all_text')
+        if all_text:
+            qset = (
+                Q(path__icontains=all_text) |
+                Q(description__icontains=all_text) |
+                Q(notes__icontains=all_text)
+            )
+            base_object_list = base_object_list.filter(qset)
+
         # include SSE bed file only if requested
         include_sse_bedfile = request.GET.get('include_sse', None)
         if not include_sse_bedfile:
             base_object_list = base_object_list.exclude(meta__contains='"sse":true')
 
-        return base_object_list
+        return base_object_list.distinct()
 
+    def hydrate(self, bundle):
+        # backwards compat: description, notes and enabled are saved also in meta field
+        meta = bundle.data.get('meta') or {}
+        if isinstance(meta, basestring):
+            meta = json.loads(meta)
+
+        if 'description' in bundle.data:
+            meta['description'] = bundle.data['description']
+        if 'notes' in bundle.data:
+            meta['notes'] = bundle.data['notes']
+        if 'enabled' in bundle.data:
+            meta['enabled'] = bundle.data['enabled']
+
+        bundle.data['meta'] = meta
+        return bundle
 
     class Meta:
         max_limit = 0
         
         queryset = models.Content.objects.all()
-
         register_allowed_methods = ['post']
 
         # allow ordering and filtering by all fields
-        field_list = models.Content._meta.get_all_field_names()
+        field_list = models.Content._meta.get_all_field_names() + ['upload_date']
         ordering = field_list
         filtering = field_dict(field_list)
 
@@ -5130,7 +5197,7 @@ class CompositeDataManagementResource(ModelResource):
                         qset = qset & Q(dmfilestat__preserve_data=True)
 
                 if "P" in filter_list:
-                    filter_list.extend(['AG', 'DG', 'EG', 'SA', 'SE', 'S', 'N', 'A'])
+                    filter_list.extend(['AG', 'DG', 'EG', 'IG', 'SA', 'SE', 'S', 'N', 'A'])
 
                 filter_list = [f for f in filter_list if f not in ['K','P']]
                 if filter_list:
@@ -6139,14 +6206,15 @@ class GetChefCartridgeUsageResource(ModelResource):
 
     def prepend_urls(self):
         urls = [url(r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()),
-                    self.wrap_view('get_update'), name="api_get_update")
+                    self.wrap_view('dispatch_update'), name="api_dispatch_update")
                 ]
 
         return urls
 
+    def dispatch_update(self, request, **kwargs):
+        return self.dispatch('update', request, **kwargs)
+
     def get_update(self, request, **kwargs):
-        # do not allow anonyomous access, authenticate before proceeding
-        self.is_authenticated(request)
         dbParams = {}
         params = request.GET.copy()
         cfw_validator = ChefFlexibleWorkflowValidator()

@@ -529,25 +529,31 @@ tmap_interval_overlap(uint32_t low1, uint32_t high1, uint32_t low2, uint32_t hig
 
 
 static inline void
-tmap_version_to_int(const char *v, int32_t v_n[3])
+tmap_version_to_int (const char *v, int32_t v_n[3])
 {
   int32_t i, j, len;
-  len = strlen(v);
-  v_n[0] = atoi(v);
-  for(i=0,j=1;i<len;i++) {
-      if('.' == v[i]) {
-          i++; // skip the dot
-          if(i == len) {
-              tmap_error("malformed version string", Exit, OutOfRange);
+  len = strlen (v);
+  v_n [0] = atoi (v);  // DK: TODO: this code will interpret any non-numeric component of a version as zero. Thus, 3.0.0 would equate to 3.UGLY.VERSION There is no sanity check for such mishaps.
+  for (i = 0, j = 1; i < len; ++i) 
+  {
+      if ('.' == v[i]) 
+      {
+          ++i; // skip the dot
+          if (i == len) 
+	  {
+	      fprintf (stderr, "Malformed version string: %s", v);
+              tmap_error("Version should contain at least three dot-separated components", Exit, OutOfRange);
           }
-          v_n[j] = atoi(v + i);
-          j++;
-          // if (j == 3)
-          //    break; // do not read the ION_VERSION_BUILDNUM
+          v_n [j] = atoi (v + i);
+          ++j;
+          if (j == 3)
+             break; // do not read the 'patch' component of a version string
       }
   }
-  if(3 != j) {
-      tmap_error("malformed version string", Exit, OutOfRange);
+  if (3 != j) 
+  {
+     fprintf (stderr, "Malformed version string: %s", v);
+     tmap_error ("Version should contain at least three dot-separated components", Exit, OutOfRange);
   }
 }
 
@@ -557,14 +563,16 @@ tmap_compare_versions(const char *v1, const char *v2)
   int32_t i;
   int32_t v1_n[3], v2_n[3];
 
-  tmap_version_to_int(v1, v1_n);
-  tmap_version_to_int(v2, v2_n);
+  tmap_version_to_int (v1, v1_n);
+  tmap_version_to_int (v2, v2_n);
 
-  for(i=0;i<3;i++) {
-      if(v1_n[i] < v2_n[i]) return -1;
-      else if(v1_n[i] > v2_n[i]) return 1;
+  for (i = 0; i < 3; ++i) 
+  {
+      if (v1_n [i] < v2_n [i]) 
+	return -1;
+      else if (v1_n [i] > v2_n [i]) 
+	return 1;
   }
-
   return 0;
 }
 

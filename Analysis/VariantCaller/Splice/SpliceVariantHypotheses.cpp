@@ -41,8 +41,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
   }
 
   int read_idx = current_read.left_sc;
-  // TS-17069 Use the original position for splicing
-  int ref_idx  = current_read.original_position;
+  int ref_idx  = current_read.alignment.Position;
   int read_idx_max = current_read.alignment.QueryBases.length() - current_read.right_sc;
   bool did_splicing = false;
   bool just_did_splicing = false;
@@ -412,8 +411,7 @@ string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alig
 
   // --- Get index positions at snp variant position
   int read_idx = current_read.left_sc;
-  // TS-17069 Use the original position for splicing  
-  int ref_idx  = current_read.original_position;  
+  int ref_idx  = current_read.alignment.Position;
   unsigned int pretty_idx = 0;
 
   while (pretty_idx < current_read.pretty_aln.length() and ref_idx < variant_position) {

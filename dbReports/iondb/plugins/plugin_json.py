@@ -156,7 +156,8 @@ def get_expmeta(ion_params, report_dir, report_pk):
     results_name = ion_params.get('resultsName')
     reanalysis_indicator = "Auto_" if results_name.startswith("Auto_") else ""
     plan = ion_params.get('plan', {})
-    server_name = slugify(ion_params.get('site_name').decode('utf-8'))
+    site_name = ion_params.get('site_name')
+    server_name = slugify(site_name.decode('utf-8')) if site_name else ""
     return {
         "run_name": exp_json.get('expName'),
         "run_date": exp_json.get('date'),

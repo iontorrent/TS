@@ -69,7 +69,8 @@ $(function(){
                     error(self, resp);
                 }
             };
-            return Backbone.Collection.prototype.fetch.call(this, options);
+            this.currentFetch = Backbone.Collection.prototype.fetch.call(this, options);
+            return this.currentFetch;
         },
 
         parse: function (resp) {
@@ -259,6 +260,10 @@ $(function(){
                 this.baseUrl = "/rundb/api/v1/compositeexperiment/";
             } else {
                 this.baseUrl = "/rundb/api/mesh/v1/compositeexperiment/";
+            }
+            if (this.currentFetch && this.currentFetch.readyState < 4) {
+                console.log("Aborting current data page request");
+                this.currentFetch.abort();
             }
             return this.fetch();
         },

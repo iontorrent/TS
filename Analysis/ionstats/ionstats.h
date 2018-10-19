@@ -15,6 +15,7 @@
 #define IONSTATS_BIGGEST_PHRED 47
 #define TYPICAL_FLOWS_PER_BASE 2
 #define NUMBER_OF_NUCLEOTIDES 4
+#define DEFAULT_SEQ_KEY                    "TCAG"
 
 using namespace std;
 

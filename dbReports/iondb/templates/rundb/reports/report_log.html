@@ -60,14 +60,16 @@ $(function() {
         {% elif error == "report_deleted" %}
             <h2>Report was deleted and cannot be viewed</h2>
         {% endif %}
-        {% if archive_files %}
         <ul>
-            <li><a href="{{archive_files.csa}}">Customer Support Archive</a></li>
+            {% if archive_files.csa %}
+                <li><a href="{{ archive_files.csa }}">Customer Support Archive</a></li>
+            {% endif %}
             {% if not no_live_beads %}{# TS-9782 #}
-            <li><a href="{{archive_files.report_pdf}}">View Backup Report PDF</a></li>
+                {% if archive_files.report_pdf %}
+                    <li><a href="{{ archive_files.report_pdf }}">View Backup Report PDF</a></li>
+                {% endif %}
             {% endif %}
         </ul>
-        {% endif %}
         {% if archive_restore %}
         <ul>
             <li><a id="archive_restore" href="{% url "import_data" %}" data-postdata="{{archive_restore}}">Restore Report files from archived location</a></li>

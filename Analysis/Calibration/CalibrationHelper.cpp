@@ -525,9 +525,11 @@ bool ReadAlignmentInfo::UnpackReadInfo(BamAlignment* new_alignment, vector<DPTre
   prefix_flow = -1;
   if (not calib_context.resolve_clipped_bases) {
 
-    // Construct hard clipped prefix from tags [KS][ZT][ZE]
+    // Construct hard clipped prefix from tags [KS][ZK][ZT][ZE]
     prefix_bases = key_it->second;
-    std::string temp_zt, temp_ze;
+    std::string temp_zk, temp_zt, temp_ze;
+    if (alignment->GetTag("ZK", temp_zk))
+      prefix_bases += temp_zt;
     if (alignment->GetTag("ZT", temp_zt))
       prefix_bases += temp_zt;
     if (alignment->GetTag("ZE", temp_ze))

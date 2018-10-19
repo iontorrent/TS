@@ -8,16 +8,15 @@ import sys
 import json
 import urllib
 import traceback
-from ion.plugin import PluginCLI, IonPlugin, RunLevel, RunType
+from ion.plugin import PluginCLI, IonPlugin, RunLevel
 
 
 class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.8.0.2'
+    version = '5.10.0.0'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
-    runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     runlevels = [RunLevel.LAST]
     requires_configuration = True
 

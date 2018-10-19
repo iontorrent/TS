@@ -374,7 +374,7 @@ def _wkhtmltopdf_create_pdf(url, outputFile, name, filePath="", js_str=""):
         pdf_str += ' --run-script "%s"' % js_str.replace("$", "\$")
 
     pdf_str += ' --javascript-delay 1200'
-    pdf_str += ' --margin-top 5 --margin-bottom 5 --margin-left 5 --margin-right 5'
+    pdf_str += ' --zoom 0.8 --margin-top 5 --margin-bottom 5 --margin-left 2 --margin-right 2'
     pdf_str += ' --footer-left "' + name + '"'
     pdf_str += ' --footer-right "Page [page] of [toPage]"'
     pdf_str += ' --header-left "[title]"'

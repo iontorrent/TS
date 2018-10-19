@@ -136,7 +136,14 @@ void InputStructures::DetectFlowOrderzAndKeyFromBam(const SamHeader &samHeader){
       // New run id: Check whether this flow order is the same or a sub/ superset of an existing flow order
       unsigned int iFO = 0;
       for (; iFO< temp_flow_order_vector.size(); iFO++){
-
+    	if ( temp_flow_order_vector.at(iFO) == itr->FlowOrder){
+            flow_order_index_by_run_id[run_id] = iFO;
+            num_flows_by_run_id[run_id] = itr->FlowOrder.length();
+            break;
+    	}
+    	
+    	//XXX The subset/superset flow orders cause problems in calibration, i.e., no calibration of subset flow order can be found at the flow of the superset flow order.
+    	/*
         // Is the new flow order a subset of an existing flow order?
         if ( temp_flow_order_vector.at(iFO).length() >= itr->FlowOrder.length() ) {
           if (temp_flow_order_vector.at(iFO).substr(0, itr->FlowOrder.length()) == itr->FlowOrder ) {
@@ -157,6 +164,7 @@ void InputStructures::DetectFlowOrderzAndKeyFromBam(const SamHeader &samHeader){
             break;
           }
         }
+        */
       }
 
       // Do we have a new flow order?

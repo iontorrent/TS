@@ -7,6 +7,7 @@
 {% endblock tab-configure-references %}
 {% block extra_head %}
   <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+  <script type="text/javascript" src="{% static "js/date.min.js"%}"></script>
   <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
   <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
   <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
@@ -20,14 +21,9 @@
 
   <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
   <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
-<!--
-  Ignoring fileinput because it doesn't seem to work properly.
-  <script type="text/javascript" src="{% static "jquery/js/fileinput/jquery.fileinput.min.js"%}"></script>
-  <link type="text/css" href="{% static "jquery/js/fileinput/fileinput.css"%}" rel="stylesheet"/>
-  -->
 {% endblock extra_head %}
-{% block content %}
 
+{% block content %}
 <div id="sys_messages"></div>
 
 <div class="content clearfix">
@@ -173,9 +169,10 @@
 
 <script id="uploadStatusTemplate" type="text/x-kendo-template">
   # var emph = "text-success"; #
+  # status = (status==="complete") ? "Successfully Completed" : status #
   # if (status.indexOf('Complete') !== -1) { #
     # emph = "text-info"; #
-  # } else if (status.indexOf('Error') !== -1) { #
+  # } else if (status.indexOf('Error') !== -1 || status.indexOf('fail') !== -1) { #
     # emph = "text-error"; #
   # } #
   <span style="font-weight:bold;" class="#=emph#">
@@ -228,163 +225,130 @@ $(function () {
   navigate_to_hash();
 });
 
+var upload_types = JSON.parse("{{publisher_types|escapejs}}");
+
 $(document).ready(function() {
 
-  // Upload History
-
+    // Upload History
     var uploads_data = {
       type : "json",
       transport : {
-          read : {
-              url : '/rundb/api/v1/contentupload/?format=json&limit=0',
-              contentType : 'application/json; charset=utf-8',
-              type : 'GET',
-              dataType : 'json'
-          },
+        read : {
+            url : '/rundb/api/v1/contentupload/?format=json&limit=0',
+            contentType : 'application/json; charset=utf-8',
+            type : 'GET',
+            dataType : 'json'
+        },
+        parameterMap : function(options) {
+            return buildParameterMap(options);
+        }
       },
       schema: {
         data : "objects",
         total : "meta.total_count",
       },
-      serverPaging : false,
-      pageSize : 5000,
-      serverSorting : false,
+      serverPaging : true,
+      pageSize : 100,
+      serverSorting : true,
       sort: { field: "upload_date", dir: "desc" },
     };
 
     $("#uploads").kendoGrid({
       dataSource: uploads_data,
       height: '600',
-      groupable: false,
-      scrollable: true,
-      selectable: false,
+      scrollable: { virtual: true },
       sortable: true,
       pageable: false,
       columns: [
-        { field: "name", title: "Uploaded File", width: '40%', template: "<a href='/rundb/uploadstatus/${id}/'>${name}</a>"},
-        { field: "upload_type", title: "Type", width: '20%'},
-        { field: "upload_date", title: "Date", width: '20%', template: '#=upload_date?kendo.toString(new Date(Date.parse(upload_date)),"yyyy/MM/dd hh:mm tt"):"" #'},
-        { field: "status", title: "Status", width: '20%', template: kendo.template($("#uploadStatusTemplate").html())}
+        { field: "name", title: "Uploaded File", width: '40%', sortable: false, template: "<a href='/rundb/uploadstatus/${id}/'>${name}</a>"},
+        { field: "upload_type", title: "Type", width: '20%', template: '#=upload_types[upload_type] ? upload_types[upload_type] : upload_type #'},
+        { field: "upload_date", title: "Upload Date", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'},
+        { field: "status", title: "Status", width: '25%', template: kendo.template($("#uploadStatusTemplate").html())}
       ]
     });
 
 
-  // Target Regions and Hotspots
-
-  $.get('/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__contains=/unmerged/detail/', function (data) {
-
-    var targets_data = new kendo.data.DataSource({
-      data: [],
-      schema: {
-        model: {
-          fields: {
-            id: { type: "number" },
-            upload_id: { type: "number" },
-            name: { type: "string" },
-            description: { type: "string" },
-            notes: { type: "string" },
-            search_concat: { type: "string" },
-            enabled: {type: "boolean" },
-            upload_date: {type: "date" },
-            reference: { type: "string" }
-          }
-        }
-      },
-      sort: { field: "upload_date", dir: "desc" },
-      pageSize: 5000
-    });
-
-    var hotspots_data = new kendo.data.DataSource({
-      data: [],
-      schema: {
-        model: {
-          fields: {
-            id: { type: "number" },
-            upload_id: { type: "number" },
-            name: { type: "string" },
-            description: { type: "string" },
-            notes: { type: "string" },
-            search_concat: { type: "string" },
-            enabled: {type: "boolean" },
-            upload_date: {type: "date" },
-            reference: { type: "string" }
-          }
-        }
-      },
-      sort: { field: "upload_date", dir: "desc" },
-      pageSize: 5000
-    });
-
-
-    $.each(data.objects, function (int_index, result) {
-      var selName = result.file.split('/').pop().split('.')[0];
-      if (!selName || !result.file.endsWith('.bed')) {
-        return true;
-      }
-      var description = result.meta.description || '';
-      var notes = result.meta.notes || '';
-      var upload_date = null;
-      if (result.meta.upload_date) {
-        upload_date = new Date(Date.parse(result.meta.upload_date));
-      }
-
-      var upload = {
-        id: result.id,
-        upload_id: result.contentupload.substr(28),
-        name: selName,
-        description: description,
-        notes: notes,
-        search_concat: selName + " " + description + " " + notes + " " + result.meta.reference,
-        enabled: ('enabled' in result.meta) ? result.meta.enabled : true,
-        upload_date: upload_date,
-        reference:result.meta.reference
-      }
-
-      if (result.meta.hotspot) {
-        hotspots_data.add(upload);
-      } else {
-        targets_data.add(upload);
-      }
-    });
-
-
+    // Target Regions
+    var targets_data = {
+        type : "json",
+        transport : {
+            read : {
+                url : '/rundb/api/v1/content/?format=json&publisher__name=BED&type=target&path__contains=/unmerged/detail/',
+                contentType : 'application/json; charset=utf-8',
+                type : 'GET',
+                dataType : 'json'
+            },
+            parameterMap : function(options) {
+                return buildParameterMap(options);
+            }
+        },
+        schema: {
+          data : "objects",
+          total : "meta.total_count",
+        },
+        serverFiltering: true,
+        serverPaging : true,
+        pageSize : 100,
+        serverSorting : true,
+        sort: { field: "upload_date", dir: "desc" },
+    };
+    
     $("#targetRegions").kendoGrid({
-      dataSource: targets_data,
-      height: '600',
-      groupable: false,
-      scrollable: true,
-      selectable: false,
-      sortable: true,
-      pageable: false,
-      columns: [
-        { field: "name", title: "Name", width: '20%', template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
-        { field: "description", title: "Description", width: '25%'},
-        { field: "notes", title: "Notes", width: '25%'},
-        { field: "reference", title: "Reference", width: '10%'},
-        { field: "enabled", title: "Enabled", width: '10%'},
-        { field: "upload_date", title: "Upload Date", width: '10%', template: '#= upload_date?kendo.toString(upload_date,"yyyy/MM/dd"):""  #'}
-      ]
+        dataSource: targets_data,
+        height: '600',
+        scrollable: { virtual: true },
+        sortable: true,
+        pageable: false,
+        columns: [
+            { field: "name", title: "Name", width: '25%', sortable: false, template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
+            { field: "description", title: "Description", width: '20%'},
+            { field: "notes", title: "Notes", width: '20%'},
+            { field: "extra", title: "Reference", width: '20%'},
+            { field: "enabled", title: "Enabled", width: '55px'},
+            { field: "upload_date", title: "Upload Date", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'}
+        ]
     });
 
+    // Hotspots
+    var hotspots_data = {
+        type : "json",
+        transport : {
+            read : {
+                url : '/rundb/api/v1/content/?format=json&publisher__name=BED&type=hotspot&path__contains=/unmerged/detail/',
+                contentType : 'application/json; charset=utf-8',
+                type : 'GET',
+                dataType : 'json'
+            },
+            parameterMap : function(options) {
+                return buildParameterMap(options);
+            }
+        },
+        schema: {
+          data : "objects",
+          total : "meta.total_count",
+        },
+        serverFiltering: true,
+        serverPaging : true,
+        pageSize : 100,
+        serverSorting : true,
+        sort: { field: "upload_date", dir: "desc" },
+    };
+    
     $("#hotspots").kendoGrid({
-      dataSource: hotspots_data,
-      height: '600',
-      groupable: false,
-      scrollable: true,
-      selectable: false,
-      sortable: true,
-      pageable: false,
-      columns: [
-        { field: "name", title: "Name", width: '20%', template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
-        { field: "description", title: "Description", width: '25%'},
-        { field: "notes", title: "Notes", width: '25%'},
-        { field: "reference", title: "Reference", width: '10%'},
-        { field: "enabled", title: "Enabled", width: '10%'},
-        { field: "upload_date", title: "Upload Date", width: '10%', template: '#= upload_date?kendo.toString(upload_date,"yyyy/MM/dd"):""  #'}
-      ]
+        dataSource: hotspots_data,
+        height: '600',
+        scrollable: { virtual: true },
+        sortable: true,
+        pageable: false,
+        columns: [
+            { field: "name", title: "Name", width: '25%', sortable: false, template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
+            { field: "description", title: "Description", width: '20%'},
+            { field: "notes", title: "Notes", width: '20%'},
+            { field: "extra", title: "Reference", width: '20%'},
+            { field: "enabled", title: "Enabled", width: '55px'},
+            { field: "upload_date", title: "Upload Date", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'}
+        ]
     });
-
-  });  
     
   function update_targets_filter() {
     var filters = get_bedfiles_filters($('#targets-search').val(), $('#targets-ref-dropdown').val());
@@ -399,10 +363,10 @@ $(document).ready(function() {
   function get_bedfiles_filters(search_filter, reference_filter){
     var filters = [];
       if (reference_filter){
-        filters.push({field:"reference", operator: "eq", value: reference_filter });
+        filters.push({field:"extra", operator: "", value: reference_filter });
       }
       if (search_filter){
-        filters.push({field:"search_concat", operator: "contains", value: search_filter });
+        filters.push({field:"all_text", operator: "", value: search_filter });
       }
     return filters;
   }
@@ -428,7 +392,11 @@ $(document).ready(function() {
   <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
   <ul class="dropdown-menu pull-right">
     <li>
-      <a href="#= '{% url "references_barcodeset" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Edit</a>
+        # if(system){ #
+            <a href="#= '{% url "references_barcodeset" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">View</a>
+        # } else { #
+            <a href="#= '{% url "references_barcodeset" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Edit</a>
+        # } #
     </li>
       <li>
           <a href="#= '{% url "references_barcodeset_csv" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Download</a>
@@ -443,9 +411,18 @@ $(document).ready(function() {
   # var _id = id;#
   <a href="#= '{% url "references_barcodeset" '999999' %}'.replace('999999', _id)#">#= name#</a>
 </script>
+<script id="barcodeSystemCellTemplate" type="text/x-kendo-template">
+    # if(system){ #
+        System Barcode
+    # } else { #
+        Custom
+    # } #
+</script>
 <script type="text/javascript">
 $(document).ready(function(){
-  var referenceSequences = $("#referenceSequences").kendoGrid({
+
+    // Reference Sequences
+    var referenceSequences = $("#referenceSequences").kendoGrid({
         dataSource: {
           type: "json"
       , transport: {
@@ -478,11 +455,11 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "date", dir: "desc" }
             , serverPaging: true
-          , pageSize: 5000
+          , pageSize: 100
         }
         , height: '600'
         , groupable: false
-        , scrollable: true
+        , scrollable: { virtual: true }
         , selectable: false
         , sortable: true
         , pageable: false
@@ -490,37 +467,45 @@ $(document).ready(function(){
       {
                 field: "short_name"
                 , title: "Short Name"
+                , width: '20%'
                 , template: "<a href='/configure/references/genome/edit/${id}' class='edit_genome'>${short_name}</a>"
             } , {
                 field: "name"
                 , title: "Description"
                 , sortable: true
+                , width: '20%'
             } , {
                 field: "notes"
                 , title: "Notes"
                 , sortable: true
-            } , {
-                field: "date"
-                , title: "Date"
-                , sortable: true
-                , template: '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
-            } , {
-                field: "index_version"
-                , title: "Index version"
-                , sortable: true
-            } , {
-                field: "status"
-                , title: "Status"
-                , sortable: true
-                , template: '#= status==="complete" ? "Successfully Completed" : status #'
+                , width: '20%'
             } , {
                 field: "enabled"
                 , title: "Enabled"
                 , sortable: true
+                , width: '10%'
+            } , {
+                field: "date"
+                , title: "Date"
+                , sortable: true
+                , width: '10%'
+                , template: '#= kendo.toString(new Date(Date._parse(date)),"MMM d yyyy") #'
+            /* } , {
+                field: "index_version"
+                , title: "Index version"
+                , sortable: true */
+            } , {
+                field: "status"
+                , title: "Status"
+                , sortable: true
+                , width: '20%'
+                , template: kendo.template($("#uploadStatusTemplate").html())
             }
         ]
     });
-  var obsoleteReferenceSequences = $("#obsoleteReferenceSequences").kendoGrid({
+
+    // Obsolete Reference Sequences
+    var obsoleteReferenceSequences = $("#obsoleteReferenceSequences").kendoGrid({
         dataSource: {
           type: "json"
       , transport: {
@@ -552,11 +537,11 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "date", dir: "desc" }
             , serverPaging: true
-          , pageSize: 5000
+          , pageSize: 100
         }
         , height: '600'
         , groupable: false
-        , scrollable: true
+        , scrollable: { virtual: true }
         , selectable: false
         , sortable: true
         , pageable: false
@@ -589,7 +574,9 @@ $(document).ready(function(){
             }
         ]
     });
-  var testFragments = $("#testFragments").kendoGrid({
+
+    // Test Fragments
+    var testFragments = $("#testFragments").kendoGrid({
         dataSource: {
           type: "json"
       , transport: {
@@ -620,11 +607,11 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "name", dir: "desc" }
             , serverPaging: true
-          , pageSize: 5000
+          , pageSize: 100
         }
         , height: '600'
         , groupable: false
-        , scrollable: true
+        , scrollable: { virtual: true }
         , selectable: false
         , sortable: true
         , pageable: false
@@ -671,7 +658,9 @@ $(document).ready(function(){
       });
     }
     });
-  var barcodes = $("#barcodes").kendoGrid({
+
+    // Barcodes
+    var barcodes = $("#barcodes").kendoGrid({
         dataSource: {
           type: "json"
       , transport: {
@@ -698,19 +687,25 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "name", dir: "desc" }
             , serverPaging: true
-          , pageSize: 5000
+          , pageSize: 100
         }
         , height: '600'
         , groupable: false
-        , scrollable: true
+        , scrollable: { virtual: true }
         , selectable: false
         , sortable: true
         , pageable: false
-    , columns: [
-      {
+        , columns: [
+            {
                 field: "name"
                 , title: "Name"
                 , template: kendo.template($("#barcodeNameCellTemplate").html())
+            }
+            ,{
+                field: "system"
+                , title: "System"
+                , sortable: false
+                , template: kendo.template($("#barcodeSystemCellTemplate").html())
             }
             , {
                 title: "Action",

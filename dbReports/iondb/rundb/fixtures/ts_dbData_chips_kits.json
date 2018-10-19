@@ -724,6 +724,7 @@
       "flowCount": 100,
       "uid": "SEQ0006",
       "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT_IC",
       "isActive": true,
       "description": "Ion PGM Install Kit",
       "categories" : "readLengthDerivableFromFlows;"
@@ -933,7 +934,7 @@
       "flowCount": 500,
       "uid": "SEQ0009",
       "instrumentType": "pgm",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Sequencing 200 Kit v2",
       "categories" : "readLengthDerivableFromFlows;"
     }
@@ -950,7 +951,7 @@
       "uid": "TEMPLT0003",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Template OT2 200 Kit"
     }
   },
@@ -965,7 +966,7 @@
       "flowCount": 850,
       "uid": "SEQ0010",
       "instrumentType": "pgm",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Sequencing 400 Kit",
       "categories" : "readLengthDerivableFromFlows;"
     }
@@ -982,7 +983,7 @@
       "uid": "TEMPLT0004",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",      
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Template OT2 400 Kit"
     }
   },
@@ -1077,7 +1078,7 @@
       "uid": "ICPREP0001",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "IC",
-      "isActive": true,
+      "isActive": false,
       "description": "ION PGM IC 200 KIT"
     }
   },
@@ -1226,7 +1227,7 @@
       "flowCount": 0,
       "uid": "LIB0014",
       "instrumentType": "pgm",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Controls 200 Kit"
     }
   },
@@ -1324,7 +1325,7 @@
       "uid": "ICPREP0002",
       "instrumentType": "proton",
       "samplePrep_instrumentType" : "IC",      
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PI IC 200 Kit",
       "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.3.1"
     }
@@ -1422,8 +1423,8 @@
       "flowCount": 500,
       "uid": "SEQ0018",
       "instrumentType": "pgm",
-      "samplePrep_instrumentType" : "OT_IC",
-      "isActive": true,
+      "samplePrep_instrumentType" : "OT_IC_IA",
+      "isActive": false,
       "description": "Ion PGM Hi-Q Sequencing Kit",
       "categories" : "flowOverridable;readLengthDerivableFromFlows;"
     }
@@ -1519,13 +1520,12 @@
       "runMode": "",
       "flowCount": 0,
       "libraryReadLength" : 200,
-      "templatingSize" : "200;400",      
       "uid": "ICPREP0003",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "IC",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Hi-Q Chef Kit",
-      "categories" : "multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;hidSamplePrep"
+      "categories" : "supportLibraryReadLength;samplePrepProtocol;hidSamplePrep;pcr200_400bpSamplePrep"
     }
   },
   {
@@ -1538,13 +1538,12 @@
       "runMode": "",
       "flowCount": 0,
       "libraryReadLength" : 200,
-      "templatingSize" : "200",      
       "uid": "ICPREP0004",
       "instrumentType": "proton",
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion PI Hi-Q Chef Kit",
-      "categories" : "multipleTemplatingSize;supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep",
+      "categories" : "supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep",
       "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.3.1"
     }
   },
@@ -1559,7 +1558,7 @@
       "flowCount": 520,
       "uid": "SEQ0020",
       "instrumentType": "proton",
-      "samplePrep_instrumentType" : "OT_IC",
+      "samplePrep_instrumentType" : "OT_IC_IA",
       "isActive": true,
       "description": "Ion PI Hi-Q Sequencing 200 Kit",
       "categories" : "readLengthDerivableFromFlows;",
@@ -1646,7 +1645,7 @@
       "uid": "TEMPLT0011",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Hi-Q OT2 Kit - 200"
     }
   },    
@@ -1662,7 +1661,7 @@
       "uid": "TEMPLT0012",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PGM Hi-Q OT2 Kit - 400"
     }
   },                      
@@ -1694,7 +1693,7 @@
       "flowCount": 500,
       "uid": "SEQ0022",
       "instrumentType": "pgm",
-      "samplePrep_instrumentType" : "",
+      "samplePrep_instrumentType" : "OT_IC",
       "isActive": true,
       "description": "Ion PGM Select Sequencing Kit",
       "categories" : ""
@@ -1744,13 +1743,12 @@
       "runMode": "",
       "flowCount": 0,
       "libraryReadLength" : 200,
-      "templatingSize" : "200;400",        
       "uid": "ICPREP0005",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion 520 & Ion 530 Kit-Chef",
-      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;",
+      "categories" : "s5v1Kit;",
       "chipTypes" : "520;530"
     }
   },
@@ -1764,13 +1762,12 @@
       "runMode": "",
       "flowCount": 500,
       "libraryReadLength" : 200,
-      "templatingSize" : "200",
       "uid": "ICPREP0006",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion 540 Kit-Chef",
-      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;samplePrepProtocol;s5RnaWTSamplePrep",
+      "categories" : "s5v1Kit;samplePrepProtocol;s5RnaWTSamplePrep;",
       "chipTypes" : "540"
     }
   },
@@ -1784,14 +1781,13 @@
       "runMode": "",
       "flowCount": 500,
       "libraryReadLength" : 200,
-      "templatingSize" : "200",
       "uid": "TEMPLT0014",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "OT",
       "isActive": true,
       "description": "Ion 540 Kit-OT2",
       "categories" : "s5v1Kit;flowOverridable;multipleReadLength;",
-      "chipTypes" : "540"
+      "chipTypes" : "540;550"
     }
   },  
   {
@@ -1804,7 +1800,6 @@
       "runMode": "",
       "flowCount": 0,
       "libraryReadLength" : 200,
-      "templatingSize" : "200;400",
       "uid": "TEMPLT0015",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "OT",
@@ -1895,7 +1890,7 @@
       "flowCount": 500,
       "uid": "SEQ0024",
       "instrumentType": "pgm",
-      "samplePrep_instrumentType" : "OT_IC",
+      "samplePrep_instrumentType" : "OT_IC_IA",
       "isActive": true,
       "description": "Ion PGM Hi-Q View Sequencing Kit",
       "categories" : "flowOverridable;readLengthDerivableFromFlows;"
@@ -1943,13 +1938,12 @@
       "runMode": "",
       "flowCount": 0,
       "libraryReadLength" : 200,
-      "templatingSize" : "200;400",      
       "uid": "ICPREP0007",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion PGM Hi-Q View Chef Kit",
-      "categories" : "multipleTemplatingSize;supportLibraryReadLength"
+      "categories" : "supportLibraryReadLength;samplePrepProtocol;pcr200_400bpSamplePrep"
     }
   },
   {
@@ -2163,7 +2157,7 @@
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Precision ID Chef Reagents",
-      "categories" : "filter_s5HidKit",
+      "categories" : "filter_s5HidKit;samplePrepProtocol;s5hidSamplePrep",
       "chipTypes" : "510;520;530",
       "applicationType" : "AMPS"
     }
@@ -2178,13 +2172,12 @@
       "runMode": "",
       "flowCount": 0,
       "libraryReadLength" : 200,
-      "templatingSize" : "200;400",        
       "uid": "ICPREP0012",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion 510 & Ion 520 & Ion 530 Kit-Chef",
-      "categories" : "s5v1Kit;multipleTemplatingSize;flowOverridable;samplePrepProtocol;s5MyeloidSamplePrep",
+      "categories" : "s5v1Kit;flowOverridable;samplePrepProtocol;s5MyeloidSamplePrep;pcr200_400bpSamplePrep",
       "chipTypes" : "510;520;530"
     }
   },
@@ -2199,7 +2192,7 @@
       "flowCount": 150,
       "uid": "SEQ0027",
       "instrumentType": "proton",
-      "samplePrep_instrumentType" : "OT_IC",
+      "samplePrep_instrumentType" : "OT_IC_IA",
       "isActive": false,
       "description": "Ion PQ Sequencing Kit",
       "chipTypes" : "P2.2.1;P2.2.2",
@@ -2290,19 +2283,35 @@
       "runMode": "",
       "flowCount": 500,
       "libraryReadLength" : 200,
-      "templatingSize" : "200",
       "uid": "ICPREP0014",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion 550 Kit-Chef",
-      "categories" : "s5v1Kit;flowOverridable;multipleReadLength;",
+      "categories" : "s5v1Kit;",
       "defaultCartridgeUsageCount" : 2,
       "cartridgeExpirationDayLimit" : 8,
       "cartridgeBetweenUsageAbsoluteMaxDayLimit" : 30,
       "chipTypes" : "550"
     }
   },
+  {
+    "pk": 20114,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq HD Library Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0027",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq HD Library Kit",
+      "applicationType" : "AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1"
+    }
+  },
+
   {
     "pk": 20001,
     "model": "rundb.kitpart",

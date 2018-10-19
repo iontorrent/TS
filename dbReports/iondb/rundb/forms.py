@@ -112,7 +112,7 @@ class CmdlineArgsField(forms.CharField):
 
     def __init__(self):
         super(CmdlineArgsField, self).__init__(
-            max_length=1024,
+            max_length=5000,
             required=False,
             widget=forms.Textarea(attrs={'class': 'span12 args', 'rows': 4})
         )
@@ -410,7 +410,7 @@ class NetworkConfigForm(forms.Form):
             stdout, stderr = proc.communicate()
             out_lines = stdout.split("\n")
             formatted_output = "\n".join("    %s" % l for l in out_lines)
-            logger.info("TSquery output:\n%s" % formatted_output)
+            logger.debug("TSquery output:\n%s" % formatted_output)
             for line in out_lines:
                 if line:
                     key, value = line.split(":", 1)
@@ -468,6 +468,22 @@ class NetworkConfigForm(forms.Form):
             if stderr:
                 logger.warning("Network error: %s" % stderr)
 
+        def noproxyconf(no_proxy):
+            """
+            Helper method for TSsetnoproxy script
+                --no_proxy    no_proxy setting
+                --remove      Removes no_proxy setting
+            """
+            if no_proxy:
+                cmd = ["sudo", "/usr/sbin/TSsetnoproxy", "--no_proxy", no_proxy]
+            else:
+                cmd = ["sudo", "/usr/sbin/TSsetnoproxy", "--remove"]
+
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            if stderr:
+                logger.warning("Network error: %s" % stderr)
+
         def dhcp():
             """
             Helper method to call into the TSstaticip script with the "remove" option to revert back to dhcp
@@ -519,8 +535,6 @@ class NetworkConfigForm(forms.Form):
 
                 logger.info("User changed the host network settings.")
                 static_ip(address, subnet, gateway, nameserver=nameservers, search=dnssearch)
-        else:
-            logger.info("new_config failed to pass")
 
         proxy_config = ["proxy_address", "proxy_port", "proxy_username", "proxy_password"]
         if self.new_config(self.cleaned_data, network_settings, proxy_config):
@@ -533,5 +547,10 @@ class NetworkConfigForm(forms.Form):
                 proxyconf(address, port, user, password)
             else:
                 ax_proxy()
+
+        # set no proxy
+        if self.new_config(self.cleaned_data, network_settings, ['no_proxy']):
+            no_proxy = self.cleaned_data['no_proxy']
+            noproxyconf(no_proxy)
 
         self.set_to_current_values()

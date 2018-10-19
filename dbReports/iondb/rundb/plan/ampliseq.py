@@ -267,7 +267,7 @@ class AmpliSeqPanelImport(object):
             substitue_version = None
             if available_plan_version:
                 for version in available_plan_version:
-                    if float(version) < float(planTS):
+                    if StrictVersion(version) < StrictVersion(planTS):
                         isSubstitueVersionAvailable = True
                         substitue_version = version
                         break
@@ -334,6 +334,7 @@ def convert_AS_to_TS_plan_and_post(
 def post_TS_plan(plan_prototype, alignmentargs_override, args):
     isUploadFailed = False
     errMsg = None
+    error_messages = None
     try:
         success, response, content = api.post("plannedexperiment", **plan_prototype)
         if not success:
@@ -342,13 +343,17 @@ def post_TS_plan(plan_prototype, alignmentargs_override, args):
             error_message_array = []
             if 'error' in err_content:
                 error_json = json.loads(str(err_content['error'][3:-2]))
-                for k in error_json:
-                    for j in range(len(error_json[k])):
-                        err_message = str(error_json[k][j])
-                        err_message = err_message.replace('&gt;', '>')
-                        error_message_array.append(err_message)
-            error_messages = ','.join(error_message_array)
-            raise Exception(error_messages)
+                if isinstance((error_json), list) and len(error_json) > 1:
+                    for k in error_json:
+                        for j in range(len(error_json[k])):
+                            err_message = str(error_json[k][j])
+                            err_message = err_message.replace('&gt;', '>')
+                            error_message_array.append(err_message)
+                    error_messages = error_message_array
+                    error_messages = ','.join(error_message_array)
+                else:
+                    error_messages = error_json.get("Error") or error_json
+            raise Exception(str(error_messages))
         if alignmentargs_override:
             content_dict = json.loads(content)
             api.patch("plannedexperiment",

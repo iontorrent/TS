@@ -92,6 +92,9 @@ static int main_tvc(int argc, char* argv[])
   if (tag_trimmer.HaveTags()){
 	  cout << "TVC: Call small variants with molecular tags. Indel Assembly will be turned off automatically." << endl;
 	  parameters.program_flow.do_indel_assembly = false;
+	  if (not parameters.force_sample_name.empty()){
+		  cerr << "WARNING: The option \"--force-sample-name\" will group the reads that have the same UMT in the same family even though they come from different samples!" << endl;
+	  }
   }
 
   OrderedVCFWriter vcf_writer;
@@ -262,8 +265,7 @@ void * VariantCallerWorker(void *input)
   int prev_positioin_ticket_end = -1;    // position_ticket.end at the previous while loop
   PersistingThreadObjects  thread_objects(*vc.global_context);
 
-  Consensus consensus;
-  consensus.SetFlowConsensus(false);
+  ConsensusAlignmentManager consensus(vc.ref_reader, vc.parameters->program_flow.DEBUG > 1);
   list<PositionInProgress> consensus_position_temp(1);
   list<PositionInProgress>::iterator consensus_position_ticket = consensus_position_temp.begin();
   consensus_position_ticket->begin = NULL;
@@ -393,16 +395,20 @@ void * VariantCallerWorker(void *input)
         if (new_read[i]->filtered)
           continue;
 
-
         // 4) Filter by read mismatch limit (note: NOT the filter for read-max-mismatch-fraction) here.
         FilterByModifiedMismatches(new_read[i], vc.parameters->read_mismatch_limit, vc.targets_manager);
         if (new_read[i]->filtered)
           continue;
 
-        // 5) Parsing alignment: Read filtering & populating allele specific data types in Alignment object
+        // 5) Calculate the hash for family identification
+        vc.mol_tag_manager->PreComputeForFamilyIdentification(new_read[i]);
+        if (new_read[i]->filtered)
+          continue;
+
+        // 6) Parsing alignment: Read filtering & populating allele specific data types in Alignment object
         vc.candidate_generator->UnpackReadAlleles(*new_read[i]);
 
-        // 6) Unpacking read meta data for evaluator
+        // 7) Unpacking read meta data for evaluator
         UnpackOnLoad(new_read[i], *vc.global_context);
       }
 
@@ -447,24 +453,7 @@ void * VariantCallerWorker(void *input)
     	        my_molecular_families_multisample.resize(sample_num);
     			my_family_generator.GenerateMyMolecularFamilies(vc.mol_tag_manager, *position_ticket, overloaded_sample_index, my_molecular_families_multisample[sample_index]);
     		}
-    		// Clear previous consensus_position_ticket
-			while ((consensus_position_ticket->begin != NULL) and (consensus_position_ticket->begin != consensus_position_ticket->end)) {
-				Alignment* p = consensus_position_ticket->begin;
-				consensus_position_ticket->begin = consensus_position_ticket->begin->next;
-				delete p;
-			}
-			if (consensus_position_ticket->begin != NULL) {
-				delete consensus_position_ticket->begin;
-				consensus_position_ticket->begin = NULL;
-				consensus_position_ticket->end = NULL;
-			}
     		GenerateConsensusPositionTicket(my_molecular_families_multisample, vc, consensus, consensus_position_ticket);
-			for (Alignment *p = consensus_position_ticket->begin; p; p = p->next) {
-				// Unpack the read for candidate gen if it is not copied from a actual read.
-				if (p->refmap_has_allele.empty()){
-					vc.candidate_generator->UnpackReadAlleles(*p);
-				}
-			}
         }
         if (position_ticket->begin != NULL and position_ticket->end != NULL){
         	prev_positioin_ticket_begin = position_ticket->begin->read_number;

@@ -3,7 +3,6 @@
 import xmlrpclib
 import socket
 import logging
-import time
 
 try:
     from django.conf import settings
@@ -45,19 +44,3 @@ def call_pluginStatus(jobid, conn=None):
 
     return ret
 
-
-def call_sgeStop(jobid, conn=None):
-    if jobid is None:
-        return "Invalid JobID"
-    if conn is None:
-        conn = get_serverProxy()
-
-    ret = ""
-    log = logging.getLogger(__name__)
-    try:
-        ret = conn.sgeStop(jobid)
-    except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
-        log.exception("XMLRPC Error")
-        ret = str(f)
-
-    return ret

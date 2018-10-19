@@ -267,7 +267,9 @@ class processAmpliSeqPanel(object):
                         queryString["isDefault"] = True
                 app = models.ApplProduct.objects.filter(**queryString)[0]
             except:
-                print traceback.print_exc()
+                # uncomment the below line during debugging for more detailed exception
+                # print traceback.print_exc()
+                print "Exception during application product parsing."
                 print
                 if available_choice and decoratedInstType in available_choice:
                     traceback.print_exc()

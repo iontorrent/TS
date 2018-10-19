@@ -30,6 +30,7 @@ result_patterns = [
     'separator.bftraces.txt',
     'separator.trace.txt',
     'sigproc.log',
+    'separator.avg-traces.txt',
     'BkgModelFilterData.h5',
     'pinsPerFlow.txt',
     # Basecaller files

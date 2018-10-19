@@ -73,7 +73,7 @@ def pretty_floats(obj):
 
 print "Saving to " + output_filename
 with open(output_filename,'w') as f:
-    json.dump(pretty_floats(output_json),f,indent=4)
+    json.dump(pretty_floats(output_json),f,indent=4,sort_keys=True)
 
 
 

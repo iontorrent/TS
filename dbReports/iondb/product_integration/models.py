@@ -5,6 +5,7 @@ different than what the django locale's preferred encoding then it will fail to 
 """
 
 import requests
+import os
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import pre_delete
@@ -13,6 +14,7 @@ from django.dispatch import receiver
 from iondb.product_integration.utils import send_deep_laser_iot_request, get_deep_laser_iot_response
 from iondb.rundb.json_field import JSONField
 from iondb.security.models import SecureString
+from iondb import settings
 
 
 class ThermoFisherCloudAccount(models.Model):
@@ -78,7 +80,8 @@ class ThermoFisherCloudAccount(models.Model):
 
     def setup_ampliseq(self, password):
         """This method will setup a secret for the ampliseq password"""
-        ampliseq_response = requests.get("https://ampliseq.com/ws/design/list", auth=(self.username, password))
+        base_url = os.path.join(settings.AMPLISEQ_URL,"ws/design/list")
+        ampliseq_response = requests.get(base_url, auth=(self.username, password))
         ampliseq_response.raise_for_status()
 
     def get_ampliseq_password(self):

@@ -1,0 +1,83 @@
+{% extends "rundb/home/base.html" %}
+{% load url from future %}
+
+{% block sub-nav %}
+    <li><a href="{% url "dashboard" %}">Dashboard</a></li>
+    <li class="active">
+        <a href="{% url "news" %}">News {% if unread_news %}
+            <span class="label label-warning" style="margin-left: 3px; line-height:14px;">
+                {{ unread_news }} Unread News Item{{ unread_news|pluralize }}
+            </span>{% endif %}
+        </a>
+    </li>
+{% endblock sub-nav %}
+
+{% block content %}
+    <style type="text/css">
+        div.news-link {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #E3E3E3;
+            font: 14px/1.4 Arial, "Helvetica Neue", Helvetica, sans-serif;
+        }
+
+        div.news-link a.news-title {
+            font-weight: normal;
+            font-size: 24px;
+            line-height: 28px;
+        }
+
+        .news-date {
+            color: gray;
+        }
+
+        .news-summary {
+            color: black;
+            padding-left: 14px;
+        }
+
+        .news-read {
+            color: green;
+        }
+
+        .news-body {
+            margin-left: 15px;
+        }
+
+        .last-read {
+            color: gray;
+            line-height: 40px;
+            margin: 10px 0;
+        }
+    </style>
+
+    {% if is_updating %}
+        <div class="content clearfix">
+            {% if articles and articles.0.updated < last_read %}
+                <small class="pull-right last-read">No news since you last checked {{ last_read|timesince }} ago.
+                </small>
+            {% endif %}
+            <h1>News
+                <small>Updates from Ion Torrent</small>
+            </h1>
+            {% for article in articles %}
+                <div class="news-link">
+                    {% if article.updated > last_read %}
+                        <div class="text-success pull-left">&bull;</div>
+                    {% endif %}
+                    <div class="news-body">
+                        <a href="{{ article.link }}" class="news-title">{{ article.title }}</a>
+                        <p class="news-summary">{{ article.summary|safe }}</p>
+                        <small class="news-date">{{ article.updated|date:"M j Y" }}</small>
+                    </div>
+                </div>
+            {% empty %}
+                <h2>There are no news updates from Ion Torrent at this time</h2>
+            {% endfor %}
+        </div>
+    {% else %}
+        <h2 class="alert" style="line-height: 100px; text-align:center;">News updates are disabled in this site's global
+            configuration</h2>
+    {% endif %}
+
+{% endblock %}

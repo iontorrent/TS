@@ -86,13 +86,13 @@
     </div>
 </div>
 
-<div class="row-fluid" {%if not helper.isDualBarcodingSupported %}style="display: none;"{%endif%}>
+<div class="row-fluid endBarcodeSet" {%if not helper.isDynamicDualBarcoding %}style="display: none;"{%endif%}>
     <div class="form-inline">
-        <label class="span3 control-label" for="endBarcodingKit">End Barcode Set</label>
+        <label class="span3 control-label" for="endBarcodeSet">End Barcode Set</label>
         <select id="endBarcodeSet" name="endBarcodeSet" class="span4">
             <option></option>
             {% for barcode in step.getPrePopulatedFieldDict.endBarcodeSets %}  
-                <option value="{{barcode}}" {%ifequal step.getCurrentSavedFieldDict.endBarcodeSet barcode %}selected{%endifequal%}>
+                <option value="{{barcode}}" {% if helper.isDynamicDualBarcoding and step.getCurrentSavedFieldDict.endBarcodeSet == barcode %}selected{%endif%}>
                     {{barcode}}
                 </option>
             {% endfor %}
@@ -176,7 +176,7 @@
         "isReferenceSupported" : "{{helper.getApplProduct.isReferenceSelectionSupported}}" == "True",
         "isTargetBEDFileSupported": ("{{helper.getApplProduct.isTargetRegionBEDFileSupported}}" == "True") &&  ("{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" == "True"),
         "isHotspotBEDFileSupported": ("{{helper.getApplProduct.isHotspotRegionBEDFileSuppported}}" == "True") &&  ("{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" == "True"),
-        "isDualBarcodingSupported": ("{{helper.isDualBarcodingSupported}}" == "True"),
+        "isDualBarcodingBySampleSupported": ("{{helper.isDualBarcodingBySampleSupported}}" == "True"),
         "isPlanBySample": "{{helper.isPlanBySample}}" == "True",
         "isControlSeqTypeBySample": "{{helper.isControlSeqTypeBySample}}" == "True",
         "isReserved": "{{ helper.getStepDict.Application.prepopulatedFields.planStatus }}" == "reserved",
@@ -189,24 +189,6 @@
             "short_name": "{{obj.short_name}}",
             "name": "{{obj.name}}", 
             "display": "{{obj.short_name}} ({{obj.name}})"
-        });
-    {% endfor %}
-
-    var targetBedFiles = [];
-    {% for obj in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
-        targetBedFiles.push({
-            "file": "{{obj.file}}",
-            "reference": "{{obj.meta.reference}}", 
-            "display": "{{obj.file}}".split("/").pop()
-        });
-    {% endfor %}
-    
-    var hotSpotBedFiles = [];
-    {% for obj in helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles %}
-        hotSpotBedFiles.push({
-            "file": "{{obj.file}}",
-            "reference": "{{obj.meta.reference}}", 
-            "display": "{{obj.file}}".split("/").pop()
         });
     {% endfor %}
 
@@ -232,6 +214,11 @@
                "display": "{{obj.value}}" || "None"
             });
         {% endif %}
+    {% endfor %}
+
+    var barcodeSets_static = [];
+    {% for name in step.prepopulatedFields.barcodeSets_static %}
+        barcodeSets_static.push("{{name}}")
     {% endfor %}
 
     var USERINPUT = USERINPUT || {};

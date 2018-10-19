@@ -345,7 +345,10 @@ $(document).ready(function(){
                 field: "date",
                 title: "Installed Date",
                 width: '20%',
-                template: '#= date != "NA" ? kendo.toString(new Date(Date.parse(date)),"MMM d yyyy") : "NA" #'
+                template: '#= date === null ? "" : kendo.toString(kendo.parseDate(date),"MMM d yyyy") #',
+                parse: function(e){
+                    return Date.parse(date);
+                }
             } , {
                 field: "isSupported",
                 title: "Ion Supported",

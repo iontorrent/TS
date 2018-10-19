@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <fenv.h>
 #include <armadillo>
 #include "Mask.h"
 #include "RawWells.h"
@@ -315,6 +316,8 @@ void calcMeanCovariance(mat new_sgma[2], vec new_mean[2], vec &new_alpha, const 
         sum1[1].fill(0.0);
 
         // Accumulate weighted sums for re-estimating moments:
+        int savedExceptionFlags = fegetexcept();
+        fedisableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW | FE_INEXACT | FE_UNDERFLOW); //possible division by zero in probability normalization for outliers
         for(int j=0; j<nsamp; ++j){
             // Skip reads outside the poisson range for ppf:
             if(mixed_ppf_cutoff() < ppf[j])
@@ -328,10 +331,11 @@ void calcMeanCovariance(mat new_sgma[2], vec new_mean[2], vec &new_alpha, const 
             q[0] = alpha[0] * clone_dist.pdf(x);
             q[1] = alpha[1] * mixed_dist.pdf(x);
 
-            // Skip outliers:
-            if(sum(q) < 1e-20)
-              continue;
             vec w = q / sum(q);
+
+            // Skip outliers:
+            if( not w.is_finite() )
+              continue;
 
             // Running sums for moments are weighted:
             sumw         += w;
@@ -341,6 +345,7 @@ void calcMeanCovariance(mat new_sgma[2], vec new_mean[2], vec &new_alpha, const 
             sum2.at(0,1) += w[0] * (ppf[j] - mean[0][0]) * (ssq[j] - mean[0][1]);
             sum2.at(1,1) += w[0] * square(ssq[j] - mean[0][1]);
         }
+        feenableexcept(savedExceptionFlags);
 
         // New means:
         for(int j=0; j<2; ++j) {

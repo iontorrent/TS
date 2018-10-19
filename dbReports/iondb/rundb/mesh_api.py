@@ -5,12 +5,15 @@
 import requests
 import multiprocessing
 import datetime
+import json
 import logging
 
-from tastypie.resources import ModelResource
+from tastypie.resources import ModelResource, Resource
+from tastypie.http import HttpNotImplemented, HttpCreated
 from tastypie.exceptions import InvalidSortError, BadRequest
 from django.utils.dateparse import parse_datetime
 from django.conf import settings
+from django.core.cache import cache
 
 from ion.utils.TSversion import findVersions
 from iondb.rundb.models import IonMeshNode
@@ -486,3 +489,55 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
 
     def rollback(self, bundles):
         raise NotImplementedError("This is a readonly resource!")
+
+
+class AutoDiscoveredHostsResource(Resource):
+    class Meta:
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+    def _validate_list(self, hosts_list):
+        for host_entry in hosts_list:
+            if sorted(host_entry.keys()) != ["hostname", "ipv4"]:
+                raise BadRequest("Invalid list object keys. Must be 'hostname', 'ipv4'.")
+            if not host_entry["hostname"]:
+                raise BadRequest("Empty hostname key.")
+            if not host_entry["ipv4"]:
+                raise BadRequest("Empty ipv4 key.")
+
+    def post_list(self, request, **kwargs):
+        hosts_list = json.loads(request.body)["objects"]
+        self._validate_list(hosts_list)
+        cache.set("auto_discovered_hosts_json", json.dumps(hosts_list), None)
+        return HttpCreated()
+
+    def post_detail(self, request, **kwargs):
+        return HttpNotImplemented()
+
+
+    def get_list(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def get_detail(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def delete_list(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def delete_detail(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def put_detail(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def put_list(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def patch_detail(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def patch_list(self, request, **kwargs):
+        return HttpNotImplemented()
+
+    def get_multiple(self, request, **kwargs):
+        return HttpNotImplemented()

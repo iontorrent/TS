@@ -62,77 +62,49 @@ max_filename_len = 255
 
 def addAutorunParams(plan=None):
   '''Additional parameter set up for autoruns to fill in for defaults usually set customization GUI.'''
+  # check for plan plugin configuration, where available
   config = pluginParams['config']
-  config['librarytype'] = 'WGNM'
-  config['librarytype_id'] = 'Whole Genome'
-  config['targetregions'] = ''
-  config['targetregions_id'] = 'None'
-  config['trimreads'] = 'No'
-  if not 'sampleid' in config: config['sampleid'] = 'No'
-  if not 'padtargets' in config: config['padtargets'] = '0'
-  if not 'uniquemaps' in config: config['uniquemaps'] = 'No'
-  if not 'nonduplicates' in config: config['nonduplicates'] = 'Yes'
-  config['minalignlen'] = '0'
-  config['minmapqual'] = '0'
-  config['barcodebeds'] = 'No'
-  config['barcodetargetregions'] = ''
-  config['covdepth1'] = '20'
-  config['covdepth2'] = '100'
-  config['covdepth3'] = '500'
-  # extract things from the plan if provided - for coverageAnalysis auto-run w/o a plan leads to early exit
   if plan: 
-    config['librarytype'] = runtype = plan['runType']
-    if runtype == 'AMPS':
-      config['librarytype_id'] = 'AmpliSeq DNA'
-    elif runtype == 'AMPS_EXOME':
-      config['librarytype_id'] = 'AmpliSeq Exome'
-    elif runtype == 'AMPS_RNA':
-      config['librarytype_id'] = 'AmpliSeq RNA'
-    elif runtype == 'AMPS_DNA_RNA':
-      config['librarytype_id'] = 'AmpliSeq DNA and Fusions'
-    elif runtype == 'MIXED':
-      config['librarytype_id'] = 'Mixed Samples (DNA/RNA)'
-    elif runtype == 'TARS':
-      config['librarytype_id'] = 'TargetSeq'
-    elif runtype == 'TAG_SEQUENCING':
-      config['librarytype_id'] = 'Tag Sequencing'
-    elif runtype == 'TARS_16S':
-      config['librarytype_id'] = '16S Targeted Sequencing'
-      config['sampleid'] = 'No'
-      config['uniquemaps'] = 'No'
-    elif runtype == 'RNA':
-      config['librarytype_id'] = 'RNA-Seq'
-      config['sampleid'] = 'No'
-      config['uniquemaps'] = 'No'
-    elif runtype == 'WGNM':
-      config['librarytype_id'] = 'Whole Genome'
-    elif runtype == 'GENS':
-      config['librarytype_id'] = 'Generic Sequencing'
+    runtype = plan['runType']
+    config['librarytype'] = runtype
+    config['librarytype_id'] = plan['runTypeDescription']
+    config['targetregions'] = target_id = plan['bedfile']
+    target_id = os.path.basename(target_id)
+    if target_id[-4:] == ".bed": target_id = target_id[:-4]
+    config['targetregions_id'] = target_id
+    if 'launch_mode' in config:
+      config['launch_mode'] = 'Autostart with plan configuration'
     else:
-      config['librarytype_id'] = "[%s]"%runtype
-      raise Exception("CATCH:Do not know how to analyze coverage for unsupported plan runType: '%s'"%runtype)
-    if runtype[:4] == 'AMPS' or runtype == 'TARS_16S' or runtype == 'RNA' or runtype == 'TAG_SEQUENCING':
-      config['nonduplicates'] = 'No'
-      config['padtargets'] = '0'
-    else:
-      config['sampleid'] = 'No'
+      config['launch_mode'] = 'Autostart with default configuration'
   else:
-    raise Exception("CATCH:Automated analysis requires a Plan to specify Run Type.")    
+    config['librarytype'] = 'GENS'
+    config['librarytype_id'] = 'Generic Sequencing'
+    config['launch_mode'] = 'Autostart with no plan'
+  furbishPluginParams()
 
 
 def furbishPluginParams():
   '''Additional parameter set up for configured and semi-configured runs.'''
   config = pluginParams['config']
-  # HTML form posts typically do not add unchecked options...
-  if 'barcodebeds' not in config: config['barcodebeds'] = 'No'
-  if 'sampleid' not in config: config['sampleid'] = 'No'
-  if 'uniquemaps' not in config: config['uniquemaps'] = 'No'
-  if 'nonduplicates' not in config: config['nonduplicates'] = 'No'
-  if 'minalignlen' not in config: config['minalignlen'] = '0'
-  if 'minmapqual' not in config: config['minmapqual'] = '0'
-  if 'covdepth1' not in config: config['covdepth1'] = '20'
-  if 'covdepth2' not in config: config['covdepth2'] = '100'
-  if 'covdepth3' not in config: config['covdepth3'] = '500'
+  config.setdefault('targetregions','')
+  config.setdefault('targetregions_id','None')
+  config.setdefault('barcodetargetregions','')
+  config['barcodebeds'] = 'Yes' if config.get('barcodebeds',False) else 'No'
+  config['sampleid'] = 'Yes' if config.get('sampleid',False) else 'No'
+  config['uniquemaps'] = 'Yes' if config.get('uniquemaps',False) else 'No'
+  config.setdefault('sampleid','No')
+  config.setdefault('padtargets','0')
+  config.setdefault('minalignlen','0')
+  config.setdefault('minmapqual','0')
+  config.setdefault('covdepth1','20')
+  config.setdefault('covdepth2','100')
+  config.setdefault('covdepth3','500')
+  # for past and future use
+  config['trimreads'] = 'No'
+  # for defaults that depend on runtype
+  runtype = config['librarytype']
+  if not 'nonduplicates' in config:
+    config['nonduplicates'] = 'Yes' if runtype == 'GENS' or runtype == 'TARS' or runtype == 'WGNM' else "No"
 
 
 def configReport():
@@ -205,9 +177,9 @@ def run_plugin(skiprun=False,barcode=""):
 
   # use nucType and targets to distinguish barcode-specific run-types
   bedfile = barcodeData['bedfile']
-  if librarytype == 'AMPS_DNA_RNA' or librarytype == 'MIXED':
+  if '_DNA_RNA' in librarytype or 'MIXED' in librarytype:
     librarytype = 'AMPS_RNA' if barcodeData['nuctype'] == 'RNA' else 'AMPS'
-  elif librarytype == 'RNA' and bedfile != '':
+  elif 'RNA' in librarytype and bedfile != '':
     librarytype = 'AMPS_RNA'
 
   # link from source BAM since pipeline uses the name as output file stem
@@ -216,12 +188,13 @@ def run_plugin(skiprun=False,barcode=""):
   createlink(barcodeData['bamfile']+'.bai',linkbam+'.bai')
   bamfile = linkbam
 
-  # Run-type flags used to customize the detailed (barcode) report
+  # Run-type flags used here to run options and customize the detailed (barcode) report
+  # - renderOptions() does near equivalent for summary reports
   samp_track = (config['sampleid'] == 'Yes')
   trg_stats = (bedfile != "")
   amp_stats = (trg_stats and pluginParams['is_ampliseq'])
-  rna_stats = (librarytype == 'AMPS_RNA' or librarytype == 'RNA')
-  chr_stats = (librarytype == 'RNA' and not trg_stats)
+  rna_stats = ('RNA' in librarytype)
+  chr_stats = ('RNA' in librarytype and not trg_stats)
   wgn_stats = ((librarytype == 'WGNM' or librarytype == 'GENS') and not trg_stats)
   bas_stats = ((wgn_stats or trg_stats) and not rna_stats)
   trg_type = 1 if amp_stats else 0
@@ -581,7 +554,8 @@ def renderOptions():
     filter_options.append('Minimum aligned length = %d'%int(config['minalignlen']))
   if config['minmapqual'] and int(config['minmapqual']):
     filter_options.append('Minimum mapping quality = %d'%int(config['minmapqual']))
-  trg_stats = config['targetregions_id'] != 'None'
+  trg_stats = config['targetregions_id'] != 'None' or pluginParams['trg_barcode_specific']
+  mixed = "_DNA_RNA" in librarytype or 'MIXED' in librarytype
   return {
     "runType" : librarytype,
     "library_type" : config['librarytype_id'],
@@ -589,11 +563,11 @@ def renderOptions():
     "target_padding" : config['padtargets'],
     "filter_options" : ', '.join(filter_options),
     "samp_track" : (config['sampleid'] == 'Yes'),
-    "mixed_stats" : (librarytype == "AMPS_DNA_RNA"),
-    "chr_stats" : (librarytype == "RNA" and not trg_stats),
+    "mixed_stats" : ("_DNA_RNA" in librarytype or 'MIXED' in librarytype),
+    "chr_stats" : ("RNA" in librarytype and not trg_stats),
     "wgn_stats" : (librarytype == 'WGNM' or librarytype == 'GENS'),
     "trg_stats" : trg_stats,
-    "bas_stats" : (librarytype != 'AMPS_RNA' and librarytype != 'RNA')
+    "bas_stats" : (mixed or "RNA" not in librarytype)
   }
   
 
@@ -913,20 +887,24 @@ def loadPluginParams():
 
   # set up plugin specific options depending on auto-run vs. plan vs. GUI
   config = pluginParams['config'] = jsonParams['pluginconfig'].copy() if 'pluginconfig' in jsonParams else {}
-  launchmode = config.get('launch_mode','')
-  pluginParams['manual_run'] = launchmode == 'Manual'
+  pluginParams['manual_run'] = config.get('launch_mode','') == 'Manual'
   if pluginParams['manual_run']:
     furbishPluginParams()
-  elif 'plan' in jsonParams:
-    # assume that either plan.html or config.html has partially defined the config if launch_mode is defined
-    if launchmode:
-      furbishPluginParams()
-    else:
-      config['launch_mode'] = 'Autostart with plan configuration'
-    addAutorunParams(jsonParams['plan'])
   else:
-    config['launch_mode'] = 'Autostart with default configuration'
-    addAutorunParams()
+    addAutorunParams(jsonParams.get('plan',None))
+
+  # preset some (library) dependent flags and ensure fixed (hidden) option defaults
+  runtype = config['librarytype']
+  pluginParams['is_ampliseq'] = (runtype[:4] == 'AMPS' or runtype == 'TARS_16S' or runtype == 'TAG_SEQUENCING' or runtype == 'MIXED')
+  pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
+  if pluginParams['is_ampliseq']:
+    config['nonduplicates'] = 'No'
+    config['padtargets'] = '0'
+  else:
+    config['sampleid'] = 'No'
+  if runtype == 'RNA':
+    config['nonduplicates'] = 'No'
+    config['padtargets'] = '0'
 
   # (re)validate that numeric inputs really are, until plan.html can perform pre-validation
   isInt = re.compile("^\d+$")
@@ -977,11 +955,6 @@ def loadPluginParams():
   pluginParams['ref_barcode_specific'] = ref_bs
   pluginParams['trg_barcode_specific'] = trg_bs
  
-  # preset some (library) dependent flags
-  runtype = config['librarytype']
-  pluginParams['is_ampliseq'] = (runtype[:4] == 'AMPS' or runtype == 'TARS_16S' or runtype == 'TAG_SEQUENCING' or runtype == 'MIXED')
-  pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
-
   # early catch for unsuitable setup - to approximate 5.0 behavior
   if pluginParams['genome_id'].lower == 'none':
     raise Exception("CATCH: Cannot run plugin without reads aligned to any reference.")

@@ -129,11 +129,11 @@ def get_search_parameters():
 @login_required
 def rundb_redirect(request):
     # Old /rundb/ page redirects to /data/, keeps args
-    url = reverse('data') or '/data/'
+    url = reverse('dashboard')
     args = request.META.get('QUERY_STRING', '')
     if args:
         url = "%s?%s" % (url, args)
-    return redirect(url, permanent=True)
+    return redirect(url, permanent=False)
 
 
 def get_serialized_exps(request, pageSize):

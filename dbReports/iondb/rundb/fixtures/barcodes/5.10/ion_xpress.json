@@ -1,0 +1,1730 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 69,
+			"name": "IonXpress",
+			"sequence": "TTCAATTGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_069",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "IonXpress",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_001",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "IonXpress",
+			"sequence": "TAAGGAGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_002",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "IonXpress",
+			"sequence": "AAGAGGATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_003",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "IonXpress",
+			"sequence": "TACCAAGATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_004",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "IonXpress",
+			"sequence": "CAGAAGGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_005",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 67,
+			"name": "IonXpress",
+			"sequence": "TTCCTACCAGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_067",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 68,
+			"name": "IonXpress",
+			"sequence": "TCAAGAAGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_068",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 77,
+			"name": "IonXpress",
+			"sequence": "CGAAGCGATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_077",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 78,
+			"name": "IonXpress",
+			"sequence": "CAGCCAATTCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_078",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 79,
+			"name": "IonXpress",
+			"sequence": "CCTGGTTGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_079",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 80,
+			"name": "IonXpress",
+			"sequence": "TCGAAGGCAGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_080",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 81,
+			"name": "IonXpress",
+			"sequence": "CCTGCCATTCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_081",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 95,
+			"name": "IonXpress",
+			"sequence": "CGGACAGATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_095",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 96,
+			"name": "IonXpress",
+			"sequence": "TTAAGCGGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_096",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 82,
+			"name": "IonXpress",
+			"sequence": "TTGGCATCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_082",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 39,
+			"name": "IonXpress",
+			"sequence": "TAACAATCGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_039",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 63,
+			"name": "IonXpress",
+			"sequence": "CCTTAGAGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_063",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 64,
+			"name": "IonXpress",
+			"sequence": "CTGAGTTCCGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_064",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 66,
+			"name": "IonXpress",
+			"sequence": "CCGCAATCATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_066",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 70,
+			"name": "IonXpress",
+			"sequence": "CCTACTGGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_070",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 71,
+			"name": "IonXpress",
+			"sequence": "TGAGGCTCCGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_071",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 72,
+			"name": "IonXpress",
+			"sequence": "CGAAGGCCACAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_072",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 73,
+			"name": "IonXpress",
+			"sequence": "TCTGCCTGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_073",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 74,
+			"name": "IonXpress",
+			"sequence": "CGATCGGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_074",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 75,
+			"name": "IonXpress",
+			"sequence": "TCAGGAATAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_075",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 76,
+			"name": "IonXpress",
+			"sequence": "CGGAAGAACCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_076",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 83,
+			"name": "IonXpress",
+			"sequence": "CTAGGACATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_083",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 84,
+			"name": "IonXpress",
+			"sequence": "CTTCCATAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_084",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 86,
+			"name": "IonXpress",
+			"sequence": "CTTGGTTATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_086",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 87,
+			"name": "IonXpress",
+			"sequence": "TTGGCTGGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_087",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 88,
+			"name": "IonXpress",
+			"sequence": "CCGAACACTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_088",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 89,
+			"name": "IonXpress",
+			"sequence": "TCCTGAATCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_089",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 90,
+			"name": "IonXpress",
+			"sequence": "CTAACCACGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_090",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 91,
+			"name": "IonXpress",
+			"sequence": "CGGAAGGATGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_091",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 92,
+			"name": "IonXpress",
+			"sequence": "CTAGGAACCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_092",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 93,
+			"name": "IonXpress",
+			"sequence": "CTTGTCCAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_093",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 94,
+			"name": "IonXpress",
+			"sequence": "TCCGACAAGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_094",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 85,
+			"name": "IonXpress",
+			"sequence": "CCAGCCTCAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_085",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 33,
+			"name": "IonXpress",
+			"sequence": "TTCTCATTGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_033",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 65,
+			"name": "IonXpress",
+			"sequence": "TCCTGGCACATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_065",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 28,
+			"name": "IonXpress",
+			"sequence": "ATCCGGAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_028",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 20,
+			"name": "IonXpress",
+			"sequence": "CAGATCCATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_020",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 21,
+			"name": "IonXpress",
+			"sequence": "TCGCAATTAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_021",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 22,
+			"name": "IonXpress",
+			"sequence": "TTCGAGACGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_022",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 23,
+			"name": "IonXpress",
+			"sequence": "TGCCACGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_023",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 24,
+			"name": "IonXpress",
+			"sequence": "AACCTCATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_024",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 25,
+			"name": "IonXpress",
+			"sequence": "CCTGAGATAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_025",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 26,
+			"name": "IonXpress",
+			"sequence": "TTACAACCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_026",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 27,
+			"name": "IonXpress",
+			"sequence": "AACCATCCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_027",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 29,
+			"name": "IonXpress",
+			"sequence": "TCGACCACTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_029",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 30,
+			"name": "IonXpress",
+			"sequence": "CGAGGTTATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_030",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "IonXpress",
+			"sequence": "TCTAACGGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_013",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "IonXpress",
+			"sequence": "TTGGAGTGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_014",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "IonXpress",
+			"sequence": "TCTAGAGGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_015",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "IonXpress",
+			"sequence": "TCTGGATGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_016",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 17,
+			"name": "IonXpress",
+			"sequence": "TCTATTCGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_017",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 18,
+			"name": "IonXpress",
+			"sequence": "AGGCAATTGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_018",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 19,
+			"name": "IonXpress",
+			"sequence": "TTAGTCGGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_019",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 31,
+			"name": "IonXpress",
+			"sequence": "TCCAAGCTGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_031",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 32,
+			"name": "IonXpress",
+			"sequence": "TCTTACACAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_032",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 34,
+			"name": "IonXpress",
+			"sequence": "TCGCATCGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_034",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 35,
+			"name": "IonXpress",
+			"sequence": "TAAGCCATTGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_035",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 36,
+			"name": "IonXpress",
+			"sequence": "AAGGAATCGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_036",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 37,
+			"name": "IonXpress",
+			"sequence": "CTTGAGAATGTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_037",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 38,
+			"name": "IonXpress",
+			"sequence": "TGGAGGACGGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_038",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 40,
+			"name": "IonXpress",
+			"sequence": "CTGACATAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_040",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 41,
+			"name": "IonXpress",
+			"sequence": "TTCCACTTCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_041",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 42,
+			"name": "IonXpress",
+			"sequence": "AGCACGAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_042",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 43,
+			"name": "IonXpress",
+			"sequence": "CTTGACACCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_043",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 44,
+			"name": "IonXpress",
+			"sequence": "TTGGAGGCCAGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_044",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 45,
+			"name": "IonXpress",
+			"sequence": "TGGAGCTTCCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_045",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 46,
+			"name": "IonXpress",
+			"sequence": "TCAGTCCGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_046",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 47,
+			"name": "IonXpress",
+			"sequence": "TAAGGCAACCAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_047",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 48,
+			"name": "IonXpress",
+			"sequence": "TTCTAAGAGAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_048",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 49,
+			"name": "IonXpress",
+			"sequence": "TCCTAACATAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_049",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 50,
+			"name": "IonXpress",
+			"sequence": "CGGACAATGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_050",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 51,
+			"name": "IonXpress",
+			"sequence": "TTGAGCCTATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_051",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 53,
+			"name": "IonXpress",
+			"sequence": "CTGGCAATCCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_053",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 54,
+			"name": "IonXpress",
+			"sequence": "CCGGAGAATCGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_054",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 55,
+			"name": "IonXpress",
+			"sequence": "TCCACCTCCTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_055",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 56,
+			"name": "IonXpress",
+			"sequence": "CAGCATTAATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_056",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 57,
+			"name": "IonXpress",
+			"sequence": "TCTGGCAACGGC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_057",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "IonXpress",
+			"sequence": "CTGCAAGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_006",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "IonXpress",
+			"sequence": "TTCGTGATTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_007",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "IonXpress",
+			"sequence": "TTCCGATAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_008",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "IonXpress",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_009",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "IonXpress",
+			"sequence": "CTGACCGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_010",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "IonXpress",
+			"sequence": "TCCTCGAATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_011",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "IonXpress",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpress_012",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 52,
+			"name": "IonXpress",
+			"sequence": "CCGCATGGAAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_052",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 58,
+			"name": "IonXpress",
+			"sequence": "TCCTAGAACAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_058",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 59,
+			"name": "IonXpress",
+			"sequence": "TCCTTGATGTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_059",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 60,
+			"name": "IonXpress",
+			"sequence": "TCTAGCTCTTC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_060",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 61,
+			"name": "IonXpress",
+			"sequence": "TCACTCGGATC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXpress_061",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 62,
+			"name": "IonXpress",
+			"sequence": "TTCCTGCTTCAC",
+			"adapter": "GAT",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXpress_062",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

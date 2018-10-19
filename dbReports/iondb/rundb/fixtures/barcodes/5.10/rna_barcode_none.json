@@ -1,0 +1,20 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "RNA_Barcode_None",
+			"sequence": "GGCCAAGGCG",
+			"adapter": "",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "RNA_Barcode_None_001",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

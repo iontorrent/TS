@@ -17,7 +17,7 @@ from ion.utils import blockprocessing
 class FileExporter(IonPlugin):
     """This is a torrent suite plugin used to convert and export data sets."""
 
-    version = '5.8.0.2'
+    version = '5.10.0.0'
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     runlevels = [RunLevel.LAST]
 

@@ -3,85 +3,64 @@
 <div id="modal_references_addedit_barcode" title="" class="modal hide" data-width="750">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        {% if barcode %}
-        <h3>Edit barcode in set <strong>{{ barCodeSet }}</strong></h3>
-        {% else %}
-        <h3>Add new barcode in set <strong>{{ barCodeSet }}</strong></h3>
-        {% endif %}
+        <h3>View barcode in set <strong>{{ barcode.name }}</strong></h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
-        <form class="form-horizontal" id="modal_references_addedit_barcode_form" >
-            <fieldset>
-                <div class="control-group">
-                    <label for="id_str" class="control-label">Barcode ID</label>
-                    <div class="controls">
-                        <input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="512" type="text">
-                    </div>
+        <div class="form-horizontal">
+            <div class="control-group">
+                <label for="id_str" class="control-label">Barcode ID</label>
+                <div class="controls">
+                    <input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="512" type="text" readonly />
                 </div>
-                <div class="control-group">
-                    <label for="sequence" class="control-label">Sequence</label>
-                    <div class="controls">
-                        <input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
-                    </div>
+            </div>
+
+            <div class="control-group">
+                <label for="sequence" class="control-label">Sequence</label>
+                <div class="controls">
+                    <input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;" readonly />
                 </div>
-                <div class="control-group">
-                    <label for="adapter" class="control-label">Adapter</label>
-                    <div class="controls">
-                        <input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
-                    </div>
+            </div>
+
+            <div class="control-group">
+                <label for="adapter" class="control-label">Adapter</label>
+                <div class="controls">
+                    <input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;" readonly />
                 </div>
-                <div class="control-group">
-                    <label for="floworder" class="control-label">Floworder</label>
-                    <div class="controls">
-                        <input value="{{ barcode.floworder|blankIfNone }}" name="floworder"
-                               id="floworder" size="35" maxlength="128" type="text"
-                               style="text-transform: uppercase;"
-                               class="input-xlarge validateNuc" />
-                    </div>
+            </div>
+
+            <div class="control-group">
+                <label for="end_sequence" class="control-label">End Sequence</label>
+                <div class="controls">
+                    <input value="{{ barcode.end_sequence|blankIfNone }}" name="end_sequence" id="end_sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;" readonly />
                 </div>
-                <div class="control-group">
-                    <label for="annotation" class="control-label">Annotation</label>
-                    <div class="controls">
-                        <input value="{{ barcode.annotation|blankIfNone }}" name="annotation"
-                            id="annotation" size="35" maxlength="512" type="text"
-                               class="input-xlarge textInput"/>
-                    </div>
+            </div>
+
+            <div class="control-group">
+                <label for="end_adapter" class="control-label">End Adapter</label>
+                <div class="controls">
+                    <input value="{{ barcode.end_adapter|blankIfNone }}" name="end_adapter" id="end_adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;" readonly />
                 </div>
-                <div class="control-group">
-                    <label for="type" class="control-label">Type</label>
-                    <div class="controls">
-                        <select name="type">
-                            {% for type_val,type in barcode.ALLOWED_BARCODE_TYPES %}
-                            <option value={{type_val}} {%if barcode.type == type_val %}selected{%endif%}>{{type}}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+            </div>
+            <div class="control-group">
+                <label for="annotation" class="control-label">Annotation</label>
+                <div class="controls">
+                    <input value="{{ barcode.annotation|blankIfNone }}" name="annotation" id="annotation" size="35" maxlength="512" type="text" class="input-xlarge textInput" readonly/>
                 </div>
-            </fieldset>
-            <input value="{{ index }}" name="index" id="index" type="hidden"/>
-            <input value="{{ barCodeSetName }}" name="name" id="name" type="hidden"/>
-            <input value="{{ length }}" name="length" id="length" type="hidden"/>
-          </form>
-        <div class="bump">
-            <div id="loadingstatus"></div>
-            <div id="return"></div>
-            <div id="error"></div>
+            </div>
+            <div class="control-group">
+                <label for="type" class="control-label">Type</label>
+                <div class="controls">
+                    <input value="{{ barcode.get_type_display }}" name="annotation" id="annotation" size="35" maxlength="512" type="text" class="input-xlarge textInput" readonly/>
+                </div>
+            </div>
         </div>
     </div>
-    <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a id="upfile" class="btn btn-primary save_button" href="#">Save Barcode</a>
-    </div>
+</div>
 
 <script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
 <script type="text/javascript">
-$('#modal_references_addedit_barcode_form').uniform({
-    holder_class : 'control-group'
-    , msg_selector: 'p.help-block'
-    , error_class : 'alert alert-error'
-});
 
 //otherList - a list of all the other id_strs in use
 uniq = {{otherList|safe}};
@@ -92,7 +71,9 @@ $('.save_button').click(function(e){
 });
 $('#modal_references_addedit_barcode_form').submit(function(e){
     $("#sequence").val($("#sequence").val().toUpperCase());
+    $("#end_sequence").val($("#end_sequence").val().toUpperCase());
     $("#adapter").val($("#adapter").val().toUpperCase());
+    $("#end_adapter").val($("#end_adapter").val().toUpperCase());
     $("#floworder").val($("#floworder").val().toUpperCase());
     $("#length").val($("#sequence").val().length);
 

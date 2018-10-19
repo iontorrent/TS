@@ -40,19 +40,29 @@
 
 <div class="container-fluid">
 	<table>
-	    <tr><td><strong>Library type:</strong></td>          <td>{{options.library_type}}</td></tr>
-	    <tr><td><strong>Reference genome:</strong></td>      <td>{{options.reference_genome_name}}</td></tr>
-        <tr><td><strong>Targeted regions:</strong></td>      <td>{{options.targets_name}}</td></tr>
-        <tr><td><strong>Hotspot regions:</strong></td>       <td>{{options.hotspots_name}}</td></tr>
-	    <tr><td><strong>Configuration:</strong></td>         <td>{{options.config_line1}}</td></tr>
-  	    <tr><td><strong>Output directory:</strong></td>      <td><a href="../../../../../report/{{startplugin_json.runinfo.pk}}/metal/plugin_out/{{output_dir}}">{{output_dir}}</a>
+	    <tr><td><strong><font color="dimgrey">Library type:</font></strong></td><td>
+	     {% if options.library_type == "tagseq" %}
+	        Tag Sequencing
+	     {% else %}
+	     	{% if options.library_type == "ampliseq_hd" %}
+	     	   AmpliSeq HD
+	     	{% else %}
+	     		{{options.library_type}}
+	     	{% endif %}
+	     {% endif %}   
+	    </td></tr>
+	    <tr><td><strong><font color="dimgrey">Reference genome:</font></strong></td>      <td>{{options.reference_genome_name}}</td></tr>
+        <tr><td><strong><font color="dimgrey">Targeted regions:</font></strong></td>      <td>{{options.targets_name}}</td></tr>
+        <tr><td><strong><font color="dimgrey">Hotspot regions:</font></strong></td>       <td>{{options.hotspots_name}}</td></tr>
+	    <tr><td><strong><font color="dimgrey">Configuration:</font></strong></td>         <td>{{options.config_line1}}</td></tr>
+  	    <tr><td><strong><font color="dimgrey">Output directory:</font></strong></td>      <td><a href="../../../../../report/{{startplugin_json.runinfo.pk}}/metal/plugin_out/{{output_dir}}">{{output_dir}}</a>
   	    {% if options.barcoded_run %}
-          <tr><td><strong>Download all barcodes:</strong></td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
+          <tr><td><strong><font color="dimgrey">Download all barcodes:</font></strong></td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
                                                   <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
                                                   <a class="btn" href="{{options.run_name}}.xls">XLS</a>
                                                   <a class="btn" href="{{options.run_name}}.cov.xls">COV</a></td></tr>
         {% endif %}  
-        <tr><td><strong>Please note:</strong></td>           <td>Variant calling was carried out for all barcodes with reference genome, targeted regions and hotspot regions as specified above.</td></tr>
+        <tr><td><strong><font color="dimgrey">Please note:</font></strong></td>           <td>Variant calling was carried out for all barcodes with reference genome, targeted regions and hotspot regions as specified above.</td></tr>
 	</table>
 	
 <script type="text/javascript">
@@ -80,7 +90,7 @@
 	  {% else %}
     	  barcode_json['sample'] = "<a target='_parent' href='{{barcode.summary.barcode_details}}' class='help'><span title='Click to view the detailed report'>{{barcode.sample}}</span><a>";
 	  {% endif %}
-          {% if options.library_type == "tagseq" %}
+          {% if options.has_umt %}
 		  barcode_json['median_depth'] = {{barcode.summary.median_depth}};
 		  barcode_json['median_num_fam3'] = {{barcode.summary.median_num_fam3}};
 		  barcode_json['fm3_pass80'] = "{{barcode.summary.fm3_pass80}}";
@@ -97,7 +107,8 @@
       {% endif %}
 	  barcode_json['exports'] = '<a class="btn" href="{{barcode.summary.variants_vcf_gz_link}}">VCF.GZ</a> &nbsp <a class="btn" href="{{barcode.summary.variants_tbi_link}}">VCF.GZ.TBI</a> &nbsp';
 	  
-      {% if options.library_type != "tagseq" %}
+	  {% if options.has_umt %}
+	  {% else %}
 	  barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_vcf_gz_link}}">gVCF.GZ</a> &nbsp';
 	  barcode_json['exports'] += '<a class="btn" href="{{barcode.summary.genome_tbi_link}}">gVCF.GZ.TBI</a> &nbsp';
       {% endif %}
@@ -127,7 +138,7 @@ $(document).ready(function() {
             barcode_name: {type:"string"},
           {% endif %}
           sample: {type:"string"},
-          {% if options.library_type == "tagseq" %}
+          {% if options.has_umt %}
 		  median_depth: {type:"number"},
 		  median_num_fam3: {type:"number"},
 		  fm3_pass80: {type:"string"},
@@ -145,11 +156,11 @@ $(document).ready(function() {
           {field:"barcode_name",width:"15%"},
         {% endif %}
         {field:"sample",width:"15%"},
-          {% if options.library_type == "tagseq" %}
-        {field:"median_depth"},
-        {field:"median_num_fam3"},
-        {field:"fm3_pass80"},  
-          {% endif %}    
+        {% if options.has_umt %}
+          {field:"median_depth"},
+          {field:"median_num_fam3"},
+          {field:"fm3_pass80"},  
+        {% endif %}    
         {field:"variants"},
       {% if options.has_hotspots %}
         {field:"hotspot_variants"},     
@@ -170,7 +181,7 @@ $(document).ready(function() {
         <th title="Name of the barcode sequence and link to detailed report for reads associated with that barcode.">Barcode Name</th>
       {% endif %}
       <th title="Sample Name associated with this barcode in the experiment plan.">Sample</th>
-          {% if options.library_type == "tagseq" %}
+          {% if options.has_umt %}
 	  <th title="Median number of reads covering on target position">Median Read Cov</th>
 	  <th title="Median number of Molecules per target">Median Mol Cov</th>
 	  <th title="Limits of Detection (median - high) %">LOD %</th>
@@ -188,7 +199,7 @@ $(document).ready(function() {
           <td> #= barcode_details #</td>
         {% endif %}
         <td> #= (sample) ? sample : "None" #</td>
-          {% if options.library_type == "tagseq" %}
+          {% if options.has_umt %}
 			<td> #= numberWithCommas(median_depth) # </td>
 			<td> #= numberWithCommas(median_num_fam3) # </td>
 			<td> #= fm3_pass80 # </td>

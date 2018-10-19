@@ -1,5 +1,3 @@
-{%include "rundb/plan/page_plan/summary/kit_summary.html"%}
-
 {% if 'Save_plan' in helper.getStepDict.keys %}
     {% for key, value in helper.getStepDict.Save_plan.getCurrentSavedFieldDict.items %}
         {% if key in helper.getStepDict.Save_plan.qcNames %}

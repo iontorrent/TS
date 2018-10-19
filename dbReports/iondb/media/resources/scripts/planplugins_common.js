@@ -46,8 +46,10 @@ $.fn.restoreJSON = function(data, showObsolete) {
     if(data && typeof data == 'object') {
         $.each(els, function() {
             if (this.name && data[this.name]) {
-                if(this.type == 'checkbox' || this.type == 'radio') {
+                if(this.type == 'radio') {
                     $(this).attr("checked", (data[this.name] == $(this).val()));
+                } else if(this.type == 'checkbox'){
+                    $(this).prop("checked", data[this.name]);
                 } else if(showObsolete && this.type == 'select-one' && this.options.length < 2){
                     // add saved values if missing options
                     $(this).append('<option value="' + data[this.name] + '">' + data[this.name] + '</option>');
@@ -57,7 +59,7 @@ $.fn.restoreJSON = function(data, showObsolete) {
                 }
                 $(this).change();
             } else if (this.type == 'checkbox') {
-                $(this).attr("checked", false);
+                $(this).prop("checked", false);
             }
         });
     }

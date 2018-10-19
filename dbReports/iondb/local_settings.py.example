@@ -90,22 +90,8 @@ TEMPLATE_DEBUG = True
 TASTYPIE_FULL_DEBUG = True
 GUIDISPLAY = True
 
-# Add httpproxy to list of INSTALLED_APPS from settings.py
-INSTALLED_APPS = (
-    'django.contrib.auth',
-    'django.contrib.admin',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.admindocs',
-    'django.contrib.sites',
-    'django.contrib.staticfiles',
-    'django.contrib.humanize',
-    'django.contrib.messages',
-    'iondb.rundb',
-    'tastypie',
-    'djcelery',
-    'south',
+# these will be added to settings.py INSTALLED_APPS
+DEBUG_APPS = (
 #    'django_extensions',
     'django_nose',
 #    'tastypie_swagger',

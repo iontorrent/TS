@@ -2,6 +2,7 @@
 
 import os
 from ion.reports.plotters import plotters
+from numpy import median
 
 
 class KeyPlot:
@@ -44,26 +45,14 @@ class KeyPlot:
         return toPlot
 
     def dump_max(self, fileName):
-        def average(values):
-            sum = 0
-            length = len(values)
-            for value in values:
-                sum += value
-            if length > 0:
-                average = int(round(sum/length, 0))
-                self.average_peak = average
-                return average
-            else:
-                self.average_peak = 0
-                return 0
         try:
-            f = open(fileName, 'a')
-        except:
-            print "Can't open file"
-        if f:
-            max_array = [max(trace) for k, trace in self.data.iteritems() if k in self.key]
-            f.write("%s = %s\n" % (self.title, average(max_array)))
-            f.close()
+            with open(fileName, 'a') as f:
+                max_array = [max(trace) for k, trace in self.data.iteritems() if k in self.key]
+                self.average_peak = int(median(max_array)) if len(max_array) > 0 else 0
+                f.write("%s = %s\n" % (self.title, self.average_peak))
+        except Exception:
+            print("Can't open file")
+
 
 if __name__ == "__main__":
     libKey = sys.argv[2]

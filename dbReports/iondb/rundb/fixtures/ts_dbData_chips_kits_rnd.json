@@ -88,7 +88,7 @@
       "instrumentType": "S5"
     }
   },
- 
+
   {
     "pk": 20095,
     "model": "rundb.kitinfo",
@@ -99,7 +99,6 @@
       "runMode": "",
       "flowCount": 500,
       "libraryReadLength" : 200,
-      "templatingSize" : "200;400",
       "uid": "ICPREP0008",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "IC",

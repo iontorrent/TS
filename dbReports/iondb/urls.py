@@ -30,10 +30,8 @@ urlpatterns = patterns(
     (r'^report/', include('iondb.rundb.report.urls')),
     (r'^rundb/', include('iondb.rundb.urls')),
     (r'^security/', include('iondb.security.urls')),
-    # Dashboard
-    (r'^dashboard/', include('iondb.rundb.dashboard.urls')),
-    # From extra/
-    url(r'^news/$', 'iondb.rundb.extra.views.news', name="news"),
+    (r'^home/', include('iondb.rundb.home.urls')),
+
     # Admin
     (r'^admin/doc/', include('django.contrib.admindocs.urls')),
     (r'^admin/manage/$', 'iondb.rundb.admin.manage'),
@@ -52,6 +50,7 @@ urlpatterns = patterns(
     (r'^admin/update/version_lock/(?P<enable>[\w\.]+)', 'iondb.rundb.admin.version_lock'),
     (r'^admin/update/maintenance/(?P<action>[\w\.]+)', 'iondb.rundb.admin.maintenance'),
     (r'^admin/experiment/exp_redo_from_scratch/$', 'iondb.rundb.admin.exp_redo_from_scratch'),
+    url(r'^admin/configure_server/$', 'iondb.rundb.admin.configure_server', name="configure_server"),
     url(r'^admin/tsvm/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm/(?P<action>\w+)/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
     url(r'^admin/tsvm_log/(.+)/$', 'iondb.rundb.admin.tsvm_get_log', name="tsvm_log"),

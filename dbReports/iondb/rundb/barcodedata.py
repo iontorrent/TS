@@ -231,6 +231,7 @@ class BarcodeSampleInfo(object):
             barcodeEntry[BARCODE_DESCRIPTION] = ''
             barcodeEntry[NTC_CONTROL] = ''
 
+            # dual barcoding
             barcodeEntry[END_BARCODE_NAME] = ''
             barcodeEntry[END_BARCODE_INDEX] = ''
             barcodeEntry[END_BARCODE_ADAPTER] = ''
@@ -239,6 +240,15 @@ class BarcodeSampleInfo(object):
             barcodeEntry[END_BARCODE_TYPE] = ''
             barcodeEntry[DUAL_BARCODE_NAME] = ''
             barcodeEntry[END_BARCODE_KIT_NAME] = self.eas.endBarcodeKitName
+
+            if dnaBarcodeData.end_sequence:
+                barcodeEntry[END_BARCODE_NAME] = barcodeEntry[DUAL_BARCODE_NAME] = barcodeEntry[BARCODE_NAME]
+                barcodeEntry[END_BARCODE_INDEX] = barcodeEntry[BARCODE_INDEX]
+                barcodeEntry[END_BARCODE_ANNOTATION] = barcodeEntry[BARCODE_ANNOTATION]
+                barcodeEntry[END_BARCODE_TYPE] = barcodeEntry[BARCODE_TYPE]
+
+                barcodeEntry[END_BARCODE_ADAPTER] = dnaBarcodeData.end_adapter
+                barcodeEntry[END_BARCODE_SEQUENCE] = dnaBarcodeData.end_sequence
 
             if len(EASbarcodedSamples) > 0:
                 # attempt to find the barcode in the EAS BarcodeSample mapping
@@ -257,6 +267,7 @@ class BarcodeSampleInfo(object):
                     elif barcodeEntry[TARGET_REGION_FILEPATH] != self.eas.targetRegionBedFile:
                         barcodeEntry[SSE_BED_FILEPATH] = ''
 
+                     # dynamic dual barcoding
                     if self.eas.endBarcodeKitName:
                         sampleEndBarcode = barcodedSample.get(END_BARCODE, barcodeEntry[END_BARCODE_NAME])
                         barcodeEntry[END_BARCODE_NAME] = sampleEndBarcode

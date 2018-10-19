@@ -10,6 +10,7 @@ $(document).ready(function () {
     // 7 - applProduct for the application, target technique and sequencing instrument
     // 8 - categorized applProduct for the application, target technique and categories
     var categorizedApplProductInUse = null;
+    var isInit = true;
 
     $("form").submit(function(){
         $("select[name=barcodeId]").prop('disabled', false);
@@ -30,13 +31,12 @@ $(document).ready(function () {
        }
     );
 
-    function init_protocol_templatingSize_n_readLength_visibility() {
+    function init_protocol_n_readLength_visibility() {
         var templateKit = templateKits[$("#templateKit").val()];
-        console.log("templateKit=", templateKit);
+        //console.log("templateKit=", templateKit);
         if (templateKit) {
             var categories = templateKit.categories;
             if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
-                $('.templating_size_info').hide();
                 $('.library_read_length_info').hide();
                 $('.read_length_info').show();
             }
@@ -45,55 +45,12 @@ $(document).ready(function () {
                 $('.read_length_info').hide();
             }
             else {
-                $('.templating_size_info').hide();
                 $('.library_read_length_info').hide();
                 $('.read_length_info').hide();
            }
            handleTemplateKitSelectionForProtocol();
+           update_templating_size_warning()
         }
-    }
-
-    function handleTemplateKitSelectionForTemplatingSize() {
-        $('input[name = "templatingSize"]').prop('checked', false);
-        $('.templating_size_info').hide();
-
-        var defaultTemplatingSize = "";
-        var templateKit = templateKits[$("#templateKit").val()];
-
-        if (templateKit) {
-            var categories = templateKit.categories;
-            if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
-                $('.templating_size_info').hide();
-                $('.library_read_length_info').hide();
-            }
-            // only show templating size if there applProduct has no specialcategorization
-            var mayBeShowTemplatingSize = true;
-            if (categorizedApplProductInUse) {
-                var categorizedDefaults = categorizedApplProducts[categorizedApplProductInUse];
-                if (categorizedDefaults.defaultTemplateKit && categorizedDefaults.defaultTemplateKit === templateKit.value) {
-                    mayBeShowTemplatingSize = false;
-                }
-            }
-            if (mayBeShowTemplatingSize) {
-                if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {
-                    var allowed_templatingSizes = templateKit.templatingSize;
-                    //console.log("at handleTemplateKitSelectionForTemplatingSize() categories=", categories, "; allowed_templatingSizes=", allowed_templatingSizes);
-                    if (allowed_templatingSizes) {
-                        $('input[name = "templatingSize"]').parent().hide();
-
-                        jQuery.each(allowed_templatingSizes.split(";"), function(index, item) {
-                            $('input[name = "templatingSize"][value="' + item + '"]').parent().show();
-                            if (index == 0) {
-                                $('input[name = "templatingSize"][value="' + item + '"]').prop('checked', true);
-                                defaultTemplatingSize = item;
-                            }
-                        });
-                        $('.templating_size_info').show();
-                    }
-                }
-            }
-        }
-        updateSummaryPanel("#selectedTemplatingSize", defaultTemplatingSize);
     }
 
     function handleTemplateKitSelectionForLibraryReadLength() {
@@ -105,7 +62,6 @@ $(document).ready(function () {
             $('.library_read_length_info').show();
         }
     }
-
 
     function updateLibraryReadLength(){
         var defaultLibraryReadLength = 0;
@@ -131,7 +87,6 @@ $(document).ready(function () {
         updateSummaryPanel("#selectedLibraryReadLength", $('input[name = "libraryReadLength"]').val());
     }
 
-
     //for some templating kits, templating size cannot be used to drive UI behavior or db persistence.  Need to use read length instead
     function handleTemplateKitSelectionForReadLength() {
         $('input[name = "readLength"]').prop('checked', false);
@@ -144,8 +99,8 @@ $(document).ready(function () {
             var categories = templateKit.categories;
 
             if (categories.toLowerCase().indexOf("multiplereadlength") >= 0) {
-                // use TemplatingSize field to define available Read length radio buttons
-                var allowed_readLengths = templateKit.templatingSize;
+                // define available Read length radio buttons
+                var allowed_readLengths = "200;400";
                 if (allowed_readLengths) {
                     $('input[name = "readLength"]').parent().hide();
 
@@ -195,24 +150,38 @@ $(document).ready(function () {
                 var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
                 if (categorizedApplProduct) {
                     update_samplePrepProtocol_select(kitCategories);
-                    if (!_isEditRun) {
+                    if (!_isEditRun && !isInit){
                         //try to auto-select the appropriate samplePrepProtocol
                         handleAutoSelectionByKitCategories(categorizedApplProduct, kitCategories);
                     }
                     return;
                 }
+                else{
+                    update_samplePrepProtocol_select(kitCategories, "noCategorizedApplProduct");
+                    return;
+                }
+
             }
         }
         $('#samplePrepProtocol').empty().change();
     }
 
-    function update_samplePrepProtocol_select(kitCategories){
-        var filters = {};
+    function update_samplePrepProtocol_select(kitCategories, noCategorizedApplProduct){
+
+    	//be able to filter by seq_instruments as well
+        var filters = get_filters("");
+
         filters['categories'] = kitCategories;
 
         // TS-14664 remove empty templating protocol choice for myeloid plan
         var includeEmpty = true;
         if (_planCategories && _planCategories.indexOf('chef_myeloid_protocol') >= 0){
+            includeEmpty = false;
+        }
+
+        var noCategorizedApplProduct = arguments[1];
+        if (noCategorizedApplProduct && kitCategories.indexOf("pcr200_400bp") >= 0){
+            filters['excludeProtocol'] = "true";
             includeEmpty = false;
         }
 
@@ -238,12 +207,15 @@ $(document).ready(function () {
 
                 if (categorizedDefaults.defaultFlowCount) {
                     updateFlows(categorizedDefaults.defaultFlowCount);
-                    set_templating_size_from_category_rules();
+                    set_samplePrepProtocol_from_category_rules();
                 }
             }
         }
         else {
             categorizedApplProductInUse = null;
+            if (kitCategories){
+                update_samplePrepProtocol_select(kitCategories);
+            }
             setAdvancedSettingsSelection("samplePrepProtocol", "");
         }
     }
@@ -281,7 +253,7 @@ $(document).ready(function () {
     }
 
     function handleSequencingKitSelection(selectedSequenceKitName) {
-        if (!_isEditRun) {
+        if (!_isEditRun && !isInit) {
             setFlowCountBySelectedKits()
             updateLibraryReadLength();
             handleSeqKitSelectionForFlowOrder(selectedSequenceKitName);
@@ -296,9 +268,8 @@ $(document).ready(function () {
         $(el).html(value);
     }
 
-
     function updateFlows(value) {
-        if (!_isEditRun && value > 0){
+        if (!_isEditRun && !isInit && value > 0){
             $('input[name = "flows"]').val(value);
             updateSummaryPanel("#selectedFlows", value);
         }
@@ -306,7 +277,7 @@ $(document).ready(function () {
 
     function setFlowCountBySelectedKits(){
 
-        if (_isEditRun) return;
+        if (_isEditRun || isInit) return;
 
         var templateKit = templateKits[$("#templateKit").val()];
         var sequenceKit = sequencingKits[$("#sequenceKit").val()];
@@ -354,7 +325,7 @@ $(document).ready(function () {
             var flowCount = null;
             // values_selected fields must correspond to rules defined in KitInfo._category_flowCount_rules
             var values_selected = {
-                'templatingSize': $('[name=templatingSize]:checked').val(),
+                'samplePrepProtocol': $('select#samplePrepProtocol option:checked').val(),
                 'readLength': $('[name=readLength]:checked').val(),
                 'chipType': $('#chipType').val(),
             }
@@ -386,8 +357,8 @@ $(document).ready(function () {
         }
     }
 
-    // Set templating size as defined in the business rule based on number of flows selected
-    function set_templating_size_from_category_rules() {
+    // Set samplePrep protocol as defined in the business rule based on number of flows selected
+    function set_samplePrepProtocol_from_category_rules() {
         var templateKit = templateKits[$("#templateKit").val()];
         if (templateKit && templateKit.categories){
             // values_selected fields must correspond to rules defined in KitInfo._category_flowCount_rules
@@ -399,8 +370,8 @@ $(document).ready(function () {
                 if (templateKit.categories.toLowerCase().indexOf(rule.category.toLowerCase()) >= 0){
                     for (field in values_selected) {
                         if (field in rule && values_selected[field] == rule[field]){
-                            templatingSize = rule.templatingSize;
-                           $('input[name = "templatingSize"][value="' + templatingSize + '"]').prop('checked', true);
+                            samplePrepProtocol = rule.samplePrepProtocol;
+                            setAdvancedSettingsSelection("samplePrepProtocol", samplePrepProtocol);
                         }
                     }
                 }
@@ -502,20 +473,26 @@ $(document).ready(function () {
     function handleAutoSelectionByApplProduct(selectedInstrumentType) {
         //get the applProduct for selected instrumentType
         var applProduct = getApplProduct();
-        if (!_isEditRun && applProduct) {
+        if (!_isEditRun && !isInit && applProduct) {
             var defaults = applProductDefaults[applProduct];
 
-            if (defaults.defaultLibraryKit){
-                $('#libraryKitType option[value="'+defaults.defaultLibraryKit+'"]').attr('selected', 'selected');
+            selectedLibKitValue = $("#libraryKitType").val();
+            if (!selectedLibKitValue && defaults.defaultLibraryKit){
+                $('#libraryKitType option[value="' + defaults.defaultLibraryKit + '"]').attr('selected', 'selected');
                 $('#libraryKitType').change();
+
             }
 
-            // select default Template Kit Type and trigger change to update Kit dropdown options and selected value
-            var defaultTemplateKitType = defaults.defaultTemplateKitType || $('input[name="templatekitType"]:checked').val();
-            $('input[name="templatekitType"][value='+ defaultTemplateKitType +']').prop('checked', true);
-            $('input[name="templatekitType"][value='+ defaultTemplateKitType +']').change();
+            selectedTemplKit = $("#templateKit").val();
+            if (!selectedTemplKit){
+                // select default Template Kit Type and trigger change to update Kit dropdown options and selected value
+                var defaultTemplateKitType = defaults.defaultTemplateKitType || $('input[name="templatekitType"]:checked').val();
+                $('input[name="templatekitType"][value='+ defaultTemplateKitType +']').prop('checked', true);
+                $('input[name="templatekitType"][value='+ defaultTemplateKitType +']').change();
+            }
 
-            if (defaults.defaultSequencingKit) {
+            selectedSeqKit = $("#sequenceKit").val();
+            if (!selectedSeqKit && defaults.defaultSequencingKit) {
                 $('#sequenceKit option[value="'+defaults.defaultSequencingKit+'"]').attr('selected', 'selected');
                 $('#sequenceKit').change();
             }
@@ -562,7 +539,7 @@ $(document).ready(function () {
         var libraryKit = libraryKits[libKitName];
 
         //if user traverses from chevron to chevron, we should not trigger auto-selection when user retuns to the Kits chevron
-        if (libraryKit && (libKitName != "{{step.savedFields.librarykitname}}")) {
+        if (libraryKit && !isInit) {
             if (libraryKit.categories.toLowerCase().indexOf("sampleprepprotocol") >= 0) {
                 var kitCategories = libraryKit.categories;
                 var categorizedApplProduct = getCategorizedApplProduct(kitCategories);
@@ -598,7 +575,9 @@ $(document).ready(function () {
                     update_SequencingKit_select();
                 }
                 //if categorizedApplProduct exists, need to reset samplePrepProtocol value
-                setAdvancedSettingsSelection("samplePrepProtocol", "");
+                if (categorizedApplProduct) {
+                    setAdvancedSettingsSelection("samplePrepProtocol", "");
+                }
             }
         }
         update_barcodeKit_dropdown()
@@ -641,7 +620,6 @@ $(document).ready(function () {
         if (selectedVal) $('input[name="templatekitType"]:checked').data('templatekitname', selectedVal);
 
         setFlowCountBySelectedKits();
-        handleTemplateKitSelectionForTemplatingSize();
         handleTemplateKitSelectionForLibraryReadLength();
         handleTemplateKitSelectionForReadLength();
         handleTemplateKitSelectionForAutoSeqKitSelection();
@@ -649,7 +627,7 @@ $(document).ready(function () {
         set_default_flows_from_category_rules();
         handleTemplateKitSelectionForThreePrimeadapter();
         update_barcodeKit_dropdown();
-
+        update_templating_size_warning();
         updateSummaryPanel("#selectedTemplatingKitName", templateKitNameToDesc[selectedVal]);
     });
 
@@ -688,6 +666,7 @@ $(document).ready(function () {
         else {
             updateSummaryPanel("#selectedSamplePrepProtocol", "Use Instrument Default");
         }
+        set_default_flows_from_category_rules()
     });
 
     $("#base_recalibrate").change(function() {
@@ -716,14 +695,6 @@ $(document).ready(function () {
             setFlowCountByLibraryReadLength(value);
         });
     }
-
-
-    $('input[type=radio][name=templatingSize]').change(function() {
-        updateSummaryPanel("#selectedTemplatingSize", this.value);
-
-        // TS-10547 set number of flows based on templating size selection
-        set_default_flows_from_category_rules();
-    });
 
     $('input[type=radio][name=readLength]').change(function() {
         updateSummaryPanel("#selectedLibraryReadLength", this.value);
@@ -766,15 +737,8 @@ $(document).ready(function () {
         updateSummaryPanel("#selectedBarcode", $(this).val());
     });
 
-    init_protocol_templatingSize_n_readLength_visibility();
+    init_protocol_n_readLength_visibility();
 
-    //hide templatingSize UI section by default if value is blank
-    if ($('input[name = "templatingSize"]:checked').val() == undefined) {
-        $(".templating_size_info").hide();
-    }
-    else {
-        $(".templating_size_info").show();
-    }
 
     $('#isDuplicateReads').change(function(){
         if($(this).is(':checked')) {
@@ -805,12 +769,12 @@ $(document).ready(function () {
     update_TemplateKit_select();
     update_SequencingKit_select();
 
-
     // Advanced Settings
     $('[name=advancedSettingsChoice]').change(function(){
         if (isCustomKitSettings()){
-            $(".advanced-settings-row .showhide").removeClass('icon-minus').addClass('icon-plus');
-            $(".hideable_advanced_settings_section").show();
+            if (!$(".hideable_advanced_settings_section").is(':visible')){
+                $(".showhide").click();
+            }
             $('.advanced').prop('disabled', false);
         } else {
             $('.advanced').each(function(){
@@ -838,7 +802,7 @@ $(document).ready(function () {
         } else {
             if ( (previous || current) && (previous != current) ){
                 $('#show_updated').show();
-                setTimeout(function(){ $('#show_updated').hide(); }, 2000);
+                setTimeout(function(){ $('#show_updated').hide(); }, 4000);
             }
         }
         $(this).data('previousVal', current);
@@ -874,6 +838,8 @@ $(document).ready(function () {
         }
         $("#"+id).change();
     }
+    
+    isInit = false;
 });
 
 // ******************* Filters ************************* //
@@ -896,7 +862,7 @@ function filter_select_dropdown(data, filters, selectId){
     });
     // make sure to keep original option order
     filtered_options.sort(function(a,b){ return a.index > b.index? 1: -1;})
-
+    
     create_filter_select_dropdown(filtered_options, selectId);
 }
 
@@ -913,7 +879,11 @@ function filter_select_dropdown_multi_tokens(data, filters, selectId, includeEmp
                 //var filter_tokens = filters[filterKey].split(';');
                 var isFound = false;
                 for (match_value in match_values) {
-                    if (filters[filterKey].indexOf(match_values[match_value]) >= 0){
+                    if (filters[filterKey].toLowerCase().indexOf(match_values[match_value].toLowerCase()) >= 0) {
+                        //console.log("Include only templatingSize related protocol(pcr200_400bp));
+                        if (('excludeProtocol' in filters ) && !(match_values[match_value].indexOf("pcr") >= 0)) {
+                            return;
+                        }
                         //console.log('FOUND! multi_tokens filtered - selectId=', selectId, "; filterKey=", filterKey, "; filters[key]=", filters[filterKey], "; match_value=", match_value, "; matchValues=", match_values, "; display=", option.display)
                         isFound = true;
                     }
@@ -961,14 +931,10 @@ function update_LibraryKit_select(){
     filter_select_dropdown(libraryKits, filters, "#libraryKitType");
 }
 
-function getSamplePrep_filter_option(isTemplatingKit){
+function getSamplePrep_filter_option(){
     templatekitType_value = $('input[name="templatekitType"]:checked').val();
     if (templatekitType_value == "IA"){
-    	if (isTemplatingKit)
-        	SamplePrep_filter_option = "IA";
-        else {
-        	SamplePrep_filter_option = "OT";
-        }
+        SamplePrep_filter_option = "IA";
     }
     else{
         SamplePrep_filter_option = templatekitType_value == "IonChef"? "IC" : "OT";
@@ -978,14 +944,14 @@ function getSamplePrep_filter_option(isTemplatingKit){
 
 function update_TemplateKit_select(){
     var filters = get_filters("");
-    filters['samplePrep_instruments'] = getSamplePrep_filter_option(true);
+    filters['samplePrep_instruments'] = getSamplePrep_filter_option();
 
     filter_select_dropdown(templateKits, filters, "#templateKit");
 }
 
 function update_SequencingKit_select(){
     var filters = get_filters("");
-    filters['samplePrep_instruments'] = getSamplePrep_filter_option(false);
+    filters['samplePrep_instruments'] = getSamplePrep_filter_option();
 
     filter_select_dropdown(sequencingKits, filters, "#sequenceKit");
 }
@@ -1060,5 +1026,18 @@ function show_chiptype_warning(chipType){
     } else {
         $("#chipTypeWarning").empty().hide();
         $("#chipType").css('border-color','')
+    }
+}
+
+function update_templating_size_warning(){
+    $("#templatingProtocolAlert").empty().hide();
+    var templateKit = templateKits[$("#templateKit").val()];
+    if (templateKit){
+        var kitCategories = templateKit.categories;
+        if (kitCategories.indexOf("pcr200_400bp") >= 0) {
+            warning = "Templating Size <i class='icon-info-sign' rel='tooltip' title='Warning! " +
+                "Templating Size is obsolete. Click Advanced Settings -> Customize -> select appropriate Templating Protocol'></i>";
+            $("#templatingProtocolAlert").html(warning).show();
+        }
     }
 }

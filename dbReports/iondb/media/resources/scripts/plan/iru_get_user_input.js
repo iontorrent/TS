@@ -419,92 +419,6 @@ function find_relationship_type(workflow, columns_map) {
 }
 
 /**
-* Filter IR workflows based on runType and application group
-*/
-function get_workflow_url() {
-    var applicationGroupName = $('input[name=applicationGroupName]').val();
-    var runType_name = $('input[name=runType_name]').val();
-    var runType_nucleotideType = $('input[name=runType_nucleotideType]').val();
-
-    var planCategories = $('input[name=planCategories]').val();
-    console.log("iru_get_user_input.get_workflow_url() applicationGroupName=", applicationGroupName, "; runType_name=", runType_name, "; runType_nucleotideType=", runType_nucleotideType, "; planCategories=", planCategories);
-  
-    var myURL = USERINPUT.user_input_url;
-
-    myURL += "?format=json&id=" + USERINPUT.account_id;
-    var isFilterSet = false;
-
-    if (runType_nucleotideType.toLowerCase() == "dna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
-        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-        myURL += "DNA";
-        
-        isFilterSet = true;
-    }
-    else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
-        myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-        myURL += "RNA";
-        
-        isFilterSet = true;
-    }
-
-	if (runType_nucleotideType.toLowerCase() == "dna_rna" && applicationGroupName.toLowerCase() == "immune_repertoire") {
-        myURL += "&filterKey=tag_IMMUNE_REPERTOIRE_SHORT_ASSAY&filterValue=";
-        myURL += "true";
-
-        isFilterSet = true;
-	}
-	else {	
-	    if (applicationGroupName == "DNA + RNA") {
-	        /*for mixed single & paired type support
-	        if (runType_nucleotideType.toLowerCase() == "dna_rna") {
-	            myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
-	            myURL += "DNA_RNA";
-	            isFilterSet = true;
-	        }
-	        */
-	        //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-	
-	        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
-	//            if (!isFilterSet) {
-	//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
-	//            }
-	            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-	        }
-	        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
-	            if (!isFilterSet) {
-	                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
-	            }
-	            else {
-	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-	            }
-	        }
-	    }
-	    else {
-	        if (runType_name.toLowerCase() != "amps") {
-	            if (!isFilterSet) {
-	                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
-	            }
-				if (applicationGroupName == "onco_liquidBiopsy") {
-					myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-				}
-				else {
-	            	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
-	            }
-	        }
-	        else {
-	            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
-	                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
-	            }
-	            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
-	                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
-	            }
-	        }
-	    }
-    }
-    return myURL;
-}
-
-/**
 * Validate selected values are compatible with data returned by IRU
 */
 function check_selected_values(){
@@ -671,7 +585,7 @@ function populate_userinput_from_response(data){
     Main function to call IRU and process the response
 **/
 function load_and_set_ir_fields() {
-    var myURL = get_workflow_url();
+    var myURL = get_workflow_url(USERINPUT.user_input_url, USERINPUT.account_id);
 
     $.blockUI();
     var jqhxhr = $.ajax({

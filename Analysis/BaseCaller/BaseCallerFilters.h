@@ -179,6 +179,11 @@ public:
   //! @param    read_class          Read class, 0=library, 1=TFs
   void TrimExtraRight               (int read_index, int read_class, ProcessedRead& processed_read, const vector<char> & sequence);
 
+  //! @brief    Update the filter status after end barcode classification
+  //! @param    read_index          Read index
+  //! @param    filter_history      Read filtering history
+  void UpdateFilterStatus(int read_index, ReadFilteringHistory& filter_history);
+
   //! @brief    Entry point for quality trimmer to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
@@ -285,8 +290,6 @@ protected:
   bool                trim_barcodes_;                     //!< Switch indicating whether barcode trimming is turned on.
   int                 extra_trim_left_;                   //!< Delete a fixed number of bases on the 5' end of the read
   int                 extra_trim_right_;                  //!< Delete a fixed number of bases on the 3' end of the read
-  bool                save_extra_trim_;                   //!< Save extra trimming in BAM tags (left: ZE; right: YE)
-
 };
 
 

@@ -15,7 +15,6 @@
     <script type="text/javascript" src="{% static "resources/scripts/plan/iru_get_user_input.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/by_template.js" %}"></script>   
     <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_sample_table.js" %}"></script>
-    <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_reference_section.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/plan/page_plan_analysis_params_section.js" %}"></script> 
     <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
     <script type="text/javascript" src="{% static "jquery/js/jquery.form.js" %}"></script>
@@ -169,11 +168,6 @@
 
     var BARCODES = {{step.prepopulatedFields.barcodeSets_barcodes|safe}};
     var ENDBARCODES = {{step.prepopulatedFields.endBarcodeSets_barcodes|safe}};
-
-    var REFERENCE_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.references}}";
-
-    var TARGET_BED_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles}}";
-    var HOTSPOT_BED_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles}}";
 
     var IS_COPY = "{{helper.isCopy}}";
     var IS_CREATE = "{{helper.isCreate}}";

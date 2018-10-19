@@ -8,7 +8,7 @@ from ion.plugin import *
 
 class immuneResponseRNA(IonPlugin):
   '''Whole Transciptome AmpliSeq-RNA Analysis. (Ion supprted)'''
-  version = '5.8.0.1'
+  version = '5.10.0.1'
   major_block = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]

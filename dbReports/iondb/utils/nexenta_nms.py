@@ -9,6 +9,7 @@ import os
 
 NEXENTACRED = "/etc/torrentserver/nms_access"
 #NEXENTACRED = "./nms_access"
+STATUS_JSON = "/var/spool/ion/torrentnas_status.json"
 
 class Nexentanms(object):
     'Class for access to Nexenta Storage Devices'
@@ -160,7 +161,22 @@ def get_all_torrentnas_data():
                 errors.append("Nexentanms, %s: %s" % (tnas.get('ipaddress'), err))
             except:
                 errors.append(traceback.format_exc())
+
+    # save all info in json file
+    with open(STATUS_JSON, 'w') as fhandle:
+        json.dump(data, fhandle)
+
     return data, errors
+
+
+def load_torrentnas_status_json():
+    # Read Torrent NAS status from saved json file
+    try:
+        with open(STATUS_JSON, 'r') as fhandle:
+            data = json.load(fhandle)
+    except:
+        data = []
+    return data
 
 
 def has_nexenta_cred():

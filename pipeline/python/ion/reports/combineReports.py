@@ -314,7 +314,7 @@ def find_barcodes_to_process(parentBAMs, barcodeSet):
 
             for bc_path in barcode_bams:
                 try:
-                    bcname = [name for name in barcodeSet_Info.keys() if os.path.basename(bc_path).startswith(name)][0]
+                    bcname = [name for name in sorted(barcodeSet_Info.keys(), reverse=True) if os.path.basename(bc_path).startswith(name)][0]
                 except:
                     bcname = 'unknown'
 

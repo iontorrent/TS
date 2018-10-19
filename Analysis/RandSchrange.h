@@ -2,6 +2,8 @@
 #ifndef RANDSCHRANGE_H
 #define RANDSCHRANGE_H
 
+#include <assert.h>
+
 /**
  * Random number generator using Park & Millers numbers and Schrange's 
  * handling of integer overflow

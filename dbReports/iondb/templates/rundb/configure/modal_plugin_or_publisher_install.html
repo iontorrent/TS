@@ -138,6 +138,7 @@ $(function(){
 
                          if (file_name.indexOf(".deb") >= 0){
                              $.unblockUI();
+                             $("#manualOffcycle").removeClass('alert-info alert-error').addClass('alert-success');
                              $('#manualOffcycle').append('<p>Installation successfully completed for ' + uploader.files[0].name + '.<a href="{% url "offcycle_updates" %}" class="btn"><i class="icon-check"></i>Acknowledge</a></p>').show();
                          } else {
                              $('#manualOffcycle').html('<p>Product upload successfull. Update in progress...</p>').delay(6000).show(0);

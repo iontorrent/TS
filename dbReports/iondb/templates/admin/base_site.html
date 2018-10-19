@@ -5,6 +5,12 @@
 {% block extrahead %}
 <style type="text/css">
 
+    /* Increase the width of the side bar */
+    #content-related {
+        width: 22em;
+        margin-right: -23em;
+    }
+
   .aligned label{
 	width: 16em;
   }
@@ -92,13 +98,11 @@
   <script src="{% static "js/messagebox.js"%}"></script>
 {% endblock %}
 
-{% block title %}{{ title }} | {% trans 'Ion Web' %}{% endblock %}
+{% block title %}{{ title }} | {% trans 'Admin Interface' %}{% endblock %}
 
 {% block branding %}
-  <h1 id="site-name">{% trans 'Ion Web' %}</h1>
+    <h1 id="site-name">{% trans 'Admin Interface' %}</h1>
 {% endblock %}
-
-{% block nav-global %}<a id="main_site" href="{% url "data" %}">Back to Main Site</a>{% endblock %}
 
 {% block pretitle %}
 <div id="global_messages"></div>
@@ -113,4 +117,12 @@
       });
   });
 </script>
+{% endblock %}
+
+
+{% block userlinks %}
+    {% if user.has_usable_password %}
+        <a href="{% url 'admin:password_change' %}">{% trans 'Change password' %}</a> /
+    {% endif %}
+    <a href="{% url 'admin:logout' %}">{% trans 'Log out' %}</a>
 {% endblock %}

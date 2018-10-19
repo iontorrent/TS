@@ -37,7 +37,7 @@
 {% block content %}
 <div id="chef_view" class="content">
     <div class="pull-right">
-        <a href="{% url "monitor_chef" %}" class="btn"><i class="icon-refresh"></i> Refresh</a>
+        <a id="live_update" class="btn"></a>
     </div>
     <h1 style="margin-bottom:5px;">Ion Chef</h1>
     {% if plans %}
@@ -75,12 +75,12 @@
                         </td>
                         <td>{{ prepData.template_prep_status }}</td>
                         {% if prepData.planName %}
-                         	<td style="word-wrap: break-word;">{{ prepData.template_prep_remaining_time }}</td>
-                        	<td style="word-wrap: break-word;">{{ prepData.template_prep_estimated_end_time }}</td>
-                         {% else %}                                              
-                        	<td style="word-wrap: break-word;">{{ prepData.remaining_time }}</td>
-                        	<td style="word-wrap: break-word;">{{ prepData.estimated_end_time }}</td>                    
-                        {% endif %}                    
+                            <td style="word-wrap: break-word;">{{ prepData.template_prep_remaining_time }}</td>
+                            <td style="word-wrap: break-word;">{{ prepData.template_prep_estimated_end_time }}</td>
+                        {% else %}
+                            <td style="word-wrap: break-word;">{{ prepData.remaining_time }}</td>
+                            <td style="word-wrap: break-word;">{{ prepData.estimated_end_time }}</td>
+                        {% endif %}
                     </tr>
                 {% endfor %}
             </table>
@@ -107,5 +107,36 @@
         </div>
     {% endif %}
 
+<script type="text/javascript">
+    var disable_refresh = window.localStorage.getItem("disable-chef-refresh") == "true";
+    var timeout = null;
+
+    function handle_refresh(toggle){
+        if (toggle){
+            disable_refresh = !disable_refresh;
+        }
+
+        if (disable_refresh) {
+            $("#live_update").addClass('btn-success').text('Auto Refresh');
+            window.localStorage.setItem("disable-chef-refresh", "true");
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+        } else {
+            $("#live_update").removeClass('btn-success').text('Stop Refresh');
+            window.localStorage.setItem("disable-chef-refresh", "false");
+            timeout = setTimeout(function(){ window.location.reload(true); }, 20000);
+        }
+    }
+
+    $(function(){
+        $("#live_update").click(function(){
+            handle_refresh(true);
+            return false;
+        });
+
+        handle_refresh(false);
+    });
+</script>
 </div><!-- content -->
 {% endblock content %}

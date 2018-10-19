@@ -28,6 +28,7 @@ class EnsembleEvalTuningParameters {
   public:
     float germline_prior_strength; // how concentrated are we at 0,0.5,1.0 frequency for germline calls
     float outlier_prob;  // 1-data_reliability
+    int outlier_pre_filter; // outlier pre-filtering using FD
     int heavy_tailed;    // how heavy are the tails of my distribution to resist mis-shapen items = CrossHypotheses
     bool adjust_sigma;   // If true, sigma^2 = (dof-2) / dof * E[r^2] (where dof = 2*heavy_tail - 1), else sigma^2 = E[r^2]
     float prediction_precision; //  damper_bias = bias_generator - how likely the predictions are to be accurately calibrated
@@ -56,6 +57,7 @@ class EnsembleEvalTuningParameters {
     EnsembleEvalTuningParameters() {
       germline_prior_strength = 0.0f;
       outlier_prob = 0.01f;
+      outlier_pre_filter = -1;
       heavy_tailed = 3; //t5
       prediction_precision = 30.0f;
       pseudo_sigma_base = 0.3f;
@@ -178,9 +180,8 @@ class ControlCallAndFilters {
     float position_bias;
     float position_bias_pval;
 
-    // LOD filter
-    bool  use_lod_filter;
-    float lod_multiplier;
+    // LOD related
+    float min_callable_prob;
 
     // filter's for mol tags
     int  tag_sim_max_cov;

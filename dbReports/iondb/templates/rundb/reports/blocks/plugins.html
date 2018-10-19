@@ -34,7 +34,7 @@
 </script>
 
 <script type="text/x-kendo-template" id="pluginStatusTemplate">
-    <div id="#= name #-section" style="height: 30px; margin-top: -30px"></div>
+    <div id="#= name #-section" class="plugin-section-anchor" style="height: 30px; margin-top: -30px"></div>
     # data.results.forEach(function(result, i){ #
         <div class='pluginGroup' id="pluginGroupId#= result.id #" # if(i>0) { # style="display:none" # } #>
             <div class='pluginGroupHead'>
@@ -90,7 +90,7 @@
                     # for (var j = 0; j < result.Files.length; j++) { #
                         # if ( result.Files[j].endsWith("_block.html") || result.Files[j].endsWith("_block.php") ) { #
                             <div class="pluginBlock">
-                                <iframe id="#= result.Name #" class="pluginBlock" src="#= result.URL ##= result.Files[j] #"width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #">
+                                <iframe id="#= result.Name #" class="pluginBlock" data-src="#= result.URL ##= result.Files[j] #" width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #">
                                 </iframe>
                             </div>
                         # } else { #

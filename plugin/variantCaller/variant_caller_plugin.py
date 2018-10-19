@@ -105,15 +105,17 @@ class ConfigureOptionsManager:
 
         return get_consensus(value_list) 
     
-    def get_options(self, configuration):
-        self.configuration_name = configuration['name']
-        self.__is_barcoded_run = configuration['barcoded_run']
-        self.__is_configured_run = configuration['configured_run']
-        self.__is_multisample = configuration['multisample']
-        self.__start_mode = configuration['start_mode']
-        self.__options = {} # options from the plugin config
-        self.__barcodes_options = {},  # barcode specific options for barcoded run in auto start mode. won't initialize for a non-barcded run.
-        self.__barcode_options_keys = set() # set of all keys in barcodes_options[barcode]
+    def chip_type_cleanup(self, my_chip_type):
+        my_chip_type = str(my_chip_type).lower()
+        if my_chip_type in ['pgm', '314', '316', '318']:
+            return 'pgm'
+        if my_chip_type in ['510', '520', '530', '540', '550']:
+            return my_chip_type
+        if 'p1' in my_chip_type or 'proton' in my_chip_type:
+            return 'proton_p1'
+        return None
+    
+    def load_parameters(self, configuration):
         json_in = configuration['json']
         try:
             self.__options['parameters'] = copy.deepcopy(json_in['pluginconfig'])
@@ -138,13 +140,37 @@ class ConfigureOptionsManager:
         with open(os.path.join(DIRNAME, 'pluginMedia/parameter_sets/parameter_sets.json'),'r') as fin:
             built_in_parameters = json.load(fin, parse_float=str)
     
-        for reload_parameters in built_in_parameters:
-            try:
-                if meta_configuration not in reload_parameters["meta"]["replaces"]:
-                    continue
-            except:
+        # Handle the reload parameter more carefully since there might be multiple configurations that can replace this configuration.
+        # Priorities:
+        # P1: The configuration named exactly the same as meta_configuration
+        # P2: User selected chip type matched the chip compatibility list
+        # P3: runinfo chip type matched the chip compatibility list
+        # P4: no chip match
+        user_selected_chip = self.chip_type_cleanup(self.__options['parameters'].get('meta', {}).get('user_selections', {}).get('chip', None))
+        runinfo_chip = self.chip_type_cleanup(STARTPLUGIN_JSON.get('runinfo', {}).get('chipType', None))
+        reload_parameters = None
+        best_reload_prioirty = 4
+        for try_reload_parameters in built_in_parameters:
+            if meta_configuration not in try_reload_parameters["meta"]["replaces"]:
                 continue
-    
+            # P1
+            if meta_configuration == try_reload_parameters['meta']['configuration']:
+                best_reload_prioirty = 1
+                reload_parameters = try_reload_parameters
+                break
+            # P2 
+            if user_selected_chip in try_reload_parameters['meta']['compatibility']['chip'] and best_reload_prioirty > 2:
+                best_reload_prioirty = 2
+                reload_parameters = try_reload_parameters
+            # P3
+            if runinfo_chip in try_reload_parameters['meta']['compatibility']['chip'] and best_reload_prioirty > 3:
+                best_reload_prioirty = 3
+                reload_parameters = try_reload_parameters
+            if best_reload_prioirty == 4:
+                reload_parameters = try_reload_parameters
+            
+
+        if reload_parameters is not None:    
             self.__options['original_parameters'] = copy.deepcopy(json_in['pluginconfig'])
             self.__options['parameters'] = reload_parameters
     
@@ -153,14 +179,18 @@ class ConfigureOptionsManager:
             if 'configuration' not in self.__options['parameters']['meta']:
                 self.__options['parameters']['meta']['configuration'] = meta_configuration
     
-            self.__options["original_config_line1"] = self.__options['original_parameters']['meta'].get('name','Legacy '+ meta_configuration)
-            self.__options["original_config_line2"] = ''
-            if self.__options['original_parameters']['meta'].get('configuration',''):
-                self.__options["original_config_line2"] += self.__options['original_parameters']['meta']['configuration'] + ', '
-            self.__options["original_config_line2"] += 'TS version: ' + self.__options['original_parameters']['meta'].get('ts_version','unspecified')
-            break
-    
-        self.__options["config_line1"] = self.__options['parameters']['meta'].get('name','Legacy '+ meta_configuration)
+            # Handle TS-16890
+            if best_reload_prioirty == 1 and json_in['pluginconfig'] == {'meta': {'configuration': meta_configuration}}:
+                self.__options["original_config_line1"] = '(Default) %s' % self.__options['parameters']['meta']['name']
+                self.__options["original_config_line2"] = '%s, TS version: %s' %(meta_configuration, self.__options['parameters']['meta'].get('ts_version', 'unspecified')) 
+            else:
+                self.__options["original_config_line1"] = self.__options['original_parameters']['meta'].get('name','Legacy '+ meta_configuration)
+                self.__options["original_config_line2"] = ''
+                if self.__options['original_parameters']['meta'].get('configuration',''):
+                    self.__options["original_config_line2"] += self.__options['original_parameters']['meta']['configuration'] + ', '
+                self.__options["original_config_line2"] += 'TS version: ' + self.__options['original_parameters']['meta'].get('ts_version','unspecified')
+
+        self.__options["config_line1"] = self.__options['parameters']['meta'].get('name', 'Legacy %s' %meta_configuration )        
         self.__options["config_line2"] = ''
         if self.__options['parameters']['meta'].get('configuration',''):
             self.__options["config_line2"] += self.__options['parameters']['meta']['configuration'] + ', '
@@ -192,12 +222,7 @@ class ConfigureOptionsManager:
         for key in ['meta', 'torrent_variant_caller', 'freebayes', 'long_indel_assembler']:
             if key not in self.__options['parameters']:
                 configuration['warning'].append('The section "%s" is not found in the parameter file.' %key)
-            
-        # These two values are needed to display the 'Output Directory' in the HTML pages
-        self.__options['plugin_name']               = json_in['runinfo'].get('plugin_name','')
-        self.__options['pluginresult']              = json_in['runinfo'].get('pluginresult','')
-        self.__options['run_name']                  = json_in['expmeta'].get('run_name','Current run')
-
+        
         # The default error motifs
         if 'error_motifs' in self.__options['parameters'].get('torrent_variant_caller', {}):
             # Don't use the default error motif if error motif is specified in the parameter file.
@@ -209,17 +234,31 @@ class ConfigureOptionsManager:
             sequence_kit = json_in.get('plan', {}).get('sequencekitname', '')
             if sample_prep_kit == 'Ion AmpliSeq Exome Kit':
                 if sequence_kit == 'Ion S5 Sequencing Kit' or (sequence_kit == 'IonProtonIHiQ' and chip_type in ['P1.1.17', '540']):
-                    self.__options['error_motifs'] = 'ampliseqexome_germline_p1_hiq_motifset.txt'
+                    self.__options['error_motifs'] = 'ampliseqexome_germline_p1_hiq_motifset.txt'                
+                  
+    def get_options(self, configuration):
+        self.configuration_name = configuration['name']
+        self.__is_barcoded_run = configuration['barcoded_run']
+        self.__is_configured_run = configuration['configured_run']
+        self.__is_multisample = configuration['multisample']
+        self.__start_mode = configuration['start_mode'].lower()
+        assert(self.__start_mode in ['manual start', 'auto start'])
+        self.__is_auto_start = self.__start_mode == 'auto start'
+        self.__options = {} # options from the plugin config
+        self.__barcodes_options = {},  # barcode specific options for barcoded run in auto start mode. won't initialize for a non-barcded run.
+        self.__barcode_options_keys = set() # set of all keys in barcodes_options[barcode]
+        
+        json_in = configuration['json']
 
-        assert(self.__start_mode.lower() in ['manual start', 'auto start'])
+        # Load parameters
+        self.load_parameters(configuration)
+
+        # These two values are needed to display the 'Output Directory' in the HTML pages
+        self.__options['plugin_name']               = json_in['runinfo'].get('plugin_name','')
+        self.__options['pluginresult']              = json_in['runinfo'].get('pluginresult','')
+        self.__options['run_name']                  = json_in['expmeta'].get('run_name','Current run')
+
         # Note that the files in self.__options come from meta. They may be differ from what are actually being used.
-        if self.__start_mode.lower() == 'manual start':
-            self.__is_auto_start                     = False            
-            self.__options['library_type']             = json_in['pluginconfig']['meta']['librarytype']    
-        else:
-            self.__is_auto_start                     = True            
-            self.__options['library_type']             = json_in.get('plan',{}).get('runType', None)
-    
         # The default reference/targets/hotspots files 
         self.__options['reference_genome_name']    = json_in['pluginconfig']['meta'].get('reference', '')
         self.__options['targets_bed_unmerged']     = json_in['pluginconfig']['meta'].get('targetregions', '')
@@ -227,6 +266,10 @@ class ConfigureOptionsManager:
     
         # In TS-5.4 and earlier, library type is not barcode specific.
         # Need to clean up library type before load_barcode_info because barcodes will take library_type and trim_reads from meta.
+        if self.__is_auto_start:
+            self.__options['library_type']             = json_in.get('plan',{}).get('runType', None)
+        else:  
+            self.__options['library_type']             = json_in['pluginconfig']['meta']['librarytype']        
         self.__cleanup_library_type(configuration['error'])
         
         # Deal with barcode stuffs
@@ -313,7 +356,7 @@ class ConfigureOptionsManager:
         options['hotspots_bed_merged']  = ""
         options['has_hotspots']         = False
         options['has_sse_bed']          = False
-        options['trim_reads']           = self.__options['library_type'] == 'AmpliSeq'
+        options['trim_reads']           = self.__options['library_type'] in ['AmpliSeq', 'ampliseq_hd']
         # check referemce genome
         if not options['reference_genome_name']:
             options['error'].append('Reference genome unspecified.')
@@ -374,7 +417,7 @@ class ConfigureOptionsManager:
             if options[key] != '' and (not os.path.exists(options[key])):
                 options['error'].append('Can not find the %s file: %s' %(key.replace('_', ' '), options[key]))
     
-        if self.__options['library_type'] in ["AmpliSeq", 'tagseq'] and not options['has_targets']:
+        if self.__options['library_type'] in ["AmpliSeq", 'tagseq', 'ampliseq_hd'] and not options['has_targets']:
             options['error'].append('A %s run must have target regions specified' %self.__options['library_type'])
             
         # Note that I may add more keys in check_options. So I MUST update self.__barcode_options_keys
@@ -383,6 +426,7 @@ class ConfigureOptionsManager:
     def __cleanup_library_type(self, error_msg_list):
         # In TS-5.4 and earlier, library_type is not barcode specific.
         my_lib_type = self.__options['library_type'].lower()
+        self.__options['has_umt'] = False
         if my_lib_type in [v.lower() for v in ["wholegenome",'WGNM','GENS']]:
             self.__options['library_type'] = "Whole Genome"
         elif my_lib_type in [v.lower() for v in ["ampliseq",'AMPS','AMPS_EXOME','AMPS_DNA_RNA','AMPS_DNA']]:
@@ -391,6 +435,10 @@ class ConfigureOptionsManager:
             self.__options['library_type'] = "TargetSeq"
         elif my_lib_type in [v.lower() for v in ["tagseq", 'tag_sequencing', 'TAG_SEQUENCING']]:
             self.__options['library_type'] = "tagseq"
+            self.__options['has_umt'] = True
+        elif my_lib_type.startswith('AMPS_HD'.lower()) or my_lib_type == 'ampliseq_hd':
+            self.__options['library_type'] = 'ampliseq_hd'
+            self.__options['has_umt'] = True
         elif not my_lib_type:
             error_msg_list.append('Empty library type from the plan')
         else:
@@ -892,7 +940,12 @@ def print_options(vc_options, bam):
     printtime('  Plugin start mode          : %s' %('Auto start' if vc_options.is_auto_start() else 'Manual start'))
     printtime('  Variant Caller version     : %s' %vc_options.serve_option('tvc_version'))
     printtime('  Run is barcoded            : %s' %str(vc_options.is_barcoded_run()))
-    printtime('  Library Type               : %s' %vc_options.serve_option('library_type', barcode))
+    pretty_library = vc_options.serve_option('library_type', barcode)
+    if pretty_library == 'tagseq':
+        pretty_library = 'Tag Sequencing'
+    elif pretty_library == 'ampliseq_hd':
+        pretty_library = 'AmpliSeq HD'
+    printtime('  Library Type               : %s'%pretty_library)
     try:  
         printtime('  Requested Parameters       : %s' %vc_options.serve_option("original_config_line1"))
         printtime('                               %s' %vc_options.serve_option("original_config_line2"))
@@ -1241,7 +1294,7 @@ def variant_caller_pipeline(configuration, queued_bams):
             
     # Set post_processed_bam
     # I output post processed bam if trim_reads or tagseq
-    is_output_post_processed_bam = configuration['options'].serve_option('trim_reads', barcode) or (configuration['options'].serve_option('library_type', barcode) == 'tagseq')
+    is_output_post_processed_bam = configuration['options'].serve_option('trim_reads', barcode) or configuration['options'].serve_option('has_umt', barcode)
     if is_output_post_processed_bam:
         for bam in queued_bams:
             if multisample:
@@ -1269,12 +1322,18 @@ def variant_caller_pipeline(configuration, queued_bams):
     variantcaller_command        = '%s/bin/variant_caller_pipeline.py' % DIRNAME
     variantcaller_command   +=     '  --input-bam "%s"' % untrimmed_bams
     
-    if configuration['options'].serve_option('library_type', barcode) == 'tagseq':       
+    if configuration['options'].serve_option('has_umt', barcode):       
         variantcaller_command   += '  --run-consensus on'
         # I did not check has_target here. I will let TVC raise error if targets_bed_unmerged is empty.
         # Note that I don't want to trim ampliseq primer in tagseq because of super-amplicon.
         # Thus I use the unmerged bed file as the region bed.        
         variantcaller_command   += '  --region-bed "%s"' % configuration['options'].serve_option('targets_bed_unmerged', barcode)
+        # TS-17032 Disable AmpliSeq primer trimming for AMPS HD
+        '''
+        # Trim AmpliSeq Primer in AmpliSeq HD runs
+        if configuration['options'].serve_option('library_type', barcode) == 'ampliseq_hd':
+            variantcaller_command   += '  --primer-trim-bed "%s"' % configuration['options'].serve_option('targets_bed_unmerged', barcode)
+        '''
     else:
         if configuration['options'].serve_option('has_targets', barcode):
             variantcaller_command   += '  --region-bed "%s"' % configuration['options'].serve_option('targets_bed_merged', barcode)        
@@ -1482,7 +1541,7 @@ def load_render_context(render_context, bam, options):
     with open(os.path.join(bam['results_directory'],'variant_summary.json'), 'r') as summary_in:
         render_context['summary'] = json.load(summary_in)
 
-    if options.serve_option('library_type', bam['name']) == 'tagseq':
+    if options.serve_option('has_umt', bam['name']):
         df = pd.read_csv(os.path.join(bam['results_directory'],'consensus_metrics.txt'), sep = ':', names=['metric','value'], index_col='metric')
         render_context['summary']['median_depth'] =  int(df.get_value('Median read coverage','value'))
         render_context['summary']['median_num_fam3'] = int(df.get_value('Median molecular coverage','value'))
@@ -1826,12 +1885,13 @@ def get_status_dict(process_status):
                    'barcodes_carried_out': len(process_status['bams_filtered_out']) + len(process_status['bams_processed']), }
     return status_dict
 
-def generate_status_report(process_status, bams_in_progress):
+def generate_status_report(process_status, bams_in_progress, has_umt):
     output_dir = os.path.basename(TSP_FILEPATH_PLUGIN_DIR.rstrip('/'))
     render_context = {'barcode_data': process_status['bams_processed'] + bams_in_progress,
                       'output_dir': output_dir  ,
                       'status': get_status_dict(process_status),
                       'runinfo_pk': STARTPLUGIN_JSON['runinfo']['pk'],
+                      'has_umt': has_umt
                       }
     
     with open(os.path.join(TSP_FILEPATH_PLUGIN_DIR, HTML_BLOCK), 'w') as out:
@@ -1905,7 +1965,7 @@ def process_configuration(configuration, results_json, process_status):
 
     if configuration['multisample']:
         if configuration['barcoded_run']:
-            generate_status_report(process_status, configuration['bams'])
+            generate_status_report(process_status, configuration['bams'], configuration['options'].serve_option('has_umt'))
         if tmap_server_key == 0:
             # Not using tmap server. Do realignment here.
             for bam in configuration['bams']:
@@ -1938,7 +1998,7 @@ def process_configuration(configuration, results_json, process_status):
         # Run variant_caller_pipeline and process results for non-multisample
         for bam in configuration['bams']:
             if configuration['barcoded_run']:
-                generate_status_report(process_status, [bam, ])        
+                generate_status_report(process_status, [bam, ], configuration['options'].serve_option('has_umt'))
             if tmap_server_key == 0:
                 # Not using tmap server. Do realignment here to maximize the "barcode pipeline".                
                 process_reference(configuration, bam, tmap_server_key)
@@ -1978,7 +2038,7 @@ def get_global_options(configurations):
     barcode_specific = 'barcode specific'
     option_keys_of_interests = ['library_type', \
                                 'reference_genome_name', 'has_targets', 'targets_name', 'has_hotspots', \
-                                'hotspots_name', 'config_line1', 'run_name']   
+                                'hotspots_name', 'config_line1', 'run_name', 'has_umt']
     global_options = {}
 
     for config in configurations.itervalues():

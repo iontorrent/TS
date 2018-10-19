@@ -134,6 +134,109 @@ public:
     };
 
 };
+
+class DepthProvider
+{
+public:
+    // Depth is dstored in a nested map: chromosome_name -> position -> coverage
+    typedef std::map <unsigned int, unsigned int> PosCovMap;
+    typedef std::map <std::string, PosCovMap> ContigCovMap;
+private:
+    ContigCovMap coverage_map_;
+    string fname_;
+    bool loaded_;
+    bool present_;
+public:
+    DepthProvider ()
+    :
+    loaded_ (false),
+    present_ (false)
+    {
+    }
+    bool loaded () const
+    {
+        return loaded_;
+    }
+    bool present () const
+    {
+        return present_;
+    }
+    bool load (const char* fname)
+    {
+        loaded_ = true;
+        coverage_map_.clear ();
+        // open the file
+        ifstream depth_file (fname);
+        if (!depth_file.is_open ())
+        {
+            cerr << "Failed to open depth file " << fname << " for reading" << endl;
+            present_ = false;
+            return false;
+        }
+
+        const char* delim = "\t";
+        const size_t IN_BUF_SZ = 256;
+        char buffer [IN_BUF_SZ+1];
+        buffer [IN_BUF_SZ] = 0;
+        char* contig_name = NULL;
+        unsigned pos = 0;
+        unsigned depth = 0;
+        unsigned lno = 0;
+        while (depth_file.good ())
+        {
+            // get line
+            depth_file.getline (buffer, IN_BUF_SZ);
+            // sanity check
+            if (depth_file.bad ())
+            {
+                cerr << "Possibly misformatted depth file" << fname << ": line " << lno << "is too long (over " << IN_BUF_SZ << " characters). Unable to continue" << endl;
+                present_ = false;
+                return false;
+            }
+            // parse line. Expect "Contig_name\tPosition\tCoverage" or # as first non-ws char
+            // use direct c-stype tokenizer to save on copying during std::string initializxation 
+            char* token = strtok (buffer, delim);
+            if (token && *token != '#')
+            {
+                contig_name = token;
+
+                token = strtok (NULL, delim);
+                if (!token)
+                {
+                    cerr << "Possibly misformatted depth file" << fname << " at line " << lno << ". Unable to continue" << endl;
+                    present_ = false;
+                    return false;
+                }
+                pos = atoi (token);
+                token = strtok (NULL, delim);
+                if (!token)
+                {
+                    cerr << "Possibly misformatted depth file" << fname << " at line " << lno << ". Unable to continue" << endl;
+                    present_ = false;
+                    return false;
+                }
+                depth = atoi (token);
+
+                coverage_map_ [contig_name][pos] = depth;
+            }
+            ++ lno;
+        }
+        present_ = true;
+        return true;
+    }
+    unsigned get (const char* contig, unsigned pos) const
+    {
+        ContigCovMap::const_iterator cmitr = coverage_map_.find (contig);
+        if (cmitr == coverage_map_.end ())
+            return 0;
+        PosCovMap::const_iterator pcitr = cmitr->second.find (pos);
+        if (pcitr == cmitr->second.end ())
+            return 0;
+        else
+            return pcitr->second;
+    }
+};
+
 //--------------------------------------------------------
 struct VCFinfo {
 private:
@@ -935,9 +1038,9 @@ public:
 
 //-----------------------------------------------------
 
-    void set_positional_info_from_bam(const char * fname) {
+    bool  set_positional_info_from_bam(const char * fname) {
         if (strlen(fname) == 0) {
-            return;
+            return false;
         }
         tmpstruct_t tmp;
 
@@ -946,7 +1049,7 @@ public:
         tmp.in = samopen(fname, "rb", 0);
         if (tmp.in == 0) {
             fprintf(stderr, "Fail to open BAM file %s\n", fname);
-            return;
+            return false;
         }
 
         int ref;
@@ -955,7 +1058,7 @@ public:
         idx = bam_index_load(fname); // load BAM index
         if (idx == 0) {
             fprintf(stderr, "BAM indexing file is not available.\n");
-            return;
+            return false;
         }
 
 
@@ -968,7 +1071,7 @@ public:
                                      &tmp.beg, &tmp.end); // parse the region
                     if (ref < 0) {
                         cerr <<"Invalid region " << pos_id << endl;
-                        return;
+                        return false;
                     }
                     buf = bam_plbuf_init(pileup_func, &tmp); // initialize pileup
                     bam_fetch(tmp.in->x.bam, idx, ref, tmp.beg, tmp.end, buf, fetch_func);
@@ -979,6 +1082,25 @@ public:
         bam_plbuf_destroy(buf);
 
         samclose(tmp.in);
+        return true;
+    }
+
+//-----------------------------------------------------
+
+    bool set_positional_info_from_depth (const DepthProvider& provider) 
+    {
+        if (!provider.present ())
+            return false;
+        for(std::map< string , std::map<long int,VCFinfo> >::iterator chrit = vcfrec.begin(); chrit != vcfrec.end(); ++chrit)
+            for(std::map<long int,VCFinfo>::iterator posit = chrit->second.begin(); posit != chrit->second.end(); posit++)
+                for(int i=0; i< posit->second.alt_count(); i++) 
+                {
+                    const char* ctg_name = chrit->first.c_str ();
+                    int pos = posit->first;
+                    depth = provider.get (ctg_name, pos);
+                    posit->second.set_dp (depth);
+                }
+        return true;
     }
 
 //-----------------------------------------------------
@@ -1243,9 +1365,13 @@ void print_usage(int ext_code, string full_version_string) {
     cerr << "--main-bam   filename     filename of the indexed BAM file. using this option may significantly impact the runtime. this file is used to recalculate" << endl;
     cerr << "                          certain metrics for variant positions in case they are requested by analysis, but not provided in INFO field of main-vcf,"  << endl;
     cerr << "                          or values from INFO field require to be recalculated (e.g., depth of coverage metric 'DP')." << endl;
+    cerr << "--coverage   filename     filename of the depth.txt file from tvc. Alternative to the use of the BAM file. Coverage information is used to recalculate" << endl;
+    cerr << "                          certain metrics for variant positions in case they are requested by analysis, but not provided in INFO field of main-vcf,"  << endl;
+    cerr << "                          or values from INFO field require to be recalculated (e.g., depth of coverage metric 'DP')." << endl;
     cerr << "--min_mapping_qv          The minimum mapping quality to use in calculating coverage." << endl;
     cerr << "--depth      cov_list     additional coverage depth thresholds used in the report. multiple thresholds should be comma separated. for TP,FP reports" << endl;
-    cerr << "                          DP is extracted from main-vcf INFO field if available. for FN reports DP is recalulated from the main-bam file if provided." << endl;
+    cerr << "                          DP is extracted from main-vcf INFO field if available. for FN reports DP is recalulated from the main-bam file" << endl;
+    cerr << "                          or obtained from coverage (depth) tvc report file, if any provided." << endl;
     cerr << "                          missing DP equals to DP=0. example: '-dp 20,30,50'. analysis for coverage >=0 is always reported and stored in the output files." << endl;
     cerr << "--fasta      reference    filename with the reference sequence in FASTA format. If provided, then variant maching is done by normalizing variants to" << endl;
     cerr << "                          the reference. that enables matching of differently represented equivalent variants. usually variants representation is already" << endl;
@@ -1281,6 +1407,7 @@ int main(int argc, char *argv[]) {
     string out_format = "text"; // {text,html,json,cvs}
     string DP = "";
     string main_bam_file = "";
+    string  coverage_file = "";
     string ignore_genotype = "f";
     string bg_match_criteria = "";
     string truth_match_criteria = "a";
@@ -1314,6 +1441,8 @@ int main(int argc, char *argv[]) {
             out_format = (++acnt) < argc ? argv[acnt] : out_format;
         } else if(strcmp(argv[acnt], "--main-bam")==0 )  {
             main_bam_file = (++acnt) < argc ? argv[acnt] : main_bam_file;
+        } else if(strcmp(argv[acnt], "--coverage")==0 )  {
+            coverage_file = (++acnt) < argc ? argv[acnt] : coverage_file;
         } else if(strcmp(argv[acnt], "--min-mapping-qv")==0 )     {
             map_quality = (++acnt) < argc ? argv[acnt] : map_quality;
         } else if(strcmp(argv[acnt], "--depth")==0 )     {
@@ -1347,6 +1476,7 @@ int main(int argc, char *argv[]) {
 
     VCFList * varBg = NULL, * varTruth = NULL, * varVC = NULL, * varFilter = NULL;
     FASTA * reference = NULL;
+    DepthProvider depth_provider;
 
     if(!ref_file.empty()) {
         cerr << "\nloading reference ... from " << ref_file << endl;
@@ -1389,6 +1519,7 @@ int main(int argc, char *argv[]) {
         varFilter->load_file(filter_vcf_file, reference, split_mnp, !ignore_genotype.empty() && ignore_genotype.find("f")!=string::npos);
     }
 
+
     long TARGET_SIZE = -1;
 
     VCFList * target = NULL;
@@ -1419,7 +1550,23 @@ int main(int argc, char *argv[]) {
                 target = tmp_target;
             }
         }
-        target->set_positional_info_from_bam(main_bam_file.c_str());
+
+        bool target_depth_obtained = false;
+        if (!coverage_file.empty ())
+        {
+            cerr << "loading target positional info from depth file" << coverage_file << endl;
+            depth_provider.load (coverage_file.c_str ());
+            target_depth_obtained = target->set_positional_info_from_depth (depth_provider);
+            if (!target_depth_obtained)
+                cerr << "Warning: Failed to load depth from " << coverage_file << endl;
+        }
+        if (!target_depth_obtained && !main_bam_file.empty ())
+        {
+            cerr << "loading target positional info from BAM file " << main_bam_file << endl;
+            target_depth_obtained = target->set_positional_info_from_bam (main_bam_file.c_str ());
+        } 
+        // if (!target_depth_obtained && target != NULL) 
+        //     target->set_dp_to_zero();
 
         cerr << "extract on-target vcf records ... " << endl;
         if(varVC!=NULL) {
@@ -1494,10 +1641,25 @@ int main(int argc, char *argv[]) {
         varTruth->match(varVC, tp, fn, fp, reference, require_allele_match, require_zygosity_match);
     }
 
-    if(!main_bam_file.empty()) {
+    bool fn_depth_obtained = false;
+    if (!coverage_file.empty ())
+    {
+        if (!depth_provider.loaded ())
+        {
+            cerr << "loading positional info from depth file" << coverage_file << endl;
+            depth_provider.load (coverage_file.c_str ());
+        }
+        fn_depth_obtained = fn->set_positional_info_from_depth (depth_provider);
+        if (!fn_depth_obtained)
+            cerr << "Warning: Failed to load depth from " << coverage_file << endl;
+    }
+    if (!fn_depth_obtained && !main_bam_file.empty ())
+    {
         cerr << "loading positional info from BAM file " << main_bam_file << endl;
-        fn->set_positional_info_from_bam(main_bam_file.c_str());
-    } else if(fn!=NULL) fn->set_dp_to_zero();
+        fn_depth_obtained = fn->set_positional_info_from_bam (main_bam_file.c_str ());
+    } 
+    if (!fn_depth_obtained && target != NULL) 
+        fn->set_dp_to_zero();
 
     bool html = (strcmp(out_format.c_str(),"html") == 0);
 

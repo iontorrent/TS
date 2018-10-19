@@ -227,14 +227,14 @@ void HypothesisStack::InitForInference(PersistingThreadObjects &thread_objects, 
   AllocateFrequencyStarts(num_hyp_no_null, allele_identity_vector);
   // predict given hypotheses per read
   total_theory.FillInPredictionsAndTestFlows(thread_objects, read_stack, global_context);
+  // FlowDisruptiveOutlierFiltering must be done after FillInPredictionsAndTestFlows and filling FD matrix.
+  total_theory.FlowDisruptiveOutlierFiltering((unsigned int) my_params.outlier_pre_filter, false);  // Filter out obvious outlier reads using flow-disruption.
   if(not total_theory.GetIsMolecularTag()){
-	  // If use mol tag, total_theory.FindValidIndexes() is done in total_theory.InitializeMyEvalFamilies(unsigned int num_hyp)
+	  // If use mol tag, total_theory.FindValidIndexes() will be done in total_theory.InitializeMyEvalFamilies(unsigned int num_hyp)
 	  total_theory.FindValidIndexes();
   }
   else{
-    total_theory.FlowDisruptiveOutlierFiltering(false);  // Filter out obvious outlier reads using flow-disruption.
 	total_theory.InitializeMyEvalFamilies((unsigned int) num_hyp_no_null + 1);
-
 	if(DEBUG > 0){
 		cout << endl << "+ Initialized families on the read stack: "<< endl
 			 <<"  - Number of reads on the read stack = " << total_theory.my_hypotheses.size() << endl
@@ -384,6 +384,9 @@ void HypothesisStack::PropagateTuningParameters(int num_hyp_no_null) {
   total_theory.PropagateTuningParameters(my_params);
   // number of pseudo-data points at no bias
   cur_state.PropagateTuningParameters(my_params, num_hyp_no_null);
+  if (my_params.outlier_pre_filter < 0){
+	  my_params.outlier_pre_filter = total_theory.GetIsMolecularTag()? 1 : 0;
+  }
 }
 
 // tool for combining items at differing log-levels
@@ -634,7 +637,7 @@ void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta,  int i_allele) {
 void EnsembleEval::ApproximateHardClassifierForReads()
 {
     read_id_.assign(read_stack.size(), -1);
-	strand_id_.assign(read_stack.size(), false);
+	strand_id_.assign(read_stack.size(), -1);
 	dist_to_left_.assign(read_stack.size(), -1);
 	dist_to_right_.assign(read_stack.size(), -1);
 
@@ -659,7 +662,7 @@ void EnsembleEval::ApproximateHardClassifierForReads()
 		    assert ( dist_to_right_[i_read] >=0 );
 	    }
 	    //compute strand_id_
-	    strand_id_[i_read] = not (read_stack[i_read]->is_reverse_strand);
+	    strand_id_[i_read] = read_stack[i_read]->is_reverse_strand? 1 : 0;
 	}
 }
 
@@ -745,7 +748,7 @@ void EnsembleEval::ApproximateHardClassifierForFamilies(){
 	unsigned int num_families = allele_eval.total_theory.my_eval_families.size();
 	int position0 = variant->position -1; // variant->position 1-base: vcflib/Variant.h
 	read_id_.assign(num_families, -1); // every family starts with outlier
-	strand_id_.assign(num_families, false);
+	strand_id_.assign(num_families, -1);
 	dist_to_left_.assign(num_families, -1);
 	dist_to_right_.assign(num_families, -1);
 	alt_fam_indices_.resize(allele_identity_vector.size());
@@ -755,7 +758,7 @@ void EnsembleEval::ApproximateHardClassifierForFamilies(){
 		// Hard classify the family to allele_assigned (-1 = outlier, 0 = ref, 1 = alt1, etc)
 		int allele_assigned = my_fam->GetFuncFromValid() ? my_fam->MostResponsible() - 1 : -1; // non-func familiy = outlier
 		read_id_[fam_idx] = allele_assigned;
-		strand_id_[fam_idx] = (my_fam->strand_key == 0);
+		strand_id_[fam_idx] = my_fam->strand_key;
 
 		// Classify as an alt
 		if (allele_assigned > 0){
@@ -930,38 +933,67 @@ void EnsembleEval::MultiAlleleGenotype(float af_cutoff_rej, float af_cutoff_gt, 
 void EnsembleEval::SetEffectiveMinFamilySize(const ExtendParameters& parameters, const vector<VariantSpecificParams>& variant_specific_params){
 	assert(allele_identity_vector.size() > 0);
 	allele_eval.total_theory.effective_min_family_size = (unsigned int) parameters.tag_trimmer_parameters.min_family_size;
+	allele_eval.total_theory.effective_min_fam_per_strand_cov = (unsigned int) parameters.tag_trimmer_parameters.min_fam_per_strand_cov;
 
-	bool is_override = false;
+	// Override min_tag_fam_size
+	bool min_tag_fam_size_override = false;
 	for (unsigned int i_alt = 0; i_alt < variant_specific_params.size(); ++i_alt){
 		if (variant_specific_params[i_alt].min_tag_fam_size_override){
 			if (variant_specific_params[i_alt].min_tag_fam_size < 1){
 				cerr << "WARNING: Fail to override the parameter min_tag_fam_size by " << variant_specific_params[i_alt].min_tag_fam_size << " < 1." << endl;
 				continue;
 			}
-			if (not is_override){
+			if (not min_tag_fam_size_override){
 				// This is the first override.
 				allele_eval.total_theory.effective_min_family_size = (unsigned int) variant_specific_params[i_alt].min_tag_fam_size;
 			}else{
 				allele_eval.total_theory.effective_min_family_size = max(allele_eval.total_theory.effective_min_family_size, (unsigned int) variant_specific_params[i_alt].min_tag_fam_size);
 			}
-			is_override = true;
+			min_tag_fam_size_override = true;
 		}
 	}
-	if (is_override){
+	if (min_tag_fam_size_override){
 		if (DEBUG){
 			cout << "+ Override min_fam_size to " << allele_eval.total_theory.effective_min_family_size << endl;
 		}
+	}
+	// Override min_fam_per_strand_cov
+	bool min_fam_per_strand_cov_override = false;
+	for (unsigned int i_alt = 0; i_alt < variant_specific_params.size(); ++i_alt){
+		if (variant_specific_params[i_alt].min_fam_per_strand_cov_override){
+			if (variant_specific_params[i_alt].min_fam_per_strand_cov < 0){
+				cerr << "WARNING: Fail to override the parameter min_fam_per_strand_cov by " << variant_specific_params[i_alt].min_fam_per_strand_cov << " < 0." << endl;
+				continue;
+			}
+			if (not min_fam_per_strand_cov_override){
+				// This is the first override.
+				allele_eval.total_theory.effective_min_fam_per_strand_cov = (unsigned int) variant_specific_params[i_alt].min_fam_per_strand_cov;
+			}else{
+				allele_eval.total_theory.effective_min_fam_per_strand_cov = max(allele_eval.total_theory.effective_min_fam_per_strand_cov, (unsigned int) variant_specific_params[i_alt].min_fam_per_strand_cov);
+			}
+			min_fam_per_strand_cov_override = true;
+		}
+	}
+	if (min_fam_per_strand_cov_override){
+		if (DEBUG){
+			cout << "+ Override min_fam_per_strand_cov to " << allele_eval.total_theory.effective_min_fam_per_strand_cov << endl;
+		}
+	}
+
+	if (min_fam_per_strand_cov_override or min_tag_fam_size_override){
 		return;
 	}
+
     // Increase min_fam_size if I found an allele is HP-INDEL.
 	if (parameters.tag_trimmer_parameters.indel_func_size_offset > 0){
 		for (unsigned int i_alt = 0; i_alt < allele_identity_vector.size(); ++i_alt){
 			if (allele_identity_vector[i_alt].status.isHPIndel){
 				allele_eval.total_theory.effective_min_family_size += (unsigned int) parameters.tag_trimmer_parameters.indel_func_size_offset;
+				allele_eval.total_theory.effective_min_fam_per_strand_cov += (unsigned int) parameters.tag_trimmer_parameters.indel_func_size_offset;
 				if (DEBUG){
-					cout << "+ Found allele "<< i_alt + 1 << " is HP-INDEL: increase min_fam_size from "
-						 << parameters.tag_trimmer_parameters.min_family_size
-						 << " to " << allele_eval.total_theory.effective_min_family_size  << endl;
+					cout << "+ Found allele "<< i_alt + 1 << " is HP-INDEL." << endl
+						 << "  - Increase min_fam_size from " << parameters.tag_trimmer_parameters.min_family_size << " to " << allele_eval.total_theory.effective_min_family_size  << endl
+						 << "  - Increase min_fam_per_strand_cov from " << parameters.tag_trimmer_parameters.min_fam_per_strand_cov << " to " << allele_eval.total_theory.effective_min_fam_per_strand_cov  << endl;
 				}
 				return;
 			}
@@ -990,13 +1022,8 @@ void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool 
 
 void EnsembleEval::FlowDisruptivenessInReadLevel(const InputStructures &global_context)
 {
-	for (unsigned int i_read = 0;  i_read < read_stack.size(); ++i_read){
+	for (unsigned int i_read = 0; i_read < read_stack.size(); ++i_read){
 		allele_eval.total_theory.my_hypotheses[i_read].FillInFlowDisruptivenessMatrix(global_context.flow_order_vector.at(read_stack[i_read]->flow_order_index), *(read_stack[i_read]));
-	}
-	if (allele_eval.total_theory.GetIsMolecularTag()){
-		for (vector<EvalFamily>::iterator fam_it = allele_eval.total_theory.my_eval_families.begin(); fam_it != allele_eval.total_theory.my_eval_families.end(); ++fam_it){
-			fam_it->FillInFlowDisruptivenessMatrix(allele_eval.total_theory.my_hypotheses);
-		}
 	}
 }
 
@@ -1032,49 +1059,24 @@ void EnsembleEval::FlowDisruptivenessInReadStackLevel(float min_ratio_for_fd)
     		 << "  - min_ratio_for_fd = "<< min_ratio_for_fd << endl;
     }
 
-
-    if (allele_eval.total_theory.GetIsMolecularTag()){
-		for (vector<EvalFamily>::iterator fam_it = allele_eval.total_theory.my_eval_families.begin(); fam_it != allele_eval.total_theory.my_eval_families.end(); ++fam_it){
-    		if (not fam_it->GetFuncFromValid()){
-    			continue;
-    		}
-			for (unsigned int i_hyp = 0; i_hyp < num_hyp_not_null; ++i_hyp){
-				float resp = fam_it->family_responsibility[i_hyp + 1];
-				if (resp < min_resp_cutoff){
-					// I don't count low responsible hypotheses.
-					continue;
-				}
-				postrior_coverage[i_hyp] += resp;
-				for (unsigned int j_hyp = 0; j_hyp < num_hyp_not_null; ++j_hyp){
-					// Note that local_flow_disruptiveness_matrix contains the outlier hypothesis
-					int fd_type = fam_it->GetFlowDisruptiveness(i_hyp + 1, j_hyp + 1);
-					if (fd_type >= 0){
-						posterior_fd_type_counts[i_hyp][j_hyp][fd_type] += resp;
-					}
+	for (vector<CrossHypotheses>::iterator read_it = allele_eval.total_theory.my_hypotheses.begin(); read_it != allele_eval.total_theory.my_hypotheses.end(); ++read_it){
+		if (not read_it->success){
+			continue;
+		}
+		for (unsigned int i_hyp = 0; i_hyp < num_hyp_not_null; ++i_hyp){
+			float resp = read_it->responsibility[i_hyp + 1];
+			if (resp < min_resp_cutoff)
+				continue;
+			postrior_coverage[i_hyp] += resp;
+			for (unsigned int j_hyp = 0; j_hyp < num_hyp_not_null; ++j_hyp){
+				// Note that local_flow_disruptiveness_matrix contains the outlier hypothesis
+				int fd_type = read_it->local_flow_disruptiveness_matrix[i_hyp + 1][j_hyp + 1];
+				if (fd_type >= 0){
+					posterior_fd_type_counts[i_hyp][j_hyp][fd_type] += resp;
 				}
 			}
 		}
-    }
-    else{
-		for (vector<CrossHypotheses>::iterator read_it = allele_eval.total_theory.my_hypotheses.begin(); read_it != allele_eval.total_theory.my_hypotheses.end(); ++read_it){
-    		if (not read_it->success){
-    			continue;
-    		}
-			for (unsigned int i_hyp = 0; i_hyp < num_hyp_not_null; ++i_hyp){
-				float resp = read_it->responsibility[i_hyp + 1];
-				if (resp < min_resp_cutoff)
-					continue;
-				postrior_coverage[i_hyp] += resp;
-				for (unsigned int j_hyp = 0; j_hyp < num_hyp_not_null; ++j_hyp){
-					// Note that local_flow_disruptiveness_matrix contains the outlier hypothesis
-					int fd_type = read_it->local_flow_disruptiveness_matrix[i_hyp + 1][j_hyp + 1];
-					if (fd_type >= 0){
-						posterior_fd_type_counts[i_hyp][j_hyp][fd_type] += resp;
-					}
-				}
-			}
-		}
-    }
+	}
 
     for (unsigned int i_hyp = 0; i_hyp < num_hyp_not_null; ++i_hyp){
     	global_flow_disruptive_matrix[i_hyp][i_hyp] = 0;
@@ -1185,6 +1187,19 @@ void EnsembleEval::ServeAfCutoff(const ControlCallAndFilters &my_controls, const
 	af_cutoff_rej = 1.0f;
 	// The old fashion scheme: choose the minimum one among all alleles
 	if (not my_controls.use_fd_param ){
+		// (TS-16940): min_allele_freq override has the top priority.
+		bool has_override = false;
+		for (unsigned int allele_idx = 0; allele_idx < allele_identity_vector.size(); ++allele_idx){
+			if (variant_specific_params[allele_idx].min_allele_freq_override){
+				has_override = true;
+				af_cutoff_rej = min(af_cutoff_rej, variant_specific_params[allele_idx].min_allele_freq);
+			}
+		}
+		if (has_override){
+			af_cutoff_gt = af_cutoff_rej;
+			return;
+		}
+
 		for (unsigned int allele_idx = 0; allele_idx < allele_identity_vector.size(); ++allele_idx){
 			af_cutoff_rej = min(af_cutoff_rej, FreqThresholdByType(allele_identity_vector[allele_idx], my_controls, variant_specific_params[allele_idx]));
 		}
@@ -1378,13 +1393,15 @@ void EnsembleEval::CalculateTagSimilarity(const MolecularTagManager& mol_tag_man
 			for (unsigned int fam_idx = 0; fam_idx < allele_fam_cov; ++fam_idx){
 				const string& fam_barcode = allele_eval.total_theory.my_eval_families[alt_fam_indices_[allele_idx][fam_idx]].family_barcode;
 				cout << "  - Family #" << alt_fam_indices_[allele_idx][fam_idx] << " \"" << fam_barcode.substr(0, prefix_tag_len) << "\" + \"" << fam_barcode.substr(prefix_tag_len) << "\" is similar to ";
+				bool is_similar_to_else = false;
 				for (unsigned int fam_idx_2 = 0; fam_idx_2 < allele_fam_cov; ++fam_idx_2){
 					if (pairwise_tag_similar_matrix[fam_idx][fam_idx_2] and fam_idx != fam_idx_2){
 						const string& sim_fam_barcode = allele_eval.total_theory.my_eval_families[alt_fam_indices_[allele_idx][fam_idx_2]].family_barcode;
 						cout << "Family #" << alt_fam_indices_[allele_idx][fam_idx_2] << " \"" << sim_fam_barcode.substr(0, prefix_tag_len) << "\" + \"" << sim_fam_barcode.substr(prefix_tag_len) << "\", ";
+						is_similar_to_else = true;
 					}
 				}
-				cout << endl;
+				cout << (is_similar_to_else? "": "none else.") << endl;
 			}
 			if (tag_similar_counts_[allele_idx] > 0){
 				cout << "+ Found "<< num_isolated_subgraphs << " isolated subgraph(s) of tag-similar families for allele "<< allele_idx + 1 << ": " << endl;
@@ -1904,8 +1921,7 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 		vector<int>& alleles_on_hold,
 		int& sliding_window_start_0,
 		int& sliding_window_end_0,
-		int max_group_size_allowed,
-		const TargetsManager * const targets_manager){
+		int max_group_size_allowed){
 	const int num_alt_alleles = (int) allele_identity_vector.size();
 	int splicing_lower_bound_at_current_candidate_gen_window_end_0 = -1;
 	LocalReferenceContext current_candidate_gen_window_context;
@@ -1920,12 +1936,8 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 	// I look ahead just 1bp every time.
 	sliding_window_end_0 = min(current_candidate_gen_window_end_0 + 1, (int) ref_reader.chr_size(seq_context.chr_idx));
 
-	// (Step 1.b): The trivial (and perhaps the most common) cases:
-	// (1.b.1) Every allele is ready to go if the look ahead window can't be fully covered by any unmerged region.
-	int current_merged_target_idx = targets_manager->FindMergedTargetIndex(seq_context.chr_idx, seq_context.position0);
-	bool is_breaking_point = (current_merged_target_idx >= 0)? targets_manager->IsBreakingIntervalInMerged(current_merged_target_idx, seq_context.chr_idx, seq_context.position0, max(seq_context.position0, (long) sliding_window_end_0)) : false;
-
-	// (1.b.2) If every allele and its end of the variant window hits the lookahead window end, then every allele is on hold.
+	// (Step 1.b): The trivial (and perhaps the most common) case:
+	// If every allele and its end of the variant window hits the lookahead window end, then every allele is on hold.
 	bool is_trivial_all_on_hold = true;
 	for (int i_alt = 0; i_alt < num_alt_alleles; ++i_alt){
 		if (allele_identity_vector[i_alt].end_variant_window < current_candidate_gen_window_end_0){
@@ -1934,7 +1946,7 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 		}
 	}
 
-	if (is_trivial_all_on_hold and (not is_breaking_point)){
+	if (is_trivial_all_on_hold){
 		for (int i_alt = 0; i_alt < num_alt_alleles; ++i_alt){
 			alleles_on_hold.push_back(i_alt);
 			// Sort alleles_on_hold
@@ -1961,16 +1973,14 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 	// I don't do final splitting.
 	SplitAlleleIdentityVector(padding_removed_allele_identity_vector, allele_groups_ready_to_go, ref_reader, num_alt_alleles, true, 0);
 
-	// (Step 2.b): Trivial cases: No need to look ahead => all alleles are ready to go.
-	// Case 1: hit the end of the chromosome
-	// Case 2: breaking point in the merged region
-	if (current_candidate_gen_window_end_0 == sliding_window_end_0 or is_breaking_point){
+	// (Step 2.b): Trivial case: No need to look ahead => all alleles are ready to go.
+	if (current_candidate_gen_window_end_0 == sliding_window_end_0 or sliding_window_end_0 == (int) ref_reader.chr_size(seq_context.chr_idx)){
 		sliding_window_start_0 = sliding_window_end_0;
 		if (DEBUG){
 			cout << "+ Calculating the look ahead \"sliding\" window for (" << PrintVariant(*variant) <<"): "<< endl
 				 << "  - Current candidate window end = " << current_candidate_gen_window_end_0 << endl
 				 << "  - Current variant window = [" << seq_context.position0 << ", " << (int) seq_context.position0 + (int) seq_context.reference_allele.size() << ")" << endl
-			     << "  - All alleles are ready to go and no need to look ahead " << (is_breaking_point? "because it hits a breaking point in the merged region)." : ".") << endl;
+			     << "  - All alleles are ready to go and no need to look ahead. "  << endl;
 		}
 	    FinalSplitReadyToGoAlleles(allele_groups_ready_to_go, ref_reader, max_group_size_allowed);
 		return;
@@ -2259,15 +2269,13 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
     if (rai->sample_index != sample_index)
       continue;
 
-    // TS-17069: The primer-trimmed read must fully cover the variant
-    if (rai->alignment.Position > seq_context.position0 or rai->alignment.GetEndPosition() < (int) seq_context.position0 + (int) seq_context.reference_allele.size())
+    if (rai->alignment.Position > multiallele_window_start)
       continue;
 
     if (rai->filtered)
       continue;
 
-    // TS-17069: The original read must fully cover the splicing window. (rai->original_positinon has been checked)
-    if (rai->original_end_position < multiallele_window_end)
+    if (rai->alignment.GetEndPosition() < multiallele_window_end)
       continue;
 
     // Reservoir Sampling
@@ -2301,7 +2309,9 @@ struct FamInfoForDownSample
 		ptr_fam = fam;
 		num_reads_remaining = ptr_fam->valid_family_members.size(); // Initially, none of the reads is picked up.
 	};
-	bool operator<(const FamInfoForDownSample &rhs) const { return num_reads_remaining > rhs.num_reads_remaining; };
+	bool operator<(const FamInfoForDownSample &rhs) const {
+		return num_reads_remaining > rhs.num_reads_remaining;
+	};
 };
 
 // Compare two func families for sorting.
@@ -2325,6 +2335,296 @@ bool CompareFuncFamilies(const FamInfoForDownSample& fam_0, const FamInfoForDown
 	return fam_0.ptr_fam->GetValidFamSize() > fam_1.ptr_fam->GetValidFamSize();
 }
 
+// Contains the information I need for downsampling with mol tagging
+class FamInfoForBiDirDownSample
+{
+public:
+	MolecularFamily* ptr_fam; // The pointer of the molecular family.
+	vector<int> fwd_read_indicies;  // The indicies of the FWD reads in ptr_fam->valid_family_members
+	vector<int> rev_read_indicies;  // The indicies of the REV reads in ptr_fam->valid_family_members
+	// Picking the reads in fwd_read_indicies[0:min_func_fwd_idx + 1] and rev_read_indicies[0:min_func_rev_idx + 1] can make the family functional with as least number of reads as possible.
+	int min_func_fwd_idx;
+    int min_func_rev_idx;
+	unsigned int num_fwd_reads_remaining; // How many reads that are not picked up after down sampling?
+	unsigned int num_rev_reads_remaining; // How many reads that are not picked up after down sampling?
+
+	FamInfoForBiDirDownSample(MolecularFamily* const fam, unsigned int min_fam_size, unsigned int min_fam_per_strand_cov);
+	// Used to sort the objects by the number of reads remaining.
+	bool operator<(const FamInfoForBiDirDownSample &rhs) const{
+		return num_fwd_reads_remaining + num_rev_reads_remaining > rhs.num_fwd_reads_remaining + rhs.num_rev_reads_remaining;
+	};
+};
+
+// Compare two functional Bi-Dir families for sorting.
+// Note that the use case is that there is one consensus read on each strand, the rest of the reads are usually not consensus reads.
+bool CompareFuncBiDirFamilies(const FamInfoForBiDirDownSample& lhs, const FamInfoForBiDirDownSample& rhs)
+{
+	assert(max(rhs.min_func_fwd_idx, rhs.min_func_rev_idx) >= 0 and max(lhs.min_func_fwd_idx, lhs.min_func_rev_idx) >= 0);
+	bool is_rhs_efficient = rhs.min_func_fwd_idx < 1 and rhs.min_func_rev_idx < 1; // Can two reads or less make rhs functional?
+	bool is_lhs_efficient = lhs.min_func_fwd_idx < 1 and lhs.min_func_rev_idx < 1; // Can two reads or less make lhs functional?
+
+	// Deal with the most common case first.
+	if (is_lhs_efficient and is_rhs_efficient){
+		// Priority:
+		// 1) min(ZR of the first FWD read, ZR of the first REV read), i.e., good coverage on each strand if I get one read on each strand
+		// 2) max(ZR of the first FWD read, ZR of the first REV read), i.e., good coverage if I get one read on each strand
+		// 3) Less total number of (consensus) reads
+		// 4) Larger Family size
+
+		// P.1
+		// Note that min_func_fwd_idx and min_func_rev_idx can be -1 if min_fam_per_strand_cov = 0
+		int min_lhs_1st_zr = min(lhs.ptr_fam->valid_family_members.at((lhs.min_func_fwd_idx < 0? lhs.min_func_rev_idx : lhs.min_func_fwd_idx))->read_count, lhs.ptr_fam->valid_family_members.at((lhs.min_func_rev_idx < 0? lhs.min_func_fwd_idx : lhs.min_func_rev_idx))->read_count);
+		int min_rhs_1st_zr = min(rhs.ptr_fam->valid_family_members.at((rhs.min_func_fwd_idx < 0? rhs.min_func_rev_idx : rhs.min_func_fwd_idx))->read_count, rhs.ptr_fam->valid_family_members.at((rhs.min_func_rev_idx < 0? rhs.min_func_fwd_idx : rhs.min_func_rev_idx))->read_count);
+		if (min_lhs_1st_zr > min_rhs_1st_zr){
+			return true;
+		}else if (min_lhs_1st_zr < min_rhs_1st_zr){
+			return false;
+		}else{
+			// P.2
+			int max_lhs_1st_zr = max(lhs.ptr_fam->valid_family_members.at((lhs.min_func_fwd_idx < 0? lhs.min_func_rev_idx : lhs.min_func_fwd_idx))->read_count, lhs.ptr_fam->valid_family_members.at((lhs.min_func_rev_idx < 0? lhs.min_func_fwd_idx : lhs.min_func_rev_idx))->read_count);
+			int max_rhs_1st_zr = max(rhs.ptr_fam->valid_family_members.at((rhs.min_func_fwd_idx < 0? rhs.min_func_rev_idx : rhs.min_func_fwd_idx))->read_count, rhs.ptr_fam->valid_family_members.at((rhs.min_func_rev_idx < 0? rhs.min_func_fwd_idx : rhs.min_func_rev_idx))->read_count);
+			if (max_lhs_1st_zr > max_rhs_1st_zr){
+				return true;
+			}else if (max_lhs_1st_zr < max_rhs_1st_zr){
+				return false;
+			}else{
+				// P.3
+				if (lhs.ptr_fam->valid_family_members.size() < rhs.ptr_fam->valid_family_members.size()){
+					return true;
+				}else if (lhs.ptr_fam->valid_family_members.size() > rhs.ptr_fam->valid_family_members.size()){
+					return false;
+				}
+			}
+		}
+		// P.4
+		return lhs.ptr_fam->GetValidFamSize() > rhs.ptr_fam->GetValidFamSize();
+	}
+
+	if (is_rhs_efficient and (not is_lhs_efficient)){
+		return false;
+	}
+	if (is_lhs_efficient and (not is_rhs_efficient)){
+		return true;
+	}
+
+	// if (not (is_rhs_efficient or is_lhs_efficient))
+	// Priority:
+	// a): min(min_func_fwd_idx + min_func_rev_idx), i.e.,needs less reads to be functional
+	// b): Less total number of (consensus) reads
+	// c): Larger family size
+
+	// P.a
+	if (lhs.min_func_fwd_idx + lhs.min_func_rev_idx < rhs.min_func_fwd_idx + rhs.min_func_rev_idx){
+		return true;
+	}else if (lhs.min_func_fwd_idx + lhs.min_func_rev_idx > rhs.min_func_fwd_idx + rhs.min_func_rev_idx){
+		return false;
+	}else{
+		// P.b
+		if (lhs.ptr_fam->valid_family_members.size() < rhs.ptr_fam->valid_family_members.size()){
+			return true;
+		}else if (lhs.ptr_fam->valid_family_members.size() > rhs.ptr_fam->valid_family_members.size()){
+			return false;
+		}
+	}// else
+	// P.c
+	return lhs.ptr_fam->GetValidFamSize() > rhs.ptr_fam->GetValidFamSize();
+}
+
+
+FamInfoForBiDirDownSample::FamInfoForBiDirDownSample(MolecularFamily* const fam, unsigned int min_fam_size, unsigned int min_fam_per_strand_cov){
+	// I require that the family must be functional and sorted.
+	assert(fam->GetFuncFromValid());
+	assert(fam->is_valid_family_members_sorted);
+	ptr_fam = fam;
+	fwd_read_indicies.reserve(ptr_fam->valid_family_members.size());
+	rev_read_indicies.reserve(ptr_fam->valid_family_members.size());
+	for (unsigned int read_idx = 0; read_idx != ptr_fam->valid_family_members.size(); ++read_idx){
+		if (ptr_fam->valid_family_members[read_idx]->is_reverse_strand){
+			rev_read_indicies.push_back(read_idx);
+		}else{
+			fwd_read_indicies.push_back(read_idx);
+		}
+	}
+	min_func_fwd_idx = -1;
+	min_func_rev_idx = -1;
+	num_fwd_reads_remaining = fwd_read_indicies.size();
+	num_rev_reads_remaining = rev_read_indicies.size();
+
+	unsigned int current_fwd_cov = 0;
+	unsigned int current_rev_cov = 0;
+	// Get FWD reads to satisfy min_fam_per_strand_cov
+	while (current_fwd_cov < min_fam_per_strand_cov){
+		++min_func_fwd_idx;
+		current_fwd_cov += (unsigned int) ptr_fam->valid_family_members[min_func_fwd_idx]->read_count;
+	}
+	// Get REV reads to satisfy min_fam_per_strand_cov
+	while (current_rev_cov < min_fam_per_strand_cov){
+		++min_func_rev_idx;
+		current_rev_cov += (unsigned int) ptr_fam->valid_family_members[min_func_rev_idx]->read_count;
+	}
+	// Get reads to satisfy min_fam_size
+	while (current_fwd_cov + current_rev_cov < min_fam_size){
+		int next_fwd_count = (min_func_fwd_idx + 1 < (int) fwd_read_indicies.size())? ptr_fam->valid_family_members.at(fwd_read_indicies.at(min_func_fwd_idx + 1))->read_count : 0;
+		int next_rev_count = (min_func_rev_idx + 1 < (int) rev_read_indicies.size())? ptr_fam->valid_family_members.at(rev_read_indicies.at(min_func_rev_idx + 1))->read_count : 0;
+		// Safety check. Shouldn't happen.
+		assert(max(next_fwd_count, next_rev_count) > 0);
+		bool pick_fwd = false;
+		// Prefer to get the read with a larger read count
+		if (next_fwd_count > next_rev_count){
+			pick_fwd = true;
+		}else if (next_fwd_count < next_rev_count){
+			pick_fwd = false;
+		}else{
+			// Tie. Prefer to get balanced coverage on both strands.
+			if (current_fwd_cov > current_rev_cov){
+				pick_fwd = false;
+			}else if (current_fwd_cov > current_rev_cov){
+				pick_fwd = true;
+			}else{
+				// Tie. Prefer to get balanced number of (consensus) reads on both strands.
+				pick_fwd = min_func_fwd_idx < min_func_rev_idx;
+			}
+		}
+		if (pick_fwd){
+			++min_func_fwd_idx;
+			current_fwd_cov += (unsigned int) next_fwd_count;
+		}else{
+			++min_func_rev_idx;
+			current_rev_cov += (unsigned int) next_rev_count;
+		}
+	}
+}
+
+// This function does strategic downsampling for bi-directional UMT familis by assuming most of the families consist of two consensus reads, one on FWD strand and one on REV strand.
+void EnsembleEval::DoDownSamplingBiDirMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size,  unsigned int effective_min_fam_per_strand_cov, vector< vector<MolecularFamily> > &my_molecular_families,
+			                            unsigned int num_reads_available, unsigned int num_func_fam, int strand_key)
+{
+	assert(strand_key == 0);
+	MyRandSchrange my_rand_schrange(parameters.my_controls.RandSeed); 	// The random number generator that we use to guarantee reproducibility.
+    unsigned int read_counter = 0;  // Number of reads on read stack
+    unsigned int downSampleCoverage = (unsigned int) parameters.my_controls.downSampleCoverage;
+
+	read_stack.clear();  // reset the stack
+	allele_eval.total_theory.my_eval_families.clear();
+
+	// (Case 1): I can keep all the reads in all functional families :D
+	if (num_reads_available <= downSampleCoverage){
+		allele_eval.total_theory.my_eval_families.reserve(num_func_fam);
+		read_stack.reserve(num_reads_available);
+
+		for (vector<MolecularFamily>::iterator family_it = my_molecular_families[strand_key].begin();
+				family_it != my_molecular_families[strand_key].end(); ++family_it){
+			if (family_it->SetFuncFromValid(effective_min_fam_size, effective_min_fam_per_strand_cov)){
+				allele_eval.total_theory.my_eval_families.push_back(EvalFamily(family_it->family_barcode, family_it->strand_key, &read_stack));
+				for (vector<Alignment*>::iterator read_it = family_it->valid_family_members.begin(); read_it != family_it->valid_family_members.end(); ++read_it){
+					read_stack.push_back(*read_it);
+					allele_eval.total_theory.my_eval_families.back().AddNewMember(read_counter);
+					++read_counter;
+				}
+			}
+		}
+
+		if (DEBUG > 0){
+			cout << endl
+					<< "+ Down sample with bi-directional UMT: "<< endl
+			        << "  - Down sample " << num_reads_available << " reads to " << downSampleCoverage << ". " << endl
+			        << "  - Number of functional families before/after down sampling = "<< num_func_fam<< "." << endl
+			        << "  - Total reads after down sampling = " << read_counter << endl;
+		}
+		return;
+	}
+
+	// (Case 2): I can't keep all the reads
+	unsigned int num_of_func_fam_after_down_sampling = 0;
+	vector<FamInfoForBiDirDownSample> func_families;
+	func_families.reserve(num_func_fam);
+	for (vector<MolecularFamily>::iterator family_it = my_molecular_families[strand_key].begin(); family_it != my_molecular_families[strand_key].end(); ++family_it){
+		if (family_it->SetFuncFromValid(effective_min_fam_size, effective_min_fam_per_strand_cov)){
+			if (not family_it->is_valid_family_members_sorted){
+				family_it->SortValidFamilyMembers();
+			}
+			func_families.push_back(FamInfoForBiDirDownSample(&(*family_it), effective_min_fam_size, effective_min_fam_per_strand_cov));
+		}
+	}
+	// Random shuffle func_families to get randomness for the tie situation during sorting.
+    random_shuffle(func_families.begin(), func_families.end(), my_rand_schrange);
+	// The most important step. Sort func_families according to CompareFuncFamilies
+    sort(func_families.begin(), func_families.end(), CompareFuncBiDirFamilies);
+
+    // Step 2.a: Try to get as many functional families as possible
+    int read_remaining = (int) downSampleCoverage;
+	for (vector<FamInfoForBiDirDownSample>::iterator func_fam_it = func_families.begin(); func_fam_it != func_families.end() and read_remaining > 0; ++func_fam_it){
+		// Note that read_remaining may < 0, i.e., I may get more than downSampleCoverage reads because I want to keep one more family.
+		if (func_fam_it->min_func_fwd_idx >= 0 and func_fam_it->num_fwd_reads_remaining > 0){
+			func_fam_it->num_fwd_reads_remaining -= (unsigned int) (func_fam_it->min_func_fwd_idx + 1);
+			read_remaining -= (func_fam_it->min_func_fwd_idx + 1);
+		}
+		if (func_fam_it->min_func_rev_idx >= 0 and func_fam_it->num_rev_reads_remaining > 0){
+			func_fam_it->num_rev_reads_remaining -= (unsigned int) (func_fam_it->min_func_rev_idx + 1);
+			read_remaining -= (func_fam_it->min_func_rev_idx + 1);
+		}
+		++num_of_func_fam_after_down_sampling;
+	}
+
+	// Step 2.b
+	// I can make every family functional and I still have reads left.
+	if (read_remaining > 0){
+		// Sort by number of reads remaining.
+	    sort(func_families.begin(), func_families.end());
+	    // Get as many reads as possible until I don't have reads remaining.
+	    while (read_remaining > 0 and (func_families[0].num_fwd_reads_remaining + func_families[0].num_rev_reads_remaining) > 0){
+	    	for (vector<FamInfoForBiDirDownSample>::iterator func_fam_it = func_families.begin(); func_fam_it != func_families.end() and read_remaining > 0; ++func_fam_it){
+	    		if (func_fam_it->num_fwd_reads_remaining + func_fam_it->num_rev_reads_remaining == 0){
+	    			break;
+	    		}
+	    		if (func_fam_it->num_fwd_reads_remaining == 0){
+	    			--func_fam_it->num_rev_reads_remaining;
+	    		}else if (func_fam_it->num_rev_reads_remaining == 0){
+	    			--func_fam_it->num_fwd_reads_remaining;
+	    		}else{
+	    			if (func_fam_it->fwd_read_indicies.size() - func_fam_it->num_fwd_reads_remaining > func_fam_it->rev_read_indicies.size() - func_fam_it->num_rev_reads_remaining){
+	    				--func_fam_it->num_rev_reads_remaining;
+	    			}else{
+	    				--func_fam_it->num_fwd_reads_remaining;
+	    			}
+	    		}
+	    		--read_remaining;
+	    	}
+	    }
+	}
+
+	// Step 3
+	// Fill in read stack
+	allele_eval.total_theory.my_eval_families.reserve(num_of_func_fam_after_down_sampling);
+	read_stack.reserve((int) downSampleCoverage - read_remaining);
+	for (vector<FamInfoForBiDirDownSample>::iterator func_fam_it = func_families.begin(); func_fam_it != func_families.end(); ++func_fam_it){
+		unsigned int num_fwd_reads_in = func_fam_it->fwd_read_indicies.size() - func_fam_it->num_fwd_reads_remaining;
+		unsigned int num_rev_reads_in = func_fam_it->rev_read_indicies.size() - func_fam_it->num_rev_reads_remaining;
+		if (num_fwd_reads_in + num_rev_reads_in == 0){
+			continue;
+		}
+		allele_eval.total_theory.my_eval_families.push_back(EvalFamily(func_fam_it->ptr_fam->family_barcode, func_fam_it->ptr_fam->strand_key, &read_stack));
+		for (int my_strand = 0; my_strand < 2; ++my_strand){
+			unsigned int num_reads_in = (my_strand == 0 ? num_fwd_reads_in : num_rev_reads_in);
+			vector<int> const * const read_indicies = (my_strand == 0 ? &(func_fam_it->fwd_read_indicies) : &(func_fam_it->rev_read_indicies));
+			for (unsigned int idx = 0; idx < num_reads_in; ++idx){
+				read_stack.push_back(func_fam_it->ptr_fam->valid_family_members.at(read_indicies->at(idx)));
+				allele_eval.total_theory.my_eval_families.back().AddNewMember(read_counter);
+				++read_counter;
+			}
+		}
+	}
+
+	if (DEBUG > 0){
+		cout << endl
+		     << "+ Down sample with bi-directional UMT: "<< endl
+		     << "  - Down sample " << num_reads_available << " reads to " << downSampleCoverage << ". " << endl
+		     << "  - Number of functional families before down sampling = "<< func_families.size() << "." << endl
+		     << "  - Number of functional families after down sampling = "<< num_of_func_fam_after_down_sampling<< "." << endl
+		     << "  - Total number of reads after down sampling = " << read_counter << endl;
+	}
+}
+
 // I apply a strategic downsampling algorithm for molecular tagging using the following rules.
 // Rule 0: Only reads in functional families will be evaluated.
 // Rule 1: Get as many functional families as possible after down sampling
@@ -2333,9 +2633,10 @@ bool CompareFuncFamilies(const FamInfoForDownSample& fam_0, const FamInfoForDown
 // I only pick up the reads from my_molecular_families[strand_key]
 // num_reads_available: total number of reads in the functional families (from valid_family_members) on the strand specified by strand_key
 // num_func_fam: total number of functional families (from valid_family_members) on the strand specified by strand_key
-void EnsembleEval::DoDownSamplingMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size, vector< vector<MolecularFamily> > &my_molecular_families,
+void EnsembleEval::DoDownSamplingUniDirMolTag(const ExtendParameters &parameters, unsigned int effective_min_fam_size, vector< vector<MolecularFamily> > &my_molecular_families,
 			                            unsigned int num_reads_available, unsigned int num_func_fam, int strand_key)
 {
+    assert(strand_key > 0);    // This function is for uni-directional UMT.
 	MyRandSchrange my_rand_schrange(parameters.my_controls.RandSeed); 	// The random number generator that we use to guarantee reproducibility.
     unsigned int read_counter = 0;  // Number of reads on read stack
     unsigned int downSampleCoverage = (unsigned int) parameters.my_controls.downSampleCoverage;
@@ -2361,10 +2662,11 @@ void EnsembleEval::DoDownSamplingMolTag(const ExtendParameters &parameters, unsi
 		}
 
 		if (DEBUG > 0){
-			cout << endl <<"+ Down sample for molecular tags: "<< endl;
-			cout << "  - Down sample " << num_reads_available << " reads to " << downSampleCoverage << ". ";
-			cout << "Number of families after down sampling = "<< num_func_fam << "." << endl;
-			cout << "  - Total reads after down sampling = " << read_counter << endl;
+			cout << endl
+				 << "+ Down sample with uni-directional UMT on the " << (strand_key == 1? "FWD" : "REV") << " strand:" << endl
+			     << "  - Down sample " << num_reads_available << " reads to " << downSampleCoverage << ". "
+   		         << "  - Number of functional families before/after down sampling = "<< num_func_fam<< "." << endl
+			     << "  - Total reads after down sampling = " << read_counter << endl;
 		}
 		return;
 	}
@@ -2375,8 +2677,7 @@ void EnsembleEval::DoDownSamplingMolTag(const ExtendParameters &parameters, unsi
 	unsigned int num_of_func_fam_after_down_sampling = 0;
 	vector<FamInfoForDownSample> func_families;
 	func_families.reserve(num_func_fam);
-	for (vector<MolecularFamily>::iterator family_it = my_molecular_families[strand_key].begin();
-			family_it != my_molecular_families[strand_key].end(); ++family_it){
+	for (vector<MolecularFamily>::iterator family_it = my_molecular_families[strand_key].begin(); family_it != my_molecular_families[strand_key].end(); ++family_it){
 		if (family_it->SetFuncFromValid(effective_min_fam_size)){
 			func_families.push_back(FamInfoForDownSample(&(*family_it)));
 			// Always make sure valid_family_members is sorted
@@ -2468,7 +2769,7 @@ void EnsembleEval::DoDownSamplingMolTag(const ExtendParameters &parameters, unsi
 		allele_eval.total_theory.my_eval_families.push_back(EvalFamily(func_fam_it->ptr_fam->family_barcode, func_fam_it->ptr_fam->strand_key, &read_stack));
 		allele_eval.total_theory.my_eval_families.back().all_family_members.reserve(num_reads_picked);
 
-		// For fairness, I need to randomly pick up the reads with the same read_count if needed.
+		// For fairness, I randomly pick up the reads with the same read_count.
 		if (func_fam_it->num_reads_remaining > 0){
 			vector<Alignment*>::iterator first_read_it_with_smallest_read_count;
 			vector<Alignment*>::iterator next_read_it_not_with_smallest_read_count;
@@ -2517,29 +2818,40 @@ void EnsembleEval::DoDownSamplingMolTag(const ExtendParameters &parameters, unsi
 	}
 
 	if (DEBUG > 0){
-		cout << "+ Down sample with molecular tagging: "<< endl;
-		cout << "  - Down sample " << num_reads_available << " reads to " << downSampleCoverage << ". " << endl;
-		cout << "  - Number of functional families after down sampling = "<< num_of_func_fam_after_down_sampling<< "." << endl;
-		cout << "  - Total reads after down sampling = " << read_counter << endl;
+		cout << endl
+		     << "+ Down sample with uni-directional UMT on the " << (strand_key == 1? "FWD" : "REV") << " strand:" << endl
+		     << "  - Down sample " << num_reads_available << " reads to " << downSampleCoverage << ". " << endl
+		     << "  - Number of functional families before down sampling = "<< num_func_fam<< "." << endl
+		     << "  - Number of functional families after down sampling = "<< num_of_func_fam_after_down_sampling<< "." << endl
+		     << "  - Total number of reads after down sampling = " << read_counter << endl;
 	}
 }
 
 // Currently only take the reads on one strand
 void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, vector< vector<MolecularFamily> > &my_molecular_families, int sample_index)
 {
-	int strand_key = -1;
 	unsigned int effective_min_fam_size = allele_eval.total_theory.effective_min_family_size;
-	vector<unsigned int> num_func_fam_by_strand = {0, 0};
-	vector<unsigned int> num_reads_available_by_strand = {0, 0}; // Here, one consensus read counts one read!
-	vector<unsigned int> num_reads_conuts_available_by_strand = {0, 0}; // Here, one consensus read counts by its read counts!
+	unsigned int effective_min_fam_per_strand_cov = allele_eval.total_theory.effective_min_fam_per_strand_cov;
+
+	vector<unsigned int> num_func_fam_by_strand = {0, 0, 0};
+	vector<unsigned int> num_reads_available_by_strand = {0, 0, 0}; // Here, one consensus read counts one read!
+	vector<unsigned int> num_reads_conuts_available_by_strand = {0, 0, 0}; // Here, one consensus read counts by its read counts!
 
 	assert(allele_eval.total_theory.effective_min_family_size > 0);
+
+
+	// For the current molecular barcoding scheme (bcprimer), the reads in each amplicom should be on on strand only.
+	// However, we sometimes get families on both strands, primarily due to false priming.
+	// Here I pick the strand that has more functional families
+	// strand_index = 0, 1, 2 indicatae bi-directional, uni-directional FWD, uni-directional REV families.
+	int best_strand_index = -1;
+	int best_func_fam_cov = -1;
 
 	for (unsigned int i_strand = 0; i_strand < my_molecular_families.size(); ++i_strand){
 		for (vector< MolecularFamily>::iterator family_it = my_molecular_families[i_strand].begin();
 				family_it != my_molecular_families[i_strand].end(); ++family_it){
 			// Skip the family if it is not functional
-			if (not family_it->SetFuncFromAll(effective_min_fam_size)){
+			if (not family_it->SetFuncFromAll(effective_min_fam_size, effective_min_fam_per_strand_cov)){
 				continue;
 			}
 			family_it->ResetValidFamilyMembers();
@@ -2572,27 +2884,28 @@ void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, v
 			family_it->is_valid_family_members_sorted = true; // valid_family_members is of course sorted as well since all_family_members is sorted.
 			family_it->CountFamSizeFromValid();
 			// Determine the functionality from valid_family_members
-			if (family_it->SetFuncFromValid(effective_min_fam_size)){
+			if (family_it->SetFuncFromValid(effective_min_fam_size, effective_min_fam_per_strand_cov)){
 				// Count how many reads and functional families available for down sampling
 				num_reads_available_by_strand[i_strand] += family_it->valid_family_members.size();
 				num_reads_conuts_available_by_strand[i_strand] += family_it->GetValidFamSize();
 				++num_func_fam_by_strand[i_strand];
 			}
 		}
+		if ((int) num_func_fam_by_strand[i_strand] > best_func_fam_cov){
+			best_func_fam_cov = (int) num_func_fam_by_strand[i_strand];
+			best_strand_index = (int) i_strand;
+		}
 	}
 
-	// For the current molecular barcoding scheme (bcprimer), the reads in each amplicom should be on on strand only.
-	// However, we sometimes get families on bo	th strands, primarily due to false priming.
-	// Here I pick the strand that has more functional families
-	strand_key = num_func_fam_by_strand[0] > num_func_fam_by_strand[1] ? 0 : 1;
-
 	if (DEBUG > 0){
-		string which_strand = (strand_key == 0)? "FWD" : "REV";
+		vector<string> strand_text = {"BIDIR", "FWD", "REV"};
 		cout << endl << "+ Stack up one variant with molecular tagging" << endl
-			 << "  - Effective-min-fam-size = " << effective_min_fam_size <<endl
-			 << "  - Number of functional families found on FWD strand = " << num_func_fam_by_strand[0] << endl
-			 << "  - Number of functional families found on REV strand = " << num_func_fam_by_strand[1] << endl
-			 << "  - Use the families on " << which_strand <<" strand only." << endl;
+			 << "  - Effective-min-fam-size = " << effective_min_fam_size << endl
+			 << "  - Effective-min-fam-per-strand-cov = " << effective_min_fam_per_strand_cov << endl;
+		for (unsigned int i_strand = 0; i_strand < num_func_fam_by_strand.size(); ++i_strand){
+			 cout << "  - Number of functional families identified on the "<< strand_text[i_strand] <<" strand = " << num_func_fam_by_strand[i_strand] << endl;
+		}
+		cout << "  - Use the families on the " << strand_text[best_strand_index] <<" strand only." << endl;
 		cout << "  - Calculating family size histogram (Zero family size means all family members are filtered out.)..." << endl;
 		for (unsigned int i_strand = 0; i_strand < my_molecular_families.size(); ++i_strand){
 			 map<int, unsigned int> fam_size_hist;
@@ -2600,7 +2913,7 @@ void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, v
 				int fam_size = family_it->GetFuncFromAll()? family_it->GetValidFamSize() : family_it->GetFamSize();
 				++fam_size_hist[fam_size];
 			}
-			cout << "  - "<< (strand_key == 0 ? "FWD" : "REV") << ": fam_size_hist = [";
+			cout << "  - "<< strand_text[i_strand] << " strand: fam_size_hist = [";
 			for (map<int, unsigned int>::iterator hist_it = fam_size_hist.begin(); hist_it != fam_size_hist.end(); ++hist_it){
 				cout << "(" << hist_it->first << ", " << hist_it->second <<"), ";
 			}
@@ -2609,7 +2922,11 @@ void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, v
 	}
 
 	// Do down-sampling
-	DoDownSamplingMolTag(parameters, effective_min_fam_size, my_molecular_families, num_reads_available_by_strand[strand_key], num_func_fam_by_strand[strand_key], strand_key);
+	if (best_strand_index == 0){
+		DoDownSamplingBiDirMolTag(parameters, effective_min_fam_size, effective_min_fam_per_strand_cov, my_molecular_families, num_reads_available_by_strand[best_strand_index], num_func_fam_by_strand[best_strand_index], best_strand_index);
+	}else{
+		DoDownSamplingUniDirMolTag(parameters, effective_min_fam_size, my_molecular_families, num_reads_available_by_strand[best_strand_index], num_func_fam_by_strand[best_strand_index], best_strand_index);
+	}
 }
 
 // ------------------------------------------------------------

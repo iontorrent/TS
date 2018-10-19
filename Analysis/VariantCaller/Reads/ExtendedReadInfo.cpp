@@ -53,15 +53,13 @@ void GetPrefixFlow(Alignment *rai, const string & prefix_bases, const ion::FlowO
 // Sets the member variables ref_aln, seq_aln, pretty_aln, startSC, endSC
 void UnpackAlignmentInfo(Alignment *rai)
 {
-  // TS-17069 Use the original CIGAR for splicing
-  const vector<CigarOp>& cigar_for_unpack = rai->old_cigar;
   rai->left_sc = 0;
   rai->right_sc = 0;
 
   unsigned int num_query_bases = 0;
   bool match_found = false;
 
-  for (vector<CigarOp>::const_iterator cigar = cigar_for_unpack.begin(); cigar != cigar_for_unpack.end(); ++cigar) {
+  for (vector<CigarOp>::const_iterator cigar = rai->alignment.CigarData.begin(); cigar != rai->alignment.CigarData.end(); ++cigar) {
     switch (cigar->Type) {
       case 'M':
       case '=':
@@ -98,7 +96,7 @@ void UnpackAlignmentInfo(Alignment *rai)
   // Basic alignment sanity check
   if (num_query_bases != rai->alignment.QueryBases.length()) {
     cerr << "WARNING in ExtendedReadInfo::UnpackAlignmentInfo: Invalid Cigar String in Read " << rai->alignment.Name << " Cigar: ";
-    for (vector<CigarOp>::const_iterator cigar = cigar_for_unpack.begin(); cigar != cigar_for_unpack.end(); ++cigar)
+    for (vector<CigarOp>::const_iterator cigar = rai->alignment.CigarData.begin(); cigar != rai->alignment.CigarData.end(); ++cigar)
       cerr << cigar->Length << cigar->Type;
     cerr << " Length of query string: " << rai->alignment.QueryBases.length() << endl;
     assert(num_query_bases == rai->alignment.QueryBases.length());
@@ -258,17 +256,20 @@ void UnpackOnLoad(Alignment *rai, const InputStructures &global_context)
     rai->read_group.clear();
   }
 
-  // Get read prefix - hard clipped start of the read: [KS][ZT][ZE]
+  // Get read prefix - hard clipped start of the read: [KS][ZK][ZT][ZE]
+  // where KS = key sequence of the read group, ZK = prefix handle (if bi-dir mol tagging is used), ZT = prefix mol tag, ZE = custom prefix trimming.
   rai->prefix_flow = -1;
   std::map<string,string>::const_iterator key_it = global_context.key_by_read_group.find(rai->read_group);
   if (key_it != global_context.key_by_read_group.end()) {
     rai->prefix_bases = key_it->second;
 
-    string temp_zt, temp_ze;
-    if (rai->alignment.GetTag("ZT", temp_zt))
-      rai->prefix_bases += temp_zt;
-    if (rai->alignment.GetTag("ZE", temp_ze))
-      rai->prefix_bases += temp_ze;
+	vector<string> prefix_tags = {"ZK", "ZT", "ZE"};
+	for (vector<string>::iterator tag_it = prefix_tags.begin(); tag_it != prefix_tags.end(); ++tag_it){
+		string temp_tag = "";
+	    if (rai->alignment.GetTag(*tag_it, temp_tag)){
+	        rai->prefix_bases += temp_tag;
+	    }
+	}
 
     if (not rai->prefix_bases.empty())
 	  GetPrefixFlow(rai, rai->prefix_bases, flow_order);
@@ -282,9 +283,11 @@ void UnpackOnLoad(Alignment *rai, const InputStructures &global_context)
     if (check_start_flow != rai->start_flow) {
       rai->prefix_flow = -1;
       rai->prefix_bases.clear();
+	  rai->filtered = true;
+      cerr << "WARNING: Missing hard-clipped prefix bases in read "<< rai->alignment.Name << endl;
+	  cerr << "start_flow = "<< rai->start_flow<<", check_start_flow = " << check_start_flow<<endl;
     }
   }
-
 }
 
 // Unpack the information used to generate flow space consensus
@@ -420,36 +423,40 @@ void UnpackOnLoadLight(Alignment *rai, const InputStructures &global_context)
 	    rai->read_group.clear();
 	}
 
-	// Get read prefix - hard clipped start of the read: [KS][ZT][ZE]
+	// Get read prefix - hard clipped start of the read: [KS][ZK][ZT][ZE]
+	// where KS = key sequence of the read group, ZK = prefix handle (if bi-dir mol tagging is used), ZT = prefix mol tag, ZE = custom prefix trimming.
 	rai->prefix_flow = -1;
 	map<string,string>::const_iterator key_it = global_context.key_by_read_group.find(rai->read_group);
 	if (key_it != global_context.key_by_read_group.end()) {
 	    rai->prefix_bases = key_it->second;
 
-	    string temp_zt, temp_ze;
-	    if (rai->alignment.GetTag("ZT", temp_zt))
-	        rai->prefix_bases += temp_zt;
-	    if (rai->alignment.GetTag("ZE", temp_ze))
-	        rai->prefix_bases += temp_ze;
+		vector<string> prefix_tags = {"ZK", "ZT", "ZE"};
+		for (vector<string>::iterator tag_it = prefix_tags.begin(); tag_it != prefix_tags.end(); ++tag_it){
+			string temp_tag = "";
+		    if (rai->alignment.GetTag(*tag_it, temp_tag)){
+		        rai->prefix_bases += temp_tag;
+		    }
+		}
 
 	    if (not rai->prefix_bases.empty())
 		    GetPrefixFlow(rai, rai->prefix_bases, flow_order);
 	  }
 
-	// Get read suffix
+	// Get read suffix [YE][YT][YK][SK]
+	// where YE = custom suffix trimming, YT = suffix mol tag, YK = suffix mol tag handle, SK = suffix sample barcode.
 	rai->suffix_bases.clear();
-    string temp_yt, temp_ye;
-    if (rai->alignment.GetTag("YE", temp_ye))
-        rai->suffix_bases += temp_ye;
-    if (rai->alignment.GetTag("YT", temp_yt))
-        rai->suffix_bases += temp_yt;
-
+	vector<string> suffix_tags = {"YE", "YT", "YK", "SK"};
+	for (vector<string>::iterator tag_it = suffix_tags.begin(); tag_it != suffix_tags.end(); ++tag_it){
+		string temp_tag = "";
+	    if (rai->alignment.GetTag(*tag_it, temp_tag)){
+	        rai->suffix_bases += temp_tag;
+	    }
+	}
 
     if (not rai->prefix_bases.empty())
 	    GetPrefixFlow(rai, rai->prefix_bases, flow_order);
 
-
-	  // Check consistency of prefix_flow and start_flow - maybe we don't have all info about hard clipped bases
+	// Check consistency of prefix_flow and start_flow - maybe we don't have all info about hard clipped bases
 	char read_bases_at_0 = rai->is_reverse_strand? NucComplement(rai->alignment.QueryBases.back()) : rai->alignment.QueryBases[0];
 	if (rai->prefix_flow >= 0) {
 	    int check_start_flow = rai->prefix_flow;

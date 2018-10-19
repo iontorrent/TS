@@ -23,26 +23,28 @@ using namespace BamTools;
 
 void IonstatsBasecallerHelp()
 {
-  printf ("\n");
-  printf ("ionstats %s-%s (%s) - Generate performance metrics and statistics for Ion sequences.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
-  printf ("\n");
-  printf ("Usage:   ionstats basecaller [options]\n");
-  printf ("\n");
-  printf ("General options:\n");
-  printf ("  -i,--input                 FILE       input BAM (unmapped or mapped) [required option]\n");
-  printf ("  -o,--output                FILE       output json file [ionstats_basecaller.json]\n");
-  printf ("  -h,--histogram-length      INT        read length histogram cutoff [400]\n");
-  printf ("\n");
+  cerr << endl;
+  cerr << "ionstats " << IonVersion::GetVersion() << "-" << IonVersion::GetRelease()
+       << " (" <<IonVersion::GetGitHash() << ") - Generate performance metrics and statistics for Ion sequences."
+       << endl << endl;
+  cerr << "Usage:   ionstats basecaller [options]"
+       << endl << endl;
+  cerr << "General options:" << endl;
+  cerr << "  -i,--input                 FILE       input BAM (unmapped or mapped) [required option]" << endl;
+  cerr << "  -o,--output                FILE       output json file [ionstats_basecaller.json]" << endl;
+  cerr << "  -h,--histogram-length      INT        read length histogram cutoff [400]" << endl;
+  cerr << "  -k,--key                   STRING     seq key - used for calculating system_snr [" << DEFAULT_SEQ_KEY << "]"
+       << endl << endl;
 }
 
 
 
 int IonstatsBasecaller(OptArgs &opts)
 {
-  string input_bam_filename   = opts.GetFirstString('i', "input", "");
-  string output_json_filename = opts.GetFirstString('o', "output", "ionstats_basecaller.json");
-  int histogram_length        = opts.GetFirstInt   ('h', "histogram-length", 400);
+  string input_bam_filename   = opts.GetFirstString ('i', "input", "");
+  string output_json_filename = opts.GetFirstString ('o', "output","ionstats_basecaller.json");
+  int    histogram_length     = opts.GetFirstInt    ('h', "histogram-length", 400);
+  string seq_key              = opts.GetFirstString ('k', "key", DEFAULT_SEQ_KEY);
 
   if(input_bam_filename.empty()) {
     IonstatsBasecallerHelp();
@@ -76,13 +78,13 @@ int IonstatsBasecaller(OptArgs &opts)
   MetricGeneratorSNR system_snr;
   BaseQVHistogram qv_histogram;
 
+  // We assume all read groups share the same flow order, so point iterating over all
   string flow_order;
-  string key;
   for (SamReadGroupIterator rg = sam_header.ReadGroups.Begin(); rg != sam_header.ReadGroups.End(); ++rg) {
     if(rg->HasFlowOrder())
       flow_order = rg->FlowOrder;
-    if(rg->HasKeySequence())
-      key = rg->KeySequence;
+    if (not flow_order.empty())
+      break;
   }
 
   double qv_to_error_rate[256];
@@ -122,9 +124,9 @@ int IonstatsBasecaller(OptArgs &opts)
 
     // Record data for system snr
     if(alignment.GetTag("ZM", flow_signal_zm))
-      system_snr.Add(flow_signal_zm, key.c_str(), flow_order);
+      system_snr.Add(flow_signal_zm, seq_key, flow_order);
     else if(alignment.GetTag("FZ", flow_signal_fz))
-      system_snr.Add(flow_signal_fz, key.c_str(), flow_order);
+      system_snr.Add(flow_signal_fz, seq_key, flow_order);
 
     // Record qv histogram
     qv_histogram.Add(alignment.Qualities);

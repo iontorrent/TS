@@ -87,10 +87,11 @@ void VariantCallerHelp() {
   printf("     --min-delta-for-flow               FLOAT       minimum prediction delta for scoring flows [0.1]\n");
   printf("     --max-flows-to-test                INT         maximum number of scoring flows [10]\n");
   printf("     --outlier-probability              FLOAT       probability for outlier reads [0.01]\n");
+  printf("     --outlier-pre-filter               INT         filtering out outlier reads before evaluation, range: 0 (disable) - 4 (most stringent) [1 if mol-tag else 0]\n");
   printf("     --heavy-tailed                     INT         (2*this value-1) is the Degrees of Freedom (DoF) in t-dist modeling signal residual heavy tail [3]\n");
   printf("     --adjust-sigma                     on/off      It true, use sigma^2=(DoF-2)/Dof*VAR(residual) for calculating the t-dist log-likelihood, else use sigma^2=VAR(residual) [off]\n");
   printf("     --suppress-recalibration           on/off      Suppress homopolymer recalibration [on].\n");
-  printf("     --do-snp-realignment               on/off      Realign reads in the vicinity of candidate snp variants [on].\n");
+  printf("     --do-snp-realignment               on/off      Realign reads in the vicinity of candidate snp variants [off].\n");
   printf("     --do-mnp-realignment               on/off      Realign reads in the vicinity of candidate mnp variants [do-snp-realignment].\n");
   printf("     --realignment-threshold            FLOAT       Max. allowed fraction of reads where realignment causes an alignment change [1.0].\n");
   printf("\n");
@@ -127,8 +128,6 @@ void VariantCallerHelp() {
   printf("  -e,--error-motifs                     FILE        table of systematic error motifs and their error rates [optional]\n");
   printf("     --sse-prob-threshold               FLOAT       filter out variants in motifs with error rates above this [0.2]\n");
   printf("     --min-ratio-reads-non-sse-strand   FLOAT       minimum required alt allele frequency for variants with error motifs on opposite strand [0.2]\n");
-  printf("     --use-lod-filter                   on/off      enable the Limit Of Detection (LOD) filter [off]\n");
-  printf("     --lod-multiplier                   FLOAT       multiplier of LOD for filtering out variants with low alt allele frequency [0.6]\n");
   printf("     --tag-sim-max-cov                  INT         check the similarity of variant molecular tags if the variant molecular coverage <= this value [20]\n");
   printf("     --cleanup-unlikely-candidates      on/off      remove unlikely variant candidates from the vcf records if there is a highly likely variant presented (similar to heal-snps) [on].\n");
 
@@ -215,6 +214,7 @@ void VariantCallerHelp() {
 
   MolecularTagTrimmer::PrintHelp(true);
   printf("     --indel-func-size-offset           INT         require family of size >= (min-tag-fam-size + this value) to be functional when calling HP-INDEL [0]\n");
+  printf("     --min-callable-prob                FLOAT       minimum callable probability for LOD calculation [0.98]\n");
   printf("\n");
 
 
@@ -262,9 +262,7 @@ ControlCallAndFilters::ControlCallAndFilters() {
   position_bias = 0.75f;              // position bias
   position_bias_pval = 0.05f;         // pval for observed > threshold
 
-  use_lod_filter = false;
-  lod_multiplier = 0.6f;
-
+  min_callable_prob = 0.98f;
   tag_sim_max_cov = 20;
 
   // VCF record filters (applied during vcf merging) XXX
@@ -320,6 +318,7 @@ void EnsembleEvalTuningParameters::SetOpts(OptArgs &opts, Json::Value& tvc_param
 
   prediction_precision                  = RetrieveParameterDouble(opts, tvc_params, '-', "prediction-precision", 30.0);
   outlier_prob                          = RetrieveParameterDouble(opts, tvc_params, '-', "outlier-probability", 0.01);
+  outlier_pre_filter                    = RetrieveParameterInt   (opts, tvc_params, '-', "outlier-pre-filter", -1);
   germline_prior_strength               = RetrieveParameterDouble(opts, tvc_params, '-', "germline-prior-strength", 0.0f);
   heavy_tailed                          = RetrieveParameterInt   (opts, tvc_params, '-', "heavy-tailed", 3);
   adjust_sigma                          = RetrieveParameterBool  (opts, tvc_params, '-', "adjust-sigma", false);
@@ -346,6 +345,7 @@ void EnsembleEvalTuningParameters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("min-delta-for-flow",      min_delta_for_flow,      0.01f, 0.5f);
   CheckParameterLowerBound<float>     ("prediction-precision",    prediction_precision,    0.1f);
   CheckParameterLowerUpperBound<float>("outlier-probability",     outlier_prob,            0.0000001f,  1.0f); // extremely low outlier_prob causes floating exception
+  CheckParameterLowerUpperBound<int>  ("outlier-pre-filter",      outlier_pre_filter,      -1,  4);
   CheckParameterLowerUpperBound<float>("germline-prior-strength", germline_prior_strength, 0.0f,  1000.0f);
   CheckParameterLowerBound<int>       ("heavy-tailed",            heavy_tailed,            1);
 
@@ -421,7 +421,7 @@ void ClassifyFilters::SetOpts(OptArgs &opts, Json::Value & tvc_params) {
   minRatioReadsOnNonErrorStrand         = RetrieveParameterDouble(opts, tvc_params, '-', "min-ratio-reads-non-sse-strand", 0.2);
   sse_relative_safety_level             = RetrieveParameterDouble(opts, tvc_params, '-', "sse-relative-safety-level", 0.025);
   // min ratio of reads supporting variant on non-sse strand for variant to be called
-  do_snp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-snp-realignment", true);
+  do_snp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-snp-realignment", false);
   do_mnp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-mnp-realignment", do_snp_realignment);
   realignment_threshold                 = RetrieveParameterDouble(opts, tvc_params, '-', "realignment-threshold", 1.0);
 
@@ -604,8 +604,8 @@ void ControlCallAndFilters::CheckParameterLimits() {
 	CheckParameterLowerUpperBound<float>("position-bias",             position_bias,              0.0f, 1.0f);
 	CheckParameterLowerUpperBound<float>("position-bias-pval",        position_bias_pval,         0.0f, 1.0f);
 	CheckParameterLowerUpperBound<float>("tune-sbias",                sbias_tune,                 0.001f, 1000.0f);
-	CheckParameterLowerBound<float>     ("lod-multiplier",            lod_multiplier,             0.0f);
 	CheckParameterLowerBound<int>       ("tag-sim-max-cov",           tag_sim_max_cov,            0);
+	CheckParameterLowerUpperBound<float>("min-callable-prob",         min_callable_prob,          0.000001f, 0.999999f);
     CheckParameterLowerUpperBound<float>("min-read-ratio-for-fd",     min_ratio_for_fd,           0.0f, 1.0f);
 	CheckParameterLowerBound<int>       ("fd-nonsnp-min-var-cov",     fd_nonsnp_min_var_cov,      0);
 
@@ -636,8 +636,7 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   position_bias                         = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias",0.75f);
   position_bias_pval                    = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias-pval",0.05f);
 
-  use_lod_filter                        = RetrieveParameterBool(opts, tvc_params, '-', "use-lod-filter", false);
-  lod_multiplier                        = RetrieveParameterDouble(opts, tvc_params, '-', "lod-multiplier",0.6f);
+  min_callable_prob                     = RetrieveParameterDouble(opts, tvc_params, '-', "min-callable-prob",0.98f);
 
   tag_sim_max_cov                       = RetrieveParameterInt   (opts, tvc_params, '-', "tag-sim-max-cov", 20);
   downSampleCoverage                    = RetrieveParameterInt   (opts, tvc_params, '-', "downsample-to-coverage", 2000);
@@ -931,6 +930,7 @@ void ExtendParameters::CheckParameterLimits() {
   // Checking TagTrimmerParameters
   CheckParameterLowerUpperBound<int>  ("tag-trim-method",        tag_trimmer_parameters.tag_trim_method,        0, 1);
   CheckParameterLowerBound<int>       ("min-tag-fam-size",       tag_trimmer_parameters.min_family_size,        1);
+  CheckParameterLowerBound<int>       ("min-fam-per-strand-cov", tag_trimmer_parameters.min_fam_per_strand_cov, 0);
   CheckParameterLowerBound<int>       ("indel-func-size-offset", tag_trimmer_parameters.indel_func_size_offset, 0);
 }
 
@@ -950,6 +950,7 @@ void ExtendParameters::SetMolecularTagTrimmerOpt(Json::Value& tvc_params)
 
 	tag_trimmer_parameters.suppress_mol_tags      = RetrieveParameterBool   (opts, tvc_params, '-', "suppress-mol-tags", false);
 	tag_trimmer_parameters.min_family_size        = RetrieveParameterInt    (opts, tvc_params, '-', "min-tag-fam-size", 3);
+	tag_trimmer_parameters.min_fam_per_strand_cov = RetrieveParameterInt    (opts, tvc_params, '-', "min-fam-per-strand-cov", 0);
 	tag_trimmer_parameters.indel_func_size_offset = RetrieveParameterInt    (opts, tvc_params, '-', "indel-func-size-offset", 0);
 	string trim_method                            = RetrieveParameterString (opts, tvc_params, '-', "tag-trim-method", "sloppy-trim");
 

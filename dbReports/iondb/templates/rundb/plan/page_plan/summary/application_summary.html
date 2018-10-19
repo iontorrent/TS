@@ -1,8 +1,4 @@
 <tr>
-    <td width="140"><b>Ion Reporter:</b></td>
-    <td id="selectedIR">{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}</td>
-</tr>
-<tr>
     <td><b>Research Application:</b></td>
     <td id="selectedApplication"></td>
 </tr>
@@ -11,31 +7,8 @@
     <td id="selectedApplicationCategory"></td>
 </tr>
 <tr>
-    <td><b>Sample Grouping:</b></td>
-    <td id="selectedGroup"></td>
-</tr>
-<tr>
     <td><b>Target Technique:</b></td>
     <td id="selectedTechnique"></td>
-</tr> 
-<tr>
-    <td><b>Ion Reporter Workflow:</b></td>
-    <td id="selectedWorkflow">
-    {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName != "None" %}
-        {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow|default:"Upload Only"}}
-    {% endif %}
-    </td>
 </tr>
- <!-- #TS-11365 - Below comment will be reverted in release 5.2 -->
-<tr>
-    <td width="160"><b>Ion Reporter Upload Options:</b></td>
-    <td id="selectedUploadMode">
-            {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName %}
-                {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode == 'no_check' %}
-                    Automatically upload to Ion Reporter after run completion
-                {% elif helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode == 'manual_check' %}
-                    Review results after run completion, then upload to Ion Reporter
-                {% endif %}
-            {% endif %}
-    </td>
-</tr>
+{%include "rundb/plan/page_plan/summary/ionreporter_summary.html"%}
+

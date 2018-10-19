@@ -24,14 +24,40 @@ def match(design, pipeline):
     target = pipe_types.get(pipeline, None)
     return not target or design['plan']['runType'] == target
 
-def get_ampliseq_designs(user, password, pipeline, ctx):
+def _get_all_ampliseq_designs(user, password):
+    # Get all the ampliseq design panels including Ampliseq HD
+    # "ampliseq-hd=true" filter is used to get the HD panels
     http = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
     http.add_credentials(user, password)
-    url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/list")
-    response, content = http.request(url)
-    if response['status'] == '200':
-        design_data = json.loads(content)
-        designs = design_data.get('AssayDesigns', [])
+    response = {}
+    errMsg = None
+    all_ampseq_designs = []
+    api_endpoints = ["ws/design/list", "ws/design/list/?ampliseq-hd=true"]
+    try:
+        for api_url in api_endpoints:
+            url = urlparse.urljoin(settings.AMPLISEQ_URL, api_url)
+            response, content = http.request(url)
+            if response['status'] == '200':
+                design_data = json.loads(content)
+                designs = design_data.get('AssayDesigns', [])
+                if designs:
+                    all_ampseq_designs.extend(designs)
+            else:
+                return response, {}
+    except httplib2.ServerNotFoundError as serverError:
+        errMsg = str(serverError) + ". Please check your network connection and try again."
+    except Exception as err:
+        errMsg = "There was a unknown error when contacting Ampliseq.com for Design Panels: %s" % str(err)
+
+    if errMsg:
+        response = { "status" : "500", "err_msg" : errMsg }
+        logger.error(errMsg)
+
+    return response, all_ampseq_designs
+
+def get_ampliseq_designs(user, password, pipeline, ctx):
+    response, designs = _get_all_ampliseq_designs(user, password)
+    if designs:
         ctx['unordered_solutions'] = []
         ctx['ordered_solutions'] = []
         unordered_tmpList = []

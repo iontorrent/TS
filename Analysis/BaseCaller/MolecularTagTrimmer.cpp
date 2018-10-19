@@ -29,7 +29,7 @@ MolecularTagTrimmer::MolecularTagTrimmer()
 {}
 
 // -------------------------------------------------------------------------
-//TODO write help function
+// Help function
 
 void MolecularTagTrimmer::PrintHelp(bool tvc_call)
 {
@@ -41,8 +41,10 @@ void MolecularTagTrimmer::PrintHelp(bool tvc_call)
   cout << "     --suppress-mol-tags     " << space1_for_tvc << "BOOL"   << space2_for_tvc << "       Ignore tag information [false]" << endl;
   cout << "     --tag-trim-method       " << space1_for_tvc << "STRING" << space2_for_tvc << "     Method to trim tags. Options: {strict-trim, sloppy-trim} [sloppy-trim]" << endl;
   // TVC only options
-  if (tvc_call)
+  if (tvc_call){
     cout << "     --min-tag-fam-size      " << space1_for_tvc << "INT" << space2_for_tvc << "        Minimum required size of molecular tag family [3]" << endl;
+    cout << "     --min-fam-per-strand-cov" << space1_for_tvc << "INT" << space2_for_tvc << "        Minimum required coverage of reads on each strand in a bi-directional molecular tag family [0]" << endl;
+  }
   // BaseCaller only options
   else{
     cout << "     --prefix-mol-tag        STRING     Structure of prefix molecular tag {ACGTN bases}" << endl;
@@ -57,23 +59,27 @@ void MolecularTagTrimmer::PrintHelp(bool tvc_call)
 // -------------------------------------------------------------------------
 // Command line parsing
 
-TagTrimmerParameters MolecularTagTrimmer::ReadOpts(OptArgs& opts)
+TagTrimmerParameters MolecularTagTrimmer::ReadOpts(OptArgs& opts, const Json::Value& structure)
 {
   // Reading command line options to set tag structures
   TagTrimmerParameters my_params;
 
   my_params.min_family_size            = opts.GetFirstInt     ('-', "min-tag-fam-size", 3);
+  my_params.min_fam_per_strand_cov     = opts.GetFirstInt     ('-', "min-fam-per-strand-cov", 0);
+
   my_params.suppress_mol_tags          = opts.GetFirstBoolean ('-', "suppress-mol-tags", false);
-  //my_params.cl_a_handle                = opts.GetFirstString  ('-', "tag-handle", "");
-  //my_params.handle_cutoff              = opts.GetFirstInt     ('-', "handle-cutoff", 2);
-
-  my_params.master_tags.prefix_mol_tag = opts.GetFirstString  ('-', "prefix-mol-tag", "");
-  my_params.master_tags.suffix_mol_tag = opts.GetFirstString  ('-', "suffix-mol-tag", "");
-
   my_params.heal_tag_hp_indel          = opts.GetFirstBoolean ('-', "heal-tag-hp-indel", true);
 
+  // Specifying tag structure via command line trumps anything else
+  my_params.master_tags.prefix_mol_tag = opts.GetFirstString  ('-', "prefix-mol-tag", "");
+  my_params.master_tags.suffix_mol_tag = opts.GetFirstString  ('-', "suffix-mol-tag", "");
+  if (not my_params.master_tags.HasTags() and structure.isMember("tag")){
+    my_params.master_tags.prefix_mol_tag = structure["tag"].get("PT", "").asString();
+    my_params.master_tags.suffix_mol_tag = structure["tag"].get("ST", "").asString();
+  }
   ValidateTagString(my_params.master_tags.prefix_mol_tag);
   ValidateTagString(my_params.master_tags.suffix_mol_tag);
+  my_params.command_line_tags = my_params.master_tags.HasTags();
 
   // Overload to disable molecular tagging
   if (my_params.min_family_size == 0)
@@ -82,8 +88,6 @@ TagTrimmerParameters MolecularTagTrimmer::ReadOpts(OptArgs& opts)
     cerr << "MolecularTagTrimmer Error: min-tag-fam-size must be at least 1. " << endl;
     exit(EXIT_FAILURE);
   }
-
-  my_params.command_line_tags = my_params.master_tags.HasTags();
 
   // Options for read filtering & and trimming method selection
   string trim_method          = opts.GetFirstString  ('-', "tag-trim-method", "sloppy-trim");
@@ -107,6 +111,7 @@ TagTrimmerParameters MolecularTagTrimmer::ReadOpts(OptArgs& opts)
     cerr << "MolecularTagTrimmer Error: Unknown tag filtering option " << filter_method << endl;
     exit(EXIT_FAILURE);
   }
+
   return my_params;
 }
 
@@ -142,7 +147,6 @@ void MolecularTagTrimmer::InitializeFromJson(const TagTrimmerParameters params, 
 
     read_group_name = read_group_index_to_name_[rg];
     read_group_name_to_index_[read_group_name] = rg;
-    //cout << "Checking read group " << read_group_name << " for tags: " << endl; // XXX
 
     // Don't load any tag info if we need to supress tags
     if (suppress_mol_tags_){
@@ -255,7 +259,7 @@ void    MolecularTagTrimmer::InitializeFromSamHeader(const TagTrimmerParameters 
 
 void MolecularTagTrimmer::PrintOptionValues(bool tvc_call)
 {
-  // Verbose output XXX do not say anything if there are no tags
+  // Verbose output - do not say anything if there are no tags
   if (num_read_groups_with_tags_ > 0) {
     cout << "MolecularTagTrimmer settings:" << endl;
     cout << "    found " << num_read_groups_with_tags_ << " read groups with tags." << endl;
@@ -279,12 +283,12 @@ void MolecularTagTrimmer::PrintOptionValues(bool tvc_call)
       default : cout << "unknown option" << endl; break;
     }
 
-    // Only give info about command line tags if they were specified
+    /* / Only give info about command line tags if they were specified
     if (command_line_tags_){
       cout << "     prefix-mol-tag : " << master_tags_.prefix_mol_tag << endl;
       cout << "     suffix-mol-tag : " << master_tags_.suffix_mol_tag << endl;
     }
-    cout << endl;
+    cout << endl;*/
   }
 }
 
@@ -502,6 +506,8 @@ bool  MolecularTagTrimmer::GetTagsFromBamAlignment(const BamTools::BamAlignment&
     return false;
 
   if (NeedPrefixTag(idx_it->second)) {
+	// Use ZK to determine it is bi-directional mol tag or not.
+	Tags.is_bi_directional_tag += alignment.HasTag("ZK");
     if (Tags.prefix_mol_tag.empty())
       return false;
   }
@@ -509,6 +515,8 @@ bool  MolecularTagTrimmer::GetTagsFromBamAlignment(const BamTools::BamAlignment&
     Tags.prefix_mol_tag.clear();
 
   if (NeedSuffixTag(idx_it->second)) {
+	// Also use YK to determine it is bi-directional mol tag or not.
+	Tags.is_bi_directional_tag += alignment.HasTag("YK");
     if (Tags.suffix_mol_tag.empty())
       return false;
   }

@@ -327,6 +327,14 @@
                              "Allowed values: Integers > 0",
                              "Suggested trial value between 3 and 7",
                              "Impact: Increasing values make variant calls less sensitive but more specific"]},
+                             
+		"min_fam_per_strand_cov":
+            {"type": "Integer",
+             "range": "[0,inf)",
+             "description": [" Minimum required coverage of reads on each strand in a bi-directional molecular tag family",
+                             "Allowed values: Integers >= 0",
+                             "Suggested trial value: 0 (TagSeq), 1 (AmpliSeq HD)",
+                             "Impact: Increasing values make variant calls less sensitive but more specific for AmpliSeq HD."]},                             
 
        "indel_func_size_offset":
             {"type": "Integer",
@@ -463,7 +471,7 @@
         "use_fd_param":
             {"type": "Bool",
              "description": ["A filtering parameter: Use Flow Disruptiveness (FD) instead of allele types (INDEL, SNP, MNP) as the criterion to choose the parameter set.",
-                             "If turned on, the (non-FD, moderate FD, FD) allele applies the the (INDEL, SNP, MNP) parameters, respectively.",
+                             "If turned on, the (non-FD, weak FD, strong FD) allele applies the the (INDEL, SNP, MNP) parameters, respectively.",
                              "Allowed values: 0: do not use FD parameters, 1: use FD parameters."]},
         
         "max_flows_to_test":

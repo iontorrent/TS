@@ -147,6 +147,9 @@
                 {% block nav %}
                     <div class="">
                     <ul class=" nav nav-tabs pull-left">
+                        <li id="home-menu" class="{% block home_menu %}{% endblock %}">
+                            <a href="{% url "dashboard" %}" class="nav-tab">Home</a>
+                        </li>
                         <li id="plan-menu" class="{% block plan_menu %}{% endblock %}">
                             <a href="{% url "plan" %}" class="nav-tab">Plan</a>
                         </li>
@@ -158,7 +161,6 @@
                         </li>
                     </ul>
                     <ul class="nav nav-tabs pull-right" id="configureNav">
-                        <li class="{% block news_menu %}{% endblock %}"><a href="{% url 'news' %}" class="nav-tab">News{% if unread_news %} <span class="badge badge-dark" style="margin-left: 3px; line-height:10px;">{{ unread_news }}</span>{% endif %}</a></li>
                         <li id="configure-menu" class="dropdown {% block configure_menu %}{% endblock %}">
                             <a id="configure" class="dropdown-toggle nav-tab" data-toggle="dropdown" data-target="#" href="{% url "configure_about" %}">
                             <div id="gear" class="gear-inactive"><b class="caret"></b></div>
@@ -184,7 +186,7 @@
     </div>
 </div>
 <div class="sub-nav">
-    <div class="container-fluid">
+    <div class="container-fluid" style="position: absolute">
         <div class="row-fluid">
             <div class="span12">
                 <ul class="nav">
@@ -222,7 +224,7 @@
                 <img class="pull-left" src="{% static "resources/img/ion-by-thermo-logo-125px.png"%}" border="0">
                 <div class="pull-right">
                     <p>For Research Use Only. Not for use in diagnostic procedures.</p>
-                    <p><span class="copyright">&copy; 2017 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
+                    <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
                     <a href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html">Technical Support</a> |
                     <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a>
                     </p>

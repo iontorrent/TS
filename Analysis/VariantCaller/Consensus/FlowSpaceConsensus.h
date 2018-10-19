@@ -130,6 +130,7 @@ public:
 void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFamily> > >& my_molecular_families_multisample,
                                      FlowSpaceConsensusMaster& flow_space_consensus_master,
 									 unsigned int min_family_size,
+									 unsigned int min_fam_per_strand_cov,
                                      list<PositionInProgress>::iterator& consensus_position_ticket,
                                      list<PositionInProgress>::iterator& aln_needed_consensus_position_ticket,
 									 TargetsManager* targets_manager,

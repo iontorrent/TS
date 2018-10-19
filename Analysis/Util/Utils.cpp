@@ -972,11 +972,27 @@ int GetAbsoluteFreeSystemMemoryInKB()
 
 // -----------------
 
+bool isNBaseString(std::string s_in)
+{
+  if (std::string::npos == s_in.find_first_not_of("ACGTN"))
+    return true;
+  return false;
+}
 
-void expandBaseSymbol(char nuc, std::vector<bool>& nuc_ensemble)
+int transformIntValue(int symb_in)
+{
+  if (symb_in > 91) --symb_in;
+  if (symb_in > 46) --symb_in;
+  if (symb_in > 38) --symb_in;
+  if (symb_in > 33) --symb_in;
+  symb_in-=33;
+  return (symb_in);
+}
+
+void expandBaseSymbol(const char nucBase, std::vector<bool>& nuc_ensemble)
 {
   nuc_ensemble.assign(4, false);
-  nuc = toupper(nuc);
+  char nuc = toupper(nucBase);
 
   switch(nuc) {
       case 'A': nuc_ensemble[0] = true; break;
@@ -1055,24 +1071,11 @@ char contractNucSymbol(const std::vector<bool>& nuc_ensemble)
 }
 
 
-bool isBaseMatch(char nuc1, char nuc2)
+bool isBaseMatch(const char nuc1, const char nuc2)
 {
   std::vector<bool> ensemble1, ensemble2;
   expandBaseSymbol(nuc1, ensemble1);
   expandBaseSymbol(nuc2, ensemble2);
-
-  /* / ---- XXX
-  cerr << "[";
-  for (unsigned int i=0; i<ensemble1.size(); ++i){
-    cerr << ensemble1[i];
-  }
-  cerr << "] [";
-  for (unsigned int i=0; i<ensemble2.size(); ++i){
-    cerr << ensemble2[i];
-  }
-  cerr << "] ";
-  // ------- XXX //*/
-
 
   for (unsigned int i=0; i<ensemble2.size(); ++i){
     if (ensemble1[i] and ensemble2[i])
@@ -1082,7 +1085,7 @@ bool isBaseMatch(char nuc1, char nuc2)
 }
 
 
-char getMatchSymbol(char nuc1, char nuc2)
+char getMatchSymbol(const char nuc1, const char nuc2)
 {
   std::vector<bool> ensemble1, ensemble2;
   expandBaseSymbol(nuc1, ensemble1);
@@ -1093,6 +1096,27 @@ char getMatchSymbol(char nuc1, char nuc2)
   }
 
   return contractNucSymbol(ensemble1);
+}
+
+
+std::string getNormString(std::string s_in)
+{
+  if (s_in.empty() or isNBaseString(s_in))
+    return (s_in);
+
+  string s_out;
+  RandSchrange mRand(transformIntValue((int)(s_in.back())));
+
+  for (unsigned int b=0; b<s_in.length()-1; ++b){
+    int bb = (transformIntValue((int)s_in.at(b))-mRand.Rand()) % 89;
+    if (bb < 0)
+      bb += 89;
+    if (bb == 32)
+      break;
+    s_out.append(1,bb);
+  }
+
+  return s_out;
 }
 
 #endif

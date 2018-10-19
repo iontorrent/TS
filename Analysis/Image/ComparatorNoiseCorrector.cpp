@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 #include "Utils.h"
 #include "ComparatorNoiseCorrector.h"

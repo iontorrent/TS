@@ -39,6 +39,7 @@ from iondb.rundb.models import ReferenceGenome, FileMonitor, dnaBarcode, Plugin,
 from iondb.utils.utils import GetChangeLog, VersionChange, get_apt_cache
 from django.db.models import get_model
 from distutils.version import StrictVersion, LooseVersion
+from iondb.plugins.manager import pluginmanager
 
 logger = logging.getLogger(__name__)
 
@@ -729,7 +730,7 @@ def InstallDeb(pathToDeb, actualFileName = None):
         raise Exception("No file at " + pathToDeb)
 
     # call the ion plugin deb install script which handles the misc deb packages installation
-    p = subprocess.Popen(["sudo", "/opt/ion/iondb/bin/ion_plugin_install_deb.py", pathToDeb, "miscDeb"],
+    p = subprocess.Popen(["sudo", "/opt/ion/iondb/bin/ion_package_install_deb.py", pathToDeb, "miscDeb"],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     out, err = p.communicate()
@@ -745,3 +746,6 @@ def InstallDeb(pathToDeb, actualFileName = None):
             err = ("Something went wrong. Check the file (%s) uploaded and try again. "
                    "If problem exists again, please consult with your Torrent Suite administrator." % actualFileName)
         raise Exception(err)
+
+    if 'ion-plugin' in actualFileName:
+        pluginmanager.rescan()

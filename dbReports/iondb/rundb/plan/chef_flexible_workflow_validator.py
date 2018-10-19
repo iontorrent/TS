@@ -59,6 +59,7 @@ class ChefFlexibleWorkflowValidator(object):
             "E308": "time between solutions usage has been exceeded the max limit of ({0}) days, continuing run is not allowed",
             "E309": "time between reagents usage has been exceeded the max limit of ({0}) days, continuing run is not allowed",
             "E310": "Invalid chef current time. Check the time format",
+            "E311": "exceededs the GS1 standard (should not be greater than {0} chars long)",
             "W400": "Ion Mesh warning: Remote server has incompatible software version ({0})",
             "E401": "Invalid user credentials",
             "E402": "{0}", # captures unknown exceptions during composite experiment api call
@@ -100,6 +101,19 @@ class ChefFlexibleWorkflowValidator(object):
                 response["allowRunToContinue"] = False
                 response["errorCodes"] = [errCode]
                 response["detailMessages"][errCode] = self.error_warning_codes[errCode].format(keysNotExists)
+
+            #validate that the serial nos are adhered to the GS1 standards
+            keys = ["chefReagentsSerialNum", "chefSolutionsSerialNum"]
+            for key in keys:
+                errMsg = self.validate_GS1_standards(params[key])
+                if errMsg:
+                    errCode = "E311"
+                    if errCode in response["errorCodes"]:
+                        response["detailMessages"][errCode] = ', '.join(keys) + " : " + errMsg
+                    else:
+                        response["detailMessages"][errCode] = key + " : " + errMsg
+                    response["allowRunToContinue"] = False
+                    response["errorCodes"] = [errCode]
 
         return response
 
@@ -236,12 +250,7 @@ class ChefFlexibleWorkflowValidator(object):
         if response["allowRunToContinue"]:
             self.checkCartrideExpiration(oldestReagentStartTime, oldestSolutionStartTime, params, dbParams)
 
-        if num_reagentsExps != num_solutionsExps:
-            errCode = "E300"
-            response["allowRunToContinue"] = False
-            response["errorCodes"].append(errCode)
-            response["detailMessages"][errCode] = self.error_warning_codes[errCode]
-        elif num_reagentsExps >= cartridgeUsageLimit and num_solutionsExps >= cartridgeUsageLimit:
+        if num_reagentsExps >= cartridgeUsageLimit and num_solutionsExps >= cartridgeUsageLimit:
             errCode = "E303"
             response["allowRunToContinue"] = False
             response["errorCodes"].append(errCode)
@@ -256,7 +265,13 @@ class ChefFlexibleWorkflowValidator(object):
             response["allowRunToContinue"] = False
             response["errorCodes"].append(errCode)
             response["detailMessages"][errCode] = self.error_warning_codes[errCode].format(cartridgeUsageLimit)
-        elif data["warnings"]:
+
+        if num_reagentsExps != num_solutionsExps:
+            errCode = "E300"
+            response["allowRunToContinue"] = False
+            response["errorCodes"].append(errCode)
+            response["detailMessages"][errCode] = self.error_warning_codes[errCode]
+        if data["warnings"]:
             warnings = data["warnings"]
             fetchRunsIssueServers = []
             fetchRunsIssue = False
@@ -367,3 +382,13 @@ class ChefFlexibleWorkflowValidator(object):
             response["detailMessages"][errCode] = str(exc)
 
         return response
+
+    def validate_GS1_standards(self, value):
+        #adhere to GS1 standards
+        GS1 = 20 # GS1 standard max limit
+        errMsg = None
+        errCode = "E311"
+        if len(str(value)) > GS1:
+            errMsg = self.error_warning_codes[errCode].format(GS1)
+
+        return errMsg

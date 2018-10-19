@@ -78,7 +78,7 @@ void H5DataSet::Init ( size_t id )
   mSize = 0;
 }
 
-void H5DataSet::SetDataspace ( int rank, const hsize_t dims[], const hsize_t chunking[], int type )
+void H5DataSet::SetDataspace ( int rank, const hsize_t dims[], const hsize_t chunking[], hid_t type )
 {
   mRank = rank;
   mDims.resize ( rank );

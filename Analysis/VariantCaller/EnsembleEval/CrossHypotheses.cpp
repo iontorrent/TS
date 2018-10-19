@@ -794,18 +794,32 @@ int EvalFamily::MostResponsible(){
 int EvalFamily::CountFamSizeFromAll()
 {
 	fam_size_ = 0;
+	fam_cov_fwd_ = 0;
+	fam_cov_rev_ = 0;
 	for (vector<unsigned int>::iterator read_it = all_family_members.begin(); read_it != all_family_members.end(); ++read_it){
-		fam_size_ += (read_stack_->at(*read_it)->read_count);
+		if (read_stack_->at(*read_it)->is_reverse_strand){
+			fam_cov_rev_ += (read_stack_->at(*read_it)->read_count);
+		}else{
+			fam_cov_fwd_ += (read_stack_->at(*read_it)->read_count);
+		}
 	}
+	fam_size_ = fam_cov_fwd_ + fam_cov_rev_;
 	return fam_size_;
 }
 
 int EvalFamily::CountFamSizeFromValid()
 {
 	valid_fam_size_ = 0;
+	valid_fam_cov_fwd_ = 0;
+	valid_fam_cov_rev_ = 0;
 	for (vector<unsigned int>::iterator read_it = valid_family_members.begin(); read_it != valid_family_members.end(); ++read_it){
-		valid_fam_size_ += (read_stack_->at(*read_it)->read_count);
+		if (read_stack_->at(*read_it)->is_reverse_strand){
+			valid_fam_cov_rev_ += (read_stack_->at(*read_it)->read_count);
+		}else{
+			valid_fam_cov_fwd_ += (read_stack_->at(*read_it)->read_count);
+		}
 	}
+	valid_fam_size_ = valid_fam_cov_fwd_ + valid_fam_cov_rev_;
 	return valid_fam_size_;
 }
 
@@ -1085,26 +1099,59 @@ void CrossHypotheses::FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_
 
 // A simple criterion to determine outlier reads
 // If I can not find any non-null hypothesis which is not flow-disruptive with the null hypothesis, I claim the read is an outluer and return true.
-bool CrossHypotheses::OutlierByFlowDisruptiveness() const {
-	if (not success or local_flow_disruptiveness_matrix.empty()){
+// return true if I am an outlier else false.
+// stringency_level = 0: disable the filter
+// stringency_level = 1: not OL if at least one Hyp vs. Hyp(OL) is FD-10 (flow disrupted)
+// stringency_level = 2: not OL if at least one Hyp vs. Hyp(OL) is FD-5
+// stringency_level = 3: not OL if at least one Hyp vs. Hyp(OL) is FD-0 (HP-INDEL)
+// stringency_level = 4: not OL if at least one Hyp is the same as Hyp(OL)
+bool CrossHypotheses::OutlierByFlowDisruptiveness(unsigned int stringency_level) const {
+	if ((not success) or local_flow_disruptiveness_matrix.empty()){
+		return true;
+	}
+	// stringency_level = 0 means disable the filter
+	// at_least_one_same_as_null means not an OL. Should be the most common case.
+	if (stringency_level == 0 or at_least_one_same_as_null){
+		return false;
+	}
+	else if (stringency_level >= 4){
+		// Claime OL because none of the Hyp is the same as Hyp(OL).
 		return true;
 	}
 
+	int min_fd_code = -1;
 	for (unsigned int i_hyp = 1; i_hyp < local_flow_disruptiveness_matrix[0].size(); ++i_hyp){
-		if (local_flow_disruptiveness_matrix[0][i_hyp] == 0 or local_flow_disruptiveness_matrix[0][i_hyp] == 1){
-			return false;
+		if (local_flow_disruptiveness_matrix[0][i_hyp] >= 0 and local_flow_disruptiveness_matrix[0][i_hyp] < min_fd_code){
+			min_fd_code = local_flow_disruptiveness_matrix[0][i_hyp];
 		}
 	}
-	// indefinite or flow-disruptive means outlier
-	return true;
+
+	if (min_fd_code < 0){
+		// Filter out indefinite read.
+		return true;
+	}
+
+	/*
+	switch (stringency_level){
+	case 1:
+		return min_fd_code >= 2;
+	case 2:
+		return min_fd_code >= 1;
+	case 3:
+		return min_fd_code >= 0;
+	}
+	*/
+	// The above switch is equivalent to the following return value.
+	return min_fd_code >= (3 - (int) stringency_level);
 }
 
+//CZB: Majority rule makes no sense for BIR-DIR UMT.
 void EvalFamily::FillInFlowDisruptivenessMatrix(const vector<CrossHypotheses> &my_hypotheses)
 {
 	unsigned int num_hyp = 0;
-	for(unsigned int i_member = 0; i_member < all_family_members.size(); ++i_member){
-		if (my_hypotheses[all_family_members[i_member]].success){
-			num_hyp = my_hypotheses[all_family_members[i_member]].instance_of_read_by_state.size();
+	for(unsigned int i_member = 0; i_member < valid_family_members.size(); ++i_member){
+		if (my_hypotheses[valid_family_members[i_member]].success){
+			num_hyp = my_hypotheses[valid_family_members[i_member]].instance_of_read_by_state.size();
 			break;
 		}
 	}
@@ -1121,12 +1168,9 @@ void EvalFamily::FillInFlowDisruptivenessMatrix(const vector<CrossHypotheses> &m
 			// Note that loacal_flow_disruptiveness_matrix[i_hyp][j_hyp] = -1, 0, 1, 2 means indefinite, HP-INDEL, not-FD and not HP-INDEL, FD, respectively.
 			// Use majority rule to determine flow_disruptiveness_matrix of the family.
 			vector<int> fd_type_counts(3);
-			for (unsigned int i_member = 0; i_member < all_family_members.size(); ++i_member){
+			for (unsigned int i_member = 0; i_member < valid_family_members.size(); ++i_member){
 				// Don't count outliers.
-				const CrossHypotheses* my_member = &(my_hypotheses[all_family_members[i_member]]);
-				if (my_member->OutlierByFlowDisruptiveness()){
-					continue;
-				}
+				const CrossHypotheses* my_member = &(my_hypotheses[valid_family_members[i_member]]);
 				int fd_type = my_member->local_flow_disruptiveness_matrix[i_hyp][j_hyp];
 				if (fd_type >= 0){
 					fd_type_counts[fd_type] += my_member->read_counter;

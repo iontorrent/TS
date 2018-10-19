@@ -17,6 +17,7 @@ import requests
 from django.utils import timezone
 import celery.exceptions
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth.decorators import login_required, permission_required
 from django.views.decorators.http import require_POST
 from django.shortcuts import render_to_response, get_object_or_404, get_list_or_404
@@ -28,14 +29,14 @@ from django.core.urlresolvers import reverse
 from django.forms.models import model_to_dict
 import ion.utils.TSversion
 from iondb.rundb.forms import EmailAddress as EmailAddressForm, UserProfileForm
-from iondb.rundb import tasks, publishers
+from iondb.rundb import tasks, publishers, publisher_types
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
 from iondb.product_integration.models import ThermoFisherCloudAccount
 from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, PluginResultJob, GlobalConfig, Chip, AnalysisArgs, \
                                EmailAddress, Publisher, Results, Template, UserProfile, model_to_csv, IonMeshNode, \
-                               FileMonitor, ContentType, Cruncher, RunType, RUNNING_STATES, ReferenceGenome
+                               FileMonitor, ContentType, Cruncher, RunType, RUNNING_STATES, ReferenceGenome, GlobalConfig
 from iondb.rundb.data import rawDataStorageReport
 from iondb.rundb.configure.genomes import search_for_genomes
 from iondb.rundb.plan import ampliseq
@@ -53,7 +54,7 @@ from ion.plugin.remote import call_pluginStatus
 from iondb.utils.utils import convert, cidr_lookup
 from iondb.bin.IonMeshDiscoveryManager import IonMeshDiscoveryManager
 from iondb.rundb.configure import updateProducts
-from iondb.utils.nexenta_nms import this_is_nexenta, get_all_torrentnas_data, has_nexenta_cred
+from iondb.utils.nexenta_nms import this_is_nexenta, get_all_torrentnas_data, has_nexenta_cred, load_torrentnas_status_json
 from iondb.rundb.configure import ampliseq_design_parser
 from iondb.product_integration.models import ThermoFisherCloudAccount
 logger = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ def sort_drive_array_for_display(raidstatus):
             pass
 
 
-def get_torrent_nas_info():
+def get_torrent_nas_info(refresh=True):
     # Torrent NAS information
 
     def get_health_state(health_str):
@@ -154,9 +155,16 @@ def get_torrent_nas_info():
         return state
 
     info = []
-    data, err = get_all_torrentnas_data()
-    for error in err:
-        logger.error(error)
+    if not has_nexenta_cred():
+        return info
+
+    if refresh:
+        data, err = get_all_torrentnas_data()
+        for error in err:
+            logger.error(error)
+    else:
+        data = load_torrentnas_status_json()
+
     for nas in data:
         nasInfo = { "ipaddress": nas["ipaddress"], "volumes": [] }
         for name in nas['volumes']:
@@ -216,7 +224,13 @@ def configure_services(request):
     servers = get_servers()
     jobs = current_jobs() + current_plugin_jobs()
     crawler = _crawler_status(request)
-    processes = process_set()
+
+
+    system_services = []
+    telemetry_services = []
+
+    for name, status in process_set():
+            system_services.append([name, status])
 
     # RAID Info
     raidJson = load_raid_status_json()
@@ -226,8 +240,12 @@ def configure_services(request):
     if raid_status:
         sort_drive_array_for_display(raid_status)
 
+    gc = GlobalConfig.objects.get()
+
     ctxd = {
-        "processes": processes,
+        "system_services": system_services,
+        "telemetry_services": telemetry_services,
+        "telemetry_enabled": gc.telemetry_enabled,
         "servers": servers,
         "jobs": jobs,
         "crawler": crawler,
@@ -241,11 +259,24 @@ def configure_services(request):
 
 
 @login_required
+def configure_telemetry_services_toggle(request):
+    """ Switch telemetry_services on and off """
+    if request.method == "POST":
+        gc = GlobalConfig.objects.get()
+        if gc.telemetry_enabled:
+            gc.telemetry_enabled = False
+        else:
+            gc.telemetry_enabled = True
+        gc.save()
+    return HttpResponseRedirect(urlresolvers.reverse("configure_services"))
+
+@login_required
 def configure_references(request):
     '''Render reference tab'''
     search_for_genomes()
     ctxd = {
-        "active_references": ReferenceGenome.objects.filter(enabled=True, index_version=settings.TMAP_VERSION).order_by('short_name')
+        "active_references": ReferenceGenome.objects.filter(enabled=True, index_version=settings.TMAP_VERSION).order_by('short_name'),
+        "publisher_types": json.dumps(publisher_types.get_publisher_types())
     }
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/references.html", context_instance=ctx)
@@ -661,20 +692,26 @@ def link_mesh_node(request):
 @login_required
 @permission_required('user.is_staff', raise_exception=True)
 def delete_mesh_node(request, pk):
-    error = ""
     node = get_object_or_404(IonMeshNode, pk=pk)
     url = 'http://%s/rundb/api/v1/ionmeshnode/' % node.hostname
     headers = {"Authorization": "system_id "  + settings.SYSTEM_UUID + ":" + node.apikey_remote}
+
+    # remove remote entry
+    remote_exception = None
     try:
-        # remove local entry
-        node.delete()
-        # remove remote entry
         r = requests.delete(url + '?system_id='+ settings.SYSTEM_UUID, headers=headers)
         r.raise_for_status()
     except Exception as exc:
-        return HttpResponseServerError(str(exc))
+        remote_exception = exc
 
-    return HttpResponse()
+    # remove local entry
+    if not remote_exception or "force" in request.GET:
+        node.delete()
+
+    if remote_exception:
+        return HttpResponse(str(remote_exception), status=500)
+    else:
+        return HttpResponse()
 
 
 @login_required
@@ -687,8 +724,16 @@ def configure_mesh(request):
     """
     finish_sharedservers_mesh_link()
 
-    ctx=RequestContext(request, {
-        "mesh_computers": sorted(ionMeshDiscoveryManager.getMeshComputers()),
+    mesh_hosts = []
+
+    # Fetch hosts that may have been posted to this TS by an S5 host
+    mesh_hosts += [i["hostname"] for i in json.loads(cache.get("auto_discovered_hosts_json", "[]"))]
+
+    # Fetch hosts that may have been found via avahi
+    mesh_hosts += ionMeshDiscoveryManager.getMeshComputers()
+
+    ctx = RequestContext(request, {
+        "mesh_hosts": sorted(mesh_hosts),
         "ion_mesh_nodes_table": IonMeshNode.objects.all(),
         "system_id": settings.SYSTEM_UUID
     })
@@ -853,6 +898,7 @@ def process_set():
         "ionCrawler",
         "ionPlugin",
         "RSM_Launch",
+        #"deeplaser",
         "ntp"
     ]
 
@@ -880,6 +926,7 @@ def process_set():
 
     for node in ['celerybeat', 'celery_w1', 'celery_plugins', 'celery_periodic', 'celery_slowlane', 'celery_transfer', 'celery_diskutil']:
         proc_set[node] = complicated_status("/var/run/celery/%s.pid" % node)
+
     return sorted(proc_set.items())
 
 
@@ -910,8 +957,12 @@ def references_TF_delete(request, pk):
 
 @login_required
 def references_barcodeset(request, barcodesetid):
-    barCodeSetName = get_object_or_404(dnaBarcode, pk=barcodesetid).name
-    ctx = RequestContext(request, {'name': barCodeSetName, 'barCodeSetId': barcodesetid})
+    barcode = get_object_or_404(dnaBarcode, pk=barcodesetid)
+    ctx = RequestContext(request, {
+        'name': barcode.name,
+        'barCodeSetId': barcodesetid,
+        'system': barcode.system,
+    })
     return render_to_response("rundb/configure/references_barcodeset.html", context_instance=ctx)
 
 
@@ -921,111 +972,48 @@ def references_barcodeset_add(request):
         ctx = RequestContext(request, {})
         return render_to_response("rundb/configure/modal_references_add_barcodeset.html", context_instance=ctx)
     elif request.method == 'POST':
-        return _add_barcode(request)
-
-
-def _add_barcode(request):
-    """add the barcodes, with CSV validation"""
-
-    if request.method == 'POST':
         name = request.POST.get('name', '')
         postedfile = request.FILES['postedfile']
 
-        #Trim off barcode and barcode kit leading and trailing spaces and update the log file if exists
-        if ((len(name) - len(name.lstrip())) or (len(name) - len(name.rstrip()))):
+        # Trim off barcode and barcode kit leading and trailing spaces and update the log file if exists
+        if len(name) - len(name.lstrip()) or len(name) - len(name.rstrip()):
             name = name.strip()
             logger.warning("The Barcode Set Name (%s) contains Leading/Trailing spaces and got trimmed." % name)
 
-        barCodeSet = dnaBarcode.objects.filter(name=name)
-        if barCodeSet:
+        if dnaBarcode.objects.filter(name=name):
             return HttpResponse(json.dumps({"status": "Error: Barcode set with the same name already exists"}), mimetype="text/html")
 
-        expectedHeader = ["id_str", "type", "sequence", "floworder", "index", "annotation", "adapter"]
-
-        barCodes = []
-        failed = {}
-        nucs = ["sequence", "floworder", "adapter"]  # fields that have to be uppercase
-        reader = csv.DictReader(postedfile.read().splitlines())
-        for index, row in enumerate(reader, start=1):
-            invalid = _validate_barcode(row, barcodeSetName=name)
-            if invalid:  # don't make dna object or add it to the list
-                failed[index] = invalid
-                continue
-            newBarcode = dnaBarcode(name=name, index=index)
-            for key in expectedHeader:  # set the values for the objects
-                value = row.get(key, None)
-                if value:
-                    value = value.strip()  # strip the strings
-                    if key in nucs:  # uppercase if a nuc
-                        value = value.upper()
-                    if key == "type":
-                        value = value.lower()
-                    setattr(newBarcode, key, value)
-            if not newBarcode.id_str:  # make a id_str if one is not provided
-                newBarcode.id_str = str(name) + "_" + str(index)
-            newBarcode.length = len(newBarcode.sequence)  # now set a default
-            barCodes.append(newBarcode)  # append to our list for later saving
+        bar_codes, failed = dnaBarcode.from_csv(postedfile, name)
 
         if failed:
             r = {"status": "Barcodes validation failed. The barcode set has not been saved.", "failed": failed}
             return HttpResponse(json.dumps(r), mimetype="text/html")
-        if not barCodes:
+        if not bar_codes:
             return HttpResponse(json.dumps({"status": "Error: There must be at least one barcode! Please reload the page and try again with more barcodes."}), mimetype="text/html")
-        usedID = []
-        for barCode in barCodes:
-            if barCode.id_str not in usedID:
-                usedID.append(barCode.id_str)
+        used_id = []
+        for bar_code in bar_codes:
+            if bar_code.id_str not in used_id:
+                used_id.append(bar_code.id_str)
             else:
-                error = {"status": "Duplicate id_str for barcodes named: " + str(barCode.id_str) + "."}
+                error = {"status": "Duplicate id_str for barcodes named: " + str(bar_code.id_str) + "."}
                 return HttpResponse(json.dumps(error), mimetype="text/html")
-        usedIndex = []
-        for barCode in barCodes:
-            if barCode.index not in usedIndex:
-                usedIndex.append(barCode.index)
+        used_index = []
+        for bar_code in bar_codes:
+            if bar_code.index not in used_index:
+                used_index.append(bar_code.index)
             else:
-                error = {"status": "Duplicate index: " + barCode.index + "."}
+                error = {"status": "Duplicate index: " + bar_code.index + "."}
                 return HttpResponse(json.dumps(error), mimetype="text/html")
 
-        #saving to db needs to be the last thing to happen
-        for barCode in barCodes:
+        # saving to db needs to be the last thing to happen
+        for bar_code in bar_codes:
             try:
-                barCode.save()
-            except:
+                bar_code.save()
+            except Exception as exc:
                 logger.exception("Error saving barcode to database")
                 return HttpResponse(json.dumps({"status": "Error saving barcode to database!"}), mimetype="text/html")
         r = {"status": "Barcodes Uploaded! The barcode set will be listed on the references page.", "failed": failed, 'success': True}
         return HttpResponse(json.dumps(r), mimetype="text/html")
-
-
-def _validate_barcode(barCodeDict, barcodeSetName=None):
-    """validate the barcode, return what failed"""
-    failed = []
-    requiredList = ["sequence"]
-
-    for req in requiredList:
-        if req in barCodeDict:
-            if not barCodeDict[req]:
-                failed.append((req, "Required column is empty"))
-        else:
-            failed.append((req, "Required column is missing"))
-    nucOnly = ["sequence", "floworder", "adapter"]
-    for nuc in nucOnly:
-        if nuc in barCodeDict:
-            if not set(barCodeDict[nuc].upper()).issubset("ATCG"):
-                failed.append((nuc, "Must have A, T, C, G only: '%s'" % barCodeDict[nuc]))
-    if 'id_str' in barCodeDict:
-        barcode = barCodeDict["id_str"]
-         #Trim off barcode and barcode kit leading and trailing spaces and update the log file if exists
-        if ((len(barcode) - len(barcode.lstrip())) or (len(barcode) - len(barcode.rstrip()))):
-            logger.warning("The BarcodeName (%s) of BarcodeSetName (%s) contains Leading/Trailing spaces and got trimmed" % (barcode, barcodeSetName))
-            barcode = barcode.strip()
-        if not set(barcode).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"):
-            failed.append(("id_str", "str_id must only have letters, numbers, or the characters _ . - "))
-    #do not let the index be set to zero. Zero is reserved.
-    if 'index' in barCodeDict:
-        if barCodeDict["index"] == "0":
-            failed.append(("index", "index must not contain a 0. Indices should start at 1."))
-    return failed
 
 
 def reference_barcodeset_csv(request, barcodesetid):
@@ -1035,7 +1023,16 @@ def reference_barcodeset_csv(request, barcodesetid):
     barcode_csv_filename = filename.replace(" ", "_")
     response = HttpResponse(mimetype='text/csv')
     response['Content-Disposition'] = 'attachment; filename=%s.csv' % barcode_csv_filename
-    response.write(model_to_csv(dnaBarcode.objects.filter(name=barcodeset_name), ['index', 'id_str', 'sequence', 'annotation', 'adapter']))
+    barcodes = dnaBarcode.objects.filter(name=barcodeset_name)
+    columns = ['index', 'id_str', 'sequence', 'annotation', 'adapter']
+
+    # if any of the barcodes have an end adapter or sequence this will also needed to be added to the csv
+    for barcode in barcodes:
+        if barcode.end_adapter or barcode.end_sequence:
+            columns += ['end_adapter', 'end_sequence']
+            break
+
+    response.write(model_to_csv(barcodes, columns))
     return response
 
 @login_required
@@ -1583,6 +1580,7 @@ def configure_ampliseq(request, pipeline=None):
 
     # get the thermo fisher cloud account model
     tfc_account = None
+    http_error = False
     try:
         tfc_account = ThermoFisherCloudAccount.objects.get(user_account_id=request.user.id)
     except ThermoFisherCloudAccount.DoesNotExist:
@@ -1600,20 +1598,33 @@ def configure_ampliseq(request, pipeline=None):
         try:
             response, ctx = ampliseq_design_parser.get_ampliseq_designs(username, password, pipeline, ctx)
             if response['status'].startswith("40"):
-                ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to ' \
+                http_error = 'Your user name or password is invalid.<br> You may need to log in to ' \
                                     '<a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                 fixed = None
-
+                tfc_account.delete()
+                tfc_account = None
+            elif response['status'] == "500":
+                tfc_account = None
+                http_error = response["err_msg"]
             else:
                 ctx = ampliseq_design_parser.get_ampliseq_fixed_designs(username, password, pipeline, ctx)
                 fixed = ctx['fixed_solutions']
         except httplib2.HttpLib2Error as err:
+            tfc_account = None
             logger.error("There was a connection error when contacting ampliseq: %s" % err)
-            ctx['http_error'] = "Could not connect to AmpliSeq.com"
+            http_error = "Could not connect to AmpliSeq.com"
             fixed = None
 
-    ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
-    ctx['ampliseq_url'] = settings.AMPLISEQ_URL
+    if http_error:
+        ctx = {
+            'designs': None,
+            'tfc_account_setup': tfc_account is None,
+            'http_error': http_error
+        }
+
+    if tfc_account:
+        ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
+        ctx['ampliseq_url'] = settings.AMPLISEQ_URL
 
     s5_chips = Chip.objects.filter(isActive=True, name__in=["510", "520", "530", "540", "550"], instrumentType="S5").values_list('name', flat=True).order_by('name')
     ctx['s5_chips'] = s5_chips
@@ -1635,14 +1646,19 @@ def configure_ampliseq_download(request):
         password = tfc_account.get_ampliseq_password()
         solutions = request.POST.getlist("solutions")
         fixed_solutions = request.POST.getlist("fixed_solutions")
+        meta = {
+            "upload_type": publisher_types.AMPLISEQ,
+            "username": request.user.username
+        }
         for ids in solutions:
             design_id, solution_id = ids.split(",")
-            meta = '{"choice":"%s"}' % request.POST.get(solution_id + "_instrument_choice", "None")
-            start_ampliseq_solution_download(design_id, solution_id, meta, (username, password))
+            meta["choice"] = request.POST.get(solution_id + "_instrument_choice", "None")
+            start_ampliseq_solution_download(design_id, solution_id, json.dumps(meta), (username, password))
         for ids in fixed_solutions:
             design_id, reference = ids.split(",")
-            meta = '{"reference":"%s", "choice": "%s"}' % (reference.lower(), request.POST.get(design_id + "_instrument_choice", "None"))
-            start_ampliseq_fixed_solution_download(design_id, meta, (username, password))
+            meta["choice"] = request.POST.get(design_id + "_instrument_choice", "None")
+            meta["reference"] = reference.lower()
+            start_ampliseq_fixed_solution_download(design_id, json.dumps(meta), (username, password))
 
         if request.method == "POST":
             if solutions or fixed_solutions:
@@ -2069,7 +2085,7 @@ def configure_offline_install(request, **kwargs):
                 # since deb file has some version attached to it, also some has (underscore, hypen) after the package name
                 # which is not consistent, so perform the reverse comparison
                 isSupported = [name for name, description in installPackages if name in actualFileName]
-                if not isSupported:
+                if not isSupported and 'ion-plugin' not in actualFileName:
                     errMsg = "The selected deb pacakge is not supported currently."
                     return HttpResponseServerError(errMsg)
                 updateProducts.InstallDeb(filename, actualFileName = actualFileName)

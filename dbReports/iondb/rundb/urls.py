@@ -130,6 +130,7 @@ v1_api.register(api.IonMeshNodeResource())
 v1_mesh_api = Api(api_name='v1')
 v1_mesh_api.register(mesh_api.MeshCompositeExperimentResource())
 v1_mesh_api.register(mesh_api.MeshPrefetchResource())
+v1_mesh_api.register(mesh_api.AutoDiscoveredHostsResource())
 
 urlpatterns = patterns(
     'iondb.rundb',
@@ -158,7 +159,6 @@ urlpatterns = patterns(
     (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),  #REFACTOR: move to rundb/configure
     (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),  #REFACTOR: move to rundb/configure
     (r'^uploadstatus/download/(\d+)/$', 'publishers.upload_download'),  #REFACTOR: move to rundb/configure
-    (r'^content/(\d+)/$', 'publishers.content_details'),  #REFACTOR: move to rundb/configure
     (r'^content/download/(\d+)/$', 'publishers.content_download'),  #REFACTOR: move to rundb/configure
     (r'^content/targetregions/add/$', 'publishers.content_add', {'hotspot': False}),  #REFACTOR: move to rundb/configure
     (r'^content/hotspots/add/$', 'publishers.content_add', {'hotspot': True}),  #REFACTOR: move to rundb/configure

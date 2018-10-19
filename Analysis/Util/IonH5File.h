@@ -83,7 +83,7 @@ class H5DataSet {
   void Init(size_t id);
 
   /* Setup for the state of the dataset. */
-  void SetDataspace(int rank, const hsize_t dims[], const hsize_t chunking[], int type);
+  void SetDataspace(int rank, const hsize_t dims[], const hsize_t chunking[], hid_t type);
   bool CreateDataSet();
   bool OpenDataSet();
   void GetSelectionSpace(const size_t *starts, const size_t *ends, hid_t &memspace);
@@ -104,7 +104,7 @@ class H5DataSet {
   H5File *mParent;   ///< Pointer to the file obect that created this dataset
   size_t mRank;      ///< Rank of the space of data, 1 for vector, 2 for matrix, 3 for cube, etc.
   int mCompression;  ///< Compression level, 0 for no compression
-  int mType;         ///< Type of data like H5T_NATIVE_FLOAT
+  hid_t mType;         ///< Type of data like H5T_NATIVE_FLOAT
   hid_t mDataspace;  ///< H5 dataspace identifier
   hid_t mGroup;      ///< H5 datagroup identifier, will be closed if not the root file.
   hid_t mDatatype;   ///< H5 data type identifier

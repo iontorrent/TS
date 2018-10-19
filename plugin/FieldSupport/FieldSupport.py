@@ -17,12 +17,12 @@ from ion.utils import makeCSA
 
 class FieldSupport(IonPlugin):
     """Generate an enhanced CSA"""
-    version = '5.8.0.1'
+    version = '5.10.0.1'
     runtypes = [RunType.THUMB]
     runlevels = [RunLevel.LAST]
 
     plugin_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)))
-
+    start_plugin = dict()
     template = None
     state = {
         "warning": None,
@@ -84,7 +84,7 @@ class FieldSupport(IonPlugin):
         return response.json()
 
     def fetch_pdf(self, pk):
-        url = urlparse.urljoin(self.start_plugin['runinfo']['api_url'], '/report/latex/%s.pdf/' % pk)
+        url = urlparse.urljoin(self.start_plugin['runinfo']['api_url'], '/rundb/api/v1/results/%s/report/' % pk)
         params = {
             "api_key": self.start_plugin['runinfo']['api_key'],
             "pluginresult": self.start_plugin['runinfo']['pluginresult']
@@ -127,7 +127,7 @@ class FieldSupport(IonPlugin):
         }
         subprocess.check_output(["bash", "launch.sh"], cwd=plugin_dir, env=env)
 
-    def launch(self):
+    def launch(self, data=None):
         self.log.info("Launching Field Support.")
 
         with open('startplugin.json', 'r') as start_plugin_file:

@@ -81,6 +81,8 @@
         e.preventDefault();
         e.stopImmediatePropagation();
 
+        $("#modal_save_samplesetitems_popup .modal-body").scrollTop(0);
+
     	SAMPLESET_URL = "{% url "samplesets" %}"
     	
         url = "{% url "save_input_samples" %}"       	

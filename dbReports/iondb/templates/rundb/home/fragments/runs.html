@@ -1,0 +1,109 @@
+{% load static from staticfiles %}
+{% load pagetools %}
+{% for run in runs.runs %}
+    {% with current_stage=runs.stages|bracket:run.stage %}
+        <div class="row-fluid dash-run {% cycle 'odd' 'even' %}">
+            <div class="span4">
+                <p class="dash-label">{{ current_stage.name_label }}</p>
+                {% if run.url %}
+                    <p class="dash-name"><a href="{{ run.url }}">{{ run.name }}</a></p>
+                {% else %}
+                    <p class="dash-name"><b>{{ run.name }}</b></p>
+                {% endif %}
+            </div>
+            <div class="span2">
+                <span class="run-type-icon {{ run.runType }}" rel="tooltip"
+                      title="{{ run.applicationCategoryDisplayedName }}"></span>
+                {% if run.barcodedSamples %}
+                    <span rel="popover" data-toggle="popover" data-select="#sample{{ run.uid }}" class="samples">
+                        {{ run.barcodedSamples|length }} Samples <i class="fa fa-info-circle" style="opacity: 0.9"></i>
+                    </span>
+                    <div id="sample{{ run.uid }}" class="hide">
+                        <table class="table table-condensed table-striped sample-popover-table" style="margin:0;">
+                            <thead>
+                            <tr>
+                                <th>Sample</th>
+                                <th>Barcode</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for sample in run.barcodedSamples|slice:":16" %}
+                                <tr>
+                                    <td>{{ sample.sampleName }}</td>
+                                    <td>{{ sample.barcodes }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                            {% if run.barcodedSamples|length > 16 %}
+                                <tfoot>
+                                <tr>
+                                    <td colspan="2">+{{ run.barcodedSamples|length|add:"-16" }} more barcodes</td>
+                                </tr>
+                                </tfoot>
+                            {% endif %}
+                        </table>
+                    </div>
+                {% else %}
+                    <span>{{ run.sampleDisplayedName }}</span>
+                {% endif %}
+            </div>
+            <div class="span2">
+                <p class="dash-label">
+                    {% if run.stage == "Plugins"%}
+                        Analysis date
+                    {% else %}
+                        {{ current_stage.display_name }} {% if run.state == "In progress" %}started{% else %}date{% endif %}
+                    {% endif %}
+                </p>
+                <p class="dash-date">{{ run.date|date:"M j Y g:i A" }}</p>
+            </div>
+            <div class="span2">
+                <ul class="stage-list">
+                    {% for stage in runs.stages.values|dictsort:"index" %}
+                        <li data-toggle="tooltip" title="{{ stage.display_name }}"
+                            class="
+                                       {% comment %}For the non active stages{% endcomment %}
+                                       {% if stage.index < current_stage.index %}okay
+                                       {% elif stage.index > current_stage.index %}disabled
+                                       {% comment %}For the active stage{% endcomment %}
+                                       {% elif stage.index == current_stage.index and run.state == "Complete" %}okay
+                                       {% elif stage.index == current_stage.index and run.state == "In progress" %}okay active
+                                       {% elif stage.index == current_stage.index and run.state == "Error" %}error{% endif %}">
+                        </li>
+                    {% endfor %}
+                </ul>
+                <p class="stage-label"><strong>{{ current_stage.display_name }}</strong>
+                    - {{ run.state }} {{ run.progress_string }}</p>
+            </div>
+            <div class="span2">
+                {% if run.url %}
+                    <p><a href="{{run.url}}">Run Report</a></p>
+                {% endif %}
+                {% if run.status_string %}
+                    <p>{{ run.status_string }}</p>
+                {% endif %}
+                {% if run.error_string %}
+                    <p class="text-error">{{ run.error_string|safe }}</p>
+                {% endif %}
+                {% if run.thumb_url %}
+                    <p style="margin-top:5px;"><a href="{{run.thumb_url}}">Thumbnail Report</a></p>
+                {% endif %}
+                {% if run.thumb_error %}
+                    <p class="text-error">{{ run.thumb_error }}</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endwith %}
+{% empty %}
+    {% if runs.error %}
+        <div class="alert alert-warning">{{runs.error}}</div>
+    {% else %}
+        No runs performed
+        {% if runs.time_span == "hour" %}within the last hour.
+        {% elif runs.time_span == "today" %}today.
+        {% elif runs.time_span == "24hours" %}within the last 24 hours.
+        {% elif runs.time_span == "7days" %}within the last 7 days.
+        {% else %}.{% endif %}
+        Check <a href="{% url "data" %}" style="font-size: 14px">Completed Runs & Reports</a>
+    {% endif %}
+{% endfor %}

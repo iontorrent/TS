@@ -50,24 +50,15 @@ def dict_bed_hotspot():
     data = {}
     allFiles = Content.objects.filter(publisher__name="BED", path__contains="/unmerged/detail/").order_by('path')
     bedFiles, hotspotFiles, sseFiles = [], [], []
-    bedFileFullPaths, bedFilePaths, hotspotFullPaths, hotspotPaths = [], [], [], []
     for _file in allFiles:
         if _file.meta.get("sse"):
             sseFiles.append(_file)
         elif _file.meta.get("hotspot", False):
             hotspotFiles.append(_file)
-            hotspotFullPaths.append(_file.file)
-            hotspotPaths.append(_file.path)
         else:
             bedFiles.append(_file)
-            bedFileFullPaths.append(_file.file)
-            bedFilePaths.append(_file.path)
     data["bedFiles"] = bedFiles
     data["hotspotFiles"] = hotspotFiles
-    data["bedFileFullPaths"] = bedFileFullPaths
-    data["bedFilePaths"] = bedFilePaths
-    data["hotspotFullPaths"] = hotspotFullPaths
-    data["hotspotPaths"] = hotspotPaths
     data["sseFiles"] = sseFiles
     return data
 
@@ -311,11 +302,21 @@ def get_template_categories():
             'ampliSeq_upload': True,
             'code': 5,
         },
+        # AmpliSeq HD
+        {
+            'tag': 'ampliseq_hd',
+            'displayedName': 'AmpliSeq HD',
+            'api_filter': '&runType__in=AMPS_HD_DNA,AMPS_HD_RNA,AMPS_HD_DNA_RNA,AMPS_HD_DNA_RNA_1',
+            'img': 'resources/img/appl_ampliSeqHD.png',
+            'isActive': True,
+            'ampliSeq_upload': True,
+            'code': 14,
+        },
         # DNA and Fusions
         {
             'tag': 'fusions',
             'displayedName': 'DNA and Fusions',
-            'api_filter': '&runType__in=AMPS,AMPS_EXOME,AMPS_RNA,AMPS_DNA_RNA&applicationGroup__uid__iexact=APPLGROUP_0005',
+            'api_filter': '&applicationGroup__uid__in=APPLGROUP_0005,APPLGROUP_0011',
             'img': 'resources/img/appl_ampliSeqDNA_RNA.png',
             'isActive': True,
             'code': 8,
@@ -401,7 +402,7 @@ def get_template_categories():
         {
             'tag': 'onco_liquidBiopsy',
             'displayedName': applicationGroup_tagSeq[0].description,
-            'api_filter':'&runType=TAG_SEQUENCING&applicationGroup__name__iexact=onco_liquidBiopsy',
+            'api_filter':'&categories__icontains=onco_liquidBiopsy',
             'img': 'resources/img/appl_tagSequencing.png',
             'isActive': applicationGroup_tagSeq[0].isActive if applicationGroup_tagSeq else False,
             'code': 10,

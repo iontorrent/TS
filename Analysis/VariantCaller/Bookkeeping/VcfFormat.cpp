@@ -148,19 +148,18 @@ string getVCFHeader(const ExtendParameters *parameters, ReferenceReader& ref_rea
   if (parameters->output_allele_cigar) {
 	headerss << "##INFO=<ID=CIGAR,Number=A,Type=String,Description=\"Cigar to align reference to alternative allele.\">" << endl;
   }
-  if (parameters->my_controls.use_lod_filter){
-	  headerss << "##INFO=<ID=LOD,Number=A,Type=Float,Description=\"Limit of Detection at genomic location.\">" << endl;
-  }
+
   if (use_molecular_tag){
 	  headerss << "##INFO=<ID=MDP,Number=1,Type=Integer,Description=\"Total molecular depth at the locus\">" << endl
 	 	       << "##INFO=<ID=MRO,Number=1,Type=Integer,Description=\"Reference allele molecular observations\">" << endl
 	 	       << "##INFO=<ID=MAO,Number=A,Type=Integer,Description=\"Alternate allele molecular observations\">" << endl
 	 	       << "##INFO=<ID=MAF,Number=A,Type=Float,Description=\"Allele frequency based on Flow Evaluator molecular observation counts\">" << endl
 	           << "##INFO=<ID=TGSM,Number=A,Type=Integer,Description=\"Number of additional families that may be falsely generated.\">" << endl
-	           << "##INFO=<ID=VFSH,Number=1,Type=String,Description=\"The family size histogram of the variant, zipped by the pair (family size, family counts).\">" << endl;
+	           << "##INFO=<ID=VFSH,Number=.,Type=String,Description=\"The family size histogram of the variant, zipped by the pair (family size, family counts).\">" << endl
+			   << "##INFO=<ID=LOD,Number=A,Type=Float,Description=\"Limit of Detection at genomic location.\">" << endl;
   }
   if (parameters->my_controls.report_ppa){
-	  headerss << "##INFO=<ID=PPA,Number=1,Type=String,Description=\"Possible Polyplody Alleles (PPA).\">" << endl;
+	  headerss << "##INFO=<ID=PPA,Number=1,Type=String,Description=\"Possible Polyplody Alleles (PPA) that are not reported in GT.\">" << endl;
   }
   if (parameters->my_controls.disable_filters){
 	  headerss << "##INFO=<ID=BAI,Number=1,Type=Integer,Description=\"The 0-based index of the best alt allele.\">" << endl

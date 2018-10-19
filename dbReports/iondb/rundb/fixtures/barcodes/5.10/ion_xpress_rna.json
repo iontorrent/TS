@@ -1,0 +1,290 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "IonXpressRNA",
+			"sequence": "TAAGGAGAAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_002",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "IonXpressRNA",
+			"sequence": "AAGAGGATTC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_003",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "IonXpressRNA",
+			"sequence": "TACCAAGATC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_004",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "IonXpressRNA",
+			"sequence": "CAGAAGGAAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_005",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "IonXpressRNA",
+			"sequence": "CTGCAAGTTC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_006",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "IonXpressRNA",
+			"sequence": "TTCGTGATTC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_007",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "IonXpressRNA",
+			"sequence": "TTCCGATAAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_008",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "IonXpressRNA",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_009",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "IonXpressRNA",
+			"sequence": "CTGACCGAAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_010",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "IonXpressRNA",
+			"sequence": "TCTAACGGAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_013",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "IonXpressRNA",
+			"sequence": "TTGGAGTGTC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_014",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "IonXpressRNA",
+			"sequence": "TCTAGAGGTC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_015",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "IonXpressRNA",
+			"sequence": "TCTGGATGAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_016",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "IonXpressRNA",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_012",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "IonXpressRNA",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_001",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "IonXpressRNA",
+			"sequence": "TCCTCGAATC",
+			"adapter": "GGCCAAGGCG",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXpressRNA_011",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

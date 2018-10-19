@@ -10,7 +10,7 @@ from iondb.rundb.models import KitInfo, Chip, dnaBarcode, LibraryKey,\
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.utils import validation
-from iondb.rundb.plan.plan_validator import validate_flows, validate_libraryReadLength, validate_templatingSize
+from iondb.rundb.plan.plan_validator import validate_flows, validate_libraryReadLength
 
 try:
     from collections import OrderedDict
@@ -356,12 +356,6 @@ class KitsStepData(AbstractStepData):
                     self.validationErrors.pop(field_name, None)
                     self.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH] = new_field_value
 
-        if field_name == KitsFieldNames.TEMPLATING_SIZE:
-            errors = validate_templatingSize(new_field_value)
-            if errors:
-                self.validationErrors[field_name] = ' '.join(errors)
-            else:
-                self.validationErrors.pop(field_name, None)
 
     def validateField_crossField_dependencies(self, fieldNames, fieldValues):
         if KitsFieldNames.LIBRARY_KIT_NAME in fieldNames and KitsFieldNames.BARCODE_KIT_NAME:

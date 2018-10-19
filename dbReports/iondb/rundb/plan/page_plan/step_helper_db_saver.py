@@ -110,7 +110,6 @@ class StepHelperDbSaver():
             libraryReadLength = kits_step_data.savedFields[KitsFieldNames.READ_LENGTH]
         else:
             libraryReadLength = kits_step_data.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH]
-        templatingSize = kits_step_data.savedFields[KitsFieldNames.TEMPLATING_SIZE]
         samplePrepProtocol = kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREP_PROTOCOL]
         isCustom_kitSettings = kits_step_data.savedFields[KitsFieldNames.ADVANCED_SETTINGS_CHOICE] == "custom"
         
@@ -206,7 +205,6 @@ class StepHelperDbSaver():
             'pairedEndLibraryAdapterName': '',
             'samplePrepKitName': samplePrepKitName,
             'libraryReadLength': libraryReadLength,
-            'templatingSize': templatingSize,
             'samplePrepProtocol': samplePrepProtocol,
             'planStatus': planStatus,
             'categories': categories,
@@ -275,6 +273,8 @@ class StepHelperDbSaver():
 
         sampleTubeLabel = tubeLabel
         chipBarcode = chip_barcode
+        x_endBarcodeKitName = ""
+
         if step_helper.isBarcoded():
             barcodedSamples = barcoding_step.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE]
             sampleTubeLabel = barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL]
@@ -282,8 +282,6 @@ class StepHelperDbSaver():
 
             if barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET]:
                 x_endBarcodeKitName = barcoding_step.savedFields[SavePlanFieldNames.END_BARCODE_SET]
-            else:
-                x_endBarcodeKitName = ""
         
         retval = {'planDisplayedName': planDisplayedName,
                   'planName': "_".join(planDisplayedName.split()),

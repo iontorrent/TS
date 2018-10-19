@@ -1,5 +1,8 @@
-{%include "rundb/plan/page_plan/summary/reference_summary.html"%}
+{%include "rundb/plan/page_plan/summary/kit_summary.html"%}
 <tr>
     <td><b>Plugins:</b></td>
     <td id="selectedPlugins"></td>
 </tr>
+{% if step.getStepName == "Plugins" %}
+    {%include "rundb/plan/page_plan/summary/advanced_settings_summary.html"%}
+{% endif %}

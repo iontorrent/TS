@@ -1,0 +1,1730 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 29,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCTCATTGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_029",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_001",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TAAGGAGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_002",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "AAGAGGATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_003",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TACCAAGATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_004",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CAGAAGGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_005",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTGGATGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_015",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTATTCGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_016",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 17,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "AGGCAATTGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_017",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 18,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTAGTCGGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_018",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 19,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CAGATCCATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_019",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 20,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCGCAATTAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_020",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTGCAAGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_006",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCGTGATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_007",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_008",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTGACCGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_009",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCTCGAATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_010",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_011",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTAACGGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_012",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTGGAGTGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_013",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 21,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCGAGACGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_021",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 22,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGCCACGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_022",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 23,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "AACCTCATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_023",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 24,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "AACCATCCGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_024",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 25,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "ATCCGGAATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_025",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTAGAGGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_014",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 26,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGAGGTTATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_026",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 27,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCAAGCTGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_027",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 28,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTTACACAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_028",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 67,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCTGAATCTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_067",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 68,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTAACCACGGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_068",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 69,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGGAAGGATGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_069",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 70,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTTGTCCAATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_070",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 71,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCGACAAGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_071",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 72,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCTTCCTCTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_072",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 73,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCTTCAAGATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_073",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 74,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTTGGAACTGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_074",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 76,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGAATTCCGGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_076",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 77,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTAACAATTCAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_077",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 78,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCGCAATGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_078",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 79,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCCGCACGGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_079",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 80,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTGGCCAATTGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_080",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 81,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTAGTTCAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_081",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 82,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGAGAAGAATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_082",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 83,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGCTTCGATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_083",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 84,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCCAGATTGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_084",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 31,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TAAGCCATTGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_031",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 35,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTGGAGGCCAGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_035",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 36,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGGAGCTTCCTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_036",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 37,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCAGTCCGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_037",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 39,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCTAACATAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_039",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 40,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTGAGCCTATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_040",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 41,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CCGCATGGAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_041",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 42,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTGGCAATCCTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_042",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 43,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCACCTCCTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_043",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 44,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CAGCATTAATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_044",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 45,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCTTGATGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_045",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 46,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTAGCTCTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_046",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 47,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCACTCGGATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_047",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 48,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCCTGCTTCAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_048",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 49,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CCTTAGAGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_049",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 50,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTGAGTTCCGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_050",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 51,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CCAACATTATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_051",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 52,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCAAGAAGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_052",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 53,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCAATTGGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_053",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 54,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CCTACTGGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_054",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 55,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGAGGCTCCGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_055",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 56,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGAAGGCCACAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_056",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 57,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTGCCTGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_057",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 58,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGATCGGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_058",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 59,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCAGGAATAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_059",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 60,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGGAAGAACCTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_060",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 61,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CGAAGCGATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_061",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 62,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCGAAGGCAGGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_062",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 63,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTAGGACATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_063",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 64,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CCAGCCTCAAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_064",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 65,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTTGGTTATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_065",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 66,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTGGCTGGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_066",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 33,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TAACAATCGGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_033",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 34,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTGACATAATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_034",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 38,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCTAAGAGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_038",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 75,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TGGAGATAATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_075",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 85,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCGGAGTCTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_085",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 86,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TACATCCATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_086",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 87,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "GCAACACGAC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "IonXMuSeek_087",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 88,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TAAGCAATTCTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_088",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 89,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CTGATCCATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_089",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 90,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TAGGAACAATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_090",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 91,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "AACCGGAATTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_091",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 92,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "CCGGAGGTAATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_092",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 93,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTCAGGACCTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_093",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 94,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCTAACCAATGC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_094",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 95,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCCGAGCTGATC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 12,
+			"id_str": "IonXMuSeek_095",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 96,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TTACCATGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_096",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 30,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "TCGCATCGTTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_030",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 32,
+			"name": "Ion Xpress MuSeek Barcode set 1",
+			"sequence": "AAGGAATCGTC",
+			"adapter": "TTCGTGCGTCAGTTCA",
+			"score_cutoff": 2,
+			"length": 11,
+			"id_str": "IonXMuSeek_032",
+			"active": true,
+			"score_mode": 1,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

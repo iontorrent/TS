@@ -1,0 +1,6914 @@
+[
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "TagSequencing",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_1",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "TagSequencing",
+			"sequence": "TAAGGAGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_2",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "TagSequencing",
+			"sequence": "AAGAGGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_3",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "TagSequencing",
+			"sequence": "TACCAAGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_4",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "TagSequencing",
+			"sequence": "CAGAAGGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_5",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "TagSequencing",
+			"sequence": "CTGCAAGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_6",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "TagSequencing",
+			"sequence": "TTCGTGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_7",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "TagSequencing",
+			"sequence": "TTCCGATAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_8",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "TagSequencing",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_9",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "TagSequencing",
+			"sequence": "CTGACCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_10",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "TagSequencing",
+			"sequence": "TCCTCGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_11",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "TagSequencing",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_12",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "TagSequencing",
+			"sequence": "TCTAACGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_13",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "TagSequencing",
+			"sequence": "TTGGAGTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_14",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "TagSequencing",
+			"sequence": "TCTAGAGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_15",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "TagSequencing",
+			"sequence": "TCTGGATGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_16",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 17,
+			"name": "TagSequencing",
+			"sequence": "TCTATTCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_17",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 18,
+			"name": "TagSequencing",
+			"sequence": "AGGCAATTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_18",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 19,
+			"name": "TagSequencing",
+			"sequence": "TTAGTCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_19",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 20,
+			"name": "TagSequencing",
+			"sequence": "CAGATCCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_20",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 21,
+			"name": "TagSequencing",
+			"sequence": "TCGCAATTAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_21",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 22,
+			"name": "TagSequencing",
+			"sequence": "TTCGAGACGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_22",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 23,
+			"name": "TagSequencing",
+			"sequence": "TGCCACGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_23",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 24,
+			"name": "TagSequencing",
+			"sequence": "AACCTCATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_24",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 25,
+			"name": "TagSequencing",
+			"sequence": "CCTGAGATAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_25",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 26,
+			"name": "TagSequencing",
+			"sequence": "TTACAACCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_26",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 27,
+			"name": "TagSequencing",
+			"sequence": "AACCATCCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_27",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 28,
+			"name": "TagSequencing",
+			"sequence": "ATCCGGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_28",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 29,
+			"name": "TagSequencing",
+			"sequence": "CGAGGTTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_29",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 30,
+			"name": "TagSequencing",
+			"sequence": "TCCAAGCTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_30",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 31,
+			"name": "TagSequencing",
+			"sequence": "TCTTACACAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_31",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 32,
+			"name": "TagSequencing",
+			"sequence": "TTCTCATTGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_32",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 33,
+			"name": "TagSequencing",
+			"sequence": "TCGCATCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_33",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 34,
+			"name": "TagSequencing",
+			"sequence": "TAAGCCATTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_34",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 35,
+			"name": "TagSequencing",
+			"sequence": "AAGGAATCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_35",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 36,
+			"name": "TagSequencing",
+			"sequence": "CTTGAGAATGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_36",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 37,
+			"name": "TagSequencing",
+			"sequence": "TGGAGGACGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_37",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 38,
+			"name": "TagSequencing",
+			"sequence": "TAACAATCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_38",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 39,
+			"name": "TagSequencing",
+			"sequence": "CTGACATAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_39",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 40,
+			"name": "TagSequencing",
+			"sequence": "TTCCACTTCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_40",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 41,
+			"name": "TagSequencing",
+			"sequence": "AGCACGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_41",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 42,
+			"name": "TagSequencing",
+			"sequence": "TTGGAGGCCAGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_42",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 43,
+			"name": "TagSequencing",
+			"sequence": "TGGAGCTTCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_43",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 44,
+			"name": "TagSequencing",
+			"sequence": "TCAGTCCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_44",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 45,
+			"name": "TagSequencing",
+			"sequence": "TAAGGCAACCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_45",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 46,
+			"name": "TagSequencing",
+			"sequence": "TTCTAAGAGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_46",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 47,
+			"name": "TagSequencing",
+			"sequence": "TCCTAACATAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_47",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 48,
+			"name": "TagSequencing",
+			"sequence": "CGGACAATGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_48",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 49,
+			"name": "TagSequencing",
+			"sequence": "TTGAGCCTATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_49",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 50,
+			"name": "TagSequencing",
+			"sequence": "CCGCATGGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_50",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 51,
+			"name": "TagSequencing",
+			"sequence": "CTGGCAATCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_51",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 52,
+			"name": "TagSequencing",
+			"sequence": "TCCACCTCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_52",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 53,
+			"name": "TagSequencing",
+			"sequence": "CAGCATTAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_53",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 54,
+			"name": "TagSequencing",
+			"sequence": "TCCTTGATGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_54",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 55,
+			"name": "TagSequencing",
+			"sequence": "TCTAGCTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_55",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 56,
+			"name": "TagSequencing",
+			"sequence": "TCACTCGGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_56",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 57,
+			"name": "TagSequencing",
+			"sequence": "TTCCTGCTTCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_57",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 58,
+			"name": "TagSequencing",
+			"sequence": "CCTTAGAGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_58",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 59,
+			"name": "TagSequencing",
+			"sequence": "CTGAGTTCCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_59",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 60,
+			"name": "TagSequencing",
+			"sequence": "TCCTGGCACATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_60",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 61,
+			"name": "TagSequencing",
+			"sequence": "CCGCAATCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_61",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 62,
+			"name": "TagSequencing",
+			"sequence": "CCAACATTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_62",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 63,
+			"name": "TagSequencing",
+			"sequence": "TCAAGAAGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_63",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 64,
+			"name": "TagSequencing",
+			"sequence": "TTCAATTGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_64",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 65,
+			"name": "TagSequencing",
+			"sequence": "CCTACTGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_65",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 66,
+			"name": "TagSequencing",
+			"sequence": "TGAGGCTCCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_66",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 67,
+			"name": "TagSequencing",
+			"sequence": "CGAAGGCCACAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_67",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 68,
+			"name": "TagSequencing",
+			"sequence": "TCTGCCTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_68",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 69,
+			"name": "TagSequencing",
+			"sequence": "CGATCGGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_69",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 70,
+			"name": "TagSequencing",
+			"sequence": "TCAGGAATAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_70",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 71,
+			"name": "TagSequencing",
+			"sequence": "CGGAAGAACCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_71",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 72,
+			"name": "TagSequencing",
+			"sequence": "CGAAGCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_72",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 73,
+			"name": "TagSequencing",
+			"sequence": "CAGCCAATTCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_73",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 74,
+			"name": "TagSequencing",
+			"sequence": "TCGAAGGCAGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_74",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 75,
+			"name": "TagSequencing",
+			"sequence": "CCTGCCATTCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_75",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 76,
+			"name": "TagSequencing",
+			"sequence": "CTAGGACATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_76",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 77,
+			"name": "TagSequencing",
+			"sequence": "CTTCCATAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_77",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 78,
+			"name": "TagSequencing",
+			"sequence": "CCAGCCTCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_78",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 79,
+			"name": "TagSequencing",
+			"sequence": "CTTGGTTATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_79",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 80,
+			"name": "TagSequencing",
+			"sequence": "TTGGCTGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_80",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 81,
+			"name": "TagSequencing",
+			"sequence": "CCGAACACTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_81",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 82,
+			"name": "TagSequencing",
+			"sequence": "TCCTGAATCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_82",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 83,
+			"name": "TagSequencing",
+			"sequence": "CTAACCACGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_83",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 84,
+			"name": "TagSequencing",
+			"sequence": "CGGAAGGATGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_84",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 85,
+			"name": "TagSequencing",
+			"sequence": "CTTGTCCAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_85",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 86,
+			"name": "TagSequencing",
+			"sequence": "TCCGACAAGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_86",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 87,
+			"name": "TagSequencing",
+			"sequence": "CGGACAGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_87",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 88,
+			"name": "TagSequencing",
+			"sequence": "CCTTGAGGCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_88",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 89,
+			"name": "TagSequencing",
+			"sequence": "TTCTTCCTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_89",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 90,
+			"name": "TagSequencing",
+			"sequence": "TTCTTCAAGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_90",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 91,
+			"name": "TagSequencing",
+			"sequence": "CTTGGAACTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_91",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 92,
+			"name": "TagSequencing",
+			"sequence": "TCGGCCGGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_92",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 93,
+			"name": "TagSequencing",
+			"sequence": "TGGAGATAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_93",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 94,
+			"name": "TagSequencing",
+			"sequence": "TGAATTCCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_94",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 95,
+			"name": "TagSequencing",
+			"sequence": "CTTGCCACCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_95",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 96,
+			"name": "TagSequencing",
+			"sequence": "CTAACAATTCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_96",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 97,
+			"name": "TagSequencing",
+			"sequence": "TTCGCAATGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_101",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 98,
+			"name": "TagSequencing",
+			"sequence": "TTCCGCACGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_102",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 99,
+			"name": "TagSequencing",
+			"sequence": "TTGGCCAATTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_103",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 100,
+			"name": "TagSequencing",
+			"sequence": "TCTAGTTCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_104",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 101,
+			"name": "TagSequencing",
+			"sequence": "TGAGAAGAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_105",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 102,
+			"name": "TagSequencing",
+			"sequence": "CCTCAACCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_106",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 103,
+			"name": "TagSequencing",
+			"sequence": "CCTGCTGGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_107",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 104,
+			"name": "TagSequencing",
+			"sequence": "TGGCAGGAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_108",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 105,
+			"name": "TagSequencing",
+			"sequence": "CGCTTCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_109",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 106,
+			"name": "TagSequencing",
+			"sequence": "TTCCAGATTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_110",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 107,
+			"name": "TagSequencing",
+			"sequence": "TCCGGAGTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_111",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 108,
+			"name": "TagSequencing",
+			"sequence": "TACATCCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_112",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 109,
+			"name": "TagSequencing",
+			"sequence": "GCAACACGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_113",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 110,
+			"name": "TagSequencing",
+			"sequence": "TAAGCAATTCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_114",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 111,
+			"name": "TagSequencing",
+			"sequence": "CTGATCCATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_115",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 112,
+			"name": "TagSequencing",
+			"sequence": "TAGGAACAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_116",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 113,
+			"name": "TagSequencing",
+			"sequence": "AACCGGAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_117",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 114,
+			"name": "TagSequencing",
+			"sequence": "CCGGAGGTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_118",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 115,
+			"name": "TagSequencing",
+			"sequence": "TTCAGGACCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_119",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 116,
+			"name": "TagSequencing",
+			"sequence": "TCTAACCAATGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_120",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 117,
+			"name": "TagSequencing",
+			"sequence": "TCCGAGCTGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_121",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 118,
+			"name": "TagSequencing",
+			"sequence": "TTACCATGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_122",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 119,
+			"name": "TagSequencing",
+			"sequence": "CTCATTCCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_123",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 120,
+			"name": "TagSequencing",
+			"sequence": "TCGAGGCCTGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_124",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 121,
+			"name": "TagSequencing",
+			"sequence": "TGGAAGGTTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_125",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 122,
+			"name": "TagSequencing",
+			"sequence": "TAGGATTCCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_126",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 123,
+			"name": "TagSequencing",
+			"sequence": "TTGAAGCTCCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_127",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 124,
+			"name": "TagSequencing",
+			"sequence": "TTCAACTTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_128",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 125,
+			"name": "TagSequencing",
+			"sequence": "TTAGGCTCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_129",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 126,
+			"name": "TagSequencing",
+			"sequence": "CCAAGGCGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_130",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 127,
+			"name": "TagSequencing",
+			"sequence": "CTTAGATCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_131",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 128,
+			"name": "TagSequencing",
+			"sequence": "CCGGTCCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_132",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 129,
+			"name": "TagSequencing",
+			"sequence": "TTGGAGCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_133",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 130,
+			"name": "TagSequencing",
+			"sequence": "CTTGTTCCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_134",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 131,
+			"name": "TagSequencing",
+			"sequence": "TCCGGCAAGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_135",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 132,
+			"name": "TagSequencing",
+			"sequence": "TTCCTATCCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_136",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 133,
+			"name": "TagSequencing",
+			"sequence": "CTAATTGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_137",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 134,
+			"name": "TagSequencing",
+			"sequence": "TTCGACACCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_138",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 135,
+			"name": "TagSequencing",
+			"sequence": "TCCGCCATGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_139",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 136,
+			"name": "TagSequencing",
+			"sequence": "CCAGTTCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_140",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 137,
+			"name": "TagSequencing",
+			"sequence": "TAACAATAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_141",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 138,
+			"name": "TagSequencing",
+			"sequence": "TGCCTGGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_142",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 139,
+			"name": "TagSequencing",
+			"sequence": "CTGAAGTCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_143",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 140,
+			"name": "TagSequencing",
+			"sequence": "AAGGAATGGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_144",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 141,
+			"name": "TagSequencing",
+			"sequence": "TTCCGAACCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_145",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 142,
+			"name": "TagSequencing",
+			"sequence": "TTCACCAGGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_146",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 143,
+			"name": "TagSequencing",
+			"sequence": "CTACAACTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_147",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 144,
+			"name": "TagSequencing",
+			"sequence": "CTGAGGCATCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_148",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 145,
+			"name": "TagSequencing",
+			"sequence": "CCAGCATCATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_149",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 146,
+			"name": "TagSequencing",
+			"sequence": "CCGGCTTGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_150",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 147,
+			"name": "TagSequencing",
+			"sequence": "TCAGGCAGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_151",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 148,
+			"name": "TagSequencing",
+			"sequence": "TTCTGCACGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_152",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 149,
+			"name": "TagSequencing",
+			"sequence": "TCCGAAGATAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_153",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 150,
+			"name": "TagSequencing",
+			"sequence": "CCTCATCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_154",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 151,
+			"name": "TagSequencing",
+			"sequence": "TGCAACCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_155",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 152,
+			"name": "TagSequencing",
+			"sequence": "CGGAATCCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_156",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 153,
+			"name": "TagSequencing",
+			"sequence": "TCTTGAGGAAGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_157",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 154,
+			"name": "TagSequencing",
+			"sequence": "CCGCCACCAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_158",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 155,
+			"name": "TagSequencing",
+			"sequence": "AAGGTTATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_159",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 156,
+			"name": "TagSequencing",
+			"sequence": "TGGAGATTGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_160",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 157,
+			"name": "TagSequencing",
+			"sequence": "TCTCCATCAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_161",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 158,
+			"name": "TagSequencing",
+			"sequence": "TGGAGCCAACAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_162",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 159,
+			"name": "TagSequencing",
+			"sequence": "TCTAATCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_163",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 160,
+			"name": "TagSequencing",
+			"sequence": "CCACCAATAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_164",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 161,
+			"name": "TagSequencing",
+			"sequence": "CTTGGATTCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_165",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 162,
+			"name": "TagSequencing",
+			"sequence": "TTCTGGATTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_166",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 163,
+			"name": "TagSequencing",
+			"sequence": "TTCTTCTGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_167",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 164,
+			"name": "TagSequencing",
+			"sequence": "TCCTGAGACTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_168",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 165,
+			"name": "TagSequencing",
+			"sequence": "CTGGAACAAGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_169",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 166,
+			"name": "TagSequencing",
+			"sequence": "TCTTGCTTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_170",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 167,
+			"name": "TagSequencing",
+			"sequence": "CTCCAATTGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_171",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 168,
+			"name": "TagSequencing",
+			"sequence": "CTAAGGAAGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_172",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 169,
+			"name": "TagSequencing",
+			"sequence": "TGAAGGCACCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_173",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 170,
+			"name": "TagSequencing",
+			"sequence": "ACAATCCGGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_174",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 171,
+			"name": "TagSequencing",
+			"sequence": "TCCTTACAGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_175",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 172,
+			"name": "TagSequencing",
+			"sequence": "TGAATCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_176",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 173,
+			"name": "TagSequencing",
+			"sequence": "CTTGAAGCCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_177",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 174,
+			"name": "TagSequencing",
+			"sequence": "TTGAGATCAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_178",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 175,
+			"name": "TagSequencing",
+			"sequence": "CAGCAATTCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_179",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 176,
+			"name": "TagSequencing",
+			"sequence": "CGAAGCTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_180",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 177,
+			"name": "TagSequencing",
+			"sequence": "CTTAAGGCTGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_181",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 178,
+			"name": "TagSequencing",
+			"sequence": "CTGGAGAACCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_182",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 179,
+			"name": "TagSequencing",
+			"sequence": "TACTTGGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_183",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 180,
+			"name": "TagSequencing",
+			"sequence": "CTAGGCCTCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_184",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 181,
+			"name": "TagSequencing",
+			"sequence": "CCGAGAACAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_185",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 182,
+			"name": "TagSequencing",
+			"sequence": "TTAAGACGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_186",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 183,
+			"name": "TagSequencing",
+			"sequence": "CTAAGATCCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_187",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 184,
+			"name": "TagSequencing",
+			"sequence": "TGGCTTCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_188",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 185,
+			"name": "TagSequencing",
+			"sequence": "CGAACAATTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_189",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 186,
+			"name": "TagSequencing",
+			"sequence": "TTCAAGGTGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_190",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 187,
+			"name": "TagSequencing",
+			"sequence": "CTTAACCACCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_191",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 188,
+			"name": "TagSequencing",
+			"sequence": "TCCGGACCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_192",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 189,
+			"name": "TagSequencing",
+			"sequence": "CCTTGAGCATGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_193",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 190,
+			"name": "TagSequencing",
+			"sequence": "TCTTAGATATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_194",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 191,
+			"name": "TagSequencing",
+			"sequence": "CCTGAATTAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_195",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 192,
+			"name": "TagSequencing",
+			"sequence": "AAGCCAACCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_196",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 193,
+			"name": "TagSequencing",
+			"sequence": "TCTGGCAACGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_201",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 194,
+			"name": "TagSequencing",
+			"sequence": "CTAGGAACCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_202",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 195,
+			"name": "TagSequencing",
+			"sequence": "TTAAGCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_203",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 196,
+			"name": "TagSequencing",
+			"sequence": "TTGGCATCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_204",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 197,
+			"name": "TagSequencing",
+			"sequence": "TTGGTTCCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_205",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 198,
+			"name": "TagSequencing",
+			"sequence": "TTAGGCTGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_206",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 199,
+			"name": "TagSequencing",
+			"sequence": "TGGAACCACGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_207",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 200,
+			"name": "TagSequencing",
+			"sequence": "AGGCAACGGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_208",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 201,
+			"name": "TagSequencing",
+			"sequence": "TCCTCCTCCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_209",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 202,
+			"name": "TagSequencing",
+			"sequence": "TCTCATTCATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_210",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 203,
+			"name": "TagSequencing",
+			"sequence": "TTCGGAACGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_211",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 204,
+			"name": "TagSequencing",
+			"sequence": "TTAAGATTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_212",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 205,
+			"name": "TagSequencing",
+			"sequence": "CCTTATGGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_213",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 206,
+			"name": "TagSequencing",
+			"sequence": "CTTGAACAGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_214",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 207,
+			"name": "TagSequencing",
+			"sequence": "CCGAACCTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_215",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 208,
+			"name": "TagSequencing",
+			"sequence": "CCAGGACGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_216",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 209,
+			"name": "TagSequencing",
+			"sequence": "CCTTGTCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_217",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 210,
+			"name": "TagSequencing",
+			"sequence": "CTAGCCAATGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_218",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 211,
+			"name": "TagSequencing",
+			"sequence": "CCTGGCTCAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_219",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 212,
+			"name": "TagSequencing",
+			"sequence": "CTGAGGCTTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_220",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 213,
+			"name": "TagSequencing",
+			"sequence": "CAAGAATAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_221",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 214,
+			"name": "TagSequencing",
+			"sequence": "CCGAACCAACGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_222",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 215,
+			"name": "TagSequencing",
+			"sequence": "CCTAGATTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_223",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 216,
+			"name": "TagSequencing",
+			"sequence": "TCAACCACAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_224",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 217,
+			"name": "TagSequencing",
+			"sequence": "AGGCCATTGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_225",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 218,
+			"name": "TagSequencing",
+			"sequence": "TCGAGAATCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_226",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 219,
+			"name": "TagSequencing",
+			"sequence": "TTCTGCCACTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_227",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 220,
+			"name": "TagSequencing",
+			"sequence": "CTAAGCCATCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_228",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 221,
+			"name": "TagSequencing",
+			"sequence": "CCTTAGCTCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_229",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 222,
+			"name": "TagSequencing",
+			"sequence": "TCTTAGGACGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_230",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 223,
+			"name": "TagSequencing",
+			"sequence": "CTTGCAATGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_231",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 224,
+			"name": "TagSequencing",
+			"sequence": "TCTAATGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_232",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 225,
+			"name": "TagSequencing",
+			"sequence": "CCTCCACGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_233",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 226,
+			"name": "TagSequencing",
+			"sequence": "CCTAAGGCAGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_234",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 227,
+			"name": "TagSequencing",
+			"sequence": "TCTGGAAGTCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_235",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 228,
+			"name": "TagSequencing",
+			"sequence": "TCTTAGGTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_236",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 229,
+			"name": "TagSequencing",
+			"sequence": "TCCAGGCTTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_237",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 230,
+			"name": "TagSequencing",
+			"sequence": "TGAATTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_238",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 231,
+			"name": "TagSequencing",
+			"sequence": "CTTGAGAATTAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_239",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 232,
+			"name": "TagSequencing",
+			"sequence": "AAGGCCTCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_240",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 233,
+			"name": "TagSequencing",
+			"sequence": "TTCCTTCAACAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_241",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 234,
+			"name": "TagSequencing",
+			"sequence": "TGGTTGGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_242",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 235,
+			"name": "TagSequencing",
+			"sequence": "CGGCAACATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_243",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 236,
+			"name": "TagSequencing",
+			"sequence": "TGCATTCCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_244",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 237,
+			"name": "TagSequencing",
+			"sequence": "CGGAAGCATCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_245",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 238,
+			"name": "TagSequencing",
+			"sequence": "CTTGGAGTCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_246",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 239,
+			"name": "TagSequencing",
+			"sequence": "CGGACCACGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_247",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 240,
+			"name": "TagSequencing",
+			"sequence": "TTGCCAACCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_248",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 241,
+			"name": "TagSequencing",
+			"sequence": "CTGTTCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_249",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 242,
+			"name": "TagSequencing",
+			"sequence": "CCGAGTGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_250",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 243,
+			"name": "TagSequencing",
+			"sequence": "CAAGGCTTCCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_251",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 244,
+			"name": "TagSequencing",
+			"sequence": "TCTTCATGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_252",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 245,
+			"name": "TagSequencing",
+			"sequence": "TTGACATTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_253",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 246,
+			"name": "TagSequencing",
+			"sequence": "TCAGGCCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_254",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 247,
+			"name": "TagSequencing",
+			"sequence": "TTCCGCATTGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_255",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 248,
+			"name": "TagSequencing",
+			"sequence": "TGGAAGGTCCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_256",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 249,
+			"name": "TagSequencing",
+			"sequence": "TTAGCAACATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_257",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 250,
+			"name": "TagSequencing",
+			"sequence": "TCTTAGCGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_258",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 251,
+			"name": "TagSequencing",
+			"sequence": "AAGCAATCCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_259",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 252,
+			"name": "TagSequencing",
+			"sequence": "CCAAGTTGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_260",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 253,
+			"name": "TagSequencing",
+			"sequence": "TGGACTCAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_261",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 254,
+			"name": "TagSequencing",
+			"sequence": "TCTGTAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_262",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 255,
+			"name": "TagSequencing",
+			"sequence": "TTGAAGGATCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_263",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 256,
+			"name": "TagSequencing",
+			"sequence": "TTCTACCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_264",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 257,
+			"name": "TagSequencing",
+			"sequence": "TGGAAGAAGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_265",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 258,
+			"name": "TagSequencing",
+			"sequence": "CACCATCCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_266",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 259,
+			"name": "TagSequencing",
+			"sequence": "CCTGCCGGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_267",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 260,
+			"name": "TagSequencing",
+			"sequence": "CGGCCTTCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_268",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 261,
+			"name": "TagSequencing",
+			"sequence": "CCTTGGCCTGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_269",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 262,
+			"name": "TagSequencing",
+			"sequence": "CTAGTCGAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_270",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 263,
+			"name": "TagSequencing",
+			"sequence": "TAGACGGAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_271",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 264,
+			"name": "TagSequencing",
+			"sequence": "TCCTCCAAGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_272",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 265,
+			"name": "TagSequencing",
+			"sequence": "CCTAAGCTAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_273",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 266,
+			"name": "TagSequencing",
+			"sequence": "CTAACCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_274",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 267,
+			"name": "TagSequencing",
+			"sequence": "CCACATCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_275",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 268,
+			"name": "TagSequencing",
+			"sequence": "TCTTCCTTCCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_276",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 269,
+			"name": "TagSequencing",
+			"sequence": "TGGACAATTGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_277",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 270,
+			"name": "TagSequencing",
+			"sequence": "TTAGCCTTAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_278",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 271,
+			"name": "TagSequencing",
+			"sequence": "TCACCTCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_279",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 272,
+			"name": "TagSequencing",
+			"sequence": "TCTGACATTCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_280",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 273,
+			"name": "TagSequencing",
+			"sequence": "TCCGCTCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_281",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 274,
+			"name": "TagSequencing",
+			"sequence": "TTCTTGATCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_282",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 275,
+			"name": "TagSequencing",
+			"sequence": "CTGACTCCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_283",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 276,
+			"name": "TagSequencing",
+			"sequence": "GAAGATCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_284",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 277,
+			"name": "TagSequencing",
+			"sequence": "TTCCGAAGTCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_285",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 278,
+			"name": "TagSequencing",
+			"sequence": "TCCTGGAGTAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_286",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 279,
+			"name": "TagSequencing",
+			"sequence": "TGACCAATCCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_287",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 280,
+			"name": "TagSequencing",
+			"sequence": "TGGAGGCCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_288",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 281,
+			"name": "TagSequencing",
+			"sequence": "TAGCATCCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_289",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 282,
+			"name": "TagSequencing",
+			"sequence": "TAAGTCGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_290",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 283,
+			"name": "TagSequencing",
+			"sequence": "TCGGCCATAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_291",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 284,
+			"name": "TagSequencing",
+			"sequence": "TTCCAATCCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_292",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 285,
+			"name": "TagSequencing",
+			"sequence": "CTTGAAGACGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_293",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 286,
+			"name": "TagSequencing",
+			"sequence": "TAGAATTCCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_294",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 287,
+			"name": "TagSequencing",
+			"sequence": "CGAGATGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_295",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 288,
+			"name": "TagSequencing",
+			"sequence": "TTCTACAATATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_296",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 289,
+			"name": "TagSequencing",
+			"sequence": "CCTGGTTGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_301",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 290,
+			"name": "TagSequencing",
+			"sequence": "TTCTGAGCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_302",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 291,
+			"name": "TagSequencing",
+			"sequence": "TCCAAGGACAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_303",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 292,
+			"name": "TagSequencing",
+			"sequence": "CCAAGCAACGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_304",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 293,
+			"name": "TagSequencing",
+			"sequence": "TTCTTAAGTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_305",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 294,
+			"name": "TagSequencing",
+			"sequence": "TTCGACTCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_306",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 295,
+			"name": "TagSequencing",
+			"sequence": "TCCGGAACTAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_307",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 296,
+			"name": "TagSequencing",
+			"sequence": "CGGCCTCAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_308",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 297,
+			"name": "TagSequencing",
+			"sequence": "CAGCCTCCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_309",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 298,
+			"name": "TagSequencing",
+			"sequence": "TCTGACGGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_310",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 299,
+			"name": "TagSequencing",
+			"sequence": "TCCTTATTGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_311",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 300,
+			"name": "TagSequencing",
+			"sequence": "TTCTCCATTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_312",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 301,
+			"name": "TagSequencing",
+			"sequence": "AACTTCCGGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_313",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 302,
+			"name": "TagSequencing",
+			"sequence": "TCCACAATTAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_314",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 303,
+			"name": "TagSequencing",
+			"sequence": "AAGGCTCGGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_315",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 304,
+			"name": "TagSequencing",
+			"sequence": "CCGAGTCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_316",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 305,
+			"name": "TagSequencing",
+			"sequence": "TTCTTCACCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_317",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 306,
+			"name": "TagSequencing",
+			"sequence": "CGGAACCTTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_318",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 307,
+			"name": "TagSequencing",
+			"sequence": "CTAGGCCAGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_319",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 308,
+			"name": "TagSequencing",
+			"sequence": "CCTGAAGGCTGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_320",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 309,
+			"name": "TagSequencing",
+			"sequence": "CTTGAAGGTCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_321",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 310,
+			"name": "TagSequencing",
+			"sequence": "CTCTCCGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_322",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 311,
+			"name": "TagSequencing",
+			"sequence": "CTTAACATCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_323",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 312,
+			"name": "TagSequencing",
+			"sequence": "TTGAATGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_324",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 313,
+			"name": "TagSequencing",
+			"sequence": "TGAGGAATTCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_325",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 314,
+			"name": "TagSequencing",
+			"sequence": "TGGAAGCAAGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_326",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 315,
+			"name": "TagSequencing",
+			"sequence": "CTGAGCAATCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_327",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 316,
+			"name": "TagSequencing",
+			"sequence": "TCCAGCCATATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_328",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 317,
+			"name": "TagSequencing",
+			"sequence": "CCTTACTCATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_329",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 318,
+			"name": "TagSequencing",
+			"sequence": "TCCTTCCACTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_330",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 319,
+			"name": "TagSequencing",
+			"sequence": "TGAACCATTGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_331",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 320,
+			"name": "TagSequencing",
+			"sequence": "TTAGGATCATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_332",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 321,
+			"name": "TagSequencing",
+			"sequence": "TTCCAATTCCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_333",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 322,
+			"name": "TagSequencing",
+			"sequence": "TTCTGGTTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_334",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 323,
+			"name": "TagSequencing",
+			"sequence": "TTCTGTCCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_335",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 324,
+			"name": "TagSequencing",
+			"sequence": "TCCGAAGAGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_336",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 325,
+			"name": "TagSequencing",
+			"sequence": "TTACACGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_337",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 326,
+			"name": "TagSequencing",
+			"sequence": "TAAGTCCAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_338",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 327,
+			"name": "TagSequencing",
+			"sequence": "TAAGATTCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_339",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 328,
+			"name": "TagSequencing",
+			"sequence": "AGGCCTAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_340",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 329,
+			"name": "TagSequencing",
+			"sequence": "TCTTCAGGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_341",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 330,
+			"name": "TagSequencing",
+			"sequence": "TTCCTTGGTCAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_342",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 331,
+			"name": "TagSequencing",
+			"sequence": "TTCCTTGCCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_343",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 332,
+			"name": "TagSequencing",
+			"sequence": "CTTAGGCAAGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_344",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 333,
+			"name": "TagSequencing",
+			"sequence": "AACAATTCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_345",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 334,
+			"name": "TagSequencing",
+			"sequence": "CGAGGATCCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_346",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 335,
+			"name": "TagSequencing",
+			"sequence": "TCCTCTTCCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_347",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 336,
+			"name": "TagSequencing",
+			"sequence": "TCGAAGCTTCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_348",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 337,
+			"name": "TagSequencing",
+			"sequence": "CTAAGGTTCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_349",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 338,
+			"name": "TagSequencing",
+			"sequence": "TTAGGAATCCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_350",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 339,
+			"name": "TagSequencing",
+			"sequence": "TGGCCAATCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_351",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 340,
+			"name": "TagSequencing",
+			"sequence": "CTTAAGCATTAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_352",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 341,
+			"name": "TagSequencing",
+			"sequence": "TTCCTCTAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_353",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 342,
+			"name": "TagSequencing",
+			"sequence": "CTTCCATTCGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_354",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 343,
+			"name": "TagSequencing",
+			"sequence": "CCTACAAGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_355",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 344,
+			"name": "TagSequencing",
+			"sequence": "TCTTGAAGATGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_356",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 345,
+			"name": "TagSequencing",
+			"sequence": "TGAAGCCATCTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_357",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 346,
+			"name": "TagSequencing",
+			"sequence": "CTAAGCTTGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_358",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 347,
+			"name": "TagSequencing",
+			"sequence": "CTTGGATAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_359",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 348,
+			"name": "TagSequencing",
+			"sequence": "CAAGCCACCGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_360",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 349,
+			"name": "TagSequencing",
+			"sequence": "CCTAGGTCTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_361",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 350,
+			"name": "TagSequencing",
+			"sequence": "TTGACTTCCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_362",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 351,
+			"name": "TagSequencing",
+			"sequence": "CCAGACCGAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_363",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 352,
+			"name": "TagSequencing",
+			"sequence": "TCTAGCCATCGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_364",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 353,
+			"name": "TagSequencing",
+			"sequence": "CGCCAAGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_365",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 354,
+			"name": "TagSequencing",
+			"sequence": "TGAGGCATGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_366",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 355,
+			"name": "TagSequencing",
+			"sequence": "CGAGATTCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_367",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 356,
+			"name": "TagSequencing",
+			"sequence": "TCAACCTGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_368",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 357,
+			"name": "TagSequencing",
+			"sequence": "TCCTGAGGTATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_369",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 358,
+			"name": "TagSequencing",
+			"sequence": "AAGATGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_370",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 359,
+			"name": "TagSequencing",
+			"sequence": "CCTGGAAGACGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_371",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 360,
+			"name": "TagSequencing",
+			"sequence": "TTGCACCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_372",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 361,
+			"name": "TagSequencing",
+			"sequence": "TCTAAGACTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_373",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 362,
+			"name": "TagSequencing",
+			"sequence": "CGAACATATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_374",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 363,
+			"name": "TagSequencing",
+			"sequence": "TTGGACTTATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_375",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 364,
+			"name": "TagSequencing",
+			"sequence": "CGAGGCAATGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_376",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 365,
+			"name": "TagSequencing",
+			"sequence": "TCGAGATTAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_377",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 366,
+			"name": "TagSequencing",
+			"sequence": "TTCGCCAACAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_378",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 367,
+			"name": "TagSequencing",
+			"sequence": "TCGGCACGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_379",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 368,
+			"name": "TagSequencing",
+			"sequence": "TCCGTTCGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 11,
+			"id_str": "TagSequencing_380",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 369,
+			"name": "TagSequencing",
+			"sequence": "CCTTAGGATGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_381",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 370,
+			"name": "TagSequencing",
+			"sequence": "CACCACCAATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_382",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 371,
+			"name": "TagSequencing",
+			"sequence": "TTGAAGCCAGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_383",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 372,
+			"name": "TagSequencing",
+			"sequence": "CCTCCAATCGGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_384",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 373,
+			"name": "TagSequencing",
+			"sequence": "TTACAATGAATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_385",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 374,
+			"name": "TagSequencing",
+			"sequence": "TCCTGCATGATC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_386",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 375,
+			"name": "TagSequencing",
+			"sequence": "CGCTTCCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_387",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 376,
+			"name": "TagSequencing",
+			"sequence": "TGACAACTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 10,
+			"id_str": "TagSequencing_388",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 377,
+			"name": "TagSequencing",
+			"sequence": "CTTGGCCAACTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_389",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 378,
+			"name": "TagSequencing",
+			"sequence": "TCTTGGCAATGC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_390",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 379,
+			"name": "TagSequencing",
+			"sequence": "AAGGCATCCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_391",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 380,
+			"name": "TagSequencing",
+			"sequence": "CCGACCGGATTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_392",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 381,
+			"name": "TagSequencing",
+			"sequence": "TTCATTCCGTTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_393",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 382,
+			"name": "TagSequencing",
+			"sequence": "CTGGCATCGGAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_394",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 383,
+			"name": "TagSequencing",
+			"sequence": "CTTGACCTGGTC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_395",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 384,
+			"name": "TagSequencing",
+			"sequence": "TTCTACCTCAAC",
+			"adapter": "TCTGTACGGTGACAAGGCG",
+			"score_cutoff": 0,
+			"length": 12,
+			"id_str": "TagSequencing_396",
+			"active": true,
+			"score_mode": 0,
+			"type": "",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

@@ -434,7 +434,7 @@ if [ ! -z "${JOB_ID}" ]; then
 fi
 
 # Set initial 'Started' status, now that we have started executing
-ion-plugin-status --pk '{{ runinfo.pluginresult }}' --msg 'Started' --jobid "${JOB_ID}"
+ion-plugin-status --state 'Started' --host '{{ net_location }}' --apikey '{{ api_key }}' --pk '{{ pluginresult }}'
 
 cmd_line_args "$@"
 
@@ -522,7 +522,7 @@ function plugin_error_trap
     local message="${1:-"Unknown Error"}"
     echo "==============================================================================="
     echo "ERROR: Plugin exited unexpectedly with error: ${exit_status} - ${message}"
-    ion-plugin-status --pk '{{ runinfo.pluginresult  }}' --msg 'Error' --jobid "${JOB_ID}" --jsonpath="${RESULTS_DIR}"
+    ion-plugin-status --state 'Error' --host '{{ net_location }}' --apikey '{{ api_key }}' --pk '{{ pluginresult }}'
     exit ${exit_status}
 }
 
@@ -531,7 +531,7 @@ function plugin_timeout_trap
     local exit_status="Plugin Timed Out"
     echo "********************************************************************************"
     echo "ERROR: Plugin exited unexpectedly with error: ${exit_status}"
-    ion-plugin-status --pk '{{ runinfo.pluginresult  }}' --msg 'Timed Out' --jobid "${JOB_ID}" --jsonpath="${RESULTS_DIR}"
+    ion-plugin-status --state 'Timed Out' --host '{{ net_location }}' --apikey '{{ api_key }}' --pk '{{ pluginresult }}'
     exit 0
 }
 
@@ -582,7 +582,11 @@ echo "pluginelapsedtime: ${PLUGINNAME},${elapsedtime}"
 
 {% if runinfo.pluginresult %}
 # Both pluginUpdate commands set a 'Complete' or 'Error' status based on RETVAL
-ion-plugin-status --pk "{{ runinfo.pluginresult }}" --convert --msg "${RETVAL}" --jsonpath="${RESULTS_DIR}"
+if [ $RETVAL -eq 0 ]; then
+    ion-plugin-status --state 'Completed' --host '{{ net_location }}' --apikey '{{ api_key }}' --pk '{{ pluginresult }}'
+else
+    ion-plugin-status --state 'Error' --host '{{ net_location }}' --apikey '{{ api_key }}' --pk '{{ pluginresult }}'
+fi
 {% endif %}
 
 if [ -f output.json ]; then

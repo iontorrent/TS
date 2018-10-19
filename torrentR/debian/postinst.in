@@ -8,6 +8,7 @@ case "$1" in
     LIBLIST=(\
         caTools_1.14.tar.gz \
         gplots_2.8.0.tar.gz \
+        Rcpp_0.12.1.tar.gz \
         spam_0.29-3.tar.gz \
         maps_2.3-3.tar.gz \
         fields_6.8.tar.gz \

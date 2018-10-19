@@ -18,12 +18,17 @@
 <script src="slickgrid/lib/jquery.event.drag-2.0.min.js"></script>
 <script src="slickgrid/slick.core.js"></script>
 <script src="slickgrid/slick.grid.js"></script>
+<script src="slickgrid/plugins/slick.autotooltips.js"></script>
+<script src="slickgrid/plugins/slick.cellrangedecorator.js"></script>
 <script src="slickgrid/plugins/slick.rowselectionmodel.js"></script>
+<script src="slickgrid/plugins/slick.cellselectionmodel.js"></script>
+<script src="slickgrid/plugins/slick.cellrangeselector.js"></script>
+<script src="slickgrid/plugins/slick.cellcopymanager.js"></script>
 <script src="slickgrid/slick.dataview.js"></script>
+
 <script src="lifegrid/lifegrid.js"></script>
-
-
-<script src="lifegrid/allelesTable.js"></script>
+<script src="lifegrid/allelesTable.js"></script
+>
 <script src="bootstrap-select.js"></script>
 <script src="bootbox.min.js"></script>
 
@@ -154,7 +159,11 @@
                     {% if options.library_type == "tagseq" %}
                     Tag Sequencing
                     {% else %}
-                    {{options.library_type}}
+                      {% if options.library_type == "ampliseq_hd" %}
+                         AmpliSeq HD
+                      {% else %}
+                         {{options.library_type}}
+                      {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -285,7 +294,7 @@
                 </div>
             </div>
 
-            {% if options.library_type == "tagseq" %}
+            {% if options.has_umt %}
 			{% else %}
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
@@ -310,7 +319,7 @@
                 </div>
             </div>
 
-	        {% if options.library_type == "tagseq" %}
+	        {% if options.has_umt %}
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
                     <span class="headvc">Library Performance</span>

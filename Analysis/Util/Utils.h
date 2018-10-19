@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <sstream>
 #include <sys/time.h>
+#include "RandSchrange.h"
 
 #ifndef ALIGNSTATS_IGNORE
 #include "SpecialDataTypes.h"
@@ -76,10 +77,12 @@ int GetSystemMemInBuffers();
 
 // --- Mapping of base ambiguity symbols
 
-void expandBaseSymbol(char nuc, std::vector<bool>& nuc_ensemble);
+bool isNBaseString(std::string s_in);
+int  transformIntValue(int symb_in);
+void expandBaseSymbol(const char nuc, std::vector<bool>& nuc_ensemble);
 char contractNucSymbol(const std::vector<bool>& nuc_ensemble);
-bool isBaseMatch(char nuc1, char nuc2);
-char getMatchSymbol(char nuc1, char nuc2);
+bool isBaseMatch(const char nuc1, const char nuc2);
+char getMatchSymbol(const char nuc1, const char nuc2);
 
 //string utils
 int     count_char (std::string s, char c);
@@ -115,6 +118,7 @@ std::vector<T> char2Vec (const char *s, char delim='*')
   }
   return vec;
 }
+std::string getNormString(std::string s_in);
 /** Slow - only use for error messages etc. */
 template <class T>
 std::string ToStr (T t)

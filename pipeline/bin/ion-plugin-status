@@ -1,133 +1,61 @@
 #!/usr/bin/env python
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-
-import os
-import traceback
 import json
-import xmlrpclib
 import optparse
-import time
-import socket
-
-# import /etc/torrentserver/cluster_settings.py, provides PLUGINSERVER_PORT, PLUGINSERVER_HOST
+import os
+import requests
 import sys
-sys.path.append('/etc')
-from torrentserver.cluster_settings import *
-
-import logging
-LOG = logging.getLogger('ion-plugin-status')
-
-def UpdatePluginStatus(pk, status, jsonfname='results.json', jobid=None):
-    # Preprocess resultjsonfile
-    updateJSON = None
-    if jsonfname is not None:
-        try:
-            with open(jsonfname, 'r') as f:
-                updateJSON = json.load(f)
-        except (OSError, IOError) as e:
-            LOG.error("Unable to read the json file '%s': %s", jsonfname, e)
-            updateJSON = None
-        except:
-            LOG.exception("Invalid json syntax in file '%s'. Ignoring.", jsonfname)
-            updateJSON = None
-
-    ret = UpdatePluginStatus_XMLRPC(pk, status, store=updateJSON, jobid=jobid)
-
-    return ret
-
-
-def UpdatePluginStatus_XMLRPC(pk, status, store=None, jobid=None, host=PLUGINSERVER_HOST, port = PLUGINSERVER_PORT):
-    """
-    Updates a plugins status through XMLRPC
-    """
-    # Get Fault so we can catch errors
-    retries = 10
-    delay = 5
-    # Total timeout = 60*5 == 300 == 5min
-    attempts = 0
-
-    ret = ''
-    while attempts < retries:
-        try:
-            conn = xmlrpclib.ServerProxy("http://%s:%d" % (host,port), verbose=False, allow_none=True)
-            grid_engine_job_id = os.environ['JOB_ID']
-            ret = conn.updatePR(pk, grid_engine_job_id, status, store)
-            LOG.debug("Plugin Update XMLRPC call returns: '%s'", ret)
-            break
-        except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
-            LOG.error("XMLRPC Error: %s",f)
-            if attempts < retries:
-                LOG.warn("Error connecting to plugin daemon at %s:%d. Retrying in %d", host, port, delay)
-                time.sleep(delay)
-                attempts += 1
-            else:
-                raise "Unable to connect to plugin daemon after multiple attempts"
-
-    if ret:
-        if store is not None and store:
-            note = ", with store data: %s..." % str(store)[:15]
-        else:
-            note = ''
-        LOG.info("Updated PluginResult '%s':%s to status '%s' %s",
-                 pk, ret, status, note)
-    else:
-        LOG.error("Failed to update plugin status '%s' '%s' after '%d' attempts",
-                  pk, ret, attempts)
-    return ret
-
+import time
+import traceback
 
 if __name__ == '__main__':
-
-    options = optparse.OptionParser(description = 'Update a plugins status and json dataStore through the ionPlugin daeamon')
-    options.add_option('-i', '--pk'     , dest = 'pk'     , action = 'store', default = "")
-    options.add_option('-d', '--debug' , dest = 'debug' , action = 'store_true', default = False)
-    options.add_option('-s', '--msg' , dest = 'msg' , action = 'store', default = None,
-                       help="Status message to set (if --convert is set status codes into verbose messages)")
-    options.add_option('-c', '--convert' , dest = 'convert' , action = 'store_true', default = False,
-                       help="Convert Unix exit codes provided with --msg (-s) into verbose messages")
-    options.add_option('-j', '--jsonpath' , dest = 'jsonpath' , action = 'store', default = None,
-                       help="Path to the JSON file to PUT")
-    options.add_option('-g', '--jobid' , dest = 'jobid' , action = 'store', default = None,
-                       help="GridEngine JobID")
-
+    options = optparse.OptionParser(description='Update a plugins status and json dataStore through the ionPlugin daeamon')
+    options.add_option('-u', '--host', dest='host', action='store', default=None)
+    options.add_option('-s', '--state', dest='state', action='store', default=None)
+    options.add_option('-a', '--apikey', dest='apikey', action='store', default=None)
+    options.add_option('-p', '--pk', dest='pk', action='store', default=None)
     (options, argv) = options.parse_args(sys.argv)
 
-    if options.debug:
-        loglevel = logging.DEBUG
-    else:
-        loglevel = logging.INFO
-    logging.basicConfig(level=loglevel)
+    # reusable request data structures
+    auth_params = {'pluginresult': options.pk, 'api_key': options.apikey}
+    json_headers = {'content-type': 'application/json'}
 
-    # Check required options
-    opts = {
-        "pk" : options.pk,
-        "message": options.msg
-    }
-    goodArgs = True
-    for key, value in opts.iteritems():
-        if not value:
-            LOG.error("You must give the value for %s", key)
-            goodArgs = False
-    if not goodArgs:
-        LOG.fatal("Bad command line arguments '%s'", sys.argv)
-        sys.exit(1)
+    # update the store data in the plugin result if there is store data to ... store
+    results_file_path = os.path.join(os.getcwd(), 'results.json')
+    if os.path.exists(results_file_path):
+        try:
+            store_data = {}
+            with open(results_file_path, 'r') as f:
+                store_data = json.load(f)
 
-    if options.jsonpath:
-        jsonfname = os.path.join(options.jsonpath,"results.json")
-    else:
-        jsonfname = "results.json"
-    if not os.path.exists(jsonfname):
-        jsonfname = None
+            if store_data:
+                store_response = requests.patch(options.host + "/rundb/api/v1/pluginresult/" + str(options.pk) + "/", headers=json_headers, params=auth_params, data=json.dumps({'store': store_data}))
+                store_response.raise_for_status()
+        except Exception as exc:
+            traceback.print_exc()
 
+    attempts = 0
+    while attempts < 10:
+        attempts += 1
 
-    # Set a status using 'update' method.
-    if options.convert:
-        if options.msg == "0":
-            options.msg = "Completed"
-        else:
-            # Any non-zero exit status is Error
-            options.msg = "Error"
+        try:
+            # query based on the jobid to get the resource url
+            job_query_response = requests.get(options.host + "/rundb/api/v1/PluginResultJob/", params={'grid_engine_jobid': os.environ['JOB_ID'], 'pluginresult': options.pk, 'api_key': options.apikey})
+            job_query_response.raise_for_status()
+            job_query = job_query_response.json()
+            resource_uri = job_query['objects'][0]['resource_uri']
 
-    updater = UpdatePluginStatus(options.pk, options.msg, jsonfname, jobid=options.jobid)
+            # send the patch request
+            data = json.dumps({'state': options.state})
+            job_patch_response = requests.patch(options.host + resource_uri, headers=json_headers, params=auth_params, data=data)
+            job_patch_response.raise_for_status()
 
+            # we are exiting here which is our happy path...
+            sys.exit()
+        except Exception as exc:
+            traceback.print_exc()
+            time.sleep(5)
+
+    # if we made it here and did not exit as part of the try loop then we can assume that we ran out of attempts
+    raise ValueError("After many attempts the status was not able to be updated.")

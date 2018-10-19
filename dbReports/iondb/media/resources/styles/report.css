@@ -1,3 +1,7 @@
+div.header ul.nav.nav-tabs.pull-left{
+    position: absolute;
+}
+
 .hide
 {
 	display: none;
@@ -14,7 +18,7 @@
 
 #plugins-sub-nav {
     width: 100%;
-    max-height: 262px;
+    max-height: 340px;
     overflow-y: auto;
     overflow-x: hidden;
 }

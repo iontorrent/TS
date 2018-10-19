@@ -1,0 +1,40 @@
+{% extends "admin/base_site.html" %}
+{% load url from future %}
+
+{% block title %}Reconfigure Torrent Suite{% endblock %}
+
+{% block content %}
+    <div id="content-main">
+        <h1>Reconfigure Torrent Suite</h1>
+        <p>
+            This will configure the server with the desired environment for Torrent Suite Software.
+
+            For example, it will:
+        </p>
+        <ul>
+            <li>Set system environment and files permission</li>
+            <li>Configure network, firewall, database and file server</li>
+            <li>Install missing packages from prescribed repository but it will not update
+                the existing package
+            </li>
+        </ul>
+        <p style="width: 700px">
+            This is normally done as part of software update process. This page will serve as troubleshooting tool and
+            is only used as advised by the field support team. The system will be unavailable during the update. Make
+            sure ongoing analyses are completed before starting the reconfiguration process.
+        </p>
+        <form name="input" method="post">
+            <input type="submit" value="Reconfigure Server"
+                   onclick="return confirm('Select OK to reconfigure server, or Cancel to abort reconfiguration.')"
+                   {% if tsconfig_lock %}disabled="disabled"{% endif %}
+            />
+            <span>{% if tsconfig_lock %} Reconfigure Server is running...{% endif %}</span>
+        </form>
+        <br><br>
+        <h1>Troubleshooting</h1>
+        <ul>
+            <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+        </ul>
+
+    </div>
+{% endblock %}

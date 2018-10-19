@@ -44,7 +44,6 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             dataType : 'json'
         });
 
-
     });
 
     //Check if there is a file
@@ -56,7 +55,6 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             processing = false;
             return false;
         }
-
         $('#modal_batch_planning_upload .modal-body #modal-error-messages').addClass('hide').empty();
         $("#loadingstatus").html("<div class='alert alert-info'><img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'> Uploading csv file for plans </div>");
         $("#submitUpload").attr("disabled", true);
@@ -123,6 +121,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
                 error += "<ul class='unstyled'>";
                 error += "<li><strong>" + key + " (Plan " + plan_no + ") contained error(s):</strong> ";
                 error += "<ul>";
+                plan_param = "Plan_" + plan_no
                 if (singleCSV){
                     error += error_table;
                 }
@@ -149,7 +148,8 @@ TB.plan.batchupload.ready = function(plannedUrl) {
                             if ((!singleCSV) && ((value == "Barcoded samples validation errors:") || (value == "IRU validation errors:"))){
                                 BC_IR_flag = true;
                                 IRU_flag = true;
-                                error = get_iru_bc_error_table(index, value, errorLists, error);
+                                //error = get_iru_bc_error_table(index, value, errorLists, error);
+                                error = get_iru_bc_error_table(index, value, errorLists, error,  plan_param);
                             }
                             if ((!singleCSV) && (!BC_IR_flag) && (errorLists[index+1])){
                                 error += "<li><strong>" + value + "</strong> :   " + errorLists[index+1] + "</li>";
@@ -191,11 +191,16 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             $('#modal_batch_planning_upload .modal-body #modal-success-messages').html(responseText.status).show();
             $('#modal_batch_planning_upload .modal-body #modal-error-messages').html(warning).show();
             $('#modal_batch_planning_upload #submitUpload').hide();
-            $('#modal_batch_planning_upload #dismissUpload').text("Close");
+            $('#modal_batch_planning_upload #dismissUpload').text("Close").addClass('warnings');
+
         } else {
             $('#modal_batch_planning_upload').modal("hide");
             window.location = plannedUrl;
         }
+
+        $(".warnings").click(function(e){
+            window.location = plannedUrl;
+        });
     }
 
 };
@@ -203,8 +208,8 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 // Construct the drop down menu to list the failed plans
 function get_failed_plans_dropdown(invalidPlans){
     dropDown_menu = '<div class="dropdown">' +
-                    '<button type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown">' +
-                    '<span class="sr-only">Choose plan to view errors</span>' +
+                    '<button id="error_list" type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown">' +
+                    '<span>Choose plan to view errors</span>' +
                     '<span class="caret"></span>' +
                     '</button>' +
                     '<ul class="dropdown-menu" role="menu">';
@@ -228,13 +233,14 @@ function get_failed_plans_dropdown(invalidPlans){
 }
 
 // Construct the table to display the IRU and Barcoded validation error message
-function get_iru_bc_error_table(index, value, errorLists, error){
+function get_iru_bc_error_table(index, value, errorLists, error, plan_param){
      var data;
+     table_id = "iru_validation_errors_" + plan_param;
      //handle any exception if data is not in json format
      try {
         data = JSON.parse(errorLists[index+1]);
         BC_IR_err_count = $.map(data, function(n, i) { return i; }).length;
-        error_table =  '<ul><table class="table table-striped table-condensed table-bordered">' +
+        error_table =  '<ul><table id=' + table_id + ' class="table table-striped table-condensed table-bordered">' +
                        '<thead>' +
                        '<tr><th colspan="2">' + value + BC_IR_err_count + '</th></tr>' +
                        '<tr>' +

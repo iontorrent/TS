@@ -361,9 +361,6 @@ int main (int argc, const char *argv[])
     // *** Initialize remaining modules of BaseCallerContext
     basecaller_bam_comments["BaseCallerComments"]["MasterKey"] = bc.run_id;
 
-    BaseCallerFilters filters(opts, basecaller_bam_comments["BaseCallerComments"], bc.flow_order, bc.keys, mask);
-    bc.filters = &filters;
-
     BaseCallerMetricSaver metric_saver(opts, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY(), bc.flow_order.num_flows(),
                                 bc.chip_subset.GetRegionSizeX(), bc.chip_subset.GetRegionSizeY(), bc_params.GetFiles().output_directory);
     bc.metric_saver = &metric_saver;
@@ -378,19 +375,27 @@ int main (int argc, const char *argv[])
     // initialize the per base quality score generator - dependent on calibration
     bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, hist_calibration.is_enabled());
 
-
     // Barcode classification
     BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, bc_params.GetFiles().output_directory,
-    		                   bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
+        bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY(), bc_params.GetFiles().read_structure);
     bc.barcodes = &barcodes;
     // Make sure calibration barcodes are initialized with default parameters
+    Json:: Value dummy;
     BarcodeClassifier calibration_barcodes(null_opts, datasets_calibration, bc.flow_order, bc.keys,
-                          bc_params.GetFiles().output_directory, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
+        bc_params.GetFiles().output_directory, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY(), dummy);
     bc.calibration_barcodes = &calibration_barcodes;
+    // End barcode classification
+    EndBarcodeClassifier end_barcodes(opts, datasets,
+        &bc.flow_order, barcodes.GetBarcodeMaskPointer(), bc_params.GetFiles().read_structure);
+    bc.end_barcodes = &end_barcodes;
+
+    BaseCallerFilters filters(opts, basecaller_bam_comments["BaseCallerComments"], bc.flow_order, bc.keys, mask);
+    bc.filters = &filters;
 
     // Molecular tag identification & trimming
     MolecularTagTrimmer tag_trimmer;
-    tag_trimmer.InitializeFromJson(MolecularTagTrimmer::ReadOpts(opts), datasets.read_groups(), barcodes.TrimBarcodes());
+    tag_trimmer.InitializeFromJson(MolecularTagTrimmer::ReadOpts(opts, bc_params.GetFiles().read_structure),
+        datasets.read_groups(), barcodes.TrimBarcodes());
     bc.tag_trimmer = &tag_trimmer;
 
     // Command line parsing officially over. Detect unknown options.
@@ -433,8 +438,10 @@ int main (int argc, const char *argv[])
 
 
     // Initialize Barcode Classifier(s) - dependent on phase estimates
-    bc.barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
-    bc.calibration_barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
+    bc.barcodes->BuildPredictedSignals(bc.flow_order, bc.estimator.GetAverageCF(),
+                 bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
+    bc.calibration_barcodes->BuildPredictedSignals(bc.flow_order, bc.estimator.GetAverageCF(),
+                 bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
 
     MemUsage("BeforeBasecalling");
 
@@ -442,35 +449,39 @@ int main (int argc, const char *argv[])
     // Step 3. Open wells and output BAM files & initialize writers
     //
     JsonToCommentLine(basecaller_bam_comments, bam_comments);
+    Json::Value empty_json;
 
     // Library data set writer - always
     bc.lib_writer.Open(bc_params.GetFiles().output_directory, datasets, 0, bc.chip_subset.NumRegions(),
                  bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(), bc_params.NumBamWriterThreads(),
-                 basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(), bc_params.CompressOutputBam());
+                 basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(), bc_params.CompressOutputBam(),
+                 bc.end_barcodes->NumEndBarcodes(), bc_params.GetFiles().read_structure);
 
     // Calibration reads data set writer - if applicable
     if (bc.have_calibration_panel)
       bc.calib_writer.Open(bc_params.GetFiles().output_directory, datasets_calibration, 0, bc.chip_subset.NumRegions(),
                      bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(), bc_params.NumBamWriterThreads(),
-                     basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(), bc_params.CompressOutputBam());
+                     basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(), bc_params.CompressOutputBam(),
+                     bc.end_barcodes->NumEndBarcodes(), empty_json);
 
     // Test fragments data set writer - if applicable
     if (bc.process_tfs)
       bc.tf_writer.Open(bc_params.GetFiles().output_directory, datasets_tf, 1, bc.chip_subset.NumRegions(),
                   bc.flow_order, bc.keys[1].bases(), filters.GetTFBeadAdapters(), bc_params.NumBamWriterThreads(),
-                  basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(), bc_params.CompressOutputBam());
+                  basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(), bc_params.CompressOutputBam(),
+                  bc.end_barcodes->NumEndBarcodes(), empty_json);
 
     // Unfiltered / unfiltered untrimmed data set writers - if applicable
     if (!bc.unfiltered_set.empty()) {
     	bc.unfiltered_writer.Open(bc_params.GetFiles().unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, -1,
                       bc.chip_subset.NumRegions(), bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
                       bc_params.NumBamWriterThreads(), basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(),
-                      bc_params.CompressOutputBam());
+                      bc_params.CompressOutputBam(), bc.end_barcodes->NumEndBarcodes(), empty_json);
 
         bc.unfiltered_trimmed_writer.Open(bc_params.GetFiles().unfiltered_trimmed_directory, datasets_unfiltered_trimmed, -1,
                               bc.chip_subset.NumRegions(), bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
                               bc_params.NumBamWriterThreads(), basecaller_json, bam_comments, tag_trimmer, barcodes.TrimBarcodes(),
-                              bc_params.CompressOutputBam());
+                              bc_params.CompressOutputBam(), bc.end_barcodes->NumEndBarcodes(), empty_json);
     }
 
     //
@@ -506,11 +517,14 @@ int main (int argc, const char *argv[])
            filters.NumWellsCalled(), bc.chip_subset.NumWells(),
            difftime(basecall_end_time,basecall_start_time), bc_params.NumThreads());
 
-    bc.lib_writer.Close(datasets, "Library");
+    bc.lib_writer.Close(datasets, end_barcodes.EndBarcodeNames(),
+        bc_params.GetFiles().output_directory, "Library");
     if (bc.have_calibration_panel)
-    	bc.calib_writer.Close(datasets_calibration, "IonControl");
+    	bc.calib_writer.Close(datasets_calibration, end_barcodes.EndBarcodeNames(),
+    	    bc_params.GetFiles().output_directory, "IonControl");
     if (bc.process_tfs)
-        bc.tf_writer.Close(datasets_tf, "Test Fragments");
+        bc.tf_writer.Close(datasets_tf, end_barcodes.EndBarcodeNames(),
+            bc_params.GetFiles().output_directory, "Test Fragments");
 
     filters.TransferFilteringResultsToMask(mask);
 
@@ -519,8 +533,10 @@ int main (int argc, const char *argv[])
         // Must happen after filters transferred to mask
         bc.WriteUnfilteredFilterStatus(bc_params.GetFiles());
 
-        bc.unfiltered_writer.Close(datasets_unfiltered_untrimmed);
-        bc.unfiltered_trimmed_writer.Close(datasets_unfiltered_trimmed);
+        bc.unfiltered_writer.Close(datasets_unfiltered_untrimmed,
+            end_barcodes.EndBarcodeNames(), bc_params.GetFiles().output_directory, "");
+        bc.unfiltered_trimmed_writer.Close(datasets_unfiltered_trimmed,
+            end_barcodes.EndBarcodeNames(), bc_params.GetFiles().output_directory, "");
 
         datasets_unfiltered_untrimmed.SaveJson(bc_params.GetFiles().unfiltered_untrimmed_directory+"/datasets_basecaller.json");
         datasets_unfiltered_trimmed.SaveJson(bc_params.GetFiles().unfiltered_trimmed_directory+"/datasets_basecaller.json");
@@ -1022,8 +1038,16 @@ void * BasecallerWorker(void *input)
                 }
                 // Read trimming shortens a read or remove it if it's too short after trimming
                 bc.filters->TrimAdapter         (read_index, read_class, processed_read, scaled_residual, base_to_flow, treephaser, read);
+
+                // XXX End barcode classification
+                if (read_class == 0){
+                  bc.end_barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
+                  bc.filters->UpdateFilterStatus(read_index, processed_read.filter);
+                }
+
                 bc.filters->TrimSuffixTag       (read_index, read_class, processed_read, read.sequence, bc.tag_trimmer);
                 bc.filters->TrimExtraRight      (read_index, read_class, processed_read, read.sequence);
+
                 // quality trimming
                 if (use_flow_predictors){ //flow space
                 	bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality_flow,

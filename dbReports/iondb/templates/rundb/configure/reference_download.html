@@ -25,31 +25,73 @@
                     {% for ref in references %}
                         <tr>
                             <td>
-                                {% if ref.installed %}
-                                    <a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.installed.status }}</a>
+                                {% if ref.installed or ref.preInstalled %}
+                                    {%  if ref.installed %}
+                                        <a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.installed.status }}</a>
+                                    {% else %}
+                                        <a class="pull-right" href="{% url "references_genome_edit" ref.preInstalled.pk %}">pre-installed</a>
+                                    {% endif  %}
                                     <p>{{ ref.name }}</p>
                                     {% if ref.notes %}
                                         <p>{{ ref.notes }}</p>
                                     {% endif %}
-                                    {%if ref.installed.status == "complete" %}
-                                        <form action="{% url "references_genome_download" %}" method="post">
-                                            {% if ref.refAnnotNotAvailable != 'N/A' %}
-                                                <i>Annotation</i>
-                                            {% endif %}
-                                            <input type="hidden" name="reference_meta" value="{{ ref.meta_encoded }}" />
-                                            <input type="hidden" name="annotation_meta" value="{{ ref.annotation_encoded }}" />
-                                            <input type="hidden" name="reference_mask" value="{{ ref.reference_mask }}" />
-                                            {% if ref.isAnnotCompleted and not ref.isNewAnnotPosted and not ref.noLink %}
-                                                <a class="pull-right" href="{% url "references_genome_edit" ref.installed.pk %}">{{ ref.isAnnotCompleted }}</a>
-                                            {% else %}
-                                                <a class="pull-right" title="{{ref.errURL}}"><font color="#FF6666">{{ ref.noLinkMsg }}</font></a>
-                                            {% endif %}
-                                            {%if ref.isNewAnnotPosted %}
-                                                <input type="hidden" name="missingAnnotation_meta" value="{{ ref.missingAnnotation_meta }}" />
-                                                <input id=test type=file name=test style="visibility:hidden;position:absolute;top:0;left:0" value="{{ ref.missingAnnotation_data }}">
-                                                <input type="submit" name="ref_annot_update" class="btn btn-small" value="Import Annotation" />
-                                            {% endif %}
-                                        </form>
+                                    {%if ref.installed.status == "complete" or ref.preInstalled.status == "complete" %}
+                                        {% if ref.annotationfiles %}
+                                            <div>
+                                                <i>Annotation Files</i>
+                                                <button class="btn btn-small download_bedfiles" data-toggle="modal" data-target="#modal_upload_annotfiles_{{forloop.counter}}">Import Annotation Files</button>
+                                                <ul>
+                                                {% for annotfile in ref.annotationfiles %}
+                                                    <li>
+                                                        {{annotfile.short_description}} ({{annotfile.url|basename}})
+                                                        {% if annotfile.status %}
+                                                            <span {% if 'error' in annotfile.status|lower %}class="text-error"{%else%}class="text-success"{%endif%}>
+                                                                &mdash; Status: {{annotfile.status}}
+                                                            </span>
+                                                        {% endif %}
+                                                    </li>
+                                                {% endfor %}
+                                                </ul>
+                                            </div>
+                                            <div id="modal_upload_annotfiles_{{forloop.counter}}" class="modal hide" role="dialog">
+                                                <form action="{% url "start_install_annotationfiles" %}" method="post">
+                                                    <div class="modal-header">
+                                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                                        <h3 id="modal-header-text" class="modal-title">Import Annotation Files</h3>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <input type="hidden" name="annotationfiles_meta" value="{{ ref.annotation_encoded }}" />
+                                                        <table id="annotfiles_table_{{forloop.counter}}" class="table table-striped annotfiles_table">
+                                                            <thead>
+                                                                <th><span rel='tooltip' title='(De)select All'><input  class='annotfiles_selectall' type='checkbox' checked></span></th>
+                                                                <th>Description</th>
+                                                                <th>Annotation File</th>
+                                                                <th>File Size</th>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr></tr>
+                                                                {% for annotfile in ref.annotationfiles %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <input type="checkbox" name="annotationfiles" value="{{annotfile.url|basename}}"
+                                                                            {% if annotfile.status and not 'error' in annotfile.status|lower %} disabled {% else %} checked {%endif%}>
+                                                                    </td>
+                                                                    <td><span rel="tooltip" title="{{ annotfile.description }}">{{annotfile.short_description}}</span></td>
+                                                                    <td>{{annotfile.url|basename}}</td>
+                                                                    <td>{{annotfile.filesize}}</td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <input type="button" value="Cancel" class="btn" data-dismiss="modal"/>
+                                                        <input type="submit" href="{% url "start_install_annotationfiles" %}" value="Import Selected" class="btn btn-primary install_bedfiles"/>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        {% endif %}
+
                                         {% if ref.bedfiles %}
                                             <div>
                                                 <i>BED Files</i>
@@ -172,6 +214,15 @@
 
             $('.bedfiles_selectall, [name=bedfiles]').change(function(e){
                 var selected = $(this).parents('.bedfiles_table').find('tbody input:checked');
+                $(this).parents('form').find(':input[type=submit]').prop('disabled', selected.length < 1);
+            });
+
+            $('.annotfiles_selectall').click(function(){
+                $(this).parents('.annotfiles_table').find('input').not(':disabled').prop('checked', this.checked);
+            });
+
+            $('.annotfiles_selectall, [name=annotationfiles]').change(function(e){
+                var selected = $(this).parents('.annotfiles_table').find('tbody input:checked');
                 $(this).parents('form').find(':input[type=submit]').prop('disabled', selected.length < 1);
             });
 

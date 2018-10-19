@@ -18,14 +18,10 @@ logger = logging.getLogger(__name__)
 class ReferenceFieldNames():
 
     BED_FILES = 'bedFiles'
-    BED_FILE_FULL_PATHS = 'bedFileFullPaths'
-    BED_FILE_PATHS = 'bedFilePaths'
     HOT_SPOT_BED_FILE = 'default_hotSpotBedFile'
     HOT_SPOT_BED_FILES = 'hotSpotBedFiles'
     HOT_SPOT_BED_FILE_MISSING = 'hotSpotBedFileMissing'
     HOT_SPOT_FILES = 'hotspotFiles'
-    HOT_SPOT_FULL_PATHS = 'hotspotFullPaths'
-    HOT_SPOT_PATHS = 'hotspotPaths'
 
     MIXED_TYPE_RNA_HOT_SPOT_BED_FILE = "mixedTypeRNA_hotSpotBedFile"
     MIXED_TYPE_RNA_REFERENCE = "mixedTypeRNA_reference"
@@ -151,7 +147,10 @@ class ReferenceStepData(AbstractStepData):
                 logger.debug(" validateField_in_section reference=%s; targetBed=%s; runType=%s; applicationGroupName=%s" % (reference, new_field_value, runType, applicationGroupName))
 
                 errors = []
-                errors = validate_targetRegionBedFile_for_runType(targetRegionBedFile, runType, reference, "", applicationGroupName, "Target Regions BED File")
+                isSameRefInfoPerSample = self.savedFields[ReferenceFieldNames.SAME_REF_INFO_PER_SAMPLE]
+                if isSameRefInfoPerSample:
+                    errors = validate_targetRegionBedFile_for_runType(targetRegionBedFile, runType, reference, "", applicationGroupName, "Target Regions BED File")
+
                 if errors:
                     self.validationErrors[field_name] = ''.join(errors)
                 else:
@@ -173,19 +172,9 @@ class ReferenceStepData(AbstractStepData):
 
                 if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName:
                     self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName
-                    self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = True
-
-                    if self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
-                       self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
-                        self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = False
 
                 if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName:
                     self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName
-                    self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = True
-
-                    if self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.HOT_SPOT_FULL_PATHS] or\
-                       self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.HOT_SPOT_PATHS]:
-                        self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
 
             if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].isHotspotRegionBEDFileSuppported:
                 self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = True

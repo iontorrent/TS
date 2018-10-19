@@ -92,6 +92,13 @@
             }
         });
 
+        // stop click on the selected col from opening the edit input, the checkbox will take care of toggeling the value
+        $("#bctable-grid table").click(function (event) {
+            if ($(event.target).attr("name") === "selected") {
+                event.stopPropagation();
+            }
+        });
+
         // add onchange event to checkboxes
         $.each(checkbox_columns, function(i, name){
             $("#bctable-grid .k-grid-content").on("change", "[name="+ name +"] :input", function(e) {

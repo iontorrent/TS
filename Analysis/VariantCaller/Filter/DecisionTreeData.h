@@ -47,6 +47,7 @@ class DecisionTreeData {
     vector<string>*         info_fields;             //!< Additional information to be printed out in vcf FR tag
 
     MultiBook all_summary_stats;
+    LodManager lod_manager;
 
     vector<VariantOutputInfo> summary_info_vector;
 
@@ -61,7 +62,7 @@ class DecisionTreeData {
     int best_allele_index;
     bool isBestAlleleVeryReal;
     bool reference_genotype;
-    bool is_ppa_same_as_gt;
+    bool has_ppa;
     bool use_molecular_tag;
     EvaluatedGenotype eval_genotype;
 
@@ -77,7 +78,7 @@ class DecisionTreeData {
       best_variant_filtered=false;
       isBestAlleleVeryReal = false;
       reference_genotype = false;
-      is_ppa_same_as_gt = true;
+      has_ppa = false;
       use_molecular_tag = false;
 
       tune_xbias = 0.005f; // tune calculation of chi-square bias = proportioinal variance by frequency

@@ -7,7 +7,7 @@ www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
                              @PYTHON_SITE_PACKAGES@/ion_tsconfig/TSconfig.py, \
                              /opt/ion/onetouch/findHosts.py, \
                              /opt/ion/iondb/bin/ion_plugin_install.py, \
-                             /opt/ion/iondb/bin/ion_plugin_install_deb.py, \
+                             /opt/ion/iondb/bin/ion_package_install_deb.py, \
                              /opt/ion/iondb/bin/sudo_utils.py, \
                              /opt/ion/iondb/bin/write_nms_access.py, \
                              /opt/ion/iondb/bin/ion_plugin_migrate_permissions.py, \
@@ -16,8 +16,10 @@ www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
                              /opt/ion/iondb/bin/ion_remove_nfs_mount.py, \
                              /opt/ion/iondb/bin/ion_check_for_new_tsvm.py, \
                              /opt/ion/iondb/bin/administrative/check_updates.py, \
+                             /opt/ion/iondb/bin/administrative/set_telemetry_services.py, \
                              /usr/sbin/TSstaticip, \
                              /usr/sbin/TSsetproxy, \
+                             /usr/sbin/TSsetnoproxy, \
                              /usr/sbin/grp_connect_nodetest, \
                              /usr/sbin/grp_config_nodetest, \
                              /usr/bin/qmod, \

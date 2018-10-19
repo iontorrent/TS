@@ -24,7 +24,6 @@ public:
   ~BarcodeDatasets();
 
   void InitializeNonbarcoded(const string& run_id);
-  void InitializeFromBarcodeList(const string& run_id, string barcode_list_filename);
   void LoadJsonFile(const string& filename_json);
   void LoadJson(const Json::Value& datasets_json, string data_source);
   void SaveJson(const string& filename_json);
@@ -54,6 +53,7 @@ public:
   Json::Value&    read_group(int idx) { return datasets_json_["read_groups"][read_group_id_to_name_[idx]]; }
   int read_group_name_to_id(const string& rg_name) { return read_group_name_to_id_[rg_name]; }
   const string& read_group_name(int idx) { return read_group_id_to_name_[idx]; }
+  const string& start_barcode_name(int idx) { return start_barcode_names_.at(idx); };
 
   int  GetBCmaxFlows()    const     { return barcode_max_flows_; }
   void SetBCmaxFlows(int max_flows) { barcode_max_flows_ = max_flows; }
@@ -83,6 +83,7 @@ protected:
 
   vector<string>            read_group_id_to_name_;
   map<string,int>           read_group_name_to_id_;
+  vector<string>            start_barcode_names_;
 
 };
 

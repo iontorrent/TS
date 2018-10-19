@@ -65,6 +65,8 @@ function pluginStatusLoad() {
     var pluginStatusTable = $("#pluginStatusTable");
     var pluginSubNav = $("#plugins-sub-nav");
 
+    var pluginStatusTableContainer = $("#pluginStatus");
+
     //init the spinner -- this is inside of the refresh button
     $('#pluginRefresh').activity({
         segments: 10,
@@ -76,7 +78,10 @@ function pluginStatusLoad() {
         padding: '3',
         align: 'left'
     });
-    pluginStatusTable.fadeOut();
+    pluginStatusTableContainer.css({
+        "opacity": "0.2",
+        "height": pluginStatusTableContainer.height(),
+    });
     pluginStatusTable.html("");
     pluginSubNav.html("");
     $.ajax({
@@ -85,10 +90,11 @@ function pluginStatusLoad() {
         contentType: "application/json; charset=utf-8",
         dataType: "json",
         success: function (pluginResultsList) {
-            if (pluginResultsList.length == 0){
+            if (pluginResultsList.length == 0) {
                 // No plugins to display
                 pluginStatusTable.append($("<h2/>", {text: "No plugins have been run"}));
             } else {
+                var iframeLoadPromises = [];
                 var groupedPluginResults = {};
                 //Group plugin results by name
                 pluginResultsList.forEach(function (result) {
@@ -103,14 +109,38 @@ function pluginStatusLoad() {
                 }).forEach(function (name) {
                     var results = groupedPluginResults[name];
                     //Render template
-                    pluginStatusTable.append(pluginResultsTemplate({name: name, results: results}));
+                    var pluginElement = pluginResultsTemplate({name: name, results: results});
+                    // Add to page
+                    pluginStatusTable.append(pluginElement);
                     //Add to sidebar
                     pluginSubNav.append(pluginSubNavTemplate({
                         name: name,
                         iconClass: getPluginStateIcon(results[0].State)
                     }))
                 });
-                //Bind events for plugin result selectors
+                // Register promises and trigger all loads
+                pluginStatusTable.find("iframe").each(function () {
+                    var deferred = new $.Deferred();
+                    $(this).on("load", function () {
+                        deferred.resolve();
+                    });
+                    iframeLoadPromises.push(deferred);
+                    $(this).attr("src", $(this).attr("data-src"));
+                });
+                // When all promises have resolved
+                $.when.apply($, iframeLoadPromises).then(function () {
+                    console.log("All iframes loaded");
+                    resizeiFrames();
+                    pluginStatusTableContainer.css({
+                        "opacity": "1",
+                        "height": "auto",
+                    });
+                    setTimeout(function(){
+                        resizeiFrames();
+                        $(window).trigger("ion.pluginsReloaded", {init: true});
+                    }, 1);
+                });
+                // Bind events for plugin result selectors
                 $(".changePluginResult").change(function () {
                     var select = $(this);
                     //Hide and show the results
@@ -131,7 +161,6 @@ function pluginStatusLoad() {
             pluginStatusTable.text("Failed to get Plugin Status");
         }
     }); //for ajax call
-    pluginStatusTable.fadeIn();
     $('#pluginRefresh').activity(false);
 }
 
@@ -417,8 +446,17 @@ $(document).ready(function () {
     });
 
     //report list
-    $("#resultList").change(function () {
-        window.location = "/report/" + $(this).val();
+    $(function () {
+        var resultsList = $("#resultList");
+        //if loaded from cache the val of the select may be saved from the last nav
+        //reset it here
+        $(window).bind("pageshow", function(event) {
+            resultsList.val(resultsList.find("[selected]").attr("value")).selectpicker("refresh");
+        });
+
+        resultsList.change(function () {
+            window.location = "/report/" + $(this).val();
+        });
     });
 
     //plan popup modal
@@ -500,18 +538,19 @@ $(document).ready(function () {
     $('.pluginRemove').live("click", function (e) {
         e.preventDefault();
         var url = $(this).attr("href");
-        if (confirm("Are you sure you want to delete this plugin result?")) {
-            $.ajax({
-                type: 'DELETE',
-                url: url,
-                async: true,
-            }).fail(function (msg) {
-                alert("Failed to remove plugin result.")
-            }).done(function () {
-                pluginStatusLoad();
-            });
-        }
-        return false;
+        bootbox.confirm("Are you sure you want to delete this plugin result?", function (okay) {
+            if (okay) {
+                $.ajax({
+                    type: 'DELETE',
+                    url: url,
+                    async: true,
+                }).fail(function (msg) {
+                    alert("Failed to remove plugin result.")
+                }).done(function () {
+                    pluginStatusLoad();
+                });
+            }
+        });
     });
 
     //TODO : Rewrite with bootstrap
@@ -577,9 +616,10 @@ $(document).ready(function () {
             });
     });
 
-    $("#pluginRefresh").click(function () {
+    $("#pluginRefresh").click(function (e) {
+        e.preventDefault();
+        $(window).trigger("ion.pluginsReload");
         pluginStatusLoad();
-        $(window).trigger("ion.pluginsRefreshed");
     });
 
     //the plugin launcher
@@ -922,10 +962,10 @@ $(document).ready(function () {
     launcherSearchInput.bind("input", function (event) {
         launcherTableContainer.find("tr").each(function (_, element) {
             var row = $(element);
-            if (row.find("a").text().toLowerCase().search(event.target.value.toLowerCase()) == -1) {
-                row.hide();
-            } else {
+            if (row.find("a").text().toLowerCase().startsWith(event.target.value.toLowerCase())) {
                 row.show();
+            } else {
+                row.hide();
             }
         });
     });

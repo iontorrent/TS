@@ -1,5 +1,6 @@
 /* Copyright (C) 2016 Thermo Fisher Scientific, All Rights Reserved */
 #include "polyclonal_filter.h"
+#include <cmath>
 
 PolyclonalFilterOpts::PolyclonalFilterOpts()
 {

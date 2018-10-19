@@ -238,7 +238,7 @@ def mergeAvgNukeTraces(dirs, SIGPROC_RESULTS, key, beads):
                 traceback.print_exc()
                 continue
 
-            if sumAvgNukeTraceData == None:
+            if sumAvgNukeTraceData is None:
                 sumAvgNukeTraceData = currentAvgNukeTraceData * wells
             else:
                 sumAvgNukeTraceData += currentAvgNukeTraceData * wells

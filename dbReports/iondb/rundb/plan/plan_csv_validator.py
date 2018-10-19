@@ -10,8 +10,8 @@ from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_IR_accounts_by_u
     get_ir_set_id, is_operation_supported_by_obj
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_flows, \
     validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info, \
-    validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType, validate_chipBarcode, \
-    validate_reference, validate_sampleControlType, get_kit_application_list
+    validate_libraryReadLength, validate_targetRegionBedFile_for_runType, validate_chipBarcode, \
+    validate_reference, validate_sampleControlType, get_kit_application_list, validate_plugin_configurations
 from iondb.rundb.plan.plan_csv_iru_validator import validate_iruConfig_process_userInputInfo, call_iru_validation_api
 from traceback import format_exc
 
@@ -231,10 +231,6 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
         if errorMsg:
             failed.append((PlanCSVcolumns.COLUMN_SEQ_KIT, errorMsg))
 
-    errorMsg = _validate_templatingSize(csvPlanDict.get(PlanCSVcolumns.COLUMN_TEMPLATING_SIZE), selectedTemplate, planObj)
-    if errorMsg:
-        failed.append((PlanCSVcolumns.COLUMN_TEMPLATING_SIZE, errorMsg))
-
     errorMsg = _validate_libraryReadLength(csvPlanDict.get(PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH), selectedTemplate, planObj)
     if errorMsg:
         failed.append((PlanCSVcolumns.COLUMN_LIBRARY_READ_LENGTH, errorMsg))
@@ -286,7 +282,10 @@ def validate_csv_plan(csvPlanDict, username, single_file=True, samples_contents=
     if errorMsg:
         failed.append((PlanCSVcolumns.COLUMN_HOTSPOT_BED, errorMsg))
 
-    errorMsg, plugins = _validate_plugins(csvPlanDict.get(PlanCSVcolumns.COLUMN_PLUGINS), selectedTemplate, selectedEAS, planObj)
+    pluginWarning, errorMsg, plugins = _validate_plugins(csvPlanDict.get(PlanCSVcolumns.COLUMN_PLUGINS), selectedTemplate, selectedEAS, planObj)
+
+    if pluginWarning:
+        rawPlanDict['warnings'].append(pluginWarning)
     if errorMsg:
         failed.append((PlanCSVcolumns.COLUMN_PLUGINS, errorMsg))
 
@@ -654,7 +653,8 @@ def _validate_chip_type(input, selectedTemplate, planObj, selectedExperiment):
 
     return errorMsg, chipWarning
 
-
+'''
+#templatingSize validation became obsolete, this field has been replaced by samplePrepProtocol - TS-16425
 def _validate_templatingSize(input, selectedTemplate, planObj):
     """
     validate templating size value with leading/trailing blanks in the input ignored
@@ -671,7 +671,7 @@ def _validate_templatingSize(input, selectedTemplate, planObj):
         planObj.get_planObj().templatingSize = ""
 
     return errorMsg
-
+'''
 
 def _validate_libraryReadLength(input, selectedTemplate, planObj):
     """
@@ -939,6 +939,8 @@ def _validate_plugins(input, selectedTemplate, selectedEAS, planObj):
     """
 
     errorMsg = ""
+    warningMsg = ""
+    pluginConfigReqLists = []
     plugins = {}
 
     if input:
@@ -955,23 +957,33 @@ def _validate_plugins(input, selectedTemplate, selectedEAS, planObj):
                     if selectedPlugin.name in template_selectedPlugins:
                         # logger.info("_validate_plugins() FOUND plugin in selectedTemplate....=%s" %(template_selectedPlugins[plugin.strip()]))
                         pluginUserInput = template_selectedPlugins[selectedPlugin.name]["userInput"]
-
+                    pluginName = selectedPlugin.name
                     pluginDict = {
                         "id": selectedPlugin.id,
-                        "name": selectedPlugin.name,
+                        "name": pluginName,
                         "version": selectedPlugin.version,
                         "userInput": pluginUserInput,
                         "features": []
                     }
 
                     plugins[selectedPlugin.name] = pluginDict
+
                 except:
                     logger.exception(format_exc())
                     errorMsg += plugin + " not found. "
     else:
         planObj.get_easObj().selectedPlugins = ""
 
-    return errorMsg, plugins
+    validationErrors = validate_plugin_configurations(plugins)
+
+    if validationErrors:
+        # Get only pluginNames to display custom error message for CSV
+        pluginConfigReqLists = [err.split(' ', 1)[0] for err in validationErrors]
+        pluginsNames = ", ".join(pluginConfigReqLists)
+        warningMsg = "Selected Plugin(s) (%s) need to be configured before sequencing the plan. Edit the plan, go to plugin tab, click configure next to plugin and save. " \
+                          "If you sequence the created plan without saving the plugin configuration, the results may not be as expected." % pluginsNames
+
+    return warningMsg,errorMsg, plugins
 
 
 def _validate_projects(input, selectedTemplate, planObj):

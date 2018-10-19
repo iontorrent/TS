@@ -69,10 +69,9 @@ class StepHelperDbLoader():
         if applicationGroupObj:
             application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = applicationGroupObj.name
 
-            application_step_data.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isVisible=True,
-                                                                                                             applType__runType=runTypeObj.runType, applicationGroup=applicationGroupObj)
+            application_step_data.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.get_default_for_runType(runTypeObj.runType, applicationGroupName=applicationGroupObj.name)
             application_step_data.prepopulatedFields[ApplicationFieldNames.APPL_PRODUCTS] = ApplProduct.objects.filter(isActive=True, isDefaultForInstrumentType=True,
-                                                                                                             applType__runType=runTypeObj.runType, applicationGroup=applicationGroupObj)
+                                    applType__runType=runTypeObj.runType, applicationGroup=applicationGroupObj)
 
             categorizedApplProducts = ApplProduct.objects.filter(isActive=True,
                                                           applType__runType=runTypeObj.runType, applicationGroup=applicationGroupObj).exclude(categories = "")
@@ -252,19 +251,8 @@ class StepHelperDbLoader():
         save_plan_step_data.savedObjects[SavePlanFieldNames.META] = self._metaDataFromPlan(step_helper, planned_experiment)
 
         barcodeSet = planned_experiment.get_barcodeId()
-        save_plan_step_data.savedFields[SavePlanFieldNames.BARCODE_SET] = barcodeSet
-        if barcodeSet:
-            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(barcodeSet)
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
-
-
         endBarcodeSet = planned_experiment.get_endBarcodeKitName()
-        save_plan_step_data.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
-        if endBarcodeSet:
-            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(endBarcodeSet)
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeSets
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
+        self._update_barcode_sets_for_edit(step_helper, barcodeSet, endBarcodeSet, save_plan_step_data)
 
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = planned_experiment.get_library()
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = planned_experiment.get_bedfile()
@@ -397,10 +385,6 @@ class StepHelperDbLoader():
         for qc_value in qc_values:
             step_helper.steps[target_step].savedFields[qc_value.qcName] = PlannedExperimentQC.objects.get(plannedExperiment__pk=planned_experiment.pk, qcType__pk=qc_value.pk).threshold
 
-        logger.debug("QCs ARE: %s" % str(step_helper.steps[target_step].savedFields))
-
-        self._updateUniversalStep_dualBarcoding_for_edit(step_helper, planned_experiment, appl_product, application_step_data, step_helper.steps[target_step])
-
         step_helper.steps[StepNames.OUTPUT].savedFields[OutputFieldNames.PROJECTS] = []
         projects = planned_experiment.projects.all()
         for project in projects:
@@ -429,12 +413,10 @@ class StepHelperDbLoader():
         if selectedApplicationGroup:
             application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = selectedApplicationGroup.name
 
-        try:
-            appl_product = ApplProduct.objects.get(applType__runType=selectedRunType.runType, applicationGroup=selectedApplicationGroup, isDefault=True, isActive=True, isVisible=True)
-        except:
-            appl_product = ApplProduct.objects.get(applType__runType=selectedRunType.runType, isDefault=True, isActive=True, isVisible=True)
+        instrumentType = planned_experiment.experiment.getPlatform
+        application_step_data.prepopulatedFields[ApplicationFieldNames.INSTRUMENT_TYPE] = instrumentType
 
-        # logger.debug("step_helper_db_loader._updateUniversalStep_applicationData() saving appl_product now!!")
+        appl_product = ApplProduct.get_default_for_runType(selectedRunType.runType, applicationGroupName=selectedApplicationGroup.name, instrumentType=instrumentType)
         application_step_data.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = appl_product
         
         application_step_data.prepopulatedFields[ApplicationFieldNames.CATEGORIES] = planned_experiment.categories
@@ -508,7 +490,6 @@ class StepHelperDbLoader():
         kits_step_data.savedFields[KitsFieldNames.FLOWS] = planned_experiment.get_flows()
         kits_step_data.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH] = planned_experiment.libraryReadLength
         kits_step_data.savedFields[KitsFieldNames.READ_LENGTH] = planned_experiment.libraryReadLength
-        kits_step_data.savedFields[KitsFieldNames.TEMPLATING_SIZE] = planned_experiment.templatingSize
 
         kits_step_data.savedFields[KitsFieldNames.FORWARD_3_PRIME_ADAPTER] = planned_experiment.get_forward3primeadapter()
         kits_step_data.savedFields[KitsFieldNames.FLOW_ORDER] = planned_experiment.experiment.flowsInOrder
@@ -613,31 +594,6 @@ class StepHelperDbLoader():
         else:
             reference_step_data.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
 
-        if reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE]:
-
-            reference_step_data.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = True
-            if reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in reference_step_data.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
-               reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in reference_step_data.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
-                reference_step_data.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = False
-            else:
-                logger.debug("at step_helper_db_loader.updateUniversalStepHelper() TARGET_BED_FILE_MISSING saved target=%s" % (reference_step_data.savedFields[ReferenceFieldNames.TARGET_BED_FILE]));
-        else:
-            reference_step_data.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = False
-
-        if reference_step_data.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE]:
-
-            reference_step_data.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = True
-            if reference_step_data.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in reference_step_data.file_dict[ReferenceFieldNames.HOT_SPOT_FULL_PATHS] or\
-               reference_step_data.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in reference_step_data.file_dict[ReferenceFieldNames.HOT_SPOT_PATHS]:
-                reference_step_data.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
-            else:
-                logger.debug("at step_helper_db_loader.updateUniversalStepHelper() HOT_SPOT_BED_FILE_MISSING saved hotSpot=%s" % (reference_step_data.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE]));
-                logger.debug("HOT_SPOT MISSING BED_FILE_FULL_PATHS=%s" % (reference_step_data.file_dict[ReferenceFieldNames.HOT_SPOT_FULL_PATHS]))
-                logger.debug("HOT_SPOT MISSING BED_FILE_PATHS=%s" % (reference_step_data.file_dict[ReferenceFieldNames.HOT_SPOT_PATHS]))
-
-        else:
-            reference_step_data.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
-
         stepHelper_type = step_helper.sh_type
 
         logger.debug("step_helper_db_loader._updateUniversalStep_referenceData() stepHelper_type=%s; reference_step_data.savedFields=%s" % (stepHelper_type, reference_step_data.savedFields))
@@ -680,20 +636,22 @@ class StepHelperDbLoader():
         reference_step_data.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] = planned_experiment.planStatus
 
 
-    def _updateUniversalStep_dualBarcoding_for_edit(self, step_helper, planned_experiment, appl_product, application_step_data, save_plan_step_data):
-        barcodeSet = planned_experiment.get_barcodeId()
-        save_plan_step_data.savedFields[SavePlanFieldNames.BARCODE_SET] = barcodeSet
+    def _update_barcode_sets_for_edit(self, step_helper, barcodeSet, endBarcodeSet, update_step_data):
+
+        appl_product = step_helper.getApplProduct()
+        update_step_data.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = appl_product
+
+        update_step_data.savedFields[SavePlanFieldNames.BARCODE_SET] = barcodeSet
         if barcodeSet:
             barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(barcodeSet)
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES]  = json.dumps(all_barcodes)
+            update_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
+            update_step_data.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES]  = json.dumps(all_barcodes)
 
-        endBarcodeSet = planned_experiment.get_endBarcodeKitName()
-        save_plan_step_data.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
+        update_step_data.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
         if endBarcodeSet:
             barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(endBarcodeSet)
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeSets
-            save_plan_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES]   = json.dumps(all_barcodes)
+            update_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcodeSets
+            update_step_data.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES]   = json.dumps(all_barcodes)
 
 
     def _updateUniversalStep_analysisParamsData(self, step_helper, planned_experiment, appl_product,  application_step_data, kits_step_data, analysisParams_step_data):
@@ -944,14 +902,8 @@ class StepHelperDbLoader():
         barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = sorted_sampleSetItems
         barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.SHOW_SAMPLESET_INFO] = len(samplesets) > 1
 
-        if step_helper.isCreate() and samplesets:
-            sampleTubeLabelInfo = self._get_combinedLibraryTubeLabelInfo(samplesets)
-            barcoding_step.savedFields[SavePlanFieldNames.TUBE_LABEL] = sampleTubeLabelInfo
-            barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = sampleTubeLabelInfo                   
-            save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = sampleTubeLabelInfo
-        else:
-            barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
-            save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
+        barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
+        save_plan_step.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = planned_experiment.sampleTubeLabel
 
         barcoding_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = planned_experiment.get_chipBarcode()
         save_plan_step.savedFields[SavePlanFieldNames.CHIP_BARCODE_LABEL] = planned_experiment.get_chipBarcode()
@@ -982,24 +934,11 @@ class StepHelperDbLoader():
                     endBarcodeSet = item.endDnabarcode.name
                     break
                 
+
         barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET] = step_helper.steps[StepNames.KITS].savedFields[KitsFieldNames.BARCODE_ID] = barcodeSet
-        save_plan_step.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
-        save_plan_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS]
 
-        barcoding_step.savedFields[SavePlanFieldNames.END_BARCODE_SET] = endBarcodeSet
-        barcoding_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS] = barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS]
-        
-        if barcodeSet:
-            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(barcodeSet)
-            barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = barcodeSets
-            barcoding_step.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
+        self._update_barcode_sets_for_edit(step_helper, barcodeSet, endBarcodeSet, barcoding_step)
 
-        if endBarcodeSet:
-            barcodeSets, all_barcodes = self._get_all_barcodeSets_n_barcodes_for_selection(endBarcodeSet)
-            save_plan_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS]  = barcodeSets
-            save_plan_step.prepopulatedFields[SavePlanFieldNames.END_BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
-                
-                
         # IonReporter parameters
         irInfo = self._getIRinfo(planned_experiment)
         if irInfo:
@@ -1100,19 +1039,6 @@ class StepHelperDbLoader():
         return barcodeSets, all_barcodes
 
 
-    def _get_combinedLibraryTubeLabelInfo(self, sampleSets):
-        '''
-        returns all the combined library tube label values found in the sample sets, separated by a space
-        '''
-        labelInfo = ""
-        for sampleSet in sampleSets:
-            if sampleSet.combinedLibraryTubeLabel:
-                if labelInfo:
-                    labelInfo += " "
-                labelInfo += sampleSet.combinedLibraryTubeLabel
-        return labelInfo       
-    
-    
     def _getIRinfo(self, planned_experiment):
         # logger.debug("ENTER step_helper_db_loader._getIRinfo()")
 
