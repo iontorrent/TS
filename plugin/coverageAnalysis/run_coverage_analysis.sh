@@ -868,9 +868,12 @@ if [ -n "$RESHTML" ]; then
   if ! [ -f "$BAMBAI" ];then
     WARNMSG="-W \"<h4 style='text-align:center;color:red'>WARNING: BAM index file not found. Assignments of reads to amplicons not performed.</h4>\""
   fi
+  if [ -n "$RFTITLE" ]; then
+    RFTITLEOPT="-s '$RFTITLE'"
+  fi
   COVERAGE_HTML="COVERAGE_html"
   STATSDICT="$RUNDIR/../templates/help_dict.json"
-  HMLCMD="$RUNDIR/coverage_analysis_report.pl $RFTITLE $AMPOPT $GENOPT $SIDOPT $WARNMSG -A '$STATSDICT' -N '$FILESTEM' -t '$FILESTEM' -D '$WORKDIR' '$COVERAGE_HTML' '$STATSTEM'"
+  HMLCMD="$RUNDIR/coverage_analysis_report.pl  $RFTITLEOPT $AMPOPT $GENOPT $SIDOPT $WARNMSG -A '$STATSDICT' -N '$FILESTEM' -t '$FILESTEM' -D '$WORKDIR' '$COVERAGE_HTML' '$STATSTEM'"
   eval "$HMLCMD" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: coverage_analysis_report.pl failed." >&2
