@@ -621,7 +621,7 @@ vcf::Variant* VcfOrderedMerger::merge_overlapping_variants() {
     if (assembly_queue.current()->position > 0) {
                 //padding
                 int chr = reference_reader.chr_idx(assembly_queue.current()->sequenceName.c_str());
-                string pad = reference_reader.substr(chr, assembly_queue.current()->position , bpback);
+                string pad = reference_reader.substr(chr, assembly_queue.current()->position-1 , bpback);
                 assembly_queue.current()->ref = pad + assembly_queue.current()->ref;
                 assembly_queue.current()->alt[0] = pad +  assembly_queue.current()->alt[0];
                 // put the assembly at an empty position

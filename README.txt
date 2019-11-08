@@ -1,3 +1,14 @@
+For support questions, please send them to the following support mailing list:
+
+- ngs-amsupport@thermofisher.com (Americas)
+- ngs-eusupport@thermofisher.com (EMEA)
+- ngs-gcsupport@thermofisher.com (Greater China)
+- ngs-sasiasupport@thermofisher.com (South Asia)
+- jptech@thermofisher.com (Japan)
+
+APAC customers, please contact your local sales representative, Field Service Engineer or Field Bioinformatics Specialist
+
+
 Please see buildTools/BUILD.txt for build requirements and instructions.
 Note especially the section BUILD SPECIFIC MODULES.
 
